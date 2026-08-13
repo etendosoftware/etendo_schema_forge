@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-21T12:35:20.415Z",
-  "checksum": "45271ccb71ed77cd",
+  "updatedAt": "2026-08-12T14:26:26.515Z",
+  "checksum": "65e9a1ca837093bc",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -32,7 +32,7 @@
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
-          "borderRight": "1px solid #E8EAEF",
+          "borderRight": "1px solid hsl(var(--border-subtle))",
           "padding": 0
         }
       },
@@ -74,7 +74,6 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false,
@@ -460,6 +459,29 @@
             }
           },
           {
+            "name": "writeoffAmount",
+            "apiKey": "writeoffAmount",
+            "column": "Writeoffamt",
+            "label": "Write-off Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -769,6 +791,13 @@
             }
           },
           {
+            "name": "writeoffAmount",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
             "name": "creationDate",
             "derivation": {
               "type": "fromConfig",
@@ -944,7 +973,7 @@
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
-          "borderRight": "1px solid #E8EAEF",
+          "borderRight": "1px solid hsl(var(--border-subtle))",
           "padding": 0
         }
       },
@@ -986,7 +1015,6 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false
@@ -1162,7 +1190,7 @@
             "apiKey": "writeoffAmount",
             "column": "Writeoffamt",
             "type": "amount",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2131,6 +2159,14 @@
         "description": "Default value for 'updated' in finPayment should be a string"
       },
       {
+        "id": "t-default-value-type-finPayment-writeoffAmount",
+        "category": "default-value-type",
+        "entity": "finPayment",
+        "field": "writeoffAmount",
+        "runner": "node",
+        "description": "Default value for 'writeoffAmount' in finPayment should be a string"
+      },
+      {
         "id": "t-default-value-type-finPaymentScheduleDetail-amount",
         "category": "default-value-type",
         "entity": "finPaymentScheduleDetail",
@@ -2371,6 +2407,14 @@
         "description": "Field 'updated' should be present in finPayment"
       },
       {
+        "id": "t-field-presence-finPayment-writeoffAmount",
+        "category": "field-presence",
+        "entity": "finPayment",
+        "field": "writeoffAmount",
+        "runner": "node",
+        "description": "Field 'writeoffAmount' should be present in finPayment"
+      },
+      {
         "id": "t-field-presence-finPaymentScheduleDetail-amount",
         "category": "field-presence",
         "entity": "finPaymentScheduleDetail",
@@ -2545,6 +2589,14 @@
         "field": "updated",
         "runner": "node",
         "description": "Field 'updated' should have type 'string' in finPayment"
+      },
+      {
+        "id": "t-field-type-finPayment-writeoffAmount",
+        "category": "field-type",
+        "entity": "finPayment",
+        "field": "writeoffAmount",
+        "runner": "node",
+        "description": "Field 'writeoffAmount' should have type 'number' in finPayment"
       },
       {
         "id": "t-field-type-finPaymentScheduleDetail-amount",
@@ -3202,14 +3254,6 @@
         "description": "System field 'usedCredit' should exist in backend but not frontend for finPayment"
       },
       {
-        "id": "t-system-field-finPayment-writeoffAmount",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "writeoffAmount",
-        "runner": "node",
-        "description": "System field 'writeoffAmount' should exist in backend but not frontend for finPayment"
-      },
-      {
         "id": "t-system-field-finPaymentScheduleDetail-active",
         "category": "system-field",
         "entity": "finPaymentScheduleDetail",
@@ -3465,15 +3509,15 @@
       }
     ],
     "summary": {
-      "total": 192,
+      "total": 194,
       "byCategory": {
         "action-endpoint": 11,
         "crud-flags": 2,
-        "default-value-type": 10,
+        "default-value-type": 11,
         "displaylogic-evaluable": 6,
         "displaylogic-valid": 6,
-        "field-presence": 22,
-        "field-type": 22,
+        "field-presence": 23,
+        "field-type": 23,
         "process-failure": 1,
         "process-happy": 1,
         "readonlylogic-evaluable": 7,
@@ -3481,11 +3525,11 @@
         "rule-declared": 25,
         "searchable-filters": 3,
         "selector-endpoint": 5,
-        "system-field": 62,
+        "system-field": 61,
         "visibility": 2
       },
       "byRunner": {
-        "node": 190,
+        "node": 192,
         "junit": 2
       }
     }

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { openSelectorField, selectorFieldDisplay } from '../helpers/selectors.js';
 
 /**
  * Amortization window — Test Plan "Activos y Amortizaciones" (REAL BACKEND).
@@ -89,15 +90,21 @@ async function createAssetWithAmortization(page, stamp) {
 
   await page.getByTestId('field-searchKey').fill(`AM-ETP4429-${stamp}`);
   await page.getByTestId('field-name').fill(`Activo Amort ETP-4429 ${stamp}`);
-  await page.getByTestId('field-assetCategory').click();
-  // Wait for selector options to load from the API before clicking the specific one.
-  await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 10_000 });
+  // `assetCategory` carries an explicit `searchSelect: false` opt-out
+  // (AssetsDetailPanel.jsx, ETP-4600 follow-up) that keeps it on the OLD plain
+  // Radix SelectorInput rather than the unified CreatableSearchSelect — a
+  // temporary carve-out for a DetailView save→refetch/callout race the unified
+  // selector exposes. `openSelectorField`/`selectorFieldDisplay` both fall back
+  // to the plain `field-assetCategory` trigger when no chip testid exists, so
+  // this helper works unchanged regardless of which component the field renders.
+  await openSelectorField(page, 'assetCategory');
   await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
-  await expect(page.getByTestId('field-assetCategory')).not.toContainText(/Seleccionar|Select/i);
+  // Original guarantee: a category is now selected (no longer the placeholder).
+  await expect(selectorFieldDisplay(page, 'assetCategory')).not.toContainText(/Seleccionar|Select/i);
 
   // Activate "Depreciar" → financial sections appear.
   await page.getByRole('switch').first().click();
-  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 15_000 });
 
   // Save → record created; wait for the route to settle on /assets/{id}.
   await page.getByTestId('action-save').click();

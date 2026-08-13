@@ -16,11 +16,11 @@
       "sidePanelStyle": {
         "order": -1,
         "borderLeft": "none",
-        "borderRight": "1px solid #E8EAEF",
+        "borderRight": "1px solid hsl(var(--border-subtle))",
         "padding": 0
       }
     },
-    "contentAreaClassName": "!bg-[#FAFAFB] !p-0",
+    "contentAreaClassName": "!bg-card !p-0",
     "attachments": false,
     "detailEntity": null,
     "hideDeleteWhenComplete": true,
@@ -63,7 +63,8 @@
       "PPM": "cobroDepositado",
       "PWNC": "cobroDepositado"
     },
-    "statusFieldLabel": "statusColumnLabel",
+    "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {
@@ -182,7 +183,9 @@
           "visibility": "discarded"
         },
         "writeoffAmount": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "section": "other"
         },
         "aPRMAddScheduledpayments": {
           "visibility": "discarded"

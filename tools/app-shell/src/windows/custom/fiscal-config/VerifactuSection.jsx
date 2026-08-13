@@ -23,7 +23,7 @@ const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
 // Two-column section row wrapper
 function SectionRow({ children, leftContent }) {
   return (
-    <div className="flex items-start py-6 gap-6 border-t border-[#E8EAEF]">
+    <div className="flex items-start py-6 gap-6 border-t border-[hsl(var(--border-subtle))]">
       <div className="w-[160px] flex-shrink-0">{leftContent}</div>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
@@ -85,7 +85,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
       <SectionRow
         leftContent={
           <div className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[#121217]">VERI*FACTU</span>
+            <span className="text-sm font-semibold text-[hsl(var(--foreground))]">VERI*FACTU</span>
           </div>
         }
         data-testid="SectionRow__e30816">
@@ -116,7 +116,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
               onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
               disabled={isLocked}
               data-testid="Switch__e30816" />
-            <span className="text-sm text-[#121217]">{ui('fiscal.verifactu.field.qr')}</span>
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.verifactu.field.qr')}</span>
           </div>
         </div>
       </SectionRow>
@@ -124,8 +124,8 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
       <SectionRow
         leftContent={
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-semibold text-[#121217]">{ui('fiscal.cert.section.legend')}</span>
-            <span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>
+            <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{ui('fiscal.cert.section.legend')}</span>
+            <span className="text-xs text-[hsl(var(--foreground))] leading-tight">{ui('fiscal.cert.section.hint')}</span>
           </div>
         }
         data-testid="SectionRow__e30816">

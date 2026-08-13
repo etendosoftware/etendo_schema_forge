@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-06-11T18:36:13.442Z",
-  "updatedAt": "2026-06-23T03:05:27.020Z",
-  "checksum": "01438675ab0c702a",
+  "updatedAt": "2026-07-28T13:51:31.344Z",
+  "checksum": "858dddea9ad9fee5",
   "frontendContract": {
     "window": {
       "id": "24963D64E83B4543A7F6BD248CF944EE",
@@ -118,7 +118,11 @@
             "cellType": "toggle",
             "gridLabelKey": "matchRuleColActive",
             "gridOrder": 7,
-            "inlineToggle": true
+            "inlineToggle": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "name",
@@ -139,7 +143,11 @@
             "subField": "financialAccount",
             "subEmptyKey": "matchRuleAllAccounts",
             "gridLabelKey": "matchRuleColName",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 200
+            }
           },
           {
             "name": "priority",
@@ -158,7 +166,11 @@
             "cellType": "priorityPill",
             "gridLabelKey": "matchRuleColPriority",
             "gridOrder": 1,
-            "inlineEdit": true
+            "inlineEdit": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "textPattern",
@@ -174,7 +186,11 @@
             "sourceRequired": true,
             "placeholderKey": "matchRulePatternPlaceholder",
             "section": "general",
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 200
+            }
           },
           {
             "name": "transactionType",
@@ -200,7 +216,10 @@
             "section": "general",
             "seq": 4,
             "gridLabelKey": "matchRuleColType",
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "matchCount",
@@ -220,7 +239,10 @@
             "defaultValue": "0",
             "cellType": "boldText",
             "gridLabelKey": "matchRuleColReconciliations",
-            "gridOrder": 6
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "businessPartner",
@@ -237,7 +259,10 @@
             "inputMode": "selector",
             "searchSelect": true,
             "section": "general",
-            "seq": 9
+            "seq": 9,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "financialAccount",
@@ -255,7 +280,10 @@
             "searchSelect": true,
             "emptyOptionLabelKey": "matchRuleAllAccounts",
             "section": "general",
-            "seq": 3
+            "seq": 3,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "project",
@@ -272,7 +300,10 @@
             "inputMode": "selector",
             "searchSelect": true,
             "section": "dimensions",
-            "seq": 20
+            "seq": 20,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "costCenter",
@@ -289,7 +320,10 @@
             "inputMode": "selector",
             "searchSelect": true,
             "section": "dimensions",
-            "seq": 21
+            "seq": 21,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "textCondition",
@@ -330,7 +364,11 @@
               "R": "matchRuleConditionRegex"
             },
             "gridLabelKey": "matchRuleColCondition",
-            "gridOrder": 3
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "accountingConcept",
@@ -343,13 +381,18 @@
             "required": true,
             "grid": true,
             "form": true,
+            "sourceRequired": true,
             "reference": "GLItem",
             "inputMode": "selector",
             "searchSelect": true,
             "section": "general",
             "seq": 5,
             "gridLabelKey": "matchRuleColConcept",
-            "gridOrder": 5
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "product",
@@ -366,7 +409,10 @@
             "inputMode": "selector",
             "searchSelect": true,
             "section": "dimensions",
-            "seq": 24
+            "seq": 24,
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [
@@ -582,14 +628,6 @@
             "required": true
           },
           {
-            "name": "matchRule",
-            "apiKey": "matchRule",
-            "column": "Etgo_Match_Rule_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -644,6 +682,14 @@
             "type": "foreignKey",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etgo_Match_Rule_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "match-rule"
@@ -812,91 +858,6 @@
         "M_Product_ID": "Product"
       }
     }
-  },
-  "formState": {
-    "entities": {
-      "etgoMatchRuleHeader": {
-        "fields": {
-          "active": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "name": {
-            "required": true
-          },
-          "priority": {
-            "required": true
-          },
-          "textPattern": {
-            "required": true
-          },
-          "transactionType": {},
-          "matchCount": {
-            "readOnly": true,
-            "defaultValue": "0"
-          },
-          "businessPartner": {},
-          "financialAccount": {},
-          "project": {},
-          "costCenter": {},
-          "textCondition": {
-            "required": true
-          },
-          "accountingConcept": {
-            "required": true
-          },
-          "product": {}
-        }
-      }
-    },
-    "requiredSessionVariables": [],
-    "evaluationMode": "runtime"
-  },
-  "agentProfile": {
-    "purpose": "Manage match rule financial records.",
-    "whenToUse": [
-      "Use for match rule management."
-    ],
-    "minimumCreate": {
-      "headerFields": [
-        "active",
-        "name",
-        "priority",
-        "textPattern",
-        "textCondition",
-        "accountingConcept"
-      ],
-      "recommendedOrder": [
-        "createHeader"
-      ]
-    },
-    "selectorContexts": [],
-    "actions": [],
-    "workflow": [
-      "Create draft header with required fields"
-    ],
-    "edgeCases": [
-      "Required field without default value must be provided"
-    ],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "active",
-          "name",
-          "priority",
-          "textPattern",
-          "textCondition",
-          "accountingConcept"
-        ]
-      }
-    ],
-    "warnings": [
-      "Transactional spec has no generated lifecycle action metadata"
-    ],
-    "knownLimitations": [],
-    "dangerousOperations": []
   },
   "testManifest": {
     "tests": [
@@ -1228,12 +1189,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for etgoMatchRuleHeader"
       },
       {
-        "id": "t-system-field-etgoMatchRuleHeader-matchRule",
+        "id": "t-system-field-etgoMatchRuleHeader-id",
         "category": "system-field",
         "entity": "etgoMatchRuleHeader",
-        "field": "matchRule",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'matchRule' should exist in backend but not frontend for etgoMatchRuleHeader"
+        "description": "System field 'id' should exist in backend but not frontend for etgoMatchRuleHeader"
       },
       {
         "id": "t-system-field-etgoMatchRuleHeader-organization",

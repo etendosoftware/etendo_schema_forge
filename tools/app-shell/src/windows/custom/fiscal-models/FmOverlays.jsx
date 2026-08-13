@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
+import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check, Landmark } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import './fiscal-models.css';
 
 function parseCityLine(cityLine) {
@@ -27,18 +28,22 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 3-path submission:
-//   1. submitted_ack — upload PDF/XML receipt; status → submitted_ack
-//   2. submitted     — submitted without receipt; status → submitted
-//   3. submitted_ext — submitted via external agency; status → submitted_ext
-export function PresentModal({ decl, onConfirm, onClose }) {
+// PresentModal — 4-path submission:
+//   1. submitted_ack   — upload PDF/XML receipt; status → submitted_ack
+//   2. submitted       — submitted without receipt; status → submitted
+//   3. submitted_ext   — submitted via external agency; status → submitted_ext
+//   4. aeat_telematic  — sentinel path (303 only): onConfirm reports the
+//      literal status 'aeat_telematic', which is never a real declaration
+//      status — the caller (FmModel303Page) intercepts it and opens the
+//      dedicated AeatSubmitFlow instead of changing the declaration status.
+export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
   const [path, setPath] = useState(null);
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const canConfirm = path === 'submitted_ext' || path === 'submitted' || (path === 'submitted_ack' && acuseFile);
+  const canConfirm = path === 'submitted_ext' || path === 'submitted' || path === 'aeat_telematic' || (path === 'submitted_ack' && acuseFile);
 
   function handleConfirm() {
     onConfirm({ status: path, acuseFile: path === 'submitted_ack' ? acuseFile : null });
@@ -49,6 +54,9 @@ export function PresentModal({ decl, onConfirm, onClose }) {
     { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
     { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
     { id: 'submitted_ext', icon: <ArrowUpRight size={16} strokeWidth={1.75} data-testid="ArrowUpRight__cda0bb" />, titleKey: 'fm.present.path.otra', descKey: 'fm.present.path.otra_desc' },
+    ...(showAeatPath ? [
+      { id: 'aeat_telematic', icon: <Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />, titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' },
+    ] : []),
   ];
 
   return (
@@ -74,25 +82,25 @@ export function PresentModal({ decl, onConfirm, onClose }) {
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 12,
                   padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-                  border: `1px solid ${path === p.id ? '#121217' : '#E8EAEF'}`,
-                  background: path === p.id ? '#F5F7F9' : '#fff',
+                  border: `1px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-subtle))'}`,
+                  background: path === p.id ? 'hsl(var(--muted))' : 'hsl(var(--card))',
                   transition: 'border-color .12s, background .12s',
                 }}
               >
                 <span style={{
                   width: 36, height: 36, borderRadius: 10, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: path === p.id ? '#121217' : '#F5F7F9',
-                  color: path === p.id ? '#fff' : '#828FA3',
+                  background: path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted))',
+                  color: path === p.id ? 'hsl(var(--card))' : 'hsl(var(--text-disabled))',
                   transition: 'background .12s, color .12s',
                 }}>
                   {p.icon}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', lineHeight: '20px' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', lineHeight: '20px' }}>
                     {t(p.titleKey)}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 400, color: '#828FA3', lineHeight: '18px', marginTop: 2 }}>
+                  <div style={{ fontSize: 13, fontWeight: 400, color: 'hsl(var(--text-disabled))', lineHeight: '18px', marginTop: 2 }}>
                     {t(p.descKey)}
                   </div>
                   {p.id === 'submitted_ack' && path === 'submitted_ack' && (
@@ -101,8 +109,8 @@ export function PresentModal({ decl, onConfirm, onClose }) {
                         type="button"
                         style={{
                           fontSize: 12, padding: '5px 12px',
-                          border: '1px solid #D1D4DB', borderRadius: 8,
-                          cursor: 'pointer', background: '#fff', color: '#121217',
+                          border: '1px solid hsl(var(--border-control))', borderRadius: 8,
+                          cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
                         }}
                         onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
                       >
@@ -120,12 +128,12 @@ export function PresentModal({ decl, onConfirm, onClose }) {
                 </div>
                 <span style={{
                   width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                  border: `2px solid ${path === p.id ? '#121217' : '#D1D4DB'}`,
-                  background: path === p.id ? '#121217' : 'transparent',
+                  border: `2px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-control))'}`,
+                  background: path === p.id ? 'hsl(var(--foreground))' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'border-color .12s, background .12s',
                 }}>
-                  {path === p.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'block' }} />}
+                  {path === p.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))', display: 'block' }} />}
                 </span>
               </div>
             ))}
@@ -142,7 +150,7 @@ export function PresentModal({ decl, onConfirm, onClose }) {
             disabled={!canConfirm}
             onClick={handleConfirm}
           >
-            {t('fm.action.confirm_presentation')}
+            {path === 'aeat_telematic' ? (t('fm.action.continue') ?? 'Continue') : t('fm.action.confirm_presentation')}
           </button>
         </div>
 
@@ -158,8 +166,8 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
   const [contact, setContact] = React.useState(decl?.contact ?? '');
   const inputSt = {
     width: '100%', fontSize: 14, padding: '8px 12px',
-    border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
-    boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+    border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
+    boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
   };
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -179,16 +187,16 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
         {/* Body */}
         <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.contact_name')}
               {t('fm.filegen.contact_name_hint') && (
-                <span style={{ fontSize: 12, color: '#828FA3', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
+                <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
               )}
             </div>
             <input style={inputSt} value={contact} onChange={e => setContact(e.target.value)} placeholder={t('fm.filegen.contact_name_placeholder')} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
             <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
           </div>
         </div>
@@ -218,8 +226,8 @@ export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
   const [filename, setFilename] = React.useState(defaultFilename ?? `303_${decl?.period}_${decl?.year}.txt`);
   const inputSt = {
     width: '100%', fontSize: 14, padding: '8px 12px',
-    border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
-    boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+    border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
+    boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
   };
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -234,7 +242,7 @@ export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
         <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
-          <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+          <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
             {t('fm.filegen.filename') ?? 'Nombre del fichero'}
           </div>
           <input
@@ -274,14 +282,14 @@ export function NewDeclModal({ onConfirm, onClose }) {
       <div className="fm-present-modal">
         <div className="fm-present-modal__title">{t('fm.new_decl.title')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: '#374151' }}>
+          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
             {t('fm.new_decl.model')}
             <select value={model} onChange={e => { setModel(e.target.value); setPeriod('T1'); }} style={{ marginLeft: 8, fontSize: 12 }}>
               <option value="303">303</option>
               <option value="349">349</option>
             </select>
           </label>
-          <label style={{ fontSize: 12, color: '#374151' }}>
+          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
             {t('fm.new_decl.year')}
             <select
               value={year}
@@ -293,7 +301,7 @@ export function NewDeclModal({ onConfirm, onClose }) {
               ))}
             </select>
           </label>
-          <label style={{ fontSize: 12, color: '#374151' }}>
+          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
             {t('fm.new_decl.period')}
             <select value={period} onChange={e => setPeriod(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
               <optgroup label={t('fm.new_decl.period_quarterly') ?? 'Trimestral'}>
@@ -328,7 +336,7 @@ export function IncidentTray({ incidents, onClose }) {
       <div className="fm-incident-tray__header">
         {t('fm.incidents.title')}
         <button
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'hsl(var(--muted-foreground))' }}
           onClick={onClose}
           aria-label={t('fm.action.close')}
         >
@@ -350,7 +358,7 @@ export function IncidentTray({ incidents, onClose }) {
 function CfgSection({ title, children }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontWeight: 600, fontSize: 14, color: '#121217', marginBottom: 12 }}>{title}</div>
+      <div style={{ fontWeight: 600, fontSize: 14, color: 'hsl(var(--foreground))', marginBottom: 12 }}>{title}</div>
       {children}
     </div>
   );
@@ -359,7 +367,7 @@ function CfgSection({ title, children }) {
 function CfgField({ label, children, style }) {
   return (
     <div style={{ marginBottom: 12, ...style }}>
-      <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   );
@@ -367,19 +375,19 @@ function CfgField({ label, children, style }) {
 
 const INPUT_ST = {
   width: '100%', fontSize: 14, padding: '8px 12px',
-  border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
-  boxSizing: 'border-box', color: '#121217', outline: 'none',
-  background: '#fff',
+  border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
+  boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none',
+  background: 'hsl(var(--card))',
 };
 
 function CfgSection303({ t }) {
   return (
     <CfgSection title={t('fm.config.m303.title')} data-testid="CfgSection__cda0bb">
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 8 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 8 }}>
         <input type="checkbox" defaultChecked />
         {t('fm.config.m303.redeme')}
       </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 12 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
         <input type="checkbox" />
         {t('fm.config.m303.recc')}
       </label>
@@ -426,7 +434,7 @@ function CfgSection349({ t }) {
       <CfgField label={t('fm.config.m349.keys')} data-testid="CfgField__cda0bb">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {['E', 'A', 'T', 'S', 'I'].map(k => (
-            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
               <input type="checkbox" defaultChecked />
               <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span>
             </label>
@@ -447,7 +455,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const modelTab = model ?? '303';
   const [activeTab, setActiveTab] = useState('declarante');
 
-  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '', conceptCondition: 'condición', amountTolerance: '0%' });
+  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '' });
   const [redeme, setRedeme] = useState(true);
   const [recc, setRecc] = useState(false);
   const [iban, setIban] = useState('');
@@ -488,13 +496,13 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const tabStyle = (id) => ({
     padding: '5px 16px', fontSize: 14,
     fontWeight: activeTab === id ? 500 : 400,
-    color: '#121217',
-    background: activeTab === id ? '#fff' : 'transparent',
+    color: 'hsl(var(--foreground))',
+    background: activeTab === id ? 'hsl(var(--card))' : 'transparent',
     border: 'none',
     borderRadius: 8,
     cursor: 'pointer',
     boxShadow: activeTab === id
-      ? '0px 1px 3px rgba(18,18,23,0.1), 0px 1px 2px rgba(18,18,23,0.06)'
+      ? '0px 1px 3px hsl(var(--foreground) / 0.1), 0px 1px 2px hsl(var(--foreground) / 0.06)'
       : 'none',
     transition: 'all 0.1s',
     whiteSpace: 'nowrap',
@@ -513,7 +521,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
 
         {/* Tab navigation */}
         <div style={{ padding: '12px 20px 16px' }}>
-        <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: '#F5F7F9' }}>
+        <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: 'hsl(var(--muted))' }}>
           {TABS.map(tab => (
             <button key={tab.id} style={{ ...tabStyle(tab.id), flex: 1, textAlign: 'center' }} onClick={() => setActiveTab(tab.id)}>
               {tab.label}
@@ -551,28 +559,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                   <input type="text" value={form.address} onChange={set('address')} style={INPUT_ST} />
                 </CfgField>
               </div>
-              {/* Row 3: Condición sobre el concepto + Tolerancia de importe */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <CfgField
-                  label={t('fm.config.declarant.concept_condition') ?? 'Condición sobre el concepto'}
-                  data-testid="CfgField__cda0bb">
-                  <select value={form.conceptCondition} onChange={set('conceptCondition')} style={INPUT_ST}>
-                    <option value="condición">condición</option>
-                    <option value="ninguna">ninguna</option>
-                  </select>
-                </CfgField>
-                <CfgField
-                  label={t('fm.config.declarant.amount_tolerance') ?? 'Tolerancia de importe'}
-                  data-testid="CfgField__cda0bb">
-                  <select value={form.amountTolerance} onChange={set('amountTolerance')} style={INPUT_ST}>
-                    <option value="0%">0%</option>
-                    <option value="1%">1%</option>
-                    <option value="2%">2%</option>
-                    <option value="5%">5%</option>
-                  </select>
-                </CfgField>
-              </div>
-              {/* Row 4: CP + Municipio + Provincia */}
+              {/* Row 3: CP + Municipio + Provincia */}
               <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: 12 }}>
                 <CfgField
                   label={t('fm.config.declarant.postal') ?? 'CP'}
@@ -597,18 +584,18 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
             <>
               {/* Regímenes fiscales */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 12 }}>
                   {t('fm.config.m303.regimes') ?? 'Regímenes fiscales'}
                 </div>
                 <div style={{ display: 'flex', gap: 20 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
                     <Checkbox
                       checked={redeme}
                       onChange={() => { setRedeme(v => !v); setIsDirty(true); }}
                       data-testid="Checkbox__cda0bb" />
                     {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
                     <Checkbox
                       checked={recc}
                       onChange={() => { setRecc(v => !v); setIsDirty(true); }}
@@ -671,7 +658,6 @@ const T1_2026_BOXES = { 7:3248, 27:682.08, 45:3498.39, 46:-2816.31 };
 export function CompareDrawer({ decl, prevDecl, onClose }) {
   const ui = useUI();
   const t = ui;
-  const fmt = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
 
   const boxes    = decl.boxes    ?? {};
   const summary  = decl.summary  ?? {};
@@ -710,7 +696,7 @@ export function CompareDrawer({ decl, prevDecl, onClose }) {
 
         {/* Body */}
         <div className="fm-config-modal__body" style={{ minHeight: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 12, fontWeight: 400, color: '#121217', borderBottom: '1px solid #E8EAEF' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 12, fontWeight: 400, color: 'hsl(var(--foreground))', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
             <span />
             <span style={{ textAlign: 'right', minWidth: 100 }}>{prevLabel}</span>
             <span style={{ textAlign: 'right', minWidth: 100 }}>{currLabel}</span>
@@ -720,15 +706,15 @@ export function CompareDrawer({ decl, prevDecl, onClose }) {
             const d      = r.curr - r.prev;
             const up     = d >= 0;
             const pctNum = r.prev !== 0 ? (d / Math.abs(r.prev)) * 100 : null;
-            let deltaColor = '#828FA3';
-            if (pctNum != null) deltaColor = up ? '#17663A' : '#D50B3E';
+            let deltaColor = 'hsl(var(--text-disabled))';
+            if (pctNum != null) deltaColor = up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
             const arrow     = up ? '↑' : '↓';
             const deltaText = pctNum == null ? '—' : `${arrow} ${Math.abs(pctNum).toFixed(1)}%`;
             return (
-              <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid #E8EAEF' : '1px solid #F5F7F9', fontSize: 14, alignItems: 'center' }}>
-                <span style={{ color: '#121217' }}>{r.label}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.prev)}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.curr)}</span>
+              <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid hsl(var(--border-subtle))' : '1px solid hsl(var(--muted))', fontSize: 14, alignItems: 'center' }}>
+                <span style={{ color: 'hsl(var(--foreground))' }}>{r.label}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.prev)}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.curr)}</span>
                 <span style={{ textAlign: 'right', minWidth: 72, color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                   {deltaText}
                 </span>
@@ -770,11 +756,11 @@ export function DrillDownPanel({ title, children, onClose }) {
   const ui = useUI();
   const t = ui;
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 360, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{title}</span>
+    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 360, background: 'hsl(var(--card))', borderLeft: '1px solid hsl(var(--border-subtle))', boxShadow: '-4px 0 16px hsl(var(--foreground) / .10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid hsl(var(--border-subtle))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontWeight: 600, fontSize: 13, color: 'hsl(var(--foreground))' }}>{title}</span>
         <button
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'hsl(var(--muted-foreground))' }}
           onClick={onClose}
           aria-label={t('fm.action.close')}
         >

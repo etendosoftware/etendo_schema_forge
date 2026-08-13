@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import GeneralTable from './GeneralTable';
 import GeneralForm from './GeneralForm';
 import DimensionesTable from './DimensionesTable';
@@ -593,6 +595,13 @@ export const api = {
 
 // @sf-generated-start component:GeneralPage
 export default function GeneralPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('125');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="125" />;
+  }
   if (recordId) {
     return (
       <>
@@ -615,7 +624,7 @@ export default function GeneralPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -630,7 +639,7 @@ export default function GeneralPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

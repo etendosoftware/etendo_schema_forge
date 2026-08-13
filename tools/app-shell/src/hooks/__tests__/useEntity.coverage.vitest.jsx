@@ -167,6 +167,36 @@ describe('useEntity — coverage paths', () => {
       expect(body.real).toBe('value');
     });
 
+    it('mirrors exemptionCauseWarning from the RESPONSE ROOT onto selected/editing (ETP-4751)', async () => {
+      const parent = { id: 'p1', name: 'Parent' };
+      const childRow = { id: 'c1', product: 'Exempt Widget' };
+      // The backend stamps the signal at the response ROOT, alongside {response:{data:[line]}},
+      // NOT on the nested line record. handleAddChild must read it from the root.
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') {
+          return {
+            ok: true, status: 200,
+            json: async () => ({ response: { data: [childRow] }, exemptionCauseWarning: true }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleAddChild({ product: 'Exempt Widget' });
+      });
+
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(true);
+        expect(result.current.editing.exemptionCauseWarning).toBe(true);
+      });
+      // The nested-line-only path never carried the flag; assert the autofill flag defaulted false.
+      expect(result.current.selected.exemptionCauseAutoFilled).toBe(false);
+    });
+
     it('handles json() failure gracefully', async () => {
       const parent = { id: 'p1' };
       globalThis.fetch.mockImplementation(async (url, opts) => {
@@ -225,6 +255,85 @@ describe('useEntity — coverage paths', () => {
       expect(result.current.children[0].qty).toBe(5);
       expect(result.current.children[0].price).toBe(20);
     });
+
+    it('mirrors exemptionCauseWarning from an explicit signalSource root (ETP-4751 PATCH path)', async () => {
+      globalThis.fetch.mockResolvedValue(mockFetchOk([]));
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'p1' }); });
+
+      globalThis.fetch.mockResolvedValueOnce(mockFetchOk([{ id: 'c1', qty: 1 }]));
+      await act(async () => { result.current.fetchChildren('p1'); });
+      await waitFor(() => { expect(result.current.children).toHaveLength(1); });
+
+      // serverRow is the nested line (no flag); signalSource is the PATCH response ROOT.
+      const serverRow = { id: 'c1', qty: 2 };
+      const responseRoot = { response: { data: [serverRow] }, exemptionCauseWarning: true };
+      act(() => { result.current.handleUpdateChild('c1', serverRow, undefined, responseRoot); });
+
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(true);
+        expect(result.current.editing.exemptionCauseWarning).toBe(true);
+      });
+    });
+
+    // ETP-4751 W2 regression guard: handleUpdateChild's object-form branch calls
+    // applyExemptionCauseSignals(fieldOrObject) for EVERY object-form line update, not
+    // only exemption saves. A plain (non-exemption) object update must NOT spuriously
+    // set either signal true — applyExemptionCauseSignals writes the resolved boolean
+    // (false when the object lacks the key). If this regressed to leaking a stale value,
+    // SifTab's one-shot toast could either fire spuriously or fail to re-arm.
+    it('object-form update WITHOUT a signal leaves both exemption flags false (ETP-4751 W2)', async () => {
+      globalThis.fetch.mockResolvedValue(mockFetchOk([]));
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'p1' }); });
+
+      globalThis.fetch.mockResolvedValueOnce(mockFetchOk([{ id: 'c1', qty: 1, price: 10 }]));
+      await act(async () => { result.current.fetchChildren('p1'); });
+      await waitFor(() => { expect(result.current.children).toHaveLength(1); });
+
+      // A normal line edit — plain object, no signal keys on it and no signalSource.
+      act(() => { result.current.handleUpdateChild('c1', { qty: 5, price: 20 }); });
+
+      await waitFor(() => {
+        // The resolved boolean is written, so both flags are the falsy `false`
+        // (never left undefined, never spuriously true).
+        expect(result.current.selected.exemptionCauseWarning).toBe(false);
+        expect(result.current.selected.exemptionCauseAutoFilled).toBe(false);
+        expect(result.current.editing.exemptionCauseWarning).toBe(false);
+        expect(result.current.editing.exemptionCauseAutoFilled).toBe(false);
+      });
+    });
+
+    // ETP-4751 W2 regression guard (the actual failure mode Alex flagged): after a
+    // warning has been stamped true, a subsequent PLAIN object-form line edit must
+    // reset it back to false — a `true → false` transition, with NO stale-true left
+    // behind. That reset is exactly what re-arms SifTab's one-shot toast guard; if the
+    // object-form branch stopped resetting, the flag would stick true and the warning
+    // would never re-fire on the next qualifying save.
+    it('plain object-form update resets a previously-true warning to false (ETP-4751 W2)', async () => {
+      globalThis.fetch.mockResolvedValue(mockFetchOk([]));
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'p1' }); });
+
+      globalThis.fetch.mockResolvedValueOnce(mockFetchOk([{ id: 'c1', qty: 1 }]));
+      await act(async () => { result.current.fetchChildren('p1'); });
+      await waitFor(() => { expect(result.current.children).toHaveLength(1); });
+
+      // 1) Stamp the warning true via an explicit signalSource root (the PATCH path).
+      const responseRoot = { response: { data: [{ id: 'c1', qty: 2 }] }, exemptionCauseWarning: true };
+      act(() => { result.current.handleUpdateChild('c1', { id: 'c1', qty: 2 }, undefined, responseRoot); });
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(true);
+        expect(result.current.editing.exemptionCauseWarning).toBe(true);
+      });
+
+      // 2) A normal, unrelated line edit (plain object, no signalSource) must flip it back.
+      act(() => { result.current.handleUpdateChild('c1', { qty: 3 }); });
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(false);
+        expect(result.current.editing.exemptionCauseWarning).toBe(false);
+      });
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -245,6 +354,49 @@ describe('useEntity — coverage paths', () => {
 
       expect(result.current.children).toHaveLength(2);
       expect(result.current.children.find(c => c.id === 'c2')).toBeUndefined();
+    });
+
+    // ETP-4751 (Bug A) — deleting a line must reset the transient exemption-cause
+    // signals to false so the SIF tab's one-shot warning-toast guard re-arms. Without
+    // this, an edited invoice that previously warned keeps the flag stuck `true` across
+    // the delete; re-adding an exempt line as the first line stamps `true` again with no
+    // intervening true→false transition, so the guard never re-arms and the warning
+    // silently fails to re-fire. The reset must also survive refreshHeaderTotals's
+    // carry-forward of the signal keys (it copies them from the previous record).
+    it('resets exemptionCauseWarning to false on delete so the toast guard re-arms (ETP-4751)', async () => {
+      const parent = { id: 'p1', name: 'Parent' };
+      const childRow = { id: 'c1', product: 'Exempt Widget' };
+      // The header GET fired by refreshHeaderTotals must NOT re-introduce the flag: it is
+      // a transient client-only signal, never an entity field, so the header row omits it.
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') {
+          return {
+            ok: true, status: 200,
+            json: async () => ({ response: { data: [childRow] }, exemptionCauseWarning: true }),
+          };
+        }
+        return mockFetchOk([{ id: 'p1', name: 'Parent' }]);
+      });
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      // A line save stamps the warning flag true (the "already warned once" state).
+      await act(async () => {
+        await result.current.handleAddChild({ product: 'Exempt Widget' });
+      });
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(true);
+        expect(result.current.editing.exemptionCauseWarning).toBe(true);
+      });
+
+      // Deleting the line must flip the flag back to false — and it must STAY false
+      // after refreshHeaderTotals's carry-forward runs.
+      await act(async () => { result.current.handleDeleteChild('c1'); });
+      await waitFor(() => {
+        expect(result.current.selected.exemptionCauseWarning).toBe(false);
+        expect(result.current.editing.exemptionCauseWarning).toBe(false);
+      });
     });
   });
 
@@ -658,6 +810,71 @@ describe('useEntity — coverage paths', () => {
       await act(async () => { await result.current.handleDelete(); });
 
       expect(toast.error).toHaveBeenCalledWith('Network error');
+    });
+
+    // ETP-4656 — same FK/RESTRICT normalization `useEntity-delete-errors.test.js`
+    // exercises via extractErrorMessage directly, but routed through the real
+    // handleDelete → normalizeServerError path (this file's Vitest/v8 instrumentation
+    // can attribute coverage back to useEntity.js, unlike that file's custom
+    // Node ESM loader hook — see its own header comment for why).
+    it('maps a raw Postgres FK/RESTRICT delete error to the standardized message', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'is still referenced from table "m_inout_line"' } }) }),
+            json: async () => ({ error: { message: 'is still referenced from table "m_inout_line"' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
+    });
+
+    it('maps the Spanish Postgres FK/RESTRICT wording ("se hace referencia a la llave")', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'aún se hace referencia a la llave "m_product_id"' } }) }),
+            json: async () => ({ error: { message: 'aún se hace referencia a la llave "m_product_id"' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
+    });
+
+    it('maps the classic Etendo AD_Message ForeignKeyViolation (Spanish variant)', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'DELETE') {
+          return {
+            ok: false, status: 500,
+            clone: () => ({ json: async () => ({ error: { message: 'No se puede eliminar este registro porque está relacionado con otros elementos existentes.' } }) }),
+            json: async () => ({ error: { message: 'No se puede eliminar este registro porque está relacionado con otros elementos existentes.' } }),
+          };
+        }
+        return mockFetchOk([]);
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'd1' }); });
+
+      await act(async () => { await result.current.handleDelete(); });
+
+      expect(toast.error).toHaveBeenCalledWith('This record cannot be deleted because it has associated records.');
     });
   });
 

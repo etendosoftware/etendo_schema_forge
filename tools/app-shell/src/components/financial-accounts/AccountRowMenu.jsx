@@ -8,6 +8,8 @@ import {
   Plug,
   ArrowLeftRight,
   Plus,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -25,22 +27,27 @@ import { ACCOUNT_TYPE } from './tokens';
  * downstream features ship. Items follow this order:
  *
  *   1. Abrir cuenta             (navigates to the detail)
- *   2. Editar cuenta            (opens the unified edit modal — includes the PSD2
+ *   2. Editar cuenta            (opens the unified edit modal — includes the bank
  *                                connection panel when connected, ETP-4097 / T3)
- *   3. Sincronizar ahora        (connected only — runs the PSD2 statement fetch)
+ *   3. Sincronizar ahora        (connected only — runs the bank statement fetch)
  *   ───
- *   4. Desconectar PSD2         (connected only)
- *   4'. Conectar PSD2           (not connected)
+ *   4. Desconectar banco         (connected only — deactivates, stays reconnectable)
+ *   4'. Reconectar               (soft-disconnected only — revives the surviving link)
+ *   4''. Conectar banco          (no bank link at all)
+ *   5. Borrar conexión           (any bank link — irreversible, ETP-4764)
  *
- * The former standalone "Editar conexión PSD2" item was merged into "Editar
+ * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
- * Cash accounts (type=C) never expose the PSD2 group because the connection
+ * Cash accounts (type=C) never expose the bank connection group because the connection
  * does not apply to manual cash drawers.
  */
-export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Action, onTransfer, onNewMovement }) {
+export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
   const ui = useUI();
   const isCash = account.type === ACCOUNT_TYPE.CASH;
-  const psd2Connected = account.psd2Connected === true;
+  const bankConnected = account.bankConnected === true;
+  const isArchived = account.active === false;
+  // Soft-disconnected: not connected, but the bank link survives and can be revived.
+  const bankReconnectable = account.bankReconnectable === true;
 
   return (
     <DropdownMenu data-testid="DropdownMenu__ffaf9f">
@@ -49,7 +56,7 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           type="button"
           aria-label={ui('financeAccountsRowMenuLabel')}
           data-testid={`account-row-menu-trigger-${account.id}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#E8EAEF]"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
         >
           <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ffaf9f" />
         </button>
@@ -62,8 +69,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onOpen?.(account)}
           data-testid={`account-row-menu-open-${account.id}`}
         >
-          <ExternalLink className="h-5 w-5 text-[#828FA3]" data-testid="ExternalLink__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <ExternalLink className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountsMenuOpen')}
           </span>
         </DropdownMenuItem>
@@ -72,8 +79,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onEdit?.(account)}
           data-testid={`account-row-menu-edit-${account.id}`}
         >
-          <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountsMenuEdit')}
           </span>
         </DropdownMenuItem>
@@ -82,8 +89,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onNewMovement?.(account)}
           data-testid={`account-row-menu-new-movement-${account.id}`}
         >
-          <Plus className="h-5 w-5 text-[#828FA3]" data-testid="Plus__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <Plus className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--text-primary))]">
             {ui('financeAccountTxNewAction')}
           </span>
         </DropdownMenuItem>
@@ -92,60 +99,109 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
           onClick={() => onTransfer?.(account)}
           data-testid={`account-row-menu-transfer-${account.id}`}
         >
-          <ArrowLeftRight className="h-5 w-5 text-[#828FA3]" data-testid="ArrowLeftRight__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#121217]">
+          <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountTransferAction')}
           </span>
         </DropdownMenuItem>
 
         {!isCash ? (
           <>
-            {psd2Connected ? (
+            {bankConnected ? (
               <>
                 <DropdownMenuItem
-                  onClick={() => onPsd2Action?.('syncNow', account)}
+                  onClick={() => onBankConnectionAction?.('syncNow', account)}
                   data-testid={`account-row-menu-sync-${account.id}`}
                 >
-                  <RefreshCw className="h-5 w-5 text-[#828FA3]" data-testid="RefreshCw__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
+                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                     {ui('financeAccountsMenuSyncNow')}
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
                 <DropdownMenuItem
-                  onClick={() => onPsd2Action?.('disconnect', account)}
+                  onClick={() => onBankConnectionAction?.('disconnect', account)}
                   data-testid={`account-row-menu-disconnect-${account.id}`}
                 >
-                  <Unlink2 className="h-5 w-5 text-[#828FA3]" data-testid="Unlink2__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
+                  <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                     {ui('financeAccountsMenuDisconnect')}
                   </span>
                 </DropdownMenuItem>
               </>
-            ) : (
+            ) : null}
+
+            {/* Soft-disconnected: the link survives, so offer to revive it rather than a
+                from-scratch connect, which would orphan the existing connection. */}
+            {!bankConnected && bankReconnectable ? (
+              <>
+                <DropdownMenuItem
+                  onClick={() => onBankConnectionAction?.('reconnect', account)}
+                  data-testid={`account-row-menu-reconnect-${account.id}`}
+                >
+                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                    {ui('financeAccountsBankConnectionReconnect')}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+              </>
+            ) : null}
+
+            {!bankConnected && !bankReconnectable ? (
               <DropdownMenuItem
-                onClick={() => onPsd2Action?.('connect', account)}
+                onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
               >
-                <Plug className="h-5 w-5 text-[#828FA3]" data-testid="Plug__ffaf9f" />
-                <span className="text-sm font-normal leading-6 text-[#121217]">
+                <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                   {ui('financeAccountsMenuConnect')}
                 </span>
               </DropdownMenuItem>
-            )}
+            ) : null}
+
+            {/* Permanent deletion is offered wherever a bank link exists — live or deactivated. */}
+            {bankConnected || bankReconnectable ? (
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('deleteConnection', account)}
+                data-testid={`account-row-menu-delete-connection-${account.id}`}
+              >
+                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+                  {ui('financeAccountsBankConnectionDeleteAction')}
+                </span>
+              </DropdownMenuItem>
+            ) : null}
           </>
         ) : null}
 
         <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-        <DropdownMenuItem
-          onClick={() => onArchive?.(account)}
-          data-testid={`account-row-menu-archive-${account.id}`}
-        >
-          <Archive className="h-5 w-5 text-[#D50B3E]" data-testid="Archive__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[#D50B3E]">
-            {ui('financeAccountsMenuArchive')}
-          </span>
-        </DropdownMenuItem>
+        {/* Archived accounts (the "Inactivas" view) get the inverse action instead — otherwise the
+            only thing on offer is archiving something that is already archived, with no way back.
+            Restoring is not destructive, so it drops the red treatment. */}
+        {isArchived ? (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-unarchive-${account.id}`}
+          >
+            <RotateCcw
+              className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
+              data-testid="RotateCcw__ffaf9f" />
+            <span className="text-sm font-normal leading-6">
+              {ui('financeAccountsMenuUnarchive')}
+            </span>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-archive-${account.id}`}
+          >
+            <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountsMenuArchive')}
+            </span>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

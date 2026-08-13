@@ -1,12 +1,14 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
     "category": "contact",
     "name": "Contacts",
     "entityLabel": "Contact",
     "sidebarLayout": false,
     "breadcrumb": "Contact",
     "detailEntity": null,
+    "statusField": "none",
     "summaryFields": [],
     "primaryTabs": [
       {
@@ -68,7 +70,6 @@
     "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
     "listViewOptions": {
       "hidePrint": true,
-      "hideEye": true,
       "hideCounter": true,
       "hideLink": true
     },
@@ -115,7 +116,8 @@
           "customerReceivablesNo",
           "customerPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       },
       "vendorAccounting": {
         "tabMode": "table-form",
@@ -126,7 +128,8 @@
           "vendorLiability",
           "vendorPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {
@@ -266,7 +269,8 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 9
+          "order": 9,
+          "inputPrefix": "https://"
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -536,7 +540,8 @@
         "psd2ApiKey": {
           "visibility": "discarded"
         }
-      }
+      },
+      "javaQualifier": "contactHandler"
     },
     "basicDiscount": {
       "fields": {
@@ -565,6 +570,7 @@
       }
     },
     "bankAccount": {
+      "agentPrompt": "#REF#agent-prompts/contacts/bank-account.md",
       "fields": {
         "bankName": {
           "visibility": "editable",
@@ -587,18 +593,21 @@
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "columnWidth": 360
+          "columnWidth": 360,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.account-no.md"
         },
         "iBAN": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "columnWidth": 400
+          "columnWidth": 400,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.iban.md"
         },
         "swiftCode": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.swift-code.md"
         },
         "displayedAccount": {
           "visibility": "readOnly",
@@ -609,6 +618,7 @@
     },
     "customerAccounting": {
       "javaQualifier": "customerAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
@@ -634,6 +644,7 @@
     },
     "vendorAccounting": {
       "javaQualifier": "vendorAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "vendorLiability": {

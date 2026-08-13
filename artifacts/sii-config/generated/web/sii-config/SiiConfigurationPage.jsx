@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import SiiConfigurationTable from './SiiConfigurationTable';
 import SiiConfigurationForm from './SiiConfigurationForm';
 import LogHashTable from './LogHashTable';
@@ -139,6 +141,13 @@ export const api = {
 
 // @sf-generated-start component:SiiConfigurationPage
 export default function SiiConfigurationPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('C1D3A2A017AC4B82B9FEE6F4D2A0C55A');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="C1D3A2A017AC4B82B9FEE6F4D2A0C55A" />;
+  }
   if (recordId) {
     return (
       <>
@@ -161,7 +170,7 @@ export default function SiiConfigurationPage({ windowName, recordId, ...props })
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -176,7 +185,7 @@ export default function SiiConfigurationPage({ windowName, recordId, ...props })
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

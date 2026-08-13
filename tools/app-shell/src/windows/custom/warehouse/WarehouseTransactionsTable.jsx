@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useWarehouseStock } from './useWarehouseStock';
+import { parseCalendarDate, formatCalendarDate } from '@/lib/dateOnly';
 
 /** Navigable link to the source document, styled like the Assets "Period" link. */
 function DocumentLink({ label, onClick }) {
@@ -10,12 +11,12 @@ function DocumentLink({ label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex items-center gap-1 text-sm font-medium text-[#121217]"
+      className="group inline-flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))]"
     >
-      <span className="border-b border-[#828FA3] group-hover:border-[#121217] transition-colors leading-6">
+      <span className="border-b border-[hsl(var(--text-disabled))] group-hover:border-[hsl(var(--foreground))] transition-colors leading-6">
         {label}
       </span>
-      <ArrowUpRight className="h-4 w-4 text-[#121217]" data-testid="ArrowUpRight__4dd2db" />
+      <ArrowUpRight className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="ArrowUpRight__4dd2db" />
     </button>
   );
 }
@@ -47,13 +48,25 @@ const TYPE_KEY_MAP = {
   'D-': 'movTypeInternalConsumption',
 };
 
+/**
+ * Document-window discriminator ({@code etgoDocWindow}, injected server-side by
+ * {@code ProductTransactionsHandler}) to i18n key. Unlike {@code M_Transaction.MovementType}
+ * (which is identical for a shipment and its return on the same side), the resolved window key
+ * already distinguishes a normal document from its return — see ETP-4864.
+ *
+ * Windows without a clear return semantics (goods-movements, physical-inventory) are
+ * intentionally absent here; those rows fall back to {@code TYPE_KEY_MAP} below.
+ */
+const WINDOW_TYPE_KEY_MAP = {
+  'goods-shipment': 'movTypeCustomerShipment',
+  'return-material-receipt': 'movTypeCustomerReturn',
+  'goods-receipt': 'movTypeVendorReceipt',
+  'return-to-vendor-shipment': 'movTypeVendorReturn',
+};
+
 function fmtDate(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  const day   = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year  = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return formatCalendarDate(iso);
 }
 
 function fmtQty(val) {
@@ -72,13 +85,17 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
     }
   }, [loading, error, transactions?.length]);
 
-  const resolveTypeLabel = (tx) =>
-    tx['movementType$_identifier'] ?? (TYPE_KEY_MAP[tx.movementType] ? ui(TYPE_KEY_MAP[tx.movementType]) : tx.movementType) ?? '';
+  const resolveTypeLabel = (tx) => {
+    const windowTypeKey = WINDOW_TYPE_KEY_MAP[tx.etgoDocWindow];
+    if (windowTypeKey) return ui(windowTypeKey);
+    if (TYPE_KEY_MAP[tx.movementType]) return ui(TYPE_KEY_MAP[tx.movementType]);
+    return tx['movementType$_identifier'] ?? tx.movementType ?? '';
+  };
 
   const sorted = useMemo(() => {
     if (!transactions) return [];
     return [...transactions].sort((a, b) =>
-      new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime()
+      (parseCalendarDate(b.movementDate)?.getTime() ?? 0) - (parseCalendarDate(a.movementDate)?.getTime() ?? 0)
     );
   }, [transactions]);
 
@@ -119,9 +136,9 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
           const canNavigate = Boolean(tx.etgoDocWindow && tx.etgoDocHeaderId);
           return (
             <tr key={tx.id ?? i} className="border-b border-border/30 hover:bg-muted/30 transition-colors h-10">
-              <td className="py-2.5 pr-3 font-semibold text-[#121217] tabular-nums whitespace-nowrap">{fmtDate(tx.movementDate)}</td>
+              <td className="py-2.5 pr-3 font-semibold text-[hsl(var(--foreground))] tabular-nums whitespace-nowrap">{fmtDate(tx.movementDate)}</td>
               <td className="py-2.5 pr-3 text-muted-foreground">{typeLabel}</td>
-              <td className="py-2.5 pr-3 text-[#121217]">
+              <td className="py-2.5 pr-3 text-[hsl(var(--foreground))]">
                 {docLabel && canNavigate ? (
                   <DocumentLink
                     label={docLabel}
@@ -131,8 +148,8 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
                   <span>{docLabel ?? '—'}</span>
                 )}
               </td>
-              <td className="py-2.5 pr-3 text-[#121217]">{product}</td>
-              <td className={`py-2.5 text-right tabular-nums font-semibold ${qty < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+              <td className="py-2.5 pr-3 text-[hsl(var(--foreground))]">{product}</td>
+              <td className={`py-2.5 text-right tabular-nums font-semibold ${qty < 0 ? 'text-destructive' : 'text-status-success-foreground'}`}>
                 {qty >= 0 ? '+' : ''}{fmtQty(qty)}
               </td>
             </tr>

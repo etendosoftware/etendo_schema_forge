@@ -104,12 +104,6 @@ export function useReturnToVendorPdf(shipmentId, apiBaseUrl, token) {
   });
 }
 
-export async function generateReturnToVendorPdf(shipmentId, apiBaseUrl, token, labels) {
-  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-  const data = await buildReturnToVendorData(shipmentId, base, token);
-  return renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels });
-}
-
 export function getReturnToVendorPdfLabels(ui) {
   return {
     title:            ui('returnToVendorPdfTitle'),

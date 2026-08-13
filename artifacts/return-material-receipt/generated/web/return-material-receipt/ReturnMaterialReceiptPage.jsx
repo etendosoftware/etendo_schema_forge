@@ -1,5 +1,8 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { toast } from 'sonner';
 import ReturnMaterialReceiptTable from './ReturnMaterialReceiptTable';
 import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
@@ -26,14 +29,13 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:returnMaterialReceipt
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:returnMaterialReceipt
 
 // @sf-generated-start processes:returnMaterialReceipt
 const processes = [
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @#ShowAcct@='Y'\n" },
+
 ];
 // @sf-generated-end processes:returnMaterialReceipt
 
@@ -177,12 +179,6 @@ export const api = {
     },
     {
       "entity": "returnMaterialReceipt",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/posted"
-    },
-    {
-      "entity": "returnMaterialReceipt",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/calculateFreight",
@@ -288,6 +284,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ReturnMaterialReceiptPage
 export default function ReturnMaterialReceiptPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('123271B9AD60469BAE8A924841456B63');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="123271B9AD60469BAE8A924841456B63" />;
+  }
   if (recordId) {
     return (
       <>
@@ -310,17 +313,20 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
+        hidePrintWhen={true}
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnMaterialReceiptBottomPanel}
         topbarRight={ConfirmWithCreditButton}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -338,7 +344,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

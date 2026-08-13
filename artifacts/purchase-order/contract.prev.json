@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.44.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-21T19:17:46.806Z",
-  "checksum": "97965f9f07e1b828",
+  "updatedAt": "2026-08-11T19:52:33.007Z",
+  "checksum": "3cb3e09676655071",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -12,7 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "hideSaveStatuses": [
         "CO",
         "CL",
@@ -31,7 +35,8 @@
           "C_BPartner_ID": "Contacto",
           "DatePromised": "Fecha de entrega esperada",
           "DeliveryStatusPurchase": "Estado de recepción",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -40,8 +45,18 @@
           "InvoiceStatus": "Invoicing Status"
         }
       },
+      "listViewOptions": {
+        "hidePrint": true
+      },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
@@ -1383,11 +1398,9 @@
             "defaultValue": "1",
             "section": "principal",
             "gridOrder": 3,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 10,
-              "minimum": 0
+              "maxLength": 10
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -1414,11 +1427,9 @@
             "columnType": "amount",
             "section": "principal",
             "gridOrder": 4,
-            "min": 0,
             "validation": {
               "required": true,
-              "maxLength": 22,
-              "minimum": 0
+              "maxLength": 22
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
@@ -2699,7 +2710,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "hideSaveStatuses": [
         "CO",
         "CL",
@@ -2718,7 +2733,8 @@
           "C_BPartner_ID": "Contacto",
           "DatePromised": "Fecha de entrega esperada",
           "DeliveryStatusPurchase": "Estado de recepción",
-          "InvoiceStatus": "Estado de facturación"
+          "InvoiceStatus": "Estado de facturación",
+          "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -2727,8 +2743,18 @@
           "InvoiceStatus": "Invoicing Status"
         }
       },
+      "listViewOptions": {
+        "hidePrint": true
+      },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
     },
@@ -5570,7 +5596,8 @@
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",

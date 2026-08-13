@@ -55,7 +55,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
   if (loading) {
     return (
       <div className="px-2 py-1">
-        <div className="flex items-center gap-5 rounded-lg border border-[#E8EAEF] px-3 py-2">
+        <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
           <Skeleton className="h-8 w-8 rounded-full" data-testid="Skeleton__748dd1" />
           <Skeleton className="h-5 w-48" data-testid="Skeleton__748dd1" />
           <div className="ml-auto flex gap-5">
@@ -70,7 +70,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
 
   return (
     <div className="px-2 py-1">
-      <div className="flex items-center gap-5 rounded-lg border border-[#E8EAEF] px-3 py-2">
+      <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
 
         {/* Avatar + identifier — fixed width, never grows or shrinks. Hidden for
             cash accounts (no IBAN) and for cards without a masked PAN. Banks show
@@ -79,16 +79,16 @@ export function AccountSummaryStrip({ account, totals, loading }) {
           <div className="flex w-[364px] shrink-0 items-center gap-2">
             <AccountLogoAvatar
               account={account}
-              className="h-8 w-8 shrink-0"
+              className="shrink-0"
               data-testid="AccountLogoAvatar__748dd1" />
             <div className="flex min-w-0 flex-col">
-              <span className="text-xs leading-4 text-[#3F3F50]">
+              <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
                 {isCard ? ui('financeAccountDetailCardNumber') : 'IBAN'}
               </span>
               <div className="flex items-center gap-0.5">
                 <span
                   data-testid="iban-text"
-                  className="truncate text-xs leading-4 text-[#6C6C89]"
+                  className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
                 >
                   {isCard ? account?.maskedPan : formatIban(account?.iban)}
                 </span>
@@ -97,7 +97,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
                     type="button"
                     onClick={handleCopyIban}
                     data-testid="iban-copy-button"
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9]"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
                     aria-label={ui('financeAccountDetailIbanCopyAria')}
                   >
                     <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
@@ -110,7 +110,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
 
         {/* Saldo total */}
         <div data-testid="kpi-balance" className="flex flex-1 flex-col gap-0.5">
-          <span className="text-xs leading-4 text-[#3F3F50]">
+          <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             {ui('financeAccountDetailKpiBalance')}
           </span>
           <MoneyAmount
@@ -123,7 +123,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
 
         {/* Entradas — sufijo dinámico según el filtro de fecha activo */}
         <div data-testid="kpi-inflows" className="flex flex-1 flex-col gap-0.5">
-          <span className="text-xs leading-4 text-[#3F3F50]">
+          <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             {ui('financeAccountDetailKpiInflows')}{suffix}
           </span>
           <MoneyAmount
@@ -136,7 +136,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
 
         {/* Salidas — mismo sufijo que Entradas */}
         <div data-testid="kpi-outflows" className="flex flex-1 flex-col gap-0.5">
-          <span className="text-xs leading-4 text-[#3F3F50]">
+          <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             {ui('financeAccountDetailKpiOutflows')}{suffix}
           </span>
           <MoneyAmount

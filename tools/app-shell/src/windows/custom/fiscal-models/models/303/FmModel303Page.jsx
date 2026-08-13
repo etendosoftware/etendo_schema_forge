@@ -4,14 +4,21 @@ import {
   Settings, Download,
   OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
   Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
-  ClipboardCheck, ReceiptText, Folder,
+  ClipboardCheck, ReceiptText, Folder, FileCheck,
 } from 'lucide-react';
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import AeatSubmitFlow from './AeatSubmitFlow.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents } from '../../fiscalModelsUtils.js';
+import { AttachmentsTab, useAttachments } from '@/components/attachments';
+
+// AD table name backing the AEAT justificante attachments store — both the
+// server-side auto-attach on a successful telematic submission and the
+// manual "Presentación con Acuse de recibo" upload persist here.
+const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 
 const STEPPER_INDEX = {
   draft: 0, ready: 1,
@@ -118,10 +125,10 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
   return (
-    <div style={{ background: '#fff', flex: 1, overflow: 'auto', padding: '0' }}>
+    <div style={{ background: 'hsl(var(--card))', flex: 1, overflow: 'auto', padding: '0' }}>
       <div style={{
         display: 'flex',
-        background: '#fff',
+        background: 'hsl(var(--card))',
         overflow: 'auto',
         minWidth: 'fit-content',
       }}>
@@ -137,8 +144,8 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
               onClick={() => setActiveSection(s.id)}
               style={{
                 padding: '8px 12px', fontSize: 14, textAlign: 'left', border: 'none', width: '100%',
-                background: activeSection === s.id ? '#E8EAED' : 'transparent',
-                color: '#121217',
+                background: activeSection === s.id ? 'hsl(var(--muted))' : 'transparent',
+                color: 'hsl(var(--foreground))',
                 fontWeight: activeSection === s.id ? 500 : 400,
                 cursor: 'pointer',
                 borderRadius: 8,
@@ -179,7 +186,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         className="fm-section-header__icon-btn"
-        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', background: '#fff' }}
+        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', background: 'hsl(var(--card))' }}
         onClick={() => setOpen(o => !o)}
         aria-label="Más opciones"
       >
@@ -191,7 +198,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <ArrowLeftRight
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="ArrowLeftRight__4f6c0d" />
             {t('fm.action.compare') ?? 'Comparar'}
           </button>
@@ -199,7 +206,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <Settings
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="Settings__4f6c0d" />
             {t('fm.config.title') ?? 'Configuración'}
           </button>
@@ -212,7 +219,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <Download
               size={14}
               strokeWidth={1.75}
-              style={{ color: fileBlocked ? '#dc2626' : '#121217' }}
+              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
               data-testid="Download__4f6c0d" />
             {t('fm.action.gen303') ?? 'Generar fichero 303'}
           </button>
@@ -232,9 +239,9 @@ function buildIncidentVariants(blocking, warning, t) {
   if (blocking > 0) tone = 'danger';
   else if (warning > 0) tone = 'warn';
 
-  let iconColor = '#828FA3';
-  if (blocking > 0) iconColor = '#D50B3E';
-  else if (warning > 0) iconColor = '#8A6100';
+  let iconColor = 'hsl(var(--text-disabled))';
+  if (blocking > 0) iconColor = 'hsl(var(--destructive))';
+  else if (warning > 0) iconColor = 'var(--status-warning-fg)';
 
   let badge = null;
   if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
@@ -251,6 +258,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [status, setStatus] = useState(decl.status);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
+  const [showAeatFlow, setShowAeatFlow] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
@@ -266,6 +274,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState({});
 
+  // Only used to grab `upload()` for the manual acuse-de-recibo path below —
+  // isActive: false keeps it from eagerly listing/fetching attachments on
+  // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
+  const { upload: uploadReceipt } = useAttachments({
+    tableName: FISCAL_DECL_TABLE,
+    recordId: decl.id,
+    token,
+    apiBaseUrl,
+    isActive: false,
+  });
+
   function handleBoxChange(boxNum, rawValue) {
     const value = parseBoxInput(rawValue);
     setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
@@ -279,6 +298,26 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
+
+  // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
+  // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
+  // token/apiBaseUrl is configured) and is refreshed from the real backend on mount and after
+  // every AEAT submission attempt (test or production — both replace the persisted rows server
+  // side, see `Fiscal303BoxesHandler#handleSubmit`).
+  const [incidents, setIncidents] = useState(decl.incidents ?? { blocking: 0, warning: 0, items: [] });
+
+  async function refreshIncidents() {
+    const fresh = await fetchDeclarationIncidents(decl.id, { token, apiBaseUrl });
+    setIncidents(fresh);
+  }
+
+  useEffect(() => {
+    // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
+    // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
+    if (!token || !apiBaseUrl) return;
+    refreshIncidents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl.id, token, apiBaseUrl]);
 
   async function handleCompute() {
     setComputing(true);
@@ -305,12 +344,39 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     onStatusChange?.(decl.id, newStatus);
   }
 
-  function handlePresent({ status: newStatus }) {
+  // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
+  // PDF was returned for the submission — including TEST_SUCCESS, which
+  // deliberately does NOT go through handleStatusChange (test mode must
+  // never change the declaration's status). Combined into the "Justificante"
+  // tab's remount key below so a test-mode success also refreshes the tab,
+  // without misusing the status-change path for it.
+  const [receiptRefreshTick, setReceiptRefreshTick] = useState(0);
+  function handleAeatAttached() {
+    setReceiptRefreshTick(t => t + 1);
+  }
+
+  function handlePresent({ status: newStatus, acuseFile }) {
+    // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
+    // real declaration status — it means "open the AEAT submission flow",
+    // not "change the status directly" like the other 3 manual paths.
+    if (newStatus === 'aeat_telematic') {
+      setShowPresent(false);
+      setShowAeatFlow(true);
+      return;
+    }
+    // Manual "Presentación con Acuse de recibo" path: persist the uploaded
+    // receipt to the same attachments store the "Justificante" tab reads
+    // from. Fire-and-forget — useAttachments.upload() already toasts its
+    // own errors and never rethrows, so a failed upload must not block the
+    // status change the user explicitly confirmed.
+    if (newStatus === 'submitted_ack' && acuseFile) {
+      uploadReceipt(acuseFile);
+    }
     handleStatusChange(newStatus);
   }
 
-  const blocking = decl.incidents?.blocking ?? 0;
-  const warning = decl.incidents?.warning ?? 0;
+  const blocking = incidents?.blocking ?? 0;
+  const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const fileBlocked = blocking > 0;
@@ -345,6 +411,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
       badge: decl.file ? 1 : null,
       icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
+    { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
+      icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
     { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
       icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
@@ -356,20 +424,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       {/* ── Title bar ────────────────────────────────────────────── */}
       <div style={{
         padding: '10px 20px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="fm-model-badge fm-model-badge--303">303</span>
-          <span style={{ fontWeight: 600, fontSize: 20, color: '#121217' }}>
+          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
             Modelo 303 - {periodLabel}
           </span>
           <MoreVertical
             size={14}
             strokeWidth={1.75}
-            style={{ color: '#9ca3af', cursor: 'pointer' }}
+            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
             data-testid="MoreVertical__4f6c0d" />
         </div>
-        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 1 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
           Tesorería / Modelo 303 - {periodLabel}
         </div>
       </div>
@@ -377,18 +445,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 20px 10px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <button
           className="fm-btn"
           onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', fontSize: 14, color: '#121217' }}
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}
         >
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
         <span style={{
           padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
-          background: '#F5F7F9', color: '#3F3F50',
+          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         }}>
           {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
         </span>
@@ -408,7 +476,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           className="fm-btn"
           onClick={handleCompute}
           disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', border: '1px solid #D1D4DB' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))' }}
         >
           {computing
             ? <Loader2
@@ -437,7 +505,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         display: 'flex', flexDirection: 'row', alignItems: 'center',
         gap: 12, padding: '12px 16px',
         flexShrink: 0,
-        background: '#fff',
+        background: 'hsl(var(--card))',
       }}>
         {/* Incidencias */}
         <KpiWidget
@@ -449,41 +517,41 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           label={t('fm.tab.incidents') ?? 'Incidencias'}
           value={String(incidentCount)}
           badge={incidentBadge}
-          badgeBg={blocking > 0 ? '#FEF0F4' : '#FFF9EB'}
-          badgeColor={blocking > 0 ? '#D50B3E' : '#8A6100'}
+          badgeBg={blocking > 0 ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)'}
+          badgeColor={blocking > 0 ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)'}
           data-testid="KpiWidget__4f6c0d" />
 
         {/* IVA Devengado */}
         <KpiWidget
           icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.accrued') ?? 'IVA Devengado'}
           value={formatAmount(summary.accrued ?? 0)}
           badge={t('fm.m303.summary.accrued_sub') ?? 'De ventas'}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
         {/* IVA Deducible */}
         <KpiWidget
           icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.deductible') ?? 'IVA Deducible'}
           value={formatAmount(summary.deductible ?? 0)}
           badge={t('fm.m303.summary.deductible_sub') ?? 'De compras'}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
         {/* Resultado */}
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
           badge={resultSubLabel}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
       </div>
       {/* ── Inline generate error ────────────────────────────────── */}
@@ -491,11 +559,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <div style={{
           margin: '4px 20px 0',
           padding: '8px 14px',
-          background: '#FEF0F4',
-          border: '1px solid #F9B8C8',
+          background: 'var(--status-destructive-bg)',
+          border: '1px solid hsl(var(--destructive) / 0.3)',
           borderRadius: 8,
           fontSize: 13,
-          color: '#D50B3E',
+          color: 'hsl(var(--destructive))',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -528,13 +596,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
           {activeTab === 'sources' && (
             <SourcesTab
-              decl={{ ...decl, sources: liveSources ?? decl.sources }}
+              decl={{ ...decl, sources: liveSources ?? decl.sources, incidents }}
               t={t}
               data-testid="SourcesTab__4f6c0d" />
           )}
           {activeTab === 'incidents' && (
             <IncidentsTab
-              decl={decl}
+              decl={{ ...decl, incidents }}
               blocking={blocking}
               warning={warning}
               t={t}
@@ -550,6 +618,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
               data-testid="FilesTab__4f6c0d" />
           )}
+          {activeTab === 'receipt' && (
+            // key={`${status}-${receiptRefreshTick}`}: `status` changes when a
+            // production submission succeeds (handleStatusChange) — AEAT's own
+            // auto-attach on a successful telematic submission happens
+            // server-side and is invisible to this component, so remounting
+            // AttachmentsTab (and its useAttachments instance) on a status
+            // change is how this tab notices the new file. `receiptRefreshTick`
+            // covers the case `status` can't: a TEST_SUCCESS submission also
+            // gets a PDF attached server-side now, but test mode must never
+            // change the declaration's status, so it can't ride the status-key
+            // remount — AeatSubmitFlow's onAttached bumps the tick instead.
+            (<AttachmentsTab
+              tableName={FISCAL_DECL_TABLE}
+              recordId={decl.id}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              isActive={activeTab === 'receipt'}
+              config={{ allowedMimeTypes: ['application/pdf'] }}
+              key={`${status}-${receiptRefreshTick}`}
+              data-testid="AttachmentsTab__303receipt" />)
+          )}
           {activeTab === 'history' && (
             <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
           )}
@@ -560,7 +649,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           decl={decl}
           onConfirm={handlePresent}
           onClose={() => setShowPresent(false)}
+          showAeatPath
           data-testid="PresentModal__4f6c0d" />
+      )}
+      {showAeatFlow && (
+        <AeatSubmitFlow
+          decl={decl}
+          orgIdent={orgIdent}
+          identChecks={identChecks}
+          summary={summary}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          onSuccess={(newStatus) => handleStatusChange(newStatus)}
+          onAttached={handleAeatAttached}
+          onIncidentsChanged={refreshIncidents}
+          onClose={() => setShowAeatFlow(false)}
+          data-testid="AeatSubmitFlow__4f6c0d" />
       )}
       {showFilegen && (
         <FileGenModal303

@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.26.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-14T15:10:25.533Z",
-  "contractChecksum": "11250808b7bb6a1a",
+  "updatedAt": "2026-07-22T10:47:48.784Z",
+  "contractChecksum": "12944acec8a976f4",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -750,7 +750,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -1032,5 +1033,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "479950653b6032bf"
+  "checksum": "eb933e0fbd3c1b52"
 }

@@ -1,9 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock react-router-dom
+const { mockUseFeatureFlag } = vi.hoisted(() => ({
+  mockUseFeatureFlag: vi.fn(() => false),
+}));
+
+// Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
+// tests can override the current path (e.g. the ETP-4598 openGroups-race
+// regression test below needs a non-'/dashboard' route).
+const mockUseLocation = vi.fn(() => ({ pathname: '/dashboard', search: '' }));
 vi.mock('react-router-dom', () => ({
-  useLocation: () => ({ pathname: '/dashboard', search: '' }),
+  useLocation: () => mockUseLocation(),
   NavLink: ({ children, to, className, ...props }) => (
     <a href={to} className={typeof className === 'function' ? '' : className} {...props}>{children}</a>
   ),
@@ -30,6 +37,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 const mockUseFavorites = vi.fn(() => ({ favorites: [] }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => mockUseFavorites(),
+}));
+
+vi.mock('@/lib/flags', () => ({
+  useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
+  TENANT_UPGRADE: 'tenant-upgrade',
+  PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
 }));
 
 // Mock menu.json — includes a couple of extra entries (a "Favorites" group and
@@ -163,6 +176,15 @@ const MENU_GROUPS = [
       { name: 'sales-invoice', label: 'Sales Invoice' },
     ],
   },
+  {
+    group: 'Proof of Concept',
+    icon: 'FlaskConical',
+    section: 'System',
+    items: [
+      { name: 'quick-sales-order', label: 'Quick Sales Order' },
+      { name: 'quick-purchase-order', label: 'Quick Purchase Order' },
+    ],
+  },
 ];
 
 describe('SideMenu', () => {
@@ -249,7 +271,10 @@ describe('SideMenu', () => {
       // baseline here so it doesn't leak into other tests.
       mockUseAuth.mockReturnValue({ selectedOrg: { name: 'Test Org' }, user: { name: 'User' }, logout: vi.fn() });
       mockUseFavorites.mockReturnValue({ favorites: [] });
+      mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
       delete import.meta.env.VITE_SHOW_ARTIFACTS;
+      mockUseFeatureFlag.mockReset();
+      mockUseFeatureFlag.mockReturnValue(false);
     });
 
     // A group whose currentPath ('dashboard') matches one of two items, so the
@@ -331,6 +356,59 @@ describe('SideMenu', () => {
       expect(screen.queryByTestId('menu-item-dashboard-extra')).not.toBeInTheDocument();
     });
 
+    it('opens a group for the current route once the route\'s item appears in menuGroups after mount, with no navigation (ETP-4598 openGroups regression)', () => {
+      // Regression test for the bug fixed in SideMenu.jsx (activeGroup?.group
+      // added to the openGroups-sync effect's dependency array): AppLayout.jsx's
+      // useRoleMenu() always renders `menuGroups` filtered-to-empty on first
+      // paint (allowedIds starts `undefined`, treated as an empty allow-set),
+      // then re-renders with the real (unfiltered or role-filtered) menuGroups
+      // once the SFListMenu webhook resolves — with no route change in between.
+      // Before the fix, `openGroups` was only recomputed on
+      // [location.pathname, location.search], so a direct/deep-link load into a
+      // route whose menu item is absent from the very first menuGroups render
+      // left that item's group permanently collapsed even once it appeared.
+      mockUseLocation.mockReturnValue({ pathname: '/tax', search: '' });
+
+      // First render: simulates the pre-resolution state — 'tax' is not yet in
+      // the Settings group's items (as if role-filtering hid it), so no group
+      // matches the current route and findActiveGroup returns null.
+      const SETTINGS_BEFORE_RESOLVE = [
+        {
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [
+            { name: 'other-setting', label: 'Other Setting' },
+            { name: 'yet-another', label: 'Yet Another' },
+          ],
+        },
+      ];
+      // Second render (same location, no navigation): simulates allowedIds
+      // resolving — 'tax' now appears in the Settings group's items.
+      const SETTINGS_AFTER_RESOLVE = [
+        {
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [
+            { name: 'other-setting', label: 'Other Setting' },
+            { name: 'tax', label: 'Tax' },
+          ],
+        },
+      ];
+
+      const { rerender } = render(<SideMenu {...defaultProps} menuGroups={SETTINGS_BEFORE_RESOLVE} />);
+      // Settings has 2 items (non-direct) and isn't the active group yet, so it
+      // starts collapsed — none of its sub-items are rendered.
+      expect(screen.queryByTestId('menu-item-other-setting')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('menu-item-tax')).not.toBeInTheDocument();
+
+      rerender(<SideMenu {...defaultProps} menuGroups={SETTINGS_AFTER_RESOLVE} />);
+      // Settings is now the active group (its 'tax' item matches /tax) — it
+      // must end up expanded/open without any click or navigation.
+      expect(screen.getByTestId('menu-item-tax')).toBeInTheDocument();
+    });
+
     it('highlights only the active direct-link icon in collapsed mode', () => {
       render(<SideMenu {...defaultProps} menuGroups={COLLAPSED_DIRECT_GROUPS} expanded={false} />);
       const activeLink = screen.getByTestId('menu-item-dashboard');
@@ -410,6 +488,24 @@ describe('SideMenu', () => {
       const link = screen.getByTestId('NavLink__247c75');
       expect(link).toHaveAttribute('href', '/artifacts');
       expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    });
+
+    it('hides the Proof of Concept section while its flag is off', () => {
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
+    });
+
+    it('shows the Proof of Concept section when its flag is on', () => {
+      mockUseFeatureFlag.mockImplementation(key => key === 'proof-of-concept-menu');
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.getByText('Proof of Concept')).toBeInTheDocument();
+    });
+
+    it('keeps the Proof of Concept section hidden when the provider falls back', () => {
+      // A failed provider resolves useFeatureFlag to the declared false default.
+      mockUseFeatureFlag.mockReturnValue(false);
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
     });
 
     it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {

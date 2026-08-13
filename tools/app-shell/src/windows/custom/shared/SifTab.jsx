@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SelectorInput } from '@/components/contract-ui/SelectorInput.jsx';
 import {
   useSifFieldPatcher,
   VERIFACTU_INV_TYPE_OPTIONS,
@@ -45,7 +47,7 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
         disabled={disabled}
         onClick={() => !disabled && onToggle(!checked)}
         className={[
-          'h-5 w-5 shrink-0 rounded-sm border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+          'h-5 w-5 shrink-0 rounded-sm border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
           'flex items-center justify-center transition-colors',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
@@ -63,10 +65,10 @@ function CheckboxField({ id, checked, disabled, onToggle }) {
 }
 
 const PILL_CLS = {
-  pending: 'bg-yellow-50 text-yellow-800',
-  success: 'bg-green-50 text-green-700',
-  neutral: 'bg-[#F5F7F9] text-gray-700',
-  danger: 'bg-red-50 text-red-700',
+  pending: 'bg-status-warning text-status-warning-foreground',
+  success: 'bg-status-success text-status-success-foreground',
+  neutral: 'bg-[hsl(var(--muted))] text-foreground',
+  danger: 'bg-destructive text-destructive-foreground',
 };
 
 const SII_STATUS = {
@@ -169,6 +171,70 @@ function ReadOnlyField({ id, labelKey, value, ui }) {
   );
 }
 
+// ETP-4751 (Block B): SII exemption cause, replicating Classic's ExemptTaxes parity for
+// both invoice types. Backed by the existing `/header/selectors/aeatsiiCauseExemption`
+// selector endpoint (target table AEATSII_CAUSE_EXEMPTION). The FK value/identifier pair
+// mirrors DimensionsPanel: `onChange` writes both the id (`aeatsiiCauseExemption`) that
+// CRUD persists and the `$_identifier` used for display.
+//
+// Editability gate (Classic parity): the field is editable ONLY when the invoice actually
+// carries an exempt tax (`hasExemptTaxes`, served by the backend NeoHandler), is still a
+// draft, and has not been sent to SII (`siiFieldReadOnly`). With no exempt taxes it renders
+// READ-ONLY but stays visible (Classic keeps it on the form). The "should indicate an
+// exemption cause" case is NOT shown inline here — it is surfaced as a warning toast fired
+// on invoice LINE save (see the exemption-signal effect below), because the field lives in
+// the SIF tab (not the header) and gluing the warning to the field is poor UX.
+// No hardcoded `label` here — the visible label/placeholder is resolved through
+// i18n at render time (see `resolvedLabel` below), which SelectorInput uses for
+// both the field label and the "Select …" placeholder.
+const EXEMPTION_CAUSE_FIELD = {
+  id: 'sif-exemption',
+  key: 'aeatsiiCauseExemption',
+  column: 'aeatsiiCauseExemption',
+  required: false,
+};
+
+function ExemptionCauseField({ ui, data, apiBaseUrl, token, editable, onChange }) {
+  const selectedCause = data?.aeatsiiCauseExemption;
+
+  if (!editable) {
+    return (
+      <ReadOnlyField
+        id="sif-exemption"
+        labelKey="sifDataTabs.field.exemptionCause"
+        value={data?.['aeatsiiCauseExemption$_identifier']}
+        ui={ui}
+        data-testid="ReadOnlyField__b99c8b" />
+    );
+  }
+  const value = selectedCause ?? '';
+  const displayValue = data?.['aeatsiiCauseExemption$_identifier'] ?? '';
+  const selectorUrl = apiBaseUrl
+    ? `${apiBaseUrl}/header/selectors/aeatsiiCauseExemption`
+    : null;
+  return (
+    <Field
+      label={ui('sifDataTabs.field.exemptionCause')}
+      htmlFor="sif-exemption"
+      data-testid="Field__b99c8b">
+      <SelectorInput
+        entityName="header"
+        field={EXEMPTION_CAUSE_FIELD}
+        value={value}
+        displayValue={displayValue}
+        onChange={(val, lbl) => {
+          onChange?.('aeatsiiCauseExemption', val);
+          onChange?.('aeatsiiCauseExemption$_identifier', lbl ?? '');
+        }}
+        catalogs={null}
+        resolvedLabel={ui('sifDataTabs.field.exemptionCause')}
+        selectorUrl={selectorUrl}
+        token={token}
+        data-testid="SelectorInput__b99c8b" />
+    </Field>
+  );
+}
+
 // Shared by the SII and Verifactu panels: Classic's displayLogic for this field is
 // `@etvfac_has_configuration@='Y' | @TBAI_ExistTBAIConfig@=1 | @AEATSII_AcogidaSII@='Y'`,
 // i.e. it must render whenever ANY fiscal regime is configured, not just SII.
@@ -226,9 +292,54 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     showVerifactu,
     dateReadOnly,
     siiFieldReadOnly,
+    isDraft,
     getVal,
     getDateVal,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
+
+  // ETP-4751 (Block B): exempt-tax signal served by the invoice-header NeoHandler
+  // (AbstractInvoiceHeaderHandler#enrichHasExemptTaxes). Refreshed on every line
+  // add/edit/delete (useEntity#refreshHeaderTotals re-GETs the header), so it always
+  // reflects the CURRENT line state and correctly gates the exemption-cause field
+  // read-only when the invoice no longer carries any exempt tax.
+  const hasExemptTaxes = data?.hasExemptTaxes === true || data?.hasExemptTaxes === 'Y';
+  const exemptionCauseEditable = hasExemptTaxes && isDraft && !siiFieldReadOnly;
+
+  // ETP-4751 (Block B/F): Classic parity for the SII module's ExemptTaxes line-save behaviour.
+  // The invoice-LINE NeoHandler (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave) stamps
+  // AT MOST ONE mutually-exclusive signal on its line-save response, mirrored onto the header
+  // `data` by useEntity#applyExemptionCauseSignals:
+  //   • exemptionCauseAutoFilled → a default cause existed and was written → info toast
+  //     ("Causa de exención modificada"). DORMANT in Etendo GO (no default cause is seeded).
+  //   • exemptionCauseWarning → an exempt tax is present, no header cause, and NO default cause
+  //     to auto-fill → warning toast ("Debería indicarse una causa de exención"), telling the
+  //     user to pick a cause in this SIF tab.
+  // Each fires once per line save; the guard re-arms when the flag flips back to false between
+  // saves (applyExemptionCauseSignals always writes the resolved boolean).
+  const autoFillToastedRef = useRef(false);
+  const warningToastedRef = useRef(false);
+  useEffect(() => {
+    if (data?.exemptionCauseAutoFilled && !autoFillToastedRef.current) {
+      autoFillToastedRef.current = true;
+      toast.info(ui('sifDataTabs.toast.exemptionCauseModified.title'), {
+        description: ui('sifDataTabs.toast.exemptionCauseModified.description'),
+      });
+    }
+    if (!data?.exemptionCauseAutoFilled) {
+      autoFillToastedRef.current = false;
+    }
+  }, [data?.exemptionCauseAutoFilled, ui]);
+  useEffect(() => {
+    if (data?.exemptionCauseWarning && !warningToastedRef.current) {
+      warningToastedRef.current = true;
+      toast.warning(ui('sifDataTabs.toast.exemptionCauseRequired.title'), {
+        description: ui('sifDataTabs.toast.exemptionCauseRequired.description'),
+      });
+    }
+    if (!data?.exemptionCauseWarning) {
+      warningToastedRef.current = false;
+    }
+  }, [data?.exemptionCauseWarning, ui]);
 
   const defaultTab = resolveDefaultTab(showSii);
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -263,7 +374,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
 
   return (
     <div className="flex gap-2 p-2 h-full min-h-0">
-      <div className="w-56 shrink-0 flex flex-col gap-1 border border-border/40 rounded-lg bg-white p-2">
+      <div className="w-56 shrink-0 flex flex-col gap-1 border border-border/40 rounded-lg bg-card p-2">
         {railItems.map(item => {
           const active = effectiveTab === item.key;
           return (
@@ -272,7 +383,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               type="button"
               onClick={() => setActiveTab(item.key)}
               className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-md cursor-pointer text-left transition-colors ${
-                active ? 'bg-gray-50 border-l-2 border-primary' : 'hover:bg-gray-50/60'
+                active ? 'bg-muted border-l-2 border-primary' : 'hover:bg-muted/60'
               }`}
             >
               <span className={`text-xs font-semibold ${active ? 'text-primary' : 'text-foreground'}`}>
@@ -285,7 +396,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
           );
         })}
       </div>
-      <div className="flex-1 border border-border/40 rounded-lg bg-white overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 border border-border/40 rounded-lg bg-card overflow-hidden flex flex-col min-h-0">
         {effectiveTab === 'sii' && showSii && (
           <Panel
             titleKey={PANEL_META.sii.titleKey}
@@ -336,12 +447,14 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 disabled={siiFieldReadOnly}
                 data-testid="Input__b99c8b" />
             </Field>
-            <ReadOnlyField
-              id="sif-exemption"
-              labelKey="sifDataTabs.field.exemptionCause"
-              value={data?.['aeatsiiCauseExemption$_identifier']}
+            <ExemptionCauseField
               ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
+              data={data}
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              editable={exemptionCauseEditable}
+              onChange={onChange}
+              data-testid="ExemptionCauseField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.authorization')}
               htmlFor="sif-auth"

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ConversionRateTable from './ConversionRateTable';
 import ConversionRateForm from './ConversionRateForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -98,6 +100,13 @@ export const api = {
 
 // @sf-generated-start component:ConversionRatePage
 export default function ConversionRatePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('116');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="116" />;
+  }
   if (recordId) {
     return (
       <>
@@ -116,7 +125,7 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Conversion_Rate", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -132,7 +141,7 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
       api={api}
       hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

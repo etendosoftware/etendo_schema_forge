@@ -1,10 +1,12 @@
+import { useMemo } from 'react';
 import { ListModalWindow } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 
 // @sf-generated-start columns:etgoMatchRuleHeader
 const columns = [
   { key: 'priority', column: 'Priority', type: 'number', label: 'Priority', labelKey: 'matchRuleColPriority', inlineEdit: true, cellType: 'priorityPill' },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', labelKey: 'matchRuleColName', cellType: 'nameWithSubline', subField: 'financialAccount', subEmptyKey: 'matchRuleAllAccounts' },
-  { key: 'textCondition', column: 'TextCondition', type: 'enum', label: 'Text Condition', labelKey: 'matchRuleColCondition', enumLabels: { 'C': 'Contains', 'R': 'Regex', 'S': 'Starts with' }, cellType: 'conditionChip', kindField: 'textCondition', patternField: 'textPattern', kindLabels: {"C":"matchRuleConditionContains","S":"matchRuleConditionStartsWith","R":"matchRuleConditionRegex"} },
+  { key: 'textCondition', column: 'TextCondition', type: 'enum', label: 'Text Condition', labelKey: 'matchRuleColCondition', enumLabels: { 'C': 'textConditionC', 'R': 'textConditionR', 'S': 'textConditionS' }, cellType: 'conditionChip', kindField: 'textCondition', patternField: 'textPattern', kindLabels: {"C":"matchRuleConditionContains","S":"matchRuleConditionStartsWith","R":"matchRuleConditionRegex"} },
   { key: 'transactionType', column: 'ETGO_Transaction_Type_ID', type: 'selector', label: 'Transaction Type', labelKey: 'matchRuleColType' },
   { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting concept', labelKey: 'matchRuleColConcept' },
   { key: 'matchCount', column: 'MatchCount', type: 'number', label: 'Match Count', labelKey: 'matchRuleColReconciliations', cellType: 'boldText' },
@@ -207,6 +209,13 @@ export const api = {
 
 // @sf-generated-start component:EtgoMatchRuleHeaderPage
 export default function EtgoMatchRuleHeaderPage({ windowName, ...props }) {
+  const windowAccessTier = useWindowAccess('24963D64E83B4543A7F6BD248CF944EE');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="24963D64E83B4543A7F6BD248CF944EE" />;
+  }
   return (
     <ListModalWindow
       entity="etgoMatchRuleHeader"
@@ -219,7 +228,7 @@ export default function EtgoMatchRuleHeaderPage({ windowName, ...props }) {
       filters={filters}
       config={listModalConfig}
       api={api}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

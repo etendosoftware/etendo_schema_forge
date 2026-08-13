@@ -43,8 +43,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val, cur) => (val != null ? `${Number(val).toFixed(2)}${cur ? ` ${cur}` : ''}` : ''),
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (cur, val) => (val != null ? `${Number(val).toFixed(2)}${cur ? ` ${cur}` : ''}` : ''),
 }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
@@ -52,6 +52,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
@@ -226,7 +227,7 @@ describe('DataTable — render coverage', () => {
         { id: 'f2', total: 250, 'currency$_identifier': 'EUR' },
       ];
       render(<DataTable columns={cols} data={rows} selectable={false} showFooterTotals />);
-      // 100 + 250 = 350 → formatAmount mock → "350.00 EUR"
+      // 100 + 250 = 350 → formatCurrency mock → "350.00 EUR"
       expect(screen.getByText('350.00 EUR')).toBeInTheDocument();
     });
 
@@ -362,6 +363,89 @@ describe('DataTable — render coverage', () => {
         />,
       );
       expect(screen.getByText('\u25B2')).toBeInTheDocument();
+    });
+  });
+
+  // --- multiField column header: N independently sortable segments ---
+
+  describe('multiField column header', () => {
+    const MF_COLS = [{
+      key: 'name',
+      type: 'multiField',
+      title: 'name',
+      subtitle: 'searchKey',
+      parts: [
+        { key: 'searchKey', label: 'Identifier' },
+        { key: 'name', label: 'Name' },
+      ],
+    }];
+
+    it('renders one clickable segment per part, joined by the default separator', () => {
+      render(<DataTable columns={MF_COLS} data={[]} onSort={vi.fn()} selectable={false} />);
+      expect(screen.getByTestId('column-header-sort-searchKey')).toBeInTheDocument();
+      expect(screen.getByTestId('column-header-sort-name')).toBeInTheDocument();
+      expect(screen.getByText('Identifier')).toBeInTheDocument();
+      expect(screen.getByText('Name')).toBeInTheDocument();
+      expect(screen.getByText('&')).toBeInTheDocument();
+    });
+
+    it('honors a custom col.partSeparator', () => {
+      const cols = [{ ...MF_COLS[0], partSeparator: ' / ' }];
+      render(<DataTable columns={cols} data={[]} onSort={vi.fn()} selectable={false} />);
+      expect(screen.getByText('/')).toBeInTheDocument();
+    });
+
+    it('clicking a part segment calls onSort with that part.key, not the column key', async () => {
+      const onSort = vi.fn();
+      render(<DataTable columns={MF_COLS} data={[]} onSort={onSort} selectable={false} />);
+      await act(async () => {
+        await userEvent.click(screen.getByTestId('column-header-sort-searchKey'));
+      });
+      expect(onSort).toHaveBeenCalledWith('searchKey');
+
+      await act(async () => {
+        await userEvent.click(screen.getByTestId('column-header-sort-name'));
+      });
+      expect(onSort).toHaveBeenCalledWith('name');
+    });
+
+    it('shows the sort arrow only on the currently active part', () => {
+      render(
+        <DataTable
+          columns={MF_COLS}
+          data={[]}
+          onSort={vi.fn()}
+          sortColumn="searchKey"
+          sortDirection="asc"
+          selectable={false}
+        />,
+      );
+      const activeSegment = screen.getByTestId('column-header-sort-searchKey');
+      const inactiveSegment = screen.getByTestId('column-header-sort-name');
+      expect(within(activeSegment).getByText('\u25B2')).toBeInTheDocument();
+      expect(within(inactiveSegment).queryByText('\u25B2')).toBeNull();
+      expect(within(inactiveSegment).queryByText('\u25BC')).toBeNull();
+    });
+
+    it('renders a non-clickable segment when part.sortable is false', () => {
+      const cols = [{
+        ...MF_COLS[0],
+        parts: [
+          { key: 'searchKey', label: 'Identifier', sortable: false },
+          { key: 'name', label: 'Name' },
+        ],
+      }];
+      render(<DataTable columns={cols} data={[]} onSort={vi.fn()} selectable={false} />);
+      const segment = screen.getByTestId('column-header-sort-searchKey');
+      expect(segment.tagName).toBe('SPAN');
+      expect(screen.getByTestId('column-header-sort-name').tagName).toBe('BUTTON');
+    });
+
+    it('leaves non-multiField column headers on the single-label branch', () => {
+      const cols = [{ key: 'docNo', label: 'Doc No', type: 'string' }];
+      render(<DataTable columns={cols} data={[]} onSort={vi.fn()} selectable={false} />);
+      expect(screen.queryByTestId('column-header-sort-docNo')).toBeNull();
+      expect(screen.getByText('Doc No')).toBeInTheDocument();
     });
   });
 

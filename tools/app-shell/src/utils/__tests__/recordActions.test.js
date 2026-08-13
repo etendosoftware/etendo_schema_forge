@@ -111,6 +111,56 @@ describe('isDeleteVisibleForRecord', () => {
     assert.deepEqual(DELETABLE_DOC_STATUSES, ['DR', 'RPAP', 'N']);
   });
 
+  describe('boolean-typed statusField (e.g. physical-inventory / goods-movements "processed")', () => {
+    it('returns true when the boolean status is false (not yet processed / draft-like)', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: false },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        true,
+      );
+    });
+
+    it('returns false when the boolean status is true (processed)', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: true },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        false,
+      );
+    });
+
+    it('does not fall through to the string-code whitelist for booleans (regression guard)', () => {
+      // Before the fix, `DELETABLE_DOC_STATUSES.includes(false)` and
+      // `.includes(true)` both evaluate to false, which hid Delete
+      // unconditionally — even for draft (processed: false) records.
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: false },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        true,
+        'draft-like boolean status must remain deletable',
+      );
+    });
+
+    it('is unaffected when hideDeleteWhenComplete is false, regardless of boolean value', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: true },
+          statusField: 'processed',
+          hideDeleteWhenComplete: false,
+        }),
+        true,
+      );
+    });
+  });
+
   describe('hideDeleteButton (unconditional hide)', () => {
     it('returns false for a draft record when hideDeleteButton is true', () => {
       assert.equal(
@@ -243,10 +293,27 @@ describe('evalRowVisibleWhen', () => {
     );
   });
 
-  it('returns true when referenced field is absent from row', () => {
+  // ── ETP-4717 fail-closed regression ─────────────────────────────────────
+  // A referenced field missing from the row means the clause cannot be
+  // evaluated. Previously this fail-opened (treated as satisfied → the
+  // gated action stayed visible). The fix fails closed: an unevaluable
+  // clause is NOT satisfied, so a `visibleWhen` gate defaults to HIDING
+  // the action, not showing it. These cases must FAIL against the current
+  // (unfixed) `evalRowVisibleWhen` source, which still returns `true`.
+  it('returns false when referenced field is absent from row (fail-closed)', () => {
     assert.equal(
       evalRowVisibleWhen("@MissingField@='X'", { otherField: 'Y' }),
-      true,
+      false,
+    );
+  });
+
+  it('returns false for a != clause when referenced field is absent from row (fail-closed)', () => {
+    // A naive != implementation could trivially return true here (absent
+    // !== 'X'); the fail-closed contract requires false regardless of the
+    // operator, since the clause is unevaluable either way.
+    assert.equal(
+      evalRowVisibleWhen("@MissingField@!='X'", { otherField: 'Y' }),
+      false,
     );
   });
 
@@ -258,7 +325,7 @@ describe('evalRowVisibleWhen', () => {
     );
   });
 
-  it('handles null row gracefully', () => {
-    assert.equal(evalRowVisibleWhen("@Field@='X'", null), true);
+  it('hides gracefully — fails closed — when row is null', () => {
+    assert.equal(evalRowVisibleWhen("@Field@='X'", null), false);
   });
 });

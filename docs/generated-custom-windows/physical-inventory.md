@@ -100,8 +100,78 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Added the "Generate lines automatically" feature: a new `GenerateLinesModal` (Product Category, Inventory Quantity, Set Book Quantity to zero) reachable from the lines empty-state and from the "+ Add line" dropdown, both wired through `PhysicalInventoryBottomPanel`.
 - Added the `inventory` NeoHandler (`InventoryHandler.java`, `@Named("inventory")`) that drives core AD Process 105 (`M_Inventory_ListCreate`) from NEO Headless — the first backend handler for this window's header entity.
 
+## Design changes — ETP-4656
+
+- Set `hideDeleteWhenComplete: true` in `decisions.json` so the Form-view toolbar delete icon is hidden once the record is processed ("Solo Borrador" per the delete-UX design doc). `statusField` here is `processed`, a **boolean** field (not a string status code) — the shared gate `isDeleteVisibleForRecord` (`tools/app-shell/src/utils/recordActions.js`) was extended to treat `false` as deletable and `true` as not when the status value is a JS boolean, ahead of the existing `DELETABLE_DOC_STATUSES` string-code check. Grid hover/multi-select delete is untouched by this change (no `RowQuickActions` wired for this window's list).
+
 ## Merge refresh notes
 - This guide was refreshed against `origin/develop` after the `epic/ETP-3504` merge by re-reading the current Physical Inventory window code rather than relying on older guide text.
 - The create-list and update-system-count flow comes from `e5876cec` (`Feature ETP-3585: Physical inventory - add actions to kebab menu`) plus the current `InventoryMenuContent.jsx` and `InventoryCreateListModal.jsx` on `origin/develop`.
 - The line-required process visibility comes from `3766a7f5` (`Hotfix ETP-3585: Hide process button when no lines exist`) plus the current `DetailView.jsx` process filter on `origin/develop`.
 - The selector-context and saved-parent fixes come from `f26c171b` (`Feature ETP-3585: Fix physical inventory selector context`) plus the current `DetailView.jsx`, `InventoryPage.jsx`, and `InventoryLineForm.jsx` on `origin/develop`.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no such field on the header | **Nunca** — no such field on the lines tab |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously `form: false`) | **N/A** — `M_InventoryLine` has no `project` column; the matrix's "Por config" cell cannot be implemented via `decisions.json` (would require an AD Application Dictionary change to expose the column on this tab) |
+| `costCenter` | **Por config** — same fix as `project` (previously discarded) | **N/A** — same AD-level limitation as `project` |
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the ETP-4543 fix (non-grid line fields invisible
+under `inlineEditable` line layout, resolved for `sales-invoice`/`purchase-invoice`/
+`goods-shipment`/`goods-receipt` — see `sales-invoice.md`, Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`) don't apply here — there is no such field in this
+window's `lines` entity for that fix to affect in the first place (see the "N/A" cells above),
+so the header fix is the whole story for this window.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project` and `header.costCenter` (both already present and config-gated, confirmed —
+no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, making them
+render in the secondary/collapsed area instead of the main visible form. Fixed by changing
+`section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `InventoryForm.jsx`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Two columns of this window were resolving to the wrong advanced-filter mode:
+
+| Column | Where | Real type | Was | Now |
+|--------|-------|-----------|-----|-----|
+| `warehouse` (`M_Warehouse_ID`) | `tools/app-shell/src/windows/custom/physical-inventory/index.jsx` — `type: 'custom'` | foreign key | `text` (matched against the raw UUID) | `identifier` |
+| `etgoQtydiff` (`EM_Etgo_Qtydiff`) | generated `InventoryLineTable.jsx`, emitted as `type: 'signedDelta'` from `"columnType": "signedDelta"` in `decisions.json` | numeric | `text` | `numeric` |
+
+Neither needed a per-column annotation — both were fixed generically in
+`resolveFilterMode` / `inferFilterMode` (`tools/app-shell/src/lib/gridQuery.js`):
+
+- `signedDelta` is now mapped to `numeric` by `inferFilterMode`, so the difference
+  column offers `=, ≠, >, ≥, <, ≤, Entre` and a numeric input.
+- Unrecognized column types (`custom` among them) no longer short-circuit the
+  inference chain, so they reach the `_ID` foreign-key heuristic — which is what
+  restores `identifier` mode on `warehouse` and makes it match the visible
+  warehouse name instead of the UUID.
+
+Manual check: open the list, filter by **Almacén** and confirm typing part of a
+warehouse name narrows the rows; filter by the difference column and confirm the
+numeric operators are offered. Full reference:
+[`list-filters.md`](../list-filters.md).
+
+## Semantic visual states
+
+The inventory-list dialog and top-bar controls use structural surface, border, and
+foreground roles. The Generate action remains the standard high-contrast action.

@@ -68,10 +68,10 @@ describe('ReturnWindowShell', () => {
     assert.match(src, /\.\.\.pageProps/);
   });
 
-  // ── recordId branch — passes hidePrint={true} ──────────────────────────────
+  // ── recordId branch ─────────────────────────────────────────────────────────
 
-  it('passes hidePrint={true} to PageComponent when recordId is truthy', () => {
-    assert.match(src, /hidePrint=\{true\}/);
+  it('does not hardcode hidePrint (ETP-4729 — generic print icon must render)', () => {
+    assert.doesNotMatch(src, /hidePrint/);
   });
 
   it('renders PageComponent directly when recordId is provided', () => {
@@ -104,8 +104,8 @@ describe('ReturnWindowShell', () => {
     assert.match(src, /editMode: 'navigate'/);
   });
 
-  it('sets hideDeleteWhenComplete to true in rowQuickActions', () => {
-    assert.match(src, /hideDeleteWhenComplete: true/);
+  it('does not set hideDeleteWhenComplete in rowQuickActions (grid delete always visible per ETP-4656)', () => {
+    assert.doesNotMatch(src, /hideDeleteWhenComplete/);
   });
 
   // ── CloneOrderModal portal ─────────────────────────────────────────────────

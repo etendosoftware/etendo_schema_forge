@@ -1,3 +1,4 @@
+import './productImportDescriptor.js';
 import ProductPage from '@generated/product/generated/web/product/ProductPage';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import ProductCustomTable from './ProductCustomTable';
@@ -6,7 +7,7 @@ import ProductCustomTable from './ProductCustomTable';
 
 export default function ProductApp({ windowName, recordId, ...props }) {
   return (
-    <div className="contents [&_input:not(:disabled):hover]:!bg-[#F5F7F9] [&_textarea:not(:disabled):hover]:!bg-[#F5F7F9] [&_button[role='combobox']:not([disabled]):hover]:!bg-[#F5F7F9]">
+    <div className="contents [&_input:not(:disabled):hover]:!bg-[hsl(var(--muted))] [&_textarea:not(:disabled):hover]:!bg-[hsl(var(--muted))] [&_button[role='combobox']:not([disabled]):hover]:!bg-[hsl(var(--muted))]">
       <ProductPage
         windowName={windowName}
         recordId={recordId}

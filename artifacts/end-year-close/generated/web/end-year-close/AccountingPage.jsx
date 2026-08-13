@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -81,6 +83,13 @@ export const api = {
 
 // @sf-generated-start component:AccountingPage
 export default function AccountingPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('B5673F73F613496C8BEA22FB55E4E1E4');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="B5673F73F613496C8BEA22FB55E4E1E4" />;
+  }
   if (recordId) {
     return (
       <>
@@ -98,7 +107,7 @@ export default function AccountingPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FinancialMgmtAccountingFactEndYearHQL", config: {} } }]}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -113,7 +122,7 @@ export default function AccountingPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

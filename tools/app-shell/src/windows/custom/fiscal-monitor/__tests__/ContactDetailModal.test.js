@@ -135,8 +135,8 @@ describe('OptionPicker — structure', () => {
     assert.match(src, /Check.*size/);
   });
 
-  it('highlights the selected item with inline background style', () => {
-    assert.match(src, /background: opt\.id === value \? '#F5F7F9'/);
+  it('highlights the selected item with a semantic inline background style', () => {
+    assert.match(src, /background: opt\.id === value \? 'hsl\(var\(--muted\)\)'/);
   });
 
   it('handles Escape key to close the dropdown', () => {

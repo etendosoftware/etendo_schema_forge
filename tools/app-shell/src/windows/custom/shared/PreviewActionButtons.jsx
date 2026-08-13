@@ -18,7 +18,7 @@ export default function PreviewActionButtons({
       {onEmail && (
         <Button
           size="sm"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={onEmail}
           data-testid="Button__9ccdc3">
           <Mail data-testid="Mail__9ccdc3" />
@@ -28,20 +28,20 @@ export default function PreviewActionButtons({
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
-        disabled={!hasPdf}
-        onClick={hasPdf ? onDownloadPdf : undefined}
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+        disabled={!hasPdf || !onDownloadPdf}
+        onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
         data-testid="Button__9ccdc3">
-        <Download className="text-[#828FA3]" data-testid="Download__9ccdc3" />
+        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__9ccdc3" />
         {downloadLabel}
       </Button>
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={triggerEdit}
         data-testid="Button__9ccdc3">
-        <Edit2 className="text-[#828FA3]" data-testid="Edit2__9ccdc3" />
+        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__9ccdc3" />
         {editLabel}
       </Button>
     </>
@@ -50,7 +50,7 @@ export default function PreviewActionButtons({
 
 export function PreviewEmptyPanel({ icon, text }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 py-20">
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
       <span className="text-3xl">{icon}</span>
       <p className="text-sm">{text}</p>
     </div>
@@ -157,7 +157,7 @@ export function PreviewPdfPanel({ pdfLoading, pdfError, pdfUrl, generatingText, 
       )}
       {pdfError && !pdfLoading && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <AlertCircle className="h-8 w-8 text-amber-400" data-testid="AlertCircle__9ccdc3" />
+          <AlertCircle className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__9ccdc3" />
           <p className="text-sm text-muted-foreground">{errorText}</p>
           <p className="text-xs text-muted-foreground/60">{pdfError}</p>
         </div>

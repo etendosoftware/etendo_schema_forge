@@ -50,7 +50,15 @@
         "falseKey": "notPostedStatus",
         "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
       }
-    ]
+    ],
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
+    }
   },
   "entities": {
     "header": {
@@ -92,7 +100,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 30,
-          "defaultValue": "@Today@",
+          "defaultValue": "@#Date@",
           "readOnlyLogic": "@Processed@='Y'"
         },
         "orderReference": {
@@ -108,6 +116,17 @@
           "seq": 40,
           "defaultExpr": "@#M_Warehouse_ID@",
           "readOnlyLogic": "@Processed@='Y'"
+        },
+        "etgoCurrency": {
+          "visibility": "editable",
+          "reference": "Currency",
+          "inputMode": "selector",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "seq": 45,
+          "readOnlyLogic": "@Processed@='Y'",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "description": {
           "section": "collapsed",
@@ -129,15 +148,15 @@
           "searchable": true
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "form": false,
@@ -215,6 +234,7 @@
         },
         "orderQuantity": {
           "grid": true,
+          "gridReadOnly": true,
           "form": true,
           "visibility": "readOnly",
           "section": "principal",
@@ -264,21 +284,21 @@
           "displayLogic": null
         },
         "businessPartner": {
-          "reference": "BusinessPartner",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "discarded",
+          "reason": "ETP-4529 — never applicable as a dimension on Albarán compra lines."
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,

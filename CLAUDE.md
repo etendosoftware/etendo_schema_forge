@@ -239,6 +239,24 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
+
+- **Browser (React components):** `formatCurrency(currencyCode, value)` and `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`. Never format an amount with `.toFixed()`, `toLocaleString()`, or your own `Intl.NumberFormat` for currency/amount display.
+- **jsreport / PDF / printed reports:** `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — this is the only helper string that may cross the HTTP boundary into the jsreport container. Never write a second `formatCurrency`/`formatNumber` Handlebars helper by hand.
+- Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
+- Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
+
+## Date-Only Parsing & Formatting (MANDATORY)
+
+**Every business/calendar date (invoice date, movement date, statement date, etc.) MUST be parsed through the canonical date-only utilities — never a hand-rolled `new Date(string)` on a date-only value.** `new Date("2026-08-10")` parses the string as UTC midnight; reading it back with local-time getters (`getDate()`/`getMonth()`/`getFullYear()`) or formatting it with `toLocaleDateString()`/`Intl.DateTimeFormat` without an explicit `timeZone` rolls the displayed day back one under a negative-UTC-offset timezone (e.g. `America/Argentina/Buenos_Aires`). This exact bug shipped repeatedly across the codebase — ETP-4031, then again as ETP-4850 across five unrelated components — before being centralized. Treat any new ad-hoc date-only parser as a bug, not a style nit.
+
+- Use `parseCalendarDate(raw)` and `formatCalendarDate(raw, locales, options)` from `tools/app-shell/src/lib/dateOnly.js`. `parseCalendarDate` extracts the `yyyy-MM-dd` prefix and builds the `Date` via the local-time constructor (`new Date(year, month-1, day)`), so the calendar day is never shifted by the host's timezone offset; `formatCalendarDate` wraps it with `toLocaleDateString`.
+- This applies to sorting/bucketing by date too — e.g. grouping transactions into monthly buckets or comparing against date-range bounds — not just display. Use `parseCalendarDate`, not `new Date(...).getTime()`, whenever the comparison must stay in local-calendar-day space (see `tools/app-shell/src/lib/dateRangeBounds.js`, whose `from`/`to` bounds are local-time `Date`s).
+- A comparator that only orders full timestamp instants (no local-getter reads, no day-bucket keys) is timezone-independent and does not need this helper — don't over-apply the fix where the bug can't occur.
+- Before writing a new date formatter or date-bucketing comparator, **grep for `parseCalendarDate`/`formatCalendarDate` first** — there is almost certainly an existing pattern to copy in a sibling window/component (10+ call sites already use it).
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).
@@ -256,7 +274,41 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
 - **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
-**Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs).
+**Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs). Note that
+`git push --no-verify` is a different matter and is blocked for agents — see
+**Agent Guardrails** below.
+
+## Agent Guardrails (committed Claude hooks)
+
+`.claude/settings.json` is versioned and ships repo-wide Claude Code hooks. Every
+teammate who opens this repo in Claude Code gets them automatically; the scripts
+live in `.claude/hooks/`.
+
+| Hook | Event | Effect |
+|---|---|---|
+| `block-push-no-verify.sh` | `PreToolUse` / `Bash` | **Denies** any `git push --no-verify` issued through the Bash tool |
+
+Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
+failing tests, coverage drops (`docs/coverage-gate.md`) and Sonar regressions
+before CI. Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
+cycle. When the gate blocks a push, **fixing what it reports is the task** — do
+not route around it. If the gate itself is broken, say so and stop.
+
+The hook denies a segment only when it is a real invocation: it blanks quoted
+spans, drops `VAR=value` prefixes, then requires the segment to *start* with
+`git` and to carry `push` as a bare word plus `--no-verify`. So `cd x && git push
+--no-verify` and `HUSKY=0 git push --no-verify` are caught, while a commit message
+or grep pattern that merely mentions the flag is not.
+
+Deliberately NOT blocked: `git commit --no-verify` (documented WIP escape hatch)
+and `git push -n` (that's `--dry-run`, not a bypass). The hook only constrains the
+Bash tool — a human can always run the bypass in their own terminal.
+
+Adding a hook: drop an executable script in `.claude/hooks/`, register it in
+`.claude/settings.json`, and pipe-test it with a synthetic payload
+(`echo '{"tool_name":"Bash","tool_input":{"command":"..."}}' | .claude/hooks/<script>`)
+before committing. Note `.gitignore` ignores `.claude/*` — both paths are
+explicitly un-ignored via negation rules, so a new subdirectory needs its own.
 
 **Adding a new rule (F11+):** implemented in the `schema_forge_core` repo (`cli/src/validate-pipeline.js`, fixtures under `cli/test/fixtures/pipeline-validator/`, tests in `cli/test/validate-pipeline.test.js`) — publish + bump the package per `docs/repo-topology.md`. AND update the rules table in this repo's `docs/pipeline-validator-reference.md`. The reference doc is canonical — if a rule is not documented there, it doesn't exist.
 
@@ -440,3 +492,15 @@ public class InternalConsumptionLineHandler implements NeoHandler {
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
 Full reference: `docs/neo-headless-extensibility.md`
+
+## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
+
+**A different extension point from `NeoHandler` above** — for a brand-new, standalone
+Etendo-GO-authored webhook (e.g. `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`), default to
+routing it through the **NEO pseudo-spec bridge** (`NeoGoWebhookBridge`, wired in `NeoServlet`)
+instead of exposing it only via the Webhooks module's `/webhooks/*` + `SMFWHE_DEFINEDWEBHOOK_ROLE`
+grant. That grant table is reset to its XML-only baseline by `update.database`, silently wiping any
+tenant-specific grant — the NEO bridge needs only a valid NEO bearer token, no per-role grant. No
+security is weakened: each webhook's own access rule inside `get()` is unchanged either way.
+
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.10–4.11.

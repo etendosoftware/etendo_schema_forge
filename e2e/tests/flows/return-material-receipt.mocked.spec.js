@@ -7,11 +7,13 @@ import { login } from '../helpers/auth.js';
  * Covers ETP-4033:
  *   - List view: columns, row quick-actions (edit/delete for DR; clone for CO)
  *   - Preview panel: row click opens GenericPreviewModal, shows documentNo, closes
- *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button visible,
- *     modal opens on click, Cancel dismisses it, Confirm fires documentAction POST
+ *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button absent
+ *     (ETP-4714 — decisions.json hidePrintWhen: true), modal opens on click,
+ *     Cancel dismisses it, Confirm fires documentAction POST
  *   - CO detail (no invoice): "Crear factura de devolución" button visible,
- *     Clone button visible, Print button visible, clicking "Crear factura" opens modal,
- *     confirming fires createReturnInvoice POST and shows ConfirmResultModal
+ *     Clone button visible, Print button absent (ETP-4714 — decisions.json
+ *     hidePrintWhen: true), clicking "Crear factura" opens modal, confirming
+ *     fires createReturnInvoice POST and shows ConfirmResultModal
  *
  * Mock mode only — no backend required.
  */
@@ -76,17 +78,29 @@ const ROWS = [
  * these specific handlers win over the generic /sws/** stub from login().
  */
 async function installReturnReceiptMocks(page) {
-  // Lines endpoint — always empty
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', async (route) => {
+  // NOTE: two page.route() registrations per endpoint, not the `{/**,}**`
+  // brace pattern — Playwright's glob→regex compiler only treats `**` as
+  // "crosses path separators" when it is immediately followed by `/` (or the
+  // glob's end); inside a brace group the `**` right before the `,` is
+  // followed by `,`, so it silently degrades to a single-segment `[^/]*`.
+  // That matched one-segment sub-paths (e.g. `/returnMaterialReceipt/ret-001`)
+  // but NOT the two-segments-deep `/returnMaterialReceipt/<id>/action/<name>`
+  // POSTs (`documentAction`, `createReturnInvoice`), which fell through to
+  // the generic `/sws/**` stub from login() and never returned the
+  // synthetic `CO`/invoice data the confirm flow needs. See
+  // docs/e2e-testing-guide.md for the full write-up.
+  const linesHandler = async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
     });
-  });
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine/**', linesHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', linesHandler);
 
   // Header list + detail
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', async (route) => {
+  const headerHandler = async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();
@@ -107,13 +121,16 @@ async function installReturnReceiptMocks(page) {
       return;
     }
 
-    // POST action/createReturnInvoice → synthetic invoice
+    // POST action/createReturnInvoice → synthetic rectificativa invoice.
+    // ETP-4737: the generated invoice carries a NEGATIVE total (return flow) — the
+    // response key must be `grandTotalAmount` (not `grandTotal`), matching the field
+    // useConfirmWithCredit.js / ConfirmInOutModal.jsx actually read from the API.
     if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotal: 150 } },
+          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotalAmount: -150 } },
         }),
       });
       return;
@@ -142,7 +159,9 @@ async function installReturnReceiptMocks(page) {
     }
 
     route.fallback();
-  });
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt/**', headerHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', headerHandler);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,8 +217,9 @@ test.describe('return-material-receipt — list and preview', () => {
     // Clone (duplicate) must be visible for CO rows
     await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
 
-    // Delete is hidden for CO rows because hideDeleteWhenComplete: true
-    await expect(coRow.getByTestId('row-quick-action-delete')).toHaveCount(0);
+    // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
+    // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.
+    await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
     // --- Preview panel: click DR row ---
     // Move away from CO row first (unhover) then click DR row
@@ -238,11 +258,11 @@ test.describe('return-material-receipt — DR form actions', () => {
     const confirmBtn = page.getByTestId('action-confirm-with-credit');
     await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
 
-    // --- Print button is visible (no data-testid — match by accessible text) ---
-    // The PrintButton renders ui('print'), which via i18n returns the key "print"
-    // or the translated value ("Imprimir" in es_ES). Match both.
+    // --- Print button must NOT be rendered in the detail/form view (ETP-4714) ---
+    // decisions.json sets window.hidePrintWhen: true, which unconditionally
+    // suppresses DetailView's generic icon-only Print button regardless of status.
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
-    await expect(printBtn).toBeVisible();
+    await expect(printBtn).toHaveCount(0);
 
     // --- Click "Confirmar" → modal opens ---
     await confirmBtn.click();
@@ -250,6 +270,13 @@ test.describe('return-material-receipt — DR form actions', () => {
     // Toggle card visible in modal (ConfirmInOutModal uses role="switch", not role="checkbox")
     const modalInvoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
     await expect(modalInvoiceToggle).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the toggle card must show the current "Crear Factura Rectificativa"
+    // wording (returnReceipt.createRectificativeInvoice) — regression guard for the
+    // Factura de Devolución → Factura Rectificativa rename.
+    await expect(
+      page.getByTestId('confirm-inout-modal').getByText('Crear Factura Rectificativa', { exact: true }),
+    ).toBeVisible();
 
     // Cancel button via data-testid
     const cancelBtn = page.getByTestId('confirm-modal-cancel-btn');
@@ -278,6 +305,11 @@ test.describe('return-material-receipt — DR form actions', () => {
     // Wait for the result card or at minimum the modal to disappear and something to update
     // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the rectificativa invoice is created with a negative total (return
+    // flow) — the result card must render the negative amount as returned by the
+    // backend (fmtAmount uses Number.toLocaleString, which keeps the minus sign).
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });
 
@@ -293,17 +325,26 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
   test('CO detail: create invoice button, print button, invoice modal confirm — full flow', async ({ page }) => {
     test.setTimeout(120_000); // 3 navigations + modal flow can exceed 60s under full-suite load
-    // ret-003 is CO with hasReturnInvoice=false — "Crear factura de devolución" must be visible
+    // ret-003 is CO with hasReturnInvoice=false — "Crear Factura Rectificativa" must be visible
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // --- "Crear factura de devolución" button is visible ---
+    // --- "Crear Factura Rectificativa" button is visible ---
     const createInvoiceBtn = page.getByTestId('action-create-return-invoice');
     await expect(createInvoiceBtn).toBeVisible({ timeout: 8_000 });
 
-    // --- Print button is visible ---
+    // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
+    // back to the hardcoded, stale `createReturnInvoice` i18n key ("Crear Factura de
+    // Devolución") with no per-window override; ConfirmWithCreditButtonBase now accepts
+    // a `postConfirmButtonLabel` prop and this window wires it to
+    // returnReceipt.createRectificativeInvoice. Regression guard: same wording as the
+    // confirm-modal's toggle card (asserted above in the DR flow test).
+    await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
+
+    // --- Print button must NOT be rendered in the detail/form view (ETP-4714) ---
+    // window.hidePrintWhen: true suppresses it unconditionally, including CO.
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
-    await expect(printBtn).toBeVisible();
+    await expect(printBtn).toHaveCount(0);
 
     // Clone is a list-view row action (row-quick-action-clone), not a detail-view
     // button — ConfirmWithCreditButtonBase renders no clone control here.
@@ -339,5 +380,9 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
     // createReturnInvoice POST returns FC/00100 → ConfirmResultModal shows it
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
+    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });

@@ -15,19 +15,30 @@ function enrichLines(lines) {
     .filter(l => Number(l.invoicedQuantity) > 0);
 }
 
-const fetchDocuments = async ({ base, headers, bpId }) => {
-  const res = await fetch(
-    `${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`,
-    { headers },
-  );
+const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => {
+  const [res, headerRes] = await Promise.all([
+    fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
+    fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`, { headers }),
+  ]);
   if (!res.ok) return { documents: [], sharedContext: { linesCache: {} } };
 
+  let receiptCurrency = null;
+  if (headerRes.ok) {
+    receiptCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
+  }
+
   const all = (await res.json())?.response?.data || [];
-  const candidates = all.filter(o =>
+  const statusAndBpCandidates = all.filter(o =>
     o.documentStatus === 'CO'
     && o.businessPartner === bpId
     && Number(o.grandTotalAmount ?? 0) >= 0
   );
+  const candidates = receiptCurrency
+    ? statusAndBpCandidates.filter(o => o.currency === receiptCurrency)
+    : statusAndBpCandidates;
+  const excludedByCurrency = !!receiptCurrency
+    && candidates.length === 0
+    && statusAndBpCandidates.length > 0;
 
   const lineResults = await Promise.all(
     candidates.map(async inv => {
@@ -51,7 +62,7 @@ const fetchDocuments = async ({ base, headers, bpId }) => {
     return lines.some(l => !l.goodsShipmentLine && Number(l.invoicedQuantity) > 0);
   });
 
-  return { documents, sharedContext: { linesCache } };
+  return { documents, sharedContext: { linesCache }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -91,6 +102,7 @@ export default function ImportFromPurchaseInvoiceModal(props) {
       searchPlaceholderKey="searchPurchaseInvoice"
       emptyMessageKey="noCompletedPurchaseInvoicesForThisVendor"
       noSearchResultsKey="noInvoicesMatchYourSearch"
+      noCurrencyMatchMessageKey="noPurchaseInvoicesMatchReceiptCurrency"
       successMessageKey="linesImportedFromPurchaseInvoice"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

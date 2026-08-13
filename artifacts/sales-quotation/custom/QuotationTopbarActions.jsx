@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import QuotationConfirmModal from './QuotationConfirmModal';
 import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
@@ -24,11 +25,11 @@ const btnCloneStyle = {
   justifyContent: 'center',
   padding: '7px',
   borderRadius: 6,
-  border: '1px solid #D1D4DB',
-  background: '#FFFFFF',
-  color: '#64748B',
+  border: '1px solid hsl(var(--border-subtle))',
+  background: 'hsl(var(--card))',
+  color: 'hsl(var(--foreground))',
   cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave }) {
@@ -79,11 +80,15 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
 
   return (
     <>
-      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
+      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
         <CopyIcon />
       </button>
 
-      <SendDocumentButton onClick={() => setShowSend(true)} />
+      {/* ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
+          while still Draft (DR). Matches the grid row quick-action's gate. */}
+      {status !== 'DR' && <SendDocumentButton onClick={() => setShowSend(true)} />}
+
+      <CopyRecordLinkButton recordId={recordId} windowName="sales-quotation" />
 
       {showClone && createPortal(
         <CloneOrderModal

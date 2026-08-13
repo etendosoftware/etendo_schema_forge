@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
 import AssetAcctTable from './AssetAcctTable';
@@ -122,22 +124,6 @@ export const api = {
       "url": "/sws/neo/assets/assets/selectors/project"
     },
     {
-      "entity": "assets",
-      "field": "businessPartner",
-      "column": "C_BPartner_ID",
-      "reference": "BPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/businessPartner"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASCostCenter",
-      "column": "EM_Etadas_Costcenter_ID",
-      "reference": "Costcenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
-    },
-    {
       "entity": "amortizationLine",
       "field": "amortization",
       "column": "A_Amortization_ID",
@@ -244,6 +230,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AssetsPage
 export default function AssetsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800027');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800027" />;
+  }
   if (recordId) {
     return (
       <>
@@ -265,7 +258,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
           { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1000 },
         ]}
         formFooter={AssetsDetailPanel}
         hidePrint
@@ -277,17 +270,17 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         hideFormCard
         sidebarAboveTabsOnly
         tabsSeparator
-        sidebarClassName="w-[30%] shrink-0 border-l border-[#E8EAEF] p-2"
+        sidebarClassName="w-[30%] shrink-0 border-l border-border-subtle p-2"
         toolbarPaddingX="px-2"
         toolbarButtonSize="default"
-        contentBg="bg-white"
+        contentBg="bg-card"
         formScrollPaddingX="px-2"
         customTabs={[{ key: 'amortizationPlan', labelKey: 'assetsAmortizationPlanTab', Component: AssetsAmortizationPanel, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset", config: {} } }]}
         detailSortBy="sEQNoAsset asc"
         titleField="name"
         lockWhenProcessed={false}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
         sidebarContent={(data) => (
           <AssetsSidebar
             recordId={recordId}
@@ -314,10 +307,9 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       hidePrint
       hideMoreMenu
       hideLink
-      hideEyeCount
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

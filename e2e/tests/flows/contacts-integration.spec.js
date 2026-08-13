@@ -43,6 +43,21 @@ function loadCredentials() {
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0' && !!(process.env.E2E_PASSWORD || onboardingCreds);
 
+/**
+ * Search term typed into every country picker in this file — stated once here
+ * because the reason is the same for all of them.
+ *
+ * Not 'Espa': the country label comes from C_Country (C_Country_Trl only when
+ * translated), so an instance with no Spanish translation stores it as "Spain",
+ * and 'Espa' filters every option out before the locale-tolerant España/Spain
+ * selectors ever get a chance to match. Both pickers used here filter
+ * client-side with an accent-insensitive substring match (normalizeText +
+ * includes — LocationEditorModal.jsx for the Contacts address modal,
+ * AddressSection.jsx's OptionPicker for the "Nuevo contacto" modal), and 'spa'
+ * is a substring of both "e-spa-ña" and "Spa-in", so it holds on either dataset.
+ */
+const COUNTRY_SEARCH_TERM = 'spa';
+
 /** Wait for detail view fully loaded (spinner gone, data fetched). */
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
@@ -74,6 +89,69 @@ function expectDeleteResponse(page) {
   ).catch(() => {});
 }
 
+/**
+ * Ensure the required "Clave NIF País Residencia" combobox ends up with a value.
+ *
+ * The backend supplies a default for this field asynchronously. When it lands,
+ * CreatableSearchSelect stops rendering the `field-oBTIKTaxIDKey` input and
+ * renders a selected-value chip instead (`showChip = hasSelection && ...`), so
+ * clicking the input on sight races the default: the input detaches mid-click
+ * and no element with that testid is left to re-resolve to, which is exactly
+ * how the click ends up retrying until it times out.
+ *
+ * So give the default a bounded window to arrive FIRST, and only drive the
+ * dropdown when it did not — that removes the race instead of tolerating it.
+ */
+async function ensureTaxIdKeySelected(page) {
+  const taxInput = page.getByTestId('field-oBTIKTaxIDKey');
+  const taxChip = page.getByTestId('field-oBTIKTaxIDKey-chip');
+
+  const defaultArrived = await taxChip.waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!defaultArrived) {
+    // No default on this instance — the field is still the empty combobox, and
+    // it will stay that way, so picking an option now cannot race anything.
+    await expect(taxInput).toBeVisible({ timeout: 5_000 });
+    await taxInput.click();
+    const taxOption = page.locator('[role="option"]').first();
+    await expect(taxOption).toBeVisible({ timeout: 5_000 });
+    await taxOption.click();
+  }
+
+  // Both branches must leave a real selection behind. The chip only renders
+  // when the component holds a value, so this fails loudly if the default
+  // never arrived AND the manual pick did not take effect — "already filled"
+  // can never silently mean "still empty".
+  await expect(taxChip).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Fill every field required to save a new Empresa contact.
+ *
+ * Extracted into a helper because the save below may have to be retried after a
+ * page reload, and a reload discards the form contents: both the first attempt
+ * and the retry must fill exactly the same fields, otherwise the retry submits
+ * an empty record and can never leave /contacts/new. Sharing one helper keeps
+ * the two attempts from drifting apart.
+ */
+async function fillNewContactForm(page, { name, email }) {
+  const nameInput = page.getByRole('textbox', { name: /razón social/i });
+  await expect(nameInput).toBeVisible({ timeout: 5_000 });
+  await nameInput.clear();
+  await nameInput.fill(name);
+
+  // Clave NIF Pais Residencia (required dropdown — may be pre-filled by default)
+  await ensureTaxIdKeySelected(page);
+
+  // Email is optional — some configurations do not expose it on the form
+  const emailInput = page.getByRole('textbox', { name: /correo electrónico|email/i });
+  if (await emailInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await emailInput.fill(email);
+  }
+}
+
 
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
@@ -83,6 +161,7 @@ test.describe('Contacts Integration — Full journey', () => {
     const ts = Date.now();
     const CONTACT_A = `E2E Contact A ${ts}`;
     const CONTACT_B = `E2E Contact B ${ts}`;
+    const CONTACT_A_EMAIL = `e2e-${ts}@test.com`;
 
     // Use onboarding-created credentials if available, otherwise env vars
     const loginOpts = onboardingCreds
@@ -129,25 +208,7 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
 
-    // Fill Razon Social
-    const nameInput = page.getByRole('textbox', { name: /razón social/i });
-    await expect(nameInput).toBeVisible({ timeout: 5_000 });
-    await nameInput.clear();
-    await nameInput.fill(CONTACT_A);
-
-    // Fill Clave NIF Pais Residencia (required dropdown)
-    const taxSelect = page.getByTestId('field-oBTIKTaxIDKey');
-    await expect(taxSelect).toBeVisible({ timeout: 5_000 });
-    await taxSelect.click();
-    const taxOption = page.locator('[role="option"]').first();
-    await expect(taxOption).toBeVisible({ timeout: 5_000 });
-    await taxOption.click();
-
-    // Fill email (optional field — may not be present in all configurations)
-    const emailInput = page.getByRole('textbox', { name: /correo electrónico|email/i });
-    if (await emailInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await emailInput.fill(`e2e-${ts}@test.com`);
-    }
+    await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
 
     // Save — if it fails (e.g. EM_Etgo_Identifier sequence not ready on fresh
     // onboarding environments), reload and retry once.
@@ -162,9 +223,12 @@ test.describe('Contacts Integration — Full journey', () => {
       .catch(() => false);
 
     if (!saved) {
-      // Reload to refresh backend state, then retry save
+      // Reload to refresh backend state, then re-fill and retry the save.
+      // The reload starts a brand-new empty form, so re-filling is what makes
+      // this branch a real retry instead of a guaranteed failure.
       await page.reload({ waitUntil: 'networkidle' });
       await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+      await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
       const retrySave = page.getByTestId('action-save')
         .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
       await expect(retrySave.first()).toBeEnabled({ timeout: 10_000 });
@@ -403,8 +467,12 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(addAddrBtn.first()).toBeVisible({ timeout: 5_000 });
     await addAddrBtn.first().click();
 
-    // Address uses a modal ("Ubicación") — wait for it
-    await expect(page.getByText(/^ubicaci[oó]n$/i)).toBeVisible({ timeout: 5_000 });
+    // Address uses LocationEditorModal ("Dirección") — wait for it. Scope to the modal
+    // overlay (inline style position:fixed + z-index:150, see LocationEditorModal.jsx)
+    // since the background grid's "Dirección" column header also matches the text and
+    // would otherwise trip Playwright's strict-mode check.
+    const addressModal = page.locator('div[style*="z-index: 150"]');
+    await expect(addressModal.getByText(/^direcci[oó]n$/i).first()).toBeVisible({ timeout: 5_000 });
 
     // The modal overlay is: div.fixed.inset-0.z-50
     // Modal inputs are the ones with class border-gray-300 (no name/testid)
@@ -430,7 +498,7 @@ test.describe('Contacts Integration — Full journey', () => {
     // The country picker dialog has a search input "Buscar país..."
     const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
     await expect(countrySearch).toBeVisible({ timeout: 5_000 });
-    await countrySearch.fill('Espa');
+    await countrySearch.fill(COUNTRY_SEARCH_TERM);
 
     // Wait for search results to filter — country name depends on locale (España / Spain)
     const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
@@ -512,18 +580,20 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(nameInputB).toBeVisible({ timeout: 5_000 });
     await nameInputB.fill(CONTACT_B);
 
-    const taxSelectB = page.getByTestId('field-oBTIKTaxIDKey');
-    await expect(taxSelectB).toBeVisible({ timeout: 5_000 });
-    await taxSelectB.click();
-    const taxOptionB = page.locator('[role="option"]').first();
-    await expect(taxOptionB).toBeVisible({ timeout: 5_000 });
-    await taxOptionB.click();
+    await ensureTaxIdKeySelected(page);
 
     const saveBtnB = page.getByTestId('action-save')
       .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
     await expect(saveBtnB.first()).toBeEnabled({ timeout: 10_000 });
+    const saveBP = expectSaveResponse(page);
     await saveBtnB.first().click();
-    await expect(page).not.toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    await saveBP;
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. Wait for the URL to change before asserting.
+    await page.waitForURL(
+      url => !url.toString().includes('/contacts/new'),
+      { timeout: 20_000 },
+    );
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 7: List view — verify contacts, columns, subset filters
@@ -571,14 +641,18 @@ test.describe('Contacts Integration — Full journey', () => {
     // ═══════════════════════════════════════════════════════════════════════
 
     // Select Contact B
+    // Click the Checkbox__* testid (the label wrapping the input), not the
+    // input itself — the input is visually sr-only, so Playwright's click
+    // lands on the underlying decorative box and the sr-only input "intercepts
+    // pointer events" in reverse, causing flaky click timeouts.
     const rowBFinal = page.locator('tbody tr').filter({ hasText: CONTACT_B }).first();
-    await rowBFinal.locator('[role="checkbox"], input[type="checkbox"]').first().click();
+    await rowBFinal.getByTestId('Checkbox__eb5261').first().click();
 
     // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
     // Contact A may have a different name after toggle — find by email which has the timestamp
-    const rowAByEmail = page.locator('tbody tr').filter({ hasText: `e2e-${ts}@test.com` }).first();
+    const rowAByEmail = page.locator('tbody tr').filter({ hasText: CONTACT_A_EMAIL }).first();
     if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await rowAByEmail.locator('[role="checkbox"], input[type="checkbox"]').first().click();
+      await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
     }
 
     // Verify selection indicator shows selected count
@@ -605,5 +679,212 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(
       page.locator('tbody tr').filter({ hasText: CONTACT_B })
     ).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Regression — ETP-4700: "+ Crear contacto" from the Sales Order Contacto
+  // selector must succeed. Root cause was a backend defaults/coercion bug
+  // (BusinessPartner.invoiceGrouping, a List-reference column, was mangled
+  // to "0" instead of its real AD_Ref_List code) — unrelated to anything the
+  // frontend sends, but this modal (via CreateContactModal.jsx) is the exact
+  // entry point that surfaced it, so the regression test lives here too.
+  // ═══════════════════════════════════════════════════════════════════════
+  test('ETP-4700 — create contact from Sales Order "Contacto" selector modal', async ({ page }) => {
+    const ts = Date.now();
+    const CONTACT_NAME = `E2E SO Contact ${ts}`;
+    const TAX_ID = `B-${ts}`;
+
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    await navigateTo(page, 'sales-order');
+    const soNewBtn = page.getByTestId('action-new');
+    await expect(soNewBtn).toBeVisible({ timeout: 15_000 });
+    await soNewBtn.click();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    // Open the Contacto selector and trigger "+ Crear contacto"
+    const contactField = page.getByTestId('field-businessPartner');
+    await expect(contactField).toBeVisible({ timeout: 10_000 });
+    await contactField.click();
+
+    const createContactBtn = page.getByTestId('action-create-businessPartner');
+    await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
+    await createContactBtn.click();
+
+    // "Nuevo contacto" modal
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+
+    // Razón social (plain text field — label and input are siblings, no htmlFor)
+    const razonSocialLabel = page.getByText(/^raz[oó]n social/i);
+    const razonSocialInput = razonSocialLabel.locator('xpath=following::input[1]');
+    await razonSocialInput.fill(CONTACT_NAME);
+
+    // Categoría de contacto (required dynamic select). DynamicSelect never
+    // forwards its data-testid prop to the underlying <select> (EntityCreationModal.jsx),
+    // so locate it via the label like the plain text fields above.
+    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
+    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
+    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
+    await categorySelect.selectOption({ index: 1 });
+
+    // Clave NIF país residencia (required dynamic select — not listed by the
+    // reporter but enforced by requiredFields in CreateContactModal.jsx)
+    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
+    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
+    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
+    await taxIdTypeSelect.selectOption({ index: 1 });
+
+    // CIF/NIF
+    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+    await taxIdInput.fill(TAX_ID);
+
+    // País — opens a search dialog (Dirección tab, active by default).
+    // Unlike the Contacts window's own address modal, country IS required here
+    // (see CreateContactModal.jsx requiredFields), so AddressSection renders a
+    // "*" marker inside the same <label> — "País*", not an exact "País" — hence
+    // no end anchor on the regex. Also: this modal uses its own AddressSection.jsx
+    // (distinct from the Contacts window's LocationModalField.jsx), whose picker
+    // button has no aria-haspopup attribute — just the plain button in the field.
+    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
+    await paisButton.click();
+    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+    await countrySearch.fill('Espa');
+    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(page.getByRole('button', { name: /^spain$/i }));
+    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+    await countryOption.first().click();
+
+    // Guardar contacto
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    const createBpResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await saveContactBtn.click();
+    const bpResponse = await createBpResponse;
+
+    // The core regression check: creation must succeed (2xx), not 400
+    expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    // No inline error banner, modal closes, and the new contact is now selected
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
+    await expect(page.getByTestId('field-businessPartner-chip').or(contactField))
+      .toContainText(CONTACT_NAME, { timeout: 10_000 });
+  });
+
+  // Same regression as above, but for contactType='person' — Nombre/Apellido
+  // replace Razón social, and the header grid gains a 4th required field
+  // (see CreateContactModal.jsx requiredFields for 'person'). The underlying
+  // bug is backend-side and type-agnostic, but this exercises the other field
+  // set end to end instead of assuming it behaves the same untested.
+  test('ETP-4700 — create Persona contact from Sales Order "Contacto" selector modal', async ({ page }) => {
+    const ts = Date.now();
+    // Kept short: BusinessPartner.searchKey (auto-derived server-side from
+    // "firstName lastName") has a 40-char DB limit — the full 13-digit
+    // timestamp in both names blew past it.
+    const shortTs = String(ts).slice(-6);
+    const FIRST_NAME = `E2E First ${shortTs}`;
+    const LAST_NAME = `E2E Last ${shortTs}`;
+    const TAX_ID = `B-${ts}`;
+
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    await navigateTo(page, 'sales-order');
+    const soNewBtn = page.getByTestId('action-new');
+    await expect(soNewBtn).toBeVisible({ timeout: 15_000 });
+    await soNewBtn.click();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    const contactField = page.getByTestId('field-businessPartner');
+    await expect(contactField).toBeVisible({ timeout: 10_000 });
+    await contactField.click();
+
+    const createContactBtn = page.getByTestId('action-create-businessPartner');
+    await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
+    await createContactBtn.click();
+
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+
+    // Switch to Persona mode (the toggle button — not the "Persona" tab further
+    // down the modal, which shares the same visible text; the toggle renders
+    // first in the modal, hence .first()).
+    const personaToggle = page.getByRole('button', { name: /^persona$/i }).first();
+    await personaToggle.click();
+
+    // Nombre / Apellido replace Razón social in Persona mode. The toggle
+    // remounts the header field grid (different field ids per contactType),
+    // so wait for the new field to actually be visible before acting on it —
+    // combining click + immediate fill() raced the remount in practice.
+    //
+    // All tabs stay mounted in the DOM at all times (hidden via display:none,
+    // never unmounted — see EntityCreationModal.jsx's tab-content render), so
+    // a loose "starts with Nombre" match also hits "Nombre del banco" (Cuenta
+    // bancaria tab) and the unmarked "Nombre" column header (Persona de
+    // contacto tab). Only the required header field carries the trailing "*"
+    // in its own label text, so match that exactly to stay unique.
+    const firstNameLabel = page.getByText('Nombre*', { exact: true });
+    const firstNameInput = firstNameLabel.locator('xpath=following::input[1]');
+    await expect(firstNameInput).toBeVisible({ timeout: 10_000 });
+    await firstNameInput.fill(FIRST_NAME);
+
+    const lastNameLabel = page.getByText('Apellido*', { exact: true });
+    const lastNameInput = lastNameLabel.locator('xpath=following::input[1]');
+    await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
+    await lastNameInput.fill(LAST_NAME);
+
+    // Categoría de contacto
+    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
+    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
+    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
+    await categorySelect.selectOption({ index: 1 });
+
+    // Clave NIF país residencia
+    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
+    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
+    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
+    await taxIdTypeSelect.selectOption({ index: 1 });
+
+    // CIF/NIF
+    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+    await taxIdInput.fill(TAX_ID);
+
+    // País
+    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
+    await paisButton.click();
+    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+    await countrySearch.fill('Espa');
+    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(page.getByRole('button', { name: /^spain$/i }));
+    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+    await countryOption.first().click();
+
+    // Guardar contacto
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    const createBpResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await saveContactBtn.click();
+    const bpResponse = await createBpResponse;
+
+    expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
+    await expect(page.getByTestId('field-businessPartner-chip').or(contactField))
+      .toContainText(FIRST_NAME, { timeout: 10_000 });
   });
 });

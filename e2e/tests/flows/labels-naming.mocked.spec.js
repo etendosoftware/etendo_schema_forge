@@ -104,7 +104,7 @@ const CONTACT_RECORD = {
 };
 
 async function installContactsMock(page) {
-  await page.route('**/sws/neo/contacts/businessPartner**', (route) => {
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && /\/businessPartner\/[^/?]+/.test(url)) {
@@ -138,17 +138,22 @@ test.describe('JO-06 — contacts vendor account label', () => {
     await expect(financialTab).toBeVisible();
     await financialTab.click();
     // The vendor field renders inside the EntityForm with key "pOFinancialAccount".
-    const vendorField = page.getByTestId('field-pOFinancialAccount');
-    await expect(vendorField).toBeVisible();
-    await expect(vendorField).toContainText('Cuenta contable de gastos');
+    // ETP-4600 unified this FK field onto CreatableSearchSelect, whose wrapper div
+    // carries no `field-<key>` testid — only the sibling <Label htmlFor={f.key}>
+    // (rendered by EntityForm itself) surfaces the field's LABEL text; the chip
+    // (`field-pOFinancialAccount-chip`) or combobox input show the VALUE, not the
+    // label. Assert against the label element directly, same pattern as IV-08 below.
+    const vendorLabel = page.locator('label[for="pOFinancialAccount"]');
+    await expect(vendorLabel).toBeVisible();
+    await expect(vendorLabel).toContainText('Cuenta contable de gastos');
 
     // Customer block should still read "Cuenta" (not "Account" — locale es_ES).
-    const customerField = page.getByTestId('field-account');
-    await expect(customerField).toBeVisible();
-    await expect(customerField).toContainText('Cuenta');
+    const customerLabel = page.locator('label[for="account"]');
+    await expect(customerLabel).toBeVisible();
+    await expect(customerLabel).toContainText('Cuenta');
     // And specifically not the new vendor label, to guard against a copy/paste
     // of the override into the customer block.
-    await expect(customerField).not.toContainText('Cuenta contable de gastos');
+    await expect(customerLabel).not.toContainText('Cuenta contable de gastos');
   });
 });
 
@@ -164,7 +169,7 @@ const QUOTATION_ROW = {
 };
 
 async function installQuotationMock(page) {
-  await page.route('**/sws/neo/sales-quotation/quotation**', (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotation{/**,}**', (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && /\/quotation\/[^/?]+/.test(url)) {

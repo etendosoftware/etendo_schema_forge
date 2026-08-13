@@ -37,6 +37,22 @@
 - Note to bot team: <concrete: "include X next time">
 -->
 
+### 2026-07-23 — ETP-4287 — GET-only entities were not explicitly identified in discovery
+- Tool/spec: `neo_discover`; entities `bp-stats`, `bp-trend`, and system-data `tax`.
+- Root-cause category: **code-bug** (category 1) — discovery already returned the configured `methods` array, but omitted the established MCP `readOnly` semantic flag.
+- Time-to-locate: **fast** — the ticket named the discovery builder, the relevant entity configuration columns, and the existing tests. The implementation could derive the flag generically from those configured methods.
+- Missing rubric fields: **#3** verbatim JSON-RPC request, **#4** verbatim discovery response, **#5** auth context, **#7** deployment version, **#8** environment/commit, **#10** minimal repro sequence, **#11** root-cause pre-classification.
+- Highest-value field that was missing: **#4 — the raw `neo_discover` entity entries.** It would have made the absent semantic flag and the actual `tax` method configuration immediately visible.
+- Note to bot team: attach the before/after entity JSON (including `methods`) whenever discovery metadata is the issue. Also distinguish an entity that is *expected* to be read-only from one that the deployed configuration actually makes read-only: local `tax` entries allow writes, so the correct evidence is `readOnly: false`, while the generic rule will label any future GET-only tax entity correctly.
+
+### 2026-07-23 — ETP-4280 — Card financial-account creation reported without a reproducible failure
+- Tool/spec: `neo_create` on `financial-account` / `account`; intended minimum fields were `name`, `currency`, and `type: "CA"`.
+- Root-cause category: **validator-side / diagnostic gap** (category 5) — the report did not retain the failing request or response, while the deployed code path already accepts `CA`: `FinancialAccountHandler.normalizeType` preserves it and the MCP `neo_create` route invokes that handler before persistence (ETP-4239).
+- Time-to-locate: **slow** — there was no verbatim payload, error body, authentication context, deployment version, or reachable local server to distinguish a rejected field/default from an environment or validator failure.
+- Missing rubric fields: **#3** verbatim JSON-RPC request, **#4** verbatim response/error, **#5** auth context, **#7** contract/deployment version, **#8** environment/commit, **#10** ordered repro sequence, **#11** root-cause pre-classification.
+- Highest-value field that was missing: **#3/#4 — the exact request paired with the complete response.**
+- Note to bot team: for every failed `neo_create`, persist and attach the full tool input plus raw MCP result (`isError`, text/body, and transport status when available). For this case, include the actual `currency` id and `type` string sent, since `"CA"` is valid but a missing/invalid currency, duplicate name, stale deployment, or different input cannot be distinguished after a prose-only summary.
+
 ### 2026-06-26 — ETP-4274 — `neo_create` drops resolvable defaults for non-mandatory columns (defaults/create asymmetry)
 - Tool/spec: `neo_create` (and `neo_defaults`) on spec/entity `assets` header; column `C_Currency_ID` (`required:false`, `defaultExpression:@C_Currency_ID@`).
 - Root-cause category: **code-bug** (category 1) — `NeoDefaultsService.injectMandatoryDefaults` iterated mandatory columns only, so genuine non-mandatory defaults that `/defaults` returns were silently dropped on create.

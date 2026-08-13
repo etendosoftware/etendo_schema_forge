@@ -34,7 +34,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 
@@ -101,7 +101,7 @@ async function installMocks(page, hooks = {}) {
   });
 
   // Financial account transactions: movements GET + lookups + lifecycle POSTs.
-  await page.route('**/sws/neo/financial-account-transactions**', async (route) => {
+  await page.route('**/sws/neo/financial-account-transactions{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();

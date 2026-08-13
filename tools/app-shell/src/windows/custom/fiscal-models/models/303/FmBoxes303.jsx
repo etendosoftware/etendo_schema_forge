@@ -9,12 +9,12 @@ const SECTION_ICON = {
   iva_devengado: <TrendingUp
     size={20}
     strokeWidth={1.75}
-    style={{ color: '#121217' }}
+    style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingUp__49d327" />,
   iva_deducible: <TrendingDown
     size={20}
     strokeWidth={1.75}
-    style={{ color: '#121217' }}
+    style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingDown__49d327" />,
 };
 
@@ -75,7 +75,14 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     </div>
   );
 
+  // Supports a single-field condition ({field, in:[...] | equals:...}) or an
+  // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
+  // purpose, just enough to express "tipo X OR rectificativa checked" cleanly.
+  // Single source of truth for visibility evaluation: also backs field-level
+  // visibleWhen (identificacion/meta sections, below) — do not fork a second
+  // implementation, extend this one instead.
   const matchesSvw = (svw) => {
+    if (Array.isArray(svw.anyOf)) return svw.anyOf.some(matchesSvw);
     const val = identification?.[svw.field];
     return svw.in ? svw.in.includes(val) : val === svw.equals;
   };
@@ -144,12 +151,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
 
         // ── Identificación + meta sections (sin_actividad, rectificativa) ──
         if (section.sectionType === 'identificacion') {
-          const visibleFields = section.fields.filter(f => {
-            if (!f.visibleWhen) return true;
-            const val = identification?.[f.visibleWhen.field];
-            if (f.visibleWhen.in) return f.visibleWhen.in.includes(val);
-            return val === f.visibleWhen.equals;
-          });
+          const visibleFields = section.fields.filter(f => !f.visibleWhen || matchesSvw(f.visibleWhen));
 
           // Main identificacion section:
           // - read-only text fields (NIF/nombre) → top group
@@ -164,7 +166,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     {displayFields.map(f => (
                       <div key={f.id} className="fm-aeat-ident-field">
                         <span className="fm-aeat-ident-field__label">{t(f.labelKey)}</span>
-                        <div className="fm-aeat-ident-field__value" style={{ color: '#9096AD' }}>
+                        <div className="fm-aeat-ident-field__value" style={{ color: 'hsl(var(--text-disabled))' }}>
                           {identification?.[f.id] ?? ''}
                         </div>
                       </div>

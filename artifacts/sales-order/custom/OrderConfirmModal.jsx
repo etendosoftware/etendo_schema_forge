@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * Confirmation modal for Sales Order.
@@ -38,10 +39,6 @@ export default function OrderConfirmModal({
     'Content-Type': 'application/json',
   }), [token]);
 
-  const fmtNum = (v) =>
-    v != null && v !== ''
-      ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '-';
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -136,7 +133,7 @@ export default function OrderConfirmModal({
         result.shipment = {
           id:         shipment?.id ?? null,
           documentNo: shipment?.documentNo || '',
-          total:      shipment?.grandTotal != null ? `${fmtNum(shipment.grandTotal)} ${currency}`.trim() : '',
+          total:      shipment?.grandTotal != null ? formatCurrency(currency, shipment.grandTotal) : '',
         };
       }
 
@@ -159,7 +156,7 @@ export default function OrderConfirmModal({
         result.invoice = {
           id:         invoice?.id ?? null,
           documentNo: invoice?.documentNo || '',
-          total:      invoice?.grandTotal != null ? `${fmtNum(invoice.grandTotal)} ${currency}`.trim() : '',
+          total:      invoice?.grandTotal != null ? formatCurrency(currency, invoice.grandTotal) : '',
         };
       }
 
@@ -213,14 +210,14 @@ export default function OrderConfirmModal({
           <div style={{ padding: '28px 24px', textAlign: 'center' }}>
             <div style={{
               width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
-              background: '#ECFDF5',
+              background: 'hsl(var(--card))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
               {both ? ui('soBothCreated') : (shipment ? ui('soShipmentCreated') : ui('soInvoiceCreated'))}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
@@ -242,7 +239,7 @@ export default function OrderConfirmModal({
           </div>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            padding: '12px 16px', borderTop: '0.5px solid #E5E7EB',
+            padding: '12px 16px', borderTop: '0.5px solid hsl(var(--card))',
           }}>
             <button type="button" onClick={handleCloseAfterCreate} style={btnSecondary}>
               {ui('soClose')}
@@ -282,38 +279,38 @@ export default function OrderConfirmModal({
             style={{
               position: 'absolute', top: 10, right: 12,
               fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
             }}
           >
             &times;
           </button>
-          <div style={{ fontSize: 10, color: '#9CA3AF', letterSpacing: '0.04em', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
             {ui('salesOrderRef')}{documentNo}
           </div>
           <div style={{
-            background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10,
+            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
               {bpName}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {fmtNum(grandTotal)}{currency ? ` ${currency}` : ''}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+              {formatCurrency(currency, grandTotal)}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('soLines', { count: lineCount }) : '...'}
-              {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-fg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
-              <span style={{ fontWeight: 500, color: '#042C53' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+              <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
           </div>
         </div>
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid #E5E7EB' }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--card))' }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
           <CheckboxCard
@@ -334,7 +331,7 @@ export default function OrderConfirmModal({
 
         {/* Error */}
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA' }}>
+          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
           </div>
         )}
@@ -382,39 +379,39 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
       onClick={onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        border: checked ? '2px solid #3B82F6' : '0.5px solid #E5E7EB',
+        border: checked ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
         borderRadius: 8, padding: checked ? '11px 13px' : '12px 14px',
         cursor: 'pointer',
-        background: checked ? '#EFF6FF' : '#fff',
+        background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >
       <div style={{
         width: 32, height: 32, borderRadius: 6, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: checked ? '#fff' : '#F3F4F6',
-        color: checked ? '#2563EB' : '#6B7280',
+        background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        color: checked ? 'var(--status-info-fg)' : 'hsl(var(--muted))',
       }}>
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: checked ? '#2563EB' : '#111827' }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: checked ? 'var(--status-info-border)' : 'hsl(var(--foreground))' }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
           {subtitle}
         </div>
       </div>
       {/* Checkbox indicator (square, not circle) */}
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: checked ? 'none' : '1.5px solid #D1D5DB',
-        background: checked ? '#3B82F6' : '#fff',
+        border: checked ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+        background: checked ? 'var(--status-info-fg)' : 'hsl(var(--card))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
         {checked && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="1 4 4 7.5 10 1" />
           </svg>
         )}
@@ -427,14 +424,14 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
 
 function DocPill({ label, total, statusLabel }) {
   return (
-    <div style={{ fontSize: 12, color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+    <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
       <span>{label}</span>
       {total && (
-        <><span style={{ color: '#D1D5DB' }}>·</span><span>{total}</span></>
+        <><span style={{ color: 'hsl(var(--foreground))' }}>·</span><span>{total}</span></>
       )}
       <span style={{
         fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-        background: '#FEF3C7', color: '#92400E',
+        background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
       }}>
         {statusLabel}
       </span>
@@ -447,21 +444,21 @@ function DocPill({ label, total, statusLabel }) {
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: '#185FA5', color: '#fff', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

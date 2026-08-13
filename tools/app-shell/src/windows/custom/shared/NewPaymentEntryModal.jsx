@@ -4,41 +4,43 @@ import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { WriteoffToggleRow, writeoffState } from '@/components/contract-ui/WriteoffAdjustment.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
-const INK = '#121217';
-const BORDER1 = '#E8EAEF';
-const BORDER2 = '#D1D4DB';
-const FG2 = '#3F3F50';
-const FG3 = '#6C6C89';
-const FG4 = '#828FA3';
-const WIDGET_BG = '#F5F7F9';
-const GREEN_FG = '#17663A';
-const GREEN_BG = '#EEFBF4';
-const RED_FG = '#C5234A';
-const RED_BG = '#FDE2E9';
-const AMBER = '#C28800';
+const INK = 'hsl(var(--foreground))';
+const BORDER1 = 'hsl(var(--border-subtle))';
+const BORDER2 = 'hsl(var(--border-control))';
+const FG2 = 'hsl(var(--muted-foreground))';
+const FG3 = 'hsl(var(--muted-foreground))';
+const FG4 = 'hsl(var(--text-disabled))';
+const WIDGET_BG = 'hsl(var(--muted))';
+const GREEN_FG = 'var(--status-success-fg)';
+const GREEN_BG = 'var(--status-success-bg)';
+const RED_FG = 'hsl(var(--destructive))';
+const RED_BG = 'var(--status-destructive-bg)';
+const AMBER = 'var(--status-warning-fg)';
 // Stable reference for "no used sources" (create mode / no credit consumed) — a fresh []
 // literal on every render would change identity each time and loop usePaymentBalance's seed
 // effect (same failure mode as the apiFetch dependency fixed earlier).
 const EMPTY_USED_SOURCES = [];
-const EXCESS_BG = '#F5F7F9';
-const EXCESS_BORDER = '#D1D4DB';
-const EXCESS_FG = '#3F3F50';
+const EXCESS_BG = 'hsl(var(--muted))';
+const EXCESS_BORDER = 'hsl(var(--border-control))';
+const EXCESS_FG = 'hsl(var(--muted-foreground))';
 // A foreign-currency payment with a rate of exactly 1 is rejected by the backend
 // (compareTo(ONE)==0). Mirror that with a tight tolerance so the FE gate matches (ETP-4504).
 const RATE_ONE_TOLERANCE = 1e-9;
 
 // Per-source-kind row accents. credit → purple, abono (saldo a favor) → green.
 const BADGE = {
-  credit: { bg: '#F4F1FD', fg: '#4316CA' },
+  credit: { bg: 'var(--status-info-bg)', fg: 'var(--status-info-fg)' },
   abono: { bg: GREEN_BG, fg: GREEN_FG },
 };
 
@@ -51,8 +53,8 @@ const PIS_IBAN_FIELD = { key: 'pisIban', id: 'pisIban', required: true };
 const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: true };
 
 // ─── PIS (bank transfer via Salt Edge) — ETP-4406 ─────────────────────────────
-const PIS_AMBER_TEXT = '#8A6100';
-const PIS_ALERT_BG = '#FFF9EB';
+const PIS_AMBER_TEXT = 'var(--status-warning-fg)';
+const PIS_ALERT_BG = 'var(--status-warning-bg)';
 const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
 // 'initiated' is a real Salt Edge PIS status (seen for "connect"-flow payments) that isn't in the
 // PSD2_PIS_PAYMENT ref-list's documented set (requested/authorizing/authorized/processing/executed/
@@ -116,26 +118,22 @@ function buildPisPaymentFields(template, creditorValues) {
   };
 }
 
-/**
- * Resolves a currency's real symbol via Intl (no hardcoded currency→symbol map). es-ES 'symbol'
- * mode falls back to the raw ISO code for some currencies (e.g. GBP), so 'narrowSymbol' is used
- * to get a distinct symbol for every currency actually in use here (USD "$", EUR "€", GBP "£").
- */
-function currencySymbol(currency) {
-  if (!currency) return '';
-  try {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
-      .formatToParts(0).find(p => p.type === 'currency')?.value || currency;
-  } catch { return currency; }
-}
 /** Currency suffix for plain-text (non-JSX) spots — the real symbol, Intl-derived. */
 function curSuffix(currency) {
-  return currencySymbol(currency);
+  return getCurrencySymbol(currency);
 }
 /** Formats an amount with its currency symbol in es-ES grouping ("6.420,00 €"), for the spots
- *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation). */
+ *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation).
+ *  Delegates entirely to the shared formatCurrency() — do not hand-roll Intl calls here. */
 function fmtCur(n, currency) {
-  return `${formatPlain(n)} ${curSuffix(currency)}`.trim();
+  return formatCurrency(currency, n);
+}
+
+/** Rate implied by a typed account-currency amount, given the (fixed) invoice-currency amount —
+ *  the inverse of `amount × rate`. Rounded to 6 decimals (typical FX-rate precision) and
+ *  re-parsed to strip trailing zeros / float noise before being handed back as the rate string. */
+function deriveRateFromAmount(accountAmount, invoiceAmount) {
+  return String(parseFloat((accountAmount / invoiceAmount).toFixed(6)));
 }
 
 /** Label for the balance delta (excess / missing / exact). */
@@ -178,7 +176,9 @@ function mapAccounts(json) {
     currency: a.currency || null, currencyId: a.currencyId || null,
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
-    psd2Connected: !!a.psd2Connected, maskedPan: a.maskedPan || null,
+    bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
+    // ETP-4797 write-off cap. Absent when unconfigured → null, read as "no limit".
+    writeoffLimit: a.writeoffLimit ?? null,
   }));
 }
 
@@ -300,7 +300,7 @@ function extractSaveError(json, ui) {
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   const pisEligible = dir === 'out'
-    && !!selectedAccount?.psd2Connected
+    && !!selectedAccount?.bankConnected
     && looksLikeTransfer(selectedMethodObj?.name)
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
@@ -330,11 +330,11 @@ function Check({ checked, size = 18 }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: 4, flexShrink: 0,
-      border: `1.5px solid ${checked ? INK : '#A9A9BC'}`, background: checked ? INK : '#fff',
+      border: `1.5px solid ${checked ? INK : 'hsl(var(--text-disabled))'}`, background: checked ? INK : 'hsl(var(--card))',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {checked && (
-        <svg width={Math.round(size * 0.6)} height={Math.round(size * 0.6)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={Math.round(size * 0.6)} height={Math.round(size * 0.6)} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       )}
@@ -346,7 +346,7 @@ function Radio({ checked }) {
   return (
     <div style={{
       width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-      border: `1.5px solid ${checked ? INK : BORDER2}`, background: '#fff',
+      border: `1.5px solid ${checked ? INK : BORDER2}`, background: 'hsl(var(--card))',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {checked && <div style={{ width: 8, height: 8, borderRadius: '50%', background: INK }} />}
@@ -398,7 +398,7 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
-          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
             <input
               type="text" inputMode="decimal" value={l.useStr}
               onChange={e => onUseChange(e.target.value)}
@@ -419,7 +419,7 @@ function CreditSection({ rows, currency, ui, balance }) {
   if (!rows.length) return null;
   const used = rows.reduce((acc, l) => acc + (l.sel ? l.use : 0), 0);
   return (
-    <div style={{ border: `1px solid ${BORDER1}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', overflow: 'hidden' }}>
+    <div style={{ border: `1px solid ${BORDER1}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '12px' }}>
         <span style={{ font: '600 12px/16px Inter', color: INK }}>{ui('cpCreditSectionTitle')}</span>
         <span style={{ font: '400 12px/16px Inter', color: FG3 }}>· {ui('cpCreditSectionHint')}</span>
@@ -470,11 +470,11 @@ function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
       type="button"
       data-testid={testid}
       onClick={() => balance.setExcessMode(mode)}
-      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, outline: 'none', background: '#fff', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px rgba(18,18,23,.08), 0 4px 6px -2px rgba(18,18,23,.05)' : '0 1px 2px rgba(18,18,23,.05)' }}
+      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, outline: 'none', background: 'hsl(var(--card))', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px hsl(var(--foreground) / .08), 0 4px 6px -2px hsl(var(--foreground) / .05)' : '0 1px 2px hsl(var(--foreground) / .05)' }}
     >
       <div style={{ flex: 1 }}>
         <div style={{ font: '500 14px/20px Inter', color: INK }}>{title}</div>
-        <div style={{ font: '400 14px/20px Inter', color: '#555B6D', marginTop: 2 }}>{hint}</div>
+        <div style={{ font: '400 14px/20px Inter', color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{hint}</div>
       </div>
       <Radio checked={balance.excessMode === mode} data-testid="Radio__7727b3" />
     </button>
@@ -498,7 +498,7 @@ function ExcessBand({ balance, currency, ui, canLeaveCredit }) {
 function PisTextField({ label, value, onChange, placeholder, testid }) {
   return (
     <Field label={label} required data-testid={`Field__${testid}`}>
-      <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', padding: '0 12px' }}>
         <input
           type="text" value={value} placeholder={placeholder}
           onChange={e => onChange(e.target.value)}
@@ -567,7 +567,7 @@ function PisTransferSection({
           <Field label={ui('cpPisTemplateLabel')} required data-testid="Field__pis-template">
             {/* White wrapper: CreatableSearchSelect is bg-transparent, so on the grey PIS card it
                 would read grey — this keeps it white like the BBAN/account-number text inputs. */}
-            <div style={{ background: '#fff', borderRadius: 8 }}>
+            <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
             <CreatableSearchSelect
               // CreatableSearchSelect seeds its options from staticOptions only on mount; the
               // ref-list loads async, so remount once it arrives to pick the options up.
@@ -586,7 +586,7 @@ function PisTransferSection({
           <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
               {/* White wrapper — see the template select above. */}
-              <div style={{ background: '#fff', borderRadius: 8 }}>
+              <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
               <CreatableSearchSelect
                 // Same async-options remount as the template select above (supplier IBANs load async).
                 key={ibanOptions.length ? 'pis-iban-loaded' : 'pis-iban-loading'}
@@ -656,7 +656,7 @@ function PaymentModalFooter({
   saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: 'hsl(var(--card))', flexShrink: 0 }}>
       <button type="button" onClick={requestClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
       {pisPolling ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
@@ -668,7 +668,7 @@ function PaymentModalFooter({
             <button
               type="button" data-testid="cp-pis-reopen"
               onClick={onReopenPis}
-              className="bg-[#121217] text-white"
+              className="bg-[hsl(var(--foreground))] text-primary-foreground"
               style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
             >
               {ui('cpPisReopen')}
@@ -677,17 +677,17 @@ function PaymentModalFooter({
           <button
             type="button" data-testid="cp-pis-cancel-wait"
             onClick={cancelPisWait}
-            style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
+            style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
           >
             {ui('cpPisCancelWait')}
           </button>
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
+          <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
             {floppy}{ui('save')}
           </button>
-          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             {confirmLabel}
           </button>
@@ -875,10 +875,27 @@ export default function NewPaymentEntryModal({
   }, [accounts]);
 
   // ── PIS (Salt Edge bank transfer) eligibility — ETP-4406 ────────────────────
-  // Purchase-invoice payments only, on a PSD2-connected account, paid via a
+  // Purchase-invoice payments only, on a bank-connected account, paid via a
   // transfer-like method, in a currency Salt Edge supports. Imperfect by design
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
+  // ETP-4797: opt-in write-off of the shortfall, so the invoice is settled in full instead of
+  // keeping a residual balance. Off by default — today's behaviour is the default.
+  const [writeoff, setWriteoff] = useState(false);
+  // `balance.diff` is funds − invoice total, so a shortfall is negative; the write-off amount is
+  // its magnitude. Hidden while editing a draft: that path reconciles the already-linked PSD
+  // through a Core call with no write-off input (see applyInvoiceInstallment), so offering it here
+  // would promise something the backend cannot honour.
+  const writeoffInfo = useMemo(() => writeoffState({
+    difference: -balance.diff,
+    limit: selectedAccount?.writeoffLimit,
+    eligible: balance.isPartial && !isEdit,
+  }), [balance.diff, balance.isPartial, isEdit, selectedAccount]);
+
+  // A write-off that is no longer on offer must not linger checked and reach the payload.
+  useEffect(() => {
+    if (!writeoffInfo.visible || writeoffInfo.blocked) setWriteoff(false);
+  }, [writeoffInfo.visible, writeoffInfo.blocked]);
   const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
 
   // ── multi-currency conversion (ETP-4504) ────────────────────────────────────
@@ -891,21 +908,113 @@ export default function NewPaymentEntryModal({
     fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
   });
   const [rateStr, setRateStr] = useState('');
-  // Seed the rate field from the freshly-fetched prefill, re-running when the currency pair
-  // (accountCurrency) or the fetched rate changes. Crucially this also CLEARS the field when
-  // moving to a pair that has no DB rate, so a stale rate from a previously-selected account
-  // never silently carries across currency pairs (ETP-4504 W1). Manual edits persist until one
-  // of these inputs changes; when not foreign the field is kept empty.
+  // Edit mode: the rate stored on the draft (ETP-4841). Kept as the raw string from the response
+  // so a value like "0.680272" is shown back exactly, without float re-formatting.
+  const persistedRate = isEdit && Number(payment?.conversionRate) > 0
+    ? String(payment.conversionRate)
+    : null;
+  // It only applies while the modal is showing the currency PAIR it was saved for: the rate is a
+  // property of the pair, not of the account, so switching between two accounts in the same
+  // currency keeps it, while another foreign pair must reseed from the DB (showing a USD→EUR rate
+  // in a USD→GBP field would be a silent accounting error — ETP-4504 W1).
+  const persistedRateApplies = persistedRate != null
+    && !!accountCurrency && accountCurrency === payment?.accountCurrency;
+  const persistedRateSeededRef = useRef(false);
+  // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
+  // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
+  // converted amount recomputes the rate — whichever the user touches drives the other.
+  const [amountStr, setAmountStr] = useState('');
+  // Set right before an amount-driven rate/amount update so the recompute effect below skips its
+  // own echo: without this, typing in the amount field (or seeding the rate, see below) would
+  // trigger a SECOND, separate render+effect pass that recomputes the other field from a stale
+  // snapshot, producing a one-frame "wrong" value — see the seed effect's comment for how that
+  // exact window let a real user edit get silently swallowed (ETP-4876).
+  const skipAmountRecomputeRef = useRef(false);
+  // Seed the rate field, re-running when the currency pair (accountCurrency) or the fetched rate
+  // changes. Crucially this also CLEARS the field when moving to a pair that has no DB rate, so a
+  // stale rate from a previously-selected account never silently carries across currency pairs
+  // (ETP-4504 W1). Manual edits persist until one of these inputs changes; when not foreign the
+  // field is kept empty. A persisted rate wins over the system one and is seeded exactly once per
+  // visit to its pair, so neither a late validate-exchange-rate response nor a date change nor a
+  // subsequent manual edit can overwrite what the user saved on the draft (ETP-4841).
+  //
+  // Seeds amountStr in THIS SAME effect pass (instead of leaving it to the recompute effect
+  // below) and flags skipAmountRecomputeRef so that effect sits out its own pass for this commit.
+  // Without this, rateStr and amountStr settled over TWO separate render/effect passes: the
+  // recompute effect's FIRST pass still closes over the pre-seed `rate` (null, since rateStr
+  // hasn't propagated to a re-render yet) and clears amountStr to '', with the correct value only
+  // landing on a SECOND pass once `rate` catches up. That one-frame "rate seeded, amount blank"
+  // state is normally invisible, but if a real amount-field edit (e.g. blanking it) lands inside
+  // that window, React's input value-tracker sees the DOM already showing '' and skips firing
+  // onChange for the no-op edit — so the still-pending stale pass then overwrites the user's blank
+  // input with the seeded amount instead (ETP-4876).
   useEffect(() => {
-    setRateStr(isForeign && conversion.rate != null ? String(conversion.rate) : '');
-  }, [isForeign, accountCurrency, conversion.rate]);
+    const seedAmountFrom = (rawRate) => {
+      const n = parseFloat(String(rawRate).replace(',', '.'));
+      setAmountStr(Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '');
+    };
+    if (!isForeign) {
+      persistedRateSeededRef.current = false;
+      setRateStr('');
+      setAmountStr('');
+      return;
+    }
+    if (persistedRateApplies) {
+      if (!persistedRateSeededRef.current) {
+        persistedRateSeededRef.current = true;
+        skipAmountRecomputeRef.current = true;
+        setRateStr(persistedRate);
+        seedAmountFrom(persistedRate);
+      }
+      return;
+    }
+    persistedRateSeededRef.current = false;
+    const seeded = conversion.rate != null ? String(conversion.rate) : '';
+    skipAmountRecomputeRef.current = true;
+    setRateStr(seeded);
+    seedAmountFrom(seeded);
+    // balance.amount is read here only to seed amountStr at the moment the rate is (re)seeded —
+    // it doesn't need to retrigger this effect; ongoing balance.amount changes (e.g. "Igualar")
+    // are handled by the recompute effect below, which does list it as a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
   const rate = useMemo(() => {
     const n = parseFloat(String(rateStr).replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
-  // Amount expressed in the account currency = payment amount × rate (recomputes live on both).
-  const amountInAccount = (isForeign && rate != null) ? round2(balance.amount * rate) : null;
+  // Recompute the converted amount from the rate whenever the rate changes (typed directly, or
+  // re-seeded from the system/persisted value) or the invoice-currency amount changes (e.g. via
+  // "Igualar" or the Importe field) — in both cases the rate is the value to keep fixed, matching
+  // Classic. Skipped once when the change originated from the amount field itself, or from the
+  // seed effect above (see the ref there), and cleared entirely when the fields aren't shown.
+  useEffect(() => {
+    if (skipAmountRecomputeRef.current) {
+      skipAmountRecomputeRef.current = false;
+      return;
+    }
+    if (isForeign && rate != null) {
+      setAmountStr(formatPlain(round2(balance.amount * rate)));
+    } else {
+      setAmountStr('');
+    }
+  }, [isForeign, rate, balance.amount]);
+  const onRateChange = useCallback((e) => {
+    setRateStr(e.target.value);
+  }, []);
+  const onAmountChange = useCallback((e) => {
+    const raw = e.target.value;
+    setAmountStr(raw);
+    const n = parseFloat(String(raw).replace(',', '.'));
+    if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
+      skipAmountRecomputeRef.current = true;
+      setRateStr(deriveRateFromAmount(n, balance.amount));
+    } else {
+      // Blank/invalid amount ⇒ the implied rate is unknown too, so fall back to the same
+      // rateMissing gating a blank rate field already triggers.
+      setRateStr('');
+    }
+  }, [balance.amount]);
 
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
@@ -1034,6 +1143,11 @@ export default function NewPaymentEntryModal({
         conversionRate: (isForeign && rate != null) ? String(rate) : undefined,
         // Edit mode: update this existing draft instead of creating a new one.
         paymentId: payment?.id || undefined,
+        // ETP-4797. Only when the toggle was offered AND accepted; the backend re-checks the limit
+        // anyway, since a disabled switch is a convenience rather than a boundary.
+        writeoffDifference: (writeoff && writeoffInfo.visible && !writeoffInfo.blocked)
+          ? true
+          : undefined,
       };
       // PIS only ever accompanies the primary "confirm" action — Guardar
       // borrador keeps recording a plain manual payment, byte-for-byte
@@ -1115,11 +1229,11 @@ export default function NewPaymentEntryModal({
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(16,20,28,.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'hsl(var(--foreground) / 0.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
       onClick={requestClose}
     >
       <div
-        style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 0 0 1px rgba(18,18,23,.1), 0 24px 48px rgba(18,18,23,.03), 0 10px 18px rgba(18,18,23,.03), 0 5px 8px rgba(18,18,23,.04), 0 2px 4px rgba(18,18,23,.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: 'hsl(var(--card))', borderRadius: 8, boxShadow: '0 0 0 1px hsl(var(--foreground) / .1), 0 24px 48px hsl(var(--foreground) / .03), 0 10px 18px hsl(var(--foreground) / .03), 0 5px 8px hsl(var(--foreground) / .04), 0 2px 4px hsl(var(--foreground) / .04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
         data-testid="cp-new-payment-modal"
         onClick={e => e.stopPropagation()}
       >
@@ -1133,11 +1247,11 @@ export default function NewPaymentEntryModal({
         >×</button>
 
         {/* body */}
-        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: '#fff', flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto' }}>
 
           {/* invoice-context widget */}
           <div style={{ padding: '0 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '8px 12px', border: `1px solid ${BORDER1}`, borderRadius: 8, background: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '8px 12px', border: `1px solid ${BORDER1}`, borderRadius: 8, background: 'hsl(var(--card))' }}>
               <WidgetCell label={isReceipt ? ui('customer') : ui('vendor')} data-testid="WidgetCell__client">{party || '—'}</WidgetCell>
               <WidgetCell label={ui('invoice')} data-testid="WidgetCell__invoice">
                 <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{docNo || '—'}</span>
@@ -1147,7 +1261,7 @@ export default function NewPaymentEntryModal({
                 <span style={{ display: 'inline-flex', alignItems: 'center', width: 'fit-content', font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: WIDGET_BG, color: FG2, marginTop: 2 }}>{ui('cpStatusDraft')}</span>
               </div>
               <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">
-                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
+                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[var(--status-warning-fg)]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pending" />
               </WidgetCell>
             </div>
           </div>
@@ -1155,7 +1269,7 @@ export default function NewPaymentEntryModal({
           {/* 4 compact fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
             <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
-              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 <input
                   type="text" inputMode="decimal" value={balance.amountStr}
                   onChange={e => balance.onAmountChange(e.target.value)}
@@ -1170,7 +1284,7 @@ export default function NewPaymentEntryModal({
               <DateField
                 value={date}
                 onChange={(v) => { setDate(v); if (dateInvalid) setDateInvalid(false); }}
-                className={dateInvalid ? 'border-red-500 focus-within:ring-red-500' : ''}
+                className={dateInvalid ? 'border-destructive focus-within:ring-destructive' : ''}
                 data-testid="DateField__7727b3" />
             </Field>
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
@@ -1209,10 +1323,10 @@ export default function NewPaymentEntryModal({
           {isForeign && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
               <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                   <input
                     type="text" inputMode="decimal" value={rateStr}
-                    onChange={e => setRateStr(e.target.value)}
+                    onChange={onRateChange}
                     data-testid="cp-conversion-rate-input"
                     style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
                   />
@@ -1223,12 +1337,22 @@ export default function NewPaymentEntryModal({
                   </p>
                 )}
               </Field>
-              <Field label={ui('cpAmountInAccount')} data-testid="Field__amount-in-account">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 40, border: `1px solid ${BORDER1}`, borderRadius: 8, background: WIDGET_BG, minWidth: 0, padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }} data-testid="cp-amount-in-account">
-                  {amountInAccount == null
-                    ? '—'
-                    : <MoneyAmount value={amountInAccount} currency={accountCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-amount-in-account" />}
+              {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
+              <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                  <input
+                    type="text" inputMode="decimal" value={amountStr}
+                    onChange={onAmountChange}
+                    data-testid="cp-amount-in-account-input"
+                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  />
+                  <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
                 </div>
+                {(rateMissing || rateIsOne) && (
+                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
+                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
+                  </p>
+                )}
               </Field>
             </div>
           )}
@@ -1253,14 +1377,29 @@ export default function NewPaymentEntryModal({
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-money" /></div></div>
               {balance.usedCredit > 0 && (<>
                 <span style={{ color: FG2, font: '400 12px/16px Inter' }}>+</span>
-                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
+                <div><div style={{ font: '400 12px/16px Inter', color: 'hsl(var(--primary))' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[hsl(var(--primary))]" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-credit" /></div></div>
               </>)}
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
-              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
+              <div style={{ textAlign: 'right' }} data-testid="cp-delta-cell"><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
+              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
+            {/* ETP-4797 — sits directly under the amount strip, which already spells out the
+                difference, so no separate breakdown is repeated here. */}
+            {writeoffInfo.visible && (
+              <div style={{ marginTop: 10 }}>
+                <WriteoffToggleRow
+                  checked={writeoff}
+                  onCheckedChange={setWriteoff}
+                  amount={writeoffInfo.amount}
+                  currency={currency}
+                  isReceipt={isReceipt}
+                  blocked={writeoffInfo.blocked}
+                  limit={writeoffInfo.limit}
+                  data-testid="cp-writeoff-toggle" />
+              </div>
+            )}
           </div>
 
           {pisEligible && (

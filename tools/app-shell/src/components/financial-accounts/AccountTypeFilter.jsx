@@ -31,7 +31,7 @@ export function AccountTypeFilter({ value, onChange }) {
         <button
           type="button"
           data-testid="account-type-filter-trigger"
-          className="inline-flex h-9 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{active.label}</span>
           <ChevronDown
@@ -45,7 +45,7 @@ export function AccountTypeFilter({ value, onChange }) {
             const selected = opt.value === current;
             return (
               <div key={opt.value}>
-                {opt.divider ? <div className="my-1 h-px bg-[#E8EAEF]" aria-hidden="true" /> : null}
+                {opt.divider ? <div className="my-1 h-px bg-[hsl(var(--border-subtle))]" aria-hidden="true" /> : null}
                 <button
                   type="button"
                   role="option"
@@ -53,14 +53,14 @@ export function AccountTypeFilter({ value, onChange }) {
                   onClick={() => onChange?.(opt.value === ALL ? null : opt.value)}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm',
-                    'hover:bg-[#f5f7f9]',
-                    selected ? 'font-semibold text-[#121217]' : 'text-[#3f3f50]',
+                    'hover:bg-[hsl(var(--muted))]',
+                    selected ? 'font-semibold text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]',
                   )}
                   data-testid={`account-type-filter-option-${opt.value.toLowerCase()}`}
                 >
-                  <opt.Icon className="h-4 w-4 text-[#6c6c89]" />
+                  <opt.Icon className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
                   <span className="flex-1 text-left">{opt.label}</span>
-                  {selected ? <Check className="h-4 w-4 text-[#121217]" data-testid="Check__f795e3" /> : null}
+                  {selected ? <Check className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__f795e3" /> : null}
                 </button>
               </div>
             );

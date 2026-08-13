@@ -17,7 +17,7 @@ Use this window to maintain warehouse master records and understand what is phys
 - Route: `/warehouse` for the list, `/warehouse/:recordId` for detail.
 - Visibility: visible from the Inventory menu as **Warehouse**.
 - Implementation type: custom window. `tools/app-shell/src/windows/registry.js` resolves `warehouse` through `customLoaders`. The custom wrapper (`tools/app-shell/src/windows/custom/warehouse/index.jsx`) mounts the generated `WarehousePage` with overridden table, sidebar, secondary tabs, and layout props.
-- Window shape: single-entity master with custom secondary tabs. `decisions.json` declares `detailEntity: null`; the detail page combines the warehouse header form with stock-derived surfaces (sidebar summary, Products tab, Transactions tab) and the standard Attachments tab.
+- Window shape: single-entity master with custom secondary tabs. `decisions.json` declares `detailEntity: null`; the detail page combines the warehouse header form with stock-derived surfaces (sidebar summary, Products tab, Transactions tab), the generated **Accounting** tab (see "Accounting subtab" below), and the standard Attachments tab.
 
 ## List view
 
@@ -71,9 +71,21 @@ On successful warehouse creation, the wrapper calls `createDefaultStorageBin`, w
   "searchKey": "<warehouse.searchKey>-0-0-0",
   "rowX": "0", "stackY": "0", "levelZ": "0",
   "relativePriority": 50,
-  "default": true
+  "default": true,
+  "inventoryStatus": "2"
 }
 ```
+
+`inventoryStatus: "2"` (ETP-4761) explicitly sets the new bin's `M_InventoryStatus` to the fixed
+system id for "Available" (`OVERISSUE = 'N'`). Without it, the storage-bin table's own DB column
+default applies — the "Undefined" status (`7B3DC15A20234C418D26EECDC5D59003`), which also has
+`OVERISSUE = 'N'` and so behaves identically for negative-stock purposes, but is semantically
+mislabeled for a bin the user just created as their working default. This is a separate, narrower
+fix from the onboarding-sampledata gap fixed in the same ticket (`com.etendoerp.go`'s bundled
+GOClient locators previously shipped `M_INVENTORYSTATUS_ID = '0'`, "Undefined-OverIssue" with
+`OVERISSUE = 'Y'`, which did allow negative stock — see `docs/etendo-ad/onboarding-gaps.md` §I1 in
+this repo). This wrapper's fix applies to every warehouse created through this window, not just
+onboarding-seeded ones.
 
 If this POST fails, the warehouse remains saved and a `toast.warning` is shown — no rollback of the warehouse itself.
 
@@ -156,23 +168,45 @@ Columns:
 | Column | Alignment | Notes |
 |--------|-----------|-------|
 | Date | left, `font-semibold`, tabular-nums | `DD/MM/YYYY` format |
-| Type | left, `text-muted-foreground` | Resolved from `movementType$_identifier` or mapped via `TYPE_KEY_MAP` i18n key |
+| Type | left, `text-muted-foreground` | Resolved from `etgoDocWindow` via `WINDOW_TYPE_KEY_MAP` when present (distinguishes normal document vs. return — see below); falls back to translated `TYPE_KEY_MAP[movementType]`, then raw `movementType$_identifier`, otherwise |
 | Document | left | Navigable `DocumentLink` (underline + ↗ icon) when `etgoDocWindow` and `etgoDocHeaderId` are present; plain text otherwise |
 | Product | left | `product$_identifier` |
 | Qty | right, tabular-nums, `font-semibold` | Positive: `emerald-600` with leading `+`. Negative: `text-destructive`. |
 
-Movement type to source document mapping (resolved server-side by `ProductTransactionsHandler`):
+Source document mapping (resolved server-side by `ProductTransactionsHandler`), keyed on
+`M_InOut.IsSOTrx` + `C_DocType.IsReturn` — **NOT** on `M_InOut.MovementType`. Verified against
+a real instance: `MovementType` is identical between a normal document and its return
+(`C-`/`C-`, `V+`/`V+`); the actual discriminator is the `IsReturn` flag on the document's
+`C_DocType`, joined in via `M_InOut.C_DocType_ID`:
 
-| MovementType | Source join | GO window |
-|---|---|---|
-| `V+` | `M_InOutLine → M_InOut` | `goods-receipt` |
-| `C-` | `M_InOutLine → M_InOut` (issotrx = Y) | `goods-shipment` |
-| `M+` / `M-` | `M_MovementLine → M_Movement` | `goods-movements` |
-| `I+` / `I-` | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
-| `P+` / `P-` | `M_ProductionLine → M_Production` | No GO window yet — plain text |
-| `D-` / `D+` | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
+| IsSOTrx | C_DocType.IsReturn | Source join | GO window |
+|---|---|---|---|
+| `Y` | `N` (normal sale) | `M_InOutLine → M_InOut ⟕ C_DocType` | `goods-shipment` |
+| `Y` | `Y` (sales return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-material-receipt` |
+| `N` | `N` (normal purchase) | `M_InOutLine → M_InOut ⟕ C_DocType` | `goods-receipt` |
+| `N` | `Y` (purchase return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-to-vendor-shipment` |
+| — | — | `M_MovementLine → M_Movement` | `goods-movements` |
+| — | — | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
+| — | — | `M_ProductionLine → M_Production` | No GO window yet — plain text |
+| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
 
 `documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, or `productionLine$_identifier`.
+
+**Type column resolution:** `M_Transaction.MovementType` is identical between a normal document and
+its return (`C-` for both a customer shipment and its return, `V+` for both a vendor receipt and its
+return), so it cannot be used alone to label the Type column for a return. `resolveTypeLabel()` in
+`WarehouseTransactionsTable.jsx` instead prefers `WINDOW_TYPE_KEY_MAP[tx.etgoDocWindow]` — the same
+document-window discriminator used for navigation — mapping `return-material-receipt` →
+`movTypeCustomerReturn` and `return-to-vendor-shipment` → `movTypeVendorReturn` (normal
+`goods-shipment`/`goods-receipt` reuse the existing `movTypeCustomerShipment`/`movTypeVendorReceipt`
+keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`, production,
+internal consumption) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
+real `M_Transaction.MovementType` codes — `V+`, `I+`, `I-`, `M+`, `M-`, `P+`, `P-`, `C-`, `D-` — see
+`artifacts/return-material-receipt/FINDINGS.md`, which confirms no other codes like `V-`/`C+` are
+actually used in stock transactions), and only drop to the raw `movementType$_identifier` /
+`movementType` code as a last resort when the code is unmapped. The raw identifier must never be
+checked before the translated map — doing so silently reintroduces hardcoded English text
+regardless of locale (see ETP-4864).
 
 Empty state shows `warehouseNoTransactions` centered message.
 
@@ -218,6 +252,41 @@ column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProduc
 helper sums it across all bin-content rows for each product to produce the per-product
 and warehouse-total valuations shown in the sidebar and Products tab.
 
+## Accounting subtab (`accounting` entity)
+
+Added by ETP-4565 (scope-expanded follow-up to ETP-4402 — "Contabilidad tab: single record + non-deletable" across 8 master-data windows). The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) has an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`); it is now wired into the custom warehouse window as a `secondaryTabs` entry, the same pattern used by `product`/`asset-group`.
+
+The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible field:
+
+| Field | Notes |
+|-------|-------|
+| Warehouse Differences (`W_Differences_Acct`) | Editable, required, `ValidCombination` selector with the drawer-style lookup picker. |
+
+`accountingSchema` (visibility `system`, `derivation: "fromConfig"`) and `warehouse` (visibility `system`, `derivation: "fromParent"`) drive the record but are not shown to the user. `warehouseInventory`, `inventoryRevaluation`, and `inventoryAdjustment` are discarded (not exposed).
+
+**Declared in `decisions.json` (`window.secondaryTabs.accounting` + `entities.accounting`):**
+
+```json
+"secondaryTabs": {
+  "productTransactions": { "tabOrder": 1, "label": "Transactions", "customPanel": "WarehouseTransactionsTable" },
+  "accounting": { "tabOrder": 2, "label": "Accounting" }
+}
+```
+
+```json
+"accounting": {
+  "name": "accounting",
+  "hideDelete": true,
+  "fields": { "warehouseDifferences": { "visibility": "editable", "grid": true, "form": true, "required": true, "lookup": true, "grow": true, "seq": 1 }, "...": "system/discarded fields omitted" }
+}
+```
+
+**`entities.accounting.hideDelete: true`** — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`), the same gate used by `product`/`asset-group`'s `secondaryTabs.accounting`. **Not yet addressed:** same as `product`/`asset-group`, this window's Accounting tab uses `window.secondaryTabs` (not `detailEntity`), so there is no existing "cap at one record" mechanism (`window.maxDetailLines` only applies to the `detailEntity` pattern) — tracked as a Schema Forge Developer follow-up, not implemented in this pass.
+
+Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=warehouse` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
+
+**Auto-creation (requirement 3) is a separate, still-open gap, independent of this wiring fix:** of the 18 most-recently-created warehouses (at the time of the original ETP-4565 investigation), 0 had a `M_Warehouse_Acct` row (older, non-GO-created warehouses in the same DB do have one — `m_warehouse_acct` had 14 rows total, all pre-dating the current onboarding flow). Backend auto-creation of the accounting row is out of scope for this frontend-wiring pass and remains flagged as follow-up work.
+
 ## Known gaps
 
 - **Production and internal consumption not navigable**: transactions with movement types `P+`, `P-`, `D-`, `D+` have no corresponding GO window. The Document column renders plain text instead of a navigable link. This will remain until GO windows for those document types are built.
@@ -236,10 +305,12 @@ and warehouse-total valuations shown in the sidebar and Products tab.
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx` — Transactions tab table, document navigation, movement type mapping.
 - `tools/app-shell/src/windows/custom/warehouse/useWarehouseStock.js` — shared data fetch hook (bins → binContents + productTransactions, UOM resolution).
 - `tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js` — `aggregateProducts` helper. Returns all aggregated rows unfiltered; each consumer (`WarehouseProductsTab.jsx`, `WarehouseCustomTable.jsx` with `!= 0`, `WarehouseSummary.jsx` with `> 0`) applies its own qty predicate — see "Stock filtering semantics".
-- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` for productTransactions entity.
+- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` for productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
+- `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` — regression guard: `entities.accounting.hideDelete` must be `true`.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/warehouseUtils.test.js` / `warehouseUtils.vitest.js` — unit tests for `aggregateProducts` (cross-bin summation, UOM resolution, numeric coercion; no longer filters by qty).
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseProductsTab.vitest.jsx` — regression guard: list keeps negative-stock rows, hides exact-zero.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js` / `WarehouseSummary.vitest.jsx` — regression guard: KPI predicate stays `> 0` (excludes negatives and zero).
+- `tools/app-shell/src/windows/custom/warehouse/__tests__/index.vitest.jsx` — regression guard: `createDefaultStorageBin` sends `inventoryStatus: '2'` (ETP-4761) on the default-bin creation POST.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseCustomTable.test.js` — regression guard: list-view product-count cell uses `!= 0`.
 - `tools/app-shell/src/windows/__tests__/registry.test.js` — proves the `warehouse` slug is registered in the window map.
 
@@ -256,3 +327,4 @@ and warehouse-total valuations shown in the sidebar and Products tab.
 9. For a production or internal-consumption transaction, confirm the Document column shows plain text (no link).
 10. Confirm positive quantities are green with a leading `+` and negative quantities are red.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
+12. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.

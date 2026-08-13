@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
-  "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-17T18:04:55.296Z",
-  "contractChecksum": "5c7b44d77827859f",
+  "version": "0.30.0",
+  "generatedAt": "2026-07-30T22:14:36.474Z",
+  "updatedAt": "2026-08-02T18:39:15.065Z",
+  "contractChecksum": "e15091d290bd10a5",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -132,6 +132,14 @@
         "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
       },
       {
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
+      },
+      {
         "entity": "goodsReceiptLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -192,14 +200,6 @@
         "reference": "OrderLine",
         "inputMode": "search",
         "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
-      },
-      {
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "column": "C_Bpartner_ID",
-        "reference": "BusinessPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
       },
       {
         "entity": "goodsReceiptLine",
@@ -372,26 +372,43 @@
         "processType": "classic"
       },
       {
-        "name": "receiveMaterials",
-        "actionType": "createFrom",
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
         "entity": "goodsReceipt",
-        "column": "RM_Receipt_PickEdit",
+        "column": "EM_Etblkp_Bulkposting",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
-        "parameters": [],
-        "preconditions": [],
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
         "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
+          "Updates document status",
+          "May trigger workflow transitions"
         ],
-        "dryRunSupported": false,
+        "dryRunSupported": true,
         "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
         ],
-        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -415,6 +432,29 @@
         ],
         "processId": "800010",
         "processType": "classic"
+      },
+      {
+        "name": "receiveMaterials",
+        "actionType": "createFrom",
+        "entity": "goodsReceipt",
+        "column": "RM_Receipt_PickEdit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
       },
       {
         "name": "sendMaterials",
@@ -459,46 +499,6 @@
           "Record is in an incompatible state"
         ],
         "processId": "62250E8866EA4D96A66C309878DC039E",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "goodsReceipt",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -561,6 +561,14 @@
     },
     "window": {
       "category": "purchases"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "formState": {
@@ -627,6 +635,10 @@
           "processed": {
             "readOnly": true,
             "required": true
+          },
+          "etgoCurrency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
           }
         }
       },
@@ -653,7 +665,7 @@
           "movementQuantity": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
-            "defaultValue": "0"
+            "defaultValue": "1"
           },
           "uOM": {
             "readOnly": true,
@@ -669,9 +681,6 @@
           "orderQuantity": {
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "businessPartner": {
-            "readOnlyLogic": "@Posted@='Y'"
           },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
@@ -711,7 +720,8 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate"
+        "movementDate",
+        "etgoCurrency"
       ],
       "lineFields": [
         "lineNo",
@@ -789,9 +799,9 @@
       "createLinesFrom",
       "generateTo",
       "documentAction",
+      "etblkpBulkposting",
       "receiveMaterials",
-      "sendMaterials",
-      "etblkpBulkposting"
+      "sendMaterials"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -819,7 +829,8 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate"
+          "movementDate",
+          "etgoCurrency"
         ]
       },
       {
@@ -841,5 +852,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "1c995a622aee03fb"
+  "checksum": "07eac4fb4a7a5309"
 }

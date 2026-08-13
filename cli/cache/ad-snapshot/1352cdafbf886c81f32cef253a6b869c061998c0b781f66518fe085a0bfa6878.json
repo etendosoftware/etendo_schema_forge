@@ -1,6 +1,13 @@
 {
   "sql": "SELECT vr.AD_Val_Rule_ID, vr.Name, vr.Code, c.ColumnName FROM AD_Val_Rule vr JOIN AD_Column c ON c.AD_Val_Rule_ID = vr.AD_Val_Rule_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 ORDER BY vr.AD_Val_Rule_ID, c.ColumnName",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "b683e747b399f9bdc59b9c2706b07f2675e38c5619615a280901502270656232",
       "params": [
@@ -2172,6 +2179,128 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "1e41d8c65c9ff5197f168f5ea3fb6c09a946f5e8e5b93537f1f6ed486ecab540",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "77F85D5BBEEB48F48FEBD08BEE4E5AF7",
+          "code": "C_Calendar_ID IN (SELECT EM_INTR_C_Calendar_ID FROM AD_ORG WHERE AD_ORG_ID=@AD_ORG_ID@)",
+          "columnname": "C_Year_ID",
+          "name": "Years of the Intrastat Calendar"
+        },
+        {
+          "ad_val_rule_id": "A010900931E241E9AF9126EE0754BD24",
+          "code": "(C_TAX.SOPOTYPE = 'S' OR C_TAX.SOPOTYPE = 'B') AND C_TAX.ISTAXEXEMPT = 'Y' AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0')",
+          "columnname": "C_Tax_ID",
+          "name": "SalesTaxExemptRate"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "4fd3136dfc1f9742c1fb0edf511ad761b7c64741715b1baf8ee52f167ff0a9b0",
       "params": [
@@ -2647,6 +2776,13 @@
           "name": "AD_Org show child organizations"
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

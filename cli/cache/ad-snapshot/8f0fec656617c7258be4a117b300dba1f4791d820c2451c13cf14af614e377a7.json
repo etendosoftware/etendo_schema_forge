@@ -1,8 +1,136 @@
 {
   "sql": "SELECT DISTINCT c.ad_table_id, c.ad_column_id, c.columnname, c.position FROM ad_column c JOIN ad_tab t ON t.ad_table_id = c.ad_table_id WHERE t.ad_window_id = $1 AND t.isactive = 'Y' AND c.isactive = 'Y' ORDER BY c.ad_table_id, c.position, c.columnname, c.ad_column_id",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "dc0ee8d67bb6200dc314819a37fd240b92f0417924f898a2a94dd8bd3fc636f4",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "302ADF1EE4E646AEB10C1B75C29BA08D",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Etgo_Match_Rule_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1D3BD26E085A45C5B2CF6861BBF64D50",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "D015E8D9767C40DBA63BE6D5055A1281",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "91BB3F93843D4202880D970F388561F3",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "19C372C60402414FB0ABBB9AB1E7D26E",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "25E87F98E4824C2188CF852E2F1E51B5",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "45E47933F5F349CEA791F77D9CAB0974",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "CC7D45C92F59421C8D41CF0733F907D8",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "D334DD9D2541424793C93689C746409F",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Name",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "E151104B60534052A2B55FD57FA06FB3",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Priority",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "3BA0FD6AD11E4DBDA784B8B4CF9D7D4D",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "TextPattern",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "3B463B3E57C54F348866483C6335E58B",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "MatchCount",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "E63DB12CE0FB4AE4994420BECAFD2851",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_BPartner_ID",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "F87D895E8A904F989A6303AD4AA26A68",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "FIN_Financial_Account_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "B4EF6BE74E3D42839DCFD069CCB9ACFD",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_Project_ID",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "389FFE7C00ED449B987F9A544E3C765F",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_Costcenter_ID",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "6C9F1DAD941A46D4BB0E4073C5232DEE",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "TextCondition",
+          "position": "26"
+        },
+        {
+          "ad_column_id": "161CE4F72CD240329EB4048BDC447C43",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "ETGO_Transaction_Type_ID",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "32938B1474734B7DAC81979D13296F48",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_GLItem_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "0ED5786547374C808877009443251681",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "M_Product_ID",
+          "position": null
+        }
+      ]
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "8dd1dcdca1ea2248e09cfca510c615c360847a2f45b6266ce3b9a6a42ee11af3",
+      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
       "params": [
         "144"
       ],
@@ -738,6 +866,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "2020",
@@ -4204,7 +4350,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "61df14f821a9efaf3da564281ade2bef64bc27f30ca8d3c9c28f324bb2784f06",
+      "checksum": "9e7a8583ba06546c00a3f65a26b837da86bc47332af2dcf08bf63968ff7fca34",
       "params": [
         "143"
       ],
@@ -4924,16 +5070,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -4954,21 +5130,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -4976,24 +5140,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -6830,7 +6976,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "3ed2d2cf5599c3d052dda2f640b8ed8dceae2d2adaed5f999636158f1d63fbf9",
+      "checksum": "24de5d37e92e16ef3d88c124f01dc9bda8cf8cecace327fef4be2ddb427c8085",
       "params": [
         "167"
       ],
@@ -8568,6 +8714,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -11220,7 +11372,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "9fb061595d7923f55f80258216d2ec7a6634f5b3eaa4cb28d700576eafc6f43f",
+      "checksum": "331fd87c9748cb13714049df1bc3e38ab053a7f6290f9d211f8496a8feeec748",
       "params": [
         "183"
       ],
@@ -12958,6 +13110,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -14758,7 +14916,7 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
-      "checksum": "0a8d338026083b712e8bcc18f04b8267fca958cdd101452353dae0b7be8d4528",
+      "checksum": "36a9d73b8a07fa1fd62916ba1aafa054dd80b9be35bcae6aa8ea2f44ab113087",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
@@ -14848,16 +15006,28 @@
           "position": "14"
         },
         {
-          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
-          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
-          "columnname": "ETSG_SIF_Territory",
-          "position": "16"
-        },
-        {
           "ad_column_id": "25EA4B325FAE4219A589874ED6D31B59",
           "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
           "columnname": "Validate_Previous_Invoice",
-          "position": "16"
+          "position": "15"
+        },
+        {
+          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "ETSG_SIF_Territory",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "09481933730649FBAD9409C9FCCBB6DA",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_User",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "4CAC02DA1612475F831D1B6B7FD1E2EE",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_Password",
+          "position": "25"
         }
       ]
     },
@@ -15230,7 +15400,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "7edcc6ae86857d38aca146669195b626ba5ad9bc132e40f20e2c28b6786d0799",
+      "checksum": "bb20a65d408c7235d83070a0b04b66535a4e21caf42932621fa600af13c6d0b4",
       "params": [
         "184"
       ],
@@ -15960,6 +16130,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -21586,7 +21762,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "a39d01a97b89ab267902eef515a809185e065ee2ad3169723f9a1b78bef101ae",
+      "checksum": "13a0bd7468d92cb91b628baa09efae3d25682328f9fd62d18fdff34101553735",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -22192,16 +22368,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -22222,21 +22428,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -22244,24 +22438,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -22988,7 +23164,7 @@
       ]
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
-      "checksum": "12ec7e2f05f32988b1ca4f26074a209f525459ee15b90e993b7ae541750a2016",
+      "checksum": "8e8857a5c7dcc6cd076a5b1cb4a61d1803b32c713ee47ecfc0da1a1c2c65211f",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -23406,6 +23582,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -25072,7 +25254,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "50a22294cb954a339dfa045493a2f37fd31e9edbbff706a885c729b62b65e278",
+      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
       "params": [
         "140"
       ],
@@ -25886,6 +26068,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",
@@ -28214,7 +28414,7 @@
       ]
     },
     "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
-      "checksum": "cb0856ffef88ea4d03b581423f32e7891354d25eba5a8c596a2a6eb0decaa9fd",
+      "checksum": "7acb52d683512f4725b1dea971a7ca9bae795a00ed2700ed9aa72c2af9003007",
       "params": [
         "146"
       ],
@@ -28410,6 +28610,12 @@
           "ad_table_id": "255",
           "columnname": "Costbased",
           "position": "17"
+        },
+        {
+          "ad_column_id": "DC10157FBF74473F8ABE3281AB85301D",
+          "ad_table_id": "255",
+          "columnname": "EM_Etgo_Productcount",
+          "position": "19"
         },
         {
           "ad_column_id": "2987",
@@ -29851,8 +30057,1246 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "6fc20333174ac4aaf52d6a6b5bfcc7f6e81a1351c018f286621cf719bf151fb9",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "1000500002",
+          "ad_table_id": "1000500000",
+          "columnname": "C_Poc_Configuration_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1000500003",
+          "ad_table_id": "1000500000",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "1000500004",
+          "ad_table_id": "1000500000",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "1000500005",
+          "ad_table_id": "1000500000",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "1000500006",
+          "ad_table_id": "1000500000",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "1000500007",
+          "ad_table_id": "1000500000",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "1000500008",
+          "ad_table_id": "1000500000",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1000500009",
+          "ad_table_id": "1000500000",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "1000500010",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpserver",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "1000500013",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpserveraccount",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "1000500014",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpserverpassword",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "1000500015",
+          "ad_table_id": "1000500000",
+          "columnname": "IsSmtpAuthorization",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "575DA53AACF811DDAF31B32C8EC6205E",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpserversenderaddress",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "A5BD63500881485AA62A731858B83227",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpconnectionsecurity",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "2640D641B8B54440BDA5C814A854328D",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpport",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "DD8B47B6ECF745C0B401A06D37047AAA",
+          "ad_table_id": "1000500000",
+          "columnname": "SmtpTimeout",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "19065F43C18A4809ACB26368E08209C6",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpserverfromname",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "7440A6CBEF254E78A33C6C79A12C10ED",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpreplytoaddress",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "F6958659BE3E4A47A741F734F58F727E",
+          "ad_table_id": "1000500000",
+          "columnname": "Isdefaultconfig",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "2440DE1B64D840249B7DFBB2385B7C7B",
+          "ad_table_id": "1000500000",
+          "columnname": "Istestsuccessful",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "1F7397BC38464A319D7F0998CEEBB1A3",
+          "ad_table_id": "1000500000",
+          "columnname": "Lasttestdate",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "4F02F4B7AD8047ED805272E697FBB6F6",
+          "ad_table_id": "1000500000",
+          "columnname": "Smtpconnectiontest",
+          "position": "21"
+        },
+        {
+          "ad_column_id": "B1B2959CE29C403AB19957DBF4D23229",
+          "ad_table_id": "1000500000",
+          "columnname": "Email_Conf_AD_User_ID",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "C4F8A3D7B2E94F1C8A5D3E6F7B4A2C9E",
+          "ad_table_id": "1000500000",
+          "columnname": "Email_Conf_AD_Org_ID",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "D3A8F4C7B2E94F1D8A5C3E6B7F4A2C9D",
+          "ad_table_id": "1000500000",
+          "columnname": "Email_Conf_AD_Client_ID",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "66E91DE0CB314BBF98F299277392299A",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Etsg_Certificate_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "14BB538AE1374AE0863FEDCEDD463892",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "CFB8BA2CA73A418982D9F24E92CF1D8A",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "A3BD0BB2DD4A49CEAD891C72F720F14B",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "17A277EE28AE434B8436DD13DF4FB6B6",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "B8DBA1C7BBEF45B398D108843E0BA3AB",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "A17361C66E7841E0A5451A509A2CCCE0",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "008B55B601DC43D08FCD333B52A3F07C",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "0F3C8033258D494E8158515AD1A04DD1",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Certificate_Password",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "810B3A8C094F4E47B7C7F441B81359D2",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "columnname": "Expiration_Date",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "837",
+          "ad_table_id": "145",
+          "columnname": "C_Period_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "838",
+          "ad_table_id": "145",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "839",
+          "ad_table_id": "145",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "840",
+          "ad_table_id": "145",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "841",
+          "ad_table_id": "145",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "842",
+          "ad_table_id": "145",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "843",
+          "ad_table_id": "145",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "844",
+          "ad_table_id": "145",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "482",
+          "ad_table_id": "145",
+          "columnname": "Name",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "845",
+          "ad_table_id": "145",
+          "columnname": "PeriodNo",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "846",
+          "ad_table_id": "145",
+          "columnname": "C_Year_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "484",
+          "ad_table_id": "145",
+          "columnname": "StartDate",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "5943",
+          "ad_table_id": "145",
+          "columnname": "EndDate",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "847",
+          "ad_table_id": "145",
+          "columnname": "PeriodType",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "5944",
+          "ad_table_id": "145",
+          "columnname": "Processing",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "5854D61EEF913B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Close_Fact_Acct_Group_ID",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "5854D61EEF923B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Reg_Fact_Acct_Group_ID",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "5854D61EEF933B11E040007F01002D1D",
+          "ad_table_id": "145",
+          "columnname": "Divideup_Fact_Acct_Group_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "8200738EF14611DDB9650016D4EE9DB3",
+          "ad_table_id": "145",
+          "columnname": "Open_Fact_Acct_Group_ID",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "7270DE4F7AAA41E89E5F133AF78F2163",
+          "ad_table_id": "145",
+          "columnname": "OpenClose",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "6C095E9D39CD4A31BC29FB37853B9044",
+          "ad_table_id": "145",
+          "columnname": "Status",
+          "position": null
+        },
+        {
+          "ad_column_id": "528",
+          "ad_table_id": "155",
+          "columnname": "AD_Org_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "527",
+          "ad_table_id": "155",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "711",
+          "ad_table_id": "155",
+          "columnname": "IsActive",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "712",
+          "ad_table_id": "155",
+          "columnname": "Created",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "713",
+          "ad_table_id": "155",
+          "columnname": "CreatedBy",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "714",
+          "ad_table_id": "155",
+          "columnname": "Updated",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "715",
+          "ad_table_id": "155",
+          "columnname": "UpdatedBy",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "2045",
+          "ad_table_id": "155",
+          "columnname": "Value",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "522",
+          "ad_table_id": "155",
+          "columnname": "Name",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "523",
+          "ad_table_id": "155",
+          "columnname": "Description",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "2752",
+          "ad_table_id": "155",
+          "columnname": "IsSummary",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "57923EC680D411DDA0EA574F27229B25",
+          "ad_table_id": "155",
+          "columnname": "AD_Orgtype_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "58326C677587D5F2E040007F010102FE",
+          "ad_table_id": "155",
+          "columnname": "IsPeriodControlAllowed",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "58326C677588D5F2E040007F010102FE",
+          "ad_table_id": "155",
+          "columnname": "C_Calendar_ID",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "5AC9CF9FAE5C497AA82FB3975B040E87",
+          "ad_table_id": "155",
+          "columnname": "IsReady",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "8239AEEEC0404A6C9BC2E3C727244C74",
+          "ad_table_id": "155",
+          "columnname": "EM_Intr_C_Calendar_ID",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "5F6E51F7E4B348A7A49955F778B1495F",
+          "ad_table_id": "155",
+          "columnname": "Social_Name",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "821C2ABBBEF440CBB97CA03DB83D9883",
+          "ad_table_id": "155",
+          "columnname": "C_Currency_ID",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "4A0964E5760F4746B324BDBA16B8D1CB",
+          "ad_table_id": "155",
+          "columnname": "C_Acctschema_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "F93CEC78B36548BABBBAB704B9CE9866",
+          "ad_table_id": "155",
+          "columnname": "AD_Periodcontrolallowed_Org_ID",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "B5066970A1944B9EBDA0A2BE48F026F6",
+          "ad_table_id": "155",
+          "columnname": "EM_APRM_Glitem_ID",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "3244C11EC50745D092859E2545903F63",
+          "ad_table_id": "155",
+          "columnname": "AD_Calendarowner_Org_ID",
+          "position": "21"
+        },
+        {
+          "ad_column_id": "9883DA921CEC4A71A2F76D0DDD4813F2",
+          "ad_table_id": "155",
+          "columnname": "AD_Legalentity_Org_ID",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "7172CA9FB18A4BEAA9E0594891BE2A35",
+          "ad_table_id": "155",
+          "columnname": "AD_Inheritedcalendar_ID",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "37569B3F7BE447F3ACB229779A6E95EB",
+          "ad_table_id": "155",
+          "columnname": "AD_Businessunit_Org_ID",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "543142814CE54E2C88351A6EBD8CF39B",
+          "ad_table_id": "155",
+          "columnname": "EM_Etgo_Business_Type",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "EF2234B2492345EC81B8F4709C627E28",
+          "ad_table_id": "155",
+          "columnname": "EM_Etsg_Add_Certificate",
+          "position": "28"
+        },
+        {
+          "ad_column_id": "1809",
+          "ad_table_id": "228",
+          "columnname": "AD_Org_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1994",
+          "ad_table_id": "228",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "1995",
+          "ad_table_id": "228",
+          "columnname": "IsActive",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "1996",
+          "ad_table_id": "228",
+          "columnname": "Created",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "1997",
+          "ad_table_id": "228",
+          "columnname": "CreatedBy",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "1998",
+          "ad_table_id": "228",
+          "columnname": "Updated",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "1999",
+          "ad_table_id": "228",
+          "columnname": "UpdatedBy",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1811",
+          "ad_table_id": "228",
+          "columnname": "C_Location_ID",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "2352",
+          "ad_table_id": "228",
+          "columnname": "DUNS",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "2353",
+          "ad_table_id": "228",
+          "columnname": "TaxID",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "800807",
+          "ad_table_id": "228",
+          "columnname": "C_BPartner_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "1AC3399CBD3A4589902AEBE005D5BCBC",
+          "ad_table_id": "228",
+          "columnname": "Istaxundeductable",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "761DAEB8E00C4E4080645BF49AC35596",
+          "ad_table_id": "228",
+          "columnname": "C_Tax_ID",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "800875",
+          "ad_table_id": "228",
+          "columnname": "Logo",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "803100",
+          "ad_table_id": "228",
+          "columnname": "Reference_Order",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "C4EBD68726074887B5FFC0D344FA5CC4",
+          "ad_table_id": "228",
+          "columnname": "Your_Company_Document_Image",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "828EE0AE803F5FA1E040007F010067C7",
+          "ad_table_id": "228",
+          "columnname": "Automatic_Writeoff_Amt",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "A908EA6CF218F9C9E040007F01011582",
+          "ad_table_id": "228",
+          "columnname": "AD_User_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "378DF78B090E4DFDA313E6248B204ABD",
+          "ad_table_id": "228",
+          "columnname": "Iscashvat",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "E1EB246D145E4301945B7C1A9FDDAB74",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Isperson",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "5AE9679A6598406FA92C4CB838FB59D4",
+          "ad_table_id": "228",
+          "columnname": "EM_Etvfac_Installation_Number",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "4DC486F035E44F98B3BC21904E46834B",
+          "ad_table_id": "228",
+          "columnname": "IsDoubleCash",
+          "position": "22"
+        },
+        {
+          "ad_column_id": "C9813991C4E24ED79893D22FD790EE08",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Firstname",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "EE34E6C978EB422B80B8F82D762E6939",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Surname1",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "1743C3D2D6FA4C18BE3B3B2DCDCF0572",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat303_Person_Name",
+          "position": "25"
+        },
+        {
+          "ad_column_id": "F9533C3E037D43069F87EFE8749B6688",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Surname2",
+          "position": "25"
+        },
+        {
+          "ad_column_id": "18096D8809024E67A36E636EA0D9D0E7",
+          "ad_table_id": "228",
+          "columnname": "EM_Aprm_Payment_Desc",
+          "position": "25"
+        },
+        {
+          "ad_column_id": "A77581F9694A4C1095F6C937D6E5D00F",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat303_Person_Surnames",
+          "position": "26"
+        },
+        {
+          "ad_column_id": "68B354AAFC3F498A9FCDFF6A2DA1D3C3",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Rep_Nif",
+          "position": "26"
+        },
+        {
+          "ad_column_id": "AA7293E36D9D4713AC15C1AA6A847970",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat303_Is_Nat_Per",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "E5047AE449D746B794AB39E402A81FDD",
+          "ad_table_id": "228",
+          "columnname": "EM_Aeat390_Rep_Name",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "E32B576EAD874B9A89B800C58CD98697",
+          "ad_table_id": "228",
+          "columnname": "EM_Etgo_Web",
+          "position": "35"
+        },
+        {
+          "ad_column_id": "0F762B89C8B44C0282B7999EE70B6AFA",
+          "ad_table_id": "228",
+          "columnname": "EM_Etgo_Email",
+          "position": "36"
+        },
+        {
+          "ad_column_id": "C3C3852162AF436CB11684B966096068",
+          "ad_table_id": "228",
+          "columnname": "EM_Etgo_Phone",
+          "position": "37"
+        },
+        {
+          "ad_column_id": "97669652B45543F0909C3C5FFF949EA3",
+          "ad_table_id": "228",
+          "columnname": "EM_Etsg_Has_Vfactu_Config",
+          "position": "51"
+        },
+        {
+          "ad_column_id": "D09E36F0DFF44883A2F4E7F76515E593",
+          "ad_table_id": "228",
+          "columnname": "EM_Etsg_Has_Tbai_Config",
+          "position": "52"
+        },
+        {
+          "ad_column_id": "905683B2D143472892345C9BA3E9EF35",
+          "ad_table_id": "228",
+          "columnname": "EM_Etsg_Has_Sii_Config",
+          "position": "53"
+        },
+        {
+          "ad_column_id": "1812",
+          "ad_table_id": "229",
+          "columnname": "C_PeriodControl_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1813",
+          "ad_table_id": "229",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "1814",
+          "ad_table_id": "229",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "1815",
+          "ad_table_id": "229",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "1816",
+          "ad_table_id": "229",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "1817",
+          "ad_table_id": "229",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "1818",
+          "ad_table_id": "229",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1819",
+          "ad_table_id": "229",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "1820",
+          "ad_table_id": "229",
+          "columnname": "C_Period_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "5945",
+          "ad_table_id": "229",
+          "columnname": "DocBaseType",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "1822",
+          "ad_table_id": "229",
+          "columnname": "PeriodStatus",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "2354",
+          "ad_table_id": "229",
+          "columnname": "PeriodAction",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "2355",
+          "ad_table_id": "229",
+          "columnname": "Processing",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "F27047EFFEDF4F499F8D9D93A55B79B5",
+          "ad_table_id": "229",
+          "columnname": "OpenClose",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "CB2739BEDFFDA0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "AD_Org_Warehouse_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "CB2739BEDFFEA0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "CB2739BEDFFFA0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "CB2739BEE000A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "CB2739BEE001A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "CB2739BEE002A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "CB2739BEE003A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "CB2739BEE004A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "CB2739BEE005A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "M_Warehouse_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "CB2739BEE006A0E9E040007F010023A5",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "columnname": "Priority",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "248D72CB737C4536BAFB0732CF4BFC5D",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Orep_Representative_Info_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "7987CB5FD0A04280B6EC32B245344DF8",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "612528866E3E480FA6EB6EFA916F7484",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "43BF5A247CFF4D23B74743ACA42FE78D",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "4DC24CCDAE63494F894B1BD1F85AB087",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "F35CDB355BFC46838ED079B48C8C37FA",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "522A7871979A4BDF81336F869B1AFFBF",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "FB54568A18B54FD3B81B8A04C69DB71F",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "E395F980B4FA44EF97CDC3AF723AEF0B",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Firstname",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "F51E27AD99D044FE99C1F75B33A158F7",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Lastname1",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "E5098887CC864A049F6D1F61898167D2",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Lastname2",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "2ED670BEFC7243859E93F42BB28E617B",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Power_Date",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "50B9FDB437354F5BBB424366B495492F",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Notary_Name",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "9C0357F76F7D4E85ABCE6686B7F675B8",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Line",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "2C7695AA1BEE46549606151CAE6E4917",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "columnname": "Taxid",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "C8E64A71F5114BA98CA0EA3BDAA34464",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "AD_OrgModule_V_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "3C63F1EC9A9B4DC8ACFBE312A72CDE5A",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "AD_Org_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "E3BA2D1447264DA88D24EEB40B199C4F",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "AD_Client_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "422071D2D1D64319B935BA8E0C6C11DA",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Created",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "13AB438B6900462FB3B92343175BFDD2",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Isactive",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "49438452B86C4672AE4246B40804B601",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "63624821BAB8419D94A593EE101FB717",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "C523906F9ACC461A9C95D7DEB111D566",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "25EB310DC4714FA8841CE70096F03F0C",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "AD_Module_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "8C8D3DD4EB154303A09DA7019D5F42F7",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Version",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "D18C0FEE668D4E578894BE4EF4330704",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "AD_Dataset_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "943C28F43BB24DDC934EF368C1AB7FA5",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Description",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "C689CA5725C74EE7AF0E7EBA8DE45EEC",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "columnname": "Update_Available",
+          "position": null
+        },
+        {
+          "ad_column_id": "DDE4B6DE90C74A97B3A0FF3D906050AE",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Intr_Setup_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "CFE47462741940DBADBAE6FE9EE3D31B",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "DEB2EBD1D57343EEBEF3E34E8DD3FB49",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "ACE93C9C5EC7417091983608AA90242B",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "4F49BA2D5A4C4DCFA33008B0461502D3",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "3377B180FA54491EB35D6AADB31282BA",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "03522E424CEB4744A8DE53D7CAF59F48",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "BB4F72C10E9D490EB5198863F8D9684C",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "FD47188D7E3E4059A8AFDE46A300A1E9",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "C_Year_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "2D90FC1F9E754053B0E697B561868992",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Limitamt",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "1AC9B0472DEC49FB826A478F91E414DC",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Ytdreported_Amt",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "3E2191103F1948629F279E8B4146FFB6",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Declaration_Type",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "DFEC69A726B74ADDA5093C4648C94B7D",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Intr_Javaclass_ID",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "D4D732C558034D30BBEAE4A9809CEF8C",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "C_Incoterms_ID",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "B081C76EB08149478691AE366CCB9092",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Transaction_Type",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "E774AD02A4BB441D86EA1D223F00220F",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Transportation_Type",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "1FE9AF819E514A55A58B283509FC234D",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Port",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "6BC2841C1CD24032820558B0480F2DE9",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Statistical_Regime",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "DE16341185E346A1809125A99DD0963B",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Process",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "E98B760755B9443FB66F910E97B85229",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "columnname": "Statistical_Amt_Percent",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "20B1155F685D43F29D6020DFF6C9CDC9",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Epiae_Orginfo_Epigraph_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "7CBE03FF81CA49669AAB1428ABFBF683",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "42AFFE548C574EEE890A82B112A77812",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "A70EEA302C524380932D79A08AAA70C9",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "02DADC0553F44CAEAE45223C0D7AC0FF",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "D8FA0EB28EF04B699FF0E02C7317C07F",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "AC4069EC7ABF4E38A54107541EEA2849",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "41630B6415864D4CA8D9A1DF4222CC64",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "32135B7A0F984410B630A660092B657A",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Isdefault",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "F04BFF4D66DC4AF3AB5876756EF3BD0A",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Line",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "CE490139AF754079A4C7F5A161A76D7A",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Epiae_Epigraph_ID",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "E0BF4BE266DD49C0BAF7A2D001C2AFE9",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Epiae_Type_ID",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "C4711C0671F74569B8302D1A4F7A983B",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "columnname": "Epiae_Code_ID",
+          "position": "13"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
-      "checksum": "933fda89a2b159e8d27354f4679a4193812efa84d7469a2a7de878ef2c7a8c32",
+      "checksum": "d89b7b61054390621da0530eb47d8d66b9976c43497bc200c87cfe124d2127e9",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -30584,6 +32028,12 @@
           "position": "69"
         },
         {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
           "ad_table_id": "319",
           "columnname": "InvoiceStatus",
@@ -30802,7 +32252,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "a504eb62ef117da75737a5c246d2d2b05c08d8a3a5184d0ac44815901cda64a0",
+      "checksum": "2baacecd495ef2be772eb62cbaae8d3e36325817971b0f42160dd8a359460534",
       "params": [
         "181"
       ],
@@ -31408,16 +32858,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -31438,21 +32918,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -31460,24 +32928,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -32688,7 +34138,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "bd406e71a607946170c1c60e06423b68c5466095e8bf5c4b6609bbd913b3d224",
+      "checksum": "a15624c615e07424dccbcf2603d6271ece2acb638ec5bddc3c37ecde4a9f9276",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -33540,6 +34990,12 @@
           "position": "21"
         },
         {
+          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Match_Group_ID",
+          "position": "22"
+        },
+        {
           "ad_column_id": "D88FE68C6A19467DB8341FFC18C0C90D",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
           "columnname": "EM_PSD2_Transaction_Identifier",
@@ -33552,10 +35008,10 @@
           "position": "23"
         },
         {
-          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_column_id": "2A8EA3EC7BFD415692D844A42EE5BFD5",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
-          "columnname": "EM_ETGO_Match_Group_ID",
-          "position": null
+          "columnname": "EM_ETGO_Pending_Amount",
+          "position": "27"
         },
         {
           "ad_column_id": "828EE0AE7FEA5FA1E040007F010067C7",
@@ -35829,6 +37285,74 @@
         }
       ]
     },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "f7abd42387d6e39c1b5b0e3a44c0ca9c2d4695dc5032fbe2009bda7e2aedfebe",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "A821CBD8B0674217BDD63B4245716F0E",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "ETGO_Transaction_Type_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "A499FADF3B564EE9A8546A0EC4854441",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "EB3128C088F443B284B9995AB6D68199",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "D9203189334E431192882F5A9AC7160F",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "3A34717361E44C43AEFB2C526EE67FA2",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "0A2CB489CADF4241A690CBA80EE1FA55",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "9981200F6BEB43F5BFD1EC3AFB4971F0",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "EC00FCCA393B4856B72D871FFE0229B4",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "055A945DE49748B7B84DDB7CD31F6FD1",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Value",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "17853BF4B17446D2A6CF6AE59F48A4C2",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Name",
+          "position": "10"
+        }
+      ]
+    },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "d24db4d0a948ef6e1ef580fef0c448a715a12c21d0753b8c8310131e33ac3a44",
       "params": [
@@ -35970,7 +37494,7 @@
       ]
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "96d9413a33fdcc94f6768fa4b3b2aa04bebd3fafbec91b334942e35313fe9e2a",
+      "checksum": "9e4453dcb4689ee44dbb1f1e18865c1c1c4b015d47f9b9a08bc14c5cfb31d2a1",
       "params": [
         "169"
       ],
@@ -36700,6 +38224,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",

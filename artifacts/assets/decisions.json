@@ -7,7 +7,7 @@
     "titleField": "name",
     "hidePrint": true,
     "hideMoreMenu": true,
-    "contentBg": "bg-white",
+    "contentBg": "bg-card",
     "toolbarBorderBottom": true,
     "whiteFormBackground": true,
     "hideFormCard": true,
@@ -18,11 +18,10 @@
     "toolbarButtonSize": "default",
     "sidebarAboveTabsOnly": true,
     "tabsSeparator": true,
-    "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+    "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
     "formScrollPaddingX": "px-2",
     "hideListFilters": false,
     "hideLink": true,
-    "hideEyeCount": true,
     "hideMoreDetails": true,
     "detailSortBy": "sEQNoAsset asc",
     "labelOverrides": {
@@ -74,7 +73,7 @@
     },
     "secondaryTabs": {
       "assetAcct": {
-        "tabOrder": 1,
+        "tabOrder": 1000,
         "label": "Accounting",
         "addLineFields": [
           "accountingSchema",
@@ -99,6 +98,13 @@
   "entities": {
     "assets": {
       "javaQualifier": "assetsHandler",
+      "preconditions": {
+        "800125": [
+          { "field": "usableLifeMonths", "requiredWhen": "@calculateType@ != 'PE' && @amortize@ != 'YE'" },
+          { "field": "usableLifeYears", "requiredWhen": "@amortize@ == 'YE'" },
+          { "field": "currency" }
+        ]
+      },
       "fields": {
         "searchKey": {
           "grid": true,
@@ -124,7 +130,8 @@
         },
         "product": {
           "visibility": "editable",
-          "form": false
+          "section": "principal",
+          "reason": "ETP-4529 — corrected matrix: Producto is 'Siempre' for Activo (Amortizaciones) Cabecera, always visible regardless of GL Configuration. Rendered by the custom AssetsDetailPanel (not a config-gated accounting dimension)."
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -157,6 +164,7 @@
         },
         "annualDepreciation": {
           "form": false,
+          "min": 1,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType !== 'TI'",
           "businessCritical": true
         },
@@ -167,11 +175,15 @@
         },
         "usableLifeYears": {
           "form": false,
+          "min": 1,
+          "integer": true,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'",
           "businessCritical": true
         },
         "usableLifeMonths": {
           "form": false,
+          "min": 1,
+          "integer": true,
           "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'",
           "businessCritical": true
         },
@@ -256,15 +268,16 @@
         },
         "project": {
           "visibility": "editable",
-          "form": false
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y'). Moved from \"other\" to \"principal\" — the config-gated dimension field was rendering in the secondary/collapsed area instead of the main visible form."
         },
         "eTADASCostCenter": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Centro de costo is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "businessPartner": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Contacto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "eTADASUser1": {
           "visibility": "discarded",

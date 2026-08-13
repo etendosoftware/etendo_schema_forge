@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.17.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-07-21T12:35:21.632Z",
-  "checksum": "1ee00082a8db1933",
+  "updatedAt": "2026-08-05T12:15:02.258Z",
+  "checksum": "95f98b7caec0a2aa",
   "frontendContract": {
     "window": {
       "id": "144",
@@ -100,21 +100,33 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
             "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 1
             }
           },
           {
-            "name": "summaryLevel",
-            "apiKey": "summaryLevel",
-            "column": "Issummary",
-            "label": "Summary Level",
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "editable",
@@ -124,11 +136,11 @@
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
-              "source": "N"
+              "source": "true"
             },
-            "defaultValue": "N",
+            "defaultValue": "Y",
             "section": "principal",
-            "seq": 5,
+            "seq": 6,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -141,13 +153,14 @@
         ],
         "computedFields": [
           {
-            "name": "summaryLevel",
+            "name": "active",
             "derivation": {
               "type": "computed",
-              "source": "N"
+              "source": "true"
             }
           }
-        ]
+        ],
+        "javaQualifier": "productCategoryDefaultHandler"
       },
       "accounting": {
         "tableName": "M_Product_Category_Acct",
@@ -242,6 +255,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "productCategoryAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -321,7 +335,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -329,7 +343,7 @@
             "apiKey": "summaryLevel",
             "column": "Issummary",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -404,7 +418,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "productCategoryDefaultHandler"
       },
       "accounting": {
         "tableName": "M_Product_Category_Acct",
@@ -690,7 +705,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product-category/accounting",
         "detailUrl": "/sws/neo/product-category/accounting/{id}",
         "supportedFilters": []
@@ -782,12 +797,12 @@
         "description": "CRUD flags for 'productCategory' should all be booleans"
       },
       {
-        "id": "t-default-value-type-productCategory-summaryLevel",
+        "id": "t-default-value-type-productCategory-active",
         "category": "default-value-type",
         "entity": "productCategory",
-        "field": "summaryLevel",
+        "field": "active",
         "runner": "node",
-        "description": "Default value for 'summaryLevel' in productCategory should be a string"
+        "description": "Default value for 'active' in productCategory should be a string"
       },
       {
         "id": "t-field-presence-accounting-fixedAsset",
@@ -822,6 +837,14 @@
         "description": "Field 'productRevenue' should be present in accounting"
       },
       {
+        "id": "t-field-presence-productCategory-active",
+        "category": "field-presence",
+        "entity": "productCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in productCategory"
+      },
+      {
         "id": "t-field-presence-productCategory-default",
         "category": "field-presence",
         "entity": "productCategory",
@@ -852,14 +875,6 @@
         "field": "searchKey",
         "runner": "node",
         "description": "Field 'searchKey' should be present in productCategory"
-      },
-      {
-        "id": "t-field-presence-productCategory-summaryLevel",
-        "category": "field-presence",
-        "entity": "productCategory",
-        "field": "summaryLevel",
-        "runner": "node",
-        "description": "Field 'summaryLevel' should be present in productCategory"
       },
       {
         "id": "t-field-type-accounting-fixedAsset",
@@ -894,6 +909,14 @@
         "description": "Field 'productRevenue' should have type 'string' in accounting"
       },
       {
+        "id": "t-field-type-productCategory-active",
+        "category": "field-type",
+        "entity": "productCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in productCategory"
+      },
+      {
         "id": "t-field-type-productCategory-default",
         "category": "field-type",
         "entity": "productCategory",
@@ -924,14 +947,6 @@
         "field": "searchKey",
         "runner": "node",
         "description": "Field 'searchKey' should have type 'string' in productCategory"
-      },
-      {
-        "id": "t-field-type-productCategory-summaryLevel",
-        "category": "field-type",
-        "entity": "productCategory",
-        "field": "summaryLevel",
-        "runner": "node",
-        "description": "Field 'summaryLevel' should have type 'boolean' in productCategory"
       },
       {
         "id": "t-rule-declared-Copy-Accounts",
@@ -1246,14 +1261,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
       },
       {
-        "id": "t-system-field-productCategory-active",
-        "category": "system-field",
-        "entity": "productCategory",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for productCategory"
-      },
-      {
         "id": "t-system-field-productCategory-assetCategory",
         "category": "system-field",
         "entity": "productCategory",
@@ -1316,6 +1323,14 @@
         "field": "plannedMargin",
         "runner": "node",
         "description": "System field 'plannedMargin' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-system-field-productCategory-summaryLevel",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for productCategory"
       },
       {
         "id": "t-system-field-productCategory-updated",

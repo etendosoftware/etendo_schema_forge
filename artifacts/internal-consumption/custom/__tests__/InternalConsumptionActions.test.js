@@ -75,12 +75,12 @@ describe('InternalConsumptionActions', () => {
   });
 
   // ── Neutral styling (Void must NOT look destructive/red) ──────────────────────
-  it('uses neutral styling — text color #111827, not the destructive red #DC2626', () => {
-    assert.match(src, /#111827/);
-    assert.doesNotMatch(src, /#DC2626/);
+  it('uses semantic foreground text, not a destructive hardcoded color', () => {
+    assert.match(src, /hsl\(var\(--foreground\)\)/);
+    assert.doesNotMatch(src, /#DC2626|#111827/);
   });
 
-  it('uses the neutral #F3F4F6 hover background', () => {
-    assert.match(src, /#F3F4F6/);
+  it('uses the semantic card role for the hover background', () => {
+    assert.match(src, /style\.background = 'hsl\(var\(--card\)\)'/);
   });
 });

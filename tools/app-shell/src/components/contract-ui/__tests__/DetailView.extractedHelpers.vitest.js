@@ -746,6 +746,46 @@ describe('isLoadingRecordForRoute', () => {
   });
 });
 
+// ETP-4741 — a creation form must show the loading gate while useEntity is still
+// fetching its defaults, otherwise the user types into a form whose values are
+// about to be replaced by the late response.
+describe('isLoadingRecordForRoute — new-record defaults gate (ETP-4741)', () => {
+  it('is true for a new record while defaults are still loading', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: null }, true, 'new'),
+      'a new record must report loading while its defaults request is in flight'
+    ).toBe(true);
+  });
+
+  it('is true for a new record with defaults loading even when the list is loading too', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: true, selected: null }, true, 'new'),
+      'defaultsLoading must gate a new record regardless of hook.loading'
+    ).toBe(true);
+  });
+
+  it('is false for a new record once the defaults have settled', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: false, selected: {} }, true, 'new'),
+      'a new record must stop reporting loading as soon as defaults settle'
+    ).toBe(false);
+  });
+
+  it('still reports loading for an existing record that has not arrived yet', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: false, selected: { id: '1' } }, false, '999'),
+      'existing-record behavior must be unchanged'
+    ).toBe(true);
+  });
+
+  it('ignores defaultsLoading for an existing record already on screen', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: { id: '123' } }, false, '123'),
+      'defaultsLoading only gates creation forms, never an existing record'
+    ).toBe(false);
+  });
+});
+
 describe('resolveHideMoreMenu', () => {
   it('passes a boolean true through unchanged', () => {
     expect(resolveHideMoreMenu(true, { id: 'x' })).toBe(true);
@@ -1225,17 +1265,28 @@ describe('getSelectedLinesTotalLabel', () => {
   it('sums gross amounts and formats with currency', () => {
     const rows = [{ lineGrossAmount: '100' }, { lineGrossAmount: '50.5' }];
     const label = getSelectedLinesTotalLabel({}, rows, lineConfig, { 'currency$_identifier': 'EUR' });
-    expect(label).toContain('EUR');
-    // Locale-agnostic: 150 + two fraction digits (separator may be , or .)
-    expect(label).toMatch(/150[.,]50/);
+    // Delegates to formatCurrency (es-ES, narrowSymbol) — EUR renders as '€', not the
+    // literal code 'EUR'. \s matches the non-breaking space Intl inserts before the symbol.
+    expect(label).toMatch(/150,50\s€/);
   });
   it('formats without currency when none present', () => {
     const label = getSelectedLinesTotalLabel(undefined, [{ lineGrossAmount: '10' }], lineConfig, {});
-    expect(label).toMatch(/^10[.,]00$/);
+    expect(label).toBe('10,00');
   });
   it('ignores non-finite values in the sum', () => {
     const label = getSelectedLinesTotalLabel({}, [{ lineGrossAmount: 'abc' }], lineConfig, {});
-    expect(label).toMatch(/^0[.,]00$/);
+    expect(label).toBe('0,00');
+  });
+  it('pins the locale to es-ES for the no-currency path (not the runtime default)', () => {
+    // toBe('10,00') above can pass by coincidence on a machine whose default ICU
+    // locale happens to already use a comma decimal separator (e.g. es-AR) even
+    // when the code passes `undefined` as the locale — this assertion checks the
+    // actual mechanism instead of the output, so it fails regardless of the
+    // runner's own locale.
+    const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+    getSelectedLinesTotalLabel(undefined, [{ lineGrossAmount: '10' }], lineConfig, {});
+    expect(spy).toHaveBeenCalledWith('es-ES', expect.anything());
+    spy.mockRestore();
   });
 });
 

@@ -66,10 +66,18 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
     assert.doesNotMatch(src, /backendFilterKey:\s*'transactionDocument\$_identifier'/);
   });
 
-  it('uses DOC_TYPE_BADGE with i18n label keys for the AP doc types', () => {
+  // ETP-4737: SUBTYPE_BADGE is keyed by the unified subtype (FAC/RECTIFICATIVA)
+  // resolved via getApSubtype — purchases collapse credit-memo AND return/reversal
+  // doc types into a single RECTIFICATIVA badge (there is no separate returnInvoiceTab
+  // badge on the purchase side, unlike sales-invoice which does distinguish returns).
+  it('uses SUBTYPE_BADGE with i18n label keys for the AP doc subtypes', () => {
     assert.match(src, /label:\s*'invoicesTab'/);
-    assert.match(src, /label:\s*'creditNotesTab'/);
-    assert.match(src, /label:\s*'returnInvoiceTab'/);
+    assert.match(src, /label:\s*'rectificativeInvoicesTab'/);
+  });
+
+  it('resolves the badge subtype via getApSubtype, not a hardcoded doc-type name', () => {
+    assert.match(src, /import \{ getApSubtype \} from '@generated\/purchase-invoice\/custom\/purchaseInvoiceSubtype\.js'/);
+    assert.match(src, /SUBTYPE_BADGE\[getApSubtype\(row\)\]/);
   });
 });
 
@@ -124,5 +132,127 @@ describe('PurchaseInvoiceHeaderTable — due date column', () => {
   it('formats the date with the active locale, not a hardcoded region', () => {
     assert.match(src, /useLocaleSwitch/);
     assert.match(src, /formatCalendarDate\(d, locale\)/);
+  });
+});
+
+// ── ETP-4681: custom-rendered columns must declare their filter semantics ─────
+// Risk: `type: 'custom'` tells the filter layer nothing about the underlying
+// data type, so resolveFilterMode falls back to 'text'. A text-mode operator
+// set has no greaterThan / before / after, which makes the Dashboard's
+// `?filter=overdue` preload render an empty operator select.
+
+describe('PurchaseInvoiceHeaderTable — custom column filter modes (ETP-4681)', () => {
+  it('declares filterMode numeric on the outstandingAmount column', () => {
+    assert.match(
+      src,
+      /key: 'outstandingAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'outstandingAmount renders status pills (type: custom) but filters as an amount',
+    );
+  });
+
+  // ETP-4841 dropped the custom renderer on grandTotalAmount (it sign-flipped
+  // every rectificativa), so the column is a plain `type: 'amount'` again and
+  // needs no filterMode hint — resolveFilterMode infers numeric from the type.
+  it('leaves grandTotalAmount on type amount (no explicit filterMode needed)', () => {
+    assert.match(
+      src,
+      /key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount'/,
+      'type amount already infers numeric — only custom columns need filterMode',
+    );
+    assert.doesNotMatch(
+      src,
+      /key: 'grandTotalAmount',[\s\S]{0,600}?filterMode:/,
+      'a plain amount column must not carry a redundant filterMode hint',
+    );
+  });
+
+  it('declares filterMode date on the eTGODueDate column', () => {
+    assert.match(
+      src,
+      /key: 'eTGODueDate',[\s\S]{0,600}?filterMode: 'date'/,
+      'eTGODueDate renders a coloured dot (type: custom) but filters as a date',
+    );
+  });
+
+  it('keeps the two rich-render columns on type custom (the cell renderers stay)', () => {
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt',\s+type: 'custom'/);
+    assert.match(src, /key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom'/);
+  });
+
+  it('declares exactly one filterMode per custom column (no duplicates)', () => {
+    const modes = [...src.matchAll(/filterMode: '([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(modes.filter((m) => m === 'numeric').length, 1);
+    assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
+  });
+});
+
+// ── ETP-4841: payment state follows the SIGN of the total ────────────────────
+// Two defects shipped from keying the credit branch on the document type:
+//   * a Factura Rectificativa with a POSITIVE total rendered as "Saldo a favor"
+//     AND had its amount sign-flipped to negative by the grandTotalAmount cell;
+//   * an ordinary Factura with a NEGATIVE total rendered as "Pagada".
+// Both are now decided by resolveInvoicePaymentBadge; getApSubtype survives only
+// as the doc-type badge's input.
+
+describe('PurchaseInvoiceHeaderTable — sign-driven payment badge (ETP-4841)', () => {
+  it('imports the shared resolveInvoicePaymentBadge helper', () => {
+    assert.match(
+      src,
+      /import \{ resolveInvoicePaymentBadge \} from '@\/windows\/custom\/shared\/invoicePaymentBadge\.js'/,
+      'the badge state must come from the single shared source of truth',
+    );
+  });
+
+  it('no longer declares a local isNcOrReturn document-type predicate', () => {
+    assert.doesNotMatch(
+      src,
+      /isNcOrReturn/,
+      'the local doc-type predicate was replaced by resolveInvoicePaymentBadge (ETP-4841)',
+    );
+  });
+
+  it('never sign-flips an amount', () => {
+    // Strip `//` comments first: the source explains the removed `-Math.abs(...)`
+    // in a comment, and that explanation must not satisfy the assertion.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(
+      code,
+      /-Math\.abs\(/,
+      'the stored sign is the truth — `-Math.abs(...)` rendered a POSITIVE Factura Rectificativa as negative',
+    );
+  });
+
+  it('drives the outstanding cell off badge.kind, not getApSubtype', () => {
+    const cell = src.match(/key: 'outstandingAmount',[\s\S]*?key: 'eTGODeliveryStatus'/);
+    assert.ok(cell, 'expected the outstandingAmount column block');
+    assert.match(cell[0], /const badge = resolveInvoicePaymentBadge\(row\)/);
+    assert.match(cell[0], /badge\.kind === 'draft'/);
+    assert.match(cell[0], /badge\.kind === 'credit-applied'/);
+    assert.match(cell[0], /badge\.kind === 'credit-available'/);
+    assert.match(cell[0], /badge\.kind === 'paid'/);
+    assert.doesNotMatch(cell[0], /getApSubtype/);
+  });
+
+  it('drives the due-date cell off badge.isCredit, not getApSubtype', () => {
+    const cell = src.match(/key: 'eTGODueDate',[\s\S]*?key: 'businessPartner'/);
+    assert.ok(cell, 'expected the eTGODueDate column block');
+    assert.match(cell[0], /resolveInvoicePaymentBadge\(row\)\.isCredit/);
+    assert.doesNotMatch(cell[0], /getApSubtype/);
+  });
+
+  it('keeps getApSubtype for the document-type badge only', () => {
+    assert.match(src, /SUBTYPE_BADGE\[getApSubtype\(row\)\]/);
+    const occurrences = [...src.matchAll(/getApSubtype\(/g)].length;
+    assert.equal(occurrences, 1, 'getApSubtype must be called exactly once — by the doc-type badge cell');
+  });
+
+  it('renders the credit labels through i18n, not hardcoded Spanish literals', () => {
+    assert.match(src, /ui\('cpFavorBadge'\)/);
+    assert.match(src, /ui\('cpCreditFullyApplied'\)/);
+    // Strip `//` comments: the source still *describes* the badge as
+    // "Saldo a favor" in prose, which must not fail this assertion.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /Saldo a favor/, 'the badge label must come from ui(), not a literal');
+    assert.doesNotMatch(code, />Aplicada/, 'the applied pill label must come from ui(), not a literal');
   });
 });

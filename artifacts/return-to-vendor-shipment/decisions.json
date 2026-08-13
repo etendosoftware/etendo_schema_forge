@@ -3,15 +3,13 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
     "linesLayout": "inlineEditable",
     "noHeaderBorder": true,
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
     "maxDetailLines": 0,
     "customComponents": {
       "bottomSection": "ReturnToVendorShipmentBottomPanel",
@@ -32,8 +30,30 @@
     "processOverrides": {
       "Process Shipment": {
         "exclude": true
+      },
+      "etblkpBulkposting": {
+        "exclude": true
       }
-    }
+    },
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill"
+      }
+    ]
   },
   "entities": {
     "header": {
@@ -129,7 +149,8 @@
           "visibility": "discarded"
         },
         "accountingDate": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "_note": "ETP-4737: matches the goods-shipment/goods-receipt pattern (ETP-4531) — accounting date is hidden from the user but included/writable so ReturnToVendorShipmentHeaderHandler#mirrorAccountingDate (movementDate -> accountingDate, ETP-4531 pattern) actually persists on create. Previously 'discarded' (excluded from the field filter entirely), which silently dropped the mirrored value on POST and left accountingDate defaulting to a bogus value."
         },
         "orderReference": {
           "visibility": "discarded"
@@ -262,7 +283,21 @@
           "visibility": "discarded"
         },
         "posted": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 8,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "receiveMaterials": {
           "visibility": "discarded"

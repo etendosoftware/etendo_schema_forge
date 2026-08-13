@@ -62,11 +62,18 @@ describe('SalesOrderWindow custom wrapper', () => {
     assert.match(src, /Sales \/ Sales Order/);
   });
 
-  it('passes hidePrint to ListView', () => {
-    assert.match(src, /hidePrint/);
+  it('does not hardcode hidePrint on ListView (ETP-4729 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/);
   });
 
   it('imports HeaderTable from the generated sales-order artifact', () => {
     assert.match(src, /@generated\/sales-order.*HeaderTable/);
+  });
+
+  // ETP-4520 — the hand-rolled ListView bypasses GeneratedApp, so it must
+  // separately receive the runtime per-tier read-only override.
+  it('passes the runtime read-only effectiveWindow through to ListView', () => {
+    assert.match(src, /windowAccessTier === 'read-only'/);
+    assert.match(src, /window=\{effectiveWindow\}/);
   });
 });

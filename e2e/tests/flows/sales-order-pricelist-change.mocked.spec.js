@@ -54,6 +54,27 @@ const SAMPLE_LINE = {
 };
 
 /**
+ * Mocks the priceList selector endpoint (`M_PriceList_ID` column, ETP-4600
+ * CreatableSearchSelect serverSearch mode) so the combobox has options to
+ * pick from when a test needs to change the value. Must run AFTER login().
+ */
+async function installPriceListSelectorMock(page) {
+  await page.route(`**/sws/neo/sales-order/header/selectors/M_PriceList_ID{/**,}**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          { id: PRICE_LIST_OLD, label: 'Standard Sales' },
+          { id: PRICE_LIST_NEW, label: 'Special Sales' },
+        ],
+      }),
+    });
+  });
+}
+
+/**
  * Install mocks for sales-order detail with price list support.
  * Must be called AFTER login().
  */
@@ -95,7 +116,7 @@ async function installOrderMocks(page, { returnOrder = ORDER } = {}) {
   });
 
   // Lines endpoint — always return one saved line
-  await page.route(`**/sws/neo/sales-order/lines**`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/lines{/**,}**`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -119,15 +140,24 @@ test.describe('Sales Order — price list field editable with saved lines (ETP-4
   test('A: price list field is not disabled when order has saved lines', async ({ page }) => {
     await login(page);
     await installOrderMocks(page);
+    await installPriceListSelectorMock(page);
 
     await page.goto(`/sales-order/${ORDER_ID}`);
     await waitForDetailView(page);
 
-    // The priceList field is a foreignKey with inputMode=selector.
-    // EntityForm renders it as a SelectTrigger with data-testid="field-priceList"
-    // directly on the button element — so getByTestId IS the interactive element.
+    // ETP-4600 unified the priceList foreignKey/selector field onto
+    // CreatableSearchSelect: with a saved value it renders as a chip
+    // (`field-priceList-chip`, a plain <button>, never `disabled`), and only
+    // clicking it flips into edit mode (`field-priceList`, the actual
+    // combobox <input>). The editable guarantee (ETP-4027: field usable even
+    // with saved lines) now means "clicking the chip reveals a non-disabled
+    // combobox", not "the chip lacks a disabled attribute".
+    const chip = page.getByTestId('field-priceList-chip');
+    await expect(chip).toBeVisible({ timeout: 8_000 });
+
+    await chip.click();
     const priceListField = page.getByTestId('field-priceList');
-    await expect(priceListField).toBeVisible({ timeout: 8_000 });
+    await expect(priceListField).toBeVisible({ timeout: 5_000 });
 
     // processed=false in mock → readOnlyLogic evaluates to false → field is editable
     await expect(priceListField).not.toBeDisabled();
@@ -156,12 +186,37 @@ test.describe('Sales Order — price list field editable with saved lines (ETP-4
       }
     });
     await installOrderMocks(page, { returnOrder: ORDER_WITH_NEW_PL });
+    await installPriceListSelectorMock(page);
 
     await page.goto(`/sales-order/${ORDER_ID}`);
     await waitForDetailView(page);
 
-    // Save the header by clicking the save action button
-    const saveBtn = page.getByTestId('action-save');
+    // ETP-4600: changing an FK selector's value now goes through the
+    // chip → combobox → dropdown-option interaction (no more native <option>
+    // to `selectOption()` against). Click the chip to enter edit mode, type
+    // enough characters to trigger the debounced server search, then pick
+    // the new price list from the dropdown.
+    const chip = page.getByTestId('field-priceList-chip');
+    await expect(chip).toBeVisible({ timeout: 8_000 });
+    await chip.click();
+
+    const combobox = page.getByTestId('field-priceList');
+    await expect(combobox).toBeVisible({ timeout: 5_000 });
+    await combobox.fill('Special');
+
+    const option = page.getByTestId(`option-priceList-${PRICE_LIST_NEW}`);
+    await expect(option).toBeVisible({ timeout: 5_000 });
+    await option.click();
+
+    // Selecting the option re-renders the field as a chip showing the new label.
+    await expect(chip).toContainText('Special Sales');
+
+    // Save the header. For a draft-mode window (sales-order) this test uses
+    // "Guardar" (action-save-draft, plain handleSave → PATCH) rather than the
+    // "Confirmar" button (data-testid="action-save" in draft-mode windows —
+    // it runs handleSaveAndProcess and surfaces an order-confirmation panel
+    // unrelated to this ETP-4027/ETP-4600 flow).
+    const saveBtn = page.getByTestId('action-save-draft');
     if (await saveBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await saveBtn.click();
       // After save, verify a PATCH was sent
@@ -171,9 +226,9 @@ test.describe('Sales Order — price list field editable with saved lines (ETP-4
 
     // Regardless of whether a PATCH was triggered, verify the field is always editable
     // for a draft order — the DB restriction trigger was removed in ETP-4027.
-    const priceListField = page.getByTestId('field-priceList');
-    await expect(priceListField).toBeVisible({ timeout: 5_000 });
-    await expect(priceListField).not.toBeDisabled();
+    await chip.click();
+    await expect(combobox).toBeVisible({ timeout: 5_000 });
+    await expect(combobox).not.toBeDisabled();
   });
 
   test('C: form shows the price list value from the server response', async ({ page }) => {
@@ -183,9 +238,12 @@ test.describe('Sales Order — price list field editable with saved lines (ETP-4
     await page.goto(`/sales-order/${ORDER_ID}`);
     await waitForDetailView(page);
 
-    const priceListField = page.getByTestId('field-priceList');
-    await expect(priceListField).toBeVisible({ timeout: 8_000 });
+    // ETP-4600: a field with a committed value renders as the chip
+    // (`field-priceList-chip`); the plain input (`field-priceList`) is not in
+    // the DOM in this state. The chip's <span> holds the value label.
+    const priceListChip = page.getByTestId('field-priceList-chip');
+    await expect(priceListChip).toBeVisible({ timeout: 8_000 });
     // The field should show the identifier from the mock response
-    await expect(priceListField).toContainText(ORDER['priceList$_identifier']);
+    await expect(priceListChip).toContainText(ORDER['priceList$_identifier']);
   });
 });

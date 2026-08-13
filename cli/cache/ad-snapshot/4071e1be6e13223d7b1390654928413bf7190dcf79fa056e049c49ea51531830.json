@@ -1,6 +1,20 @@
 {
   "sql": "SELECT ad_tab_id, name, ad_table_id, seqno FROM ad_tab WHERE ad_window_id = $1 AND isactive = 'Y' ORDER BY seqno, name, ad_tab_id",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "fdbd72c47d283cac79fa4e29500588d3daba58fbe4302bce60db4a668601bfb2",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "45453F895E984169AB4CC0BBAA3F9683",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "name": "ETGO Match Rule Header",
+          "seqno": "10"
+        }
+      ]
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "c747bacc60ee6fb5d14c8a0d43b5cb0b78b77789c345005d7450b5082533b6f4",
       "params": [
@@ -1381,6 +1395,80 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "81cbbc1a493783e280e516bf030086371be61c727347ff55d1fc6664f8a27d47",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "143",
+          "ad_table_id": "155",
+          "name": "Organization",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "170",
+          "ad_table_id": "228",
+          "name": "Information",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "885A6DB490044F3F8528373B60E3D9F5",
+          "ad_table_id": "145",
+          "name": "Period Control",
+          "seqno": "51"
+        },
+        {
+          "ad_tab_id": "4FB5884A443240EEB5504BBF7813870D",
+          "ad_table_id": "229",
+          "name": "Documents",
+          "seqno": "52"
+        },
+        {
+          "ad_tab_id": "E166858871CA4F74BBC0E1BBDC5C9887",
+          "ad_table_id": "66C2A14049FD44808B686F2B5B0A321E",
+          "name": "Data Sets",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "73A63C7575984EDF80FF044A13E0ACBA",
+          "ad_table_id": "6B6F402E805942EEA9BC3CC35FEBA6F3",
+          "name": "Intrastat",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "910CA3AD36CA47F2B92B7AB9484EF47B",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "name": "Actividades del IAE",
+          "seqno": "70"
+        },
+        {
+          "ad_tab_id": "9F030341690C4BB3A3C15835AEC0FF39",
+          "ad_table_id": "26673F55911848E894D837F57207A92B",
+          "name": "Warehouse",
+          "seqno": "70"
+        },
+        {
+          "ad_tab_id": "25301674D3CB4FCBBC285C5AAD232376",
+          "ad_table_id": "13FEEC90E3D0486E863DCB5614438243",
+          "name": "Certificado Digital",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "A40755889D614B358959BBA14D9B669A",
+          "ad_table_id": "1000500000",
+          "name": "Email Configuration",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "53EEA7ADEBA24190A340084CC9A4119C",
+          "ad_table_id": "5E058777668648B98D3C1C8DA432F16A",
+          "name": "Representante Legal",
+          "seqno": "80"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "8fb85c8034cfaeb5676b8bd9b9fbda4e68c1081bea49dcfbf2c93ede5c88c524",
       "params": [
@@ -1572,6 +1660,20 @@
           "ad_table_id": "270",
           "name": "Accounting",
           "seqno": "30"
+        }
+      ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f6c2d6905d5b220b7d8052901afc3c529e8f2c76eb2b47e2756f819a9896452",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "90453D94C1D146FC90235C5131269183",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "name": "Transaction Type",
+          "seqno": "10"
         }
       ]
     },

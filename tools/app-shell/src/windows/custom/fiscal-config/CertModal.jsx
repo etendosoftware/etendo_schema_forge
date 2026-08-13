@@ -9,10 +9,10 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive">
         <TriangleAlert
           size={16}
-          className="text-red-500 flex-shrink-0"
+          className="text-destructive flex-shrink-0"
           data-testid="TriangleAlert__a22bc2" />
         <span className="flex-1">{title}</span>
         {onDismiss && (
@@ -23,24 +23,24 @@ function AlertBox({ type, title, body, onDismiss }) {
   }
   const styles = {
     success: {
-      wrap: 'bg-green-50 border-l-[3px] border-l-green-500',
-      icon: <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5"><Check
+      wrap: 'bg-status-success border-l-[3px] border-l-green-500',
+      icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><Check
         size={13}
         strokeWidth={2.5}
-        className="text-white"
+        className="text-primary-foreground"
         data-testid="Check__a22bc2" /></div>,
-      title: 'text-green-800 font-semibold',
-      body:  'text-green-700',
+      title: 'text-status-success-foreground font-semibold',
+      body:  'text-status-success-foreground',
     },
     warning: {
-      wrap: 'bg-amber-50 border-l-[3px] border-l-amber-400',
-      icon: <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5"><Info
+      wrap: 'bg-status-warning border-l-[3px] border-l-amber-400',
+      icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><Info
         size={13}
         strokeWidth={2.5}
-        className="text-white"
+        className="text-primary-foreground"
         data-testid="Info__a22bc2" /></div>,
-      title: 'text-amber-800 font-semibold',
-      body:  'text-amber-700',
+      title: 'text-status-warning-foreground font-semibold',
+      body:  'text-status-warning-foreground',
     },
   };
   const s = styles[type] ?? styles.warning;
@@ -85,16 +85,16 @@ function CircularProgress({ progress }) {
   const offset = circ - (progress / 100) * circ;
   return (
     <svg width="140" height="140" viewBox="0 0 140 140" className="mx-auto">
-      <circle cx="70" cy="70" r={r} fill="none" stroke="#E8EAEF" strokeWidth="8" />
+      <circle cx="70" cy="70" r={r} fill="none" stroke="hsl(var(--border-subtle))" strokeWidth="8" />
       <circle
         cx="70" cy="70" r={r}
-        fill="none" stroke="#121217" strokeWidth="8"
+        fill="none" stroke="hsl(var(--foreground))" strokeWidth="8"
         strokeDasharray={circ} strokeDashoffset={offset}
         strokeLinecap="round"
         transform="rotate(-90 70 70)"
         style={{ transition: 'stroke-dashoffset 0.2s ease' }}
       />
-      <text x="70" y="76" textAnchor="middle" fontSize="22" fontWeight="600" fill="#121217">
+      <text x="70" y="76" textAnchor="middle" fontSize="22" fontWeight="600" fill="hsl(var(--foreground))">
         {progress}%
       </text>
     </svg>
@@ -222,12 +222,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
   let dropzoneClass;
   if (drag) dropzoneClass = 'border-foreground bg-muted/40';
-  else if (file) dropzoneClass = 'border-[#121217] bg-white';
-  else dropzoneClass = 'border-dashed border-[#D1D4DB] hover:border-foreground/40 hover:bg-muted/20';
+  else if (file) dropzoneClass = 'border-[hsl(var(--foreground))] bg-card';
+  else dropzoneClass = 'border-dashed border-[hsl(var(--border-control))] hover:border-foreground/40 hover:bg-muted/20';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -266,12 +266,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 className={`rounded-xl border-2 cursor-pointer p-7 text-center transition-all ${dropzoneClass}`}
               >
                 <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center
-                  ${file ? 'bg-[#121217]' : 'bg-muted text-foreground'}`}>
+                  ${file ? 'bg-[hsl(var(--foreground))]' : 'bg-muted text-foreground'}`}>
                   {file
                     ? <FileText
                     size={20}
                     strokeWidth={1.5}
-                    className="text-white"
+                    className="text-primary-foreground"
                     data-testid="FileText__a22bc2" />
                     : <Upload size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
                 </div>
@@ -279,7 +279,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                   <>
                     <p className="text-sm font-semibold truncate w-full px-2">{file.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
-                    <p className="text-xs text-amber-600 mt-1">{ui('fiscal.cert.dropzone.changeHint')}</p>
+                    <p className="text-xs text-status-warning-foreground mt-1">{ui('fiscal.cert.dropzone.changeHint')}</p>
                   </>
                 ) : (
                   <>
@@ -315,7 +315,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     value={pwd}
                     onChange={e => setPwd(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    className="w-full h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
                   />
                   <button
                     type="button"
@@ -326,7 +326,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
                   </button>
                 </div>
-                <p className="text-xs text-[#121217] mt-1.5 flex items-center gap-1">
+                <p className="text-xs text-[hsl(var(--foreground))] mt-1.5 flex items-center gap-1">
                   <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
                 </p>
               </div>

@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -124,7 +126,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     : null;
 
   const cloneButton = (
-    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
+    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
       <CopyIcon data-testid="CopyIcon__8b5323" />
     </button>
   );
@@ -143,7 +145,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: '#9CA3AF', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -191,9 +193,12 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
       {cloneButton}
-      {(isDraft || isCompleted) && <SendDocumentButton
+      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
+          matching the grid row quick-action's status gate. */}
+      {isCompleted && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__8b5323" />}
+      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -220,7 +225,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           data-testid="CreateDocsModal__8b5323" />,
         document.body,
       )}
-      {(isDraft || isCompleted) && showSend && createPortal(
+      {isCompleted && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Purchase Order')}
           documentNo={data?.documentNo}
@@ -448,8 +453,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
-        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui('poConfirmTitle', { number: documentNo })}
           </div>
           <button type="button" onClick={handleClose} style={closeBtn}>&times;</button>
@@ -457,26 +462,26 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
         {/* Blue summary card */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: '#185FA5' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-bg)' }}>
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
-              {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-bg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
-              <span style={{ fontWeight: 500, color: '#042C53' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+              <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
-            <div style={{ borderRadius: 6, background: '#FFFBEB', border: '1px solid #FDE68A', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ borderRadius: 6, background: 'hsl(var(--card))', border: '1px solid var(--status-warning-bg)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>🔒</span>
-              <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.4 }}>
+              <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.4 }}>
                 {ui('poConfirmWarning')}
               </span>
             </div>
@@ -485,7 +490,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
           <PoCheckboxCard
@@ -507,12 +512,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         </div>
 
         {error && (
-          <div style={{ padding: '8px 20px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA', whiteSpace: 'pre-line' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={handleClose} disabled={loading}
             style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
@@ -539,30 +544,30 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
         display: 'flex', alignItems: 'center', gap: 12,
         padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8,
         cursor: disabled ? 'default' : 'pointer',
-        border: disabled ? '2px solid #10B981' : (checked ? '2px solid #3B82F6' : '1px solid #E5E7EB'),
-        background: disabled ? '#ECFDF5' : (checked ? '#EFF6FF' : '#fff'),
+        border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--card))'),
+        background: disabled ? 'hsl(var(--card))' : (checked ? 'hsl(var(--card))' : 'hsl(var(--card))'),
         opacity: disabled ? 0.85 : 1,
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >
       <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: disabled ? '#059669' : (checked ? '#2563EB' : '#111827') }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-border)' : 'hsl(var(--foreground))') }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
           {subtitle}
         </div>
       </div>
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid #D1D5DB',
-        background: disabled ? '#10B981' : (checked ? '#3B82F6' : '#fff'),
+        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--card))',
+        background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
         {(checked || disabled) && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="1 4 4 7.5 10 1" />
           </svg>
         )}
@@ -600,8 +605,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
   const invoiceSubtitle = totalOrder > 0
     ? (totalInvoiced > 0
-        ? ui('poAmountInvoicedOf', { invoiced: `${fmtNum(totalInvoiced)}${currency ? ` ${currency}` : ''}`, pending: `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''}` })
-        : `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''} ${ui('poPendingInvoice')}`)
+        ? ui('poAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), pending: formatCurrency(currency, totalPending) })
+        : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
     : ui('poCreateInvoiceCheckDesc');
 
   const handleCreate = async () => {
@@ -652,8 +657,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
-        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
@@ -661,21 +666,21 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
         {/* Blue summary card — no warning since order is already confirmed */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: '#185FA5' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-bg)' }}>
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
           </div>
         </div>
 
         {/* Only show checkboxes for pending actions; subtitle shows outstanding qty/amount */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
           {needsReceipt && (
@@ -699,12 +704,12 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         </div>
 
         {error && (
-          <div style={{ padding: '8px 20px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA', whiteSpace: 'pre-line' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
@@ -754,17 +759,17 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
   }, [orderId, apiBaseUrl, headers]);
 
   const statusMap = {
-    DR: { label: ui('orderStatusDraft'),     bg: '#FEF3C7', color: '#D97706' },
-    CO: { label: ui('orderStatusCompleted'), bg: '#DCFCE7', color: '#16A34A' },
-    CL: { label: ui('orderStatusClosed'),    bg: '#F3F4F6', color: '#6B7280' },
-    VO: { label: ui('orderStatusVoided'),    bg: '#FEE2E2', color: '#DC2626' },
+    DR: { label: ui('orderStatusDraft'),     bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+    CO: { label: ui('orderStatusCompleted'), bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+    CL: { label: ui('orderStatusClosed'),    bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' },
+    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' },
   };
-  const badge = statusMap[status] || { label: status, bg: '#F3F4F6', color: '#6B7280' };
+  const badge = statusMap[status] || { label: status, bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' };
 
   const lineCount   = lines?.length ?? null;
   const productLine = lineCount === null
     ? '…'
-    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${currency} ${fmtNum(total)}`;
+    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${formatCurrency(currency, total)}`;
 
   const handleClone = async () => {
     setLoading(true);
@@ -791,22 +796,22 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
       <div style={{ ...cardStyle, width: 440 }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 0' }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: '#111827' }}>{ui('cloneOrderConfirmTitle')}</span>
+          <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('cloneOrderConfirmTitle')}</span>
           <button type="button" onClick={onClose} style={closeBtn}>×</button>
         </div>
 
         <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Summary card */}
-          <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, overflow: 'hidden' }}>
             {/* Row 1: contact · docNo · badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F9FAFB' }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#111827', flex: 1,
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'hsl(var(--card))' }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', flex: 1,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {bpName}
               </span>
               {documentNo && (
-                <span style={{ fontSize: 12, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {documentNo}
                 </span>
               )}
@@ -818,15 +823,15 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
               )}
             </div>
             {/* Row 2: products + total */}
-            <div style={{ padding: '6px 14px 9px', background: '#F9FAFB', borderTop: '1px solid #F3F4F6' }}>
-              <span style={{ fontSize: 12, color: '#9CA3AF' }}>{productLine}</span>
+            <div style={{ padding: '6px 14px 9px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
+              <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{productLine}</span>
             </div>
           </div>
 
           {/* Explanatory text — same horizontal inset as card content */}
-          <p style={{ fontSize: 13, color: '#6B7280', margin: 0, padding: '0 2px' }}>{ui('cloneOrderConfirmBody')}</p>
+          <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0, padding: '0 2px' }}>{ui('cloneOrderConfirmBody')}</p>
 
-          {error && <div style={{ color: '#ef4444', fontSize: 12 }}>{error}</div>}
+          {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
           {/* Buttons */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -850,44 +855,44 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
 };
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13,
+  background: 'var(--status-info-bg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
 };
 
 const btnCloneStyle = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   padding: '7px', borderRadius: 6,
-  border: '1px solid #D1D4DB', background: '#FFFFFF', color: '#64748B', cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'var(--status-info-bg)', cursor: 'pointer',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 const iconBtnStyle = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   width: 32, height: 32, borderRadius: 6,
-  border: '1px solid var(--color-border, #e5e7eb)',
-  background: 'transparent', color: 'var(--color-muted-foreground, #6b7280)',
+  border: '1px solid var(--color-border, hsl(var(--foreground)))',
+  background: 'transparent', color: 'var(--color-muted-foreground, hsl(var(--muted)))',
   cursor: 'pointer',
 };
 
 const closeBtn = {
   fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+  background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
 };
 
 // ── ManageDocsLauncher ──────────────────────────────────────────────────────
@@ -931,10 +936,10 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   if (!fetched) {
     return createPortal(
       <div style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 9998,
+        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ background: '#fff', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
         </div>
       </div>,

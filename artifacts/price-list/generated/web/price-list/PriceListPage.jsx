@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import PriceListTable from './PriceListTable';
 import PriceListForm from './PriceListForm';
 import PriceListVersionTable from './PriceListVersionTable';
@@ -42,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'active', 'priceIncludesTax', 'default'];
+const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active', 'currency'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -176,6 +178,7 @@ export const api = {
     "es_ES": {
       "Name": "Nombre",
       "C_Currency_ID": "Moneda",
+      "IsSOPriceList": "Tarifa de venta",
       "Costbased": "Basado en coste",
       "IsTaxIncluded": "Precio incluye impuesto",
       "IsDefault": "Por defecto",
@@ -188,6 +191,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:PriceListPage
 export default function PriceListPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('146');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="146" />;
+  }
   if (recordId) {
     return (
       <>
@@ -215,7 +225,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_PriceList", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -233,7 +243,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

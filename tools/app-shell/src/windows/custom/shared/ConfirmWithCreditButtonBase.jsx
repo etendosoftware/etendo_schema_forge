@@ -5,15 +5,14 @@ import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal'
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
-import PrintButton from './PrintButton';
 
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
-  generatePdfFn, getPdfLabelsFn,
   specName, entityName,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
+  postConfirmButtonLabel,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -23,13 +22,12 @@ export default function ConfirmWithCreditButtonBase({
   const resultNavigatedRef = useRef(false);
   const {
     ui, status, currency, confirmDisabled, hasReturnInvoice,
-    headers, base, pdfLoading, showModal, setShowModal,
+    headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
-    handlePrint, handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
+    handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
     entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
-    generatePdfFn, getPdfLabelsFn,
   });
 
   if (status !== 'DR' && status !== 'CO') return null;
@@ -40,21 +38,17 @@ export default function ConfirmWithCreditButtonBase({
         <button type="button" data-testid="action-confirm-with-credit"
           onClick={() => !confirmDisabled && setShowModal(true)}
           disabled={confirmDisabled}
-          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? '#9ca3af' : '#18181b', color: '#fff', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
+          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
           {confirmDrLabel}
         </button>
       )}
       {status === 'CO' && !hasReturnInvoice && (
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
-          style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {ui('createReturnInvoice')}
+          style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
       {extraActions}
-      <PrintButton
-        onClick={handlePrint}
-        loading={pdfLoading}
-        data-testid="PrintButton__f9608e" />
       {extraPortals}
       {showModal && status === 'DR' && (
         <ConfirmInOutModal

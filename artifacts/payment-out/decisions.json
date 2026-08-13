@@ -19,11 +19,11 @@
       "sidePanelStyle": {
         "order": -1,
         "borderLeft": "none",
-        "borderRight": "1px solid #E8EAEF",
+        "borderRight": "1px solid hsl(var(--border-subtle))",
         "padding": 0
       }
     },
-    "contentAreaClassName": "!bg-[#FAFAFB] !p-0",
+    "contentAreaClassName": "!bg-card !p-0",
     "hideCreate": true,
     "attachments": false,
     "hideFormCard": true,
@@ -61,7 +61,8 @@
       "PPM": "pagoDepositado",
       "PWNC": "pagoDepositado"
     },
-    "statusFieldLabel": "statusColumnLabel",
+    "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {

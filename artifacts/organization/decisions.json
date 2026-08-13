@@ -1,0 +1,258 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "configuration",
+    "name": "Organización",
+    "layoutType": "custom"
+  },
+  "entities": {
+    "organization": {
+      "fields": {
+        "searchKey": {
+          "visibility": "discarded"
+        },
+        "name": {
+          "visibility": "editable",
+          "required": true
+        },
+        "description": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "defaultValue": "Y"
+        },
+        "summaryLevel": {
+          "visibility": "discarded"
+        },
+        "socialName": {
+          "visibility": "editable",
+          "required": true
+        },
+        "currency": {
+          "visibility": "readOnly"
+        },
+        "organizationType": {
+          "visibility": "discarded"
+        },
+        "allowPeriodControl": {
+          "visibility": "discarded"
+        },
+        "calendar": {
+          "visibility": "discarded"
+        },
+        "intrCCalendar": {
+          "visibility": "discarded"
+        },
+        "ready": {
+          "visibility": "discarded"
+        },
+        "generalLedger": {
+          "visibility": "discarded"
+        },
+        "aPRMGlitem": {
+          "visibility": "discarded"
+        },
+        "periodControlAllowedOrganization": {
+          "visibility": "discarded"
+        },
+        "calendarOwnerOrganization": {
+          "visibility": "discarded"
+        },
+        "inheritedCalendar": {
+          "visibility": "discarded"
+        },
+        "legalEntityOrganization": {
+          "visibility": "discarded"
+        },
+        "businessUnitOrganization": {
+          "visibility": "discarded"
+        },
+        "etsgAddCertificate": {
+          "visibility": "discarded"
+        },
+        "etgoBusinessType": {
+          "visibility": "editable",
+          "required": true
+        },
+        "client": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "id": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "creationDate": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "createdBy": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "updated": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "updatedBy": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        }
+      }
+    },
+    "periodControl": {
+      "exclude": true
+    },
+    "documents": {
+      "exclude": true
+    },
+    "dataSets": {
+      "exclude": true
+    },
+    "intrastat": {
+      "exclude": true
+    },
+    "actividadesDelIae": {
+      "exclude": true
+    },
+    "warehouse": {
+      "exclude": true
+    },
+    "certificadoDigital": {
+      "exclude": true
+    },
+    "emailConfiguration": {
+      "exclude": true
+    },
+    "representanteLegal": {
+      "exclude": true
+    },
+    "information": {
+      "fields": {
+        "locationAddress": {
+          "visibility": "editable",
+          "required": true
+        },
+        "taxID": {
+          "visibility": "editable",
+          "required": true
+        },
+        "dUNS": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "defaultValue": "Y"
+        },
+        "businessPartner": {
+          "visibility": "discarded"
+        },
+        "userContact": {
+          "visibility": "discarded"
+        },
+        "yourCompanyDocumentImage": {
+          "visibility": "editable"
+        },
+        "etgoEmail": {
+          "visibility": "editable"
+        },
+        "etgoPhone": {
+          "visibility": "editable"
+        },
+        "etgoWeb": {
+          "visibility": "editable"
+        },
+        "notTaxDeductable": {
+          "visibility": "discarded"
+        },
+        "cashVAT": {
+          "visibility": "discarded"
+        },
+        "isDoubleCash": {
+          "visibility": "discarded"
+        },
+        "aPRMPaymentDescription": {
+          "visibility": "discarded"
+        },
+        "logo": {
+          "visibility": "discarded"
+        },
+        "automaticWriteoffAmt": {
+          "visibility": "discarded"
+        },
+        "salesTaxExemptRate": {
+          "visibility": "discarded"
+        },
+        "referenceOrder": {
+          "visibility": "discarded"
+        },
+        "aeat390Isperson": {
+          "visibility": "discarded"
+        },
+        "aeat390Firstname": {
+          "visibility": "discarded"
+        },
+        "etvfacInstallationNumber": {
+          "visibility": "discarded"
+        },
+        "aeat390Surname1": {
+          "visibility": "discarded"
+        },
+        "aeat390Surname2": {
+          "visibility": "discarded"
+        },
+        "aeat390RepNif": {
+          "visibility": "discarded"
+        },
+        "aeat390RepName": {
+          "visibility": "discarded"
+        },
+        "aeat303IsNatPer": {
+          "visibility": "discarded"
+        },
+        "aeat303PersonName": {
+          "visibility": "discarded"
+        },
+        "aeat303PersonSurnames": {
+          "visibility": "discarded"
+        },
+        "id": {
+          "visibility": "system",
+          "derivation": "fromParent"
+        },
+        "client": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "creationDate": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "createdBy": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "etsgHasSIIConfig": {
+          "visibility": "discarded"
+        },
+        "etsgHasTbaiConfig": {
+          "visibility": "discarded"
+        },
+        "etsgHasVfactuConfig": {
+          "visibility": "discarded"
+        },
+        "updated": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        },
+        "updatedBy": {
+          "visibility": "system",
+          "derivation": "fromConfig"
+        }
+      }
+    }
+  }
+}

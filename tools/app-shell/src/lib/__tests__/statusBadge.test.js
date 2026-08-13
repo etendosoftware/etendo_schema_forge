@@ -20,28 +20,30 @@ describe('statusBadge — ETGO_CI (Closed - Invoice Created) classification', ()
   });
 
   describe('getStatusBadgeProps', () => {
-    it('renders ETGO_CI with the green completed style', () => {
+    it('renders ETGO_CI with the semantic success style', () => {
       const props = getStatusBadgeProps('ETGO_CI');
       assert.equal(props.variant, 'default');
-      assert.match(props.className, /bg-emerald-600/);
+      // hover:bg-status-success overrides Badge's built-in variant="default"
+      // hover:bg-primary/80, which otherwise wins on :hover (ETP-4856).
+      assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success');
     });
   });
 
   describe('getStatusDotColor', () => {
-    it('paints ETGO_CI dot emerald', () => {
-      assert.equal(getStatusDotColor('ETGO_CI'), 'bg-emerald-500');
+    it('paints the ETGO_CI dot with the semantic success foreground', () => {
+      assert.equal(getStatusDotColor('ETGO_CI'), 'bg-status-success-foreground');
     });
   });
 
   describe('getStatusPillClass', () => {
-    it('paints ETGO_CI pill emerald', () => {
-      assert.equal(getStatusPillClass('ETGO_CI'), 'bg-emerald-50 text-emerald-800');
+    it('paints ETGO_CI pill with semantic success tokens', () => {
+      assert.equal(getStatusPillClass('ETGO_CI'), 'bg-status-success text-status-success-foreground');
     });
   });
 
   describe('getStatusGridPillClass', () => {
-    it('paints ETGO_CI grid pill emerald', () => {
-      assert.equal(getStatusGridPillClass('ETGO_CI'), 'bg-emerald-500 text-white');
+    it('paints ETGO_CI grid pill with semantic success tokens', () => {
+      assert.equal(getStatusGridPillClass('ETGO_CI'), 'bg-status-success text-status-success-foreground');
     });
   });
 });
@@ -55,23 +57,23 @@ describe('statusBadge — CA (Closed - Order Created) recoloured to success', ()
     assert.equal(getStatusTone('ca'), 'success');
   });
 
-  it('getStatusBadgeProps renders CA with the green completed style', () => {
+  it('getStatusBadgeProps renders CA with the semantic success style', () => {
     const props = getStatusBadgeProps('CA');
     assert.equal(props.variant, 'default');
-    assert.match(props.className, /bg-emerald-600/);
+    assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success');
     assert.notEqual(props.variant, 'destructive');
   });
 
-  it('getStatusDotColor paints CA dot emerald (regression: was red)', () => {
-    assert.equal(getStatusDotColor('CA'), 'bg-emerald-500');
+  it('getStatusDotColor paints CA with the semantic success foreground', () => {
+    assert.equal(getStatusDotColor('CA'), 'bg-status-success-foreground');
   });
 
-  it('getStatusPillClass paints CA pill emerald (regression: was red)', () => {
-    assert.equal(getStatusPillClass('CA'), 'bg-emerald-50 text-emerald-800');
+  it('getStatusPillClass paints CA with semantic success tokens', () => {
+    assert.equal(getStatusPillClass('CA'), 'bg-status-success text-status-success-foreground');
   });
 
-  it('getStatusGridPillClass paints CA grid pill emerald (regression: was red)', () => {
-    assert.equal(getStatusGridPillClass('CA'), 'bg-emerald-500 text-white');
+  it('getStatusGridPillClass paints CA with semantic success tokens', () => {
+    assert.equal(getStatusGridPillClass('CA'), 'bg-status-success text-status-success-foreground');
   });
 });
 
@@ -79,7 +81,7 @@ describe('statusBadge — destructive tones still apply only to truly cancelled 
   it('VO is destructive', () => {
     assert.equal(getStatusTone('VO'), 'destructive');
     assert.equal(getStatusBadgeProps('VO').variant, 'destructive');
-    assert.equal(getStatusDotColor('VO'), 'bg-red-500');
+    assert.equal(getStatusDotColor('VO'), 'bg-destructive');
   });
 
   it('RPVOID is destructive', () => {
@@ -103,16 +105,16 @@ describe('statusBadge — CJ (Closed - Rejected) is destructive', () => {
     assert.equal(getStatusBadgeProps('CJ').variant, 'destructive');
   });
 
-  it('getStatusDotColor paints CJ dot red', () => {
-    assert.equal(getStatusDotColor('CJ'), 'bg-red-500');
+  it('getStatusDotColor paints CJ dot with the destructive token', () => {
+    assert.equal(getStatusDotColor('CJ'), 'bg-destructive');
   });
 
-  it('getStatusPillClass paints CJ pill red', () => {
-    assert.equal(getStatusPillClass('CJ'), 'bg-red-50 text-red-800');
+  it('getStatusPillClass paints CJ pill with destructive tokens', () => {
+    assert.equal(getStatusPillClass('CJ'), 'bg-destructive/10 text-destructive');
   });
 
-  it('getStatusGridPillClass paints CJ grid pill red', () => {
-    assert.equal(getStatusGridPillClass('CJ'), 'bg-red-500 text-white');
+  it('getStatusGridPillClass paints CJ grid pill with destructive tokens', () => {
+    assert.equal(getStatusGridPillClass('CJ'), 'bg-destructive text-destructive-foreground');
   });
 });
 
@@ -121,19 +123,19 @@ describe('statusBadge — non-regression on previously success/closed/draft stat
     assert.equal(getStatusTone('CO'), 'success');
   });
 
-  it('PA stays success in tone but blue in palette', () => {
+  it('PA stays success in tone and uses the information status role', () => {
     assert.equal(getStatusTone('PA'), 'success');
-    assert.match(getStatusBadgeProps('PA').className, /bg-blue-600/);
+    assert.equal(getStatusBadgeProps('PA').className, 'border-status-info-border bg-status-info text-status-info-foreground');
   });
 
-  it('CL stays in the closed/blue palette', () => {
+  it('CL stays in the closed/information status role', () => {
     const props = getStatusBadgeProps('CL');
-    assert.match(props.className, /bg-blue-600/);
-    assert.equal(getStatusDotColor('CL'), 'bg-blue-500');
+    assert.equal(props.className, 'border-status-info-border bg-status-info text-status-info-foreground');
+    assert.equal(getStatusDotColor('CL'), 'bg-status-info-foreground');
   });
 
-  it('DR stays in the draft/secondary palette', () => {
+  it('DR stays in the draft/secondary role', () => {
     assert.equal(getStatusBadgeProps('DR').variant, 'secondary');
-    assert.equal(getStatusDotColor('DR'), 'bg-gray-400');
+    assert.equal(getStatusDotColor('DR'), 'bg-status-neutral-foreground');
   });
 });

@@ -63,6 +63,48 @@ const windowLoaders = {
 };
 
 /**
+ * Filters an already-built menuGroups array (see buildMenuGroups) down to what
+ * the current role can reach, per SFListMenu (com.etendoerp.go docs/neo-headless.md
+ * §8). Items carrying no windowId/processId/obuiappProcessId (dashboard, custom
+ * pages, installed SDK apps) are never filtered on that axis — this mirrors
+ * SFListMenu's own "leave unfiltered" rule for nodes with no AD_Window/AD_Process
+ * link. A group emptied by filtering is dropped entirely, except `Favorites`
+ * (which starts empty regardless and is populated client-side).
+ *
+ * A second, independent axis (ETP-4513) lets a menu.json item declare
+ * `"capability": "<key>"` for entries that have no backing AD_Window/AD_Process
+ * to check against but still must be admin/client-admin-gated — e.g. the
+ * "Configuración > Roles" entry, gated on `capabilities.isAdminOrClientAdmin`
+ * from the `SFWindowAccessMap` webhook. This check fails CLOSED: an item with a
+ * `capability` key is hidden unless `capabilities[item.capability] === true`
+ * (a missing/not-yet-loaded `capabilities` map hides it, same convention as
+ * `isCapabilityVisible` in `@/lib/capabilityVisibility.js`).
+ *
+ * @param {Array} groups — output of buildMenuGroups.
+ * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
+ *   the windowId/processId/obuiappProcessId filtering axis.
+ * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
+ *   `useCapabilitiesSafe()`. `null`/omitted disables the capability filtering
+ *   axis. When both `allowedIds` and `capabilities` are falsy, `groups` is
+ *   returned unchanged (matches this function's pre-ETP-4513 behavior).
+ */
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null) {
+  if (!allowedIds && !capabilities) return groups;
+  const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
+  return groups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.capability && capabilities?.[item.capability] !== true) return false;
+        if (!allowedIds) return true;
+        const ids = itemIds(item);
+        return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
+      }),
+    }))
+    .filter(group => group.group === 'Favorites' || group.items.length > 0);
+}
+
+/**
  * Return the 2-level menu groups, merging installed SDK apps into the
  * group declared by each menu entry. Groups or items with hidden: true
  * are excluded by default; the `Marketplace` group is force-shown when
@@ -71,8 +113,13 @@ const windowLoaders = {
  * @param {string[]} [installedAppIds] — appIds present in the installed-apps
  *   store. External apps only appear in the menu when their id is here.
  * @param {{ appStoreUnlocked?: boolean }} [options]
+ * @param {Set<string>|null} [allowedIds] — see filterMenuGroupsByAccess. Most
+ *   callers should leave this `null` here and instead call
+ *   filterMenuGroupsByAccess() separately on the result, from a component
+ *   inside the AuthProvider tree (AuthContext isn't available at the level
+ *   buildMenuGroups is normally called from — see AppLayout.jsx).
  */
-export function buildMenuGroups(installedAppIds = [], options = {}) {
+export function buildMenuGroups(installedAppIds = [], options = {}, allowedIds = null) {
   const { appStoreUnlocked = false } = options;
   const installedSet = new Set(installedAppIds);
   const extraByGroup = new Map();
@@ -88,7 +135,7 @@ export function buildMenuGroups(installedAppIds = [], options = {}) {
     }
   }
 
-  return menuConfig.menu
+  const groups = menuConfig.menu
     .filter(group => {
       if (group.hidden && group.group === 'Marketplace' && appStoreUnlocked) return true;
       return !group.hidden;
@@ -103,6 +150,8 @@ export function buildMenuGroups(installedAppIds = [], options = {}) {
         ],
       };
     });
+
+  return filterMenuGroupsByAccess(groups, allowedIds);
 }
 
 /**
@@ -142,7 +191,8 @@ export const apiOnlyWindows = new Set([
  * Developers can also add entries manually for fully custom windows.
  */
 const customLoaders = {
-  // Auto-registered by pipeline when layoutType: "custom"
+  // Auto-registered by pipeline
+  'organization': () => import('./custom/organization/index.jsx'),
   'calendar': () => import('./custom/calendar/index.jsx'),
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),

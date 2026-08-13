@@ -14,10 +14,10 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 function SyncPill({ ui }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EEFBF4]">
-        <Check className="h-3 w-3 text-[#17663A]" data-testid="Check__5d6a4a" />
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--status-success-bg)]">
+        <Check className="h-3 w-3 text-[var(--status-success-fg)]" data-testid="Check__5d6a4a" />
       </span>
-      <span className="text-xs font-normal leading-4 text-[#17663A]">
+      <span className="text-xs font-normal leading-4 text-[var(--status-success-fg)]">
         {ui('financeAccountsSyncUpdatedAgo')}
       </span>
     </div>
@@ -30,24 +30,24 @@ function CurrencyBreakdown({ rows, primaryIso, ui }) {
     : [{ currencyIso: primaryIso, total: 0 }];
 
   return (
-    <div className="rounded-lg bg-[#F5F7F9] p-3">
-      <h3 className="text-xs font-semibold leading-4 text-[#3F3F50]">
+    <div className="rounded-lg bg-[hsl(var(--muted))] p-3">
+      <h3 className="text-xs font-semibold leading-4 text-[hsl(var(--muted-foreground))]">
         {ui('financeAccountsBalanceByCurrency')}
       </h3>
       <div className="mt-3 flex flex-col gap-2">
         {visibleRows.map((row, idx) => (
           <div key={row.currencyIso}>
             {idx > 0 ? (
-              <div className="mb-2 h-px w-full bg-[rgba(18,18,23,0.05)]" />
+              <div className="mb-2 h-px w-full bg-[hsl(var(--foreground) / 0.05)]" />
             ) : null}
             <div
               className="flex items-center justify-between"
               data-testid={`balance-by-currency-${row.currencyIso}`}
             >
-              <span className="text-xs font-normal leading-4 text-[#555B6D]">
+              <span className="text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">
                 {row.currencyIso}
               </span>
-              <span className="text-sm font-medium leading-5 text-[#121217] tabular-nums">
+              <span className="text-sm font-medium leading-5 text-[hsl(var(--foreground))] tabular-nums">
                 {formatCurrency(row.currencyIso, row.total)}
               </span>
             </div>
@@ -67,9 +67,9 @@ function PendingIndicator({ dotColor, label, value }) {
           style={{ backgroundColor: dotColor }}
           aria-hidden="true"
         />
-        <span className="text-xs font-normal leading-4 text-[#555B6D]">{label}</span>
+        <span className="text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
       </div>
-      <span className="text-xs font-semibold leading-5 text-[#121217] tabular-nums">
+      <span className="text-xs font-semibold leading-5 text-[hsl(var(--foreground))] tabular-nums">
         {value}
       </span>
     </div>
@@ -78,15 +78,15 @@ function PendingIndicator({ dotColor, label, value }) {
 
 function PendingCard({ pending, ui }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[#E8EAEF]">
-      <header className="flex items-center justify-between border-b border-[#E8EAEF] px-3 py-3">
-        <h3 className="text-xs font-semibold leading-4 text-[#3F3F50]">
+    <div className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]">
+      <header className="flex items-center justify-between border-b border-[hsl(var(--border-subtle))] px-3 py-3">
+        <h3 className="text-xs font-semibold leading-4 text-[hsl(var(--muted-foreground))]">
           {ui('financeAccountsPendingTitle')}
         </h3>
       </header>
       <div className="flex flex-col gap-3 py-3">
         <PendingIndicator
-          dotColor="#F3164E"
+          dotColor="hsl(var(--destructive))"
           label={ui('financeAccountsPendingAccountsRow')}
           value={pending.accountsWithPending ?? 0}
           data-testid="PendingIndicator__5d6a4a" />
@@ -109,13 +109,13 @@ export function AccountsSidebar({ summary, loading }) {
     >
       <header className="flex flex-col gap-0.5 px-3 pb-3 pt-2">
         <div className="flex items-center gap-1">
-          <h2 className="text-xl font-semibold leading-7 text-[#121217]">
+          <h2 className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">
             {ui('financeAccountsBalanceTitle')}
           </h2>
           <button
             type="button"
             aria-label={ui('financeAccountsBalanceInfo')}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9]"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
           >
             <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
           </button>
@@ -124,7 +124,7 @@ export function AccountsSidebar({ summary, loading }) {
       </header>
       <div className="flex items-center px-3" style={{ minHeight: 32 }}>
         <span
-          className="text-[30px] font-medium leading-8 text-[#121217] tabular-nums"
+          className="text-[30px] font-medium leading-8 text-[hsl(var(--foreground))] tabular-nums"
           data-testid="balance-card"
         >
           {loading ? '—' : formatCurrency(primaryIso, totalBalance)}

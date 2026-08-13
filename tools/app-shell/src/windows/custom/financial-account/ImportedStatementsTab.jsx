@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
-import { usePsd2Actions } from '@/hooks/usePsd2Actions';
+import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { StatementsToolbar } from './StatementsToolbar';
 import { StatementsTable } from './StatementsTable';
 import { StatementLinesView } from './StatementLinesView';
@@ -12,6 +13,8 @@ import { ManualStatementModal } from './ManualStatementModal';
 import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { parseCalendarDate } from '@/lib/dateOnly';
+import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
  * Imported Statements tab for the Financial Account detail view.
@@ -30,14 +33,14 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const ui = useUI();
   const accountId = account?.id ?? null;
   const currency = account?.currencyIso ?? 'EUR';
-  // PSD2-synced accounts get their statements only from Salt Edge, so manual import / manual
+  // bank-synced accounts get their statements only from Salt Edge, so manual import / manual
   // line creation are not offered: the import split-button is replaced by a single "sync
-  // statements" action that runs the PSD2 fetch (Classic's "Get Bank Statement" equivalent).
-  const psd2Synced = account?.psd2Connected === true;
+  // statements" action that runs the bank fetch (Classic's "Get Bank Statement" equivalent).
+  const bankConnectionSynced = account?.bankConnected === true;
 
   const { statements, loading, reload } = useBankStatements(accountId);
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
-  const { sync } = usePsd2Actions();
+  const { sync } = useBankConnectionActions();
   const [syncing, setSyncing] = useState(false);
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
@@ -75,7 +78,26 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   const closeConfirm = () => setConfirm({ variant: null, statement: null });
 
-  // Runs the PSD2 statement fetch for this account (same backend action behind the kebab's
+  // ETP-4656 (Gap 3) — bulk "Delete selected" for the imported-statements grid,
+  // wired onto the checkbox selection that already existed here. Reuses the same
+  // deleteStatement(id) call the per-row hover quick-action already makes (see
+  // StatementsTable) — not every statement is deletable (drafts only, per
+  // StatementRowKebab's comment), so a non-draft in the selection surfaces as a
+  // normal per-row failure in the 3-outcome toast rather than being pre-filtered.
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
+    deleteOneFn: (id) => deleteStatement(id),
+    onOutcome: (succeeded, failed) => {
+      if (succeeded.length > 0) reload();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedIds(new Set(failed));
+      }
+    },
+  });
+
+  // Runs the bank statement fetch for this account (same backend action behind the kebab's
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
   // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
   const handleSyncStatements = async () => {
@@ -86,14 +108,14 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
       reload();
       const msg = res?.message;
       if (res?.status === 'ERROR') {
-        toast.error(msg || ui('financeAccountsPsd2SyncError'));
+        toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
       } else if (res?.status === 'WARNING') {
-        toast.info(msg || ui('financeAccountsPsd2SyncDone'));
+        toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
       } else {
-        toast.success(msg || ui('financeAccountsPsd2SyncDone'));
+        toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
       }
     } catch (err) {
-      toast.error(err?.message || ui('financeAccountsPsd2SyncError'));
+      toast.error(err?.message || ui('financeAccountsBankConnectionSyncError'));
     } finally {
       setSyncing(false);
     }
@@ -145,9 +167,9 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     const base = statements.filter((s) => {
       if (status && s.status !== status) return false;
       if (from || to) {
-        const d = new Date(s.importDate);
-        if (from && d < from) return false;
-        if (to && d > to) return false;
+        const d = parseCalendarDate(s.importDate);
+        if (from && d && d < from) return false;
+        if (to && d && d > to) return false;
       }
       if (q) {
         const haystack = [s.fileName, s.name, s.documentNo, s.notes]
@@ -184,6 +206,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {selectedIds.size > 0 && (
+        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
+          <BulkDeleteSelectionBar
+            count={selectedIds.size}
+            deleting={bulkDeleting}
+            onCancel={clearSelection}
+            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+            data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+        </div>
+      )}
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -196,7 +228,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         rows={statements}
         onImportClick={() => setImportOpen(true)}
         onManualClick={() => setManualOpen(true)}
-        psd2Synced={psd2Synced}
+        bankConnectionSynced={bankConnectionSynced}
         onSyncClick={handleSyncStatements}
         syncing={syncing}
         data-testid="StatementsToolbar__6f147a" />
@@ -210,6 +242,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           onSelectionChange={handleSelectionChange}
           data-testid="StatementsTable__6f147a" />
       </div>
+      {batchDeleteDialog}
       <ImportStatementModal
         open={importOpen}
         accountId={accountId}

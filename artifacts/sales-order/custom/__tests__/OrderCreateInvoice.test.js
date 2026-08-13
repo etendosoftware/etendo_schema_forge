@@ -214,14 +214,25 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
     });
 
-    it('switches border and background to a green/done palette when disabled', () => {
-      assert.match(src, /disabled\s*\?\s*'2px solid #10B981'/);
-      assert.match(src, /disabled\s*\?\s*'#ECFDF5'/);
-      assert.match(src, /disabled\s*\?\s*'#10B981'/);
+    it('switches to semantic success roles when disabled', () => {
+      assert.match(src, /disabled\s*\?\s*'2px solid var\(--status-success-border\)'/);
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-bg\)'/);
+      assert.match(src, /color:\s*disabled\s*\?\s*'var\(--status-success-fg\)'/);
     });
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  describe('semantic color roles (ETP-4767)', () => {
+    it('uses foreground roles for selected and completed checkbox indicators', () => {
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-fg\)'\s*:\s*\(checked\s*\?\s*'var\(--status-info-fg\)'/);
+    });
+
+    it('uses semantic surface roles for the confirmation summary and warning', () => {
+      assert.match(src, /background: 'var\(--status-info-bg\)', border: '0\.5px solid var\(--status-info-border\)'/);
+      assert.match(src, /background: 'var\(--status-warning-bg\)', border: '1px solid var\(--status-warning-border\)'/);
     });
   });
 
@@ -271,6 +282,30 @@ describe('OrderCreateInvoice', () => {
 
     it('shows the dedicated soSaveBeforeConfirmError message on save-guard failure (not the generic soErrorOccurred)', () => {
       assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('soSaveBeforeConfirmError'\)\);/);
+    });
+  });
+
+  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
+  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
+  // Form-view must agree on the same rule.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('does NOT show the Send button while the order is still Draft (DR)', () => {
+      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    });
+
+    it('shows the Send button only when the order is Completed (CO)', () => {
+      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+    });
+
+    it('does NOT gate the SendDocumentModal render on isDraft', () => {
+      assert.doesNotMatch(
+        src,
+        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
+      );
+    });
+
+    it('gates the SendDocumentModal render on isCompleted only', () => {
+      assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
     });
   });
 });

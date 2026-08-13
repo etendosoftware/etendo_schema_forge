@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CabeceraDeConfiguracionVerifactuTable from './CabeceraDeConfiguracionVerifactuTable';
 import CabeceraDeConfiguracionVerifactuForm from './CabeceraDeConfiguracionVerifactuForm';
 import catalogs from './mockCatalogs';
@@ -89,6 +91,13 @@ export const api = {
 
 // @sf-generated-start component:CabeceraDeConfiguracionVerifactuPage
 export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('27A453FA86974745977672F1A8DCCEFF');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="27A453FA86974745977672F1A8DCCEFF" />;
+  }
   if (recordId) {
     return (
       <>
@@ -106,7 +115,7 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -121,7 +130,7 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

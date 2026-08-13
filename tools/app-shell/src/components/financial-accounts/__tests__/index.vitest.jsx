@@ -10,7 +10,14 @@ describe('financial-accounts barrel exports', () => {
     expect(featureExports.AccountRowMenu).toBeDefined();
     expect(featureExports.AccountsToolbar).toBeDefined();
     expect(featureExports.AccountsSidebar).toBeDefined();
-    expect(featureExports.AccountsTable).toBeDefined();
+  });
+
+  // ETP-4658 retired the hand-rolled AccountsTable host (table + header + row): the
+  // list is now the generated page's ListView with the AccountsHeaderTable slot, and
+  // nothing mounted the old trio any more. Its cell bodies survive in
+  // AccountsTable/accountColumns.jsx, bound to columns by accountCellTypes.jsx.
+  it('no longer exports the retired AccountsTable host', () => {
+    expect(featureExports.AccountsTable).toBeUndefined();
   });
 
   it('re-exports the ACCOUNT_TYPE map and ordering', () => {
@@ -21,14 +28,14 @@ describe('financial-accounts barrel exports', () => {
 
 describe('financial-accounts tokens', () => {
   it('exposes the Figma color palette', () => {
-    expect(COLORS.textPrimary).toBe('#121217');
-    expect(COLORS.bgGray50).toBe('#f5f7f9');
-    expect(COLORS.brand).toBe('#ffd500');
+    expect(COLORS.textPrimary).toBe('hsl(var(--foreground))');
+    expect(COLORS.bgGray50).toBe('hsl(var(--muted))');
+    expect(COLORS.brand).toBe('hsl(var(--primary))');
   });
 
   it('exposes the radii and shadow tokens', () => {
     expect(RADII).toEqual({ none: 0, md: 8, pill: 360 });
-    expect(SHADOWS.xs).toBe('0 1px 2px rgba(18, 18, 23, 0.05)');
+    expect(SHADOWS.xs).toBe('0 1px 2px hsl(var(--foreground) / 0.05)');
   });
 
   it('exposes the account-type constants', () => {

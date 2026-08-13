@@ -27,7 +27,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
       return route.fulfill({
         status: 400,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
+        body: JSON.stringify({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
       });
     }
     const body = route.request().postDataJSON();
@@ -57,7 +57,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
         return route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
+          body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
         });
       }
       return route.fulfill({
@@ -231,8 +231,11 @@ test.describe('Onboarding — Full registration flow', () => {
     // PART 7: Start — verify the onboarding request fires
     // ═══════════════════════════════════════════════════════════════════════
 
+    // Match the final submission only — `/sws/go/onboarding/draft` (fired by the
+    // durable draft persistence on every step change) also contains this prefix,
+    // and its POST body ({ draft: {...} }) has no top-level clientName.
     const onboardingPromise = page.waitForRequest(
-      req => req.url().includes('/sws/go/onboarding') && req.method() === 'POST',
+      req => req.url().endsWith('/sws/go/onboarding') && req.method() === 'POST',
       { timeout: 15_000 }
     );
     await startBtn.click();
@@ -293,9 +296,13 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     await page.locator('#login-password').fill('WrongPassword!1');
     await page.getByTestId('action-login-submit').click();
 
+    // LoginStep no longer surfaces the backend's userMessage ("Credenciales
+    // incorrectas" from the mocked 401 above) — it always renders the fixed
+    // onboardingInvalidCredentials copy instead, so match that directly (es_ES
+    // "Credenciales inválidas." / en_US "Invalid credentials.").
     const errorBox = page.locator('.border-rose-200');
     await expect(errorBox).toBeVisible({ timeout: 5_000 });
-    await expect(errorBox).toContainText(/incorrectas|invalid|wrong/i);
+    await expect(errorBox).toContainText(/inválidas|incorrectas|invalid|wrong/i);
 
     // Still on login view
     await expect(page.locator('#login-email')).toBeVisible();

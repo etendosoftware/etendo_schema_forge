@@ -39,8 +39,11 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 // profile (Verifactu processing-modal wiring). Mirrors the convention used
 // by PurchaseInvoiceHeaderTable.vitest.jsx / PurchaseInvoiceTopbar.vitest.jsx
 // for the same @/auth/AuthContext.jsx + useFiscalConfig.js pair.
+let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 let fiscalProfile = null;
@@ -106,7 +109,7 @@ vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
   ),
 }));
 
-vi.mock('@/components/contract-ui', () => ({
+vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   ListView: (props) => {
     lastListViewProps = props;
     return (
@@ -184,6 +187,25 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     lastHeaderPageProps = null;
     rowDeleteConfig = null;
     fiscalProfile = null;
+    currentWindowAccessTier = 'full';
+  });
+
+  // ETP-4520 — the hand-rolled ListView below only picks up the runtime
+  // per-tier access restriction if this wrapper passes it through; verifies
+  // the effectiveWindow wiring added alongside the WindowAccessGuard check.
+  it('passes a read-only effectiveWindow to ListView when the access tier is read-only', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.window).toMatchObject({ readOnly: true });
+  });
+
+  it('renders the WindowAccessGuard instead of ListView when the access tier is none', () => {
+    currentWindowAccessTier = 'none';
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-view')).not.toBeInTheDocument();
   });
 
   it('renders the list view (ListView) when no recordId is present', () => {
@@ -337,8 +359,10 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastListViewProps.labelOverrides.en_US.OutstandingAmt).toBe('Pending Payment');
+    // ETP-4737: the former separate creditNotesTab/returnsTab subset filters
+    // are unified into a single rectificativeInvoicesTab filter.
     expect(lastListViewProps.subsetFilters.map((f) => f.label)).toEqual([
-      'allTab', 'invoicesTab', 'creditNotesTab', 'returnsTab',
+      'allTab', 'invoicesTab', 'rectificativeInvoicesTab',
     ]);
   });
 

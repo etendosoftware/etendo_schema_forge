@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import SincronizacionTable from './SincronizacionTable';
 import SincronizacionForm from './SincronizacionForm';
 import ResultadoValidacionTable from './ResultadoValidacionTable';
@@ -61,10 +63,10 @@ export const api = {
     "sincronización": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
       "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
       "supportedFilters": []
@@ -72,10 +74,10 @@ export const api = {
     "resultadoValidación": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
       "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
       "supportedFilters": []
@@ -106,12 +108,20 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "monitor"
+    "category": "monitor",
+    "readOnly": true
   }
 };
 
 // @sf-generated-start component:SincronizacionPage
 export default function SincronizacionPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('71F24BF89DE748B483BE87594747D6FB');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="71F24BF89DE748B483BE87594747D6FB" />;
+  }
   if (recordId) {
     return (
       <>
@@ -134,7 +144,7 @@ export default function SincronizacionPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -148,8 +158,9 @@ export default function SincronizacionPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

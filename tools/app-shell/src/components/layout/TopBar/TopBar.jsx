@@ -81,13 +81,28 @@ export default function TopBar({
                 <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__133e64" />
               </button>
             )}
-            <div className="flex flex-col justify-center items-start min-w-0 h-12">
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-semibold leading-8 text-text-primary truncate">
-                  {title}
-                </span>
+            {/* max-w caps this block regardless of the wrapper's shrink-0 above (max-width still
+                clamps a flex item even when it won't shrink under sibling pressure) — without it,
+                `truncate` below never activates: the center search is `absolute`, so it applies
+                no flex pressure of its own, and a long title/breadcrumb (e.g. a bank account's
+                full name + IBAN) just grows underneath it instead of eliding.
+                No `items-start`: that made this column's children size to their own content
+                instead of stretching to the max-w cap, so the cap capped this box but never
+                propagated down to the title row / breadcrumb span for `truncate` to act on —
+                they simply overflowed the (non-clipping) parent. Text stays left-aligned either
+                way; only the box-stretch behavior needed to change. */}
+            <div className="flex flex-col justify-center min-w-0 h-12 max-w-[320px]">
+              <div className="flex min-w-0 items-center gap-2">
+                <Tooltip delayDuration={300} data-testid="Tooltip__topbar-title">
+                  <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-title">
+                    <span className="min-w-0 truncate text-xl font-semibold leading-8 text-text-primary">
+                      {title}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent data-testid="TooltipContent__topbar-title">{title}</TooltipContent>
+                </Tooltip>
                 {recordCount != null && (
-                  <span className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[#D1D4DB] rounded-lg shrink-0">
+                  <span className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[hsl(var(--border-control))] rounded-lg shrink-0">
                     {recordCount}
                   </span>
                 )}

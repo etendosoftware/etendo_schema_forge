@@ -2,25 +2,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { parseBoolean } from '@/lib/parseBoolean.js';
+import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
-
-function parseBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-    return null;
-  }
-  if (typeof value !== 'string') return null;
-
-  const normalized = value.trim().toLowerCase();
-  if (['true', 'y', 'yes', '1'].includes(normalized)) return true;
-  if (['false', 'n', 'no', '0'].includes(normalized)) return false;
-  return null;
-}
 
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
@@ -98,8 +85,8 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
   }
 
   return (
-    <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-white focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
-      {prefix && <span className="pl-3 text-sm text-[#121217] select-none">{prefix}</span>}
+    <div className="flex flex-row items-center h-10 border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] overflow-hidden bg-card focus-within:border-[hsl(var(--foreground))] focus-within:shadow-[0px_0px_0px_1px_hsl(var(--foreground))] transition-colors">
+      {prefix && <span className="pl-3 text-sm text-[hsl(var(--foreground))] select-none">{prefix}</span>}
       <input
         type="number"
         step="0.01"
@@ -107,13 +94,13 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         disabled={disabled}
         onChange={e => setLocal(e.target.value)}
         onBlur={() => onCommit(local === '' ? 0 : Number(local))}
-        className="flex-1 px-3 text-sm text-[#121217] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="flex-1 px-3 text-sm text-[hsl(var(--foreground))] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <button
         type="button"
         onClick={() => step(-1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Minus size={16} data-testid="Minus__d76b90" />
       </button>
@@ -121,7 +108,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         type="button"
         onClick={() => step(1)}
         disabled={disabled}
-        className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
       >
         <Plus size={16} data-testid="Plus__d76b90" />
       </button>
@@ -132,7 +119,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
 function FieldLabel({ children }) {
   return (
     <div className="flex items-center h-6">
-      <span className="text-sm font-medium text-[#121217]">{children}</span>
+      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{children}</span>
     </div>
   );
 }
@@ -147,6 +134,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   const [savingId, setSavingId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [lazyOptions, setLazyOptions] = useState([]);
+  // Whether the option list for the CURRENT add-row session has been resolved. Gates
+  // the "every tariff is already priced" message so it never flashes while fetching.
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitialName, setCreateInitialName] = useState('');
   // Draft prices for the add-tariff row (mirrors the Figma: the new row shows the
@@ -191,31 +181,45 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (priceRows !== null) onCountChange?.(priceRows.length);
   }, [priceRows, onCountChange]);
 
-  // Lazily fetch price list version options when the add-row selector needs them.
+  // Fetch the price list version options EVERY time the add row opens. A fetch-once
+  // cache left tariffs created during the session (via "+ Create tariff", which links
+  // the new version by id) permanently out of the list, so deleting their price could
+  // never bring them back. Refetching per open also picks up tariffs created in
+  // another tab. The previous list is kept while the request is in flight (no flicker).
+  // `limit` is explicit because the server defaults to 20 (NeoSelectorEndpoint).
   useEffect(() => {
     if (!adding) return undefined;
-    if (Array.isArray(eagerOptions) && eagerOptions.length > 0) return undefined;
-    if (lazyOptions.length > 0) return undefined;
+    if (Array.isArray(eagerOptions) && eagerOptions.length > 0) {
+      setOptionsLoaded(true);
+      return undefined;
+    }
     if (!apiBaseUrl || !token) return undefined;
 
     let aborted = false;
-    fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}`, {
+    fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}?limit=200`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => (res.ok ? res.json() : null))
       .then(payload => {
         if (aborted) return;
+        // Spread first so the tariff-name override below always wins over a raw
+        // `name` column coming from the selector grid fields.
         const options = (payload?.items ?? []).map(item => ({
-          id: item.id,
-          name: item.label || item.name || item.id,
           ...item,
+          id: item.id,
+          name: item['priceList$_identifier'] || item.label || item.name || item.id,
         }));
         setLazyOptions(options);
+        setOptionsLoaded(true);
       })
-      .catch(() => { if (!aborted) setLazyOptions([]); });
+      .catch(() => {
+        if (aborted) return;
+        setLazyOptions([]);
+        setOptionsLoaded(true);
+      });
 
     return () => { aborted = true; };
-  }, [adding, eagerOptions, lazyOptions.length, apiBaseUrl, token, selectorColumn]);
+  }, [adding, eagerOptions, apiBaseUrl, token, selectorColumn]);
 
   // Reset the draft prices whenever we leave "adding" mode (cancel, Escape, outside
   // click, section toggle, or a successful add), so reopening starts clean.
@@ -223,6 +227,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (!adding) {
       setDraftUnitPrice(0);
       setDraftListPrice(0);
+      setOptionsLoaded(false);
     }
   }, [adding]);
 
@@ -276,10 +281,16 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     });
   }, [effectiveOptions, priceRows, isSales]);
 
-  // Normalize to the { id, name } shape CreatableSearchSelect expects.
+  // Normalize to the { id, name } shape CreatableSearchSelect expects. The user picks a
+  // TARIFF, so the label is the price list name (injected by ProductPriceHandler as
+  // priceList$_identifier); the version identifier is only a fallback for unenriched
+  // options, since a version is often named differently ("Version Lista de venta ...").
   const selectOptions = useMemo(() => (
     availableOptions
-      .map(opt => ({ id: extractReferenceId(opt.id), name: opt.name || opt.label || extractReferenceId(opt.id) }))
+      .map(opt => ({
+        id: extractReferenceId(opt.id),
+        name: opt['priceList$_identifier'] || opt.name || opt.label || extractReferenceId(opt.id),
+      }))
       .filter(o => o.id)
   ), [availableOptions]);
 
@@ -392,7 +403,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (!recordId) {
     return (
       <div className="p-2">
-        <div className="text-sm text-gray-500 mt-1">{ui('saveProductFirstPricing')}</div>
+        <div className="text-sm text-muted-foreground mt-1">{ui('saveProductFirstPricing')}</div>
       </div>
     );
   }
@@ -400,7 +411,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   if (loading) {
     return (
       <div className="p-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">
+        <div className="rounded-xl border border-border-subtle bg-card p-4 text-sm text-muted-foreground flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" data-testid="Loader2__d76b90" />
           {ui('loadingPricing')}
         </div>
@@ -411,9 +422,11 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   const sectionTitle = isSales ? ui('priceSalesListsTitle') : ui('pricePurchaseListsTitle');
 
   return (
-    <div className="flex flex-row items-start gap-14 px-3 py-3">
+    // Tight top padding: the custom-tab panel wrapper already adds p-2, so anything more
+    // here reads as a gap between the "Price" tab strip and the section title.
+    <div className="flex flex-row items-start gap-14 px-3 pt-1 pb-3">
       {/* Left column — Sales / Purchase toggle */}
-      <div className="flex flex-col gap-2 pt-3 shrink-0">
+      <div className="flex flex-col gap-2 shrink-0">
         {[
           { key: 'sales', label: ui('priceTabSales'), testId: 'price-tab-sales' },
           { key: 'purchase', label: ui('priceTabPurchase'), testId: 'price-tab-purchase' },
@@ -426,8 +439,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             className={[
               'flex items-center justify-center px-3 h-10 rounded-lg text-sm font-medium transition-colors',
               activeSection === opt.key
-                ? 'bg-[#F5F7F9] text-[#121217]'
-                : 'text-[#121217] hover:bg-[#F5F7F9]/60',
+                ? 'bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]'
+                : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/60',
             ].join(' ')}
           >
             {opt.label}
@@ -435,16 +448,44 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
         ))}
       </div>
       {/* Right column — active section */}
-      <div className="flex-1 min-w-0 flex flex-col gap-3 pt-3">
-        <div className="flex items-center gap-2 h-8">
-          <h3 className="text-lg font-semibold text-[#121217]">{sectionTitle}</h3>
-          <span className="inline-flex items-center px-2 h-6 text-xs text-[#3F3F50] bg-[#F5F7F9] border border-[#D1D4DB] rounded-lg">
-            {sectionRows.length}
-          </span>
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
+        {/* Section header — the add action lives HERE, so it stays in place no matter how
+            many tariffs the product has (the tab itself scrolls). The header mirrors the
+            column grid of the rows below (300 / 201 / 201 with gap-5) and the action is
+            right-aligned in the last slot, so its right edge lands on the right edge of
+            every "List price" stepper underneath — a real shared edge, instead of floating
+            at the START of that column, which aligns with nothing. (The per-row delete
+            button sits further right, but it is a hover affordance, not a column.)
+            The title box is min-w so a longer translation grows it — the action just
+            shifts right instead of overlapping. */}
+        <div className="flex flex-row items-center gap-5 h-8" data-testid="price-section-header">
+          <div className="min-w-[300px] shrink-0 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">{sectionTitle}</h3>
+            <span className="inline-flex items-center px-2 h-6 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] rounded-lg">
+              {sectionRows.length}
+            </span>
+          </div>
+          {/* Spacer over the "Unit price" column */}
+          <div className="w-[201px] shrink-0" aria-hidden="true" />
+          <div className="w-[201px] shrink-0 flex justify-end">
+            {!adding && (
+              // Same control as "Add line" in the order/invoice lines panels (shared
+              // AddLineButton). It hardcodes data-testid="action-add-line", which is not
+              // unique in this window (the Accounting secondary tab renders one too), so the
+              // wrapper carries the pricing-specific hook — mirroring DetailView's own
+              // data-inline-add-portal span around the same component.
+              (<span data-testid="price-add-tariff">
+                <AddLineButton
+                  onClick={() => setAdding(true)}
+                  label={ui('priceAddTariff')}
+                  data-testid="AddLineButton__d76b90" />
+              </span>)
+            )}
+          </div>
         </div>
 
         {sectionRows.length === 0 && !adding && (
-          <div className="text-sm text-gray-400">{ui('priceNoLists')}</div>
+          <div className="text-sm text-muted-foreground">{ui('priceNoLists')}</div>
         )}
 
         {/* Column headers — rendered once, not repeated per row */}
@@ -456,65 +497,19 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           </div>
         )}
 
-        {sectionRows.map(row => {
-          const name = row['priceListVersion$_identifier'] || row['priceList$_identifier'] || '';
-          const saving = savingId === row.id;
-
-          return (
-            <div key={row.id} className="flex flex-col gap-1 group/row">
-              <div className="flex flex-row items-end gap-5">
-                {/* Name */}
-                <div className="w-[300px] shrink-0">
-                  <input
-                    type="text"
-                    readOnly
-                    value={name}
-                    className="h-10 w-full px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
-                  />
-                </div>
-                {/* Unit price */}
-                <div className="w-[201px] shrink-0">
-                  <PriceStepper
-                    value={row.standardPrice}
-                    prefix={currencySymbol}
-                    disabled={saving}
-                    onCommit={v => patchField(row, 'standardPrice', v)}
-                    data-testid="PriceStepper__d76b90" />
-                </div>
-                {/* List price */}
-                <div className="w-[201px] shrink-0">
-                  <PriceStepper
-                    value={row.listPrice}
-                    prefix={currencySymbol}
-                    disabled={saving}
-                    onCommit={v => patchField(row, 'listPrice', v)}
-                    data-testid="PriceStepper__d76b90" />
-                </div>
-                {/* Delete */}
-                <div className="flex items-center h-10 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(row)}
-                    disabled={saving}
-                    title={ui('priceRemove')}
-                    data-testid={`price-delete-${row.id}`}
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
-                  >
-                    {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Add-tariff row — pick/create a tariff and set its prices, mirroring the saved rows */}
+        {/* Add-tariff row — pick/create a tariff and set its prices, mirroring the saved
+            rows. It sits at the TOP of the list, right under the header that holds the
+            "+ Add new tariff" action, so it is always next to the control that opened it
+            (the tab has no inner scroller: the detail content column scrolls instead). */}
         {adding && (
           <div ref={addRowRef} className="flex flex-row items-end gap-5" data-testid="price-add-tariff-row">
             {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
                 The color lives on the root box so the input + chevron (transparent) match it,
                 instead of only the input greying (the product-window rule targets input:hover). */}
-            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-white [&>div:hover]:!bg-[#F5F7F9]">
+            {/* No `preferDown`: the panel is position:fixed, so when the row happens to sit
+                near the viewport bottom a forced-down panel is drawn off-screen and no
+                scrolling can reveal it. Auto-flip opens upward only when there is no room. */}
+            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
               <CreatableSearchSelect
                 key={selectOptions.map(o => o.id).join(',')}
                 field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
@@ -525,7 +520,6 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 staticOptions={selectOptions}
                 createLabel={ui('priceCreateTariff')}
                 onCreateRequest={handleCreateRequest}
-                preferDown
                 data-testid="CreatableSearchSelect__d76b90" />
             </div>
             {/* Unit price */}
@@ -554,13 +548,77 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 disabled={savingId === 'new'}
                 title={ui('cancel')}
                 data-testid="price-add-cancel"
-                className="w-8 h-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 transition-all"
               >
                 <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
               </button>
             </div>
           </div>
         )}
+
+        {/* Every tariff of this section already has a price: without this the dropdown
+            renders just "+ Create tariff" with no explanation (CreatableSearchSelect only
+            shows its no-results text when the user typed something), which reads as a bug. */}
+        {adding && optionsLoaded && selectOptions.length === 0 && (
+          <div className="text-sm text-muted-foreground" data-testid="price-no-available-tariffs">
+            {isSales ? ui('priceAllSalesTariffsAssigned') : ui('priceAllPurchaseTariffsAssigned')}
+          </div>
+        )}
+
+        {sectionRows.map(row => {
+          // Show the TARIFF name (M_PriceList.Name), not the version name — they differ
+          // for the onboarding-created lists ("Version Lista de venta (sin impuestos)")
+          // and for legacy data ("Customer A USD" -> "Customer A USD 2014").
+          const name = row['priceList$_identifier'] || row['priceListVersion$_identifier'] || '';
+          const saving = savingId === row.id;
+
+          return (
+            <div key={row.id} className="flex flex-col gap-1 group/row">
+              <div className="flex flex-row items-end gap-5">
+                {/* Name */}
+                <div className="w-[300px] shrink-0">
+                  <input
+                    type="text"
+                    readOnly
+                    value={name}
+                    className="h-10 w-full px-3 text-sm text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] outline-none truncate"
+                  />
+                </div>
+                {/* Unit price */}
+                <div className="w-[201px] shrink-0">
+                  <PriceStepper
+                    value={row.standardPrice}
+                    prefix={currencySymbol}
+                    disabled={saving}
+                    onCommit={v => patchField(row, 'standardPrice', v)}
+                    data-testid="PriceStepper__d76b90" />
+                </div>
+                {/* List price */}
+                <div className="w-[201px] shrink-0">
+                  <PriceStepper
+                    value={row.listPrice}
+                    prefix={currencySymbol}
+                    disabled={saving}
+                    onCommit={v => patchField(row, 'listPrice', v)}
+                    data-testid="PriceStepper__d76b90" />
+                </div>
+                {/* Delete */}
+                <div className="flex items-center h-10 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(row)}
+                    disabled={saving}
+                    title={ui('priceRemove')}
+                    data-testid={`price-delete-${row.id}`}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
+                  >
+                    {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
         <InlineCreateModal
           open={createOpen}
@@ -570,19 +628,6 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           onCancel={() => setCreateOpen(false)}
           onSubmit={submitCreateTariff}
           data-testid="InlineCreateModal__d76b90" />
-
-        {/* Add new tariff link */}
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            data-testid="price-add-tariff"
-            className="flex items-center gap-1 text-sm font-medium text-[#121217] underline w-fit mt-1"
-          >
-            <Plus size={20} className="text-[#828FA3]" data-testid="Plus__d76b90" />
-            {ui('priceAddTariff')}
-          </button>
-        )}
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-07T10:16:03.053Z",
-  "contractChecksum": "45271ccb71ed77cd",
+  "updatedAt": "2026-08-10T13:34:40.080Z",
+  "contractChecksum": "65e9a1ca837093bc",
   "apiPrediction": {
     "specName": "payment-in",
     "baseUrl": "/sws/neo/payment-in",
@@ -481,6 +481,11 @@
             "required": true,
             "defaultValue": "RPAP"
           },
+          "writeoffAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
           "creationDate": {
             "readOnly": true,
             "required": true,
@@ -630,5 +635,5 @@
       "etprReactivatePayment"
     ]
   },
-  "checksum": "93af7e3f562e8f5f"
+  "checksum": "8d182f49bcf2fae5"
 }

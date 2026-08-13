@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import TaxCategoryTable from './TaxCategoryTable';
 import TaxCategoryForm from './TaxCategoryForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -79,6 +81,13 @@ export const api = {
 
 // @sf-generated-start component:TaxCategoryPage
 export default function TaxCategoryPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('138');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="138" />;
+  }
   if (recordId) {
     return (
       <>
@@ -100,7 +109,7 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_TaxCategory", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -118,7 +127,7 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       rowQuickActions={{"hideDeleteButton":true}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

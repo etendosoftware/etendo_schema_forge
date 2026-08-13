@@ -23,8 +23,10 @@ describe('PaymentDetailSidebarBase', () => {
 
   // ── Amount formatting ──────────────────────────────────────────────────────
 
-  it('uses Intl.NumberFormat for amount formatting (not a regex pattern)', () => {
-    assert.match(src, /new Intl\.NumberFormat/);
+  it('delegates amount formatting to the shared formatCurrency() (not a regex pattern, not a hand-rolled Intl.NumberFormat)', () => {
+    assert.match(src, /import\s*\{\s*formatCurrency\s*\}\s*from\s*['"]@\/lib\/formatCurrency\.js['"]/);
+    assert.match(src, /formatCurrency\(/);
+    assert.doesNotMatch(src, /new Intl\.NumberFormat/);
     assert.doesNotMatch(src, /\\B\(\?=/);
   });
 

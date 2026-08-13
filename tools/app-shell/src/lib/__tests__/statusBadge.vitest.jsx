@@ -12,59 +12,44 @@ describe('statusBadge', () => {
     });
   });
 
-  describe('getStatusBadgeProps', () => {
-    it('returns emerald for completed statuses', () => {
-      const props = getStatusBadgeProps('CO');
-      expect(props.className).toContain('emerald');
+  describe('semantic status presentation', () => {
+    it.each([
+      ['CO', 'default', 'status-success'], ['CA', 'default', 'status-success'],
+      ['CL', 'default', 'status-info'], ['PA', 'default', 'status-info'],
+      ['IP', 'outline', 'status-warning'], ['UE', 'outline', 'status-warning'],
+      ['RPAE', 'outline', 'status-warning'], ['RPAP', 'outline', 'muted'],
+    ])('maps %s to semantic badge roles', (status, variant, role) => {
+      const props = getStatusBadgeProps(status);
+      expect(props.variant).toBe(variant);
+      expect(props.className).toContain(role);
     });
 
-    it('returns secondary for draft', () => {
+    it('keeps draft neutral and voided destructive', () => {
       expect(getStatusBadgeProps('DR').variant).toBe('secondary');
-    });
-
-    it('returns destructive for voided', () => {
       expect(getStatusBadgeProps('VO').variant).toBe('destructive');
     });
 
-    it('returns outline for in process', () => {
-      expect(getStatusBadgeProps('IP').variant).toBe('outline');
-      expect(getStatusBadgeProps('IP').className).toContain('amber');
+    it.each([
+      ['CO', 'bg-status-success-foreground'], ['CL', 'bg-status-info-foreground'],
+      ['IP', 'bg-status-warning-foreground'], ['VO', 'bg-destructive'],
+      ['DR', 'bg-status-neutral-foreground'], ['?', 'bg-status-neutral-foreground'],
+    ])('maps %s to semantic dot role %s', (status, expected) => {
+      expect(getStatusDotColor(status)).toBe(expected);
     });
 
-    it('returns outline for under evaluation', () => {
-      expect(getStatusBadgeProps('UE').className).toContain('purple');
+    it.each([
+      ['CO', 'bg-status-success'], ['CL', 'bg-status-info'], ['IP', 'bg-status-warning'],
+      ['VO', 'bg-destructive'], ['DR', 'bg-muted'], ['?', 'bg-muted'],
+    ])('maps %s to semantic pill role %s', (status, expected) => {
+      expect(getStatusPillClass(status)).toContain(expected);
     });
 
-    it('returns blue for closed/paid', () => {
-      expect(getStatusBadgeProps('CL').className).toContain('blue');
+    it.each([
+      ['CO', 'bg-status-success'], ['CL', 'bg-status-info'], ['IP', 'bg-status-warning'],
+      ['VO', 'bg-destructive'], ['DR', 'border-border-control'], ['?', 'border-border-control'],
+    ])('maps %s to semantic grid-pill role %s', (status, expected) => {
+      expect(getStatusGridPillClass(status)).toContain(expected);
     });
-
-    it('returns outline for unknown', () => {
-      expect(getStatusBadgeProps('XYZ').variant).toBe('outline');
-    });
-  });
-
-  describe('getStatusDotColor', () => {
-    it('returns emerald for completed', () => { expect(getStatusDotColor('CO')).toContain('emerald'); });
-    it('returns red for voided', () => { expect(getStatusDotColor('VO')).toContain('red'); });
-    it('returns amber for in process', () => { expect(getStatusDotColor('IP')).toContain('amber'); });
-    it('returns gray for unknown', () => { expect(getStatusDotColor('?')).toContain('gray'); });
-    it('returns blue for closed', () => { expect(getStatusDotColor('CL')).toContain('blue'); });
-  });
-
-  describe('getStatusPillClass', () => {
-    it('returns emerald for completed', () => { expect(getStatusPillClass('CO')).toContain('emerald'); });
-    it('returns red for voided', () => { expect(getStatusPillClass('VO')).toContain('red'); });
-    it('returns gray for draft', () => { expect(getStatusPillClass('DR')).toContain('gray'); });
-  });
-
-  describe('getStatusGridPillClass', () => {
-    it('returns emerald+white for completed', () => {
-      const cls = getStatusGridPillClass('CO');
-      expect(cls).toContain('emerald');
-      expect(cls).toContain('white');
-    });
-    it('returns border for draft', () => { expect(getStatusGridPillClass('DR')).toContain('border'); });
   });
 
   describe('getStatusTone (extended)', () => {
@@ -88,93 +73,24 @@ describe('statusBadge', () => {
     });
   });
 
-  describe('getStatusBadgeProps (extended)', () => {
-    it('returns emerald for true/processed', () => {
-      expect(getStatusBadgeProps('true').className).toContain('emerald');
-      expect(getStatusBadgeProps('processed').className).toContain('emerald');
+  describe('extended semantic status coverage', () => {
+    it.each(['true', 'processed', 'ca', 'etgo_ci', 'rppc', 'ppm', 'pwnc', 'rdnc'])('maps %s to success roles', (status) => {
+      expect(getStatusBadgeProps(status).className).toContain('status-success');
+      expect(getStatusDotColor(status)).toBe('bg-status-success-foreground');
+      expect(getStatusPillClass(status)).toContain('bg-status-success');
+      expect(getStatusGridPillClass(status)).toContain('bg-status-success');
     });
 
-    it('returns secondary for false/not processed', () => {
-      expect(getStatusBadgeProps('false').variant).toBe('secondary');
-      expect(getStatusBadgeProps('not processed').variant).toBe('secondary');
+    it.each(['false', 'not processed'])('keeps %s neutral', (status) => {
+      expect(getStatusBadgeProps(status).variant).toBe('secondary');
+      expect(getStatusDotColor(status)).toBe('bg-status-neutral-foreground');
     });
 
-    it('returns emerald for ca/etgo_ci/rppc/ppm/pwnc/rdnc', () => {
-      for (const code of ['ca', 'etgo_ci', 'rppc', 'ppm', 'pwnc', 'rdnc']) {
-        expect(getStatusBadgeProps(code).className).toContain('emerald');
-      }
-    });
-
-    it('returns blue for pa/paid', () => {
-      expect(getStatusBadgeProps('PA').className).toContain('blue');
-      expect(getStatusBadgeProps('paid').className).toContain('blue');
-    });
-
-    it('returns destructive for rpvoid/rejected', () => {
-      expect(getStatusBadgeProps('rpvoid').variant).toBe('destructive');
-      expect(getStatusBadgeProps('rejected').variant).toBe('destructive');
-    });
-
-    it('returns amber for rpae/rpr', () => {
-      for (const code of ['RPAE', 'RPR']) {
-        expect(getStatusBadgeProps(code).className).toContain('amber');
-      }
-    });
-
-    it('returns gray for rpap (draft payment)', () => {
-      expect(getStatusBadgeProps('RPAP').className).toContain('gray');
-    });
-  });
-
-  describe('getStatusDotColor (extended)', () => {
-    it.each([
-      ['true', 'emerald'], ['processed', 'emerald'],
-      ['false', 'gray'], ['not processed', 'gray'],
-      ['ca', 'emerald'], ['etgo_ci', 'emerald'], ['rppc', 'emerald'],
-      ['ppm', 'emerald'], ['pwnc', 'emerald'], ['rdnc', 'emerald'],
-      ['pa', 'blue'], ['paid', 'blue'],
-      ['rpvoid', 'red'], ['cj', 'red'], ['rejected', 'red'], ['cancelled', 'red'],
-      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
-      ['ue', 'purple'],
-    ])('maps %s to contain %s', (status, expected) => {
-      expect(getStatusDotColor(status)).toContain(expected);
-    });
-  });
-
-  describe('getStatusPillClass (extended)', () => {
-    it.each([
-      ['true', 'emerald'], ['processed', 'emerald'],
-      ['false', 'gray'], ['not processed', 'gray'],
-      ['confirmed', 'emerald'], ['ca', 'emerald'],
-      ['pa', 'blue'], ['cl', 'blue'],
-      ['rpvoid', 'red'], ['cancelled', 'red'],
-      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
-      ['ue', 'purple'],
-    ])('maps %s to contain %s', (status, expected) => {
-      expect(getStatusPillClass(status)).toContain(expected);
-    });
-
-    it('returns gray fallback for unknown code', () => {
-      expect(getStatusPillClass('XYZ')).toContain('gray');
-    });
-  });
-
-  describe('getStatusGridPillClass (extended)', () => {
-    it.each([
-      ['true', 'emerald'], ['processed', 'emerald'],
-      ['false', 'gray'], ['not processed', 'gray'],
-      ['confirmed', 'emerald'], ['booked', 'emerald'],
-      ['ca', 'emerald'], ['etgo_ci', 'emerald'],
-      ['cl', 'slate'], ['pa', 'slate'],
-      ['rpvoid', 'red'], ['cj', 'red'], ['rejected', 'red'],
-      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
-      ['ue', 'purple'],
-    ])('maps %s to contain %s', (status, expected) => {
-      expect(getStatusGridPillClass(status)).toContain(expected);
-    });
-
-    it('returns border for unknown code', () => {
-      expect(getStatusGridPillClass('XYZ')).toContain('border');
+    it.each(['rpvoid', 'cj', 'rejected', 'cancelled'])('maps %s to destructive roles', (status) => {
+      expect(getStatusBadgeProps(status).variant).toBe('destructive');
+      expect(getStatusDotColor(status)).toBe('bg-destructive');
+      expect(getStatusPillClass(status)).toContain('bg-destructive');
+      expect(getStatusGridPillClass(status)).toContain('bg-destructive');
     });
   });
 

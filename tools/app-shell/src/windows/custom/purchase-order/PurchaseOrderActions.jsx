@@ -13,8 +13,18 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
  * PurchaseOrderActions — topbarRight component for the Purchase Order window.
  *
  * Renders action buttons depending on document status:
- *   DR (Draft)   → Save Draft, Confirm (opens modal), Delete icon, Print icon
- *   CO (Confirmed) → Receive Goods, Create Invoice, Email icon, Print icon
+ *   DR (Draft)   → Save Draft, Confirm (opens modal), Delete icon
+ *   CO (Confirmed) → Receive Goods, Create Invoice, Email icon
+ *
+ * ETP-4728 (Hallazgo 2) — the decorative "Print" icon this component used to
+ * render in both states called `onProcess?.('print')`, i.e. `handleProcess`
+ * (useEntity.js) with a bare string instead of a `{name, columnName, params}`
+ * descriptor. `process.columnName ?? process.name` resolved to `undefined`,
+ * POSTing to `.../action/undefined` — a broken no-op, not a real print action.
+ * Removed rather than "fixed" with a fake process descriptor: DetailView's
+ * generic Printer button (now unhidden for this window, see decisions.json)
+ * already opens DocumentPrintDrawer, which has a working Imprimir action.
+ * Keeping a second, redundant print affordance here would just duplicate it.
  */
 export default function PurchaseOrderActions({
   data,
@@ -78,14 +88,14 @@ export default function PurchaseOrderActions({
         toast.custom((t) => (
           <div
             style={{
-              background: '#16a34a',
-              color: '#fff',
+              background: 'var(--status-success-fg)',
+              color: 'hsl(var(--card))',
               borderRadius: 10,
               padding: '14px 18px',
               display: 'flex',
               alignItems: 'center',
               gap: 14,
-              boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+              boxShadow: '0 8px 30px hsl(var(--foreground) / 0.18)',
               minWidth: 380,
             }}
           >
@@ -94,14 +104,14 @@ export default function PurchaseOrderActions({
                 width: 32,
                 height: 32,
                 borderRadius: '50%',
-                background: 'rgba(255,255,255,0.2)',
+                background: 'hsl(var(--card) / 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
@@ -116,13 +126,13 @@ export default function PurchaseOrderActions({
             <button
               onClick={() => { toast.dismiss(t); window.location.href = invoiceUrl; }}
               style={{
-                border: '1px solid rgba(255,255,255,0.4)',
+                border: '1px solid hsl(var(--card) / 0.4)',
                 borderRadius: 6,
                 padding: '6px 14px',
                 fontSize: 13,
                 fontWeight: 500,
-                color: '#fff',
-                background: 'rgba(255,255,255,0.15)',
+                color: 'hsl(var(--card))',
+                background: 'hsl(var(--card) / 0.15)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
@@ -150,9 +160,9 @@ export default function PurchaseOrderActions({
     width: 32,
     height: 32,
     borderRadius: 6,
-    border: '1px solid var(--color-border, #e5e7eb)',
+    border: '1px solid hsl(var(--border-subtle))',
     background: 'transparent',
-    color: 'var(--color-muted-foreground, #6b7280)',
+    color: 'hsl(var(--muted-foreground))',
     cursor: 'pointer',
   };
 
@@ -166,11 +176,11 @@ export default function PurchaseOrderActions({
             style={{
               padding: '5px 14px',
               borderRadius: 6,
-              border: '1px solid var(--color-border, #e5e7eb)',
+              border: '1px solid hsl(var(--border-subtle))',
               background: 'transparent',
               fontSize: 13,
               fontWeight: 500,
-              color: 'var(--color-foreground, #111827)',
+              color: 'hsl(var(--foreground))',
               cursor: 'pointer',
             }}
             onClick={() => { if (typeof api?.save === 'function') { api.save(); } else { onProcess?.('save'); } }}
@@ -184,8 +194,8 @@ export default function PurchaseOrderActions({
               padding: '5px 14px',
               borderRadius: 6,
               border: 'none',
-              background: 'var(--color-primary, #18181b)',
-              color: '#fff',
+              background: 'hsl(var(--primary))',
+              color: 'hsl(var(--card))',
               fontSize: 13,
               fontWeight: 500,
               cursor: 'pointer',
@@ -199,7 +209,7 @@ export default function PurchaseOrderActions({
           <button
             type="button"
             aria-label={ui('delete')}
-            style={{ ...iconBtnStyle, color: '#ef4444', borderColor: '#fecaca' }}
+            style={{ ...iconBtnStyle, color: 'hsl(var(--destructive))', borderColor: 'hsl(var(--destructive) / 0.3)' }}
             onClick={() => onProcess?.('delete')}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -208,20 +218,6 @@ export default function PurchaseOrderActions({
               <path d="M10 11v6" />
               <path d="M14 11v6" />
               <path d="M9 6V4h6v2" />
-            </svg>
-          </button>
-
-          {/* Print icon */}
-          <button
-            type="button"
-            aria-label={ui('print')}
-            style={iconBtnStyle}
-            onClick={() => onProcess?.('print')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
             </svg>
           </button>
 
@@ -248,8 +244,8 @@ export default function PurchaseOrderActions({
               padding: '5px 14px',
               borderRadius: 6,
               border: 'none',
-              background: 'var(--color-primary, #18181b)',
-              color: '#fff',
+              background: 'hsl(var(--primary))',
+              color: 'hsl(var(--card))',
               fontSize: 13,
               fontWeight: 500,
               cursor: 'pointer',
@@ -265,16 +261,16 @@ export default function PurchaseOrderActions({
             style={{
               padding: '5px 14px',
               borderRadius: 6,
-              border: '1px solid var(--color-border-info, #93c5fd)',
-              background: 'var(--color-background-info, #eff6ff)',
-              color: 'var(--color-text-info, #2563eb)',
+              border: '1px solid var(--status-info-border)',
+              background: 'var(--status-info-bg)',
+              color: 'var(--status-info-fg)',
               fontSize: 13,
               fontWeight: 500,
               cursor: processing ? 'not-allowed' : 'pointer',
               opacity: processing ? 0.6 : 1,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-background-info-hover, #dbeafe)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--color-background-info, #eff6ff)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--status-info-bg)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--status-info-bg)'; }}
             onClick={handleCreateInvoice}
           >
             {processing ? ui('poProcessing') : ui('poCreateInvoice')}
@@ -290,20 +286,6 @@ export default function PurchaseOrderActions({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
               <polyline points="22,6 12,13 2,6" />
-            </svg>
-          </button>
-
-          {/* Print icon */}
-          <button
-            type="button"
-            aria-label={ui('print')}
-            style={iconBtnStyle}
-            onClick={() => onProcess?.('print')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
             </svg>
           </button>
         </>
@@ -473,38 +455,38 @@ function ConfirmOrderModal({
           <div style={{ padding: '28px 24px', textAlign: 'center' }}>
             <div style={{
               width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
-              background: '#ECFDF5',
+              background: 'var(--status-success-bg)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
 
             {isConfirmOnly ? (
               <>
-                <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
                   {ui('soOrderConfirmed')}
                 </div>
-                <div style={{ fontSize: 12, color: '#6B7280', marginTop: 8, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 8, lineHeight: 1.5 }}>
                   {ui('poOrderConfirmedDesc', { number: createdDoc.documentNo })}
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
                   {ui('soInvoiceCreated')}
                 </div>
-                <div style={{ fontSize: 12, color: '#6B7280', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {createdDoc.documentNo && (
                     <span>{ui('invoiceDoc', { number: createdDoc.documentNo })}</span>
                   )}
                   {createdDoc.total && (
-                    <><span style={{ color: '#D1D5DB' }}>·</span><span>{createdDoc.total}</span></>
+                    <><span style={{ color: 'hsl(var(--border-control))' }}>·</span><span>{createdDoc.total}</span></>
                   )}
                   <span style={{
                     fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-                    background: '#FEF3C7', color: '#92400E',
+                    background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
                   }}>
                     {ui('statusDraft')}
                   </span>
@@ -514,7 +496,7 @@ function ConfirmOrderModal({
           </div>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            padding: '12px 16px', borderTop: '0.5px solid #E5E7EB',
+            padding: '12px 16px', borderTop: '0.5px solid hsl(var(--border-subtle))',
           }}>
             <button type="button" onClick={handleCloseAfterCreate} style={btnSecondary}>
               {ui('soClose')}
@@ -543,29 +525,29 @@ function ConfirmOrderModal({
             style={{
               position: 'absolute', top: 10, right: 12,
               fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))',
             }}
           >
             &times;
           </button>
-          <div style={{ fontSize: 10, color: '#9CA3AF', letterSpacing: '0.04em', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: 'hsl(var(--text-disabled))', letterSpacing: '0.04em', marginBottom: 8 }}>
             {ui('poConfirmTitle', { number: documentNo })}
           </div>
           <div style={{
-            background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10,
+            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {bpName}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
               {fmtNum(grandTotal)}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5' }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('soLines', { count: lineCount }) : '...'}
-              {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-fg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
-              <span style={{ fontWeight: 500, color: '#042C53' }}>
+              <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
                 {fmtNum(totalLines)}
               </span>
             </div>
@@ -573,8 +555,8 @@ function ConfirmOrderModal({
         </div>
 
         {/* Options */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid #E5E7EB' }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soWhatToDo')}
           </div>
           <OptionCard
@@ -595,7 +577,7 @@ function ConfirmOrderModal({
 
         {/* Error */}
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA' }}>
+          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', borderTop: '0.5px solid hsl(var(--destructive) / 0.3)' }}>
             {error}
           </div>
         )}
@@ -643,47 +625,47 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle }) {
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        border: selected ? '2px solid #3B82F6' : '0.5px solid #E5E7EB',
+        border: selected ? '2px solid var(--status-info-fg)' : '0.5px solid hsl(var(--border-subtle))',
         borderRadius: 8, padding: selected ? '11px 13px' : '12px 14px',
         cursor: 'pointer',
-        background: selected ? '#EFF6FF' : '#fff',
+        background: selected ? 'var(--status-info-bg)' : 'hsl(var(--card))',
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >
       <div style={{
         width: 32, height: 32, borderRadius: 6, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: selected ? '#fff' : '#F3F4F6',
-        color: selected ? '#2563EB' : '#6B7280',
+        background: selected ? 'hsl(var(--card))' : 'hsl(var(--muted))',
+        color: selected ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))',
       }}>
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: selected ? '#2563EB' : '#111827' }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: selected ? 'var(--status-info-fg)' : 'hsl(var(--foreground))' }}>
             {title}
           </span>
           {badge && (
             <span style={{
               fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-              background: '#ECFDF5', color: '#059669',
+              background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
               letterSpacing: '0.3px',
             }}>
               {badge}
             </span>
           )}
         </div>
-        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
           {subtitle}
         </div>
       </div>
       <div style={{
         width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-        border: selected ? 'none' : '1.5px solid #D1D5DB',
-        background: selected ? '#3B82F6' : '#fff',
+        border: selected ? 'none' : '1.5px solid hsl(var(--border-control))',
+        background: selected ? 'var(--status-info-fg)' : 'hsl(var(--card))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+        {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))' }} />}
       </div>
     </div>
   );
@@ -694,21 +676,21 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle }) {
 const overlayStyle = {
   position: 'fixed', inset: 0, zIndex: 1000,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.3)',
+  background: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-control))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: '#185FA5', color: '#fff', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

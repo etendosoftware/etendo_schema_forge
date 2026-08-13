@@ -245,22 +245,17 @@
           "windowId": "6F8F913FA60F4CBD93DC1D3AA696E76E"
         },
         {
-          "name": "financial-accounts",
+          "name": "financial-account",
           "label": "Accounts",
           "favname": "Accounts",
-          "path": "finance/accounts"
-        },
-        {
-          "name": "financial-account",
-          "label": "Account Detail",
-          "favname": "Account Detail",
-          "hidden": true
+          "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {
           "name": "match-rule",
           "label": "Match Rule",
           "favname": "Match Rule",
-          "hidden": true
+          "hidden": true,
+          "windowId": "24963D64E83B4543A7F6BD248CF944EE"
         },
         {
           "name": "chart-of-accounts",
@@ -371,6 +366,12 @@
       "section": "System",
       "items": [
         {
+          "name": "organization",
+          "label": "Organization",
+          "favname": "Organization",
+          "windowId": "110"
+        },
+        {
           "name": "price-list",
           "label": "Price List",
           "favname": "Price List",
@@ -405,6 +406,12 @@
           "label": "User",
           "favname": "User",
           "windowId": "108"
+        },
+        {
+          "name": "roles",
+          "label": "Roles",
+          "favname": "Roles",
+          "capability": "isAdminOrClientAdmin"
         },
         {
           "name": "smart-scan",

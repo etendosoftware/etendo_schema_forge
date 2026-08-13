@@ -34,10 +34,10 @@ function formatValue(value, format, currencyLabel, locale) {
 }
 
 const KPI_SCHEMES = {
-  revenueThisMonth:  { bg: 'bg-emerald-50 dark:bg-emerald-950', icon: 'text-emerald-600' },
-  expensesThisMonth: { bg: 'bg-red-50 dark:bg-red-950',         icon: 'text-red-500'     },
-  netProfit:         { bg: 'bg-blue-50 dark:bg-blue-950',        icon: 'text-blue-600'    },
-  pendingInvoices:   { bg: 'bg-amber-50 dark:bg-amber-950',      icon: 'text-amber-600'   },
+  revenueThisMonth:  { bg: 'bg-status-success dark:bg-status-success', icon: 'text-status-success-foreground' },
+  expensesThisMonth: { bg: 'bg-destructive dark:bg-destructive',         icon: 'text-destructive-foreground'     },
+  netProfit:         { bg: 'bg-status-info dark:bg-status-info',        icon: 'text-status-info-foreground'    },
+  pendingInvoices:   { bg: 'bg-status-warning dark:bg-status-warning',      icon: 'text-status-warning-foreground'   },
 };
 const DEFAULT_SCHEME = { bg: 'bg-primary/10', icon: 'text-primary' };
 
@@ -75,7 +75,7 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
           <div
             className={cn(
               'flex items-center gap-1 mt-2 text-xs font-medium',
-              isPositive ? 'text-emerald-600' : 'text-red-600'
+              isPositive ? 'text-status-success-foreground' : 'text-destructive'
             )}
           >
             {isPositive ? (

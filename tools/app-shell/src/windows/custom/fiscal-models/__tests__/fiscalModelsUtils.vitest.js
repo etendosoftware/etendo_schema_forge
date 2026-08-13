@@ -11,6 +11,7 @@ import {
   deriveBoxes303,
   computeUpcomingDeadlines,
   generate303File,
+  applyIdentParams,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -146,28 +147,31 @@ describe('formatAmount', () => {
     expect(formatAmount(undefined)).toBe('—');
   });
 
-  it('formats a positive number with a EUR currency indicator', () => {
+  it('formats a positive number with a EUR currency indicator and thousands grouping', () => {
+    // 1000-9999 is the exact range where Intl silently drops the grouping
+    // separator when `useGrouping` isn't explicit — must show "1.000", not "1000".
     const result = formatAmount(1000);
-    expect(result).toMatch(/€|EUR/);
-    expect(result).toMatch(/1[.,\s]?000/); // thousands separator varies by ICU build
+    expect(result).toMatch(/^1\.000,00\s€$/);
   });
 
   it('formats zero', () => {
     const result = formatAmount(0);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^0,00\s€$/);
   });
 
   it('formats a negative number containing a minus sign', () => {
     const result = formatAmount(-100);
-    expect(result).toMatch(/-/);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^-100,00\s€$/);
   });
 
-  it('formats a decimal amount', () => {
+  it('formats a decimal amount in the buggy 1000-9999 range with grouping', () => {
     const result = formatAmount(1234.56);
-    // es-ES uses comma as decimal separator; thousands separator varies by ICU build
-    expect(result).toMatch(/1[.,\s]?234[,.]56/);
-    expect(result).toMatch(/€|EUR/);
+    expect(result).toMatch(/^1\.234,56\s€$/);
+  });
+
+  it('keeps grouping for amounts at/above 10000 (already correct even pre-fix)', () => {
+    const result = formatAmount(12345.67);
+    expect(result).toMatch(/^12\.345,67\s€$/);
   });
 });
 
@@ -1013,7 +1017,8 @@ describe('generate303File', () => {
 
   it('builds the correct URL with URLSearchParams', async () => {
     mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
+    // tipo=I no longer requires IBAN (EDID065 fix) — identChecks is optional here,
+    // kept to also cover the "extra IBAN param" pass-through path.
     await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     const calledUrl = vi.mocked(fetch).mock.calls[0][0];
     expect(calledUrl).toContain('/fiscal303/generate?');
@@ -1036,14 +1041,12 @@ describe('generate303File', () => {
 
   it('sends Authorization header', async () => {
     mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
     await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     expect(vi.mocked(fetch).mock.calls[0][1].headers.Authorization).toBe(`Bearer ${TOKEN}`);
   });
 
   it('returns { ok: true } and triggers download on success', async () => {
     const { anchor } = mockFetchOk();
-    // tipo=I requires IBAN — pass via identChecks (form state)
     const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     expect(result.ok).toBe(true);
     expect(anchor.download).toBe('303_T2_2026.txt');
@@ -1064,7 +1067,94 @@ describe('generate303File', () => {
   });
 
   it('returns { ok: false, error: iban_required } when tipo needs IBAN and none provided', async () => {
-    const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
+    // extranjero) require IBAN per AEAT error EDID065 — tipo=I no longer does.
+    const result = await generate303File({ ...DECL, result: { kind: 'D' } }, { token: TOKEN, apiBaseUrl: API_BASE });
     expect(result).toEqual({ ok: false, error: 'iban_required' });
+  });
+
+  it('does not require IBAN for tipo=I, G or V (EDID065 fix — no longer in IBAN_REQUIRED_TIPOS)', async () => {
+    for (const kind of ['I', 'G', 'V']) {
+      mockFetchOk();
+      const result = await generate303File({ ...DECL, result: { kind } }, { token: TOKEN, apiBaseUrl: API_BASE });
+      expect(result.ok).toBe(true);
+    }
+  });
+
+  it('returns { ok: false, error: iban_required } for tipo=I when rectificativa is checked and IBAN is empty (ETP-4456 follow-up fix)', async () => {
+    // Mirrors AeatSubmitFlow's client-side pre-flight guard: tipo I alone is
+    // not IBAN-required, but a rectificativa filed under tipo I still shows
+    // the bank section, so the download flow must gate on it too.
+    vi.stubGlobal('fetch', vi.fn());
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+    });
+    expect(result).toEqual({ ok: false, error: 'iban_required' });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('still proceeds to fetch for tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {
+    mockFetchOk();
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '' },
+    });
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── applyIdentParams — tipo-independence (QA regression coverage, ETP-4456) ───
+//
+// applyIdentParams (and IDENT_PARAM_MAP) forwards every identChecks.bank_* /
+// baja_domiciliacion field whenever it is truthy, with NO check against the
+// current tipo_declaracion. The EDID065 fix narrows the *required* + *visible*
+// set to U/D/X, and AEAT303Report2014 now nulls the IBAN value server-side for
+// any other tipo (defense in depth) — but these tests pin down that the other
+// bank_* params (SEPA, BIC, address, city, country) are NOT similarly narrowed
+// on the frontend. If identChecks retains stale bank_* values after the user
+// switches tipo_declaracion away from U/D/X (nothing currently clears them —
+// see FmModel303Page.jsx handleIdentChange, which only clears box 108 on
+// motivo_rectificacion changes), these stale params are still sent to the
+// backend regardless of the now-selected tipo. Whether the backend safely
+// discards them for a non-U/D/X tipo depends on the NEO Headless bridge
+// (com.etendoerp.go, outside this repo) correctly deriving the AEAT303Report
+// DECLARATION_RETURN/DECLARATION_RETURN_TAX/DECLARATION_RETURN_FOREIGN flags
+// from the current tipo — not verified by this test suite. Flagged in QA
+// report as a follow-up item, not a regression of the bug this PR fixes.
+describe('applyIdentParams — tipo-independent forwarding (documents current behavior)', () => {
+  it('forwards IBAN, SEPA, BIC, bank address/city/country and Cancel_Modify_Debit for tipo=I (Ingreso) when present in identChecks, even though I is not an IBAN-required tipo', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, {
+      tipo_declaracion: 'I',
+      bank_iban: 'ES76 2077 0024 0031 0257 5766',
+      bank_swift_bic: 'BBVAESMMXXX',
+      bank_nombre: 'BBVA',
+      bank_direccion: 'Calle Falsa 123',
+      bank_ciudad: 'Madrid',
+      bank_pais: 'ES',
+      bank_sepa: '1',
+      baja_domiciliacion: true,
+    });
+    // None of these are gated on tipo_declaracion by applyIdentParams itself —
+    // all are forwarded as-is. IBAN is known-safe (server nulls it downstream
+    // for non-U/D/X); the rest are not covered by this PR's fix.
+    expect(params.get('IBAN')).toBe('ES7620770024003102575766');
+    expect(params.get('SEPA')).toBe('1');
+    expect(params.get('BIC')).toBe('BBVAESMMXXX');
+    expect(params.get('BankAddress')).toBe('Calle Falsa 123');
+    expect(params.get('BankCity')).toBe('Madrid');
+    expect(params.get('CountryIso')).toBe('ES');
+    expect(params.get('Cancel_Modify_Debit')).toBe('true');
+  });
+
+  it('forwards the same bank_* params for tipo=G, C and N too — applyIdentParams has no tipo awareness at all', () => {
+    for (const tipo of ['G', 'C', 'N']) {
+      const params = new URLSearchParams();
+      applyIdentParams(params, { tipo_declaracion: tipo, bank_iban: 'ES7620770024003102575766', bank_sepa: '1' });
+      expect(params.get('IBAN')).toBe('ES7620770024003102575766');
+      expect(params.get('SEPA')).toBe('1');
+    }
   });
 });

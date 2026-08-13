@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * ETP-4300 — Build-time label slicer (Vite plugin).
@@ -29,10 +29,11 @@ const SLICER_PATHS = {
   artifactsDir: join(APP_ROOT, 'artifacts'),
 };
 
-/** Where to import the slicer from: sibling core source under LOCAL_CORE, else the published package. */
+/** Where to import the slicer from: configured core source under LOCAL_CORE, else the published package. */
 function slicerSpecifier() {
   if (process.env.LOCAL_CORE === '1') {
-    return new URL('../../../../schema_forge_core/cli/src/slice-labels.js', import.meta.url).href;
+    const coreRepo = process.env.SCHEMA_FORGE_CORE || join(APP_ROOT, '..', 'schema_forge_core');
+    return pathToFileURL(join(coreRepo, 'cli', 'src', 'slice-labels.js')).href;
   }
   return '@etendosoftware/schema-forge-cli/slice-labels';
 }

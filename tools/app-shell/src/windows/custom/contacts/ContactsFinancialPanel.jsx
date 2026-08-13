@@ -26,23 +26,23 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   return (
     <div className="flex flex-col gap-2 w-[236px]">
       <div className="flex items-center gap-1 h-6">
-        <span className="text-sm font-medium text-[#121217]">{ui('creditLimitField')}</span>
-        <span className="text-sm text-[#F53D6B]">*</span>
+        <span className="text-sm font-medium text-text-primary">{ui('creditLimitField')}</span>
+        <span className="text-sm text-destructive">*</span>
       </div>
-      <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-white hover:bg-[#F5F7F9] focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
+      <div className="flex flex-row items-center h-10 border border-border-control rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-card hover:bg-muted focus-within:ring-1 focus-within:ring-focus-ring transition-colors">
         <input
           type="number"
           value={num}
           readOnly={readOnly || saving}
           onChange={e => !readOnly && !saving && onChange(e.target.value)}
           onBlur={onBlur}
-          className="flex-1 px-3 text-sm text-[#121217] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="flex-1 px-3 text-sm text-text-primary bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <button
           type="button"
           onClick={() => step(-1)}
           disabled={readOnly || saving}
-          className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+          className="w-10 h-[38px] flex items-center justify-center border-l border-border-structural text-icon-secondary hover:bg-muted disabled:bg-muted disabled:text-text-disabled shrink-0"
         >
           <Minus size={16} data-testid="Minus__d55d36" />
         </button>
@@ -50,7 +50,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
           type="button"
           onClick={() => step(1)}
           disabled={readOnly || saving}
-          className="w-10 h-[38px] flex items-center justify-center border-l border-[#E8EAEF] text-[#828FA3] hover:bg-gray-50 disabled:opacity-40 shrink-0"
+          className="w-10 h-[38px] flex items-center justify-center border-l border-border-structural text-icon-secondary hover:bg-muted disabled:bg-muted disabled:text-text-disabled shrink-0"
         >
           <Plus size={16} data-testid="Plus__d55d36" />
         </button>
@@ -137,8 +137,8 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       {/* Crédito — layout fila: texto izquierda + stepper derecha */}
       <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
         <div className="flex flex-col gap-1 w-[148px] shrink-0">
-          <div className="text-sm font-semibold text-[#121217]">{ui('creditTax')}</div>
-          <div className="text-xs text-[#282833]">{ui('creditTaxDescription')}</div>
+          <div className="text-sm font-semibold text-text-primary">{ui('creditTax')}</div>
+          <div className="text-xs text-text-secondary">{ui('creditTaxDescription')}</div>
         </div>
         <div className="flex-1">
           <CreditLimitStepper
@@ -150,12 +150,12 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
             data-testid="CreditLimitStepper__d55d36" />
         </div>
       </div>
-      <hr className="border-t border-[#E8EAEF] mx-5" />
+      <hr className="border-t border-border mx-5" />
       {/* Preferencias de facturación — layout fila: texto izquierda + contenido derecha */}
       <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
         <div className="flex flex-col gap-1 w-[148px] shrink-0">
-          <div className="text-sm font-semibold text-[#121217]">{ui('billingPreferences')}</div>
-          <div className="text-xs text-[#282833]">{ui('billingPreferencesDesc')}</div>
+          <div className="text-sm font-semibold text-text-primary">{ui('billingPreferences')}</div>
+          <div className="text-xs text-text-secondary">{ui('billingPreferencesDesc')}</div>
         </div>
         <div className="flex-1">
           <BillingPreferencesForm

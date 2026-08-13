@@ -193,6 +193,15 @@ describe('ManualStatementModal', () => {
     expect(createStatement).not.toHaveBeenCalled();
   });
 
+  it('groups thousands in the summary widget totals (1000-9999 range silently drops the separator without explicit useGrouping)', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await fillFirstLine(user, { ref: 'REF-1', in: '3500,00' });
+
+    expect(screen.getByText('+3.500,00 €')).toBeInTheDocument();
+    expect(screen.queryByText('+3500,00 €')).toBeNull();
+  });
+
   it('posts the header + non-blank lines and reports success', async () => {
     const user = userEvent.setup();
     const { props } = renderModal();

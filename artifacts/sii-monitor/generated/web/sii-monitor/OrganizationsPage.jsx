@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import OrganizationsTable from './OrganizationsTable';
 import OrganizationsForm from './OrganizationsForm';
 import IssuedInvoicesTable from './IssuedInvoicesTable';
@@ -84,10 +86,10 @@ export const api = {
     "organizations": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/organizations",
       "detailUrl": "/sws/neo/sii-monitor/organizations/{id}",
       "supportedFilters": []
@@ -95,10 +97,10 @@ export const api = {
     "issuedInvoices": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices/{id}",
       "supportedFilters": []
@@ -106,10 +108,10 @@ export const api = {
     "issuedInvoicesSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData/{id}",
       "supportedFilters": []
@@ -117,10 +119,10 @@ export const api = {
     "receivedInvoices": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices/{id}",
       "supportedFilters": []
@@ -128,10 +130,10 @@ export const api = {
     "receivedInvoicesSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData/{id}",
       "supportedFilters": []
@@ -139,10 +141,10 @@ export const api = {
     "cashCriterionPayments": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/cashCriterionPayments",
       "detailUrl": "/sws/neo/sii-monitor/cashCriterionPayments/{id}",
       "supportedFilters": []
@@ -150,10 +152,10 @@ export const api = {
     "paymentsSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/paymentsSiiData",
       "detailUrl": "/sws/neo/sii-monitor/paymentsSiiData/{id}",
       "supportedFilters": []
@@ -161,10 +163,10 @@ export const api = {
     "issuedInvoices(previousPeriod)": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}",
       "supportedFilters": []
@@ -172,10 +174,10 @@ export const api = {
     "issuedInvoices(previousPeriod)SiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/{id}",
       "supportedFilters": []
@@ -183,10 +185,10 @@ export const api = {
     "receivedInvoices(previousPeriod)": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}",
       "supportedFilters": []
@@ -194,10 +196,10 @@ export const api = {
     "receivedInvoices(previousPeriod)SiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/{id}",
       "supportedFilters": []
@@ -1205,12 +1207,20 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "monitor"
+    "category": "monitor",
+    "readOnly": true
   }
 };
 
 // @sf-generated-start component:OrganizationsPage
 export default function OrganizationsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="FEF76C3E0F104F06A89AAD15A4A4A35C" />;
+  }
   if (recordId) {
     return (
       <>
@@ -1234,7 +1244,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -1248,8 +1258,9 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

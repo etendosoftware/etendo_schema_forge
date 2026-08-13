@@ -97,14 +97,14 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-muted-foreground">
+      <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
       </div>
     );
   }
   if (attachments.length === 0) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 text-muted-foreground">
+      <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
         <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
       </div>
@@ -117,7 +117,7 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
         <span className="truncate">{attachments[0].name}</span>
       </div>
       {pdfUrl && (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed border-border-control bg-card">
           <Suspense
             fallback={(
               <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -165,7 +165,7 @@ export default function OcrSidePanel(props) {
                 onClick={() => setActiveTab(key)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   active
-                    ? 'border border-gray-200 bg-white text-foreground shadow-sm'
+                    ? 'border border-border-subtle bg-card text-foreground shadow-sm'
                     : 'border border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -176,7 +176,7 @@ export default function OcrSidePanel(props) {
         </div>
         <button
           type="button"
-          className="rounded-md border border-gray-200 bg-white p-1.5 text-muted-foreground hover:text-foreground"
+          className="rounded-md border border-border-subtle bg-card p-1.5 text-muted-foreground hover:text-foreground"
           aria-label={ui('ocrSidePanelMore')}
         >
           <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c851a1" />

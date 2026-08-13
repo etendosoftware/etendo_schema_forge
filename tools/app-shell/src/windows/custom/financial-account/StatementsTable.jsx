@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { ChevronDown, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -31,12 +32,12 @@ const STATEMENT_CELL_RENDERERS = {
   documentNo: {
     width: '100px',
     labelKey: 'financeAccountStatementsColDocumentNo',
-    render: (s) => <span className="whitespace-nowrap font-semibold text-[#121217]">{s.documentNo || '—'}</span>,
+    render: (s) => <span className="whitespace-nowrap font-semibold text-[hsl(var(--foreground))]">{s.documentNo || '—'}</span>,
   },
   name: {
     width: 'minmax(0,1.6fr)',
     labelKey: 'financeAccountStatementsColName',
-    render: (s, ctx) => <span className="truncate text-[#121217]">{ctx.displayName(s)}</span>,
+    render: (s, ctx) => <span className="truncate text-[hsl(var(--foreground))]">{ctx.displayName(s)}</span>,
   },
   fileName: {
     width: 'minmax(0,1fr)',
@@ -44,13 +45,13 @@ const STATEMENT_CELL_RENDERERS = {
     render: (s) => (
       s.fileName ? (
         <span
-          className="inline-flex max-w-full items-center truncate rounded-lg bg-[#F5F7F9] px-2 py-1 text-xs text-[#3F3F50]"
+          className="inline-flex max-w-full items-center truncate rounded-lg bg-[hsl(var(--muted))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]"
           title={s.fileName}
         >
           {s.fileName}
         </span>
       ) : (
-        <span className="text-[#A8AAB8]">—</span>
+        <span className="text-[hsl(var(--text-disabled))]">—</span>
       )
     ),
   },
@@ -58,7 +59,7 @@ const STATEMENT_CELL_RENDERERS = {
     width: 'minmax(0,1fr)',
     labelKey: 'financeAccountStatementsColNotes',
     render: (s) => (
-      <span className={cn('truncate', s.notes ? 'text-[#121217]' : 'text-[#A8AAB8]')} title={s.notes || ''}>
+      <span className={cn('truncate', s.notes ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={s.notes || ''}>
         {s.notes || '—'}
       </span>
     ),
@@ -66,12 +67,12 @@ const STATEMENT_CELL_RENDERERS = {
   importdate: {
     width: '116px',
     labelKey: 'financeAccountStatementsColImportDate',
-    render: (s, ctx) => <span className="whitespace-nowrap text-[#121217]">{formatDate(s.importDate, ctx.bcpLocale)}</span>,
+    render: (s, ctx) => <span className="whitespace-nowrap text-[hsl(var(--foreground))]">{formatDate(s.importDate, ctx.bcpLocale)}</span>,
   },
   transactionDate: {
     width: '116px',
     labelKey: 'financeAccountStatementsColTransactionDate',
-    render: (s, ctx) => <span className="whitespace-nowrap text-[#121217]">{formatDate(s.transactionDate, ctx.bcpLocale)}</span>,
+    render: (s, ctx) => <span className="whitespace-nowrap text-[hsl(var(--foreground))]">{formatDate(s.transactionDate, ctx.bcpLocale)}</span>,
   },
 };
 
@@ -104,16 +105,9 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
+function formatMoney(amount, currency) {
   if (amount == null) return '—';
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+  return formatCurrency(currency, amount);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,13 +178,13 @@ export function StatementsTable({
 
   return (
     <div role="table" className="w-full">
-      {/* Header — same style as MovementsTable headers (xs / semibold / #121217). */}
+      {/* Header — same style as MovementsTable headers (xs / semibold / hsl(var(--foreground))). */}
       <div
         role="row"
         style={GRID_STYLE}
         className={cn(
           GRID_CLASS,
-          'h-10 items-center border-b border-[#E8EAEF] px-4 text-xs font-semibold leading-4 text-[#121217]',
+          'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-4 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
         )}
       >
         <span aria-hidden="true" />
@@ -231,7 +225,7 @@ function renderBody({
 }) {
   if (loading) {
     return [1, 2, 3, 4, 5].map((n) => (
-      <div key={n} role="row" style={GRID_STYLE} className={cn(GRID_CLASS, 'border-b border-[#F0F2F5] px-4 py-3')}>
+      <div key={n} role="row" style={GRID_STYLE} className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}>
         {SKELETON_CELL_KEYS.map((k) => (
           <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__3acaeb" />
         ))}
@@ -241,13 +235,13 @@ function renderBody({
   if (statements.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F5F7F9]">
-          <FileText className="h-5 w-5 text-[#828FA3]" data-testid="FileText__3acaeb" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
+          <FileText className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="FileText__3acaeb" />
         </div>
-        <p className="text-sm font-medium text-[#121217]">
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">
           {ui('financeAccountStatementsEmpty')}
         </p>
-        <p className="max-w-sm text-sm text-[#6C6C89]">
+        <p className="max-w-sm text-sm text-[hsl(var(--muted-foreground))]">
           {ui('financeAccountStatementsEmptyHint')}
         </p>
       </div>
@@ -289,7 +283,7 @@ function RowActions({ statement: s, actions, ui }) {
           aria-label={ui('financeAccountStatementsRowEdit')}
           title={ui('financeAccountStatementsRowEdit')}
           onClick={(e) => { e.stopPropagation(); actions.onEdit(s); }}
-          className={cn(iconBtn, 'text-[#828FA3] hover:bg-[#E8EAEF] hover:text-[#121217]')}
+          className={cn(iconBtn, 'text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] hover:text-[hsl(var(--foreground))]')}
         >
           <Pencil className="h-4 w-4" data-testid="Pencil__3acaeb" />
         </button>
@@ -306,7 +300,7 @@ function RowActions({ statement: s, actions, ui }) {
           aria-label={ui('financeAccountStatementsRowDelete')}
           title={ui('financeAccountStatementsRowDelete')}
           onClick={(e) => { e.stopPropagation(); actions.onDelete(s); }}
-          className={cn(iconBtn, 'text-[#D50B3E] hover:bg-[#FBE9EE] hover:text-[#A3082F]')}
+          className={cn(iconBtn, 'text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]')}
         >
           <Trash2 className="h-4 w-4" data-testid="Trash2__3acaeb" />
         </button>
@@ -338,8 +332,8 @@ function StatementRow({
         style={GRID_STYLE}
         className={cn(
           GRID_CLASS,
-          'group relative cursor-pointer items-center bg-white px-4 py-3 text-sm transition-shadow',
-          open ? 'bg-white' : 'hover:z-10 hover:bg-white hover:shadow-lg',
+          'group relative cursor-pointer items-center bg-card px-4 py-3 text-sm transition-shadow',
+          open ? 'bg-card' : 'hover:z-10 hover:bg-card hover:shadow-lg',
         )}
         onClick={onToggle}
       >
@@ -348,7 +342,7 @@ function StatementRow({
           aria-label={open ? ui('financeAccountStatementsCollapseAria') : ui('financeAccountStatementsExpandAria')}
           aria-expanded={open}
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#D1D4DB] bg-white text-[#6C6C89] transition-transform hover:bg-[#F5F7F9] hover:text-[#121217]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
           style={{ transform: open ? 'rotate(180deg)' : undefined }}
         >
           <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3acaeb" />
@@ -366,16 +360,16 @@ function StatementRow({
             <Fragment key={col.name} data-testid="Fragment__3acaeb">
               {renderer
                 ? renderer.render(s, cellCtx)
-                : <span className="truncate text-[#121217]">{s[col.name] ?? '—'}</span>}
+                : <span className="truncate text-[hsl(var(--foreground))]">{s[col.name] ?? '—'}</span>}
             </Fragment>
           );
         })}
-        <span className="text-right tabular-nums text-[#121217]">{s.lineCount ?? 0}</span>
-        <span className={cn('text-right tabular-nums font-semibold', Number(s.totalOut) > 0 ? 'text-[#D50B3E]' : 'text-[#A8AAB8]')}>
-          {Number(s.totalOut) > 0 ? `−${formatMoney(s.totalOut, currency, bcpLocale)}` : '—'}
+        <span className="text-right tabular-nums text-[hsl(var(--foreground))]">{s.lineCount ?? 0}</span>
+        <span className={cn('text-right tabular-nums font-semibold', Number(s.totalOut) > 0 ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--text-disabled))]')}>
+          {Number(s.totalOut) > 0 ? `−${formatMoney(s.totalOut, currency)}` : '—'}
         </span>
-        <span className={cn('text-right tabular-nums font-semibold', Number(s.totalIn) > 0 ? 'text-[#17663A]' : 'text-[#A8AAB8]')}>
-          {Number(s.totalIn) > 0 ? `+${formatMoney(s.totalIn, currency, bcpLocale)}` : '—'}
+        <span className={cn('text-right tabular-nums font-semibold', Number(s.totalIn) > 0 ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--text-disabled))]')}>
+          {Number(s.totalIn) > 0 ? `+${formatMoney(s.totalIn, currency)}` : '—'}
         </span>
         <span>
           <StatusPill
@@ -388,7 +382,7 @@ function StatementRow({
         <span aria-hidden="true" />
         {actions ? (
           <div
-            className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-white px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+            className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-card px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <RowActions statement={s} actions={actions} ui={ui} data-testid="RowActions__3acaeb" />
@@ -396,14 +390,14 @@ function StatementRow({
         ) : null}
       </div>
       {open ? (
-        <div className="relative z-10 border-b border-[#E8EAEF] bg-[#F5F7F9] px-11 pb-8 pt-3 shadow-[0px_10px_15px_-3px_rgba(18,18,23,0.08),0px_4px_6px_-2px_rgba(18,18,23,0.05)]">
+        <div className="relative z-10 border-b border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-11 pb-8 pt-3 shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]">
           <StatementLinesInline
             statementId={s.id}
             currency={currency}
             data-testid="StatementLinesInline__3acaeb" />
         </div>
       ) : (
-        <div className="border-b border-[#F0F2F5]" aria-hidden="true" />
+        <div className="border-b border-[hsl(var(--border-subtle))]" aria-hidden="true" />
       )}
     </>
   );
