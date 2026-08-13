@@ -259,6 +259,64 @@ state is detected the next time it appears instead of after 22 rows accumulate. 
 rule is implemented in `schema_forge_core` and documented in
 `docs/pipeline-validator-reference.md`, which is canonical.
 
+#### 5.3.1 The guard as built — **F23, 2026-08-13**
+
+Built as validator rule **F23**, and building it changed three things about the finding.
+
+**It reads the exported XML, not the DB.** The validator runs without DB access by design, so the
+only DB-free view of pushed state is `com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_*.xml`.
+That makes F23 the one rule reading state from outside the repo, and the one rule whose verdict can
+move with no commit at all. It also makes it **inert — no violation, no `skipped` entry — without a
+runtime-module checkout**: a per-artifact skip would print 50+ identical lines for one repo-global
+reason, and the cost of that choice is that a silent F23 and a clean F23 look the same. Verified
+against the live DB the same day: XML and DB agree exactly (0 / 409 / 6468), so the XML is a faithful
+proxy here.
+
+**The invariant splits into two classes, and only one of them can block.** §2.1's query carries
+`WHERE f.visibility IS NOT NULL`, so the 22 rows it found are all *contradictions* — a curated value
+projecting to a pair other than the one stored. The larger population is the opposite shape:
+`visibility` never written at all while the flags say included. So F23 **BLOCKs** contradictions
+(only a writer bug or a hand-edit reaches that state) and **WARNs** the unwritten rows (the runtime is
+unaffected; `neo_schema` just reports no visibility, so an agent cannot tell `readOnly` from
+`system`). Had it been one BLOCKing rule it would have gone red on 409 rows on day one and been
+skipped within a week.
+
+An absent `visibility` on a *closed* row is deliberately **not** reported: `N`/`N` **is**
+`mapVisibility(null)`. The ETP-4793 `exclude: true` fix produces exactly those rows, and there is a
+test pinning that so a future tightening cannot quietly make 398 correct rows look like debt.
+
+**Measured 2026-08-13, DB and XML agreeing:** **0 contradictions** — §2.1's query now returns 0 rows,
+so the 22 are gone — and **409 unwritten rows across 6,468 active**, in only **6 specs**
+(`return-to-vendor` 219, `return-from-customer` 121, `purchase-invoice` 31, `sales-order` 30,
+`bp-location` 6, `warehouse` 2).
+
+Two things that concentration exposed, neither of which was visible before the rule existed:
+
+1. **340 of the 409 rows — 83 % — are inside `aggregate` artifacts,** not windows. F23 was first
+   registered for `kind === 'window'` only, which is the obvious reading of "a rule about pushed
+   fields", and it reported 69 of 409. An aggregate pushes its own `ETGO_SF_SPEC` and its field rows
+   drift identically. F23 is now registered for `window`, `aggregate` and `aggregate-section`, and
+   reports 409/409. Worth generalising: any future rule about *pushed* state must be registered for
+   every artifact kind that pushes, and "it fired, so it works" is not the check — "it fired on the
+   population I measured independently" is.
+2. **105 field rows carry no `AD_COLUMN_ID`, no `JAVA_QUALIFIER` and no `SEQNO`** — only the two
+   flags — split `sales-order` 56 / `purchase-invoice` 49, with **61 of them at `ISINCLUDED='Y'`**.
+   A field row pointing at no AD column cannot resolve to anything at runtime. This is a *different*
+   defect from the visibility skew and is **not** registered here; it is noted so it is not lost, and
+   whether it earns a registry item is the user's call (§2.2 — a run does not widen the quota).
+   F23 labels these rows by primary key rather than emitting `entity.undefined`.
+
+**One copy of the projection, not three.** `mapVisibility` existed twice — exported from
+`push-to-neo.js`, inlined into `lib/neo-delta.js` to dodge a circular import — and F23 would have
+been a third. A validator that re-implements the projection cannot detect a drift *in* the
+projection, which is the whole point of the rule. It now lives in `cli/src/lib/field-visibility.js`
+alongside `visibilityMatchesFlags()`; `push-to-neo.js` re-exports it (public API), `neo-delta.js`
+imports it, F23 imports it. Same lesson as IMP-27 §5.4, reached from the other direction.
+
+**Not done by this guard:** §5.3's writer-side choice. F23 detects the state; it does not stop
+`populateSpec` producing it. The 409 rows stay until a re-push revisits those fields, and the
+"stop resetting the flags" change with its load-bearing blast radius is still open.
+
 ### 5.4 What is explicitly *not* the fix
 
 Making the MCP read `isincluded`/`isreadonly` instead of `visibility`. That would silence the
@@ -300,8 +358,12 @@ Three notes, because the price is easy to misread:
 ## 8. Done when
 
 - The §5.1 dry-run has settled the cause and is recorded here.
-- The query in §2.1 returns **0 rows**.
+- The query in §2.1 returns **0 rows**. — measured 0 on 2026-08-13, in the DB and in the exported
+  XML independently (§5.3.1). Note what this does *not* cover: that query only sees the
+  contradiction class, and 409 rows of the unwritten class remain.
 - `neo_schema` on `tax` no longer reports `userRequired:true` for `name` / `rate` / `validFromDate`,
   and `taxExempt` / `notTaxable` are either genuinely excluded from NEO or no longer reported
   `discarded` — the two stacks agreeing is the assertion, not either one's value.
 - The recurrence guard is in place, with its blast radius (§5.3) checked rather than assumed.
+  — the **detection** half is built and measured (F23, §5.3.1). The **writer** half of §5.3 is not:
+  `populateSpec` still produces unwritten rows, so this box is partly, not wholly, ticked.
