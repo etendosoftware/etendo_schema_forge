@@ -25,7 +25,36 @@ import { Checkbox } from '@/components/ui/checkbox';
  *   readOnly               — boolean — when true hides the "+ Add total discount" button
  *   totalDiscountPct       — number from header record (emEtgoTotalDiscount); restores panel on load
  *   onTotalDiscountChange  — callback(pct: number) — called when user changes or removes the discount
+ *   persistedTotals        — optional { grandTotal, netSubtotal } read straight from the
+ *                            backend-persisted header record (grandTotalAmount, summedLineAmount/
+ *                            totalLines — taxAmt is deliberately NOT accepted here; it's derived
+ *                            below, since whether netSubtotal is already net-of-discount or not
+ *                            can't be known from the header alone, see the isAlreadyDiscounted
+ *                            check). When provided AND there is no pendingLine/editingLine, these
+ *                            values are used instead of recomputing from `lines` — this is what
+ *                            keeps the panel byte-identical to the Grid's "Imp. Total" and to the
+ *                            value shown after the document is completed (ETP-4777). While a line
+ *                            IS actively pending/being edited, the live recompute below is used as
+ *                            before — nobody reported that transient in-progress number as wrong,
+ *                            only what's shown once something is saved.
  */
+// Resolves the net/tax/grand totals shown when a persisted baseline is used
+// (see the `persistedTotals` prop doc above for the full rationale). Extracted
+// out of the component so its branching doesn't count against the component's
+// own cognitive-complexity budget.
+function resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct) {
+  const factor = 1 - (totalDiscountPct || 0) / 100;
+  const persistedNet = persistedTotals.netSubtotal;
+  const rawFromLines = recomputed.netSubtotal;
+  const isAlreadyDiscounted = persistedNet != null && rawFromLines != null
+    && Math.abs(persistedNet - rawFromLines) > 0.01;
+  const netIfNotYetDiscounted = persistedNet != null ? persistedNet * factor : null;
+  const discountedNet = isAlreadyDiscounted ? persistedNet : netIfNotYetDiscounted;
+  const netSubtotal = isAlreadyDiscounted && factor > 0 ? persistedNet / factor : persistedNet;
+  const taxAmt = discountedNet != null ? persistedTotals.grandTotal - discountedNet : null;
+  return { netSubtotal, taxAmt, grandTotal: persistedTotals.grandTotal };
+}
+
 export default function DocumentTotalsPanel({
   lines = [],
   pendingLine = null,
@@ -36,6 +65,7 @@ export default function DocumentTotalsPanel({
   readOnly = false,
   totalDiscountPct = 0,
   onTotalDiscountChange,
+  persistedTotals = null,
 }) {
   const ui = useUI();
   const [totalDiscountOpen, setTotalDiscountOpen] = useState(totalDiscountPct > 0);
@@ -56,8 +86,37 @@ export default function DocumentTotalsPanel({
     }
   }, [lines.length, pendingLine, totalDiscountPct]);
 
-  const { grossSubtotal, netSubtotal, grandTotal, discountAmt, taxAmt, totalDiscountAmt } =
-    computeDocumentTotals(lines, pendingLine, editingLine, lineConfig, inputPct);
+  // A pending edit is either a line being added/edited, OR an unsaved change
+  // to the total-discount % input (inputPct diverges from the totalDiscountPct
+  // prop between keystroke/onBlur and the parent's refetch landing — see the
+  // onChange/onBlur handlers below). In either case there is no fresh
+  // persisted baseline yet for what's on screen, so fall back to the live
+  // recompute exactly like before this fix (ETP-4777).
+  const hasPendingEdit = pendingLine != null || editingLine != null || inputPct !== (totalDiscountPct || 0);
+  const recomputed = computeDocumentTotals(lines, pendingLine, editingLine, lineConfig, inputPct);
+  const useBaseline = persistedTotals != null && !hasPendingEdit;
+
+  const grossSubtotal = recomputed.grossSubtotal;
+  const discountAmt = recomputed.discountAmt;
+  const totalDiscountAmt = recomputed.totalDiscountAmt;
+
+  // persistedTotals.netSubtotal (header's summedLineAmount/totalLines) is
+  // ambiguous on its own: it's the RAW pre-total-discount net while the
+  // document-level discount is only GET-time-compensated (still no real
+  // discount line — see Order's pre-Complete window), but it BECOMES the
+  // already-discounted net the instant that discount materialises as a real
+  // line — which for e.g. an invoice created from an already-discounted
+  // order happens immediately at creation, regardless of documentStatus.
+  // documentStatus/isReadOnly is therefore NOT a reliable signal for which
+  // one it currently is (verified live: an invoice-from-order was Draft with
+  // the discount already materialised). Instead, compare it against
+  // `recomputed.netSubtotal` — the RAW net freshly summed from the current
+  // lines' own qty/price/per-line-discount fields, independent of any of
+  // this — if they differ by more than rounding noise, the persisted figure
+  // must already be net-of-discount.
+  const { netSubtotal, taxAmt, grandTotal } = useBaseline
+    ? resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct)
+    : recomputed;
 
   const fmt = (val) => {
     if (val == null) return '';

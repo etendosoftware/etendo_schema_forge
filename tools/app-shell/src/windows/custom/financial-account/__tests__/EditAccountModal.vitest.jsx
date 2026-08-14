@@ -77,7 +77,7 @@ vi.mock('@/hooks/useMovementLookups.js', () => ({
   useGLItemLookup: () => ({ results: [], loading: false }),
 }));
 
-import { EditAccountModal, initialEditTab } from '../EditAccountModal.jsx';
+import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {
   id: 'acc-1',
@@ -891,6 +891,107 @@ describe('EditAccountModal', () => {
       renderModal({ onClose });
       await user.click(screen.getByTestId('edit-account-cancel'));
       expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  // ── ETP-4871: the destructive footer slot is a 3-way choice ─────────────────
+  // (isDeleteMode in EditAccountModal.jsx). `archived` and `!archived+!deletable` still render
+  // exactly one plain button each (Desarchivar / Archivar respectively) — see EditFooter's
+  // if/else-if chain, which checks `archived` before `deleteMode` so an archived-and-deletable
+  // account still reads as "archived" (there is no reachable state where all three single-button
+  // labels could apply at once). The `!archived+deletable` state is different: both actions are
+  // genuinely available, so the footer now renders them TOGETHER via `FooterSplitButton` — Archivar
+  // as the always-visible primary action, Eliminar reachable through the chevron dropdown — rather
+  // than swapping one label out for the other.
+  describe('destructive footer action — 3-way selection (ETP-4871)', () => {
+    it.each([
+      {
+        description: 'plain active account (neither archived nor deletable) → Archivar',
+        account: { ...BANK_ACCOUNT, active: true, deletable: false },
+        expectedLabel: 'financeAccountsBankConnectionEditArchive',
+        expectedCallback: 'onArchive',
+      },
+      {
+        description: 'archived account → Desarchivar, regardless of deletable',
+        account: { ...BANK_ACCOUNT, active: false, deletable: true },
+        expectedLabel: 'financeAccountsMenuUnarchive',
+        expectedCallback: 'onArchive',
+      },
+      {
+        description: 'archived, non-deletable account → Desarchivar',
+        account: { ...BANK_ACCOUNT, active: false, deletable: false },
+        expectedLabel: 'financeAccountsMenuUnarchive',
+        expectedCallback: 'onArchive',
+      },
+    ])('$description', async ({ account, expectedLabel, expectedCallback }) => {
+      const user = userEvent.setup();
+      const onArchive = vi.fn();
+      const onDelete = vi.fn();
+      renderModal({ account, onArchive, onDelete });
+
+      const otherLabels = [
+        'financeAccountsBankConnectionEditArchive',
+        'financeAccountsMenuDelete',
+        'financeAccountsMenuUnarchive',
+      ].filter((label) => label !== expectedLabel);
+      for (const label of otherLabels) {
+        expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+
+      await user.click(screen.getByText(expectedLabel));
+
+      const callbacks = { onArchive, onDelete };
+      expect(callbacks[expectedCallback]).toHaveBeenCalledWith(account);
+      const other = expectedCallback === 'onArchive' ? onDelete : onArchive;
+      expect(other).not.toHaveBeenCalled();
+    });
+
+    it('deletable, still-active account → split button: Archivar primary + Eliminar in dropdown, independently wired', async () => {
+      const user = userEvent.setup();
+      const onArchive = vi.fn();
+      const onDelete = vi.fn();
+      const account = { ...BANK_ACCOUNT, active: true, deletable: true };
+      renderModal({ account, onArchive, onDelete });
+
+      // Archivar is the always-visible primary action; Eliminar is not in the DOM yet — the
+      // dropdown starts closed.
+      const primary = screen.getByTestId('archive-account-split');
+      expect(primary).toHaveTextContent('financeAccountsBankConnectionEditArchive');
+      expect(screen.queryByText('financeAccountsMenuDelete')).not.toBeInTheDocument();
+
+      // Clicking the primary action fires onArchive only — not aliased to onDelete.
+      await user.click(primary);
+      expect(onArchive).toHaveBeenCalledWith(account);
+      expect(onDelete).not.toHaveBeenCalled();
+      onArchive.mockClear();
+
+      // Opening the chevron reveals Eliminar in the dropdown.
+      await user.click(screen.getByTestId('archive-account-split-split'));
+      const menuItem = screen.getByTestId('archive-account-split-menu-item');
+      expect(menuItem).toHaveTextContent('financeAccountsMenuDelete');
+
+      // Clicking the dropdown item fires onDelete only — not aliased to onArchive.
+      await user.click(menuItem);
+      expect(onDelete).toHaveBeenCalledWith(account);
+      expect(onArchive).not.toHaveBeenCalled();
+    });
+
+    it('an archived-and-deletable account is not reachable as delete mode (archived always wins)', () => {
+      // isDeleteMode returns false whenever account.active === false, so this combination
+      // can never render "Eliminar" — documented here as a regression guard in case that
+      // precedence is ever inverted.
+      renderModal({ account: { ...BANK_ACCOUNT, active: false, deletable: true } });
+      expect(screen.queryByText('financeAccountsMenuDelete')).not.toBeInTheDocument();
+      expect(screen.getByText('financeAccountsMenuUnarchive')).toBeInTheDocument();
+    });
+
+    it('isDeleteMode — pure predicate truth table', () => {
+      expect(isDeleteMode({ active: true, deletable: true })).toBe(true);
+      expect(isDeleteMode({ deletable: true })).toBe(true); // active absent = active
+      expect(isDeleteMode({ active: false, deletable: true })).toBe(false);
+      expect(isDeleteMode({ active: true, deletable: false })).toBe(false);
+      expect(isDeleteMode({ active: true })).toBe(false); // deletable absent
+      expect(isDeleteMode(null)).toBe(false);
     });
   });
 

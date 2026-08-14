@@ -277,7 +277,14 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
 
     await expect.poll(() => state.invoiceCreateCalls, { timeout: 5_000 }).toBe(1);
     await expect(page.getByText('INV-QUOTE-001')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText(/90([.,])00/)).toBeVisible();
+    // As of ETP-4777, the quotation's OWN totals panel (still on screen
+    // behind the "Factura creada" confirmation banner) also reads the
+    // persisted 90,00 baseline verbatim, so an unscoped page-wide text
+    // search now matches both and trips Playwright's strict-mode ambiguity
+    // check. The totals panel renders first in the DOM and the confirmation
+    // banner is appended after it, so `.last()` reliably picks the banner's
+    // occurrence without depending on that banner's internal markup.
+    await expect(page.getByText(/90([.,])00/).last()).toBeVisible();
   });
 
   test('draft quotation can be deleted without a false related-documents blocker', async ({ page }) => {

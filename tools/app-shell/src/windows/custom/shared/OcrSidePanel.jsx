@@ -1,8 +1,8 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { MoreVertical, FileText, MessageSquare, History, Loader2 } from 'lucide-react';
+import { useRef, useState, lazy, Suspense } from 'react';
+import { FileText, Loader2, Paperclip, AlertCircle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
-import { listAttachments, fetchAttachmentBlobUrl } from '@/components/copilot/ocr/listAttachments';
+import { usePreviewAttachment, ACCEPTED_TYPES, ACCEPT_ATTR } from './usePreviewAttachment.js';
 import { useLocation } from 'react-router-dom';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
@@ -10,28 +10,17 @@ const LazyPdfViewer = lazy(() => import('./PdfViewer.jsx'));
 
 /* eslint-disable react/prop-types */
 
-const TABS = [
-  { key: 'file', icon: FileText, labelKey: 'ocrSidePanelTabFile' },
-  { key: 'messages', icon: MessageSquare, labelKey: 'ocrSidePanelTabMessages' },
-  { key: 'history', icon: History, labelKey: 'ocrSidePanelTabHistory' },
-];
-
-function ComingSoon({ Icon }) {
-  const ui = useUI();
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-      <Icon className="h-8 w-8 opacity-40" data-testid="Icon__c851a1" />
-      <span className="text-xs">{ui('ocrSidePanelComingSoon')}</span>
-    </div>
-  );
-}
-
 function FileTab(props) {
   const ui = useUI();
   // isNew is forwarded by DetailView via the sidePanel callback. It mirrors
   // the same flag the inline OCR path receives (recordId === 'new'), so the
-  // dropzone is shown for new records and the attachment viewer takes over
-  // once the document has been saved.
+  // dropzone is shown for new records and the document view takes over once the
+  // document has been saved.
+  //
+  // This split is also what keeps the OCR reader out of reach for an invoice
+  // that was captured by hand (ETP-4855 Error 3): OcrInlineUploader — the only
+  // thing that dispatches the extraction event — is never mounted in edit mode.
+  // DocumentView below can attach a file but never triggers extraction.
   if (props.isNew) {
     return (
       <div className="flex h-full flex-col gap-3">
@@ -49,75 +38,143 @@ function FileTab(props) {
       </div>
     );
   }
-  return <AttachmentsView {...props} data-testid="AttachmentsView__c851a1" />;
+  return <DocumentView {...props} data-testid="DocumentView__c851a1" />;
 }
 
 /**
- * Edit-mode view of the file tab: lists attachments tied to the current
- * record (saved via AttachFile during the OCR flow) and renders the first
- * PDF inline. Falls back to a quiet empty-state when nothing is attached —
- * common for records created before OCR or for non-OCR docs.
+ * Edit-mode view: renders the record's **document slot** and lets the user fill
+ * it (ETP-4855).
+ *
+ * The slot — `/sws/neo/preview-file`, one file per record — is the OCR source
+ * document, which is why this panel and the grid preview show the same single
+ * file and nothing else. Invoices captured by hand have no slot file, so the
+ * panel stays empty; other files the user adds through the Attachments tab do
+ * not surface here.
+ *
+ * Storing also mirrors the file into the record's attachments (the `tableName`
+ * argument below), so it appears in the Attachments tab as the ticket requires.
  */
-function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
+function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
   const ui = useUI();
   const tableName = getOcrDocType(docTypeId)?.tableName;
-  const [loading, setLoading] = useState(true);
-  const [attachments, setAttachments] = useState([]);
-  const [pdfUrl, setPdfUrl] = useState(null);
+  const [pickError, setPickError] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const inputRef = useRef(null);
 
-  useEffect(() => {
-    if (!recordId || !tableName || !token) {
-      setLoading(false);
-      return undefined;
+  const {
+    storedFile, isBusy, storeFailed, storeFile,
+  } = usePreviewAttachment({
+    documentId: recordId,
+    specName: docTypeId,
+    storeCondition: true,
+    token,
+    apiBaseUrl,
+    tableName,
+  });
+
+  const canAttach = !!(recordId && tableName && token && docTypeId);
+
+  const handleFile = (picked) => {
+    if (!picked || isBusy || !canAttach) return;
+    if (!ACCEPTED_TYPES[picked.type]) {
+      setPickError(ui('ocrInlinePdfOnly'));
+      return;
     }
-    let cancelled = false;
-    let createdUrl = null;
-    setLoading(true);
-    (async () => {
-      const list = await listAttachments({ token, tableName, recordId, apiBaseUrl });
-      if (cancelled) return;
-      setAttachments(list);
-      // Render the first PDF inline; non-PDF rows still appear in the list.
-      const firstPdf = list.find(a => /\.pdf$/i.test(a.name || ''));
-      if (firstPdf?.id) {
-        createdUrl = await fetchAttachmentBlobUrl({ token, attachmentId: firstPdf.id, apiBaseUrl });
-        if (cancelled) {
-          if (createdUrl) URL.revokeObjectURL(createdUrl);
-          return;
-        }
-        if (createdUrl) setPdfUrl(createdUrl);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
-    };
-  }, [recordId, tableName, token, apiBaseUrl]);
+    setPickError(null);
+    storeFile(picked);
+  };
 
-  if (loading) {
+  const dropHandlers = {
+    onDrop: (event) => {
+      event.preventDefault();
+      setIsDragOver(false);
+      handleFile(event.dataTransfer.files?.[0]);
+    },
+    onDragOver: (event) => { event.preventDefault(); setIsDragOver(true); },
+    onDragLeave: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
+    },
+  };
+
+  const hiddenInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={ACCEPT_ATTR}
+      className="hidden"
+      onChange={(event) => { handleFile(event.target.files?.[0]); event.target.value = ''; }}
+    />
+  );
+
+  const errorText = pickError || (storeFailed ? ui('ocrSidePanelAttachError') : null);
+  const errorRow = errorText ? (
+    <div className="flex items-start gap-2 text-xs text-destructive">
+      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__c851a1" />
+      <span>{errorText}</span>
+    </div>
+  ) : null;
+
+  if (isBusy && !storedFile) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
       </div>
     );
   }
-  if (attachments.length === 0) {
+
+  if (!storedFile) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
-        <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
-        <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
+      <div className="flex h-full flex-col gap-2">
+        <button
+          type="button"
+          disabled={!canAttach}
+          onClick={() => inputRef.current?.click()}
+          {...dropHandlers}
+          className={`flex min-h-[360px] flex-1 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            isDragOver ? 'border-primary bg-primary/5' : 'border-border-control hover:bg-muted'
+          }`}
+        >
+          <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+          <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
+          {canAttach && (
+            <span className="text-xs font-medium text-foreground">{ui('ocrSidePanelAttach')}</span>
+          )}
+        </button>
+        {errorRow}
+        {hiddenInput}
       </div>
     );
   }
+
+  const isImage = storedFile.mimeType?.startsWith('image/');
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <FileText className="h-3.5 w-3.5" data-testid="FileText__c851a1" />
-        <span className="truncate">{attachments[0].name}</span>
+        <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
+        <span className="truncate">{storedFile.fileName}</span>
+        {canAttach && (
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => inputRef.current?.click()}
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle bg-card px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isBusy
+              ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__c851a1" />
+              : <Paperclip className="h-3 w-3" data-testid="Paperclip__c851a1" />}
+            {isBusy ? ui('ocrSidePanelAttaching') : ui('ocrSidePanelAttach')}
+          </button>
+        )}
       </div>
-      {pdfUrl && (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed border-border-control bg-card">
+      {errorRow}
+      <div className={`min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed bg-card ${
+        isDragOver ? 'border-primary' : 'border-border-control'
+      }`}>
+        {isImage ? (
+          <div className="flex h-full w-full items-center justify-center overflow-auto">
+            <img src={storedFile.objectUrl} alt={storedFile.fileName} className="max-h-full max-w-full object-contain" />
+          </div>
+        ) : (
           <Suspense
             fallback={(
               <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -125,65 +182,30 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
               </div>
             )}
             data-testid="Suspense__c851a1">
-            <LazyPdfViewer url={pdfUrl} data-testid="LazyPdfViewer__c851a1" />
+            <LazyPdfViewer url={storedFile.objectUrl} data-testid="LazyPdfViewer__c851a1" />
           </Suspense>
-        </div>
-      )}
+        )}
+      </div>
+      {hiddenInput}
     </div>
   );
 }
 
+/**
+ * Side panel for OCR-capable windows.
+ *
+ * ETP-4855 Error 3 removed the "Messages" / "History" tabs (both were permanent
+ * "coming soon" placeholders) and the context-menu button (it had no onClick and
+ * never did anything). With a single view left there is no tab bar to render.
+ */
 export default function OcrSidePanel(props) {
-  const ui = useUI();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('file');
-
   const ocrDocType = matchOcrDocType(location.pathname);
-  const slotProps = { ...props, docTypeId: ocrDocType?.id };
-
-  let body;
-  if (activeTab === 'file') {
-    body = <FileTab {...slotProps} data-testid="FileTab__c851a1" />;
-  } else if (activeTab === 'messages') {
-    body = <ComingSoon Icon={MessageSquare} data-testid="ComingSoon__c851a1" />;
-  } else {
-    body = <ComingSoon Icon={History} data-testid="ComingSoon__c851a1" />;
-  }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 pb-3">
-        <div className="flex items-center gap-1" role="tablist">
-          {TABS.map(({ key, labelKey }) => {
-            const active = activeTab === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveTab(key)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? 'border border-border-subtle bg-card text-foreground shadow-sm'
-                    : 'border border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {ui(labelKey)}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          type="button"
-          className="rounded-md border border-border-subtle bg-card p-1.5 text-muted-foreground hover:text-foreground"
-          aria-label={ui('ocrSidePanelMore')}
-        >
-          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c851a1" />
-        </button>
-      </div>
       <div className="flex-1 overflow-auto">
-        {body}
+        <FileTab {...props} docTypeId={ocrDocType?.id} data-testid="FileTab__c851a1" />
       </div>
     </div>
   );

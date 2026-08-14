@@ -22,7 +22,9 @@ describe('AccountRowActions — module shape', () => {
   });
 
   it('accepts the full handler set both hosts pass through', () => {
-    for (const prop of ['account', 'onOpen', 'onEdit', 'onArchive', 'onBankConnectionAction', 'onTransfer', 'onNewMovement']) {
+    // ETP-4871: onDelete threads through alongside onArchive — a real delete is offered
+    // independently of archiving, not as a replacement for it.
+    for (const prop of ['account', 'onOpen', 'onEdit', 'onArchive', 'onDelete', 'onBankConnectionAction', 'onTransfer', 'onNewMovement']) {
       assert.match(src, new RegExp(`\\b${prop},`));
     }
   });
