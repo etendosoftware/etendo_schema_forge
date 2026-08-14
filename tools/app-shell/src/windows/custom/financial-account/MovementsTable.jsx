@@ -290,7 +290,7 @@ function DimensionsPanel({ movement, ui, visible, ctx }) {
         if (custom) {
           if (!custom.isVisible(movement)) return null;
           return (
-            <PanelField key={field.name} label={ui(custom.labelKey(movement))}>
+            <PanelField key={field.name} label={ui(custom.labelKey(movement))} data-testid="PanelField__ae5a16">
               {custom.render(movement, ctx)}
             </PanelField>
           );
@@ -298,7 +298,7 @@ function DimensionsPanel({ movement, ui, visible, ctx }) {
         const key = DIMENSION_PAYLOAD_KEY_ALIASES[field.name] ?? field.name.toLowerCase();
         if (!visible.includes(key)) return null;
         return (
-          <PanelField key={field.name} label={ui(DIMENSION_LABEL_KEYS[key] ?? key)}>
+          <PanelField key={field.name} label={ui(DIMENSION_LABEL_KEYS[key] ?? key)} data-testid="PanelField__ae5a16">
             <Input
               className="items-center"
               value={dims[key] || ''}
