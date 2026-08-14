@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -16,15 +17,22 @@ vi.mock('@generated/user/generated/web/user/UserPage', () => ({
 import UserWindow from '../index.jsx';
 
 describe('UserWindow invitation entry point', () => {
-  it('labels creation as an invitation and explains password setup', () => {
+  it('renders the invitation info banner and invite button', () => {
     render(<UserWindow />);
 
-    expect(screen.getByRole('button', { name: 'inviteUser' })).toBeInTheDocument();
     expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
       'inviteUserDescriptionTitle',
     );
     expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
       'inviteUserDescription',
     );
+    expect(screen.getByTestId('action-open-invite')).toBeInTheDocument();
+  });
+
+  it('opens the InviteUserDialog when clicking the invite button', () => {
+    render(<UserWindow />);
+
+    fireEvent.click(screen.getByTestId('action-open-invite'));
+    expect(screen.getByTestId('invite-user-dialog')).toBeInTheDocument();
   });
 });
