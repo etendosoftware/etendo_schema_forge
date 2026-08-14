@@ -139,12 +139,14 @@ export function createReportHelpers({ numberFormat } = {}) {
  */
 export function buildDocumentQrText(header) {
   if (!header || typeof header !== 'object') return 'no data';
+  const docDate = header.dateinvoiced || header.dateordered || header.movementdate || header.paymentdate;
+  const docAmount = header.grandtotal || header.amount;
   const parts = [];
   if (header.doc_type) parts.push('T:' + header.doc_type);
   if (header.documentno) parts.push('N:' + header.documentno);
-  if (header.dateinvoiced) parts.push('D:' + String(header.dateinvoiced).substring(0, 10));
+  if (docDate) parts.push('D:' + String(docDate).substring(0, 10));
   if (header.bp_name) parts.push('BP:' + header.bp_name);
-  if (header.grandtotal) parts.push('$:' + header.grandtotal);
+  if (docAmount) parts.push('$:' + docAmount);
   if (header.currency) parts.push('C:' + header.currency);
   if (header.org_taxid) parts.push('TID:' + header.org_taxid);
   if (header.status) parts.push('S:' + header.status);

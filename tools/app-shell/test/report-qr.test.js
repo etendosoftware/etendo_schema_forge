@@ -64,6 +64,34 @@ describe('buildDocumentQrText', () => {
     assert.equal(buildDocumentQrText('not-an-object'), 'no data');
   });
 
+  it('uses dateordered for orders/quotations (D: prefix, truncated)', () => {
+    assert.equal(
+      buildDocumentQrText({ documentno: 'SO-1', dateordered: '2026-08-01T09:00:00Z' }),
+      'N:SO-1|D:2026-08-01'
+    );
+  });
+
+  it('uses movementdate for shipments/receipts (no amount/currency fields)', () => {
+    assert.equal(
+      buildDocumentQrText({ doc_type: 'Shipment', documentno: 'SH-1', movementdate: '2026-08-02T00:00:00Z', bp_name: 'ACME', status: 'CO' }),
+      'T:Shipment|N:SH-1|D:2026-08-02|BP:ACME|S:CO'
+    );
+  });
+
+  it('uses paymentdate and amount for payments', () => {
+    assert.equal(
+      buildDocumentQrText({ documentno: 'PAY-1', paymentdate: '2026-08-03T12:00:00Z', amount: '500.00', currency: 'EUR' }),
+      'N:PAY-1|D:2026-08-03|$:500.00|C:EUR'
+    );
+  });
+
+  it('prefers dateinvoiced and grandtotal when multiple candidates exist', () => {
+    assert.equal(
+      buildDocumentQrText({ dateinvoiced: '2026-08-10', dateordered: '2026-08-01', grandtotal: '100', amount: '99' }),
+      'D:2026-08-10|$:100'
+    );
+  });
+
   it('skips falsy field values (empty string, 0, null)', () => {
     assert.equal(
       buildDocumentQrText({ documentno: '', grandtotal: 0, currency: null, status: 'CO' }),
