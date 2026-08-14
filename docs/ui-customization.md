@@ -513,6 +513,43 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 standard `ListView` (nothing to declare). `contacts` is the one window that
 currently opts out (see the known gap above).
 
+### 9d. `isRowDeletable` — gating bulk delete for a mixed selection (ETP-4871)
+
+An optional `ListView` prop, `(row) => boolean`, for windows where deletability is a
+**per-row, data-driven condition** rather than a blanket rule — e.g. `financial-account`,
+where an account is only really deletable once it has zero dependent records anywhere
+(every FK into `FIN_Financial_Account` is RESTRICT). Without this prop, `hideBulkDelete`
+(9c above) is all-or-nothing for the whole window; `isRowDeletable` instead lets the grid
+stay bulk-deletable in general while blocking the specific action on a bad selection.
+
+```jsx
+<ListView
+  isRowDeletable={(row) => row.deletable !== false}
+  ...
+/>
+```
+
+- **Absent (the default) behaves exactly as before ETP-4871** — every row counts as
+  deletable, so this never regresses any other window's bulk delete. This is a plain prop
+  passed straight to `ListView` (through a generated page's `{...props}` spread, same as
+  `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
+- When present, `ListView` recomputes on every selection change how many of the
+  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
+  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
+  batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
+  exists as a defense-in-depth backstop for a row that changed state between selection and
+  click, but the button being disabled up front is the primary UX).
+- `bulkDeleteBlockedTooltip` is a **generic**, entity-agnostic i18n key (`ListView` is
+  shared by every window) — "{count} registro(s) seleccionado(s) no se pueden eliminar." —
+  not a `financeAccounts*`-scoped one, even though `financial-account` is its first
+  consumer.
+- This is orthogonal to the per-row kebab delete affordance (`AccountRowMenu`'s "Eliminar
+  cuenta" item, gated the same way but reading `row.deletable` directly) — `isRowDeletable`
+  only concerns `ListView`'s own generic bulk-delete button.
+- **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
+  the only current consumer.
+
 ---
 
 ### 10. `window.dateFilterKey` — date range filter column

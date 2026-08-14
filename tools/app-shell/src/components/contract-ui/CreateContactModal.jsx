@@ -5,6 +5,7 @@ import EntityCreationModal from './EntityCreationModal.jsx';
 import FinancialSection from './FinancialSection.jsx';
 import AddressSection from './AddressSection.jsx';
 import { contactModalConfig } from './contactModalConfig.js';
+import { matchOptionByLabel } from '@/lib/matchOptionLabel';
 
 const COMPONENT_MAP = { AddressSection, FinancialSection };
 
@@ -19,6 +20,15 @@ const EMPTY_OPTS = {
   countries: { options: [], loading: false, error: null },
   regions: { options: [], loading: false, error: null },
 };
+
+/**
+ * Form fields whose value is a selector option id, not free text. A pre-fill
+ * for these arrives as a printed *label* ("España") and has to be matched
+ * against options that are fetched after mount — writing the label straight
+ * into the form would satisfy the required-field check with a value the API
+ * rejects. Maps form field id → key in `opts`.
+ */
+const OPTION_PREFILL_FIELDS = { country: 'countries', region: 'regions' };
 
 function buildPersonName(firstName, lastName) {
   return [firstName, lastName]
@@ -111,7 +121,13 @@ export function getBillingPatch(opts, form) {
  *   headers        { Authorization, Content-Type }
  *   onClose        () => void
  *   onCreated      ({ id, name }) => void
- *   initialQuery   Pre-fills Identifier from the search query
+ *   initialQuery   Pre-fills the legal name from the search query
+ *   prefill        { [formFieldId]: value } — pre-fills the form from data the
+ *                  caller already has (OCR extraction, an existing search hit).
+ *                  Keys are form field ids: name, taxID, address, postalCode,
+ *                  city, country, region, etgoEmail, etgoPhone, etgoWeb.
+ *                  `country` / `region` are given as printed labels and matched
+ *                  against the selector options — see OPTION_PREFILL_FIELDS.
  *   documentType   'sale' | 'purchase' | null — auto-checks Cliente / Proveedor
  */
 export default function CreateContactModal({
@@ -120,6 +136,7 @@ export default function CreateContactModal({
   onClose,
   onCreated,
   initialQuery = '',
+  prefill = null,
   documentType = null,
 }) {
   const ui = useUI();
@@ -129,6 +146,18 @@ export default function CreateContactModal({
   const [currentCountry, setCurrentCountry] = useState('');
   const [retryRegionCount, setRetryRegionCount] = useState(0);
   const [contactType, setContactType] = useState('company');
+  const [resolvedOptionPrefill, setResolvedOptionPrefill] = useState(null);
+
+  // Free-text part of the pre-fill — safe to seed directly into initialValues.
+  const textPrefill = useMemo(() => {
+    const out = {};
+    for (const [id, value] of Object.entries(prefill || {})) {
+      if (OPTION_PREFILL_FIELDS[id]) continue;
+      const text = String(value ?? '').trim();
+      if (text) out[id] = text;
+    }
+    return out;
+  }, [prefill]);
 
   // Fetch all selectors (except regions, which depend on country)
   useEffect(() => {
@@ -265,6 +294,27 @@ export default function CreateContactModal({
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCountry, locale, retryRegionCount]);
+
+  // Match label-valued pre-fills (country, region) against their selector
+  // options as those arrive. Regions only load once a country is known, so
+  // resolving the country also seeds `currentCountry` to trigger that fetch —
+  // without stomping a country the user picked while options were loading.
+  useEffect(() => {
+    if (!prefill) return;
+    const resolved = {};
+    for (const [id, optionsKey] of Object.entries(OPTION_PREFILL_FIELDS)) {
+      const raw = prefill[id];
+      if (!raw) continue;
+      const matched = matchOptionByLabel(opts[optionsKey]?.options, raw);
+      if (matched) resolved[id] = matched;
+    }
+    if (Object.keys(resolved).length === 0) return;
+    setResolvedOptionPrefill(prev => {
+      if (prev && Object.entries(resolved).every(([k, v]) => prev[k] === v)) return prev;
+      return { ...prev, ...resolved };
+    });
+    if (resolved.country) setCurrentCountry(c => c || resolved.country);
+  }, [prefill, opts.countries, opts.regions]);
 
   const handleFieldChange = useCallback((id, value) => {
     if (id === 'country') setCurrentCountry(value);
@@ -519,8 +569,9 @@ export default function CreateContactModal({
       requiredFields={requiredFields}
       progressFields={progressFields}
       validate={validateForm}
+      patchValues={resolvedOptionPrefill}
       initialValues={{
-        name: '',
+        name: initialQuery || '',
         etgoFirstname: '',
         etgoLastname: '',
         businessPartnerCategory: '',
@@ -549,6 +600,9 @@ export default function CreateContactModal({
         etgoEmail: '',
         etgoPhone: '',
         etgoWeb: '',
+        // Last — a caller-supplied value wins over the blank default. Option-id
+        // fields are excluded here and arrive via patchValues once resolved.
+        ...textPrefill,
       }}
       opts={optsWithRetry}
       componentMap={COMPONENT_MAP}
