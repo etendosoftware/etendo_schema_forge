@@ -1707,3 +1707,68 @@ manual pass, then a re-REVIEW before PR.**
   call shape, and refresh the 3 stale Playwright comments (lines ~190, 262, ~281 of
   `user-role-assignment.mocked.spec.js` as read pre-fix) — no test logic changes needed
   there, comments only.
+
+## Manual QA Feedback Round 2 (Human, 2026-08-14) — DEV wave 7, 2 findings
+
+Human deactivated GOClient's own legacy client-level Finance/Sales/Purchasing/Inventory
+roles (the ones the earlier `IsTemplate='N'` drift was on) to test the target
+architecture from this session's chat: "no template role should be at client level,
+only at system level." Two findings:
+
+1. **Wave 6's padding fix targeted the wrong element.** It fixed the EXPANDED
+   checklist's internal padding (`__options` div), but the actual complaint (both times)
+   is the CLOSED trigger's own left alignment against sibling native fields like
+   "Nombre". Root cause, confirmed directly in `DetailView.jsx`: `headerExtra` (where
+   `AssignTemplateRolesControl` mounts) renders as a sibling BEFORE the native form
+   card, which is wrapped in `formCardPadding` (defaults `'p-6'`, line 1313/3296)
+   — `headerExtra` itself gets NONE of that padding (line 3260, no wrapping
+   div/className at all). `AssignTemplateRolesControl`'s own root divs (`flex flex-col
+   gap-2 max-w-[420px]`, both the normal and `__save-first` render paths) need matching
+   horizontal padding (`px-6`) to visually align with "Nombre"'s card-padded position.
+
+2. **The selector is now empty — this is the ETP-4877 caveat, but live, in THIS
+   ticket, right now, not a future concern.** `AssignTemplateRolesControl.jsx`,
+   `UserRolesTab.jsx`, `RoleChipsCell.jsx`, and `RoleFilterControl.jsx` all resolve role
+   names via `fetchRolesOverview()` (`SFRolesOverview`), which is hard-scoped to the
+   CALLER's own client (`Role.Client.id = clientId` + name in
+   Finance/Sales/Purchasing/Inventory) — now that GOClient's own copies are deactivated,
+   that query returns zero matching rows, so every one of these 4 components has
+   nothing to show. This is now a functional break in ETP-4906 itself (not just a
+   forward-looking gap for ETP-4877), since the human's whole point in deactivating
+   those roles was to reach the target end-state this ticket is supposed to support.
+   **Fix — new backend read path, not a `SFRolesOverview` change** (that endpoint's own
+   job, per its own javadoc, is specifically "the CALLER's own tenant's roles" for the
+   unrelated ETP-4513 Roles-overview page — repointing it would break that page's
+   intended behavior):
+   - **Backend (`com.etendoerp.go`):** new webhook, `GET /sws/neo/systemroletemplates`
+     (name TBD by whoever implements — check no collision with an existing route),
+     admin/client-admin gated same as its siblings, mirroring
+     `SFRolesOverview.java`'s `buildRoleJson`/`buildWindowsJson`/
+     `resolveActiveEtendoGoWindowIds` pattern but resolving the 4 FIXED_ROLE_NAMES at
+     `ad_client_id='0'` (via `SystemRoleTemplates`, `com.etendoerp.go.roles` package)
+     instead of the caller's own client — no `userCount`, no client-admin row (there is
+     none at system level). Response: `{"roles": [{"id","name","windows":[{"id","name","tier"}]}, ...]}`,
+     same per-role shape `SFRolesOverview` already uses so the frontend fetch/response
+     handling can be near-identical. Consider (developer's call, not mandatory) whether
+     `resolveActiveEtendoGoWindowIds()` is now duplicated a 3rd time across
+     `SFRolesOverview`/`SFWindowAccessMap`/this new webhook and worth extracting to a
+     shared static helper — flagging, not requiring, since none of the existing 3
+     webhooks currently share it either.
+   - **Frontend:** new `fetchTemplateRoles()` in `tools/app-shell/src/lib/rolesApi.js`
+     (or a sibling file, developer's call) calling the new endpoint, same
+     `fetchNeoJson`-style conventions as its siblings. Repoint
+     `AssignTemplateRolesControl.jsx` and `UserRolesTab.jsx` to use it instead of
+     `fetchRolesOverview()` for the SELECTABLE/DISPLAYED template roles. `RoleChipsCell.jsx`/
+     `RoleFilterControl.jsx` need BOTH sources now: `fetchTemplateRoles()` for the 4
+     template names (chips/filter options going forward will carry system-level role
+     ids, since that's what new compositions will store) AND `fetchRolesOverview()`
+     still, but ONLY for its `isClientAdmin` row (the classic-Admin detection branch,
+     which correctly stays tenant-scoped — Admin is explicitly client-level per this
+     ticket's own architecture, never touch that part).
+
+**Dispatch:** one schema-forge-developer session across both repos (backend piece is
+small, tightly coupled to the frontend repoint — not worth splitting across two agents
+for this). Same rules as always: `com.etendoerp.go` plain branch not worktree, commit
+locally only, no push either repo. Tester follow-up required after, same wave pattern —
+existing tests mocking `fetchRolesOverview()` for role options in all 4 touched
+frontend files will need updating to mock the new fetch instead/additionally.
