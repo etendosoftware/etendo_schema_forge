@@ -157,12 +157,14 @@
           "visibility": "system"
         },
         "invoiceAddress": {
+          "visibility": "system",
           "reference": "BusinessPartnerLocation",
           "dependsOn": {
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "other"
+          "section": "other",
+          "agentPrompt": "Invoice (bill-to) address of the order, AD column BillTo_ID. It is mandatory on a sales order: a create call that omits it is rejected. The value is a business partner location belonging to the order's businessPartner and flagged as the bill-to address. Do not assume it equals partnerAddress, which is the ship-to location; the two coincide only when the partner has a single location. In the UI the SE_Order_BPartner callout fills this automatically when the business partner is picked, but an agent gets no callout, so resolve the location yourself — query this field's selector filtered by C_BPartner_ID with the chosen business partner and send the resulting location id."
         },
         "project": {
           "visibility": "discarded"

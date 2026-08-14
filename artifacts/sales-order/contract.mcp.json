@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.28.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-08-13T13:01:38.815Z",
-  "contractChecksum": "65aafd7e77a257b6",
+  "updatedAt": "2026-08-14T00:46:41.055Z",
+  "contractChecksum": "42a5329db89d92d1",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -118,23 +118,6 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/sales-order/header/selectors/currency"
-      },
-      {
-        "entity": "header",
-        "field": "invoiceAddress",
-        "column": "BillTo_ID",
-        "reference": "BusinessPartnerLocation",
-        "inputMode": "dependent",
-        "url": "/sws/neo/sales-order/header/selectors/invoiceAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
       },
       {
         "entity": "lines",
@@ -833,10 +816,6 @@
             "defaultValue": "@C_Currency_ID@"
           },
           "description": {},
-          "invoiceAddress": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
-          },
           "deliveryStatus": {
             "readOnly": true
           },
@@ -913,8 +892,7 @@
         "priceList",
         "paymentTerms",
         "warehouse",
-        "currency",
-        "invoiceAddress"
+        "currency"
       ],
       "lineFields": [
         "product",
@@ -962,19 +940,6 @@
             {
               "param": "IsSOTrx",
               "source": "windowCategory"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "invoiceAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
             }
           ]
         }
@@ -1041,8 +1006,7 @@
           "priceList",
           "paymentTerms",
           "warehouse",
-          "currency",
-          "invoiceAddress"
+          "currency"
         ]
       },
       {
@@ -1069,5 +1033,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "a455019d8b42be50"
+  "checksum": "eb933e0fbd3c1b52"
 }
