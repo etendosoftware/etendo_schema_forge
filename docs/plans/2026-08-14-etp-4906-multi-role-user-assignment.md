@@ -1632,6 +1632,21 @@ for the dead-code and Guardar-enablement bugs.
 
 **DEV wave 6 Findings (developer-6, landed, commit `66c0df38b`):** all 5 fixed in one
 commit, exactly per the root-cause analysis above — no surprises during implementation.
+
+**Tester follow-up (landed, commit `7f75e37f7`):** fixed the 2 predicted broken Vitest
+tests (new `roleAssignmentSaveFailedAfterUserSaved` toast call shape) and 3 stale
+Playwright comments; added regression coverage for both new behaviors — fix #4 via a
+new 3-layer pipeline test (`decisions.json`/`contract.json`/`UserPage.jsx` all agree
+`userRoles` is gone) and fix #5 via a `UserRolesTab.vitest.jsx` case proving a
+classic-only category is dropped, not rendered with all-dash rows (the existing fixture
+never actually exercised that filter). Also found and fixed a genuine Playwright
+fixture gap (Admin's `windows[]` fixture was empty, which fix #5's active-window union
+would have silently excluded a real window from — caught only because this session
+actually ran the spec against a live `make dev`, which DEV wave 6 could not). **Final
+counts:** Vitest 646 files / 12015 tests / 12012 passed / 0 failed / 3 skipped; Node
+tests 1129/1129; Playwright `user-role-assignment.mocked.spec.js` 7/7. No bugs found in
+the DEV wave 6 diff itself. **This DEV+Tester wave is closed — ready for another
+manual pass, then a re-REVIEW before PR.**
 - **#1 (spacing):** `AssignTemplateRolesControl.jsx`'s `__options` panel — `p-2` →
   `p-2 pl-4` (left padding only, per the finding's ask).
 - **#2 (blank trigger while editing):** removed both `!isEditing &&` guards (chips +
