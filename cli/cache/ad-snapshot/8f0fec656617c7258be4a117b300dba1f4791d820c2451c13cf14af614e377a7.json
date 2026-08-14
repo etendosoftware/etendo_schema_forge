@@ -34138,7 +34138,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "a15624c615e07424dccbcf2603d6271ece2acb638ec5bddc3c37ecde4a9f9276",
+      "checksum": "14b6bae71be4fa4a654f69f4f62262d6448d39cda108603dd54cb0e6825194ec",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -34660,6 +34660,12 @@
           "position": "37"
         },
         {
+          "ad_column_id": "D0514B3C327840B0BDECBB15E29D2185",
+          "ad_table_id": "4D8C3B3C31D1410DA046140C9F024D17",
+          "columnname": "EM_ETGO_Auto_Created",
+          "position": "38"
+        },
+        {
           "ad_column_id": "72F078DEF22A4E4695B54957904BEB5E",
           "ad_table_id": "4D8C3B3C31D1410DA046140C9F024D17",
           "columnname": "EM_Etpr_Remove_Transaction",
@@ -34696,10 +34702,10 @@
           "position": "42"
         },
         {
-          "ad_column_id": "D0514B3C327840B0BDECBB15E29D2185",
+          "ad_column_id": "4687B9CF9BB74115AAA3B408BF0DFE01",
           "ad_table_id": "4D8C3B3C31D1410DA046140C9F024D17",
-          "columnname": "EM_ETGO_Auto_Created",
-          "position": null
+          "columnname": "EM_ETGO_Finacc_Trans_Dest",
+          "position": "45"
         },
         {
           "ad_column_id": "804880D7B0EA1126E040007F01004F9E",
