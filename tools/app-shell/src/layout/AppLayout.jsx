@@ -87,7 +87,12 @@ function AppLayoutInner({ menuGroups, embedded }) {
             isFavorite={meta?.isFavorite}
             onPageHelp={meta?.onPageHelp}
             onAIClick={meta?.onAIClick}
+            onNewClick={meta?.onNewClick}
+            onBellClick={meta?.onBellClick}
+            onSearchClick={meta?.onSearchClick}
+            searchPlaceholder={meta?.searchPlaceholder}
             rightExtras={meta?.rightExtras}
+            className={meta?.className}
             data-testid="TopBar__488148" />
         )}
         {(() => {

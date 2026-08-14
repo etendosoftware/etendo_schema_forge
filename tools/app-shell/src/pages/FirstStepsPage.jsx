@@ -12,7 +12,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { useUI } from '@/i18n';
-import TopBar from '@/components/layout/TopBar/TopBar.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 
 const STEPS = [
   {
@@ -73,9 +73,12 @@ const total = STEPS.length;
 
 export default function FirstStepsPage() {
   const ui = useUI();
+  useSetPageMeta({
+    title: ui('firstStepsPageTitle'),
+  });
+
   return (
-    <div className="flex flex-col h-full">
-      <TopBar title={ui("firstStepsPageTitle")} data-testid="TopBar__45a28a" />
+    <div className="flex flex-col h-full" data-testid="FirstStepsPage">
       <div className="flex-1 overflow-auto bg-page-bg">
         <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
 
