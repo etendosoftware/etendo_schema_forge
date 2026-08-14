@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { MoreVertical, FileText, MessageSquare, History, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
-import { listAttachments, fetchAttachmentBlobUrl } from '@/components/copilot/ocr/listAttachments';
+import { fetchMainAttachment, fetchAttachmentBlobUrl } from '@/components/copilot/ocr/listAttachments';
 import { useLocation } from 'react-router-dom';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
@@ -53,16 +53,17 @@ function FileTab(props) {
 }
 
 /**
- * Edit-mode view of the file tab: lists attachments tied to the current
- * record (saved via AttachFile during the OCR flow) and renders the first
- * PDF inline. Falls back to a quiet empty-state when nothing is attached —
+ * Edit-mode view of the file tab: resolves the record's marked "main"
+ * document (ETP-4315 — the same attachment the list-view preview shows via
+ * `useMainAttachment`, no ad-hoc "first PDF" heuristic) and renders it
+ * inline. Falls back to a quiet empty-state when nothing is marked yet —
  * common for records created before OCR or for non-OCR docs.
  */
 function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
   const ui = useUI();
   const tableName = getOcrDocType(docTypeId)?.tableName;
   const [loading, setLoading] = useState(true);
-  const [attachments, setAttachments] = useState([]);
+  const [mainAttachment, setMainAttachment] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
 
   useEffect(() => {
@@ -74,13 +75,11 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
     let createdUrl = null;
     setLoading(true);
     (async () => {
-      const list = await listAttachments({ token, tableName, recordId, apiBaseUrl });
+      const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
       if (cancelled) return;
-      setAttachments(list);
-      // Render the first PDF inline; non-PDF rows still appear in the list.
-      const firstPdf = list.find(a => /\.pdf$/i.test(a.name || ''));
-      if (firstPdf?.id) {
-        createdUrl = await fetchAttachmentBlobUrl({ token, attachmentId: firstPdf.id, apiBaseUrl });
+      setMainAttachment(main);
+      if (main?.id) {
+        createdUrl = await fetchAttachmentBlobUrl({ token, attachmentId: main.id, apiBaseUrl });
         if (cancelled) {
           if (createdUrl) URL.revokeObjectURL(createdUrl);
           return;
@@ -102,7 +101,7 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
       </div>
     );
   }
-  if (attachments.length === 0) {
+  if (!mainAttachment) {
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
@@ -114,7 +113,7 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileText className="h-3.5 w-3.5" data-testid="FileText__c851a1" />
-        <span className="truncate">{attachments[0].name}</span>
+        <span className="truncate">{mainAttachment.name}</span>
       </div>
       {pdfUrl && (
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed border-border-control bg-card">

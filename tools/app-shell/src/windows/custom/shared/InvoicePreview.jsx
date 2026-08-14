@@ -258,8 +258,12 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     token,
     apiBaseUrl,
   } : {
+    // ETP-4315 — real, marked Attachment shared with OcrSidePanel/"Adjuntos",
+    // not the ETGO_PREVIEW_FILE cache. C_Invoice is the physical table for
+    // both sales and purchase invoices; this branch only runs for purchase.
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
+    useMainAttachment: true,
     storeCondition: true,
     autoFetch: false,
     token,

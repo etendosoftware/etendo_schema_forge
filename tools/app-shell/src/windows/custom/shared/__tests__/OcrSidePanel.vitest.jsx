@@ -14,7 +14,7 @@ vi.mock('@/components/copilot/ocr/ocrDocTypes', () => ({
 }));
 
 vi.mock('@/components/copilot/ocr/listAttachments', () => ({
-  listAttachments: vi.fn().mockResolvedValue([]),
+  fetchMainAttachment: vi.fn().mockResolvedValue(null),
   fetchAttachmentBlobUrl: vi.fn().mockResolvedValue(null),
 }));
 
@@ -37,7 +37,8 @@ vi.mock('../PdfViewer.jsx', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fetchMainAttachment, fetchAttachmentBlobUrl } from '@/components/copilot/ocr/listAttachments';
 import OcrSidePanel from '../OcrSidePanel.jsx';
 
 // --- Tests ---
@@ -52,6 +53,10 @@ const defaultProps = {
 describe('OcrSidePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: nothing marked as "main" yet — individual tests override with
+    // mockResolvedValueOnce to exercise the resolved/loading states.
+    fetchMainAttachment.mockResolvedValue(null);
+    fetchAttachmentBlobUrl.mockResolvedValue(null);
   });
 
   it('renders tab bar with three tabs', () => {
@@ -91,5 +96,59 @@ describe('OcrSidePanel', () => {
   it('shows OCR uploader when isNew=true on file tab', () => {
     render(<OcrSidePanel {...defaultProps} isNew={true} />);
     expect(screen.getByText('ocrSidePanelTitle')).toBeInTheDocument();
+  });
+
+  describe('AttachmentsView — main attachment resolution (ETP-4315)', () => {
+    it('shows a loading indicator while resolving the main attachment', () => {
+      fetchMainAttachment.mockImplementation(() => new Promise(() => {})); // never resolves
+      render(<OcrSidePanel {...defaultProps} />);
+      // The Loader2 mock spreads incoming props (see lucide-react mock above),
+      // so the source's own explicit data-testid (`Loader2__c851a1`) wins over
+      // the mock's default `icon-loader` id.
+      expect(screen.getByTestId('Loader2__c851a1')).toBeInTheDocument();
+    });
+
+    it('shows the empty state when no attachment is marked as main', async () => {
+      fetchMainAttachment.mockResolvedValueOnce(null);
+      render(<OcrSidePanel {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByText('ocrSidePanelNoAttachments')).toBeInTheDocument();
+      });
+      expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+    });
+
+    it('resolves the single marked attachment and renders its name + PDF viewer', async () => {
+      fetchMainAttachment.mockResolvedValueOnce({ id: 'att-1', name: 'invoice.pdf', dataType: 'application/pdf' });
+      fetchAttachmentBlobUrl.mockResolvedValueOnce('blob:http://localhost/abc');
+      render(<OcrSidePanel {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
+
+      expect(fetchMainAttachment).toHaveBeenCalledWith({
+        token: 'test-token',
+        tableName: 'C_Invoice',
+        recordId: 'inv-1',
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+      });
+      expect(fetchAttachmentBlobUrl).toHaveBeenCalledWith({
+        token: 'test-token',
+        attachmentId: 'att-1',
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+      });
+    });
+
+    it('renders the resolved attachment name even when no blob URL comes back', async () => {
+      fetchMainAttachment.mockResolvedValueOnce({ id: 'att-2', name: 'receipt.pdf' });
+      fetchAttachmentBlobUrl.mockResolvedValueOnce(null);
+      render(<OcrSidePanel {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('receipt.pdf')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+    });
   });
 });

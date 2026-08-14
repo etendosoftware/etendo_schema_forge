@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * ETP-4315 — Attachment / Preview sync bug reproduction (mocked).
+ * ETP-4315 — Attachment / Preview sync regression coverage (mocked).
  *
- * Purchase invoices and goods receipts have TWO independent, unsynchronized
- * stores for the same record's document file:
+ * Purchase invoices and goods receipts used to have TWO independent,
+ * unsynchronized stores for the same record's document file:
  *
  *   1. The real attachment UI (OcrSidePanel sidebar for purchase-invoice,
  *      "Adjuntos" tab — AttachmentsTab — for both windows), backed by the
@@ -13,13 +13,17 @@ import { login } from '../helpers/auth.js';
  *   2. The document preview opened from the list view (GenericPreviewModal),
  *      backed by a completely separate cache table: GET /sws/neo/preview-file.
  *
+ * The fix unifies all three surfaces (sidebar, "Adjuntos" tab, and list-view
+ * preview) on a single new endpoint — GET
+ * /sws/neo/attachments/{tableName}/{recordId}/main, which returns the one
+ * attachment metadata object marked as the record's "main" document — via
+ * `fetchMainAttachment` (listAttachments.js) and the `useMainAttachment` hook,
+ * so they can no longer diverge by construction.
+ *
  * These two suites render BOTH surfaces for the SAME record id and assert
- * the preview shows the exact same file the sidebar/tab already show. That
- * assertion is expected to FAIL today — this is a deliberate RED test that
- * reproduces the reported bug end-to-end (not just "which URL got called").
- * It documents the two real user-facing surfaces diverging; it will turn
- * green once the preview is rewired to read the real attachment for these
- * two windows (see docs/plans/2026-08-03-etp-4315-attachment-preview-sync.md
+ * the preview shows the exact same file the sidebar/tab already show. This
+ * confirms the fix: both surfaces now resolve through the same `/main`
+ * endpoint (see docs/plans/2026-08-03-etp-4315-attachment-preview-sync.md
  * and docs/plans/2026-08-14-etp-4315-attachment-preview-unification-plan.md).
  *
  * Routing note: login() installs a `**\/sws/**` catch-all; window-specific
@@ -52,9 +56,20 @@ async function installPreviewFileMock(page, response) {
 
 /**
  * Install the real attachments surface (`/sws/neo/attachments/{tableName}/*`)
- * — the same endpoint both OcrSidePanel (listAttachments.js) and AttachmentsTab
- * (useAttachments.js) consume. Returns exactly `items` for the list GET, and
- * PDF bytes for any single-file download GET.
+ * — the same endpoint family OcrSidePanel (via `fetchMainAttachment` /
+ * `useMainAttachment`), AttachmentsTab (useAttachments.js), and now the
+ * list-view preview (via `useMainAttachment` too, see GenericPreviewModal's
+ * `ManagedLeftPanel`) all consume:
+ *
+ *   - GET .../attachments/{tableName}/{recordId}/main → the single attachment
+ *     object marked as the record's "main" document (what `fetchMainAttachment`
+ *     expects). For these fixtures, each scenario only ever seeds one real
+ *     attachment, so that one is treated as the marked "main" document.
+ *   - GET .../attachments/{tableName}/{recordId} (no `/main` suffix) → the
+ *     plain list shape `{ items }`, unchanged — still used by the "Adjuntos"
+ *     tab, which intentionally excludes the main-marked attachment by design.
+ *
+ * PDF bytes are returned for any single-file download GET (`/file/{id}`).
  */
 async function installAttachmentsMock(page, tableName, items) {
   await page.route('**/sws/neo/attachments/**', async (route) => {
@@ -77,6 +92,15 @@ async function installAttachmentsMock(page, tableName, items) {
       } else {
         route.fallback();
       }
+    } else if (method === 'GET' && /\/main(?:[/?]|$)/.test(url)) {
+      // GET .../attachments/{tableName}/{recordId}/main — single "main"
+      // attachment object (fetchMainAttachment expects `.id` on the payload).
+      const main = items[0] ?? {};
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(main),
+      });
     } else if (method === 'GET') {
       await route.fulfill({
         status: 200,
@@ -216,10 +240,11 @@ test.describe('Purchase Invoice — attachment/preview sync (ETP-4315, mocked)',
     const modal = page.getByTestId('generic-preview-modal');
     await expect(modal).toBeVisible({ timeout: 5_000 });
 
-    // RED by design: the preview is wired to /preview-file for purchase-invoice
-    // today, so it resolves PI_WRONG_CACHE.fileName ("wrong-cached-invoice.pdf"),
-    // never the sidebar's real attachment. This assertion documents the
-    // expected (fixed) behavior and must fail until the fix lands.
+    // Regression check: purchase-invoice's preview now resolves via
+    // `useMainAttachment` (the same /main endpoint as the sidebar), so it
+    // shows PI_REAL_ATTACHMENT.name here — never PI_WRONG_CACHE's
+    // "wrong-cached-invoice.pdf" (the mocked /preview-file cache is now
+    // unused for this window, confirming the rewiring took effect).
     await expect(previewDownloadAnchor(modal, PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 5_000 });
   });
 });
@@ -342,8 +367,10 @@ test.describe('Goods Receipt — attachment/preview sync (ETP-4315, mocked)', ()
     const modal = page.getByTestId('generic-preview-modal');
     await expect(modal).toBeVisible({ timeout: 5_000 });
 
-    // RED by design: must fail until the preview is rewired to read the real
-    // attachment for goods-receipt (see the ETP-4315 unification plan).
+    // Regression check: goods-receipt's preview now resolves via
+    // `useMainAttachment` (the same /main endpoint as the "Adjuntos" tab), so
+    // it shows GR_REAL_ATTACHMENT.name here — never GR_WRONG_CACHE's
+    // "wrong-cached-receipt.pdf" (see the ETP-4315 unification plan).
     await expect(previewDownloadAnchor(modal, GR_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 5_000 });
   });
 });

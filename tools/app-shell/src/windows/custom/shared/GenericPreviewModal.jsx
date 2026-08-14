@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHand
 import { X, Upload, Trash2, Loader2, Download } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { usePreviewAttachment, ACCEPTED_TYPES, ACCEPT_ATTR } from './usePreviewAttachment.js';
+import { useMainAttachment } from './useMainAttachment.js';
 import PdfViewer from './PdfViewer.jsx';
 
 function getBackdropClass(animState) {
@@ -20,13 +21,27 @@ function getCardClass(animState) {
 function ManagedLeftPanel({ cfg, leftPanel }) {
   const ui = useUI();
   const autoFetch = !!(cfg.autoFetch);
-  const attachment = usePreviewAttachment({
-    documentId: cfg.documentId ?? null,
+  // ETP-4315 — externally-supplied documents (purchase-invoice, goods-receipt)
+  // opt in via `cfg.useMainAttachment` to be backed by a real, marked
+  // `Attachment` row (shared with the sidebar/"Adjuntos" tab) instead of the
+  // ETGO_PREVIEW_FILE cache. Both hooks are always called (Rules of Hooks);
+  // passing `documentId: null` to the unselected one keeps it a true no-op.
+  const useReal = !!cfg.useMainAttachment;
+  const legacyAttachment = usePreviewAttachment({
+    documentId: useReal ? null : cfg.documentId ?? null,
     specName: cfg.specName ?? null,
     storeCondition: cfg.storeCondition ?? false,
     token: cfg.token ?? null,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
   });
+  const realAttachment = useMainAttachment({
+    documentId: useReal ? cfg.documentId ?? null : null,
+    tableName: cfg.tableName ?? null,
+    storeCondition: cfg.storeCondition ?? false,
+    token: cfg.token ?? null,
+    apiBaseUrl: cfg.apiBaseUrl ?? null,
+  });
+  const attachment = useReal ? realAttachment : legacyAttachment;
 
   useEffect(() => {
     cfg.onFileChange?.(attachment.storedFile);
@@ -195,13 +210,18 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  * @param {Object}   [attachmentConfig] - Optional file persistence config:
  *   {
  *     documentId: string,       - PK of the source document
- *     specName: string,         - e.g. 'sales-invoice'
+ *     specName: string,         - e.g. 'sales-invoice' (ignored when useMainAttachment)
  *     storeCondition: boolean,  - false = no-op, caller's leftPanel is used as-is
  *     sourceBlob?: Blob,        - Blob to cache on first open (preferred over sourceUrl)
  *     sourceUrl?: string,       - URL to fetch and cache (fallback when sourceBlob absent)
  *     autoFetch?: boolean,      - true = caller provides leftPanel as fallback while caching
  *     token: string,
  *     apiBaseUrl: string,
+ *     useMainAttachment?: boolean, - ETP-4315: back this panel with a real, marked
+ *       `Attachment` (shared with the sidebar/"Adjuntos" tab, via useMainAttachment)
+ *       instead of the ETGO_PREVIEW_FILE cache. Requires `tableName` below.
+ *     tableName?: string,       - AD_Table.name, e.g. 'C_Invoice' — required when
+ *       useMainAttachment is true, ignored otherwise.
  *   }
  *   When storeCondition is true GenericPreviewModal manages the left panel:
  *     - stored file view (PDF iframe or image) when a cached file is available
@@ -249,7 +269,9 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
   const activeContent = tabs.find((t) => t.key === activeTab)?.content ?? null;
 
   const cfg = attachmentConfig ?? {};
-  const shouldManagePanel = !!(cfg.storeCondition && cfg.documentId && cfg.specName);
+  // ETP-4315 — useMainAttachment-mode configs (purchase-invoice, goods-receipt)
+  // identify the record by tableName instead of specName.
+  const shouldManagePanel = !!(cfg.storeCondition && cfg.documentId && (cfg.specName || cfg.tableName));
   const resolvedLeftPanel = shouldManagePanel
     ? <ManagedLeftPanel cfg={cfg} leftPanel={leftPanel} data-testid="ManagedLeftPanel__152ff6" />
     : leftPanel;

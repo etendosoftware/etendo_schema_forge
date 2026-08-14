@@ -49,15 +49,17 @@ describe('OcrSidePanel — FileTab gating', () => {
 });
 
 describe('OcrSidePanel — AttachmentsView', () => {
-  it('looks up the docType to derive the AD table name for the listing call', () => {
+  it('looks up the docType to derive the AD table name for the lookup call', () => {
     assert.match(src, /getOcrDocType\(docTypeId\)\?\.tableName/);
   });
 
-  it('calls listAttachments with tableName + apiBaseUrl inside an effect', () => {
-    assert.match(src, /listAttachments\(\{\s*token,\s*tableName,\s*recordId,\s*apiBaseUrl\s*\}\)/);
+  it('resolves the record\'s single marked "main" attachment inside an effect (ETP-4315 — no ad-hoc PDF heuristic)', () => {
+    assert.match(src, /fetchMainAttachment\(\{\s*token,\s*tableName,\s*recordId,\s*apiBaseUrl\s*\}\)/);
+    assert.doesNotMatch(src, /listAttachments\(/);
+    assert.doesNotMatch(src, /\.find\(\s*a\s*=>\s*\/\\\.pdf\$\/i\.test/);
   });
 
-  it('renders the first PDF inline via PdfViewer using a blob URL from NEO', () => {
+  it('renders the resolved main attachment inline via PdfViewer using a blob URL from NEO', () => {
     assert.match(src, /fetchAttachmentBlobUrl\(/);
     assert.match(src, /<LazyPdfViewer url=\{pdfUrl\}/);
   });
@@ -66,7 +68,7 @@ describe('OcrSidePanel — AttachmentsView', () => {
     assert.match(src, /URL\.revokeObjectURL\(createdUrl\)/);
   });
 
-  it('shows a localized empty state when no attachments are returned', () => {
+  it('shows a localized empty state when no attachment is marked as main', () => {
     assert.match(src, /ui\('ocrSidePanelNoAttachments'\)/);
   });
 });

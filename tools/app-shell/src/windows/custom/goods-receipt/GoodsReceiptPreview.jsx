@@ -117,9 +117,13 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
     ...makeStaticPreviewTabs(ui),
   ];
 
+  // ETP-4315 — real, marked Attachment shared with the "Adjuntos" tab
+  // (M_InOut is the physical table for goods receipts), not the
+  // ETGO_PREVIEW_FILE cache.
   const attachmentConfig = {
     documentId: receipt.id,
-    specName: 'goods-receipt',
+    tableName: 'M_InOut',
+    useMainAttachment: true,
     storeCondition: true,
     autoFetch: false,
     token,
