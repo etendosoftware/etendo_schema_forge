@@ -1629,3 +1629,66 @@ CURRENT (buggy) behavior (e.g. F9's own note that chips only show `!isEditing` "
 design"), **Tester must do a follow-up pass** updating/adding tests for all 5 fixes
 before this goes back through REVIEW/QA — same wave-pattern this ticket already used
 for the dead-code and Guardar-enablement bugs.
+
+**DEV wave 6 Findings (developer-6, landed, commit `66c0df38b`):** all 5 fixed in one
+commit, exactly per the root-cause analysis above — no surprises during implementation.
+- **#1 (spacing):** `AssignTemplateRolesControl.jsx`'s `__options` panel — `p-2` →
+  `p-2 pl-4` (left padding only, per the finding's ask).
+- **#2 (blank trigger while editing):** removed both `!isEditing &&` guards (chips +
+  overflow badge) in the trigger button; the empty-selection placeholder
+  (`selectedRoles.length === 0`) was already unconditional on `isEditing` and needed no
+  change.
+- **#3 (confusing error/success sequence):** `windows/custom/user/index.jsx`'s catch
+  block now builds the toast as `ui('roleAssignmentSaveFailedAfterUserSaved', { detail })`
+  (`detail` = `err?.message || ui('roleAssignmentSaveFailed')`) with `{ duration: 8000 }`
+  — explicitly frames the failure as "the user record saved, only the roles didn't" and
+  gives the admin more time to read it before/instead of the prior success toast fading.
+  New key `roleAssignmentSaveFailedAfterUserSaved` added to BOTH `en_US.json`
+  ("The user was saved, but the roles couldn't be updated: {detail}") and `es_ES.json`
+  ("El usuario se guardó, pero los roles no pudieron actualizarse: {detail}"). Did not
+  touch the underlying `AD_Role.IsTemplate='N'` DB-state drift (separately tracked, out
+  of scope per the dispatch).
+- **#4 (duplicate tab):** `artifacts/user/decisions.json`'s `userRoles` entity collapsed
+  to the bare `{ "exclude": true }` pattern (matching `rxServicesAccess`/`token` exactly),
+  dropping the now-moot `hideDelete`/`fields` keys. `make regen ONLY=user` confirmed the
+  contract's `entities` dropped from 3 to 2 (`user`, `emailConfiguration` only) and
+  `UserPage.jsx` no longer imports/mounts a `userRoles` table or tab.
+  `UserRolesTable.jsx`/`UserRolesForm.jsx` remain on disk as orphaned generated output
+  (the generator doesn't delete files for excluded entities) — harmless, unreferenced,
+  left as-is per the Generated Files Policy (fix belongs in the generator, not this task).
+- **#5 (classic-only categories):** `UserRolesTab.jsx` now builds `activeWindowIds` (a
+  `Set<string>`, the union of every `windows[].id` across ALL `rolesOverview.roles`,
+  Admin included) and filters `flattenWindowRows`'s output against it before grouping;
+  `groupRowsByCategory`'s output is further filtered to drop any group with zero rows
+  (defensive — in practice always already true, since rows are filtered before grouping).
+- Also updated `docs/generated-custom-windows/user.md` in the same commit (Documentation
+  Freshness policy) — the "Window shape"/"Detail behavior" bullets and the "User Roles
+  child table" reactive-behavior bullet described the now-removed native tab; rewrote
+  both to reflect the exclude and cross-referenced the new row-filtering behavior for
+  fix #5.
+- **Verification:** `make regen ONLY=user` clean; contract-integrity check (Window
+  Change Integrity Protocol Step 3) confirmed `draftMode: false`/`category: settings`
+  unaffected, no readOnly regressions on any editable `user` field (this window has no
+  draft/completion flow, so the readOnlyLogic check doesn't apply here); `npx
+  sf-validate-pipeline --scope=user` → OK (0 violations); `npm run build` clean;
+  full Vitest suite (`cd tools/app-shell && npx vitest run`) → **646 files, 12014 tests,
+  12009 passed, 2 failed, 3 skipped** — the only 2 failures are
+  `src/windows/custom/user/__tests__/index.vitest.jsx`'s
+  `handleRoleAssignmentSave (fired via onAfterExistingSave) > shows an error toast (and
+  does not throw) when saveUserRoleAssignments rejects with a domain message` and
+  `> falls back to the generic i18n error key when the rejection has no message`, both
+  asserting the OLD bare-error `toastError` call shape from fix #3 (now receives
+  `('roleAssignmentSaveFailedAfterUserSaved', { duration: 8000 })` instead of the raw
+  domain message / `'roleAssignmentSaveFailed'`) — exactly the pre-existing-test-asserts-
+  old-buggy-behavior situation this dispatch anticipated. No other test in the full suite
+  regressed from any of the 5 fixes (in particular: no Playwright/Vitest test explicitly
+  asserted chips hidden while `isEditing` for fix #2 — `e2e/tests/flows/
+  user-role-assignment.mocked.spec.js` closes the options editor before asserting chip
+  visibility in every scenario, so its assertions still hold, but 3 of its inline comments
+  ("Chips only render in the collapsed (!isEditing) view...") are now stale/inaccurate
+  and should be corrected by Tester's follow-up pass rather than left describing removed
+  behavior; not run in this session — no local server/browser available to this agent).
+  **Tester follow-up needed:** update the 2 failing assertions above to the new toast
+  call shape, and refresh the 3 stale Playwright comments (lines ~190, 262, ~281 of
+  `user-role-assignment.mocked.spec.js` as read pre-fix) — no test logic changes needed
+  there, comments only.
