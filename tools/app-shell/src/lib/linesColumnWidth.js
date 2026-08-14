@@ -40,6 +40,26 @@ const ELASTIC_BASIS_PX = {
 
 const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
 
+// Column types that never render as a fixed grid column in EITHER lines
+// renderer — InlineLinesPanel (flex layout, saved rows) or DataTable's
+// inline-add row (HTML table layout, hideHeader mode). `dimensionsPanel`
+// (ETP-4610) is the only member today: its fields render via a hover
+// action + expand sub-row instead of a header cell/basis. Both renderers
+// MUST filter their `visibleColumns` through this same predicate — see
+// ETP-4803, where DataTable diverged and kept `dimensionsPanel` in its
+// hidden add-row `<colgroup>`, throwing off `growColumnWidth()` for every
+// column after it.
+const NON_GRID_COLUMN_TYPES = new Set(['dimensionsPanel']);
+
+/**
+ * True if `col` should participate in the shared grid layout (colgroup /
+ * flex row) computed by both InlineLinesPanel and DataTable. False for
+ * column types that render out-of-band (e.g. `dimensionsPanel`).
+ */
+export function isLineGridColumn(col) {
+  return !NON_GRID_COLUMN_TYPES.has(col.type);
+}
+
 function selectorFlex(col, idx) {
   const grow = col.grow !== undefined ? col.grow : idx === 0;
   return grow ? '1 1 192px' : '0 0 192px';

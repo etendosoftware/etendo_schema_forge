@@ -1009,6 +1009,27 @@
   {
     "from": "0.23.0",
     "to": "0.24.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
+  },
+  {
+    "from": "0.24.0",
+    "to": "0.25.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"etgoCurrency\" property \"visibility\" changed from \"discarded\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
+  },
+  {
+    "from": "0.25.0",
+    "to": "0.26.0",
     "level": "breaking",
     "reasons": [
       "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
@@ -1028,8 +1049,8 @@
     "date": "2026-07-28"
   },
   {
-    "from": "0.24.0",
-    "to": "0.25.0",
+    "from": "0.26.0",
+    "to": "0.27.0",
     "level": "additive",
     "reasons": [
       "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
@@ -1039,8 +1060,8 @@
     "date": "2026-07-28"
   },
   {
-    "from": "0.25.0",
-    "to": "0.26.0",
+    "from": "0.27.0",
+    "to": "0.28.0",
     "level": "additive",
     "reasons": [
       "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)"
@@ -1049,8 +1070,8 @@
     "date": "2026-07-29"
   },
   {
-    "from": "0.26.0",
-    "to": "0.27.0",
+    "from": "0.28.0",
+    "to": "0.29.0",
     "level": "additive",
     "reasons": [
       "Field \"movementQuantity\" property \"defaultValue\" changed from \"1\" to \"0\" in frontend (additive)",
@@ -1061,8 +1082,8 @@
     "date": "2026-07-30"
   },
   {
-    "from": "0.27.0",
-    "to": "0.28.0",
+    "from": "0.29.0",
+    "to": "0.30.0",
     "level": "additive",
     "reasons": [
       "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)",
@@ -1071,5 +1092,37 @@
     ],
     "author": "pipeline",
     "date": "2026-07-30"
+  },
+  {
+    "from": "0.1.0",
+    "to": "0.2.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-02"
+  },
+  {
+    "from": "0.2.0",
+    "to": "0.3.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-03"
+  },
+  {
+    "from": "0.29.0",
+    "to": "0.30.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"orderQuantity\" property \"gridReadOnly\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-07"
   }
 ]

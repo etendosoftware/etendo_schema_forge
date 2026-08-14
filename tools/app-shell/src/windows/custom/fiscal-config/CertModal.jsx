@@ -9,7 +9,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive border border-destructive text-sm text-destructive">
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive">
         <TriangleAlert
           size={16}
           className="text-destructive flex-shrink-0"

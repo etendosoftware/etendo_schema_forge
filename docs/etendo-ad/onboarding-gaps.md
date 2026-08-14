@@ -12,12 +12,28 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
+| A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
+| A2b (generalized) | Accounting | Same stale-row class of drift, generalized to the other 11 `*_acct` columns on `C_BP_Group_Acct`; 4 of them (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`) turned out to be an ONGOING preventive gap too — neither the core `c_bp_group_trg()` trigger nor `BP_GROUP_ACCT_SQL` ever populated them | Both fronts closed (`R21` corrective + `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` preventive) | ETP-4720 |
+| A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
+| A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
+| H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
+| I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
+| J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
+| K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
+
+> **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
+> authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
+> (roles provisioning, ETP-4515/4516) below in **§H** — `H` was not actually a fresh series. Corrected
+> to `H3` (2026-08-03) across the SQL header, regression test, this table, and the
+> `onboarding-and-datafixes-map.md`/`tenant-remediation-knowledge.md` references. No functional impact
+> either way — `@gap` is a documentation/categorization tag only, never stored in
+> `ETGO_DATA_FIX_HISTORY` or read by the runner.
 
 ---
 
@@ -304,6 +320,270 @@ notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable fact
 **Where it should be fixed:** the onboarding process — at client creation these tables should be auto-populated from the schema defaults. Note: with these populated, tax accounting is independent per client (supports the system-level taxes approach).
 
 **Cross-link:** this is exactly what the `../proposals/initial-organization-setup-accounting.md` proposal aims to automate. The proposal's wiring step (`applyAccountingPackageWiring`) and package-completeness validation (`validateAccountingPackage`) together ensure these tables are populated before `AD_Org_Ready` is called.
+
+---
+
+### A2b — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on a stale pre-existing row (ETP-4706, 2026-07-29)
+
+**Symptom:** `Contabilizar` (post) on a purchase Goods Receipt fails with a generic `422`:
+```json
+{"success":false,"message":"Account could not be found."}
+```
+Server log (NEO just proxies this through):
+```
+WARN  AcctServer - getAccount - NO account Type=51, Record=<inout id>
+ERROR AcctServer - No Account Not Invoiced Receipts for product: <product> in accounting schema: <schema>
+```
+
+**Root cause — NOT a product/product-category gap (ticket's original diagnosis corrected).**
+`AcctType=51` is `AcctServer.ACCTTYPE_NotInvoicedReceipts`, resolved by
+`AcctServer_data.xsql#selectNotInvoicedReceiptsAcct`:
+```sql
+SELECT NotInvoicedReceipts_Acct FROM C_BP_Group_Acct a, C_BPartner bp
+WHERE a.C_BP_Group_ID = bp.C_BP_Group_ID AND bp.C_BPartner_ID = ? AND a.C_AcctSchema_ID = ?
+```
+This is resolved **entirely by the transaction's Business Partner → its BP Group** — never by the
+product or product category, even though the error message text happens to name the product.
+Confirmed via `information_schema.columns` that neither `M_Product_Category_Acct` nor
+`M_Product_Acct` has a not-invoiced-receipts column at all — those tables cannot be the fix target.
+
+**Live-DB diagnosis (GOClient, client `802509E12436405C86BA1FD5B1DF508C`, schema "Esquema GO"
+`C06B100312FA48159DB36B9A4B461019`):** the repro's Goods Receipt (`36DEE37DA9EA4A54A01B2D313EDFE636`)
+uses BP `6BD084B9C1744044B9691AD373F96A93` ("Tercero España"), whose group is "Cliente"
+(`DBBD00C9E0B9442188FCDDA3F601DAEA`, the group renamed from "Consumidor Final" by ETP-4402). That
+group's `C_BP_Group_Acct` row for this schema has `notinvoicedreceipts_acct = NULL`, while
+`C_AcctSchema_Default.notinvoicedreceipts_acct` on the same schema **is** populated
+(`6E9DA718417A48A290FE376448A12BF6`). The row's `created` timestamp is `2026-04-07 14:59:32` — well
+before the tenant's current account defaults were fully settled — and the onboarding insert
+(`OnboardingAccountingWiringService#provisionEntityPostingAccounts`, `BP_GROUP_ACCT_SQL`) is guarded
+by `NOT EXISTS` at the **row** level: once *any* row exists for `(group, schema)` it is never
+revisited, so a column added/defaulted after the row's creation stays permanently NULL on it. The
+sibling "Proveedor" and "Acreedor" groups on the same tenant/schema already have this column set.
+
+**Scope — swept the whole fleet, confirmed corrective-only (no preventive front needed):** every
+other `C_BP_Group_Acct` row on this DB, across every other tenant — including tenants onboarded via
+the **current** onboarding code the same day this was diagnosed (e.g. "Empresa E2E d5be89a8",
+onboarded 2026-07-29) — already has `notinvoicedreceipts_acct` populated. A brand-new tenant is NOT
+born with this gap; only this one pre-existing GOClient row is affected. Per the "Boundary" rule in
+`../etendo-ad/onboarding-and-datafixes-map.md` §0, this ships corrective-only, stated explicitly.
+`ONBOARDING_PROVISIONED_THROUGH` is deliberately NOT bumped — there is no preventive change to gate.
+
+**Also found, explicitly OUT OF SCOPE for this ticket (flagged, not fixed here):** the SAME "Cliente"
+row also has `notinvoicedrevenue_acct`, `notinvoicedreceivables_acct`, `unearnedrevenue_acct`,
+`paydiscount_exp_acct`, `paydiscount_rev_acct`, `writeoff_rev_acct`, `v_liability_services_acct`,
+`doubtfuldebt_acct`, `baddebtexpense_acct`, `baddebtrevenue_acct` and `allowancefordoubtful_acct` all
+NULL — the same stale-row class of drift, just for other account types on the identical row. ETP-4706
+explicitly scoped itself to Not-Invoiced-Receipts only; a follow-up ticket should decide whether to
+generalize R17 into a "resync every NULL `*_acct` column against the schema default" fix for this row
+(and any other row like it) rather than one column at a time.
+**RESOLVED by ETP-4720 (2026-08-05) — see the "A2b (generalized)" section immediately below.**
+
+**Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` —
+single guarded `UPDATE`, scoped to `:client_id`, backfilling `notinvoicedreceipts_acct` from
+`c_acctschema_default` wherever the group row has it NULL and the schema has a value to source from.
+Verified live in a rolled-back transaction on GOClient (`BEFORE: NULL` → `AFTER:
+6E9DA718417A48A290FE376448A12BF6`; re-check matches 0 rows).
+
+**Related hygiene fix (different repo, same stale row):** the static
+`referencedata/sampledata/GOClient/C_BP_GROUP_ACCT.xml` dump in `com.etendoerp.go` carried this exact
+row (`C_BP_GROUP_ACCT_ID 69081038A3AC421AB8DB93A096D58D57`) with `NOTINVOICEDRECEIPTS_ACCT` missing
+entirely — a byte-for-byte mirror of the live NULL above. Fixed for hygiene only in that repo's
+`feature/ETP-4706` (element added, value `6E9DA718417A48A290FE376448A12BF6`); the table is not in
+`OnboardingDatasetDefinition.INCLUDED_TABLES`, so this has no runtime/onboarding effect — it just
+prevents the stale value from resurfacing if the file is ever regenerated or the table is later
+added to the included set. If you independently find this XML stale, it's already handled.
+
+---
+
+### A2b (generalized) — the other 11 `C_BP_Group_Acct.*_acct` columns, 4 of them an ONGOING preventive gap (ETP-4720, 2026-08-05)
+
+**Task:** generalize R17's single-column backfill (`NotInvoicedReceipts_Acct`) to the other 11
+`*_acct` columns on `C_BP_Group_Acct` flagged as out-of-scope above. The ticket's own text assumed
+this was corrective-only, same as R17 — that assumption held for 7 of the 11 columns but was
+**wrong** for the other 4.
+
+**Root cause, confirmed by reading both live provisioning paths (not assumed):**
+- `pg_get_functiondef('c_bp_group_trg')` (the core, unmodified Postgres trigger that fires on every
+  `C_BP_Group` insert) shows its own `INSERT` **omits 5 of the table's columns entirely**:
+  `WriteOff_Rev_Acct`, `DoubtfulDebt_Acct`, `BadDebtExpense_Acct`, `BadDebtRevenue_Acct`,
+  `AllowanceForDoubtful_Acct`. It DOES include the other 6 of the 11
+  (`NotInvoicedRevenue_Acct`/`NotInvoicedReceivables_Acct`/`UnEarnedRevenue_Acct`/
+  `PayDiscount_Exp_Acct`/`PayDiscount_Rev_Acct`/`V_Liability_Services_Acct`).
+- `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (the Java fallback, guarded by `NOT EXISTS`
+  at the row level) includes `WriteOff_Rev_Acct` but still omits the other 4.
+- Because `C_BP_Group` is always inserted (firing the trigger) BEFORE this Java statement ever runs,
+  the trigger always wins the INSERT race and the Java fallback's own `NOT EXISTS` guard never gets a
+  chance to contribute these 4 columns either. Whichever path "wins," the resulting row is missing
+  the same 4 columns — for every tenant, every group, always.
+
+**Live confirmation this is an ONGOING preventive gap, not only legacy drift:** swept all 12 tenants
+on the dev DB — `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/
+`AllowanceForDoubtful_Acct` were NULL on **every** `C_BP_Group_Acct` row of every tenant whose
+`C_AcctSchema_Default` already had them populated (via R11), including "Empresa E2E d5be89a8"
+(client `2D54A79B1B2649218C5FED9307B84DC9`), onboarded **2026-07-29 — 6 days before this was
+diagnosed — via the current onboarding code**.
+
+**6 of the other 7 columns have no source value anywhere on this DB; the 7th has one pre-existing
+exception.** `C_AcctSchema_Default`'s own `NotInvoicedRevenue_Acct`/`NotInvoicedReceivables_Acct`/
+`UnEarnedRevenue_Acct`/`PayDiscount_Exp_Acct`/`PayDiscount_Rev_Acct`/`V_Liability_Services_Acct` are
+NULL fleet-wide on all 14 schemas — R11 only ever completed 6 *different* Defaults-tab columns.
+`WriteOff_Rev_Acct` is the exception: it is NOT NULL on F&B International Group's schema
+`732913485BB040FFA4643FF06D1AA095` (populated since 2026-07-08, before this ticket), so R21's
+`@check` does NOT no-op for F&B today — 2 of its `C_BP_Group_Acct` rows on that schema are still
+NULL and WILL be backfilled the first time R21 runs there (verified live, 2026-08-05, during DOCS
+review). This is an R11-adjacent gap, out of this ticket's scope; R21's `@check` correctly excludes
+the other 6 columns today and will self-heal them automatically per-tenant the moment a future fix
+populates `C_AcctSchema_Default` for them.
+
+**Per-partner override audit (explicitly checked, not assumed):** of the 11 columns, only
+`V_Liability_Services_Acct` has a matching per-partner override column, on `C_BP_Vendor_Acct`.
+`C_BP_Customer_Acct` has neither of the 11. Since R21 (and its preventive twin) only ever write the
+group-level table, a per-partner override's existence is orthogonal — no extra guard was needed.
+
+**Fix — both fronts closed:**
+- **Corrective:** `cli/src/data-fixes/sql/20260805T120000Z__R21-bp-group-acct-remaining-columns.sql`
+  — one guarded `UPDATE`, `COALESCE(a.col, d.col)` per column, row-level `WHERE` mirroring `@check`,
+  scoped to `:client_id`. Never touches `notinvoicedreceipts_acct` (R17's own scope). Verified live
+  in a rolled-back transaction on GOClient: exactly the 4 sourced columns filled on all 3 groups, the
+  other 7 stayed NULL (no source value), re-run affected 0 rows, R17's own column untouched.
+- **Preventive:** `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` (com.etendoerp.go),
+  a `COALESCE`-guarded `UPDATE` covering the same 5 columns the trigger/Java fallback omit, wired as
+  the new LAST provisioning step in `EtendoGoJwtServlet.ensureOnboardingDataset` (right before the
+  data-fix baseline is stamped). `ONBOARDING_PROVISIONED_THROUGH` bumped to R21's own timestamp,
+  `2026-08-05T12:00:00Z`.
+- **Tests:** `cli/test/data-fixes-r21-bp-group-acct-remaining-columns.test.js` (corrective, static
+  parse validation of `@check`/`@apply` per column) and
+  `OnboardingAccountingWiringServiceTest`/`EtendoGoJwtServletOnboardingDatasetTest` (preventive,
+  Java/Mockito — confirms the new step runs, is scoped by client, and is wired before the baseline).
+### A2c — `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely (ETP-4743, follow-up to ETP-4565, 2026-08-05)
+
+**Symptom:** already-onboarded tenants have financial accounts (`FIN_FINANCIAL_ACCOUNT`, e.g.
+"Caja", "Cuenta de Banco") and warehouses (`M_WAREHOUSE`, e.g. "Almacen GO") with **zero**
+matching rows in `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` for one or more of the tenant's
+accounting schemas — not a NULL column on an existing row (as in A2b), the per-schema row itself
+is entirely absent.
+
+**Root cause:** `FIN_FINANCIAL_ACCOUNT` and `M_WAREHOUSE` are bulk-imported by the onboarding
+dataset importer with DB triggers disabled (`OnboardingDatasetDefinition.INCLUDED_TABLES`), so
+Classic's own `fin_financial_account_trg` / `m_warehouse_trg` AFTER-INSERT triggers — which
+otherwise auto-provision the matching `*_Acct` row for every LIVE creation of these entities —
+never fire for the bundled template rows. Unlike the sibling entities that
+`OnboardingAccountingWiringService#provisionEntityPostingAccounts` already backfills via
+`runEntityAcctInsert` (BP group, product category, BP customer/vendor, product, tax), nobody
+backfilled these two tables for tenants that were **already onboarded before ETP-4565 shipped its
+preventive fix** (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL`, already merged into the
+live onboarding chain). ETP-4565 deliberately did NOT bump `ONBOARDING_PROVISIONED_THROUGH` at the
+time, since the corrective `.sql` twin did not exist yet.
+
+**Live-DB sweep (2026-08-05), pairs of (entity × schema) missing their `*_Acct` row, GENUINELY
+FIXABLE (i.e. the schema also has a `c_acctschema_default` row — see the QA finding below for why
+this qualifier matters):**
+
+| Client | FA missing pairs | WH missing pairs |
+|---|---|---|
+| acreedortest | 2 | 2 |
+| acreetest2 | 2 | 2 |
+| empresa | 3 | 2 |
+| Empresa E2E (×4) | 3 each | 2 each |
+| F&B International Group | 7 (of 14 financial accounts × 2 of its 26 schemas that have a `c_acctschema_default` row) | 96 |
+| GOClient | 0 (already correct) | 0 (already correct) |
+| QA Testing | 3 | 2 |
+| RolesPresa | 3 | 2 |
+| TaxesOrg | 2 | 2 |
+
+Every real tenant on the dev DB except GOClient itself has at least one missing pair. GOClient's
+own rows were already wired at some point, so its `@check` naturally returns 0 rows — no
+special-casing needed.
+
+**Both fronts closed (2026-08-05):**
+
+| Front | Deliverable |
+|---|---|
+| **Preventive** | Already shipped by ETP-4565 (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL` in `OnboardingAccountingWiringService`, called from `provisionEntityPostingAccounts`). No new Java needed for ETP-4743. |
+| **Corrective** | `cli/src/data-fixes/sql/20260805T140000Z__R22-fin-account-warehouse-acct.sql` — two guarded `INSERT ... SELECT` statements (mirroring the two Java constants column-for-column), each joined against **every** `c_acctschema` row the tenant owns (a tenant may run more than one ledger; mirrors the same generalization `R7-tax-accounts` already applies). Live-validated on `acreedortest` (`D94AED60C3E0494AAFD44B8A05BB5CFC`): dry-run → `WOULD_APPLY` → real run → `APPLIED (4 rows)` → re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **CUT bump** | `ONBOARDING_PROVISIONED_THROUGH` bumped from R20's `2026-08-03T18:00:00Z` to R22's `2026-08-05T14:00:00Z` in `OnboardingBaselineService.java` — this closes the loop ETP-4565 deliberately left open (preventive shipped, CUT not bumped, because the corrective twin didn't exist yet). |
+
+**QA fix (2026-08-05, Sentinel, rejection cycle 1 of ETP-4743, resolved same day):** the
+financial-account branch of `@check` was initially missing the `JOIN c_acctschema_default d ON
+d.c_acctschema_id = s.c_acctschema_id` that `@apply`'s own INSERT already had (an asymmetry Alex
+flagged as a non-blocking note in REVIEW, then Sentinel proved was live and reproducible). Without
+that join, `@check` counted ALL 343 (financial-account × schema) pairs on F&B International Group
+as "needing the fix", but `@apply`'s `INNER JOIN c_acctschema_default` could only ever insert the
+7 pairs whose schema actually HAS a `c_acctschema_default` row — the other 336 pairs belong to
+schemas with no default row at all (see gap **A2d** below) and can never be inserted by this fix.
+A real run would have written ledger status `APPLIED` (rows_affected≈7) — looking like success —
+while `@check` kept matching >0 rows forever (the 336 unreachable pairs), so the fix would never
+converge to `SKIPPED_NOT_NEEDED` on a re-run. Fixed by adding the missing join to `@check` so it
+now only counts pairs `@apply` can genuinely close; the warehouse branch never had this bug (it
+already joined `c_acctschema_default` symmetrically in both `@check` and `@apply`). Verified with
+a read-only `--dry-run` against F&B International Group (no writes) and a direct SQL count
+confirming exactly 7 genuinely-fixable financial-account pairs post-fix. Regression-guarded by two
+new tests in `cli/test/data-fixes-r22-fin-account-warehouse-acct.test.js` asserting `@check` and
+`@apply`'s financial-account branches join `c_acctschema_default` the same number of times.
+
+**Branch-ordering note:** at the time this shipped, an unmerged sibling branch
+(`feature/ETP-4720`) independently claims `R21` at `2026-08-05T12:00:00Z` for an unrelated
+`C_BP_Group_Acct` fix. `R22`'s timestamp (`14:00:00Z`) is deliberately later, so no `Rn`/CUT
+collision occurs whichever branch merges first; expect (and resolve to the later timestamp on) a
+merge conflict on the single `ONBOARDING_PROVISIONED_THROUGH` line when the two branches converge,
+per the standing rule already documented for prior collisions (R9/R10, R19/R20).
+
+**SQL fix (corrective guard — idempotent, per-schema):**
+```sql
+-- @check
+SELECT 1
+FROM fin_financial_account f
+JOIN c_acctschema s ON s.ad_client_id = f.ad_client_id
+WHERE f.ad_client_id = :client_id
+  AND NOT EXISTS (
+    SELECT 1 FROM fin_financial_account_acct a
+    WHERE a.fin_financial_account_id = f.fin_financial_account_id
+      AND a.c_acctschema_id = s.c_acctschema_id
+  )
+UNION ALL
+SELECT 1
+FROM m_warehouse w
+JOIN c_acctschema s ON s.ad_client_id = w.ad_client_id
+JOIN c_acctschema_default d ON d.c_acctschema_id = s.c_acctschema_id
+WHERE w.ad_client_id = :client_id
+  AND d.w_differences_acct IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM m_warehouse_acct a
+    WHERE a.m_warehouse_id = w.m_warehouse_id
+      AND a.c_acctschema_id = s.c_acctschema_id
+  )
+LIMIT 1;
+```
+Full `@apply` (two `INSERT ... SELECT` statements) in the `.sql` file itself — see
+`docs/etendo-ad/onboarding-and-datafixes-map.md` §4 for the paired preventive/corrective summary.
+
+---
+
+### A2d — Accounting schemas with no `C_ACCTSCHEMA_DEFAULT` row at all (NOT YET FIXED, found 2026-08-05)
+
+**Symptom:** discovered as a side-effect of Sentinel's QA pass on R22 (A2c above) — 24 of F&B
+International Group's 26 `c_acctschema` rows (all `isactive='Y'`) have **zero** matching rows in
+`c_acctschema_default`. This isn't specific to R22: ANY fix or onboarding step that resolves a
+posting-account default via `c_acctschema_default` (A2, A2c, and R22's own financial-account
+branch) can never reach these 24 schemas — its `INNER JOIN c_acctschema_default` silently excludes
+them, so a naive `@check` that doesn't mirror the same join over-reports "needs fix" for pairs
+that can never actually be inserted (exactly the bug R22 shipped with in cycle 1, before the
+`@check` join was corrected to match `@apply`).
+
+**Root cause:** not yet investigated. Candidates (untested): (a) these 24 schemas were created via
+a path that never ran the equivalent of the A1/A2 accounting-setup wiring (e.g. a bulk/test-data
+script rather than the normal *Initial Organization Setup* flow); (b) a second-ledger/parallel-book
+pattern specific to this tenant's test data that was never meant to post at all. F&B International
+Group is a QA/demo tenant with an unusually high schema count (26, vs. 1-2 for every other tenant
+on this DB), so this may be an artifact of how that specific tenant's test data was built rather
+than a live-production onboarding gap — needs a real investigation before deciding whether this
+warrants a corrective fix, an onboarding-hardening step, or is simply out of scope (a test/demo
+tenant's non-posting schemas may not need `c_acctschema_default` at all).
+
+**Status:** **NOT FIXED.** Explicitly out of scope for ETP-4743 (which backfills `*_Acct` rows
+GIVEN a schema default exists, not schema-default completeness itself). Flagged here as a
+follow-up per the tenant-remediation workflow's "flag, don't silently skip" convention. See
+`docs/etendo-ad/tenant-remediation-knowledge.md`'s ETP-4743 section for the discovery details.
 
 ---
 
@@ -652,7 +932,174 @@ SELECT name FROM ad_role WHERE ad_client_id = '<CLIENT_ID>' AND isactive = 'Y';
 
 **Live-DB staleness found and fixed while building this fix (2026-07-27):** correct reference values are `Y` for Finance and GOClient Admin, `N` for Sales/Purchasing/Inventory/GOuser — confirmed with the user. `referencedata/sampledata/GOClient/AD_ROLE.xml` already ships these correctly (a first check mis-grepped the tag's actual all-caps name, `EM_ETGO_SHOW_ACCT_FIELDS`, and wrongly concluded the XML never set it). The real gap was this local dev DB's live `ad_role` rows being stale relative to that already-correct XML — Finance and GOClient Admin both showed `N` live, same "referencedata not reapplied to an existing install" pattern as H1, just for this column instead of webhook grants. Corrected directly (`UPDATE ad_role SET em_etgo_show_acct_fields='Y' ...`) for this DB. Since Step 1 of the corrective fix always reads GOClient's *live* row (not the XML), any other environment whose GOClient copy is similarly stale would clone the wrong value until its own live data is corrected the same way.
 
-**Preventive fix (ETP-4515, implemented 2026-07-27, same day as the corrective fix):** `com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingRoleProvisioningService.java`, wired into `EtendoGoJwtServlet`'s onboarding chain right after the existing `ensureWebhookAccess` step (both are client-wide, neither needs the organization to exist yet). Same GOClient-as-template logic as the corrective data-fix above. Written and manually cross-checked against the real DAL model classes, but not compiled/run against a live onboarding flow in this session — needs that verification before being trusted end-to-end.
+**Preventive fix (ETP-4515, implemented 2026-07-27, same day as the corrective fix):** `com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingRoleProvisioningService.java`, wired into `EtendoGoJwtServlet`'s onboarding chain right after the existing `ensureWebhookAccess` step (both are client-wide, neither needs the organization to exist yet). Same GOClient-as-template logic as the corrective data-fix above.
+
+**End-to-end verification — CONFIRMED (2026-08-06):** the earlier caveat here ("not compiled/run against a live onboarding flow in this session") is resolved. Found 3 real tenants already onboarded through the live `POST /sws/go/onboarding` flow after PR #762 (`2d8b406b`, 2026-07-27) merged this service: `RolesPresa` (2026-07-27T13:14), `Empresa E2E 91c979ac` (2026-07-27T18:42), `Empresa E2E d5be89a8` (2026-07-29T12:58). All 3, checked against GOClient's *current* live state: have exactly the 4 cloned roles + their own admin role (no extras/dupes); `EM_ETGO_Show_Acct_Fields` = `Y`/Finance, `N`/Sales-Purchasing-Inventory, matching GOClient; `AD_Window_Access` counts match GOClient's current counts (Finance 9, Inventory 6, Purchasing 5, Sales 6 — unchanged since the R16 baseline); a window-id + `isreadwrite` set-equality check (not just counts) is an EXACT match for all 4 roles on all 3 tenants; every other `AD_Role` attribute matches too. The deployed `.class` on the running dev Tomcat matches the current source byte-for-byte (`javap` signature check), confirming these 3 tenants were provisioned by today's code. Idempotency ("safe to call `wire()` twice") verified via the guard precondition (`resolveRoleByName` already finds all 4 active roles on all 3 tenants → a second call would skip every clone), not a literal second live call — `handleOnboarding` has no "re-run for an existing client" entry point to trigger one safely. Full detail: `docs/etendo-ad/tenant-remediation-knowledge.md` §"ETP-4515/H2 — Onboarding role provisioning, end-to-end verification". **ETP-4515's 3rd acceptance criterion can now be considered met.**
+
+---
+
+## I — Inventory / Warehouse
+
+**New gap-label series `I`.** Storage-bin (locator) provisioning defaults don't fit the A–H
+provisioning-gap taxonomy (A=accounting, B=org tree, C=period, D=legal entity, E=session,
+F=default customer/org info, G=payment method config, H=NEO Headless/webhook access). Used
+`@gap: I1` for R19 — the same pattern G1/H1/H2 established for their own new categories. Future
+warehouse/inventory provisioning gaps continue the `I` series.
+
+### I1 — Locators born with inventory status "Undefined-OverIssue" (allows negative stock, ETP-4761)
+
+**Symptom:** any new tenant's default storage bins can post negative stock from day one — the
+Locator/Storage Bin window shows "Undefined-OverIssue" as the Inventory Status instead of
+"Available".
+
+**Root cause:** `M_InventoryStatus` is a fixed system reference (`ad_client_id='0'`): id `'0'` =
+"Undefined-OverIssue" (`OVERISSUE='Y'`, lets a locator go negative), id `'2'` = "Available"
+(`OVERISSUE='N'`, blocks it); id `7B3DC15A20234C418D26EECDC5D59003` = "Undefined" (also
+`OVERISSUE='N'` — the DB column's own default, mislabeled but functionally equal to Available).
+The bundled onboarding sampledata (`referencedata/sampledata/GOClient/M_LOCATOR.xml`, in
+`com.etendoerp.go`) shipped BOTH of GOClient's bundled locators with `M_INVENTORYSTATUS_ID='0'` —
+imported verbatim into every new tenant via `importOnboardingDataset` — so every tenant onboarded
+before this fix has at least its default warehouse bin able to go negative. Separately, the
+frontend's default-storage-bin creation (`tools/app-shell/src/windows/custom/warehouse/index.jsx`,
+Schema Forge repo) omitted the field entirely, so the DB column default (`'0'`) applied there too;
+that half of the fix is a one-line payload addition (`inventoryStatus: '2'`) in the same repo,
+delivered alongside this gap closure but outside Remedy's remit (frontend custom-component code,
+not onboarding/data-fix).
+
+**Hard business rule (confirmed live, not a DB constraint):** flipping a locator's status to one
+that disallows OverIssue FAILS at the application/callout layer if that locator currently has
+negative on-hand stock (`m_storage_detail.qtyonhand < 0` for any product/attribute/UOM) — error:
+"There is negative Stock for Product: ... The Storage Bin can not be changed to an Inventory
+Status that does not allow Over Issue". Both fronts below respect this rule: the preventive fix
+never applies to a locator that already has stock (a fresh sampledata import never does), and the
+corrective fix never flips a locator carrying negative stock — it skips it and reports the
+combination for manual physical-inventory correction instead.
+
+**Verification (per tenant):**
+
+```sql
+SELECT l.value, l.m_inventorystatus_id, ist.name
+FROM m_locator l
+JOIN m_inventorystatus ist ON ist.m_inventorystatus_id = l.m_inventorystatus_id
+WHERE l.ad_client_id = '<CLIENT_ID>' AND l.isactive = 'Y'
+ORDER BY l.value;
+-- Gap present if any row shows m_inventorystatus_id = '0' ("Undefined-OverIssue").
+```
+
+**Both fronts closed (2026-08-03):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260803T160000Z__R19-locator-inventory-status.sql` — flips every active, status-`0` locator to `'2'` UNLESS it carries any negative-stock `m_storage_detail` row (per-locator granularity: `m_locator.m_inventorystatus_id` is one column per locator, so a locator with even one negative combination is left untouched entirely). A new optional `@report` section (added to the data-fixes framework's parser/runner as part of this fix — see `cli/src/data-fixes/sql/README.md`) lists every skipped locator's product/attribute/UOM/qtyonhand into the ledger's `detail` column, so an operator can find and correct the negative stock before forcing a re-check with `--fix R19-locator-inventory-status --client <id>`. Live-validated in rolled-back transactions: QA Testing (26 status-0 locators → 23 flipped, 3 skipped for negative stock, 445 report rows across those 3 locators' many attribute-set-instance combinations) and GOClient (1 status-0 locator → flipped, 0 report rows). |
+| **Preventive** | `referencedata/sampledata/GOClient/M_LOCATOR.xml` (`com.etendoerp.go`) — both bundled locators now ship `M_INVENTORYSTATUS_ID='2'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T16:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerLocatorsDefaultToAvailableInventoryStatus`. **Not compiled/run this session** — this worktree cannot build against the module's real Gradle project (known limitation, see `docs/etendo-ad/tenant-remediation-knowledge.md` §ETP-4245 2026-07-06 note); the assertion was hand-verified against the normalizer's mocking convention (`toLowerCamel` property-name derivation) instead. |
+
+**Known limitation (accepted):** because the corrective fix runs at most once per tenant (the
+runner's strict watermark never revisits a `PROCESSED` fix), a locator skipped for negative stock
+is not automatically retried once the stock is corrected by hand — an operator must force it with
+`--fix R19-locator-inventory-status --client <id>`.
+## J — Costing
+
+### J1 — New tenants get ZERO `M_Costing_Rule` rows, not Average (ETP-4760, 2026-08-03)
+
+**Symptom:** the ticket was filed as "the costing rule should default to Standard, not Average". Live-DB sweep (etendogoclean, 2026-08-03) shows the actual defect is worse than the ticket's own framing: a freshly onboarded tenant gets **no costing rule at all**, of any algorithm. `M_Transaction.iscostcalculated` stays `'N'` forever for every transaction the tenant records, because there is never a rule for `CostingBackground`/`AverageAlgorithm`/`StandardAlgorithm` to apply.
+
+**Root cause:** `M_COSTING_RULE` was never in `OnboardingDatasetDefinition.INCLUDED_TABLES` (`com.etendoerp.go`). The bundled `referencedata/sampledata/GOClient/M_COSTING_RULE.xml` file existed on disk (with an Average-algorithm row) but was never actually imported for any tenant, because the dataset importer only normalizes tables present in `INCLUDED_TABLES`.
+
+**Live-DB sweep (2026-08-03, etendogoclean, `SELECT count(*) FROM m_costing_rule GROUP BY ad_client_id`):**
+
+| Client | `M_Costing_Rule` rows | Algorithm(s) | `M_Transaction.iscostcalculated` |
+|---|---|---|---|
+| acreedortest, acreetest2, empresa, Empresa E2E ×4, RolesPresa, TaxesOrg (9 tenants) | **0** | — | `'N'` on 100% of rows (where any transactions exist) |
+| GOClient | 2 (1 closed + 1 open) | Average (closed) → **Standard** (open, validated live via the real "Validate Costing Rule" process during this investigation) | `'Y'` |
+| F&B International Group | 2 | Average (both open, one per org) | `'Y'` |
+| QA Testing | 2 | Average (both open, one per org) | mixed `'Y'`/`'N'` (legacy pre-rule transactions never retroactively costed) |
+
+GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` row) was confirmed hand-created by a human at some point — not representative of what onboarding gives a new tenant.
+
+**"Validate Costing Rule" process semantics (observed live, GOClient, 2026-08-03):** running the real process (`org.openbravo.costing.CostingRuleProcessActionHandler`, `obuiapp_process_id=45ED6D0400FD42BEA9771C549A9AE8AB`) closed the old Average rule (`dateto` = the validation instant), inserted+validated a new Standard rule (`datefrom` = same instant), closed all 8 open `M_Costing` anchors (0 remain open — the next transaction per product re-opens its own anchor under the new rule, confirming the documented LAZY migration), and **auto-created 4 `M_Inventory` (Physical Inventory) documents** — one closing + one opening per warehouse — each linked via its own `M_Costing_Rule_Init` row. Migration to the new rule is per-product and lazy: only products with pending/open transactions get a new cost anchor immediately; the rest keep their last anchor under the old rule until their own next transaction. **Acceptance criterion:** do not expect every product to be Standard-costed immediately — the correct criterion is "the client's active/validated rule going forward is Standard."
+
+**Scope decision — SQL-only for the "zero rule" case; existing-Average-rule tenants explicitly excluded:** replicating the real process's Physical Inventory document creation (sequences, doc types, lines, workflow, posting) in hand SQL would be a materially bigger, riskier lift than this data-fixes framework is meant for, and `@type: webhook` execution is not implemented in `run.js` yet (see `docs/etendo-ad/tenant-remediation-knowledge.md`). A brand-new tenant with zero products/transactions has no prior rule to close and no inventory to reconcile, so cloning an already-validated Standard rule directly is safe there. F&B International Group and QA Testing (the only tenants left with an existing Average rule after this fix) are deliberately **excluded** by the corrective fix's `@check`/`@apply` and flagged for a manual "Validate Costing Rule" run via the UI by an accounting admin.
+
+**Single-org restriction (QA finding, addressed same day, 2026-08-03):** the fix inserts one row with `org_dimension='N'` (a whole-client rule), but that row still carries exactly one `ad_org_id`. Etendo core's actual lookup (`CostingUtils.getCostDimensionRule` / `CostingServer.getOrganization()`) is an **exact match** on `ad_org_id` with no client-wide fallback. An earlier revision of this fix picked "the oldest non-`*` org" for any zero-rule tenant, assuming the choice was irrelevant for a whole-client rule; QA traced the core lookup and showed that a hypothetical future zero-rule tenant with **multiple Legal Entities** would get transactions under every OTHER legal entity hard-failing with `NoCostingRuleFoundForOrganizationAndDate` instead of today's silent gap — worse than the defect being closed. No currently-matched tenant is multi-org (all 9 have exactly one non-`*` org, re-verified after the fix), so this was a latent assumption, not an active bug on this DB. The fix now requires `(SELECT COUNT(*) FROM ad_org WHERE ad_client_id=:client_id AND name<>'*') = 1` in **both** `@check` and `@apply`. A future multi-org zero-rule tenant falls through to the same "needs manual handling" bucket as the existing-rule tenants — multi-org costing-rule seeding is explicitly out of scope here, not silently mishandled.
+
+**Both fronts closed (2026-08-03):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective — "zero rule", single-org tenants** | `cli/src/data-fixes/sql/20260803T180000Z__R20-default-standard-costing-rule.sql` — inserts one active, validated, whole-client Standard `M_Costing_Rule` (no `M_Product_Id`/`M_Product_Category_Id`, `org_dimension='N'`, `warehouse_dimension='N'`, `datefrom`=the tenant's own `AD_Client.created`) for the tenant's operative org, guarded `NOT EXISTS (... isactive='Y' AND isvalidated='Y')` (no existing validated rule of any algorithm) AND exactly one non-`'*'` org for the client (see single-org restriction above). Live-verified in a rolled-back transaction against "empresa": insert succeeds, immediate re-run inserts 0 rows (idempotent); F&B's 623-org count independently confirmed to trip the new guard. Dry-run across the fleet: 9 `WOULD_APPLY`, GOClient/F&B/QA Testing `SKIPPED_NOT_NEEDED` — identical to before the guard was added, since all 9 matched tenants are single-org. |
+| **Corrective — existing-Average-rule tenants (F&B, QA Testing)** | **Deliberately NOT auto-fixed.** Flagged for a manual "Validate Costing Rule" run via the classic UI by an accounting admin, once confirmed relevant for those tenants — see the scope decision above. |
+| **Corrective — future multi-org zero-rule tenants (none exist today)** | **Deliberately NOT auto-fixed.** `@check` excludes them (COUNT of non-`'*'` orgs ≠ 1); would need per-Legal-Entity rule seeding, out of scope for this fix. |
+| **Preventive** | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; `referencedata/sampledata/GOClient/M_COSTING_RULE.xml`'s `M_COSTING_ALGORITHM_ID` changed from Average (`B069080A0AE149A79CF1FA0E24F16AB6`) to Standard (`6A39D8B46CD94FE682D48758D3B7726B`) — `isvalidated`/`isactive` were already `'Y'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T18:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule`. |
+
+**Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
+
+---
+
+## K — Accounting Dimension Display Configuration
+
+### K1 — `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'`, making "Dimensiones contables" a no-op (ETP-4854, 2026-08-11)
+
+**Symptom:** the "Dimensiones contables" screen (General Ledger Configuration,
+`GeneralLedgerConfigurationHandler.applyDimensionChanges`) is a flat ON/OFF toggle list per
+accounting dimension. Toggling it appears to succeed (no error, the value is saved), but has
+**zero effect** on whether the corresponding field actually shows on any document for most
+tenants.
+
+**Root cause:** `AD_Client.Acctdim_Centrally_Maintained` selects which of TWO mechanisms
+`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()` (classic Etendo core) embeds
+into every `@ACCT_DIMENSION_DISPLAY@` field's display-logic JS:
+
+- `'N'` — flat, level-agnostic: reads `C_AcctSchema_Element.IsActive` per dimension
+  (`elementtype` ∈ `OO`/`PJ`/`BP`/`PR`/`CC`/`U1`/`U2`), the SQL schema default (every element row
+  defaults `isactive='Y'`). **This is the ONLY mechanism `GeneralLedgerConfigurationHandler
+  .applyDimensionChanges` writes to** — confirmed by reading the handler: it loads/saves
+  `AcctSchemaElement.IsActive` exclusively, never anything on `AD_Client`.
+- `'Y'` — fine-grained per-document-type/level matrix: reads
+  `AD_Client.<Dim>_Acctdim_IsEnable/Header/Lines/Breakdown` (or a per-doctype
+  `ADClientAcctDimension` override row, if present) — a classic multi-entity feature Etendo GO
+  never built a screen for.
+
+`InitialSetupUtility.java` (~L159, invoked by `InitialClientSetup`, called from
+`EtendoGoJwtServlet.resolveOrCreateClient` upstream of the rest of the onboarding chain)
+hardcodes `newClient.setAcctdimCentrallyMaintained(true)` for EVERY new client — so every tenant
+born through the real onboarding flow ends up `'Y'`, permanently locked out of the only mechanism
+Etendo GO has a working screen for.
+
+**Live-DB evidence (2026-08-11, etendogoclean, 17 clients):** 14 real tenants are `'Y'`; only
+`GOClient`, `QA Testing`, and `System` are `'N'`. Critically, `C_AcctSchema_Element.isactive` is
+ALREADY `'Y'` for CostCenter/User1/User2/Project on almost every `'Y'` client, even though every
+one of them has `<Dim>_Acctdim_IsEnable = 'N'` for those same dimensions (Project on 12 of 14) —
+confirming that a naive flip to `'N'` WITHOUT a backfill would suddenly show fields that are
+currently hidden for nearly every tenant. Org/BPartner/Product are the opposite case (`IsEnable`
+and `Header`/`Lines` already `'Y'` on every client, matching their already-`'Y'` `isactive`) — a
+no-op for those three.
+
+**Backfill rule:** since flat `'N'` mode has no level distinction (one flag governs Header, Lines
+AND Breakdown simultaneously), the fix computes, per dimension, `effective = IsEnable='Y' AND
+(Header='Y' OR Lines='Y' OR Breakdown='Y')` — erring toward NOT hiding a field the client
+currently sees on any level/doctype — and sets `C_AcctSchema_Element.isactive` to match before
+flipping the mode flag, in the same transaction.
+
+**Safety (confirmed, not assumed):** grepped every Java/XML consumer of this flag repo-wide.
+Classic core: only `DimensionDisplayUtility`/`LoginUtils`/`InitialSetupUtility`. Etendo GO: only
+`NeoDisplayLogicHelper.resolveAccountingDimensionFlags` (com.etendoerp.go) — a faithful mirror of
+the classic 'N'/'Y' branching, including its own documented ETP-4529 caveat that the `'N'` branch
+is the one it evaluates most reliably per-request (no HTTP session to piggyback on, unlike
+classic `LoginUtils`). No security/accounting-posting/compliance code path reads this flag — it
+governs ONLY whether an accounting-dimension input field is shown or hidden on a form.
+
+**Both fronts closed (2026-08-11):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260811T120000Z__R23-acctdim-centrally-maintained.sql` — backfills `C_AcctSchema_Element.isactive` per elementtype from the client's current effective config, then flips `Acctdim_Centrally_Maintained` to `'N'`, both in one `@apply`, scoped to `:client_id`. Live-validated: dry-run across all 16 real tenants → 14 `WOULD_APPLY` / 2 `SKIPPED_NOT_NEEDED` (GOClient, QA Testing already `'N'`); a rolled-back transaction against "empresa" confirmed the exact expected before/after state (Org/BPartner/Product stay `'Y'`; CostCenter/Project/User1/User2 flip to `'N'`); a real run against acreedortest (`D94AED60C3E0494AAFD44B8A05BB5CFC`) → `APPLIED (5 rows)` → re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `OnboardingAcctdimCentrallyMaintainedService.forceFlatAccountingDimensionVisibility`, wired as the new step in `EtendoGoJwtServlet.ensureOnboardingDataset` right after `patchBpGroupAcctMissingColumns` and before the baseline stamp — applies the IDENTICAL backfill-then-flip logic in lockstep with the corrective SQL. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-11T12:00:00Z` in `OnboardingBaselineService.java`. |
+
+**Out of scope, noted for completeness:** `schema_forge_core` (the sibling platform-tooling repo)
+also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, but on this local
+checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
+the repo split) and is not on a branch related to this ticket — no changes were made there. If it
+needs reconciling with the current fix catalog, that is a separate task.
 
 ---
 

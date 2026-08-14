@@ -16,3 +16,15 @@ describe('FiscalModelsPage — routing', () => {
   it('renders FmModel303Page', () => assert.match(src, /FmModel303Page/));
   it('renders FmModel349Page', () => assert.match(src, /FmModel349Page/));
 });
+
+describe('FiscalModelsPage — status change persistence', () => {
+  it('imports persistDeclarationStatus', () => assert.match(src, /persistDeclarationStatus/));
+  it('awaits persistDeclarationStatus before updating view state', () => {
+    const matches = src.match(/onStatusChange=\{async[\s\S]*?\}\}/g);
+    assert.ok(matches && matches.length === 2, 'expected 2 async onStatusChange callbacks (303 + 349)');
+    for (const block of matches) {
+      assert.match(block, /await persistDeclarationStatus\(/);
+      assert.match(block, /result\.ok/);
+    }
+  });
+});

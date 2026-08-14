@@ -31,7 +31,7 @@ How a reported symptom usually maps to a real cause. The point: **not every "fai
 - **2026-06-23 — Evidenced baseline (ETP-3938 / JuanCarlos Round 1):** of 15 reported findings, **5 were NOT code bugs** — `bp-location` access denied (RBAC), `verifactu-config` / `tbai-facturas-enviadas` entity not found (modules not installed), dashboard widgets + report specs not agent-accessible (API not exposed). → When triaging, *always* rule out RBAC / missing-module / un-exposed-API before reading MCP code.
 
 - **2026-06-23 — Round 3 (Juan Carlos, 2026-06-19, 15 tickets, label `validacion-agentica`) categorized (analysis only — NOT resolved):**
-  - **code-bug (MCP/NEO Java):** ETP-4274 (neo_create ignores non-mandatory defaults — defaults/create asymmetry, `NeoDefaultsService.injectMandatoryDefaults:824-825`), ETP-4275 (no generic process-precondition validation), ETP-4285 (document actions not semantically exposed), ETP-4286 (neo_selectors lacks recordContext passthrough), ETP-4287 (GET-only entities not flagged in discovery), ETP-4284 (widgets not wrapped as `neo_widget`; were misrouted through CRUD), ETP-4255 (Jasper runtime must be removed; report callability metadata).
+  - **code-bug (MCP/NEO Java):** ETP-4274 (neo_create ignores non-mandatory defaults — defaults/create asymmetry, `NeoDefaultsService.injectMandatoryDefaults:824-825`), ETP-4275 (no generic process-precondition validation), ETP-4285 (document actions: eran invocables vía `neo_action` + `parameters.docAction` pero indescubribles — `neo_schema` emite ahora `actionValues`/`actionParameter` y la semántica por ventana vive en `decisions.json` `fields.documentAction.agentPrompt`; ADEMÁS se corrigió un defecto real encontrado al scopear: `neo_action` llamaba a `executeButtonActionCore` sin los hooks `NeoHandler` que el path REST sí corre, así que las completaciones por MCP se salteaban lógica de handler como la línea de descuento pre-CO), ETP-4286 (neo_selectors lacks recordContext passthrough), ETP-4287 (GET-only entities not flagged in discovery), ETP-4284 (widgets not wrapped as `neo_widget`; were misrouted through CRUD), ETP-4255 (Jasper runtime must be removed; report callability metadata).
   - **upstream-config (schema_forge decisions/generators):** ETP-4278 (empty `prompt` field on contacts/financial-account), ETP-4276 (assets conditional userRequired not declared), ETP-4254 (W-vs-R spec misclassification).
   - **validator-side / agent-knowledge:** **ETP-4279** — the validating agent claimed FIN_Financial_Account has 2 types (read from `SeedReferenceDataStep.java`) instead of querying `neo_selectors` (3 types: B/C/CA). Pure bot defect, no product fix. Pattern: agents assuming enum/list cardinality from source/docs instead of runtime selectors.
   - **test-data / environment gap:** ETP-4289 — 6 specs (`return-from-customer`, `return-to-vendor`, `sii-config`, `sii-monitor`, `simple-g-l-journal`, `tbai-config`) unevaluable for lack of records.
@@ -49,6 +49,14 @@ per-field agent prompt, `visibility`, a per-field `defaultValue`, or `Java_Quali
 the advisory-only note on `businessCritical` are in
 **`docs/agentic-validation/mcp-field-flags-pipeline.md`** — read it only when a ticket
 actually concerns one of those flags.
+
+Likewise, a ticket reporting that an agent **wrote** to something it should not have been
+able to write — a monitor, a log, a dashboard, a report — is **upstream-config**: the entity's
+`ETGO_SF_ENTITY` method flags are driven from `decisions.json`
+(`window.readOnly` / `entities.<e>.readOnly` / `entities.<e>.methods`). Qualification criteria,
+the declaration syntax, and the crucial caveat that the flags gate **CRUD only** (not actions,
+processes, callouts, selectors, defaults or evaluate-display) are in
+**`docs/agentic-validation/agentic-write-exposure-criteria.md`**.
 
 ---
 

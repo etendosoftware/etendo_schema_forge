@@ -359,6 +359,11 @@ and `RowQuickActions` stay in lockstep.
 
 **Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
 defense-in-depth: the API capability is disabled AND the UI icon is hidden).
+**Note (ETP-4745):** at ETP-4464 time, `hideDelete`'s "API capability" side was
+declarative only — it reached `contract.json` but not `ETGO_SF_ENTITY.ISDELETE`,
+so a direct API `DELETE` call still succeeded. ETP-4745 closed that gap; `tax`
+needs a re-push (`make regen ONLY=tax PUSH_TO_NEO=1` + `./gradlew export.database`)
+to pick up the real server-side enforcement — see `docs/feedback.md`.
 
 ---
 
@@ -388,7 +393,7 @@ below.
 Use this when a window already ships **its own** delete or bulk-delete
 affordance and stacking the generic action would be redundant/confusing.
 
-Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+Unlike `hidePrint` / `hideStatusFilter` (documented in
 `docs/decisions-reference.md` as `window.*` decisions.json keys that the
 generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
@@ -397,10 +402,16 @@ this sub-task). Today the only way to set it is to pass `listViewOptions`
 directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
 same way `contacts` does it. **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
-wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
 dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
 canonical example.
+
+> **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
+> `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
+> entirely from `ListView.jsx`. The button had no working backend and did not
+> apply to any window, so it is gone unconditionally, with no flag needed or
+> supported anymore.
 
 **Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
 does **not** mean "this window has no bulk delete." `contacts` has its own,
@@ -625,6 +636,8 @@ function MyLinesEmptyState({ data, onAddLine, canAddLine = true, ...rest }) {
 - `maxDetailLines: 1`: `business-partner-category`, `product-category` (accounting tab capped at one row per accounting schema)
 - `maxDetailLines: 0` (import-only lines, ETP-4462): `return-material-receipt` (lines imported from the source shipment) and `return-to-vendor-shipment` (lines imported from the source goods receipt) — both bottom panels (`artifacts/{window}/custom/*BottomPanel.jsx`) forward `canAddLine`, swap the empty-state description to the import-only keys `linesImportOnlyFromShipment` / `linesImportOnlyFromReceipt` (defined in `en_US`, `es_ES`, and `es_AR`), and re-render their import trigger (`ReturnReceiptLineActions` / `ReturnToVendorLineActions`) above `LinesBottomSection` via the panel-rendered pattern so importing stays available on drafts that already have lines
 
+**This flag only caps the `window.detailEntity` pattern (a window's single primary lines tab).** For a `window.secondaryTabs` entry (Accounting, Customer/Vendor Accounting, etc. rendered beside the lines tab, not as the lines tab itself), use the per-tab `maxDetailLines` inside that tab's own config instead — see §17 below (ETP-4565).
+
 ---
 
 ### 12. `hideMoreMenu` — hide the "more" (⋮) button conditionally
@@ -754,6 +767,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 **MVP scope (current iteration):**
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
+- **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the frontend simply had no handler to call; nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before. **Correction (ETP-4745):** the original write-up here claimed "the backend correctly rejected the delete" — that was inaccurate even at ETP-4565 time. `hideDelete` did not reach `ETGO_SF_ENTITY.ISDELETE` until ETP-4745; before that fix a raw API `DELETE` against this same entity (`userRoles` on the `user` window) would have succeeded server-side. The ETP-4565 fix genuinely removed the dead UI affordance, it just didn't (and couldn't, at the time) rely on any real backend rejection.
 - Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
@@ -799,6 +813,8 @@ Clicking either the chevron or the hover action toggles the same expand state �
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
 
 **Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
+
+**ETP-4803 fix — the exclusion must ALSO apply to `DataTable`'s hidden add-row colgroup.** `DataTable.jsx` computes a hidden `<colgroup>` (used only while `hideHeader=true`, i.e. the inline add-line form) that must reproduce `InlineLinesPanel`'s flex math exactly — see `tools/app-shell/src/lib/linesColumnWidth.js`'s file header. When `DataTable`'s own `visibleColumns` filter never dropped `dimensionsPanel` (unlike `InlineLinesPanel`'s), any window with that column type got a phantom fixed-width column in the colgroup that the real header didn't have, desyncing `growColumnWidth()`'s fixed/grow totals for every column after it — misaligning the add-line form's inputs against the saved-rows header on purchase-invoice, sales-invoice, purchase-shipment, and sales-shipment. Fixed by extracting the exclusion into `isLineGridColumn(col)` (`linesColumnWidth.js`) and having **both** `InlineLinesPanel` and `DataTable` filter `visibleColumns` through it, so the two renderers can't diverge on this axis again. Any future column type that renders out-of-band (not as a fixed grid column in either renderer) must be added to `NON_GRID_COLUMN_TYPES` in that same file, not to one renderer's filter alone.
 
 **Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content). **Update (same ticket, follow-up pass):** `AmortizationLinesTable.jsx` also stopped using `DimSummary`/`DimBadge` — it hand-patched the same static Layers/"Edit dimensions" hover-action pattern (see below) instead of the permanent grid-column summary it used to render. `DimSummary`/`DimBadge` currently have no consumer left in this repo but remain exported as reusable building blocks.
 
@@ -906,11 +922,30 @@ carry `requiredVisual: true` because their obligatoriness depends on the "Tipo d
 
 **What it does:** renders one or more extra tabs next to the header's detail content, backed
 either by a hand-written `Panel` component (freeform content, e.g. a custom fetch-and-render
-subtab) or a generated `Form` component (a plain entity form reused as a secondary tab). This is
-a runtime prop passed to the generated `<Page>` component from a hand-written `windows/custom/
-{window}/index.jsx` wrapper — **not** a `decisions.json` key — so it requires `window.layoutType:
-"custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts; there is no
-declarative `decisions.json` shape for this yet).
+subtab), a generated `Form` component (a plain entity form reused as a secondary tab), or a
+generated `Table` + `Form` pair backed by a genuine child entity (Accounting, Tax, Payment Plan,
+Customer/Vendor Accounting, etc.).
+
+**Two ways to declare it — don't confuse them:**
+
+1. **Declarative, `decisions.json → window.secondaryTabs`** (the common case — no custom
+   `index.jsx` needed). `resolveSecondaryTabDefs` (`generate-frontend.js`) reads this object
+   directly and emits the `Table`/`Form`/`Panel` imports and the `secondaryTabs` prop array on the
+   generated `<Page>` itself — works with the normal `"default"` `layoutType`. This is what
+   `product`, `product-category`, `business-partner-category`, `tax`, `asset-group`, and `contacts`
+   use for their Accounting/Customer-Accounting/Vendor-Accounting tabs. Full property reference
+   (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
+   `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
+   ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
+   (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
+   every other entry, not just within its own group — see `docs/decisions-reference.md`'s
+   `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
+2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
+   `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
+   entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires
+   `window.layoutType: "custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts).
+   Used by `warehouse` and `calendar` below.
 
 ```jsx
 // windows/custom/{window}/index.jsx
@@ -994,10 +1029,20 @@ file when building URLs in a `menuActions` component.
 list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
 doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
 
-**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
+**Real examples (runtime-prop path):** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
 reading `parentId`, single backing spec — the common case); `calendar` (`PeriodsExpandablePanel`,
 `AccountingPanel` — the multi-spec exception above, each panel's `apiBaseUrl` rewritten to a
 different real spec).
+
+**Real examples (declarative `decisions.json` path, `maxDetailLines` — ETP-4565):** `product` and
+`asset-group` cap their `secondaryTabs.accounting` tab at one record
+(`"maxDetailLines": 1`); `contacts` caps both `secondaryTabs.customerAccounting` and
+`secondaryTabs.vendorAccounting` the same way — all four are the "registro único" requirement for
+an accounting-schema row, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on
+`product-category`/`business-partner-category`/`tax`'s `detailEntity` (see §11 above). The cap is
+enforced client-side by `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx`,
+gating `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger once the tab's
+own child count reaches the declared `maxDetailLines`.
 
 ---
 
@@ -1205,6 +1250,7 @@ I need to customize the UI of a window
     ├─ Empty state when lines tab is empty → linesEmptyState prop + addLineGuard
     ├─ Gate add-line button on header field → addLineGuard prop
     ├─ Cap line count / disable manual line creation (import-only lines) → window.maxDetailLines (0 = import-only)
+    ├─ Cap a secondaryTabs entry's own record count (e.g. accounting tab = 1) → window.secondaryTabs.<key>.maxDetailLines
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
     ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
     │   └─ → window.rowQuickActions (on by default; declare only to disable or override)

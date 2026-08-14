@@ -135,3 +135,537 @@ describe('translateBackendError', () => {
     assert.equal(result, raw);
   });
 });
+
+// ── ETP-4706: parameterized "Account could not be found" enrichment ──────────────
+//
+// Core Etendo's `@InvalidAccount@` message ("Account could not be found.") is
+// enriched server-side (DocumentPostingService#enrichWithFailingEntity) with the
+// transaction's Business Partner / BP Group name via the en_US-only
+// ETGO_InvalidAccountBpAndGroup / ETGO_InvalidAccountBpOnly AD_MESSAGE catalog
+// entries. These two skeletons carry a dynamic name, so they can't be an exact-match
+// BACKEND_ERROR_MAP entry — they need a regex match + re-interpolation instead.
+// A fake `t(key, params)` mimics useUI()'s interpolation ({param} substitution).
+function fakeUiTranslator(dictionary) {
+  return (key, params = {}) => {
+    let text = dictionary[key] ?? key;
+    Object.keys(params).forEach((p) => {
+      text = text.replace(`{${p}}`, params[p]);
+    });
+    return text;
+  };
+}
+
+describe('translateBackendError — parameterized "Account could not be found" (ETP-4706)', () => {
+  const en = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'Account could not be found. (Contact: {bp}, Business Partner Category: {group})',
+    'backendError.invalidAccountBpOnly': 'Account could not be found. (Contact: {bp})',
+  });
+  const es = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})',
+    'backendError.invalidAccountBpOnly': 'No se pudo encontrar la cuenta. (Contacto: {bp})',
+  });
+
+  it('translates the BP + BP Group skeleton to en_US, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp, Business Partner Category: Suppliers)',
+    );
+  });
+
+  it('translates the BP + BP Group skeleton to es_ES, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)',
+    );
+  });
+
+  it('translates the BP-only skeleton to en_US, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp)',
+    );
+  });
+
+  it('translates the BP-only skeleton to es_ES, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp)',
+    );
+  });
+
+  it('does not confuse the BP-only pattern when a BP Group is also present (matches BP+Group first)', () => {
+    const raw = 'Account could not be found. (Business Partner: Jane Doe, BP Group: Retail)';
+    const result = translateBackendError(raw, en);
+    assert.equal(result, 'Account could not be found. (Contact: Jane Doe, Business Partner Category: Retail)');
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('leaves unrelated messages without a "(Business Partner: ...)" suffix untouched', () => {
+    const raw = 'Account could not be found.';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  // ── matchAccountNotFound guard branches ───────────────────────────────────────
+  //
+  // These exercise the early-return guards in matchAccountNotFound() that the
+  // happy-path tests above never hit: a prefix match that doesn't close with ')',
+  // an empty parenthesized segment, and a split that yields an empty BP or group.
+
+  it('leaves the message untouched when it starts with the prefix but does not end with ")"', () => {
+    // startsWith(prefix) is true but endsWith(')') is false — the message is
+    // truncated/malformed, so matchAccountNotFound must bail out via the
+    // "|| !msg.endsWith(')')" branch instead of slicing garbage.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the parenthesized segment is empty', () => {
+    // inner === '' after slicing — the "!inner" guard must return null rather
+    // than proceeding to split an empty string.
+    const raw = 'Account could not be found. (Business Partner: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the Business Partner name is empty but a BP Group is present', () => {
+    // delimIdx is found, but bp (the slice before it) is empty — "!bp" guard.
+    const raw = 'Account could not be found. (Business Partner: , BP Group: Vendors)';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the BP Group is empty but a Business Partner name is present', () => {
+    // delimIdx is found, but group (the slice after it) is empty — "!group" guard.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('returns the original message when the BP+Group translation key is missing (guard, BP+Group branch)', () => {
+    // Same missing-translation guard already covered for the BP-only skeleton
+    // above, but exercised on the BP+Group branch (translateParameterized's
+    // `match.group !== null` arm) which has its own independent guard check.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('does not affect existing exact-match BACKEND_ERROR_MAP entries', () => {
+    const raw = 'Country needed in an IBAN account.';
+    const t = (k) => (k === 'backendError.countryIban' ? 'Se necesita el País para una cuenta IBAN.' : k);
+    assert.equal(translateBackendError(raw, t), 'Se necesita el País para una cuenta IBAN.');
+  });
+
+  // ── mis-split bug: BP name itself contains the ", BP Group: " delimiter ──────────
+  //
+  // QA found that the original regex-based matcher (two back-to-back lazy `(.+?)`
+  // capture groups) split at the FIRST ", BP Group: " occurrence, so a Business
+  // Partner name that happens to contain that literal substring produced a garbled
+  // capture. The string-based rewrite uses `lastIndexOf` for the delimiter, which
+  // always finds the LAST occurrence — the correct split point, since a BP Group
+  // name legitimately containing ", BP Group: " would be a vanishingly unlikely
+  // coincidence compared to it appearing inside a BP name/free-text field.
+  it('demonstrates the old regex mis-split bug on a BP name containing ", BP Group: "', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const OLD_REGEX = /^Account could not be found\.\s*\(Business Partner:\s*(.+?),\s*BP Group:\s*(.+?)\)$/;
+    const oldMatch = OLD_REGEX.exec(raw);
+    // The old regex's non-greedy first group stops at the FIRST ", BP Group: " —
+    // producing a wrong split (bp truncated to "Odd", group swallowing the rest).
+    assert.equal(oldMatch[1], 'Odd');
+    assert.equal(oldMatch[2], 'Fake, Corp, BP Group: Vendors');
+  });
+
+  it('correctly splits at the LAST ", BP Group: " when the BP name contains that literal substring', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const result = translateBackendError(raw, en);
+    assert.equal(
+      result,
+      'Account could not be found. (Contact: Odd, BP Group: Fake, Corp, Business Partner Category: Vendors)',
+    );
+  });
+});
+
+// ── ETP-4706: costing engine "@product@" placeholder never resolves ──────────────
+//
+// Core Etendo's `NotCalculatedCostWithTransaction` AD_MESSAGE
+// ("The cost of the product @product@ has not been calculated.") is returned by
+// OBMessageUtils.parseTranslation() with its own embedded `@product@` placeholder
+// left literally unsubstituted — parseTranslation resolves the outer message token
+// in a single pass and does not recursively re-parse the resolved text for nested
+// placeholders. This happens deterministically every time this specific failure
+// occurs, so the raw string (with the literal `@product@`) is a stable exact-match
+// candidate for BACKEND_ERROR_MAP — no dynamic value is ever actually available to
+// capture, unlike the parameterized "Account could not be found" case above.
+describe('translateBackendError — cost not calculated exact match (ETP-4706)', () => {
+  const RAW = 'The cost of the product @product@ has not been calculated.';
+
+  it('translates the raw (broken, literal @product@) message to en_US', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'The cost of the product could not be calculated.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'The cost of the product could not be calculated.');
+  });
+
+  it('translates the raw (broken, literal @product@) message to es_ES', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'No se pudo calcular el costo del producto.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No se pudo calcular el costo del producto.');
+  });
+});
+
+// ── ETP-4831: "shipment already invoiced" parameterized enrichment ──────────────
+//
+// com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced` AD_MESSAGE ("The shipment
+// @docNo@ cannot be invoiced: quantity to invoice (@invoiced@) exceeds pending
+// quantity (@pending@). The shipment may already be invoiced in another document.")
+// has zero AD_Message_Trl rows for ANY language, because com.etendoerp.go has no
+// companion translation module (AD_MODULE.ISTRANSLATIONREQUIRED = N) — the same root
+// cause as the ETP-4706 "Account could not be found" messages above. The backend
+// always renders this with the literal docNo/invoiced/pending values substituted in
+// (never the raw `@token@` placeholders), so a matcher must parse those three values
+// back out of the rendered string via plain string slicing (same ReDoS-safe style as
+// `matchAccountNotFound` / ACCOUNT_NOT_FOUND_PREFIX above — a document number and
+// quantities are effectively free-form data, so no backtracking-prone regex).
+//
+// EXPECTED (not yet implemented): a `matchInvoiceLineAlreadyInvoiced` parameterized
+// matcher wired into `translateParameterized`, re-rendering via a new
+// `backendError.invoiceLineAlreadyInvoiced` i18n key. Until that lands, these tests
+// MUST fail: translateBackendError has no exact-match entry and no matcher for this
+// message shape, so it falls through to returning `msg` unchanged.
+describe('translateBackendError — "shipment already invoiced" parameterized match (ETP-4831)', () => {
+  const en = fakeUiTranslator({
+    'backendError.invoiceLineAlreadyInvoiced':
+      'Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.invoiceLineAlreadyInvoiced':
+      'El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.',
+  });
+  const RAW = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). The shipment may already be invoiced in another document.';
+
+  it('translates the rendered backend message to es_ES, interpolating docNo/invoiced/pending', () => {
+    assert.equal(
+      translateBackendError(RAW, es),
+      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2) supera la cantidad pendiente (0). Puede que ya esté facturado en otro documento.',
+    );
+  });
+
+  it('translates the rendered backend message to en_US, interpolating docNo/invoiced/pending', () => {
+    assert.equal(
+      translateBackendError(RAW, en),
+      'Shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). It may already be invoiced in another document.',
+    );
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(RAW, missingT), RAW);
+  });
+
+  // BUG-1 (QA finding, ETP-4831): the backend builds @invoiced@/@pending@ from
+  // BigDecimal#toPlainString() (AbstractInvoiceHeaderHandler.checkInoutEntryForOverInvoicing
+  // in com.etendoerp.go), so for a product with fractional UOM precision the rendered
+  // values are decimal, not just integers — e.g. "2.50" / "0.75". The matcher does plain
+  // digit-agnostic string slicing between fixed delimiters, so it must parse a decimal
+  // quantity exactly like an integer one.
+  it('translates a rendered message with decimal invoiced/pending quantities to es_ES', () => {
+    const decimalRaw = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2.50) exceeds pending quantity (0.75). The shipment may already be invoiced in another document.';
+    assert.equal(
+      translateBackendError(decimalRaw, es),
+      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2.50) supera la cantidad pendiente (0.75). Puede que ya esté facturado en otro documento.',
+    );
+  });
+});
+
+// ── ETP-4831 case 2: "No hay líneas a facturar en este pedido" always in Spanish ──
+//
+// CreateDraftInvoiceHandler#createFromOrder (com.etendoerp.go) throws
+// `new OBException("No hay líneas a facturar en este pedido")` — a hardcoded
+// Spanish literal with NO AD_Message/i18n involvement at all, so it always
+// renders in Spanish even in an en_US session (the inverse symptom of case 1,
+// which always rendered in English regardless of locale).
+//
+// Unlike the parameterized messages above, this string carries no dynamic/
+// interpolated value — it's a fixed literal — so it belongs in the plain
+// exact-match BACKEND_ERROR_MAP (same style as 'A tariff marked as default
+// cannot be deactivated.' / the costing-engine entry), not a parameterized
+// matcher. Suggested key: `backendError.noLinesToInvoice`.
+//
+// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
+// Spanish literal to `backendError.noLinesToInvoice`. Until that lands, these
+// tests MUST fail: translateBackendError has no matching key for this message,
+// so it falls through to returning `msg` unchanged (still Spanish, even for an
+// en_US translator).
+describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 case 2)', () => {
+  const RAW = 'No hay líneas a facturar en este pedido';
+
+  it('translates the raw Spanish literal to en_US', () => {
+    const t = (k) => (k === 'backendError.noLinesToInvoice'
+      ? 'There are no lines to invoice for this order.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'There are no lines to invoice for this order.');
+  });
+
+  it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+    const t = (k) => (k === 'backendError.noLinesToInvoice'
+      ? 'No hay líneas a facturar en este pedido.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No hay líneas a facturar en este pedido.');
+  });
+});
+
+// ── ETP-4831 case 3: "No hay líneas pendientes de facturar en este albarán" ─────
+//
+// CreateDraftInvoiceHandler (com.etendoerp.go) has TWO throw sites —
+// capShipmentLineOverrides and the line-selection loop inside
+// createFromShipments — that both throw the IDENTICAL hardcoded Spanish literal
+// `new OBException("No hay líneas pendientes de facturar en este albarán")`,
+// same bug class as case 2 (case 2 is the order-invoicing flow, this is the
+// shipment-invoicing flow) but with no AD_Message/i18n involvement, so it
+// always renders in Spanish regardless of session locale.
+//
+// Both throw sites emit the exact same string, so ONE BACKEND_ERROR_MAP entry
+// covers both. Suggested key: `backendError.noPendingLinesToInvoiceShipment`.
+//
+// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
+// Spanish literal to `backendError.noPendingLinesToInvoiceShipment`. Until that
+// lands, these tests MUST fail: translateBackendError has no matching key for
+// this message, so it falls through to returning `msg` unchanged (still
+// Spanish, even for an en_US translator).
+describe('translateBackendError — "no pending lines to invoice" shipment exact match (ETP-4831 case 3)', () => {
+  const RAW = 'No hay líneas pendientes de facturar en este albarán';
+
+  it('translates the raw Spanish literal to en_US', () => {
+    const t = (k) => (k === 'backendError.noPendingLinesToInvoiceShipment'
+      ? 'There are no pending lines to invoice for this shipment.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'There are no pending lines to invoice for this shipment.');
+  });
+
+  it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+    const t = (k) => (k === 'backendError.noPendingLinesToInvoiceShipment'
+      ? 'No hay líneas pendientes de facturar en este albarán.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No hay líneas pendientes de facturar en este albarán.');
+  });
+});
+
+// ── ETP-4831 case 4: 9 more hardcoded, untranslated literals (QA scope sweep) ────
+//
+// Verified directly against com.etendoerp.go source. Two families:
+//
+//  A) Exact-match literals (no interpolation) — belong in BACKEND_ERROR_MAP, same
+//     style as case 2/3 above.
+//  B) Parameterized literals (fixed prefix + a dynamic ID appended) — need NEW
+//     matchers wired into translateParameterized, same plain-string-slicing style
+//     (no regex, ReDoS-safe) as matchAccountNotFound / matchInvoiceLineAlreadyInvoiced.
+//
+// EXPECTED (not yet implemented): none of the BACKEND_ERROR_MAP entries, matcher
+// functions, or i18n keys below exist yet. Until they land, ALL tests in this
+// block MUST fail: translateBackendError falls through to returning `msg`
+// unchanged for every one of these raw messages.
+
+describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)', () => {
+  // A.1) CreateShipmentHandler.java:136 — hardcoded Spanish literal, no
+  // AD_Message involvement, thrown when an order has zero pending-delivery
+  // lines. Suggested key: backendError.noPendingLinesToDeliverOrder.
+  describe('"no pending lines to deliver" exact match (CreateShipmentHandler)', () => {
+    const RAW = 'No hay líneas pendientes de entrega en este pedido';
+
+    it('translates the raw Spanish literal to en_US', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToDeliverOrder'
+        ? 'There are no pending lines to deliver for this order.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'There are no pending lines to deliver for this order.');
+    });
+
+    it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToDeliverOrder'
+        ? 'No hay líneas pendientes de entrega en este pedido.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No hay líneas pendientes de entrega en este pedido.');
+    });
+  });
+
+  // A.2) CreateInvoiceShipmentHandler.java:200 — hardcoded Spanish literal, no
+  // AD_Message involvement, thrown when an invoice has zero lines with a
+  // product. Suggested key: backendError.noProductLinesInInvoice.
+  describe('"no product lines in invoice" exact match (CreateInvoiceShipmentHandler)', () => {
+    const RAW = 'No hay líneas con producto en esta factura';
+
+    it('translates the raw Spanish literal to en_US', () => {
+      const t = (k) => (k === 'backendError.noProductLinesInInvoice'
+        ? 'There are no lines with a product in this invoice.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'There are no lines with a product in this invoice.');
+    });
+
+    it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.noProductLinesInInvoice'
+        ? 'No hay líneas con producto en esta factura.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No hay líneas con producto en esta factura.');
+    });
+  });
+
+  // A.3) CreateDraftInvoiceHandler.java:812 AND :1042 — same hardcoded ENGLISH
+  // literal thrown from two sites (getOrCreateArInvoiceDocType has no linked
+  // doc type). One BACKEND_ERROR_MAP entry covers both throw sites. Suggested
+  // key: backendError.noArInvoiceDocTypeFound.
+  describe('"No AR Invoice document type found" exact match (two throw sites)', () => {
+    const RAW = 'No AR Invoice document type found';
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.noArInvoiceDocTypeFound'
+        ? 'No se encontró ningún tipo de documento de factura de venta.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No se encontró ningún tipo de documento de factura de venta.');
+    });
+
+    it('translates the raw English literal to en_US (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.noArInvoiceDocTypeFound'
+        ? 'No AR Invoice document type found.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No AR Invoice document type found.');
+    });
+  });
+
+  // A.4) CreateDraftInvoiceHandler.java:999 — hardcoded English literal,
+  // thrown when createFromShipments receives an empty shipment list.
+  // Suggested key: backendError.noShipmentsProvided.
+  describe('"No shipments provided" exact match', () => {
+    const RAW = 'No shipments provided';
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.noShipmentsProvided'
+        ? 'No se proporcionaron albaranes.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No se proporcionaron albaranes.');
+    });
+
+    it('translates the raw English literal to en_US (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.noShipmentsProvided'
+        ? 'No shipments were provided.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No shipments were provided.');
+    });
+  });
+
+  // A.5) CreateDraftInvoiceHandler.java:1005 — hardcoded English literal,
+  // thrown when the selected shipments don't all share the same Business
+  // Partner. Suggested key: backendError.shipmentsMustShareBusinessPartner.
+  describe('"All shipments must belong to the same Business Partner" exact match', () => {
+    const RAW = 'All shipments must belong to the same Business Partner';
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.shipmentsMustShareBusinessPartner'
+        ? 'Todos los albaranes deben pertenecer al mismo Tercero.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'Todos los albaranes deben pertenecer al mismo Tercero.');
+    });
+
+    it('translates the raw English literal to en_US (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.shipmentsMustShareBusinessPartner'
+        ? 'All shipments must belong to the same Business Partner.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'All shipments must belong to the same Business Partner.');
+    });
+  });
+
+  // A.6) CreateDraftInvoiceHandler.java:1068 — hardcoded English literal,
+  // thrown when the Business Partner lacks mandatory Payment Terms/Method.
+  // Suggested key: backendError.bpMissingPaymentTermsOrMethod.
+  describe('"Business Partner is missing mandatory Payment Terms or Payment Method" exact match', () => {
+    const RAW = 'Business Partner is missing mandatory Payment Terms or Payment Method';
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.bpMissingPaymentTermsOrMethod'
+        ? 'Al Tercero le faltan las Condiciones de Pago o la Forma de Pago obligatorias.'
+        : k);
+      assert.equal(
+        translateBackendError(RAW, t),
+        'Al Tercero le faltan las Condiciones de Pago o la Forma de Pago obligatorias.',
+      );
+    });
+
+    it('translates the raw English literal to en_US (symmetry with other exact-match entries)', () => {
+      const t = (k) => (k === 'backendError.bpMissingPaymentTermsOrMethod'
+        ? 'The Business Partner is missing mandatory Payment Terms or Payment Method.'
+        : k);
+      assert.equal(
+        translateBackendError(RAW, t),
+        'The Business Partner is missing mandatory Payment Terms or Payment Method.',
+      );
+    });
+  });
+
+  // B.1) CreateDraftInvoiceHandler.java:606 — "Order not found: " + orderId.
+  // Fixed English prefix + dynamic order id appended, no closing delimiter.
+  // Needs a NEW parameterized matcher (plain prefix slicing, no regex) wired
+  // into translateParameterized, re-rendered via a new
+  // backendError.orderNotFound i18n key with {orderId} interpolation.
+  describe('"Order not found: <id>" parameterized match', () => {
+    const en = fakeUiTranslator({
+      // Trailing period deliberately added so this differs from the raw
+      // (period-less) backend string — otherwise the pre-implementation
+      // fallthrough (return msg unchanged) would trivially satisfy the
+      // assertion without any matcher existing at all.
+      'backendError.orderNotFound': 'Order not found: {orderId}.',
+    });
+    const es = fakeUiTranslator({
+      'backendError.orderNotFound': 'Pedido no encontrado: {orderId}',
+    });
+    const RAW = 'Order not found: 12345';
+
+    it('translates the rendered backend message to es_ES, interpolating the order id', () => {
+      assert.equal(translateBackendError(RAW, es), 'Pedido no encontrado: 12345');
+    });
+
+    it('translates the rendered backend message to en_US, interpolating the order id', () => {
+      assert.equal(translateBackendError(RAW, en), 'Order not found: 12345.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+      assert.equal(translateBackendError(RAW, missingT), RAW);
+    });
+  });
+
+  // B.2) CreateDraftInvoiceHandler.java:996 — "Shipment not found: " + id.
+  // Same shape as B.1 above but for the shipment-lookup loop inside
+  // createFromShipments. Needs a NEW parameterized matcher wired into
+  // translateParameterized, re-rendered via a new backendError.shipmentNotFound
+  // i18n key with {id} interpolation.
+  describe('"Shipment not found: <id>" parameterized match', () => {
+    const en = fakeUiTranslator({
+      // Trailing period deliberately added — same rationale as
+      // backendError.orderNotFound above (raw backend string has no period,
+      // so the pre-implementation fallthrough must not trivially match).
+      'backendError.shipmentNotFound': 'Shipment not found: {id}.',
+    });
+    const es = fakeUiTranslator({
+      'backendError.shipmentNotFound': 'Albarán no encontrado: {id}',
+    });
+    const RAW = 'Shipment not found: 67890';
+
+    it('translates the rendered backend message to es_ES, interpolating the shipment id', () => {
+      assert.equal(translateBackendError(RAW, es), 'Albarán no encontrado: 67890');
+    });
+
+    it('translates the rendered backend message to en_US, interpolating the shipment id', () => {
+      assert.equal(translateBackendError(RAW, en), 'Shipment not found: 67890.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+      assert.equal(translateBackendError(RAW, missingT), RAW);
+    });
+  });
+});

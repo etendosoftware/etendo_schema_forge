@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Headphones,
   FileJson,
+  Loader2,
 } from 'lucide-react';
 import {
   ClipboardText as ClipboardCheck,
@@ -62,6 +63,13 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
+import {
+  useFeatureFlag,
+  PROOF_OF_CONCEPT_MENU,
+  TENANT_UPGRADE,
+} from '@/lib/flags';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 
 const ICON_MAP = {
@@ -280,6 +288,7 @@ function ExpandedGroupSection({
           type="button"
           onClick={onToggle}
           aria-expanded={!!isOpen}
+          data-testid={`menu-group-${group.group.replace(/\s+/g, '-').toLowerCase()}`}
           className={cn(
             'flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors border-l-[3px]',
             getGroupHeaderClass(isGroupActive, isOpen)
@@ -466,6 +475,17 @@ export default function SideMenu({
   const location = useLocation();
   const currentPath = location.pathname.replace(/^\//, '');
   const { favorites } = useFavorites();
+  // Switching between tenants only means something once an account can own more
+  // than one, so the switcher rides the same flag as the upgrade flow. With the
+  // flag off this renders exactly what it did before: the current company alone.
+  const multiTenantEnabled = useFeatureFlag(TENANT_UPGRADE);
+  // This is visual gating only. The windows remain protected by normal AD role
+  // filtering; the flag merely stops offering this internal menu section.
+  const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
+    enabled: multiTenantEnabled,
+  });
+  const currentEnvironment = environments.find(env => env.clientId === currentClientId);
 
   const favNameMap = useMemo(() => {
     const map = {};
@@ -478,10 +498,12 @@ export default function SideMenu({
     return map;
   }, []);
 
-  const resolvedMenuGroups = menuGroups.map((g) => {
-    if (g.group !== 'Favorites') return g;
-    return { ...g, items: favorites };
-  });
+  const resolvedMenuGroups = menuGroups
+    .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
+    .map((g) => {
+      if (g.group !== 'Favorites') return g;
+      return { ...g, items: favorites };
+    });
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();
@@ -551,6 +573,11 @@ export default function SideMenu({
                   <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
                     {selectedOrg?.name || ui('yourCompany')}
                   </span>
+                  {multiTenantEnabled && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {ui(environmentPlanLabelKey(currentEnvironment))}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -559,16 +586,54 @@ export default function SideMenu({
               <DropdownMenuContent align="start" className="w-56" data-testid="DropdownMenuContent__247c75">
                 <DropdownMenuLabel data-testid="DropdownMenuLabel__247c75">{ui('switchCompany')}</DropdownMenuLabel>
                 <DropdownMenuSeparator data-testid="DropdownMenuSeparator__247c75" />
-                <DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
-                  <img
-                    src={logoSrc}
-                    alt=""
-                    className="h-5 w-5 mr-2 rounded-full"
-                  />
-                  <span className="flex-1 truncate">
-                    {selectedOrg?.name || ui('yourCompany')}
-                  </span>
-                </DropdownMenuItem>
+                {environments.length > 0 ? (
+                  environments.map((env) => {
+                    const isCurrent = env.clientId === currentClientId;
+                    return (
+                      <DropdownMenuItem
+                        key={env.clientId}
+                        disabled={isCurrent || switching !== null}
+                        onSelect={() => { if (!isCurrent) switchTo(env); }}
+                        data-testid={`company-option-${env.clientId}`}
+                      >
+                        <img
+                          src={logoSrc}
+                          alt=""
+                          className="h-5 w-5 mr-2 rounded-full"
+                        />
+                        <span className="flex-1 truncate">
+                          {env.clientName || env.orgName || ui('yourCompany')}
+                        </span>
+                        <span className={cn(
+                          'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                          env.plan === 'productive'
+                            ? 'bg-status-success text-status-success-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        )}>
+                          {ui(environmentPlanLabelKey(env))}
+                        </span>
+                        {switching === env.clientId && (
+                          <Loader2
+                            className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"
+                            data-testid="Loader2__247c75" />
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })
+                ) : (
+                  // No platform token, or the list could not be read: showing the
+                  // current company alone beats an empty menu.
+                  (<DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
+                    <img
+                      src={logoSrc}
+                      alt=""
+                      className="h-5 w-5 mr-2 rounded-full"
+                    />
+                    <span className="flex-1 truncate">
+                      {selectedOrg?.name || ui('yourCompany')}
+                    </span>
+                  </DropdownMenuItem>)
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <button

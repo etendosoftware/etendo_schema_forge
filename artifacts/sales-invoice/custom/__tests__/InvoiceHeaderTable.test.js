@@ -57,9 +57,87 @@ describe('Sales InvoiceHeaderTable — columns', () => {
   });
 
   it('renders doc-type badge on transactionDocument column via getArSubtype', () => {
-    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect NC/DEV subtypes');
-    assert.match(src, /creditNotesTab/, 'NC badge must use the creditNotesTab i18n key');
-    assert.match(src, /returnsTab/, 'DEV badge must use the returnsTab i18n key');
+    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect the RECTIFICATIVA subtype');
+    assert.match(src, /rectificativeInvoicesTab/, 'RECTIFICATIVA badge must use the rectificativeInvoicesTab i18n key (ETP-4737: replaces the former creditNotesTab/returnsTab split)');
+  });
+});
+
+// ── ETP-4841: payment state follows the SIGN of the total ────────────────────
+// The grid used to call `isRectificativa(row)` (getArSubtype === 'RECTIFICATIVA')
+// to pick the credit branch. That mislabelled a POSITIVE Factura Rectificativa
+// as "Saldo a favor" and a NEGATIVE ordinary Factura as "Cobrada". getArSubtype
+// survives only as the input to the document-type badge column.
+
+describe('Sales InvoiceHeaderTable — sign-driven payment badge (ETP-4841)', () => {
+  it('imports the shared resolveInvoicePaymentBadge helper', () => {
+    assert.match(
+      src,
+      /import \{ resolveInvoicePaymentBadge \} from '@\/windows\/custom\/shared\/invoicePaymentBadge\.js'/,
+      'the badge state must come from the single shared source of truth',
+    );
+  });
+
+  it('no longer declares a local isRectificativa document-type predicate', () => {
+    assert.doesNotMatch(
+      src,
+      /isRectificativa/,
+      'the local doc-type predicate was replaced by resolveInvoicePaymentBadge (ETP-4841)',
+    );
+  });
+
+  it('drives the outstanding cell off badge.kind, not getArSubtype', () => {
+    const cell = src.match(/key: 'outstandingAmount',[\s\S]*?key: 'eTGODeliveryStatus'/);
+    assert.ok(cell, 'expected the outstandingAmount column block');
+    assert.match(cell[0], /const badge = resolveInvoicePaymentBadge\(row\)/);
+    assert.match(cell[0], /badge\.kind === 'draft'/);
+    assert.match(cell[0], /badge\.kind === 'credit-applied'/);
+    assert.match(cell[0], /badge\.kind === 'credit-available'/);
+    assert.match(cell[0], /badge\.kind === 'paid'/);
+    assert.doesNotMatch(cell[0], /getArSubtype/);
+  });
+
+  it('renders the pending and credit amounts from badge.amount (always non-negative)', () => {
+    const cell = src.match(/key: 'outstandingAmount',[\s\S]*?key: 'eTGODeliveryStatus'/);
+    assert.match(cell[0], /fmtAmt\(badge\.amount, currency\)/);
+    assert.doesNotMatch(
+      cell[0],
+      /Math\.abs\(outstanding\)/,
+      'the absolute value is computed inside resolveInvoicePaymentBadge, not here',
+    );
+  });
+
+  it('drives the due-date cell off badge.isCredit, not getArSubtype', () => {
+    const cell = src.match(/key: 'eTGODueDate',[\s\S]*?key: 'businessPartner'/);
+    assert.ok(cell, 'expected the eTGODueDate column block');
+    assert.match(cell[0], /resolveInvoicePaymentBadge\(row\)\.isCredit/);
+    assert.doesNotMatch(cell[0], /getArSubtype/);
+  });
+
+  it('keeps getArSubtype for the document-type badge only', () => {
+    assert.match(src, /const sub = getArSubtype\(row\)/);
+    const occurrences = [...src.matchAll(/getArSubtype\(/g)].length;
+    assert.equal(occurrences, 1, 'getArSubtype must be called exactly once — by the doc-type badge cell');
+  });
+
+  it('renders the credit labels through i18n, not hardcoded Spanish literals', () => {
+    assert.match(src, /ui\('cpFavorBadge'\)/);
+    assert.match(src, /ui\('cpCreditFullyApplied'\)/);
+    // Strip `//` comments: the source still *describes* the badge as
+    // "Saldo a favor" in prose, which must not fail this assertion.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /Saldo a favor/, 'the badge label must come from ui(), not a literal');
+    assert.doesNotMatch(code, />Aplicada/, 'the applied pill label must come from ui(), not a literal');
+  });
+
+  it('still resolves the collected pill through the cobrada generic label', () => {
+    assert.match(src, /t\('cobrada'\)/, 'the paid branch keeps the AR-specific "cobrada" label');
+  });
+});
+
+describe('Sales InvoiceHeaderTable — payment-state color roles (ETP-4767)', () => {
+  it('uses semantic success and warning background, border, and foreground roles', () => {
+    assert.match(src, /background:'var\(--status-success-bg\)',color:'var\(--status-success-fg\)'/);
+    assert.match(src, /background:'var\(--status-warning-bg\)',border:'1px solid var\(--status-warning-border\)',color:'var\(--status-warning-fg\)'/);
   });
 });
 

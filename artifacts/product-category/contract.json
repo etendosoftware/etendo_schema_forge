@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.17.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-07-28T11:50:48.153Z",
-  "checksum": "1a0dca6c5a53fa70",
+  "updatedAt": "2026-08-05T12:15:02.258Z",
+  "checksum": "95f98b7caec0a2aa",
   "frontendContract": {
     "window": {
       "id": "144",
@@ -100,11 +100,23 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
             "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -243,6 +255,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "productCategoryAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -692,7 +705,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product-category/accounting",
         "detailUrl": "/sws/neo/product-category/accounting/{id}",
         "supportedFilters": []

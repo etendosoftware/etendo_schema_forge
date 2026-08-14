@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLocale, useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -24,8 +24,13 @@ const QUOTATION_SPECS = [
 
 function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
+  // Pass the DB-sourced status dictionary (same one DataTable.jsx uses via
+  // useLocale()) so this preview resolves the exact same "Bajo evaluación"
+  // AD_Ref_List_Trl label the grid shows, instead of falling back to the
+  // generic statusUnderEvaluation ("En evaluación") key.
+  const dictionary = useLocale();
   const statusCode = quotation.documentStatus;
-  const statusLabel = resolveStatusLabel(statusCode, null, ui);
+  const statusLabel = resolveStatusLabel(statusCode, dictionary, ui);
 
   return (
     <div className="pb-4">
@@ -94,6 +99,10 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   if (!quotation) return null;
 
   const isDraft = quotation.documentStatus === 'DR';
+  // ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
+  // while still Draft (DR). Matches the Grid row quick-action and Form-view
+  // topbar gates.
+  const isSendable = quotation.documentStatus !== 'DR';
 
   const openEmailModal = () => {
     setSendModalClosing(false);
@@ -152,7 +161,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       label: ui('quotationPreviewGeneral'),
       content: <QuotationGeneralTab
         quotation={quotation}
-        onSend={openEmailModal}
+        onSend={isSendable ? openEmailModal : undefined}
         token={token}
         apiBaseUrl={apiBaseUrl}
         orgCurrencyCode={orgCurrencyCode}
@@ -187,8 +196,8 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={openEmailModal}
-      onDownloadPdf={handleDownloadPdf}
+      onEmail={isSendable ? openEmailModal : undefined}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={!!pdfUrl}
       sendLabel={ui('quotationPreviewSend')}
       downloadLabel={ui('quotationPreviewDownloadPdf')}

@@ -41,7 +41,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - The list supports hover actions (`hoverRowActions={true}`): hovering a row reveals a circular pencil icon (edit) and a circular trash icon (delete) at the right end of the row. When a row is in edit mode the pencil becomes a ✓ (confirm save) and the trash becomes an ✗ (cancel edit). Clicking the row while it is in edit mode does not navigate to the detail view.
 - Inline editing is conditional on contact type (`etgoIsperson`): for **Persona** records only `etgoFirstname`, `etgoLastname`, `etgoWeb`, `etgoEmail`, and `etgoPhone` become inputs — `name` (Razón Social) remains read-only because `ContactNameSyncHandler` rebuilds it server-side from first + last. For **Empresa** records only `name`, `etgoWeb`, `etgoEmail`, and `etgoPhone` become inputs — `etgoFirstname` and `etgoLastname` remain read-only. The PATCH payload therefore contains different fields per type.
 - The "Tipo" column in the advanced filter panel maps to a hidden virtual enum column (`__contactType`) that accepts "Cliente" and "Proveedor" as values and translates them via a `buildCriteria` hook into real backend boolean criteria (`customer = true/false`, `vendor = true/false`). The visible "Tipo" table column is separate and only displays the business-role badges.
-- When one or more rows are selected, the selection bar shows: count on the left; a trash button (40 × 40 px, white bg, pink border `#FBB1C4`, red `#F3164E` icon), and an X button (40 × 40 px, no border, gray `#828FA3` icon) on the right. The **Vista Previa** and **Imprimir** buttons are hidden for this window via `listViewOptions.hideEye: true` and `listViewOptions.hidePrint: true`. The X clears the selection immediately and also resets the DataTable's internal checkbox state via a `clearSelectionTrigger` counter passed from `ListView`.
+- When one or more rows are selected, the selection bar shows: count on the left; a trash button (40 × 40 px, white bg, pink border `#FBB1C4`, red `#F3164E` icon), and an X button (40 × 40 px, no border, gray `#828FA3` icon) on the right. The **Imprimir** button is hidden for this window via `listViewOptions.hidePrint: true` (the **Vista Previa** button was removed unconditionally from every window's selection bar in ETP-4644, so it no longer needs a per-window flag). The X clears the selection immediately and also resets the DataTable's internal checkbox state via a `clearSelectionTrigger` counter passed from `ListView`.
 - Single-row delete (`confirmDelete` in `ContactsTable`) and bulk delete both use `extractApiErrorMessage` from `tools/app-shell/src/lib/apiError.js` to parse NEO Headless / Etendo JsonDataService error bodies and display the human-readable message via `toast.error`. Before ETP-3660, failed DELETEs were silently swallowed.
 - The detail top bar exposes a Company/Person toggle backed by local contacts window context. That toggle changes which header fields are rendered: Company mode excludes first/last name; Person mode excludes commercial name and marks first/last name as required. The required constraint is frontend-only — the backend concatenates first + last name into the `name` column on save, so both fields must be filled for that to work correctly.
 - The contacts window uses explicit save for the header form (no auto-save on blur). When a user edits header fields and presses **Save**, `DetailView` calls `hook.handleSave()`, which PATCHes the record; that PATCH is what triggers `ContactNameSyncHandler` to rebuild Razón Social. The per-field-blur auto-save that was added in ETP-3660 was removed in ETP-4533; `DetailView`'s `autoSaveOnBlur` prop defaults to `false` and the contacts window no longer overrides it.
@@ -177,7 +177,7 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 
 ## ETP-4262 — Contacts UI improvements
 
-**Selection bar print/preview buttons hidden.** `ListView.jsx` now respects `listViewOptions.hideEye` and `listViewOptions.hidePrint` in the selection bar (bulk-selection mode), not only in the topbar. Previously those flags only suppressed the topbar Print button; the Vista Previa and Imprimir buttons in the selection bar were always shown. Contacts already had both flags set to `true` in `decisions.json`.
+**Selection bar print/preview buttons hidden.** `ListView.jsx` now respects `listViewOptions.hideEye` and `listViewOptions.hidePrint` in the selection bar (bulk-selection mode), not only in the topbar. Previously those flags only suppressed the topbar Print button; the Vista Previa and Imprimir buttons in the selection bar were always shown. Contacts already had both flags set to `true` in `decisions.json`. (Superseded by ETP-4644: the Vista Previa button and the `hideEye` flag were removed entirely — see below.)
 
 **Column width support added to the pipeline.** A new `columnWidth` field (integer, pixels) is accepted in `decisions.json` per entity field. It flows through `resolve-curated.js` → `generate-contract.js` → `generate-frontend.js` and becomes a `minWidth` property on the generated column object. `linesColumnWidth.js` reads `col.minWidth` as the flex-basis override in both `columnFlex()` and `columnMinWidthPx()`, giving that column more visual weight in the flex distribution.
 
@@ -273,3 +273,41 @@ Both are truncated to the column length — `AD_User.Name` and `AD_User.Username
 **Regeneration side effect.** The `make regen` this change required also brought `oBTIKVIESStatus` up to date in `contract.json` / `contract.mcp.json` / `BusinessPartnerForm.jsx` (`defaultValue: 'P'`, `maxLength` 10 → 60). That is not stray drift: it completes the contacts artifact regeneration called for by ETP-4144 (see `schema_forge_core/docs/plans/ETP-4144-cross-domain.md` § `window:contacts` — artifact regeneration), whose output never reached this repo's committed artifacts. Re-running the regen reproduces it, since it is a faithful read of AD.
 
 **Automated evidence.** `ContactHandlerTest.java` — 16 JUnit 5 tests covering the method guards, POST name derivation (both parts, one part, explicit name wins, 60-char truncation), POST username derivation (from derived name, from explicit name, existing username respected, truncation), PATCH derivation from persisted parts, the persisted-name and blank-record-id guards, and the regression that PATCH never touches `username`. `BusinessPartnerHandlerTest#testHandlePostTruncatesInjectedSearchKeyToColumnLength` covers the 40-char guard. On the front end, the obsolete `applyContactNameDefaults` / `applyContactsRequiredFields` suites were removed and `buildPatchPayload`'s now-unused `entity` parameter dropped; `buildPatchPayload` gained a test asserting a contact PATCH carries only the changed fields.
+## ETP-4565 — Customer/Vendor Accounting tabs: entity-level non-deletable
+
+**`entities.customerAccounting.hideDelete: true`** and **`entities.vendorAccounting.hideDelete: true`** added — both accounting tabs' rows can no longer be deleted (`apiPrediction.crud.customerAccounting.delete` / `crud.vendorAccounting.delete: false`). **Resolved (follow-up pass):** both tabs are now capped at one record via `window.secondaryTabs.customerAccounting.maxDetailLines: 1` and `window.secondaryTabs.vendorAccounting.maxDetailLines: 1` — the same generic `secondaryTabs`-pattern capability added for `product`/`asset-group` (see `product.md` for the full mechanism). Each tab's cap is independent (declared per-key), which is exactly why this window motivated the per-tab shape instead of a window-wide flag. Regenerated via `make regen ONLY=contacts`; `sf-validate-pipeline --scope=contacts` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral, shared across the family).
+
+**Regen hit the known `AD_Ref_List_Trl` translation-stripping gap** on `businessPartner.oBTIKVIESStatus` (unrelated field) — see `docs/feedback.md` ("ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap"). The 3 dropped `es_ES` labels were restored by hand; `BusinessPartnerForm.jsx` (which had no other change from the regen) was reverted to its committed version rather than hand-patched.
+
+**Auto-creation (requirement 3, DB-verified):** `customerAccounting` rows are auto-created reliably (100% of recently-created customer business partners have a `C_BP_Customer_Acct` row). `vendorAccounting` is a near-miss (9/10 recently-created vendor business partners) — one record created 2026-06-05 has no `C_BP_Vendor_Acct` row. Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass.
+
+## ETP-4644 — "Vista Previa" button removed
+
+The selection bar's **Vista Previa** (eye) button never had a working backend — clicking it
+always errored — and did not apply to any current window. It was removed unconditionally from
+`ListView.jsx` (shared component, affects every window), so the `listViewOptions.hideEye`
+flag this window set in `decisions.json` became meaningless and was removed along with it.
+The **Imprimir** button and `hidePrint` flag are unaffected — that is a separate, working
+action. Regenerated via `make regen ONLY=contacts`.
+
+**Out of scope for this ticket, confirmed by design (Financial Account precedent):** `financial-account`'s equivalent "Contabilidad" tab (`accountingConfiguration` entity) already satisfies both single-record and non-deletable requirements structurally — `FinancialAccountAccountingHandler` always resolves a find-or-create single row per ledger (no "Add" affordance exists) and no delete UI was ever built for it. No decisions.json change was needed there; see the ETP-4565 coordinator report for the full per-window breakdown.
+
+## ETP-4835 — Stray VIES status badge hidden from header
+
+A red "✕ P" status pill rendered next to the Cancelar button in the header, but only on
+**new** (unsaved) Contact records — existing records never showed it. Root cause: the
+window has no real document-status column, so the generator's `statusField` resolution
+(`generate-frontend.js`) fell back to name-sniffing the first `readOnly` field whose name
+contains "status" — which for `businessPartner` is `oBTIKVIESStatus` (the EU VIES tax-ID
+validation status), an unrelated field that happens to default to `'P'` ("Pendiente") via
+`/businessPartner/defaults`. On existing records that field is usually `null`, so the pill
+never appeared there — matching the "only on new records" symptom exactly.
+
+**Fix is scoped to this window only** — `decisions.json` → `window.statusField: "none"`,
+which uses the existing explicit-override escape hatch in `generate-frontend.js` (already
+shipped for `assets` since ETP-4103) to force `statusField = null` for `businessPartner`,
+bypassing the name-sniffing fallback entirely. No generator change was made: the fallback
+itself is still frágil for other windows in principle, but tightening it for every window
+is a separate, cross-window concern with its own risk budget — out of scope here. Verified
+with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
+`statusField` resolves to `null` and the pill no longer renders on new or existing records.

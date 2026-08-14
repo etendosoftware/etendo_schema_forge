@@ -38,6 +38,18 @@ function toTaken(value) {
   return value === '-' ? 0 : toNumber(value);
 }
 
+// Reports from `node --test --experimental-test-coverage` emit a DA:/FN:/BRDA: entry for
+// every line/function/branch in the file, including comments and blank lines — they are not
+// executable and were never "coverable" to begin with. vitest's v8-based coverage only emits
+// entries for lines/functions/branches that are actually instrumentable, so it's the more
+// precise source. When both report on the same file, trust vitest's set as ground truth and
+// only fold in hit counts from the other reports; entries that exist ONLY in a non-vitest
+// report are phantom and must be dropped, or they inflate the coverage denominator. Files
+// vitest never touches keep the old union behavior — there's no more precise source to defer to.
+function isTrustedSource(filePath) {
+  return /vitest/i.test(filePath);
+}
+
 function getRecord(records, sourceFile) {
   let record = records.get(sourceFile);
   if (!record) {
@@ -48,13 +60,17 @@ function getRecord(records, sourceFile) {
       lines: new Map(),
       branches: new Map(),
       extras: new Set(),
+      trustedFunctions: new Set(),
+      trustedLines: new Set(),
+      trustedBranches: new Set(),
+      hasTrustedSource: false,
     };
     records.set(sourceFile, record);
   }
   return record;
 }
 
-function parseRecord(records, text) {
+function parseRecord(records, text, trusted) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   const sourceLine = lines.find((line) => line.startsWith('SF:'));
   if (!sourceLine) {
@@ -63,6 +79,9 @@ function parseRecord(records, text) {
 
   const sourceFile = sourceLine.slice(3);
   const record = getRecord(records, sourceFile);
+  if (trusted) {
+    record.hasTrustedSource = true;
+  }
 
   for (const line of lines) {
     if (line.startsWith('TN:') || line.startsWith('SF:') || line === 'end_of_record') {
@@ -73,7 +92,11 @@ function parseRecord(records, text) {
       const payload = line.slice(3);
       const comma = payload.indexOf(',');
       if (comma >= 0) {
-        record.functions.set(payload.slice(comma + 1), payload.slice(0, comma));
+        const name = payload.slice(comma + 1);
+        record.functions.set(name, payload.slice(0, comma));
+        if (trusted) {
+          record.trustedFunctions.add(name);
+        }
       }
       continue;
     }
@@ -92,6 +115,9 @@ function parseRecord(records, text) {
     if (line.startsWith('DA:')) {
       const [lineNumber, hits] = line.slice(3).split(',', 2);
       record.lines.set(lineNumber, (record.lines.get(lineNumber) || 0) + toNumber(hits));
+      if (trusted) {
+        record.trustedLines.add(lineNumber);
+      }
       continue;
     }
 
@@ -100,6 +126,9 @@ function parseRecord(records, text) {
       if (parts.length >= 4) {
         const key = parts.slice(0, 3).join(',');
         record.branches.set(key, (record.branches.get(key) || 0) + toTaken(parts[3]));
+        if (trusted) {
+          record.trustedBranches.add(key);
+        }
       }
       continue;
     }
@@ -110,6 +139,14 @@ function parseRecord(records, text) {
 
     record.extras.add(line);
   }
+}
+
+// Returns the [key, value] entries a record should actually report for one of its
+// functions/lines/branches maps: the full map when no trusted (vitest) source touched this
+// file, or only the entries vitest also reported when one did — dropping node-only phantoms.
+function trustedEntries(map, trustedKeys, hasTrustedSource) {
+  const entries = [...map.entries()];
+  return hasTrustedSource ? entries.filter(([key]) => trustedKeys.has(key)) : entries;
 }
 
 function compareNumericKeys(left, right) {
@@ -125,8 +162,9 @@ export function mergeLcovFiles(inputFiles) {
   const records = new Map();
   for (const file of inputFiles) {
     const content = readFileSync(file, 'utf8');
+    const trusted = isTrustedSource(file);
     for (const record of content.split(/end_of_record\s*/)) {
-      parseRecord(records, record);
+      parseRecord(records, record, trusted);
     }
   }
 
@@ -135,28 +173,32 @@ export function mergeLcovFiles(inputFiles) {
     output.push('TN:');
     output.push(`SF:${record.sourceFile}`);
 
-    for (const [name, lineNumber] of [...record.functions.entries()].sort((left, right) => compareNumericKeys(left[1], right[1]))) {
+    const functionEntries = trustedEntries(record.functions, record.trustedFunctions, record.hasTrustedSource);
+    for (const [name, lineNumber] of functionEntries.sort((left, right) => compareNumericKeys(left[1], right[1]))) {
       output.push(`FN:${lineNumber},${name}`);
     }
-    for (const [name, hits] of [...record.functionHits.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+    const functionHitEntries = trustedEntries(record.functionHits, record.trustedFunctions, record.hasTrustedSource);
+    for (const [name, hits] of functionHitEntries.sort((left, right) => left[0].localeCompare(right[0]))) {
       output.push(`FNDA:${hits},${name}`);
     }
-    output.push(`FNF:${record.functions.size}`);
-    output.push(`FNH:${[...record.functionHits.values()].filter((hits) => hits > 0).length}`);
+    output.push(`FNF:${functionEntries.length}`);
+    output.push(`FNH:${functionHitEntries.filter(([, hits]) => hits > 0).length}`);
 
-    for (const [key, hits] of [...record.branches.entries()].sort((left, right) => compareNumericKeys(left[0], right[0]))) {
+    const branchEntries = trustedEntries(record.branches, record.trustedBranches, record.hasTrustedSource);
+    for (const [key, hits] of branchEntries.sort((left, right) => compareNumericKeys(left[0], right[0]))) {
       output.push(`BRDA:${key},${hits}`);
     }
-    if (record.branches.size > 0) {
-      output.push(`BRF:${record.branches.size}`);
-      output.push(`BRH:${[...record.branches.values()].filter((hits) => hits > 0).length}`);
+    if (branchEntries.length > 0) {
+      output.push(`BRF:${branchEntries.length}`);
+      output.push(`BRH:${branchEntries.filter(([, hits]) => hits > 0).length}`);
     }
 
-    for (const [lineNumber, hits] of [...record.lines.entries()].sort((left, right) => Number(left[0]) - Number(right[0]))) {
+    const lineEntries = trustedEntries(record.lines, record.trustedLines, record.hasTrustedSource);
+    for (const [lineNumber, hits] of lineEntries.sort((left, right) => Number(left[0]) - Number(right[0]))) {
       output.push(`DA:${lineNumber},${hits}`);
     }
-    output.push(`LF:${record.lines.size}`);
-    output.push(`LH:${[...record.lines.values()].filter((hits) => hits > 0).length}`);
+    output.push(`LF:${lineEntries.length}`);
+    output.push(`LH:${lineEntries.filter(([, hits]) => hits > 0).length}`);
 
     for (const extra of [...record.extras].sort((left, right) => left.localeCompare(right))) {
       output.push(extra);

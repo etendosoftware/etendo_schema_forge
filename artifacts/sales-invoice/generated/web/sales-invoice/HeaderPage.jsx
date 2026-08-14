@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import { INVOICE_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
@@ -53,7 +54,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'transactionDocument'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -153,6 +154,27 @@ export const api = {
       "reference": "Org",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
+    },
+    {
+      "entity": "header",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -271,27 +293,6 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
-    },
-    {
-      "entity": "header",
-      "field": "transactionDocument",
-      "column": "C_DocTypeTarget_ID",
-      "reference": "DocumentType",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-      "context": {
-        "required": [
-          {
-            "param": "IsSOTrx",
-            "source": "windowCategory"
-          },
-          {
-            "param": "AD_Org_ID",
-            "source": "field",
-            "field": "adOrgId"
-          }
-        ]
-      }
     },
     {
       "entity": "lines",
@@ -447,6 +448,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "tBAIQRcode",
       "column": "em_tbai_qrcode",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
@@ -467,6 +476,14 @@ export const api = {
       "column": "EM_Tbai_Xmlgenerator",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
       "processId": "BE2486102F2C41779B760609FD69A225",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
       "processType": "obuiapp"
     },
     {
@@ -537,22 +554,6 @@ export const api = {
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
       "processId": "0661406A983B4D8EA611F8596F114D52",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-      "processId": "745FCF75B6F14024B96CC14429D8E952",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -662,10 +663,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' },
+          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
         hideDeleteWhenComplete
-        hidePrint
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
@@ -682,7 +683,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         salesTheme
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
-        linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
       />
@@ -698,11 +698,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"},{"label":"creditNotesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"},{"label":"returnsTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"}]}
+      listViewOptions={{"hidePrint":true}}
+      subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D","_note":"ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."},{"label":"rectificativeInvoicesTab","filter":"criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D","_note":"ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."}]}
       dateFilterKey="invoiceDate"
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

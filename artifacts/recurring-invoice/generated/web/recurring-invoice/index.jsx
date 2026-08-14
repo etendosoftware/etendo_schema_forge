@@ -1,4 +1,5 @@
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import RecurringInvoiceTable from './RecurringInvoiceTable';
 import RecurringInvoiceForm from './RecurringInvoiceForm';
 import catalogs from './mockCatalogs';

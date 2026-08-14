@@ -1,5 +1,17 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+const { mockUseFeatureFlag } = vi.hoisted(() => ({
+  mockUseFeatureFlag: vi.fn(() => false),
+}));
+const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
+  mockUseEnvironmentSwitch: vi.fn(() => ({
+    environments: [],
+    switchTo: vi.fn(),
+    switching: null,
+    currentClientId: undefined,
+  })),
+}));
 
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
 // tests can override the current path (e.g. the ETP-4598 openGroups-race
@@ -33,6 +45,16 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 const mockUseFavorites = vi.fn(() => ({ favorites: [] }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => mockUseFavorites(),
+}));
+
+vi.mock('@/lib/flags', () => ({
+  useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
+  TENANT_UPGRADE: 'tenant-upgrade',
+  PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+}));
+
+vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  useEnvironmentSwitch: (...args) => mockUseEnvironmentSwitch(...args),
 }));
 
 // Mock menu.json — includes a couple of extra entries (a "Favorites" group and
@@ -166,6 +188,15 @@ const MENU_GROUPS = [
       { name: 'sales-invoice', label: 'Sales Invoice' },
     ],
   },
+  {
+    group: 'Proof of Concept',
+    icon: 'FlaskConical',
+    section: 'System',
+    items: [
+      { name: 'quick-sales-order', label: 'Quick Sales Order' },
+      { name: 'quick-purchase-order', label: 'Quick Purchase Order' },
+    ],
+  },
 ];
 
 describe('SideMenu', () => {
@@ -195,6 +226,34 @@ describe('SideMenu', () => {
     render(<SideMenu {...defaultProps} />);
     const matches = screen.getAllByText('Test Org');
     expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows the current environment plan in the selector when tenant upgrade is enabled', () => {
+    mockUseFeatureFlag.mockImplementation(key => key === 'tenant-upgrade');
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).getByText('environmentDemo')).toBeInTheDocument();
+  });
+
+  it('does not show a plan label in the selector when tenant upgrade is disabled', () => {
+    mockUseFeatureFlag.mockReturnValue(false);
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).queryByText('environmentDemo')).not.toBeInTheDocument();
   });
 
   it('renders the user avatar button', () => {
@@ -254,6 +313,15 @@ describe('SideMenu', () => {
       mockUseFavorites.mockReturnValue({ favorites: [] });
       mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
       delete import.meta.env.VITE_SHOW_ARTIFACTS;
+      mockUseFeatureFlag.mockReset();
+      mockUseFeatureFlag.mockReturnValue(false);
+      mockUseEnvironmentSwitch.mockReset();
+      mockUseEnvironmentSwitch.mockReturnValue({
+        environments: [],
+        switchTo: vi.fn(),
+        switching: null,
+        currentClientId: undefined,
+      });
     });
 
     // A group whose currentPath ('dashboard') matches one of two items, so the
@@ -467,6 +535,24 @@ describe('SideMenu', () => {
       const link = screen.getByTestId('NavLink__247c75');
       expect(link).toHaveAttribute('href', '/artifacts');
       expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    });
+
+    it('hides the Proof of Concept section while its flag is off', () => {
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
+    });
+
+    it('shows the Proof of Concept section when its flag is on', () => {
+      mockUseFeatureFlag.mockImplementation(key => key === 'proof-of-concept-menu');
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.getByText('Proof of Concept')).toBeInTheDocument();
+    });
+
+    it('keeps the Proof of Concept section hidden when the provider falls back', () => {
+      // A failed provider resolves useFeatureFlag to the declared false default.
+      mockUseFeatureFlag.mockReturnValue(false);
+      render(<SideMenu {...defaultProps} />);
+      expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
     });
 
     it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {

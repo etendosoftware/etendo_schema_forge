@@ -1,8 +1,8 @@
 {
-  "version": "0.81.0",
+  "version": "0.83.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-30T04:12:10.503Z",
-  "checksum": "cee32698598f9319",
+  "updatedAt": "2026-08-11T19:52:32.867Z",
+  "checksum": "758dfc90eed3f4b7",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -12,6 +12,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -42,7 +43,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "documentDateField": "invoiceDate",
@@ -69,11 +71,11 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -177,6 +179,7 @@
             },
             "section": "principal",
             "seq": 20,
+            "businessCritical": true,
             "validation": {
               "required": true,
               "maxLength": 30
@@ -206,6 +209,7 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "businessCritical": true,
             "gridOrder": 1,
             "validation": {
               "required": true,
@@ -236,6 +240,7 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "businessCritical": true,
             "gridOrder": 3,
             "validation": {
               "required": true,
@@ -546,6 +551,7 @@
             "grid": true,
             "form": false,
             "sourceRequired": true,
+            "businessCritical": true,
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -691,6 +697,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "businessCritical": true,
             "gridOrder": 7,
             "validation": {
               "required": true,
@@ -5118,6 +5125,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -5148,7 +5156,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "documentDateField": "invoiceDate",
@@ -5175,11 +5184,11 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -5242,7 +5251,8 @@
             "column": "DocumentNo",
             "type": "string",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "invoiceDate",
@@ -5250,7 +5260,8 @@
             "column": "DateInvoiced",
             "type": "date",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "businessPartner",
@@ -5258,7 +5269,8 @@
             "column": "C_BPartner_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "partnerAddress",
@@ -5338,7 +5350,8 @@
             "column": "GrandTotal",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "summedLineAmount",
@@ -5402,7 +5415,8 @@
             "column": "OutstandingAmt",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "orderDate",
@@ -6533,7 +6547,27 @@
             "required": false
           }
         ],
-        "javaQualifier": "purchaseInvoiceHeaderHandler"
+        "javaQualifier": "purchaseInvoiceHeaderHandler",
+        "namedFilters": [
+          {
+            "name": "completed",
+            "where": "e.paymentComplete = true",
+            "label": "Paid",
+            "description": "Fully paid invoices (payment complete)."
+          },
+          {
+            "name": "pending",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)",
+            "label": "Unpaid",
+            "description": "Unpaid invoices with nothing paid yet (outstanding equals the total)."
+          },
+          {
+            "name": "partial",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)",
+            "label": "Partially paid",
+            "description": "Invoices with a partial payment: some amount paid but a balance remains."
+          }
+        ]
       },
       "lines": {
         "tableName": "C_InvoiceLine",
@@ -7009,6 +7043,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOSourceInvoiceLine",
+            "apiKey": "eTGOSourceInvoiceLine",
+            "column": "EM_Etgo_Source_Invoiceline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -17475,6 +17517,14 @@
         "description": "System field 'editLineAmount' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-eTGOSourceInvoiceLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTGOSourceInvoiceLine",
+        "runner": "node",
+        "description": "System field 'eTGOSourceInvoiceLine' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-excludeforwithholding",
         "category": "system-field",
         "entity": "lines",
@@ -18399,7 +18449,7 @@
       }
     ],
     "summary": {
-      "total": 995,
+      "total": 996,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
@@ -18413,11 +18463,11 @@
         "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 53,
-        "system-field": 326,
+        "system-field": 327,
         "visibility": 13
       },
       "byRunner": {
-        "node": 995,
+        "node": 996,
         "junit": 0
       }
     }

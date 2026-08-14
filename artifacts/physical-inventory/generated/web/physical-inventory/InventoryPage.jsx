@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import InventoryTable from './InventoryTable';
@@ -261,7 +262,6 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
         lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

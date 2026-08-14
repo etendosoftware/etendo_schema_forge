@@ -25,12 +25,8 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
   default: () => <div data-testid="create-invoice-confirm-modal" />,
 }));
 
-vi.mock('../useReturnReceiptPdf', () => ({
-  generateReturnReceiptPdf: vi.fn(),
-  getReturnReceiptPdfLabels: () => ({}),
-}));
-
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
+import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
 const BASE_PROPS = {
   recordId: 'REC-001',
@@ -51,12 +47,7 @@ describe('ConfirmWithCreditButton', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders nothing when status is not DR or CO', () => {
-    const { container } = render(
-      <ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
+  itRendersOnlyCopyLinkOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
 
   it('renders process receipt button in DR status', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);
@@ -122,11 +113,26 @@ describe('ConfirmWithCreditButton', () => {
     expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
   });
 
-  it('always renders the print button regardless of status', () => {
+  it('does NOT render a print button (printing is unified in DocumentPrintDrawer)', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 1 }} />);
-    expect(screen.getByText('print')).toBeInTheDocument();
+    expect(screen.queryByText('print')).not.toBeInTheDocument();
 
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CO', returnInvoices: [] }} />);
-    expect(screen.getAllByText('print').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('print').length).toBe(0);
+  });
+
+  // ETP-4737: postConfirmButtonLabel={ui('returnReceipt.createRectificativeInvoice')}
+  // is hardcoded on this wrapper — verify it actually reaches the rendered button
+  // text through ConfirmWithCreditButtonBase, instead of the base's own
+  // ui('createReturnInvoice') fallback.
+  it('forwards ui("returnReceipt.createRectificativeInvoice") as the create-return-invoice button label', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', returnInvoices: [] }}
+      />,
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    expect(btn).toHaveTextContent('returnReceipt.createRectificativeInvoice');
   });
 });

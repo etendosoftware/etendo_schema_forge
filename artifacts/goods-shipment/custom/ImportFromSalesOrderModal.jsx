@@ -47,24 +47,33 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentI
 }
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId: shipmentId }) => {
-  const [ordersRes, draftInfo] = await Promise.all([
+  const [ordersRes, draftInfo, headerRes] = await Promise.all([
     fetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=orderDate desc`, { headers }),
     fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId: shipmentId }),
+    fetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`, { headers }),
   ]);
 
+  let shipmentCurrency = null;
+  if (headerRes.ok) {
+    shipmentCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
+  }
+
   let documents = [];
+  let excludedByCurrency = false;
   if (ordersRes.ok) {
     const all = (await ordersRes.json())?.response?.data || [];
-    documents = all.filter(o =>
+    const candidates = all.filter(o =>
       o.documentStatus === 'CO'
       && o.businessPartner === bpId
       && Number(o.deliveryStatus ?? 100) < 100,
     );
+    documents = shipmentCurrency ? candidates.filter(o => o.currency === shipmentCurrency) : candidates;
+    excludedByCurrency = !!shipmentCurrency && documents.length === 0 && candidates.length > 0;
   }
-  return { documents, sharedContext: { draftInfo } };
+  return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
+export const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const res = await fetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
   if (!res.ok) return [];
   const lines = (await res.json())?.response?.data || [];
@@ -74,12 +83,13 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
     const draftEntry = sharedContext.draftInfo?.[l.id];
     const inOtherDrafts = draftEntry?.qty || 0;
     const pending = Math.max(0, ordered - delivered - inOtherDrafts);
+    const unitPrice = Number(l.unitPrice) || 0;
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
       _maxQty: pending,
-      _unitPrice: 0,
-      _lineNetAmount: 0,
+      _unitPrice: unitPrice,
+      _lineNetAmount: unitPrice * pending,
       _alreadyImported: pending === 0,
       _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
     };
@@ -106,6 +116,7 @@ export default function ImportFromSalesOrderModal(props) {
       searchPlaceholderKey="searchSalesOrder"
       emptyMessageKey="noCompletedSalesOrdersForThisCustomer"
       noSearchResultsKey="noOrdersMatchYourSearch"
+      noCurrencyMatchMessageKey="noSalesOrdersMatchShipmentCurrency"
       successMessageKey="linesImportedFromSalesOrder"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

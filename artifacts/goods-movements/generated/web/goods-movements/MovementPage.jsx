@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import MovementTable from './MovementTable';
@@ -263,7 +264,6 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
         lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}
       />

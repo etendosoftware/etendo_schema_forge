@@ -123,13 +123,15 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Sorting is tracked in hook state and can switch to the companion `$_identifier` field when present so foreign-key sorts are alphabetical.
   - Selecting a row uses the record data already present in the list and fetches that record's children; loading by id is the path that fetches the full record and its children.
   - `handleNew()` requests `/<entity>/defaults`, normalizes returned values, and pre-fills the form when defaults exist. Combo-style fields (Price List, Payment Terms) are pre-selected by the backend; Search-type fields (Contact, Business Partner) are left empty for the user to fill explicitly.
+  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The 4-second timeout is a UX budget, not a correctness mechanism: when it fires it releases the gate so the user can start working, and nothing else — the request is **not** aborted and the session is **not** invalidated, so a response arriving later still merges. That late merge is also what fires `DetailView`'s initial-callout chain, which is latched on `editing` becoming non-empty and would never fire on a form left permanently empty (one residual gap in that latch is recorded under "Failure or edge behavior" below). When the merge runs — before or after the release — it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits at most one `defaults_block` timing event: exactly one for the session that survives to settlement (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`); a session superseded by a newer `handleNew()` **before it settles** emits none. Invalidation is reserved for genuinely superseded sessions: a newer `handleNew()`, or loading an existing record (`handleSelect` or `fetchById`) while the defaults request is still pending — the latter neutralizes it, aborting the request (still possible after the timeout, which keeps the abort handle), discarding its late response, releasing `defaultsLoading` immediately, and — when the session had not already settled — emitting no `defaults_block` event. A session that already settled as `timeout` and is only afterwards superseded or neutralized keeps that one event: the timing handle is one-shot, so no second event can follow.
   - Before a `POST`, `handleSave()` validates that all visible required fields have a value. `EntityForm` registers only currently-visible fields via `registerFields(displayFields)` so hidden fields never block the save. If any required field is empty, `fieldErrors` is set and each offending field renders a red border with an inline "Required" message — the POST is not sent.
   - If the backend still returns a structured `400 MISSING_REQUIRED_FIELDS` response, the `fields` array is parsed and mapped to `fieldErrors` as a second validation layer.
   - New records use `POST`; existing records use `PATCH` with changed fields only.
   - Child-row creation posts `parentId`, then refreshes both children and the header record so derived totals stay current.
 - **Failure or edge behavior:**
   - List refresh and pagination logout on HTTP 401.
-  - If the defaults endpoint fails, the form still opens with an empty object.
+  - If the defaults endpoint fails, the form still opens with an empty object and `defaultsLoading` returns to false. If it merely overruns the 4s budget, `defaultsLoading` also returns to false, but the request keeps running and its defaults are applied when they land.
+  - Known gap (pre-existing, narrowed but not closed by ETP-4741): `DetailView`'s initial-callout latch arms on `editing` becoming non-empty for **any** reason, including the user typing into a plain non-selector field. If that happens before the defaults land — only possible in the window between the 4s gate release and a late response — the latch is consumed while no selector field has a value yet, so the defaults still merge but the callout chain never runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`).
   - Partial or empty batches stop pagination.
   - Save blocked by missing required fields surfaces per-field `fieldErrors` highlights and a toast; the record is not created.
   - Save and child-row creation failures surface `saveError` and toast feedback; delete and process failures surface toast feedback.
@@ -137,6 +139,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Automated evidence:**
   - `tools/app-shell/src/hooks/__tests__/useEntity-pagination.test.js` verifies first-page and subsequent-page batch windows, sort handling, retry behavior for the default `creationDate` sort, empty datasets, and fetch failures.
   - `tools/app-shell/src/hooks/__tests__/useEntity-defaults.test.js` verifies the defaults URL, bearer header use, non-OK handling, network-error fallback, and missing-defaults fallback.
+  - `tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx` verifies the ETP-4741 race guards: `defaultsLoading`, the 4s gate release (which neither aborts the request nor discards its late response), invalidation of superseded and record-load-neutralized sessions, user-edit merge protection before and after the release, and the `defaults_block` timing event.
   - `tools/app-shell/src/hooks/__tests__/useEntity-required-validation.test.js` verifies the required-field validation logic: empty required fields are flagged, readOnly and summary-section fields are skipped, whitespace-only strings are treated as empty, and `readOnlyLogic` functions are respected for completed documents.
 - **Manual verification path:**
   1. Open a generated window such as `/sales-order`.
@@ -370,3 +373,34 @@ The Dashboard period filter (the range selector: "Último año", "Últimos 90 d�
 - `tools/app-shell/src/auth/useLogout.js` — the single logout choke point that calls `clearStoredDateRange()` before the core `logout()`.
 
 Full auth/session design and the "route every logout through `useLogout()`" convention: [`../architecture/07-auth-and-security.md`](../architecture/07-auth-and-security.md#logout-choke-point-uselogout).
+
+## Secondary tab strip — full-bleed divider — ETP-4605
+
+**Applies to every window with secondary tabs.** The strip that holds the child-entity /
+custom tabs (e.g. `Accounting` · `Price` · `Attachments` in Producto) carries a
+`border-b border-border/50`. It is a sibling of the form card inside the detail *content
+column*, and the only thing between them is `getLinesTabsSectionClassName`'s `mt-2`, so it
+inherited that column's horizontal padding — which made the divider start (and end) a few
+pixels inside the panel instead of spanning it.
+
+`getTabStripBleedClassName()` (exported from `DetailView.jsx`, next to
+`detailContentPadding`) now resolves the column's padding from the **same**
+`detailContentPadding()` inputs and, for each horizontal token, emits a matching negative
+margin plus the token itself:
+
+| Content column padding | Window shape | Bleed emitted |
+|---|---|---|
+| `px-2 pb-2` | sidebar + `compactSidebarPadding` (Producto) | `-mx-2 px-2` |
+| `pr-2` | sidebar, non-compact | `-mr-2 pr-2` |
+| `px-6` | no sidebar (default) | `-mx-6 px-6` |
+| `` (empty) | `inlineEditable`, no sidebar | `` (nothing to cancel) |
+
+The negative margin pulls the bordered box out to the panel edges; re-applying the padding
+inside keeps the tab buttons exactly where they were, so only the line moves. Vertical
+tokens (`pb-2`) are ignored. Deriving the value from `detailContentPadding()` instead of
+hardcoding `-mx-2` is what keeps it correct for every window shape and prevents drift if
+the padding rules change.
+
+Covered by `getTabStripBleedClassName` cases in
+`src/components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` (one per row of the
+table above, plus a `formScrollPaddingX` override).

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickEmptyStateAddLine } from '../helpers/secondaryTabsInteractions.js';
 
 /**
  * Product Pricing tab — mocked spec.
@@ -36,17 +37,23 @@ import { login } from '../helpers/auth.js';
 
 // ── Synthetic data ───────────────────────────────────────────────────────────
 
+// `label`/`name` carry the price list VERSION name and `priceList$_identifier` the
+// TARIFF name, exactly as ProductPriceHandler returns them. They are deliberately
+// different: the UI must always show the tariff name (the version of an
+// onboarding-created list is named "Version <list name>").
 const PLV_SALE = {
   id: 'plv-sale',
-  label: 'Lista venta 2026',
-  name: 'Lista venta 2026',
+  label: 'Version Lista venta 2026',
+  name: 'Version Lista venta 2026',
+  'priceList$_identifier': 'Lista venta 2026',
   salesPriceList: true,
 };
 
 const PLV_PURCHASE = {
   id: 'plv-purchase',
-  label: 'Lista compra 2026',
-  name: 'Lista compra 2026',
+  label: 'Version Lista compra 2026',
+  name: 'Version Lista compra 2026',
+  'priceList$_identifier': 'Lista compra 2026',
   salesPriceList: false,
 };
 
@@ -73,7 +80,8 @@ const EXISTING_SALES_ROW = {
   id: 'price-existing-sales-1',
   product: 'PROD-2',
   priceListVersion: 'plv-sale',
-  'priceListVersion$_identifier': 'Lista venta 2026',
+  'priceListVersion$_identifier': 'Version Lista venta 2026',
+  'priceList$_identifier': 'Lista venta 2026',
   'priceListVersion$salesPriceList': true,
   // Fields required by ProductSalePriceCell / ProductPurchasePriceCell (list view)
   // to resolve the correct price row via selectPriceRow.
@@ -140,7 +148,7 @@ async function mockProductDetail(page, product) {
  * tests can assert the lazy fetch actually fired.
  */
 async function mockSelector(page, calls) {
-  await page.route('**/sws/neo/product/price/selectors/M_PriceList_Version_ID**', async (route) => {
+  await page.route('**/sws/neo/product/price/selectors/M_PriceList_Version_ID{/**,}**', async (route) => {
     calls.push(route.request().url());
     await route.fulfill({
       status: 200,
@@ -156,7 +164,7 @@ async function mockSelector(page, calls) {
  * list GET reflects it. `postBodies` captures each create body.
  */
 function installPriceRoute(page, state) {
-  return page.route('**/sws/neo/product/price**', async (route) => {
+  return page.route('**/sws/neo/product/price{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();
@@ -185,6 +193,9 @@ function installPriceRoute(page, state) {
         product: body.product,
         priceListVersion: body.priceListVersion,
         'priceListVersion$_identifier': isSales ? PLV_SALE.label : PLV_PURCHASE.label,
+        'priceList$_identifier': isSales
+          ? PLV_SALE['priceList$_identifier']
+          : PLV_PURCHASE['priceList$_identifier'],
         'priceListVersion$salesPriceList': isSales,
         'priceListVersion$default': true,
         'priceListVersion$validFromDate': '2026-01-01',
@@ -211,7 +222,7 @@ function installPriceRoute(page, state) {
  * Accounting secondary tab added in ETP-4402.
  */
 async function mockProductAccounting(page, rows) {
-  await page.route('**/sws/neo/product/accounting**', async (route) => {
+  await page.route('**/sws/neo/product/accounting{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -335,7 +346,7 @@ test.describe('Product pricing — selector populates dropdown from lazy fetch (
     await login(page);
 
     // Return ONE existing sales row so the sales section is populated.
-    await page.route('**/sws/neo/product/price**', async (route) => {
+    await page.route('**/sws/neo/product/price{/**,}**', async (route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();
@@ -422,7 +433,7 @@ test.describe('Product pricing — inline create tariff', () => {
 
     // Spec-swapped price-list create endpoint: apiBaseUrl `/sws/neo/product`
     // has its last segment replaced → `/sws/neo/price-list/priceList`.
-    await page.route('**/sws/neo/price-list/priceList**', async (route) => {
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
       const req = route.request();
       if (req.method() !== 'POST') return route.fallback();
       createBodies.push(req.postData() ? JSON.parse(req.postData()) : {});
@@ -497,6 +508,18 @@ test.describe('Product Accounting tab — mocked', () => {
    *     copies it client-side from the previous row, and `ProductAccountingHandler`
    *     auto-fills it server-side on POST when absent (covering the very
    *     first row, which has no sibling to copy from).
+   *
+   * ETP-4565 added `"maxDetailLines": 1` to the `accounting` secondary-tab
+   * entry in `decisions.json` — the tab is now capped at a single,
+   * non-deletable record (see `DetailView.jsx`,
+   * `st.maxDetailLines == null || childrenCount < st.maxDetailLines` gating
+   * `action-add-line`, and `docs/ui-customization.md` §17). With the seeded
+   * ACCOUNTING_ROW present (the default state exercised by the "columns"
+   * test), Add Line is correctly hidden — so the GL-fields-but-not-
+   * accountingSchema coverage below now runs against an empty-seed variant
+   * (the one state where Add Line is still reachable), and a companion test
+   * asserts the cap itself: Add Line is absent once the single allowed
+   * record exists.
    */
 
   test.beforeEach(async ({ page }) => {
@@ -525,12 +548,35 @@ test.describe('Product Accounting tab — mocked', () => {
     await expect(page.getByText('6000000 Compras de mercaderías')).toBeVisible();
   });
 
+  test('Add Line is hidden once the accounting record already exists (maxDetailLines: 1 cap)', async ({ page }) => {
+    await page.getByTestId('tab-accounting').click();
+
+    // ETP-4565: maxDetailLines: 1 hides action-add-line once childrenCount
+    // reaches the cap — the seeded ACCOUNTING_ROW already fills it.
+    await expect(page.getByTestId('column-header-fixedAsset')).toBeVisible({ timeout: 8_000 });
+    // Scoped to the DetailView-rendered button: the pricing tab renders its own
+    // `action-add-line` (shared AddLineButton) and every custom tab panel stays
+    // mounted, so a global count would never be 0 in this window.
+    await expect(
+      page.locator('[data-inline-add-portal="true"] [data-testid="action-add-line"]'),
+    ).toHaveCount(0);
+  });
+});
+
+test.describe('Product Accounting tab (empty state) — mocked', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await mockProductAccounting(page, []);
+    await mockProductDetail(page, PRODUCT_FOR_ACCOUNTING);
+
+    await page.goto(`/product/${PRODUCT_FOR_ACCOUNTING.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
   test('Add Line exposes the four GL account fields; accountingSchema is never editable', async ({ page }) => {
     await page.getByTestId('tab-accounting').click();
 
-    const addBtn = page.getByTestId('action-add-line');
-    await expect(addBtn).toBeVisible({ timeout: 8_000 });
-    await addBtn.click();
+    await clickEmptyStateAddLine(page);
 
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('inline-add-field-fixedAsset')).toBeVisible();

@@ -1,8 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
+
+// Radix Select has no empty-string value, so the picker uses '__empty__' as its
+// placeholder sentinel — translate it back to '' before it reaches priceListId,
+// and back to the sentinel when feeding the current value into the Select.
+const resolvePriceListValue = (val) => (val === '__empty__' ? '' : val);
+const toPriceListSelectValue = (id) => id || '__empty__';
+const priceListPlaceholder = (ui, isLoading) => (isLoading ? ui('loading') : ui('noPriceListsAvailable'));
 
 /**
  * Generic "Create Invoice" confirmation modal — used by both goods-shipment and
@@ -13,8 +21,18 @@ import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnSt
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
- *   onConfirm        — called when user clicks Confirm (checkbox must be checked)
+ *   onConfirm        — called with the selected price list ID when the user clicks Confirm
+ *                      (checkbox must be checked, and — when showPriceListPicker is true —
+ *                      a price list must be selected)
  *   onClose          — called to dismiss without confirming
+ *   showPriceListPicker — ETP-4028: shipments/receipts carry no price list of their own —
+ *                      when true, shows a required Tarifa selector so the user explicitly
+ *                      picks the price list applied to every line of the generated invoice.
+ *                      Currency is always inherited from the shipment/receipt (read-only,
+ *                      shown in the summary card above) — never chosen here.
+ *   isSOTrx          — sales (true) vs purchase (false) price lists offered by the picker
+ *   apiBaseUrl       — required when showPriceListPicker is true, to fetch price lists
+ *   token            — auth bearer token, required for the pendingQtyUrl and price-list fetches
  */
 export default function CreateInvoiceConfirmModal({
   data,
@@ -22,21 +40,34 @@ export default function CreateInvoiceConfirmModal({
   pendingQtyUrl,
   onConfirm,
   onClose,
+  showPriceListPicker = false,
+  isSOTrx = true,
+  apiBaseUrl,
+  token,
 }) {
   const ui = useUI();
   const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
+  const [priceLists, setPriceLists] = useState([]);
+  const [priceListId, setPriceListId] = useState('');
+  const [loadingPriceLists, setLoadingPriceLists] = useState(showPriceListPicker);
+
+  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
 
   const documentNo  = data?.documentNo || '';
   const bpName      = data?.['businessPartner$_identifier'] || '';
   const linkedOrder = Array.isArray(data?.linkedOrders) ? data.linkedOrders[0] : null;
-  const currency    = linkedOrder?.['currency$_identifier'] || data?.['currency$_identifier'] || '';
+  // The document's own currency wins — it may have been edited in draft to diverge
+  // from the linked order's currency (ETP-4028: currency is editable until confirmed).
+  const currency    = data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier']
+    || linkedOrder?.['currency$_identifier'] || '';
+  const currencyCode = currency;
   const grandTotal  = Number(linkedOrder?.grandTotalAmount ?? data?.grandTotalAmount ?? 0);
 
   const fmtNum = (v, dec = 2) =>
     v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
 
-  const formattedTotal = currency ? formatCurrency(currency, grandTotal) : fmtNum(grandTotal);
+  const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
   const displayAmount = grandTotal > 0 ? formattedTotal : documentNo;
 
   useEffect(() => {
@@ -44,7 +75,7 @@ export default function CreateInvoiceConfirmModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(pendingQtyUrl);
+        const res = await fetch(pendingQtyUrl, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok || cancelled) return;
         const lines = (await res.json())?.response?.data || [];
         const total = lines.reduce((sum, l) => sum + Number(l.pendingQty || 0), 0);
@@ -52,11 +83,36 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl]);
+  }, [pendingQtyUrl, token]);
+
+  useEffect(() => {
+    if (!showPriceListPicker || !base) return;
+    let cancelled = false;
+    setLoadingPriceLists(true);
+    (async () => {
+      try {
+        const res = await fetch(`${base}/price-list/priceList?_startRow=0&_endRow=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const all = (await res.json())?.response?.data || [];
+        const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
+        if (cancelled) return;
+        setPriceLists(matches);
+        const preferred = matches.find(p => p.default) || matches[0];
+        if (preferred) setPriceListId(preferred.id);
+      } catch { /* silent */ } finally {
+        if (!cancelled) setLoadingPriceLists(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showPriceListPicker, isSOTrx, base, token]);
 
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
+
+  const canConfirm = checked && (!showPriceListPicker || !!priceListId);
 
   return createPortal(
     <div data-testid="create-invoice-confirm-modal" onClick={onClose} style={overlayStyle}>
@@ -77,6 +133,33 @@ export default function CreateInvoiceConfirmModal({
             </div>
           </div>
         </div>
+
+        {showPriceListPicker && (
+          <div style={{ padding: '0 20px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="invoice-confirm-price-list" style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
+              {ui('salesPriceListField')}
+            </label>
+            <Select
+              value={toPriceListSelectValue(priceListId)}
+              onValueChange={val => setPriceListId(resolvePriceListValue(val))}
+              disabled={loadingPriceLists || priceLists.length === 0}
+              data-testid="Select__invoice-confirm-price-list"
+            >
+              <SelectTrigger id="invoice-confirm-price-list" data-testid="invoice-confirm-price-list-select">
+                <SelectValue placeholder={priceListPlaceholder(ui, loadingPriceLists)} data-testid="SelectValue__invoice-confirm-price-list" />
+              </SelectTrigger>
+              <SelectContent data-testid="SelectContent__invoice-confirm-price-list">
+                {loadingPriceLists && <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-loading">{ui('loading')}</SelectItem>}
+                {!loadingPriceLists && priceLists.length === 0 && (
+                  <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-empty">{ui('noPriceListsAvailable')}</SelectItem>
+                )}
+                {priceLists.map(p => (
+                  <SelectItem key={p.id} value={p.id} data-testid={`option-invoice-confirm-price-list-${p.id}`}>{p['name'] ?? p.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
@@ -122,9 +205,9 @@ export default function CreateInvoiceConfirmModal({
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            disabled={loading || !checked}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !checked) ? 0.6 : 1, cursor: (loading || !checked) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={() => onConfirm(priceListId)}
+            disabled={loading || !canConfirm}
+            style={{ ...btnPrimaryStyle, opacity: (loading || !canConfirm) ? 0.6 : 1, cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loading && <Spinner data-testid="Spinner__e6fb8b" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}

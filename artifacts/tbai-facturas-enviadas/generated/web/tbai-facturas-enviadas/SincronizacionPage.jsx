@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import SincronizacionTable from './SincronizacionTable';
 import SincronizacionForm from './SincronizacionForm';
@@ -62,10 +63,10 @@ export const api = {
     "sincronización": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
       "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
       "supportedFilters": []
@@ -73,10 +74,10 @@ export const api = {
     "resultadoValidación": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
       "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
       "supportedFilters": []
@@ -107,7 +108,8 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "monitor"
+    "category": "monitor",
+    "readOnly": true
   }
 };
 
@@ -156,6 +158,7 @@ export default function SincronizacionPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

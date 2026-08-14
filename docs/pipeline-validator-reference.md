@@ -9,32 +9,41 @@ Phased delivery: `docs/plans/2026-04-16-pipeline-validator-implementation.md`.
 
 ## Quick Start
 
+The validator source lives in `schema_forge_core`; this repo consumes the published
+`sf-validate-pipeline` bin (or the `LOCAL_CORE=1` dispatcher). Always drive it through
+`make`, which exports `SF_ROOT` — see the warning below.
+
 ```bash
 # Validate every artifact in the repo (CI mode)
 make validate-pipeline
 
-# Equivalently
-node cli/src/validate-pipeline.js
+# Validate a single window
+SF_ROOT=$PWD npx sf-validate-pipeline --scope=product
 
-# Validate only staged files (pre-commit mode)
-node cli/src/validate-pipeline.js --staged
+# Validate only staged files (what the pre-commit hook runs)
+SF_ROOT=$PWD npx sf-validate-pipeline --staged
 
-# Promote warnings to blocking errors
-node cli/src/validate-pipeline.js --strict
-
-# Machine-readable output (for CI annotations)
-node cli/src/validate-pipeline.js --format=json
+# Promote warnings to blocking errors / machine-readable output
+SF_ROOT=$PWD npx sf-validate-pipeline --strict
+SF_ROOT=$PWD npx sf-validate-pipeline --format=json
 
 # Skip specific rules — escape hatch, must be justified in the commit body
-node cli/src/validate-pipeline.js --skip=F4,F7
+SF_ROOT=$PWD npx sf-validate-pipeline --skip=F4,F7
 ```
 
-The tool is also exported as a module for testing:
+> **`SF_ROOT` is mandatory when invoking the bin directly.** The validator resolves
+> `ROOT = process.env.SF_ROOT || join(__dirname, '..', '..')`, and `__dirname` is the
+> *installed package's* `src/`, so without `SF_ROOT` the root points inside
+> `node_modules`, no artifacts are found, and the run prints
+> `Pipeline validation: OK` **having validated nothing** — a silent false pass.
+> `make` sets it (`export SF_ROOT := $(CURDIR)`, Makefile line 3) and so does
+> `.githooks/pre-commit`; a bare `npx sf-validate-pipeline` does not.
 
-```js
-import { validatePipeline } from 'cli/src/validate-pipeline.js';
-const { violations, summary } = await validatePipeline({ scope: 'all', strict: false, skip: [] });
-```
+Accepted CLI flags are `--scope=`, `--staged`, `--strict`, `--format=`, `--skip=` and
+`--changed-since=`. Note there is **no** flag for the F19/F20 allowlist paths: those
+resolve to the files shipped **inside the published package**, so allowlist entries must
+be added in `schema_forge_core` and released. A copy of the file in this repo's
+`cli/src/` is never read.
 
 ---
 
@@ -64,6 +73,8 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 | F18 | BLOCK | A grid field's `multiField` decorator (composite list column) references a sibling field that does not exist on the same entity (`subtitle`, `media.field`, or any `parts[].field`), or a sort-enabled part (`sortable !== false`) is not queryable (missing from the entity's `searchableFields` / `supportedFilters`). Validated against the resolved `contract.json`. | Reference only fields declared on the same entity; mark non-queryable segments `sortable: false`, or make the field searchable so the backend accepts `_sortBy` on it. |
 | F19 | BLOCK | A hand-written custom table/panel column declares a `key` matching a `contract.json` field `name`, but its local `required` flag (`true`/`false`/absent-meaning-`false`) does not match the contract field's `required` boolean. Scans three locations per window: `tools/app-shell/src/windows/custom/<window>/` (hand-built windows), `artifacts/<window>/custom/` (pipeline-convention windows — the file actually imported by the generated `HeaderPage` via `resolveCustomImport()`, which can differ from a stale decoy array left behind in the hand-built tree), and `tools/app-shell/src/windows/custom/shared/` files reachable via a one-hop `@/...` or relative import from either of the two window-owned locations (covers components shared by more than one window, e.g. `PaymentHeaderTableBase.jsx` used by both `payment-in` and `payment-out` through thin prop-passing wrappers — the shared file's columns are attributed to whichever window is being checked). Only fires for windows with a custom override in at least one of the first two locations — generated tables are correct by construction. Columns with no matching contract field (pure custom-render cells) and columns whose local `required` cannot be statically resolved (e.g. a runtime-conditional spread) are ignored. Known-intentional divergences (e.g. a `required` flag guarding an inline-add-row save path, unrelated to `AdvancedFilterBuilder`) can be suppressed per `(artifact, key)` pair via `cli/src/validate-pipeline-f19-allowlist.json` in `schema_forge_core` — everything else still evaluates normally. | Update the `required` flag on the drifted column to match `artifacts/<window>/contract.json`, or fix the contract/decisions.json if the local value is the correct one. If the divergence is intentional, add `{ "artifact": "<window>", "key": "<field>", "reason": "..." }` to the F19 allowlist instead of changing the code. |
 | F20 | BLOCK | A hand-written custom table declares a grid column with `type: 'custom'` and **no `filterMode`**, whose `key` matches a `contract.json` field whose data type implies a non-text filter mode. `type: 'custom'` carries no filter semantics — the cell has a bespoke `render`, so `resolveFilterMode` cannot see the underlying type and degrades the Advanced Filter to text operators (ETP-4681: `?filter=overdue` preloaded `outstandingAmount greaterThan 0`, but text mode has no `greaterThan`, so the operator select rendered empty). Expected mode is derived from the contract field's `columnType ?? type`: `amount`/`number`/`integer`/`quantity`/`price`/`decimal`/`percent`/`signedDelta` → `numeric`; `date`/`dateTime` → `date`; `foreignKey` → `identifier`; `enum`/`status`/non-empty `enumValues` → `enumLabel`; `boolean` → `booleanLabel`. Scans `tools/app-shell/src/windows/custom/<window>/` and `artifacts/<window>/custom/` (Babel AST, `__tests__` excluded); fires only for windows with a custom override, since generated tables are correct by construction. **Not** reported when: the `key` matches no contract field (purely synthetic cell); the column declares neither `column` nor `backendFilterKey` (excluded from the filter field list anyway by the ETP-4609 guard in `AdvancedFilterBuilder.jsx`); the expected mode is `identifier` and `column` already ends in `_ID` (the runtime `_ID` heuristic covers it); or the value cannot be statically resolved (e.g. a spread in the column object). Reports the first violation only. | Add `filterMode: '<expected>'` to the offending column. If the divergence is intentional, add `{ "artifact": "<window>", "key": "<field>", "reason": "..." }` to `cli/src/validate-pipeline-f20-allowlist.json` in `schema_forge_core` instead of changing the code. See [`list-filters.md`](list-filters.md) for the full filter-mode resolution order. |
+| F21 | BLOCK | The declared read-only intent in `decisions.json` (`window.readOnly`, `entities.<key>.readOnly`, `entities.<key>.methods`, and — since ETP-4745 — `window.hideDelete` / `entities.<key>.hideDelete`) does not match the HTTP methods the contract would push to `ETGO_SF_ENTITY` — i.e. `apiPrediction.crud.<entity>.methods` / `apiPrediction.window.readOnly` / `apiPrediction.crud.<entity>.delete` is stale. Also fires when an emitted `crud.<entity>.methods` array omits `GET`/`GETBYID` (an entity with no read access is never valid), or when a restricting `entities.<key>` declaration (including a `hideDelete`-only one) matches no contract entity (mistyped key → silent no-op). | Regenerate the contract (`make regen ONLY=<window>`). Both write paths — the live DB push and the offline XML delta — read the method flags off the contract, so a stale contract silently re-opens a read-only window (or re-enables DELETE on a `hideDelete` entity) for writes on the next push (ETP-4254 / ETP-4745). Never hand-edit `crud.methods`. See [`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) for when an entity qualifies for write exposure at all. |
+| F22 | BLOCK | `decisions.json` sets `window.customTabsAfterBottom: true` while a `customPanelTabs[]`, `extraTabs[]`, or `attachments` entry also declares `tabOrder`. Those tabs render in a separate strip below `bottomSection`, entirely outside the sorted tab list `buildInitialTabs()` builds — the `tabOrder` has no effect and is a silent no-op. | Remove `customTabsAfterBottom`, or remove `tabOrder` from the listed custom tab(s). |
 
 ### Report rules
 
@@ -102,7 +113,7 @@ Rules applied per kind:
 
 | Kind | Rules checked |
 |------|--------------|
-| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17, F19 |
+| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17, F19, F21 |
 | report | F8 |
 | aggregate | F9 |
 | aggregate-section | none (whitelisted) |

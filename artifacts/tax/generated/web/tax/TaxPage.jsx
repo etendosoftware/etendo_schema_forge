@@ -1,10 +1,12 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
+import TaxSifField from '@/windows/custom/shared/TaxSifField';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -14,7 +16,12 @@ const breadcrumb = 'Settings / Tax';
 
 // @sf-generated-start summary:tax
 const summary = [
-
+  { key: 'name', column: 'Name', type: 'string' },
+  { key: 'validFrom', column: 'ValidFrom', type: 'date' },
+  { key: 'rate', column: 'Rate', type: 'number' },
+  { key: 'applicableTo', column: 'SOPOType', type: 'enum' },
+  { key: 'docTaxAmount', column: 'DocTaxAmount', type: 'enum' },
+  { key: 'baseAmount', column: 'BaseAmount', type: 'enum' },
 ];
 
 const statusField = null;
@@ -37,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:tax
 
 // @sf-generated-start requiredHeaderFields:tax
-const requiredHeaderFields = ['name', 'rate', 'docTaxAmount', 'baseAmount', 'applicableTo', 'validFrom'];
+const requiredHeaderFields = ['name', 'validFrom', 'rate', 'applicableTo', 'docTaxAmount', 'baseAmount'];
 // @sf-generated-end requiredHeaderFields:tax
 
 // @sf-generated-start addLineFields:accounting
@@ -169,11 +176,13 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        formFooter={TaxSifField}
         hideDeleteButton
         hidePrint
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        addLineGuard={(_, children) => children.length < 1}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

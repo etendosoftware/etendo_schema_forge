@@ -27,7 +27,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
       return route.fulfill({
         status: 400,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
+        body: JSON.stringify({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
       });
     }
     const body = route.request().postDataJSON();
@@ -36,6 +36,12 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
       contentType: 'application/json',
       body: JSON.stringify({ token: 'platform-token', account: { name: body.name, email: body.email } }),
     });
+  });
+
+  // Draft autosave/restore — handleNext() awaits this before advancing steps,
+  // so leaving it unmocked hangs every "Continuar" click forever.
+  await page.route('**/sws/go/onboarding/draft', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
   await page.route('**/sws/go/login', async route => {
@@ -57,7 +63,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
         return route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
+          body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
         });
       }
       return route.fulfill({

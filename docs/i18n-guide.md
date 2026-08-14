@@ -248,6 +248,46 @@ Is it a custom UI string (button, message, placeholder, etc.)?
   → YES: Add to `genericLabels` in BOTH locale files. Use useUI().
 ```
 
+## Backend Error Translation (`backendErrors.js`)
+
+Some validation errors are raised server-side (Etendo Java handlers, `AD_MESSAGE` catalog) and only
+exist in English — there is no `AD_MESSAGE_TRL` for `com.etendoerp.go` (not a translation-pack
+module). `tools/app-shell/src/lib/backendErrors.js` translates these raw backend strings into the
+active locale before they reach a `toast.error(...)`. It exposes a single entry point:
+
+```js
+import { translateBackendError } from '@/lib/backendErrors.js';
+
+toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
+```
+
+`t` is normally `useUI()`'s `ui` function — the resulting keys live as flat `backendError.*` entries
+inside `genericLabels` (e.g. `"backendError.countryIban"`), following the same "add to BOTH locale
+files" rule as any other `genericLabels` key.
+
+Two matching mechanisms coexist — know both before adding a new backend-error translation:
+
+1. **Exact-match (`BACKEND_ERROR_MAP`)** — the default and simplest case. A dictionary keyed by the
+   literal backend string (trimmed), mapping to a `backendError.*` i18n key. Use this whenever the
+   backend message is a fixed string with no embedded dynamic value (e.g. `MatchRuleHandler`,
+   `PriceListHeaderHandler` validation messages).
+2. **Parameterized matchers (ETP-4706, ETP-4831)** — for backend messages that embed a dynamic value
+   (e.g. a Business Partner name, a document number) inside an otherwise-fixed skeleton, so they
+   can't be looked up by exact string. Plain string slicing (`startsWith`/`endsWith`/`indexOf`/`slice`
+   around fixed delimiters) extracts the dynamic parts — deliberately **not** a regex, since the
+   captured values are user-influenced data and a backtracking-prone pattern over them is a SonarQube
+   ReDoS/DoS hotspot (`javascript:S5852`); linear-time slicing has no backtracking surface at all.
+   `t(key, { param: captured })` then re-interpolates the extracted parts through the frontend's own
+   i18n, the same way `ui('linkedToInvoice', { number })` would. See `matchAccountNotFound` (ETP-4706,
+   Account-not-found enrichment) and `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
+   `ETGO_InvoiceLineAlreadyInvoiced`) in `backendErrors.js` for the pattern: order matters — try the
+   more specific matcher before the more general one, and add a code comment linking the matcher back
+   to the server-side `AD_MESSAGE` entry it mirrors.
+
+`translateBackendError` tries the exact-match map first, then falls through to the parameterized
+matchers, and returns the original (untranslated) message if neither matches — never throws and
+never silently swallows an unrecognized backend error.
+
 ## Shared RelatedDocuments Components
 
 The `tools/app-shell/src/components/related-documents/` library provides i18n-ready building blocks:

@@ -1,14 +1,15 @@
 {
-  "version": "0.19.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-07-31T16:47:09.537Z",
-  "checksum": "7905beb6e8addfe5",
+  "updatedAt": "2026-08-11T22:41:00.513Z",
+  "checksum": "0ec1af3e8cd9a13c",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -212,6 +213,23 @@
             }
           },
           {
+            "name": "aprmGlitemDiff",
+            "apiKey": "aprmGlitemDiff",
+            "column": "EM_Aprm_Glitem_Diff",
+            "label": "GL Item Difference",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Glitem",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
             "name": "iBAN",
             "apiKey": "iBAN",
             "column": "Iban",
@@ -246,6 +264,25 @@
             },
             "displayLogic": {
               "raw": "@Type@='B'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "writeofflimit",
+            "apiKey": "writeofflimit",
+            "column": "Writeofflimit",
+            "label": "Write-off Limit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 2
+            },
+            "displayLogic": {
+              "raw": "@WriteOffLimitPreference@='Y' ",
               "evaluable": true
             }
           },
@@ -564,28 +601,28 @@
                 "value": "1BE",
                 "name": "New statement each run",
                 "labels": {
-                  "es_ES": "One per run"
+                  "es_ES": "New statement each run"
                 }
               },
               {
                 "value": "1BD",
                 "name": "Within 1 day",
                 "labels": {
-                  "es_ES": "One per day"
+                  "es_ES": "Within 1 day"
                 }
               },
               {
                 "value": "1BW",
                 "name": "Within 7 days",
                 "labels": {
-                  "es_ES": "One per week"
+                  "es_ES": "Within 7 days"
                 }
               },
               {
                 "value": "1BM",
                 "name": "Within 30 days",
                 "labels": {
-                  "es_ES": "One per month"
+                  "es_ES": "Within 30 days"
                 }
               }
             ],
@@ -2525,6 +2562,577 @@
             }
           }
         ]
+      },
+      "reconciliations": {
+        "tableName": "FIN_Reconciliation",
+        "tabId": "FF8080813320657F0133209DE21B0042",
+        "tabName": "Reconciliations",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            },
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "endingDate",
+            "apiKey": "endingDate",
+            "column": "Dateto",
+            "label": "Ending Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Statementdate",
+            "label": "Transaction Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "startingbalance",
+            "apiKey": "startingbalance",
+            "column": "Startingbalance",
+            "label": "Starting Balance",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
+          },
+          {
+            "name": "endingBalance",
+            "apiKey": "endingBalance",
+            "column": "Endingbalance",
+            "label": "Ending Balance",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "Docstatus",
+            "label": "Document Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "CL",
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
+              },
+              {
+                "value": "CO",
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
+              },
+              {
+                "value": "DR",
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
+              },
+              {
+                "value": "NA",
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
+              },
+              {
+                "value": "WP",
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
+              },
+              {
+                "value": "RE",
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
+              },
+              {
+                "value": "TEMP",
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
+              },
+              {
+                "value": "IP",
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
+              },
+              {
+                "value": "??",
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
+              },
+              {
+                "value": "VO",
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
+              }
+            ],
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "gridOrder": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            }
+          },
+          {
+            "name": "transactionDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
+            "name": "startingbalance",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "endingBalance",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          }
+        ]
+      },
+      "clearedItems": {
+        "tableName": "FIN_ReconciliationLine_v",
+        "tabId": "79DFBE24B39742AD877E3163643E619F",
+        "tabName": "Cleared items",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "Dateacct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Statementdate",
+            "label": "Transaction Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "financialAccountTransaction",
+            "apiKey": "financialAccountTransaction",
+            "column": "FIN_Finacc_Transaction_ID",
+            "label": "Financial account transaction",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Finacc_Transaction",
+            "inputMode": "search",
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "bankStatementLine",
+            "apiKey": "bankStatementLine",
+            "column": "FIN_Bankstatementline_ID",
+            "label": "Bank Statement Line",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Bankstatementline",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "transactionType",
+            "apiKey": "transactionType",
+            "column": "Trxtype",
+            "label": "Transaction Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "BPD",
+                "name": "BP Deposit",
+                "labels": {
+                  "es_ES": "Cobro"
+                }
+              },
+              {
+                "value": "BPW",
+                "name": "BP Withdrawal",
+                "labels": {
+                  "es_ES": "Pago"
+                }
+              },
+              {
+                "value": "BF",
+                "name": "Bank fee",
+                "labels": {
+                  "es_ES": "Tasa de Banco"
+                }
+              }
+            ],
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Currency",
+            "inputMode": "search",
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "FIN_Payment_ID",
+            "label": "Payment",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Payment",
+            "inputMode": "search",
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "gLItem",
+            "apiKey": "gLItem",
+            "column": "C_Glitem_ID",
+            "label": "G/L Item",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Glitem",
+            "inputMode": "search",
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "depositAmount",
+            "apiKey": "depositAmount",
+            "column": "Depositamt",
+            "label": "Deposit Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "paymentAmount",
+            "apiKey": "paymentAmount",
+            "column": "Paymentamt",
+            "label": "Withdrawal Amount",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            }
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "label": "1st Dimension",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "User1",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            }
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "label": "2nd Dimension",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "User2",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
       }
     }
   },
@@ -2534,6 +3142,7 @@
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -2677,7 +3286,7 @@
             "apiKey": "aprmGlitemDiff",
             "column": "EM_Aprm_Glitem_Diff",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2741,7 +3350,7 @@
             "apiKey": "writeofflimit",
             "column": "Writeofflimit",
             "type": "amount",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4088,6 +4697,532 @@
             "required": true
           }
         ]
+      },
+      "reconciliations": {
+        "tableName": "FIN_Reconciliation",
+        "tabId": "FF8080813320657F0133209DE21B0042",
+        "tabName": "Reconciliations",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_Doctype_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "endingDate",
+            "apiKey": "endingDate",
+            "column": "Dateto",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Statementdate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "printdetailed",
+            "apiKey": "printdetailed",
+            "column": "Printdetailed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "startingbalance",
+            "apiKey": "startingbalance",
+            "column": "Startingbalance",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "aPRMPrintDetailed",
+            "apiKey": "aPRMPrintDetailed",
+            "column": "EM_APRM_PrintDetailed",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "aPRMPrintSummary",
+            "apiKey": "aPRMPrintSummary",
+            "column": "EM_APRM_PrintSummary",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "printsummary",
+            "apiKey": "printsummary",
+            "column": "Printsummary",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "endingBalance",
+            "apiKey": "endingBalance",
+            "column": "Endingbalance",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "Docstatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "etprReactivateRecon",
+            "apiKey": "etprReactivateRecon",
+            "column": "EM_Etpr_Reactivate_Recon",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "aPRMProcessReconciliation",
+            "apiKey": "aPRMProcessReconciliation",
+            "column": "EM_APRM_Process_Reconciliation",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "aprmProcessRec",
+            "apiKey": "aprmProcessRec",
+            "column": "EM_Aprm_Process_Rec",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMProcessReconciliationForce",
+            "apiKey": "aPRMProcessReconciliationForce",
+            "column": "EM_APRM_Process_Rec_Force",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMReconciledItemNo",
+            "apiKey": "aPRMReconciledItemNo",
+            "column": "EM_APRM_ReconciledItemNo",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMReconciledItemAmount",
+            "apiKey": "aPRMReconciledItemAmount",
+            "column": "EM_APRM_ReconciledItemAmount",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMUnReconciledItemNo",
+            "apiKey": "aPRMUnReconciledItemNo",
+            "column": "EM_APRM_UnReconciledItemNo",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMUnReconciledItemAmount",
+            "apiKey": "aPRMUnReconciledItemAmount",
+            "column": "EM_APRM_UnReconciledItemAmount",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMOutstandingPaymentsItemNo",
+            "apiKey": "aPRMOutstandingPaymentsItemNo",
+            "column": "EM_APRM_OutstandingPaymentsItemNo",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMOutstandingPaymentsItemsAmount",
+            "apiKey": "aPRMOutstandingPaymentsItemsAmount",
+            "column": "EM_APRM_OutstandingPaymentsItemsAmount",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMOutstandingDepositsItemNo",
+            "apiKey": "aPRMOutstandingDepositsItemNo",
+            "column": "EM_APRM_OutstandingDepositsItemNo",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMOutstandingDepositItemsAmount",
+            "apiKey": "aPRMOutstandingDepositItemsAmount",
+            "column": "EM_APRM_OutstandingDepositItemsAmount",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etprRemoveReconciliation",
+            "apiKey": "etprRemoveReconciliation",
+            "column": "EM_Etpr_Remove_Reconciliation",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Reconciliation_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "clearedItems": {
+        "tableName": "FIN_ReconciliationLine_v",
+        "tabId": "79DFBE24B39742AD877E3163643E619F",
+        "tabName": "Cleared items",
+        "fields": [
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "Dateacct",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "Statementdate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "financialAccountTransaction",
+            "apiKey": "financialAccountTransaction",
+            "column": "FIN_Finacc_Transaction_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "bankStatementLine",
+            "apiKey": "bankStatementLine",
+            "column": "FIN_Bankstatementline_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "transactionType",
+            "apiKey": "transactionType",
+            "column": "Trxtype",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "FIN_Payment_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "gLItem",
+            "apiKey": "gLItem",
+            "column": "C_Glitem_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "depositAmount",
+            "apiKey": "depositAmount",
+            "column": "Depositamt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "paymentAmount",
+            "apiKey": "paymentAmount",
+            "column": "Paymentamt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Reconciliationline_V_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "reconciliation",
+            "apiKey": "reconciliation",
+            "column": "FIN_Reconciliation_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          }
+        ]
       }
     },
     "endpoints": [
@@ -4240,6 +5375,66 @@
         "path": "/bankStatementLines/:id",
         "entity": "bankStatementLines",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/reconciliations",
+        "entity": "reconciliations",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/reconciliations/:id",
+        "entity": "reconciliations",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/reconciliations",
+        "entity": "reconciliations",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/reconciliations/:id",
+        "entity": "reconciliations",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/reconciliations/:id",
+        "entity": "reconciliations",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/clearedItems",
+        "entity": "clearedItems",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/clearedItems/:id",
+        "entity": "clearedItems",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/clearedItems",
+        "entity": "clearedItems",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/clearedItems/:id",
+        "entity": "clearedItems",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/clearedItems/:id",
+        "entity": "clearedItems",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -4302,6 +5497,28 @@
         "listUrl": "/sws/neo/accounts/bankStatementLines",
         "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
         "supportedFilters": []
+      },
+      "reconciliations": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/accounts/reconciliations",
+        "detailUrl": "/sws/neo/accounts/reconciliations/{id}",
+        "supportedFilters": []
+      },
+      "clearedItems": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/accounts/clearedItems",
+        "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
+        "supportedFilters": []
       }
     },
     "selectors": [
@@ -4312,6 +5529,14 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/account/selectors/currency"
+      },
+      {
+        "entity": "account",
+        "field": "aprmGlitemDiff",
+        "column": "EM_Aprm_Glitem_Diff",
+        "reference": "Glitem",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
       },
       {
         "entity": "account",
@@ -4432,6 +5657,70 @@
         "reference": "Glitem",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/bankStatementLines/selectors/gLItem"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "financialAccountTransaction",
+        "column": "FIN_Finacc_Transaction_ID",
+        "reference": "Finacc_Transaction",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/financialAccountTransaction"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "bankStatementLine",
+        "column": "FIN_Bankstatementline_ID",
+        "reference": "Bankstatementline",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/bankStatementLine"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/currency"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "payment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/payment"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "gLItem",
+        "column": "C_Glitem_ID",
+        "reference": "Glitem",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/gLItem"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/project"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "User1",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/clearedItems/selectors/stDimension"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "User2",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/clearedItems/selectors/ndDimension"
       }
     ],
     "actions": [
@@ -4600,6 +5889,62 @@
         "url": "/sws/neo/accounts/importedBankStatements/{id}/action/etblkpBulkposting",
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "aPRMPrintDetailed",
+        "column": "EM_APRM_PrintDetailed",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintDetailed",
+        "processId": "3C4A5FB206B74C3CA9FE20116FCA0464",
+        "processType": "classic"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "aPRMPrintSummary",
+        "column": "EM_APRM_PrintSummary",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintSummary",
+        "processId": "BBA11D1A061346459AF6148920FE6629",
+        "processType": "classic"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "etprReactivateRecon",
+        "column": "EM_Etpr_Reactivate_Recon",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etprReactivateRecon",
+        "processId": "B2A7F27C590546F38563C20CA9AD00B7",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "aprmProcessRec",
+        "column": "EM_Aprm_Process_Rec",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aprmProcessRec",
+        "processId": "FF8080812E2F8EAE012E2F94CF470014",
+        "processType": "classic"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "aPRMProcessReconciliationForce",
+        "column": "EM_APRM_Process_Rec_Force",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMProcessReconciliationForce",
+        "processId": "6BF16EFC772843AC9A17552AE0B26AB7",
+        "processType": "classic"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "reconciliations",
+        "field": "etprRemoveReconciliation",
+        "column": "EM_Etpr_Remove_Reconciliation",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etprRemoveReconciliation",
+        "processId": "22C4DBA9FAC9444995EC27DD439A6F1B",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -4766,6 +6111,62 @@
         "description": "Action endpoint for 'posted' in importedBankStatements should exist"
       },
       {
+        "id": "t-action-endpoint-reconciliations-aPRMPrintDetailed",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "aPRMPrintDetailed",
+        "runner": "node",
+        "description": "Action endpoint for 'aPRMPrintDetailed' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-aPRMPrintSummary",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "aPRMPrintSummary",
+        "runner": "node",
+        "description": "Action endpoint for 'aPRMPrintSummary' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-aprmProcessRec",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "aprmProcessRec",
+        "runner": "node",
+        "description": "Action endpoint for 'aprmProcessRec' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-aPRMProcessReconciliationForce",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "aPRMProcessReconciliationForce",
+        "runner": "node",
+        "description": "Action endpoint for 'aPRMProcessReconciliationForce' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-etprReactivateRecon",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "etprReactivateRecon",
+        "runner": "node",
+        "description": "Action endpoint for 'etprReactivateRecon' in reconciliations should exist"
+      },
+      {
+        "id": "t-action-endpoint-reconciliations-etprRemoveReconciliation",
+        "category": "action-endpoint",
+        "entity": "reconciliations",
+        "field": "etprRemoveReconciliation",
+        "runner": "node",
+        "description": "Action endpoint for 'etprRemoveReconciliation' in reconciliations should exist"
+      },
+      {
         "id": "t-action-endpoint-transaction-aprmProcessed",
         "category": "action-endpoint",
         "entity": "transaction",
@@ -4819,11 +6220,25 @@
         "description": "CRUD flags for 'bankStatementLines' should all be booleans"
       },
       {
+        "id": "t-crud-flags-clearedItems",
+        "category": "crud-flags",
+        "entity": "clearedItems",
+        "runner": "node",
+        "description": "CRUD flags for 'clearedItems' should all be booleans"
+      },
+      {
         "id": "t-crud-flags-importedBankStatements",
         "category": "crud-flags",
         "entity": "importedBankStatements",
         "runner": "node",
         "description": "CRUD flags for 'importedBankStatements' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-reconciliations",
+        "category": "crud-flags",
+        "entity": "reconciliations",
+        "runner": "node",
+        "description": "CRUD flags for 'reconciliations' should all be booleans"
       },
       {
         "id": "t-crud-flags-transaction",
@@ -4975,6 +6390,38 @@
         "field": "transactionDate",
         "runner": "node",
         "description": "Default value for 'transactionDate' in importedBankStatements should be a string"
+      },
+      {
+        "id": "t-default-value-type-reconciliations-endingBalance",
+        "category": "default-value-type",
+        "entity": "reconciliations",
+        "field": "endingBalance",
+        "runner": "node",
+        "description": "Default value for 'endingBalance' in reconciliations should be a string"
+      },
+      {
+        "id": "t-default-value-type-reconciliations-posted",
+        "category": "default-value-type",
+        "entity": "reconciliations",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in reconciliations should be a string"
+      },
+      {
+        "id": "t-default-value-type-reconciliations-startingbalance",
+        "category": "default-value-type",
+        "entity": "reconciliations",
+        "field": "startingbalance",
+        "runner": "node",
+        "description": "Default value for 'startingbalance' in reconciliations should be a string"
+      },
+      {
+        "id": "t-default-value-type-reconciliations-transactionDate",
+        "category": "default-value-type",
+        "entity": "reconciliations",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Default value for 'transactionDate' in reconciliations should be a string"
       },
       {
         "id": "t-default-value-type-transaction-depositAmount",
@@ -5249,6 +6696,14 @@
         "description": "Display logic for 'swiftCode' in account should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-account-writeofflimit",
+        "category": "displaylogic-evaluable",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Display logic for 'writeofflimit' in account should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-accountingConfiguration-fINAssetAcct",
         "category": "displaylogic-evaluable",
         "entity": "accountingConfiguration",
@@ -5265,12 +6720,44 @@
         "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-clearedItems-ndDimension",
+        "category": "displaylogic-evaluable",
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Display logic for 'ndDimension' in clearedItems should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-clearedItems-project",
+        "category": "displaylogic-evaluable",
+        "entity": "clearedItems",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in clearedItems should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-clearedItems-stDimension",
+        "category": "displaylogic-evaluable",
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Display logic for 'stDimension' in clearedItems should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-importedBankStatements-etblkpBulkposting",
         "category": "displaylogic-evaluable",
         "entity": "importedBankStatements",
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Display logic for 'etblkpBulkposting' in importedBankStatements should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-reconciliations-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "reconciliations",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in reconciliations should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-transaction-activity",
@@ -5609,6 +7096,14 @@
         "description": "Display logic for 'swiftCode' in account should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-account-writeofflimit",
+        "category": "displaylogic-valid",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Display logic for 'writeofflimit' in account should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-accountingConfiguration-fINAssetAcct",
         "category": "displaylogic-valid",
         "entity": "accountingConfiguration",
@@ -5625,12 +7120,44 @@
         "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-clearedItems-ndDimension",
+        "category": "displaylogic-valid",
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Display logic for 'ndDimension' in clearedItems should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-clearedItems-project",
+        "category": "displaylogic-valid",
+        "entity": "clearedItems",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in clearedItems should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-clearedItems-stDimension",
+        "category": "displaylogic-valid",
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Display logic for 'stDimension' in clearedItems should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-importedBankStatements-etblkpBulkposting",
         "category": "displaylogic-valid",
         "entity": "importedBankStatements",
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Display logic for 'etblkpBulkposting' in importedBankStatements should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-reconciliations-posted",
+        "category": "displaylogic-valid",
+        "entity": "reconciliations",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in reconciliations should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-activity",
@@ -5831,6 +7358,14 @@
         "field": "aprmFundsTrans",
         "runner": "node",
         "description": "Field 'aprmFundsTrans' should be present in account"
+      },
+      {
+        "id": "t-field-presence-account-aprmGlitemDiff",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "aprmGlitemDiff",
+        "runner": "node",
+        "description": "Field 'aprmGlitemDiff' should be present in account"
       },
       {
         "id": "t-field-presence-account-aPRMImportBankFile",
@@ -6057,6 +7592,14 @@
         "description": "Field 'type' should be present in account"
       },
       {
+        "id": "t-field-presence-account-writeofflimit",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Field 'writeofflimit' should be present in account"
+      },
+      {
         "id": "t-field-presence-accountingConfiguration-fINAssetAcct",
         "category": "field-presence",
         "entity": "accountingConfiguration",
@@ -6145,6 +7688,118 @@
         "description": "Field 'transactionDate' should be present in bankStatementLines"
       },
       {
+        "id": "t-field-presence-clearedItems-accountingDate",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-bankStatementLine",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "bankStatementLine",
+        "runner": "node",
+        "description": "Field 'bankStatementLine' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-currency",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-depositAmount",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "depositAmount",
+        "runner": "node",
+        "description": "Field 'depositAmount' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-description",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-financialAccountTransaction",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "financialAccountTransaction",
+        "runner": "node",
+        "description": "Field 'financialAccountTransaction' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-gLItem",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "gLItem",
+        "runner": "node",
+        "description": "Field 'gLItem' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-ndDimension",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Field 'ndDimension' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-payment",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "payment",
+        "runner": "node",
+        "description": "Field 'payment' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-paymentAmount",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "paymentAmount",
+        "runner": "node",
+        "description": "Field 'paymentAmount' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-project",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-stDimension",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Field 'stDimension' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-transactionDate",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should be present in clearedItems"
+      },
+      {
+        "id": "t-field-presence-clearedItems-transactionType",
+        "category": "field-presence",
+        "entity": "clearedItems",
+        "field": "transactionType",
+        "runner": "node",
+        "description": "Field 'transactionType' should be present in clearedItems"
+      },
+      {
         "id": "t-field-presence-importedBankStatements-active",
         "category": "field-presence",
         "entity": "importedBankStatements",
@@ -6215,6 +7870,62 @@
         "field": "transactionDate",
         "runner": "node",
         "description": "Field 'transactionDate' should be present in importedBankStatements"
+      },
+      {
+        "id": "t-field-presence-reconciliations-documentNo",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-documentStatus",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-endingBalance",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "endingBalance",
+        "runner": "node",
+        "description": "Field 'endingBalance' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-endingDate",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Field 'endingDate' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-posted",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-startingbalance",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "startingbalance",
+        "runner": "node",
+        "description": "Field 'startingbalance' should be present in reconciliations"
+      },
+      {
+        "id": "t-field-presence-reconciliations-transactionDate",
+        "category": "field-presence",
+        "entity": "reconciliations",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should be present in reconciliations"
       },
       {
         "id": "t-field-presence-transaction-activity",
@@ -6441,6 +8152,14 @@
         "description": "Field 'aprmFundsTrans' should have type 'string' in account"
       },
       {
+        "id": "t-field-type-account-aprmGlitemDiff",
+        "category": "field-type",
+        "entity": "account",
+        "field": "aprmGlitemDiff",
+        "runner": "node",
+        "description": "Field 'aprmGlitemDiff' should have type 'string' in account"
+      },
+      {
         "id": "t-field-type-account-aPRMImportBankFile",
         "category": "field-type",
         "entity": "account",
@@ -6665,6 +8384,14 @@
         "description": "Field 'type' should have type 'string' in account"
       },
       {
+        "id": "t-field-type-account-writeofflimit",
+        "category": "field-type",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Field 'writeofflimit' should have type 'number' in account"
+      },
+      {
         "id": "t-field-type-accountingConfiguration-fINAssetAcct",
         "category": "field-type",
         "entity": "accountingConfiguration",
@@ -6753,6 +8480,118 @@
         "description": "Field 'transactionDate' should have type 'string' in bankStatementLines"
       },
       {
+        "id": "t-field-type-clearedItems-accountingDate",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-bankStatementLine",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "bankStatementLine",
+        "runner": "node",
+        "description": "Field 'bankStatementLine' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-currency",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-depositAmount",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "depositAmount",
+        "runner": "node",
+        "description": "Field 'depositAmount' should have type 'number' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-description",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-financialAccountTransaction",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "financialAccountTransaction",
+        "runner": "node",
+        "description": "Field 'financialAccountTransaction' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-gLItem",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "gLItem",
+        "runner": "node",
+        "description": "Field 'gLItem' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-ndDimension",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Field 'ndDimension' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-payment",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "payment",
+        "runner": "node",
+        "description": "Field 'payment' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-paymentAmount",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "paymentAmount",
+        "runner": "node",
+        "description": "Field 'paymentAmount' should have type 'number' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-project",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-stDimension",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Field 'stDimension' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-transactionDate",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should have type 'string' in clearedItems"
+      },
+      {
+        "id": "t-field-type-clearedItems-transactionType",
+        "category": "field-type",
+        "entity": "clearedItems",
+        "field": "transactionType",
+        "runner": "node",
+        "description": "Field 'transactionType' should have type 'string' in clearedItems"
+      },
+      {
         "id": "t-field-type-importedBankStatements-active",
         "category": "field-type",
         "entity": "importedBankStatements",
@@ -6823,6 +8662,62 @@
         "field": "transactionDate",
         "runner": "node",
         "description": "Field 'transactionDate' should have type 'string' in importedBankStatements"
+      },
+      {
+        "id": "t-field-type-reconciliations-documentNo",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-documentStatus",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should have type 'string' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-endingBalance",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "endingBalance",
+        "runner": "node",
+        "description": "Field 'endingBalance' should have type 'number' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-endingDate",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Field 'endingDate' should have type 'string' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-posted",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'string' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-startingbalance",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "startingbalance",
+        "runner": "node",
+        "description": "Field 'startingbalance' should have type 'number' in reconciliations"
+      },
+      {
+        "id": "t-field-type-reconciliations-transactionDate",
+        "category": "field-type",
+        "entity": "reconciliations",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should have type 'string' in reconciliations"
       },
       {
         "id": "t-field-type-transaction-activity",
@@ -7113,6 +9008,30 @@
         "description": "Read-only logic for 'transactionDate' in importedBankStatements should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-reconciliations-documentNo",
+        "category": "readonlylogic-evaluable",
+        "entity": "reconciliations",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in reconciliations should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reconciliations-endingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "reconciliations",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in reconciliations should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-reconciliations-transactionDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "reconciliations",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDate' in reconciliations should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-transaction-activity",
         "category": "readonlylogic-evaluable",
         "entity": "transaction",
@@ -7343,6 +9262,30 @@
         "field": "transactionDate",
         "runner": "node",
         "description": "Read-only logic for 'transactionDate' in importedBankStatements should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reconciliations-documentNo",
+        "category": "readonlylogic-valid",
+        "entity": "reconciliations",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in reconciliations should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reconciliations-endingDate",
+        "category": "readonlylogic-valid",
+        "entity": "reconciliations",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in reconciliations should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-reconciliations-transactionDate",
+        "category": "readonlylogic-valid",
+        "entity": "reconciliations",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDate' in reconciliations should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-transaction-activity",
@@ -8928,13 +10871,6 @@
         "description": "Rule 'Reconnect Account' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-Refresh-Connections",
-        "category": "rule-declared",
-        "rule": "Refresh Connections",
-        "runner": "node",
-        "description": "Rule 'Refresh Connections' (process) should be declared"
-      },
-      {
         "id": "t-rule-declared-Remove-Reconciliation",
         "category": "rule-declared",
         "rule": "Remove Reconciliation",
@@ -9019,6 +10955,13 @@
         "description": "Rule 'SE_Trxtype_Transaction_Trxtype' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-Search-Recent-Transactions",
+        "category": "rule-declared",
+        "rule": "Search Recent Transactions",
+        "runner": "node",
+        "description": "Rule 'Search Recent Transactions' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-SL-AdvPayment-Document-C-Doctype-ID",
         "category": "rule-declared",
         "rule": "SL_AdvPayment_Document_C_Doctype_ID",
@@ -9038,6 +10981,14 @@
         "rule": "Transaction Process",
         "runner": "node",
         "description": "Rule 'Transaction Process' (process) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-account-aprmGlitemDiff",
+        "category": "selector-endpoint",
+        "entity": "account",
+        "field": "aprmGlitemDiff",
+        "runner": "node",
+        "description": "Selector endpoint for 'aprmGlitemDiff' in account should exist"
       },
       {
         "id": "t-selector-endpoint-account-currency",
@@ -9086,6 +11037,70 @@
         "field": "gLItem",
         "runner": "node",
         "description": "Selector endpoint for 'gLItem' in bankStatementLines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-bankStatementLine",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "bankStatementLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'bankStatementLine' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-currency",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-financialAccountTransaction",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "financialAccountTransaction",
+        "runner": "node",
+        "description": "Selector endpoint for 'financialAccountTransaction' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-gLItem",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "gLItem",
+        "runner": "node",
+        "description": "Selector endpoint for 'gLItem' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-ndDimension",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Selector endpoint for 'ndDimension' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-payment",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "payment",
+        "runner": "node",
+        "description": "Selector endpoint for 'payment' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-project",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in clearedItems should exist"
+      },
+      {
+        "id": "t-selector-endpoint-clearedItems-stDimension",
+        "category": "selector-endpoint",
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Selector endpoint for 'stDimension' in clearedItems should exist"
       },
       {
         "id": "t-selector-endpoint-transaction-activity",
@@ -9174,14 +11189,6 @@
         "field": "accountDigitcontrol",
         "runner": "node",
         "description": "System field 'accountDigitcontrol' should exist in backend but not frontend for account"
-      },
-      {
-        "id": "t-system-field-account-aprmGlitemDiff",
-        "category": "system-field",
-        "entity": "account",
-        "field": "aprmGlitemDiff",
-        "runner": "node",
-        "description": "System field 'aprmGlitemDiff' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-aprmIsfundstransEnabled",
@@ -9374,14 +11381,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for account"
-      },
-      {
-        "id": "t-system-field-account-writeofflimit",
-        "category": "system-field",
-        "entity": "account",
-        "field": "writeofflimit",
-        "runner": "node",
-        "description": "System field 'writeofflimit' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-accountingConfiguration-account",
@@ -9712,6 +11711,102 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-clearedItems-active",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-activity",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-client",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-createdBy",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-creationDate",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-financialAccount",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "System field 'financialAccount' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-id",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-organization",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-reconciliation",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "reconciliation",
+        "runner": "node",
+        "description": "System field 'reconciliation' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-salesCampaign",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-updated",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for clearedItems"
+      },
+      {
+        "id": "t-system-field-clearedItems-updatedBy",
+        "category": "system-field",
+        "entity": "clearedItems",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for clearedItems"
+      },
+      {
         "id": "t-system-field-importedBankStatements-account",
         "category": "system-field",
         "entity": "importedBankStatements",
@@ -9870,6 +11965,254 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for importedBankStatements"
+      },
+      {
+        "id": "t-system-field-reconciliations-account",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "account",
+        "runner": "node",
+        "description": "System field 'account' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-active",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMOutstandingDepositItemsAmount",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMOutstandingDepositItemsAmount",
+        "runner": "node",
+        "description": "System field 'aPRMOutstandingDepositItemsAmount' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMOutstandingDepositsItemNo",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMOutstandingDepositsItemNo",
+        "runner": "node",
+        "description": "System field 'aPRMOutstandingDepositsItemNo' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMOutstandingPaymentsItemNo",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMOutstandingPaymentsItemNo",
+        "runner": "node",
+        "description": "System field 'aPRMOutstandingPaymentsItemNo' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMOutstandingPaymentsItemsAmount",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMOutstandingPaymentsItemsAmount",
+        "runner": "node",
+        "description": "System field 'aPRMOutstandingPaymentsItemsAmount' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMPrintDetailed",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMPrintDetailed",
+        "runner": "node",
+        "description": "System field 'aPRMPrintDetailed' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMPrintSummary",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMPrintSummary",
+        "runner": "node",
+        "description": "System field 'aPRMPrintSummary' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aprmProcessRec",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aprmProcessRec",
+        "runner": "node",
+        "description": "System field 'aprmProcessRec' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMProcessReconciliation",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMProcessReconciliation",
+        "runner": "node",
+        "description": "System field 'aPRMProcessReconciliation' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMProcessReconciliationForce",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMProcessReconciliationForce",
+        "runner": "node",
+        "description": "System field 'aPRMProcessReconciliationForce' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMReconciledItemAmount",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMReconciledItemAmount",
+        "runner": "node",
+        "description": "System field 'aPRMReconciledItemAmount' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMReconciledItemNo",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMReconciledItemNo",
+        "runner": "node",
+        "description": "System field 'aPRMReconciledItemNo' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMUnReconciledItemAmount",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMUnReconciledItemAmount",
+        "runner": "node",
+        "description": "System field 'aPRMUnReconciledItemAmount' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-aPRMUnReconciledItemNo",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "aPRMUnReconciledItemNo",
+        "runner": "node",
+        "description": "System field 'aPRMUnReconciledItemNo' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-client",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-createdBy",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-creationDate",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-documentType",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-etprReactivateRecon",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "etprReactivateRecon",
+        "runner": "node",
+        "description": "System field 'etprReactivateRecon' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-etprRemoveReconciliation",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "etprRemoveReconciliation",
+        "runner": "node",
+        "description": "System field 'etprRemoveReconciliation' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-id",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-organization",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-printdetailed",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "printdetailed",
+        "runner": "node",
+        "description": "System field 'printdetailed' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-printsummary",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "printsummary",
+        "runner": "node",
+        "description": "System field 'printsummary' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-processed",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-processNow",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-updated",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for reconciliations"
+      },
+      {
+        "id": "t-system-field-reconciliations-updatedBy",
+        "category": "system-field",
+        "entity": "reconciliations",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for reconciliations"
       },
       {
         "id": "t-system-field-transaction-account",
@@ -10077,11 +12420,25 @@
         "description": "Entity 'bankStatementLines' should only expose visible fields in frontend"
       },
       {
+        "id": "t-visibility-clearedItems",
+        "category": "visibility",
+        "entity": "clearedItems",
+        "runner": "node",
+        "description": "Entity 'clearedItems' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-importedBankStatements",
         "category": "visibility",
         "entity": "importedBankStatements",
         "runner": "node",
         "description": "Entity 'importedBankStatements' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-reconciliations",
+        "category": "visibility",
+        "entity": "reconciliations",
+        "runner": "node",
+        "description": "Entity 'reconciliations' should only expose visible fields in frontend"
       },
       {
         "id": "t-visibility-transaction",
@@ -10092,24 +12449,24 @@
       }
     ],
     "summary": {
-      "total": 712,
+      "total": 839,
       "byCategory": {
-        "action-endpoint": 21,
-        "crud-flags": 5,
-        "default-value-type": 29,
-        "displaylogic-evaluable": 45,
-        "displaylogic-valid": 45,
-        "field-presence": 76,
-        "field-type": 76,
-        "readonlylogic-evaluable": 29,
-        "readonlylogic-valid": 29,
+        "action-endpoint": 28,
+        "crud-flags": 7,
+        "default-value-type": 33,
+        "displaylogic-evaluable": 50,
+        "displaylogic-valid": 50,
+        "field-presence": 99,
+        "field-type": 99,
+        "readonlylogic-evaluable": 32,
+        "readonlylogic-valid": 32,
         "rule-declared": 225,
-        "selector-endpoint": 16,
-        "system-field": 111,
-        "visibility": 5
+        "selector-endpoint": 25,
+        "system-field": 152,
+        "visibility": 7
       },
       "byRunner": {
-        "node": 712,
+        "node": 839,
         "junit": 0
       }
     }

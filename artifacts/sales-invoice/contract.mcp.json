@@ -1,8 +1,8 @@
 {
-  "version": "0.68.0",
-  "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-28T13:29:09.420Z",
-  "contractChecksum": "1174b21d351facfb",
+  "version": "0.71.0",
+  "generatedAt": "2026-08-07T13:07:42.785Z",
+  "updatedAt": "2026-08-10T14:53:19.968Z",
+  "contractChecksum": "4daf2836eb8c2a05",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -79,6 +79,27 @@
         "reference": "Org",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "header",
@@ -197,27 +218,6 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
-      },
-      {
-        "entity": "header",
-        "field": "transactionDocument",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
       },
       {
         "entity": "lines",
@@ -493,6 +493,46 @@
         "processType": "classic"
       },
       {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "header",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "name": "tBAIQRcode",
         "actionType": "utilityAction",
         "entity": "header",
@@ -557,6 +597,29 @@
           "Record is in an incompatible state"
         ],
         "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
@@ -796,69 +859,6 @@
         "processType": "obuiapp"
       },
       {
-        "name": "eTPRRemovePayment",
-        "actionType": "paymentAction",
-        "entity": "header",
-        "column": "EM_Etpr_Remove_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "745FCF75B6F14024B96CC14429D8E952",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "header",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
         "name": "explode",
         "actionType": "utilityAction",
         "entity": "lines",
@@ -1014,6 +1014,10 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#AD_Org_ID@"
           },
+          "transactionDocument": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
           "documentNo": {
             "readOnly": true,
             "required": true,
@@ -1148,22 +1152,18 @@
             "required": true,
             "defaultValue": "N"
           },
+          "etgoTotalDiscount": {},
           "processed": {
             "readOnly": true,
             "required": true
           },
-          "etgoTotalDiscount": {},
-          "eTGODueDate": {
-            "readOnly": true
-          },
+          "eTGOCurrencyRate": {},
           "eTGODeliveryStatus": {
             "readOnly": true
           },
-          "transactionDocument": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "eTGOCurrencyRate": {}
+          "eTGODueDate": {
+            "readOnly": true
+          }
         }
       },
       "lines": {
@@ -1315,6 +1315,7 @@
     ],
     "minimumCreate": {
       "headerFields": [
+        "transactionDocument",
         "invoiceDate",
         "businessPartner",
         "partnerAddress",
@@ -1324,8 +1325,7 @@
         "priceList",
         "etvfacSimpinvart7273",
         "etvfacInvNoIDArt61d",
-        "aeatsiiIsauthorization",
-        "transactionDocument"
+        "aeatsiiIsauthorization"
       ],
       "lineFields": [
         "invoicedQuantity",
@@ -1341,6 +1341,23 @@
       ]
     },
     "selectorContexts": [
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
+      },
       {
         "entity": "header",
         "field": "partnerAddress",
@@ -1396,23 +1413,6 @@
         }
       },
       {
-        "entity": "header",
-        "field": "transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
-      {
         "entity": "lines",
         "field": "tax",
         "context": {
@@ -1436,13 +1436,13 @@
       "createLinesFromOrder",
       "createLinesFromShipment",
       "copyFrom",
+      "etblkpBulkposting",
       "etvfacRectCreate",
       "tbaiVoidxmlgenerator",
       "aeatsiiSend",
       "processNow",
       "generateTo",
-      "createLinesFrom",
-      "etblkpBulkposting"
+      "createLinesFrom"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -1467,6 +1467,7 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
+          "transactionDocument",
           "invoiceDate",
           "businessPartner",
           "partnerAddress",
@@ -1476,8 +1477,7 @@
           "priceList",
           "etvfacSimpinvart7273",
           "etvfacInvNoIDArt61d",
-          "aeatsiiIsauthorization",
-          "transactionDocument"
+          "aeatsiiIsauthorization"
         ]
       },
       {
@@ -1504,5 +1504,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "5a0f196cff4d2e9b"
+  "checksum": "d85a9ef7d945f37a"
 }

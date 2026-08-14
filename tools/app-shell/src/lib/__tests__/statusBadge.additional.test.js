@@ -9,6 +9,31 @@ import {
   statusLabel,
 } from '../statusBadge.js';
 
+describe('getStatusTone — single-letter codes in compound OR conditions', () => {
+  // The success/warning/destructive OR-chains each end in a bare single-letter
+  // code ('o', 'm', 'p') that no other test exercises — every other operand
+  // in the chain is covered, but these three are never reached, leaving the
+  // compound condition only partially covered.
+  it('classifies the single-letter "o" code as success', () => {
+    assert.equal(getStatusTone('o'), 'success');
+    assert.equal(getStatusTone('O'), 'success');
+  });
+
+  it('classifies the single-letter "m" code as warning', () => {
+    assert.equal(getStatusTone('m'), 'warning');
+    assert.equal(getStatusTone('M'), 'warning');
+  });
+
+  it('classifies the single-letter "p" code as destructive', () => {
+    assert.equal(getStatusTone('p'), 'destructive');
+    assert.equal(getStatusTone('P'), 'destructive');
+  });
+
+  it('classifies the "complete" word (distinct from "completed") as success', () => {
+    assert.equal(getStatusTone('complete'), 'success');
+  });
+});
+
 describe('getStatusTone — default fallback', () => {
   it('returns neutral for an unrecognized status', () => {
     assert.equal(getStatusTone('zzz-unknown'), 'neutral');
@@ -29,6 +54,43 @@ describe('getStatusTone — default fallback', () => {
 
   it('classifies RPAP as neutral', () => {
     assert.equal(getStatusTone('RPAP'), 'neutral');
+  });
+});
+
+describe('getStatusBadgeProps — remaining word-form operands in compound OR conditions', () => {
+  it('"complete"/"booked" (word forms) resolve to the success style, same as "completed"/"co"', () => {
+    assert.equal(getStatusBadgeProps('complete').variant, 'default');
+    assert.equal(getStatusBadgeProps('booked').variant, 'default');
+    assert.equal(
+      getStatusBadgeProps('booked').className,
+      'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success',
+    );
+  });
+
+  it('"paid" (word form) resolves to the info style, same as "closed"/"cl"/"pa"', () => {
+    assert.equal(
+      getStatusBadgeProps('paid').className,
+      'border-status-info-border bg-status-info text-status-info-foreground',
+    );
+  });
+
+  it('"void" (word form) resolves to the destructive variant, same as "voided"/"vo"', () => {
+    assert.equal(getStatusBadgeProps('void').variant, 'destructive');
+  });
+});
+
+describe('getStatusDotColor — remaining word-form operands in compound OR conditions', () => {
+  it('"complete"/"booked" (word forms) resolve to the success dot', () => {
+    assert.equal(getStatusDotColor('complete'), 'bg-status-success-foreground');
+    assert.equal(getStatusDotColor('booked'), 'bg-status-success-foreground');
+  });
+
+  it('"paid" (word form) resolves to the info dot', () => {
+    assert.equal(getStatusDotColor('paid'), 'bg-status-info-foreground');
+  });
+
+  it('"void" (word form) resolves to the destructive dot', () => {
+    assert.equal(getStatusDotColor('void'), 'bg-destructive');
   });
 });
 
@@ -68,10 +130,10 @@ describe('getStatusBadgeProps — full branch coverage', () => {
     assert.equal(props.className, 'border-border-subtle bg-muted text-muted-foreground');
   });
 
-  it('under evaluation/ue -> info outline style', () => {
+  it('under evaluation/ue -> warning outline style', () => {
     const props = getStatusBadgeProps('under evaluation');
     assert.equal(props.variant, 'outline');
-    assert.equal(props.className, 'border-status-info-border bg-status-info text-status-info-foreground');
+    assert.equal(props.className, 'border-status-warning-border bg-status-warning text-status-warning-foreground');
     assert.equal(getStatusBadgeProps('UE').className, props.className);
   });
 

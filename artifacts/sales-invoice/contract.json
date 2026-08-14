@@ -1,8 +1,8 @@
 {
-  "version": "0.68.0",
-  "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-30T04:12:10.800Z",
-  "checksum": "1174b21d351facfb",
+  "version": "0.71.0",
+  "generatedAt": "2026-08-07T13:07:42.785Z",
+  "updatedAt": "2026-08-11T19:52:33.386Z",
+  "checksum": "4daf2836eb8c2a05",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -12,7 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -44,7 +48,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "salesTheme": true,
@@ -64,21 +69,22 @@
           "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "listViewOptions": {
+        "hidePrint": true
+      },
       "subsetFilters": [
         {
           "label": "allTab"
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D",
+          "_note": "ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
-        },
-        {
-          "label": "returnsTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D",
+          "_note": "ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -100,6 +106,13 @@
           "placement": "tab"
         }
       ],
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "statusPills": [
@@ -162,6 +175,49 @@
             }
           },
           {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "label": "Transaction Document",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
+            },
+            "reference": "DocumentType",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 15,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "validationRule": {
+              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+              "contextParams": [
+                "AD_Client_ID"
+              ],
+              "cascadeParams": [
+                "IsSOTrx",
+                "AD_Org_ID"
+              ]
+            },
+            "callout": {
+              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "!!record.id"
+            }
+          },
+          {
             "name": "documentNo",
             "apiKey": "documentNo",
             "column": "DocumentNo",
@@ -179,6 +235,7 @@
             },
             "section": "principal",
             "seq": 20,
+            "businessCritical": true,
             "gridOrder": 2,
             "validation": {
               "required": true,
@@ -209,6 +266,7 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "businessCritical": true,
             "gridOrder": 1,
             "validation": {
               "required": true,
@@ -239,6 +297,7 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "businessCritical": true,
             "gridOrder": 3,
             "validation": {
               "required": true,
@@ -478,6 +537,7 @@
             "form": true,
             "sourceRequired": true,
             "section": "summary",
+            "businessCritical": true,
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -622,6 +682,7 @@
             },
             "defaultValue": "0",
             "section": "summary",
+            "businessCritical": true,
             "gridOrder": 7,
             "validation": {
               "required": true,
@@ -1334,6 +1395,21 @@
             }
           },
           {
+            "name": "etgoTotalDiscount",
+            "apiKey": "etgoTotalDiscount",
+            "column": "EM_Etgo_Total_Discount",
+            "label": "Total Discount %",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
             "name": "processed",
             "apiKey": "processed",
             "column": "Processed",
@@ -1355,34 +1431,18 @@
             }
           },
           {
-            "name": "etgoTotalDiscount",
-            "apiKey": "etgoTotalDiscount",
-            "column": "EM_Etgo_Total_Discount",
-            "label": "Total Discount %",
-            "type": "decimal",
-            "tsType": "number",
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
             "form": false,
             "validation": {
               "maxLength": 22
-            }
-          },
-          {
-            "name": "eTGODueDate",
-            "apiKey": "eTGODueDate",
-            "column": "em_etgo_due_date",
-            "label": "em_etgo_due_date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": false,
-            "gridOrder": 8,
-            "validation": {
-              "maxLength": 0
             }
           },
           {
@@ -1402,61 +1462,19 @@
             }
           },
           {
-            "name": "transactionDocument",
-            "apiKey": "transactionDocument",
-            "column": "C_DocTypeTarget_ID",
-            "label": "Transaction Document",
-            "type": "foreignKey",
+            "name": "eTGODueDate",
+            "apiKey": "eTGODueDate",
+            "column": "em_etgo_due_date",
+            "label": "em_etgo_due_date",
+            "type": "date",
             "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
-            },
-            "reference": "DocumentType",
-            "inputMode": "selector",
-            "section": "principal",
-            "seq": 15,
-            "validation": {
-              "required": true,
-              "maxLength": 22
-            },
-            "validationRule": {
-              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
-              "contextParams": [
-                "AD_Client_ID"
-              ],
-              "cascadeParams": [
-                "IsSOTrx",
-                "AD_Org_ID"
-              ]
-            },
-            "callout": {
-              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "!!record.id"
-            }
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": false,
+            "gridOrder": 8,
             "validation": {
-              "maxLength": 22
+              "maxLength": 0
             }
           }
         ],
@@ -1473,6 +1491,13 @@
             "derivation": {
               "type": "fromConfig",
               "source": "context.organization"
+            }
+          },
+          {
+            "name": "transactionDocument",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
             }
           },
           {
@@ -1599,13 +1624,6 @@
             "derivation": {
               "type": "computed",
               "source": "false"
-            }
-          },
-          {
-            "name": "transactionDocument",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
             }
           }
         ],
@@ -2608,7 +2626,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -2640,7 +2662,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "salesTheme": true,
@@ -2660,21 +2683,22 @@
           "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "listViewOptions": {
+        "hidePrint": true
+      },
       "subsetFilters": [
         {
           "label": "allTab"
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D",
+          "_note": "ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
-        },
-        {
-          "label": "returnsTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D",
+          "_note": "ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -2696,6 +2720,13 @@
           "placement": "tab"
         }
       ],
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "statusPills": [
         {
@@ -2721,12 +2752,21 @@
             "required": true
           },
           {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
             "name": "documentNo",
             "apiKey": "documentNo",
             "column": "DocumentNo",
             "type": "string",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "invoiceDate",
@@ -2734,7 +2774,8 @@
             "column": "DateInvoiced",
             "type": "date",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "businessPartner",
@@ -2742,7 +2783,8 @@
             "column": "C_BPartner_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "partnerAddress",
@@ -2798,7 +2840,8 @@
             "column": "GrandTotal",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "summedLineAmount",
@@ -2878,7 +2921,8 @@
             "column": "OutstandingAmt",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "createLinesFromOrder",
@@ -3049,6 +3093,14 @@
             "required": false
           },
           {
+            "name": "externalBusinessPartnerReference",
+            "apiKey": "externalBusinessPartnerReference",
+            "column": "BPartner_ExtRef",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "cashVAT",
             "apiKey": "cashVAT",
             "column": "Iscashvat",
@@ -3070,14 +3122,6 @@
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "externalBusinessPartnerReference",
-            "apiKey": "externalBusinessPartnerReference",
-            "column": "BPartner_ExtRef",
-            "type": "string",
-            "visibility": "discarded",
             "required": false
           },
           {
@@ -3201,6 +3245,14 @@
             "required": true
           },
           {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "etvfacIssue",
             "apiKey": "etvfacIssue",
             "column": "EM_Etvfac_Issue",
@@ -3273,10 +3325,10 @@
             "required": true
           },
           {
-            "name": "etvfacSentToVerifac",
-            "apiKey": "etvfacSentToVerifac",
-            "column": "EM_Etvfac_Senttoverifac",
-            "type": "boolean",
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
             "visibility": "discarded",
             "required": true
           },
@@ -3287,6 +3339,14 @@
             "type": "button",
             "visibility": "discarded",
             "required": false
+          },
+          {
+            "name": "etvfacSentToVerifac",
+            "apiKey": "etvfacSentToVerifac",
+            "column": "EM_Etvfac_Senttoverifac",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
           },
           {
             "name": "tbaiSequence",
@@ -3317,6 +3377,14 @@
             "apiKey": "etvfacIsGenManual",
             "column": "EM_Etvfac_Is_Gen_Manual",
             "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
             "visibility": "discarded",
             "required": true
           },
@@ -3481,50 +3549,26 @@
             "required": false
           },
           {
-            "name": "adClientId",
-            "apiKey": "adClientId",
-            "column": "AD_Client_ID",
+            "name": "etgoTotalDiscount",
+            "apiKey": "etgoTotalDiscount",
+            "column": "EM_Etgo_Total_Discount",
+            "type": "decimal",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "withholding",
+            "apiKey": "withholding",
+            "column": "C_Withholding_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "selfService",
-            "apiKey": "selfService",
-            "column": "IsSelfService",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Invoice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "priceIncludesTax",
-            "apiKey": "priceIncludesTax",
-            "column": "IsTaxIncluded",
-            "type": "boolean",
             "visibility": "discarded",
             "required": false
           },
           {
-            "name": "isSotrx",
-            "apiKey": "isSotrx",
-            "column": "IsSOTrx",
-            "type": "boolean",
+            "name": "created",
+            "apiKey": "created",
+            "column": "Created",
+            "type": "dateTime",
             "visibility": "system",
             "required": true
           },
@@ -3537,27 +3581,27 @@
             "required": false
           },
           {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
+            "name": "adClientId",
+            "apiKey": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
             "visibility": "system",
-            "required": false
+            "required": true
           },
           {
-            "name": "lastCalculatedOnDate",
-            "apiKey": "lastCalculatedOnDate",
-            "column": "LastCalculatedOnDate",
-            "type": "date",
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Invoice_ID",
+            "type": "id",
             "visibility": "system",
-            "required": false
+            "required": true
           },
           {
-            "name": "created",
-            "apiKey": "created",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
+            "name": "isActive",
+            "apiKey": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3577,18 +3621,26 @@
             "required": false
           },
           {
-            "name": "withholding",
-            "apiKey": "withholding",
-            "column": "C_Withholding_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "system",
             "required": false
           },
           {
-            "name": "generateTo",
-            "apiKey": "generateTo",
-            "column": "GenerateTo",
-            "type": "button",
+            "name": "isSotrx",
+            "apiKey": "isSotrx",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "lastCalculatedOnDate",
+            "apiKey": "lastCalculatedOnDate",
+            "column": "LastCalculatedOnDate",
+            "type": "date",
             "visibility": "system",
             "required": false
           },
@@ -3601,18 +3653,34 @@
             "required": true
           },
           {
-            "name": "isActive",
-            "apiKey": "isActive",
-            "column": "IsActive",
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "CreatedBy",
-            "type": "foreignKey",
+            "name": "priceIncludesTax",
+            "apiKey": "priceIncludesTax",
+            "column": "IsTaxIncluded",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "generateTo",
+            "apiKey": "generateTo",
+            "column": "GenerateTo",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "selfService",
+            "apiKey": "selfService",
+            "column": "IsSelfService",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -3623,6 +3691,14 @@
             "type": "button",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           },
           {
             "name": "aeatsiiAutofactura",
@@ -3751,6 +3827,14 @@
             "type": "button",
             "visibility": "discarded",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           },
           {
             "name": "etcopagCopilotFeedback",
@@ -3889,6 +3973,14 @@
             "required": false
           },
           {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "tbaiDateOperation",
             "apiKey": "tbaiDateOperation",
             "column": "EM_Tbai_Date_Operation",
@@ -3953,11 +4045,11 @@
             "required": true
           },
           {
-            "name": "etgoTotalDiscount",
-            "apiKey": "etgoTotalDiscount",
-            "column": "EM_Etgo_Total_Discount",
-            "type": "decimal",
-            "visibility": "editable",
+            "name": "eTGODeliveryStatus",
+            "apiKey": "eTGODeliveryStatus",
+            "column": "em_etgo_delivery_status",
+            "type": "integer",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -3967,65 +4059,29 @@
             "type": "date",
             "visibility": "readOnly",
             "required": false
-          },
-          {
-            "name": "eTGODeliveryStatus",
-            "apiKey": "eTGODeliveryStatus",
-            "column": "em_etgo_delivery_status",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTPRRemovePayment",
-            "apiKey": "eTPRRemovePayment",
-            "column": "EM_Etpr_Remove_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "transactionDocument",
-            "apiKey": "transactionDocument",
-            "column": "C_DocTypeTarget_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "eTGOCurrencyRate",
-            "apiKey": "eTGOCurrencyRate",
-            "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler"
+        "javaQualifier": "salesInvoiceHeaderHandler",
+        "namedFilters": [
+          {
+            "name": "completed",
+            "where": "e.paymentComplete = true",
+            "label": "Paid",
+            "description": "Fully paid invoices (payment complete)."
+          },
+          {
+            "name": "pending",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)",
+            "label": "Unpaid",
+            "description": "Unpaid invoices with nothing collected yet (outstanding equals the total)."
+          },
+          {
+            "name": "partial",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)",
+            "label": "Partially paid",
+            "description": "Invoices with a partial payment: some amount collected but a balance remains."
+          }
+        ]
       },
       "lines": {
         "tableName": "C_InvoiceLine",
@@ -4180,6 +4236,22 @@
             "column": "M_AttributeSetInstance_ID",
             "type": "productAttribute",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": false
           },
           {
@@ -4343,6 +4415,78 @@
             "required": false
           },
           {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "apiKey": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "charge",
+            "apiKey": "charge",
+            "column": "C_Charge_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_InvoiceLine_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cInvoiceId",
+            "apiKey": "cInvoiceId",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "chargeAmount",
+            "apiKey": "chargeAmount",
+            "column": "ChargeAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "priceLimit",
+            "apiKey": "priceLimit",
+            "column": "PriceLimit",
+            "type": "price",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "resourceAssignment",
+            "apiKey": "resourceAssignment",
+            "column": "S_ResourceAssignment_ID",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "invoiceDiscount",
             "apiKey": "invoiceDiscount",
             "column": "C_Invoice_Discount_ID",
@@ -4367,26 +4511,10 @@
             "required": false
           },
           {
-            "name": "charge",
-            "apiKey": "charge",
-            "column": "C_Charge_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "priceLimit",
-            "apiKey": "priceLimit",
-            "column": "PriceLimit",
-            "type": "price",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_InvoiceLine_ID",
-            "type": "id",
+            "name": "descriptionOnly",
+            "apiKey": "descriptionOnly",
+            "column": "IsDescription",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -4399,68 +4527,20 @@
             "required": false
           },
           {
-            "name": "cInvoiceId",
-            "apiKey": "cInvoiceId",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "adClientId",
-            "apiKey": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "resourceAssignment",
-            "apiKey": "resourceAssignment",
-            "column": "S_ResourceAssignment_ID",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "chargeAmount",
-            "apiKey": "chargeAmount",
-            "column": "ChargeAmt",
-            "type": "amount",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "descriptionOnly",
-            "apiKey": "descriptionOnly",
-            "column": "IsDescription",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "createdBy",
             "apiKey": "createdBy",
             "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOSourceInvoiceLine",
+            "apiKey": "eTGOSourceInvoiceLine",
+            "column": "EM_Etgo_Source_Invoiceline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "matchLCCosts",
@@ -4485,22 +4565,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "goodsShipmentLine",
-            "apiKey": "goodsShipmentLine",
-            "column": "M_InOutLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "salesOrderLine",
-            "apiKey": "salesOrderLine",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -4527,20 +4591,20 @@
             "required": true
           },
           {
-            "name": "dueDate",
-            "apiKey": "dueDate",
-            "column": "Duedate",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
             "name": "origDueDate",
             "apiKey": "origDueDate",
             "column": "OrigDueDate",
             "type": "date",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "dueDate",
+            "apiKey": "dueDate",
+            "column": "Duedate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
           },
           {
             "name": "expectedDate",
@@ -4655,6 +4719,14 @@
             "required": false
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4715,14 +4787,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5249,6 +5313,27 @@
       },
       {
         "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -5364,27 +5449,6 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
-      },
-      {
-        "entity": "header",
-        "field": "transactionDocument",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
       },
       {
         "entity": "lines",
@@ -5540,6 +5604,14 @@
       },
       {
         "entity": "header",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
         "field": "tBAIQRcode",
         "column": "em_tbai_qrcode",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
@@ -5560,6 +5632,14 @@
         "column": "EM_Tbai_Xmlgenerator",
         "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
         "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
@@ -5630,22 +5710,6 @@
         "column": "EM_Psd2_Generate_Bank_Payment",
         "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
         "processId": "0661406A983B4D8EA611F8596F114D52",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
-        "field": "eTPRRemovePayment",
-        "column": "EM_Etpr_Remove_Payment",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-        "processId": "745FCF75B6F14024B96CC14429D8E952",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
-        "field": "etblkpBulkposting",
-        "column": "EM_Etblkp_Bulkposting",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -10085,6 +10149,14 @@
         "description": "System field 'editLineAmount' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-eTGOSourceInvoiceLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTGOSourceInvoiceLine",
+        "runner": "node",
+        "description": "System field 'eTGOSourceInvoiceLine' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-excludeforwithholding",
         "category": "system-field",
         "entity": "lines",
@@ -10545,7 +10617,7 @@
       }
     ],
     "summary": {
-      "total": 605,
+      "total": 606,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
@@ -10559,11 +10631,11 @@
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 22,
-        "system-field": 209,
+        "system-field": 210,
         "visibility": 5
       },
       "byRunner": {
-        "node": 605,
+        "node": 606,
         "junit": 0
       }
     }

@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
@@ -257,7 +258,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
           { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1000 },
         ]}
         formFooter={AssetsDetailPanel}
         hidePrint
@@ -306,7 +307,6 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       hidePrint
       hideMoreMenu
       hideLink
-      hideEyeCount
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}

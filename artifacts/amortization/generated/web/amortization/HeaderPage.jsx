@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import HeaderTable from './HeaderTable';
@@ -196,6 +197,7 @@ export const api = {
       "DateAcct": "Fecha contable",
       "StartDate": "Fecha de inicio",
       "Totalamortization": "Amortización total",
+      "Processed": "Estado",
       "C_Currency_ID": "Moneda",
       "A_Asset_ID": "Activo",
       "Amortization_Percentage": "% Amortización",
@@ -216,6 +218,7 @@ export const api = {
       "DateAcct": "Accounting Date",
       "StartDate": "Starting Date",
       "Totalamortization": "Total Amortization",
+      "Processed": "Status",
       "C_Currency_ID": "Currency",
       "A_Asset_ID": "Asset",
       "Amortization_Percentage": "Amortization %",
@@ -280,7 +283,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         titleField="name"
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
 
@@ -307,7 +309,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      hiddenColumns={["processed"]}
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint

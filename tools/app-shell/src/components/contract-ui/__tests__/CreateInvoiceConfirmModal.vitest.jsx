@@ -17,9 +17,30 @@ vi.mock('@/components/contract-ui/ConfirmDocumentModal', async (importOriginal) 
   return actual;
 });
 
+// Radix Select cannot run in JSDOM — replace with a native <select> that
+// honours value/onValueChange and renders options via SelectItem.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children, value, onValueChange }) => (
+    <div>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+        data-testid="select-control"
+      >
+        {children}
+      </select>
+    </div>
+  ),
+  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
+  SelectValue: () => null,
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import * as formatCurrencyModule from '@/lib/formatCurrency.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +63,17 @@ function renderModal(props = {}) {
   };
   const merged = { ...defaults, ...props };
   return { ...render(<CreateInvoiceConfirmModal {...merged} />), props: merged };
+}
+
+function makePriceList(overrides = {}) {
+  return {
+    id: 'pl-1',
+    name: 'General Sales Price List',
+    active: true,
+    salesPriceList: true,
+    default: false,
+    ...overrides,
+  };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -92,12 +124,11 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('SO-NULL')).toBeInTheDocument();
   });
 
-  it('uses linkedOrders grandTotal and currency when present', () => {
+  it('uses linkedOrders grandTotal, falling back to linkedOrder currency when the document has none of its own', () => {
     const data = {
       documentNo: 'SO-002',
       'businessPartner$_identifier': 'Partner',
       grandTotalAmount: 0,
-      'currency$_identifier': 'USD',
       linkedOrders: [
         { grandTotalAmount: 9999, 'currency$_identifier': 'GBP' },
       ],
@@ -105,6 +136,21 @@ describe('CreateInvoiceConfirmModal', () => {
     renderModal({ data });
     expect(screen.getByText(/9\.999,00\s£/)).toBeInTheDocument();
     expect(screen.queryByText(/GBP/)).toBeNull();
+  });
+
+  it('prefers the document\'s own etgoCurrency over the linked order\'s currency (ETP-4028: currency is editable in draft and can diverge from the originating order)', () => {
+    const data = {
+      documentNo: 'SO-003',
+      'businessPartner$_identifier': 'Partner',
+      grandTotalAmount: 9999,
+      'etgoCurrency$_identifier': 'EUR',
+      linkedOrders: [
+        { grandTotalAmount: 9999, 'currency$_identifier': 'USD' },
+      ],
+    };
+    renderModal({ data });
+    expect(screen.getByText(/9\.999,00\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).toBeNull();
   });
 
   // ── Checkbox state ─────────────────────────────────────────────────────────
@@ -173,10 +219,13 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onConfirm when confirm button is clicked and checkbox is checked', () => {
+  it('calls onConfirm when confirm button is clicked and checkbox is checked (showPriceListPicker=false)', () => {
     const { props } = renderModal();
     fireEvent.click(screen.getByText('soCreateDocsBtn'));
     expect(props.onConfirm).toHaveBeenCalledTimes(1);
+    // ETP-4028: onConfirm is always called with the priceListId arg (unset here, since
+    // the picker is not shown) — old call sites that ignore the arg keep working.
+    expect(props.onConfirm).toHaveBeenCalledWith('');
   });
 
   it('does not call onConfirm when checkbox is unchecked', () => {
@@ -206,14 +255,14 @@ describe('CreateInvoiceConfirmModal', () => {
       }),
     ));
 
-    renderModal({ pendingQtyUrl: '/api/pending' });
+    renderModal({ pendingQtyUrl: '/api/pending', token: 'test-token' });
 
     await waitFor(() => {
       // soAmountPendingInvoice with substituted {pending}
       expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
     });
 
-    expect(fetch).toHaveBeenCalledWith('/api/pending');
+    expect(fetch).toHaveBeenCalledWith('/api/pending', { headers: { Authorization: 'Bearer test-token' } });
   });
 
   it('falls back to generic subtitle when pendingQtyUrl fetch fails', async () => {
@@ -245,5 +294,195 @@ describe('CreateInvoiceConfirmModal', () => {
   it('shows soCreateInvoiceTitle inside the checkbox row', () => {
     renderModal();
     expect(screen.getByText('soCreateInvoiceTitle')).toBeInTheDocument();
+  });
+
+  // ── formatCurrency usage (ETP-4314 policy: no hand-rolled currency formatting) ──
+
+  it('uses the shared formatCurrency utility to format the grand total (not a hand-rolled formatter)', () => {
+    const spy = vi.spyOn(formatCurrencyModule, 'formatCurrency');
+    renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'USD' }) });
+    expect(spy).toHaveBeenCalledWith('USD', 1234.56);
+    spy.mockRestore();
+  });
+
+  // ── ETP-4028 — showPriceListPicker ────────────────────────────────────────
+
+  describe('showPriceListPicker = false (default) — unchanged legacy behavior', () => {
+    it('does not render the price-list select', () => {
+      renderModal();
+      expect(screen.queryByTestId('invoice-confirm-price-list-select')).not.toBeInTheDocument();
+    });
+
+    it('does not fetch the price-list endpoint', async () => {
+      renderModal({ apiBaseUrl: '/sws/neo/goods-shipment/goodsShipment' });
+      await act(async () => {});
+      const calledPriceList = fetch.mock.calls.some(([url]) => String(url).includes('/price-list/'));
+      expect(calledPriceList).toBe(false);
+    });
+
+    it('confirm is enabled purely by the checkbox (no picker requirement)', () => {
+      renderModal();
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).not.toBeDisabled();
+    });
+  });
+
+  describe('showPriceListPicker = true', () => {
+    const apiBaseUrl = '/sws/neo/goods-shipment/goodsShipment';
+
+    function mockPriceListFetch(priceLists) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        if (String(url).includes('/price-list/priceList')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: priceLists } }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+    }
+
+    it('renders the price-list select', async () => {
+      mockPriceListFetch([makePriceList()]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+      });
+    });
+
+    it('fetches price lists from `${base}/price-list/priceList` with pagination params and the auth header', async () => {
+      mockPriceListFetch([makePriceList()]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, token: 'test-token' });
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          '/sws/neo/goods-shipment/price-list/priceList?_startRow=0&_endRow=200',
+          { headers: { Authorization: 'Bearer test-token' } },
+        );
+      });
+    });
+
+    it('filters out inactive price lists', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'active-1', name: 'Active PL', active: true }),
+        makePriceList({ id: 'inactive-1', name: 'Inactive PL', active: false }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('Active PL')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Inactive PL')).not.toBeInTheDocument();
+    });
+
+    it('filters price lists by salesPriceList matching isSOTrx (sales)', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'sales-1', name: 'Sales PL', salesPriceList: true }),
+        makePriceList({ id: 'purchase-1', name: 'Purchase PL', salesPriceList: false }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
+    });
+
+    it('defaults isSOTrx to true (sales price lists) when the prop is omitted entirely', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'sales-1', name: 'Sales PL', salesPriceList: true }),
+        makePriceList({ id: 'purchase-1', name: 'Purchase PL', salesPriceList: false }),
+      ]);
+      // isSOTrx intentionally omitted — must fall back to its default (true), matching
+      // the sales price list and excluding the purchase one.
+      renderModal({ showPriceListPicker: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
+    });
+
+    it('filters price lists by salesPriceList matching isSOTrx (purchase)', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'sales-1', name: 'Sales PL', salesPriceList: true }),
+        makePriceList({ id: 'purchase-1', name: 'Purchase PL', salesPriceList: false }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: false, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('Purchase PL')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Sales PL')).not.toBeInTheDocument();
+    });
+
+    it('auto-selects the price list flagged as default', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'pl-a', name: 'PL A', default: false }),
+        makePriceList({ id: 'pl-b', name: 'PL B', default: true }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        const select = screen.getByTestId('select-control');
+        expect(select.value).toBe('pl-b');
+      });
+    });
+
+    it('falls back to the first matching price list when none is flagged default', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'pl-a', name: 'PL A', default: false }),
+        makePriceList({ id: 'pl-b', name: 'PL B', default: false }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        const select = screen.getByTestId('select-control');
+        expect(select.value).toBe('pl-a');
+      });
+    });
+
+    it('confirm button is disabled until a price list is auto-selected/chosen, even with the checkbox checked', async () => {
+      // Never-resolving fetch — loadingPriceLists stays true, priceListId stays ''
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).toBeDisabled();
+    });
+
+    it('confirm button becomes enabled once a default price list is auto-selected', async () => {
+      mockPriceListFetch([makePriceList({ id: 'pl-only', default: true })]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+        expect(confirmBtn).not.toBeDisabled();
+      });
+    });
+
+    it('calls onConfirm with the selected priceListId when confirmed', async () => {
+      mockPriceListFetch([makePriceList({ id: 'pl-selected', default: true })]);
+      const onConfirm = vi.fn();
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onConfirm });
+      await waitFor(() => {
+        expect(screen.getByText('soCreateDocsBtn').closest('button')).not.toBeDisabled();
+      });
+      fireEvent.click(screen.getByText('soCreateDocsBtn'));
+      expect(onConfirm).toHaveBeenCalledWith('pl-selected');
+    });
+
+    it('calls onConfirm with the user-selected priceListId after changing the select', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'pl-a', name: 'PL A', default: true }),
+        makePriceList({ id: 'pl-b', name: 'PL B', default: false }),
+      ]);
+      const onConfirm = vi.fn();
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onConfirm });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+      });
+      fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-b' } });
+      fireEvent.click(screen.getByText('soCreateDocsBtn'));
+      expect(onConfirm).toHaveBeenCalledWith('pl-b');
+    });
+
+    it('shows noPriceListsAvailable option when no price lists match', async () => {
+      mockPriceListFetch([]);
+      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('noPriceListsAvailable')).toBeInTheDocument();
+      });
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).toBeDisabled();
+    });
   });
 });

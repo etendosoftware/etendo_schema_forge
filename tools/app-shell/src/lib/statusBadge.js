@@ -1,4 +1,49 @@
 /**
+ * Canonical business-flow ordering for status codes, independent of
+ * data-source arrival order (in-memory rows vs. backend distinct-values
+ * fetch). Buckets follow: Draft -> In process -> Awaiting -> Completed ->
+ * Closed -> Voided. Codes not listed here are unknown to this catalog and
+ * are sorted alphabetically after all known codes (see compareStatusCodes).
+ */
+export const STATUS_ORDER = [
+  // Draft / not started
+  'DR', 'DRAFT', 'FALSE', 'N',
+  // In process
+  'IP', 'M', 'UE', 'RPAE',
+  // Awaiting
+  'RPAP',
+  // Completed
+  'CO', 'CA', 'ETGO_CI', 'TRUE', 'Y', 'YES', 'PROCESSED',
+  'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC',
+  // Closed
+  'CL', 'PA',
+  // Voided / rejected
+  'VO', 'CJ', 'RPVOID', 'P',
+];
+
+/**
+ * Deterministic comparator for status codes, used to keep the "All
+ * statuses" dropdown order fixed across re-renders — regardless of whether
+ * codes came first from in-memory rows or from the (uncached) backend
+ * distinct-values fetch resolving later. Known codes follow STATUS_ORDER;
+ * unknown codes are pushed to the end, sorted alphabetically so they are
+ * still stable relative to each other.
+ */
+export function compareStatusCodes(a, b) {
+  const normalize = (c) => String(c ?? '').toUpperCase();
+  const na = normalize(a);
+  const nb = normalize(b);
+  const ia = STATUS_ORDER.indexOf(na);
+  const ib = STATUS_ORDER.indexOf(nb);
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+  if (na < nb) return -1;
+  if (na > nb) return 1;
+  return 0;
+}
+
+/**
  * Map a status code to one of the 4 Figma semantic tones.
  * Used by StatusTag (grid). Does NOT affect DetailView.
  */
@@ -30,7 +75,10 @@ export function getStatusTone(status) {
 export function getStatusBadgeProps(status) {
   const s = String(status ?? '').toLowerCase();
   if (s === 'true' || s === 'processed') {
-    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground' };
+    // Explicit hover override — Badge's variant="default" bakes in
+    // hover:bg-primary/80, which otherwise wins on :hover since nothing
+    // else in this className competes with that hover modifier (ETP-4856).
+    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success' };
   }
   if (s === 'false' || s === 'not processed') {
     return { variant: 'secondary' };
@@ -39,7 +87,8 @@ export function getStatusBadgeProps(status) {
     return { variant: 'secondary' };
   }
   if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') {
-    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground' };
+    // Same hover fix as above — this is the "Cerrado - Pedido creado" (CA) case.
+    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success' };
   }
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') {
     return { variant: 'default', className: 'border-status-info-border bg-status-info text-status-info-foreground' };
@@ -47,14 +96,11 @@ export function getStatusBadgeProps(status) {
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') {
     return { variant: 'destructive' };
   }
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') {
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') {
     return { variant: 'outline', className: 'border-status-warning-border bg-status-warning text-status-warning-foreground' };
   }
   if (s === 'rpap') {
     return { variant: 'outline', className: 'border-border-subtle bg-muted text-muted-foreground' };
-  }
-  if (s === 'under evaluation' || s === 'ue') {
-    return { variant: 'outline', className: 'border-status-info-border bg-status-info text-status-info-foreground' };
   }
   return { variant: 'outline' };
 }
@@ -67,9 +113,8 @@ export function getStatusDotColor(status) {
   if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success-foreground';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info-foreground';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning-foreground';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') return 'bg-status-warning-foreground';
   if (s === 'rpap') return 'bg-status-neutral-foreground';
-  if (s === 'under evaluation' || s === 'ue') return 'bg-status-info-foreground';
   return 'bg-status-neutral-foreground';
 }
 
