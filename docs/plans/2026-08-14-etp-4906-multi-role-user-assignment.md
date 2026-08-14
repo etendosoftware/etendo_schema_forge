@@ -1272,6 +1272,21 @@ results against `bc2b6c8c` (unchanged since B2) stand as sufficient evidence.
 
 ## Self-Review Notes
 
+- **Architectural caveat found post-QA (2026-08-14), not a blocker for THIS ticket,
+  recorded here for continuity:** `AssignTemplateRolesControl.jsx` sources its
+  selectable role options from `SFRolesOverview`, which is scoped to the CALLER's OWN
+  client — i.e. each tenant's own PER-CLIENT duplicated Finance/Sales/Purchasing/
+  Inventory role copies (the ones ETP-4877 is about retiring), not the shared
+  system-level (`ad_client_id='0'`) templates from ETP-4852/4878.
+  `UserRoleCompositionService` accepts this by design (it validates ANY active
+  `IsTemplate='Y'` role, not only the 4 system-level ones), so this ticket's feature
+  works correctly TODAY — but once ETP-4877 deactivates a tenant's old per-client
+  roles, this picker will show zero options for that tenant, and any personal role
+  composed via this ticket's UI will have its `AD_Role_Inheritance` pointing at a
+  role that ETP-4877 is about to deactivate. Both consequences have been added to
+  **ETP-4877's own description** (via Clerk, 2026-08-14) as its own scope, rather than
+  reopening this ticket — this ticket's behavior is correct relative to its own
+  acceptance criteria, the gap is in what ETP-4877 needs to additionally cover.
 - **Spec coverage (updated 2026-08-14):** 2 of the handoff's 4 original scope items ship
   in this ticket as built — grid role chips+filter (F6) and form multi-select+matrix tab
   (F3/F5). The other 2 were investigated and explicitly descoped by human decision, not
