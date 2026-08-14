@@ -102,6 +102,16 @@
           ]
         },
         {
+          "id": "unified-auth-session",
+          "kind": "open",
+          "note": "The feature currently carries two browser credentials: tenant-scoped sf_auth_token and account-scoped sf_platform_token. A login in another tab can rotate the account token while the active environment remains visibly logged in, producing 401s during Checkout or environment discovery. A compatibility resolver now accepts either credential and Checkout prefers sf_auth_token, but the durable fix is one account/session contract with a bootstrap path for accounts that own no environment yet. Closure requires unified login, refresh, logout, 401 handling, and multi-tenant isolation tests.",
+          "refs": [
+            "docs/architecture/07-auth-and-security.md — TD-AUTH-001",
+            "tools/app-shell/src/lib/upgrade/api.js — getCheckoutToken",
+            "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java — findActiveAccountByBearerToken"
+          ]
+        },
+        {
           "id": "plan-badge-in-env-picker",
           "kind": "cosmetic",
           "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
