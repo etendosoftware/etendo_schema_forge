@@ -1,54 +1,167 @@
-# ETP-4894 delivery evidence
+# ETP-4894 — Company User Invitations
 
-## Functional flow
+## Contents
 
-ETP-4894 is a company-membership invitation flow, not a password-reset flow.
+- [Functional summary](#functional-summary)
+- [Complete flow](#complete-flow)
+- [Acceptance matrix](#acceptance-matrix)
+- [Visual evidence](#visual-evidence)
+- [Tests and QA](#tests-and-qa)
+- [Known limitations](#known-limitations)
 
-1. A company administrator opens **Invite user**, enters only an email address, and submits it. The server creates a pending invitation and sends the company-invitation email.
-2. A recipient with an existing Etendo Go account opens the email link, signs in through the normal Etendo Go login flow, returns to the invitation, and then accepts it. The server verifies that the authenticated email matches the invitation before creating the target-company membership and marking it accepted.
-3. A recipient without an Etendo Go account opens the same link, creates the minimum platform account using the email locked to the invitation, and then accepts the company invitation. This route never enters company onboarding.
+## Functional summary
+
+ETP-4894 implements company invitations as a dedicated flow, not as a password-reset flow.
+
+An administrator enters only the recipient email. The invitation remains `Pending` until the recipient follows the email link and completes one of these paths:
+
+1. An existing Etendo Go user signs in through the canonical Etendo Go login and then accepts the invitation.
+2. A new recipient creates the minimum Etendo Go account from the invitation and accepts it without entering company onboarding.
+
+## Complete flow
+
+```mermaid
+flowchart TD
+  A[Administrator enters recipient email] --> B[Invitation created as Pending]
+  B --> C[Company invitation email with secure link]
+  C --> D{Existing Etendo Go account?}
+  D -->|Yes| E[Canonical Etendo Go login]
+  E --> F[Invitation page authenticated]
+  D -->|No| G[Canonical Etendo Go registration]
+  G --> F
+  F --> H[Accept invitation]
+  H --> I[Company membership provisioned]
+  C --> J{Link valid?}
+  J -->|No| K[Expired or invalid invitation state]
+```
+
+## Acceptance matrix
+
+| Scenario | Expected result | Status | Evidence |
+| --- | --- | --- | --- |
+| Administrator invites by email only | Invitation is created as `Pending` | Passed | Pending invitation |
+| Existing user opens the link | Canonical Etendo Go login is shown | Passed | Existing account login |
+| Existing user authenticates | Invitation remains on `/invite` and offers acceptance | Passed | Authenticated invitation |
+| Existing user accepts | Membership is accepted | Passed | Existing account success |
+| New recipient opens the link | Canonical Etendo Go registration is shown | Passed | New account registration |
+| New recipient registers and accepts | Account and membership are created without onboarding | Passed | New account success |
+| Invalid or expired link | Safe error state is shown | Passed | Expired invitation |
+| Invitation is already accepted | Idempotent confirmation is shown | Passed | Already accepted |
+| Acceptance fails after authentication | Actionable error preserves the Etendo Go shell | Passed | Acceptance error |
 
 ## Visual evidence
 
-- Environment: local App Shell mock (`VITE_MOCK=true`, `http://127.0.0.1:3100`)
-- Playwright command: `E2E_WORKERS=1 npx playwright test tests/flows/user-invitation.mocked.spec.js --project=mocked --workers=1 --reporter=list`
-- UI unit-test command: `npx vitest run src/windows/custom/user/__tests__/index.vitest.jsx src/windows/custom/user/__tests__/InviteUserDialog.vitest.jsx src/pages/__tests__/InviteAcceptancePage.vitest.jsx`
-- UI unit-test result: passed — 10 tests in 3 files.
-- Playwright result: passed — 7 tests in 22.7s.
-- Playwright scope: the browser flows use intercepted API responses. They prove routing, request shape, the existing-account login gate, the canonical `etendo-go-core` login surface, locked email behavior, and screenshot checkpoints; they do not prove database persistence, authorization, email delivery, or tenant role assignment.
+- **Environment:** local App Shell mock (`VITE_MOCK=true`, `http://127.0.0.1:3100`)
+- **Validation:** automated Playwright and Vitest
+- **Playwright command:** `E2E_WORKERS=1 npx playwright test tests/flows/user-invitation.mocked.spec.js --project=mocked --workers=1 --reporter=list`
+- **UI unit-test command:** `npx vitest run src/windows/custom/user/__tests__/index.vitest.jsx src/windows/custom/user/__tests__/InviteUserDialog.vitest.jsx src/pages/__tests__/InviteAcceptancePage.vitest.jsx`
+- **Result:** Playwright passed — 7 tests in 22.7s; UI unit tests passed — 10 tests in 3 files.
+- **Scope:** API responses are intercepted. These tests prove routing, request shape, login and registration gates, canonical Etendo Go surfaces, locked invitation email behavior, and visual checkpoints. They do not prove database persistence, authorization, email delivery, or tenant role assignment.
 
-### 1. Pending invitation
+### 1. Administrator creates a pending invitation
 
-[`ETP-4894-user-invitation-pending.png`](./ETP-4894-user-invitation-pending.png) shows the administrator flow after entering only the recipient email. The dialog displays `Pending`, proving that invitation creation is distinct from generic User CRUD and does not collect a password, name, company setup, or onboarding data.
+<details>
+<summary>Open evidence</summary>
+
+The administrator enters only the recipient email. The dialog displays `Pending` and does not request a password, name, company setup, or onboarding data.
+
+<p align="center">
+  <img src="./ETP-4894-user-invitation-pending.png" alt="Pending company invitation" width="50%">
+</p>
+
+</details>
 
 ### 2. Existing Etendo Go account
 
-[`ETP-4894-invitation-existing-login.png`](./ETP-4894-invitation-existing-login.png) shows the invitation link resolving to the existing-account branch and rendering the canonical Etendo Go `LoginStep`: the real Etendo Go brand, layout, SSO option, language selector, password recovery, shared fields, and shared translations. The invited email is read-only and the recipient must authenticate before acceptance.
+<details>
+<summary>Open evidence</summary>
 
-[`ETP-4894-invitation-authenticated.png`](./ETP-4894-invitation-authenticated.png) shows the invitation after normal Etendo Go login. The page is still `/invite`, with the authenticated state established and the explicit **Accept invitation** action available; it does not enter company onboarding.
+The invitation link opens the existing-account branch and renders the canonical Etendo Go `LoginStep`. The email is read-only, and the recipient must authenticate before acceptance.
 
-[`ETP-4894-invitation-existing-account.png`](./ETP-4894-invitation-existing-account.png) shows the successful membership acceptance. The backend receives both the invitation token and bearer session, verifies the authenticated account email matches the invitation, and then provisions the company membership.
+<p align="center">
+  <img src="./ETP-4894-invitation-existing-login.png" alt="Canonical Etendo Go login for an invitation" width="50%">
+</p>
 
-### 3. New Etendo Go account registers and accepts
+After the normal login, the recipient returns to `/invite` and sees the explicit **Accept invitation** action.
 
-[`ETP-4894-invitation-new-account-registration.png`](./ETP-4894-invitation-new-account-registration.png) shows the canonical Etendo Go registration surface. The recipient enters the minimum account data, while the invitation email remains locked to the trusted invitation record.
+<p align="center">
+  <img src="./ETP-4894-invitation-authenticated.png" alt="Authenticated invitation ready for acceptance" width="50%">
+</p>
 
-[`ETP-4894-invitation-new-account.png`](./ETP-4894-invitation-new-account.png) shows the successful result using the same Etendo Go authentication shell. The recipient registers from `/invite` and joins the company without entering company onboarding.
+The successful result confirms that the company membership was accepted.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-existing-account.png" alt="Existing account invitation accepted" width="50%">
+</p>
+
+</details>
+
+### 3. New recipient registers and accepts
+
+<details>
+<summary>Open evidence</summary>
+
+The recipient sees the canonical Etendo Go registration surface. The invitation email remains locked to the trusted invitation record.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-new-account-registration.png" alt="Canonical Etendo Go registration for an invitation" width="50%">
+</p>
+
+After registration, the recipient joins the company directly from `/invite`; the flow does not enter company onboarding.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-new-account.png" alt="New account invitation accepted" width="50%">
+</p>
+
+</details>
 
 ### 4. Invalid or expired invitation
 
-[`ETP-4894-invitation-expired.png`](./ETP-4894-invitation-expired.png) shows the safe error state returned for an invalid or expired invitation link. The page does not expose token details or backend internals and offers the standard sign-in action.
+<details>
+<summary>Open evidence</summary>
 
-### 5. Remaining corrected states
+An invalid or expired link produces a safe user-facing error without exposing token details or backend internals.
 
-[`ETP-4894-invitation-loading.png`](./ETP-4894-invitation-loading.png) shows the Etendo Go loading shell while the invitation token is being resolved.
+<p align="center">
+  <img src="./ETP-4894-invitation-expired.png" alt="Expired or invalid invitation" width="50%">
+</p>
 
-[`ETP-4894-invitation-already-accepted.png`](./ETP-4894-invitation-already-accepted.png) shows the idempotent confirmation when the invitation was already accepted.
+</details>
 
-[`ETP-4894-invitation-accept-error.png`](./ETP-4894-invitation-accept-error.png) shows an acceptance failure after authentication while preserving the Etendo Go shell and displaying the actionable error state.
+### 5. Loading, already accepted, and acceptance error states
 
-## Delivery limitations and QA
+<details>
+<summary>Open evidence</summary>
 
-- Backend validation remains required for invitation authorization, explicit tenant invitation-role policy, transaction/compensation behavior, lifecycle persistence, and transactional-email contract behavior. The authenticated existing-account gate is now implemented and covered by the service, UI, and Playwright tests.
-- A real email-provider and deployed-backend browser acceptance test have not been evidenced here.
-- Pending validation by QA: Matías Bernal / Emilio Polliotti.
+The invitation resolution loading state uses the Etendo Go shell.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-loading.png" alt="Invitation loading state" width="50%">
+</p>
+
+An already accepted invitation shows an idempotent confirmation.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-already-accepted.png" alt="Invitation already accepted" width="50%">
+</p>
+
+An acceptance failure after authentication preserves the Etendo Go shell and provides an actionable error.
+
+<p align="center">
+  <img src="./ETP-4894-invitation-accept-error.png" alt="Invitation acceptance error" width="50%">
+</p>
+
+</details>
+
+## Tests and QA
+
+- **Playwright:** 7 mocked invitation scenarios passed.
+- **Vitest:** 10 focused UI tests passed across the User window, invitation dialog, and acceptance page.
+- **Assertions:** routing, request shape, login/registration branch selection, locked email, authenticated acceptance, and error states.
+- **Pending QA:** Matías Bernal / Emilio Polliotti.
+
+## Known limitations
+
+- The browser tests use intercepted API responses and do not prove database persistence, authorization, email delivery, or tenant role assignment.
+- A deployed-backend browser acceptance test and a real email-provider delivery test are not included in this evidence package.
+- Backend validation remains required for invitation authorization, tenant invitation-role policy, transaction/compensation behavior, lifecycle persistence, and transactional-email contract behavior.
