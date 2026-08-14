@@ -1557,3 +1557,75 @@ follow-ups recommended, neither a reason to revisit REVIEW/QA's approval of the 
    template roles in this DB (currently `'N'`) — unrelated to ETP-4906's own changes, but it
    currently makes 2 of the 4 advertised template roles unusable end to end in this
    environment.
+
+## Manual QA Feedback (Human, 2026-08-14) — DEV wave 6, 5 findings
+
+Backend was rebuilt/redeployed (`update.database` + `smartbuild` + `make install`,
+confirmed live: `userroleassignments` now 401s like its siblings instead of 404) and the
+human ran a real manual pass. 5 findings, all root-caused directly from source before
+dispatch (not guessed):
+
+1. **Spacing** — `AssignTemplateRolesControl.jsx`'s expanded options panel (`__options`
+   div) needs more left padding; each role row (`px-2 py-1.5`) reads cramped against the
+   left edge.
+
+2. **Trigger shows blank while the checklist is expanded.** Confirmed in
+   `AssignTemplateRolesControl.jsx`: chips only render when `!isEditing`
+   (`{!isEditing && visibleChips.map(...)}`), and the "no roles" placeholder only
+   renders when `selectedRoles.length === 0`. With 2+ roles selected AND `isEditing`
+   true, NEITHER renders — the trigger button is genuinely empty by construction, not a
+   rendering glitch. This exact asymmetry was already flagged as a testability gotcha in
+   F9 Findings, just not recognized there as a real UX bug. **Fix:** stop hiding chips
+   while editing — keep them visible in the trigger regardless of `isEditing`.
+
+3. **Two things, one confusing sequence.** The immediate cause — composing "Ventas"
+   (role id `2A159DF4F4B944A6AA903202AD35B545`) rejected with "Role is not a template" —
+   is the SAME already-tracked environment drift (`AD_Role.IsTemplate='N'` for
+   Finance/Sales in this DB, see the QA Findings note directly above this section), not
+   a new bug; use Purchasing/Inventory to exercise the actual happy path. **But** the
+   error toast being immediately followed by "Saved successfully" IS a real, separate
+   bug, independent of why the role save failed: `windows/custom/user/index.jsx`'s
+   `handleRoleAssignmentSave` runs as `onAfterExistingSave` — strictly AFTER the generic
+   `AD_User` field save has already succeeded and shown its own toast — so ANY role-save
+   failure (this drift, a network blip, anything) will always read as "it worked" (the
+   generic toast) immediately followed by a contradicting error. This will keep
+   happening for legitimate future failures too, not just this one drifted role.
+
+4. **Duplicate "Roles del usuario" tab, one of them a native leak.** `decisions.json`'s
+   `userRoles` entity (the native `AD_User_Roles` child tab) has every field set to
+   `visibility: readOnly` (an ETP-4512-era decision, stale reason text: "Role assignment
+   now happens exclusively via... AssignRoleControl") but was never `exclude`d — so it
+   still renders as its own secondary tab, and its native AD_Tab label apparently
+   translates to the same "Roles del usuario" string this ticket's OWN new custom tab
+   uses (`labelKey: userRolesTabLabel`), producing two identically-labeled tabs — the
+   native one exposing the internal "Personal – NewUsertest" composition role, which
+   should never be user-visible. **Fix:** add `"exclude": true` to the `userRoles`
+   entity — the exact same convention already used for `rxServicesAccess`/`token` in
+   this same file (`artifacts/user/decisions.json` lines 23-24) — removing the native
+   tab entirely rather than just neutering its fields.
+
+5. **Matrix shows raw classic AD categories with no Etendo GO equivalent** (e.g.
+   "Diccionario de la aplicación" → Módulo, Tablas y columnas, Referencia, Definición del
+   Proceso — all "—" for every role, correctly, but they shouldn't appear as rows at
+   all). Root cause: `UserRolesTab.jsx`'s `flattenWindowRows` walks `SFListMenu`'s FULL
+   tree with NO filter against Etendo GO's actual exposed window set — as an admin
+   caller, `SFListMenu` returns literally every native AD menu node, including
+   classic-only Application Dictionary entries Etendo GO never surfaces at all. This is
+   a real gap in Task F5's original implementation, not something the plan anticipated
+   correctly. **Fix, no new backend call needed:** `UserRolesTab.jsx` already fetches
+   `rolesOverview` (`fetchRolesOverview()`) — build a `Set` of every `windows[].id` across
+   ALL `rolesOverview.roles` entries (union across all 5, Admin included — each role's
+   `windows[]` is already intersected server-side against
+   `resolveActiveEtendoGoWindowIds()` in `SFRolesOverview.java`, so the union IS exactly
+   "every window Etendo GO actually exposes"), filter `flattenWindowRows`'s output to
+   only rows whose `windowId` is in that set, then drop any category left with zero
+   surviving rows (don't render an empty "Diccionario de la aplicación" header with no
+   rows under it).
+
+**Dispatch:** schema-forge-developer (fresh agent, no reachable prior session — the
+original developer-2/a235bf7765174e48b that built these 3 files is gone). All 5 fixes
+land as one commit. Given the scale of existing test coverage asserting some of this
+CURRENT (buggy) behavior (e.g. F9's own note that chips only show `!isEditing` "by
+design"), **Tester must do a follow-up pass** updating/adding tests for all 5 fixes
+before this goes back through REVIEW/QA — same wave-pattern this ticket already used
+for the dead-code and Guardar-enablement bugs.
