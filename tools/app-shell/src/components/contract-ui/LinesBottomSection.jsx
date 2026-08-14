@@ -63,6 +63,23 @@ export default function LinesBottomSection({
   const currency = data?.['currency$_identifier'] || '';
   const isReadOnly = data?.documentStatus !== 'DR';
 
+  // ETP-4777 — the backend-persisted header total (maintained by the
+  // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's
+  // "Imp. Total" column and the printed document read) is the authoritative
+  // source. DocumentTotalsPanel prefers this over its own recompute whenever
+  // no line is actively pending/being edited. Only the two raw header fields
+  // are passed down — DocumentTotalsPanel itself works out whether
+  // summedLineAmount is already net-of-discount (it compares against a
+  // fresh recompute from the current lines; documentStatus is NOT a
+  // reliable signal here — verified live that an invoice created from an
+  // already-discounted order has its discount line materialised immediately,
+  // while still Draft). See DocumentTotalsPanel.jsx for the full rationale.
+  const resolvedTotalDiscountPct = resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField);
+  const persistedNetSubtotal = data?.summedLineAmount ?? data?.totalLines ?? null;
+  const persistedTotals = data?.grandTotalAmount != null
+    ? { grandTotal: data.grandTotalAmount, netSubtotal: persistedNetSubtotal }
+    : null;
+
   return (
     <div className="flex flex-col">
       <div className="flex">
@@ -156,8 +173,9 @@ export default function LinesBottomSection({
                 formatAmount={fmt}
                 currency={currency}
                 readOnly={isReadOnly}
-                totalDiscountPct={resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField)}
+                totalDiscountPct={resolvedTotalDiscountPct}
                 onTotalDiscountChange={onTotalDiscountChange}
+                persistedTotals={persistedTotals}
                 data-testid="DocumentTotalsPanel__751847" />
             </div>
           </>
