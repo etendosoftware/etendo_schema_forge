@@ -262,9 +262,10 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   }).toPass({ timeout: 20_000 });
   await slow(page);
 
-  // Select the product by index — fall back to first if nth doesn't exist
+  // Select the product by index — fall back to first if nth doesn't exist.
+  // Retry the whole selection if the drawer loads empty (intermittent backend timing).
   const allProducts = page.locator('[data-testid^="product-search-option-"]');
-  await expect(allProducts.first()).toBeVisible({ timeout: 15_000 });
+  await expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
   const count = await allProducts.count();
   const product = allProducts.nth(Math.min(productIndex, count - 1));
 
@@ -273,7 +274,7 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
     (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
     { timeout: 30_000 },
   );
-  await product.scrollIntoViewIfNeeded();
+  await product.waitFor({ state: 'visible', timeout: 10_000 });
   await product.click();
   await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
   await productCalloutResponse;
