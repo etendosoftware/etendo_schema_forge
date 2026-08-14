@@ -158,6 +158,14 @@ export default defineConfig(({ mode }) => {
   // LOCAL_CORE is unset (servers, CI, normal `make dev`) this adds nothing and
   // the published package is used exactly as before.
   const LOCAL_CORE = !!process.env.LOCAL_CORE;
+  // E2E_BUILD: a production build with no PWA/service worker. The SW's
+  // clientsClaim+skipWaiting takes over navigation for every route outside
+  // navigateFallbackDenylist, which fights Playwright's page.route() mocking
+  // and the addInitScript-seeded auth token — the concrete cause of a blank
+  // page when E2E tests point at a normal `npm run preview` build. Only
+  // `make test-e2e-headless` (via scripts/run-e2e-full.sh) sets this; a
+  // regular `make build`/`make preview` is unaffected.
+  const E2E_BUILD = !!process.env.E2E_BUILD;
   // Core repo location: honor SCHEMA_FORGE_CORE (same override cli/sf-local uses)
   // so a core checkout under a non-default name/path still resolves; fall back to
   // the default sibling ../schema_forge_core.
@@ -178,7 +186,7 @@ export default defineConfig(({ mode }) => {
       privateKeyPath: resolve(__dirname, '../../etendo_core/modules/com.etendoerp.go/config/apps-spike/private-key.pem'),
       publicKeyPath: resolve(__dirname, '../../etendo_core/modules/com.etendoerp.go/config/apps-spike/public-key.pem'),
     }),
-    VitePWA({
+    ...(E2E_BUILD ? [] : [VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
@@ -209,7 +217,7 @@ export default defineConfig(({ mode }) => {
           },
         ],
       },
-    }),
+    })]),
     sentryVitePlugin({
       org: 'etendo-22',
       project: 'schema_forge',
@@ -305,6 +313,11 @@ export default defineConfig(({ mode }) => {
     // at config time. Only widened when LOCAL_CORE is set.
     ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
     port: 3100,
+    // Fail loudly instead of silently drifting to 3101/3102/... when 3100 is already
+    // taken (e.g. a leftover `preview` or a stale dev server from another checkout) —
+    // tests and the CORS/OAuth2 allowlist are hardcoded to :3100, so a silent port
+    // bump makes them fail against whatever else answers on 3100, not this server.
+    strictPort: true,
     proxy: {
       '/etendo_sf': {
         target: ETENDO_URL,
@@ -345,6 +358,10 @@ export default defineConfig(({ mode }) => {
   // ETENDO_URL (which already includes it).
   preview: {
     port: 3100,
+    // Same reasoning as server.strictPort above — a preview server that silently
+    // moved to another port is indistinguishable from "still starting" until
+    // something else's response on :3100 confuses whoever's actually testing.
+    strictPort: true,
     proxy: {
       '/etendo': {
         target: ETENDO_ORIGIN,
