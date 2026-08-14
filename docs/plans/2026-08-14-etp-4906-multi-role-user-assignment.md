@@ -1772,3 +1772,38 @@ for this). Same rules as always: `com.etendoerp.go` plain branch not worktree, c
 locally only, no push either repo. Tester follow-up required after, same wave pattern —
 existing tests mocking `fetchRolesOverview()` for role options in all 4 touched
 frontend files will need updating to mock the new fetch instead/additionally.
+
+**DEV wave 7 Findings (developer-7, landed):**
+
+- **Padding:** `px-6` added to both `AssignTemplateRolesControl.jsx` root divs, matching
+  `formCardPadding`'s `p-6`. Wave 6's `__options` panel fix left untouched (still
+  correct, just was insufficient alone).
+- **Backend** (`com.etendoerp.go`, commit `90f08997`): new webhook
+  `SFSystemRoleTemplates` (`GET /sws/neo/systemroletemplates`), resolves
+  `SystemRoleTemplates.byName()`'s 4 fixed ids directly (system client `'0'`, never
+  client-scoped). Wired into `NeoPseudoSpecDispatcher`. New `SFSystemRoleTemplatesTest`
+  (12/12) + 2 new `NeoPseudoSpecDispatcherTest` cases (17/17 total). `docs/neo-headless.md`
+  §8f added. All targeted classes green (`SFRolesOverviewTest` 13/13,
+  `SFUserRoleAssignmentsTest` 8/8, `SFAssignUserRolesTest` 8/8,
+  `UserRoleCompositionServiceTest` 16/16) — no full unfiltered `gradlew test` run, per
+  standing precedent.
+- **Frontend** (`etendo_schema_forge`, commit `6b40bc7dd`): new `fetchTemplateRoles()` in
+  `rolesApi.js` (shared `fetchNeoWebhookRoles()` helper extracted, `fetchRolesOverview()`
+  behavior unchanged). `AssignTemplateRolesControl.jsx`/`UserRolesTab.jsx` switched to
+  it for selectable/displayed roles — `UserRolesTab.jsx` still ALSO calls
+  `fetchRolesOverview()` (kept solely for the tenant's client-admin row, needed by wave
+  6 fix #5's `activeWindowIds` union — some real windows are Admin-only, granted to none
+  of the 4 templates). `RoleChipsCell.jsx`'s `useUserRoleGridData()` now fetches both in
+  parallel and combines them (4 templates + tenant's own Admin row, if any) for the grid
+  chips/filter.
+- **Backward-compat gap, flagged not fixed (out of scope for this dispatch):** any user
+  composed BEFORE this fix has tenant-level role ids stored in `AD_Role_Inheritance`,
+  which the new system-level catalog can't resolve names for — chips/matrix would show
+  blank for those until re-saved. Only matters for the disposable test users created
+  earlier in this session's manual QA; not a concern for a fresh environment where
+  ETP-4877 hasn't run yet (nothing has been composed against the old ids in production).
+- **46 tests now failing** (all `"No fetchTemplateRoles export"` mock gaps, nothing else
+  regressed — full suite 642/646 files, 11966/12015 passed, 46 failed, 3 skipped):
+  `AssignTemplateRolesControl.vitest.jsx` (15), `RoleChipsCell.vitest.jsx` (7),
+  `UserHeaderTable.vitest.jsx` (9), `UserRolesTab.vitest.jsx` (13). **Tester follow-up
+  needed before this goes back to the human for another manual pass.**
