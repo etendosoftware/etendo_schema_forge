@@ -40,6 +40,8 @@ function InvitationInfoBanner({ onOpenInvite }) {
  * Company user administration.
  *
  * Provides a dedicated email-only invitation flow (ETP-4894) with pending confirmation.
+ * The AD_USER and its organization roles must already exist; the invitation only links that
+ * prepared ERP user to an Etendo Go account after acceptance.
  */
 export default function UserWindow(props) {
   const ui = useUI();

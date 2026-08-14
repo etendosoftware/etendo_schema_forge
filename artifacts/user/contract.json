@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.19.1",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-07T16:09:22.004Z",
-  "checksum": "7e6dbf8f1a309fc6",
+  "updatedAt": "2026-08-14T22:17:38.613Z",
+  "checksum": "cdf4693e4ee9259f",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -248,7 +248,7 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": true,
             "form": false,
@@ -1050,7 +1050,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {

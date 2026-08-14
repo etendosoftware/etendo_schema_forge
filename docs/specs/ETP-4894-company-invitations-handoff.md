@@ -8,7 +8,7 @@ Replace the current ETP-4894 password-reset-style implementation with a real com
 
 ## Required user journeys
 
-1. An administrator enters only an email and receives a visible `Pending` invitation confirmation.
+1. An administrator creates the target `AD_User`, assigns its organization roles, then enters only its email and receives a visible `Pending` invitation confirmation.
 2. An existing Etendo Go user opens the emailed link, signs in through the normal account-login flow, returns to the invitation, and accepts the target-company invitation.
 3. A recipient without an Etendo Go account opens the same link, creates the minimum platform account, and immediately accepts the target-company invitation.
 
@@ -36,8 +36,8 @@ Replace or remove these ETP-4894-specific semantics deliberately. Preserve norma
    - public resolve endpoint for a valid token;
    - authenticated accept-existing-account endpoint that verifies the logged-in account email;
    - public register-and-accept endpoint.
-4. Update `ETGO_INVITATION` so pending invitations can exist before `ETGO_ACCOUNT` and `AD_USER` references exist. Enforce one open invitation per target company/email.
-5. Implement tenant-derived membership creation at acceptance, including configured default role/access, idempotency, expiry, and audit.
+4. Update `ETGO_INVITATION` so it references the prepared `AD_USER` while pending; `ETGO_ACCOUNT` remains optional until acceptance. Enforce one open invitation per target company/email.
+5. Implement account-to-AD_USER linking at acceptance. Do not create, duplicate, or modify the user's roles or organization access during acceptance.
 6. Add a distinct `company-invitation` transactional email contract; raw tokens must be generated once, hashed for storage, and never logged.
 7. In Schema Forge, build an email-only invitation modal and a public `/invite` acceptance page outside `OnboardingFlow`.
 8. Assess `schema_forge_core`: add only reusable API/UI primitives that genuinely belong there; keep the company flow out of shared onboarding components.
@@ -55,6 +55,14 @@ Content-Type: application/json
 
 { "email": "recipient@example.com" }
 ```
+
+### Authenticated recipient invitation list
+
+`GET /sws/go/company-invitations/mine` requires the recipient's Etendo Go bearer session. The
+server resolves the account email from that session and returns only active invitations addressed
+to that normalized email. Client and organization readability filters are disabled intentionally so
+one account can see invitations from multiple companies; no email, client, organization, or account
+filter is accepted from the browser.
 
 The server derives company and inviter from authorization. Expected result includes only safe invitation metadata such as `id`, masked/normalized email, `status`, and `expiresAt`.
 

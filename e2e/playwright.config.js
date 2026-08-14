@@ -33,6 +33,17 @@ const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
   String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
 );
 
+const emailSinkServer = {
+  command: 'node support/email-sink.mjs',
+  url: 'http://127.0.0.1:8025/health',
+  reuseExistingServer: !process.env.CI,
+  timeout: 10_000,
+  env: {
+    E2E_EMAIL_SINK_PORT: '8025',
+    E2E_EMAIL_SINK_API_KEY: 'e2e-only-secret',
+  },
+};
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -43,6 +54,7 @@ export default defineConfig({
     ['html', { open: 'never', outputFolder: '../artifacts/e2e-report' }],
     ['list'],
   ],
+  webServer: process.env.E2E_EMAIL_SINK === '1' ? emailSinkServer : undefined,
   timeout: 60_000,
 
   use: {

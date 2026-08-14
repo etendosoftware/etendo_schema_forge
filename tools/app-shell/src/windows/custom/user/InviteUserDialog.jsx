@@ -70,6 +70,10 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
         const errorMsg =
           data.code === 'USER_ALREADY_MEMBER'
             ? ui('inviteUserAlreadyMember')
+            : data.code === 'INVITED_USER_NOT_FOUND'
+            ? ui('inviteUserNotFound')
+            : data.code === 'INVITED_USER_NO_ROLE'
+            ? ui('inviteUserNoRole')
             : data.code === 'INVALID_EMAIL_FORMAT'
             ? ui('onboardingInvalidEmailFormat')
             : data.message || ui('invitePageInvalidDescription');

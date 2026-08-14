@@ -66,7 +66,7 @@ If this smoke fails because generated field-name selector URLs return `404 Field
 
 ## Onboarding Register Integration Smoke
 
-`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
+`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). The successful registration test is repeatable: `e2e/onboarding-accounts.json` contains a JSON count (`2` by default), and the test runs that same happy path sequentially for each account, writing `.auth-credentials-1.json`, `.auth-credentials-2.json`, and so on for downstream cross-tenant E2E setup. Set `E2E_ONBOARDING_ACCOUNT_COUNT` or `E2E_ONBOARDING_ACCOUNTS_FILE` to override it. It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
 
 Run it explicitly:
 

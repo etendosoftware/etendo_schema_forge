@@ -20875,6 +20875,8 @@
     "inviteUserSuccessMessage": "Se ha enviado una invitación a {email}. El estado ahora es pendiente.",
     "inviteUserPendingBadge": "Pendiente",
     "inviteUserAlreadyMember": "Este usuario ya es miembro de esta empresa.",
+    "inviteUserNotFound": "Crea este usuario en la organización antes de enviar la invitación.",
+    "inviteUserNoRole": "Asigna al menos un rol activo en la organización antes de enviar la invitación.",
     "inviteUserPendingExists": "Ya existe una invitación activa pendiente para este correo.",
     "invitePageLoading": "Verificando invitación...",
     "invitePageInvalidTitle": "Enlace inválido o caducado",

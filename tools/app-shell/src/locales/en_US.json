@@ -20625,6 +20625,8 @@
     "inviteUserSuccessMessage": "An invitation was sent to {email}. Status is now pending.",
     "inviteUserPendingBadge": "Pending",
     "inviteUserAlreadyMember": "This user is already a member of this company.",
+    "inviteUserNotFound": "Create this user in the organization before sending the invitation.",
+    "inviteUserNoRole": "Assign at least one active role in the organization before sending the invitation.",
     "inviteUserPendingExists": "An active invitation is already pending for this email.",
     "invitePageLoading": "Verifying invitation...",
     "invitePageInvalidTitle": "Invalid or expired link",
