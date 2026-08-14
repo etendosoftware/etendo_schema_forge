@@ -79,7 +79,16 @@ export default function UserWindow(props) {
       // recomputes to `false` post-save. A ref-only update never re-renders.
       setSelectedRoleIds(confirmedIds);
     } catch (err) {
-      toast.error(err?.message || ui('roleAssignmentSaveFailed'));
+      // The generic AD_User field save has ALREADY succeeded and shown its own "Saved
+      // successfully" toast by the time this runs — `handleRoleAssignmentSave` fires as
+      // `onAfterExistingSave`, strictly AFTER that save (see this file's own doc comment,
+      // step 2). A bare "Couldn't save roles" error here reads as a direct contradiction
+      // of the success toast the admin just saw. Fix: the message explicitly says the
+      // user record itself DID save and only the role assignment failed, and the toast is
+      // given a longer duration so it doesn't get lost/dismissed behind the success toast
+      // that already fired first.
+      const detail = err?.message || ui('roleAssignmentSaveFailed');
+      toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), { duration: 8000 });
     }
   }, [selectedRoleIds, ui]);
 

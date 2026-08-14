@@ -17269,6 +17269,7 @@
     "noRolesAssigned": "No roles assigned",
     "saveUserFirstForRoles": "Save the user first to assign roles",
     "roleAssignmentSaveFailed": "Couldn't save the assigned roles",
+    "roleAssignmentSaveFailedAfterUserSaved": "The user was saved, but the roles couldn't be updated: {detail}",
     "removeRoleAria": "Remove role",
     "roleFilterAllRoles": "All roles",
     "roleFilterSearchPlaceholder": "Search roles...",

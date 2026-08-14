@@ -4,8 +4,8 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import UserTable from '@/windows/custom/user/UserHeaderTable';
 import UserForm from './UserForm';
-import UserRolesTable from './UserRolesTable';
-import UserRolesForm from './UserRolesForm';
+import EmailConfigurationTable from './EmailConfigurationTable';
+import EmailConfigurationForm from './EmailConfigurationForm';
 import AssignTemplateRolesControl from '@/windows/custom/user/AssignTemplateRolesControl';
 import { AttachmentsTab } from '@/components/attachments';
 import UserRolesTab from '@/windows/custom/user/UserRolesTab';
@@ -37,6 +37,12 @@ const processes = [
 ];
 // @sf-generated-end processes:user
 
+// @sf-generated-start detailProcesses:emailConfiguration
+const detailProcesses = [
+  { name: 'smtpconnectiontest', label: 'Test SMTP Connection', style: 'positive' },
+];
+// @sf-generated-end detailProcesses:emailConfiguration
+
 // @sf-generated-start draftMode:user
 const draftMode = null;
 // @sf-generated-end draftMode:user
@@ -45,10 +51,22 @@ const draftMode = null;
 const requiredHeaderFields = ['name', 'email', 'locked', 'lastPasswordUpdate'];
 // @sf-generated-end requiredHeaderFields:user
 
-// @sf-generated-start addLineFields:userRoles
+// @sf-generated-start addLineFields:emailConfiguration
 const addLineFields = {
   entry: [
-
+    { key: 'active', column: 'Isactive', type: 'checkbox', required: true, label: 'Active' },
+    { key: 'smtpServer', column: 'Smtpserver', type: 'text', required: true, label: 'Smtp Server' },
+    { key: 'sMTPAuthentification', column: 'IsSmtpAuthorization', type: 'checkbox', required: true, label: 'SMTP Authentification' },
+    { key: 'smtpServerAccount', column: 'Smtpserveraccount', type: 'text', label: 'Smtp Server Account' },
+    { key: 'smtpServerPassword', column: 'Smtpserverpassword', type: 'text', label: 'Smtp Server Password' },
+    { key: 'smtpServerSenderAddress', column: 'Smtpserversenderaddress', type: 'text', label: 'Smtp Server Sender Address' },
+    { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'select', required: true, label: 'SMTP Connection Security' },
+    { key: 'smtpPort', column: 'Smtpport', type: 'number', required: true, label: 'Smtp Port', defaultValue: 25 },
+    { key: 'smtpConnectionTimeout', column: 'SmtpTimeout', type: 'number', label: 'Smtp Connection Timeout', defaultValue: 600 },
+    { key: 'fromName', column: 'Smtpserverfromname', type: 'text', label: 'From Name' },
+    { key: 'replyToAddress', column: 'Smtpreplytoaddress', type: 'text', label: 'Reply-To Address' },
+    { key: 'smtpconnectiontest', column: 'Smtpconnectiontest', type: 'text', required: true, label: 'Test SMTP Connection', defaultValue: 'N' },
+    { key: 'defaultConfiguration', column: 'Isdefaultconfig', type: 'checkbox', required: true, label: 'Default' },
   ],
   derived: [
 
@@ -57,7 +75,7 @@ const addLineFields = {
 
   ],
 };
-// @sf-generated-end addLineFields:userRoles
+// @sf-generated-end addLineFields:emailConfiguration
 
 export const api = {
   "specName": "user",
@@ -75,19 +93,6 @@ export const api = {
       "supportedFilters": [
         "name",
         "email"
-      ]
-    },
-    "userRoles": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": false,
-      "listUrl": "/sws/neo/user/userRoles",
-      "detailUrl": "/sws/neo/user/userRoles/{id}",
-      "supportedFilters": [
-        "role"
       ]
     },
     "emailConfiguration": {
@@ -187,14 +192,6 @@ export const api = {
           }
         ]
       }
-    },
-    {
-      "entity": "userRoles",
-      "field": "role",
-      "column": "AD_Role_ID",
-      "reference": "Role",
-      "inputMode": "selector",
-      "url": "/sws/neo/user/userRoles/selectors/role"
     }
   ],
   "actions": [
@@ -253,18 +250,19 @@ export default function UserPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="user"
-        detailEntity="userRoles"
+        detailEntity="emailConfiguration"
         Form={UserForm}
-        DetailTable={UserRolesTable}
-        DetailForm={UserRolesForm}
+        DetailTable={EmailConfigurationTable}
+        DetailForm={EmailConfigurationForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="User"
-        detailLabel="User Roles"
+        detailLabel="Email Configuration"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}

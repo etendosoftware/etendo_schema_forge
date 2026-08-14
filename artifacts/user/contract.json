@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-14T14:12:19.014Z",
-  "checksum": "0da2f148d0daf780",
+  "updatedAt": "2026-08-14T18:20:12.546Z",
+  "checksum": "0cf71994391da7bb",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -433,75 +433,6 @@
           }
         ],
         "javaQualifier": "user"
-      },
-      "userRoles": {
-        "tableName": "AD_User_Roles",
-        "tabId": "121",
-        "tabName": "User Roles",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "role",
-            "apiKey": "role",
-            "column": "AD_Role_ID",
-            "label": "Role",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Role",
-            "inputMode": "selector",
-            "validation": {
-              "required": true,
-              "maxLength": 22
-            },
-            "validationRule": {
-              "code": "AD_Role.AD_Client_ID=@#AD_Client_ID@",
-              "contextParams": [
-                "AD_Client_ID"
-              ],
-              "cascadeParams": []
-            }
-          },
-          {
-            "name": "roleAdmin",
-            "apiKey": "roleAdmin",
-            "column": "Is_Role_Admin",
-            "label": "Role Administrator",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          }
-        ],
-        "searchableFields": [
-          "role"
-        ],
-        "computedFields": [
-          {
-            "name": "roleAdmin",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          }
-        ],
-        "hideDelete": true
       },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
@@ -1252,101 +1183,6 @@
         ],
         "javaQualifier": "user"
       },
-      "userRoles": {
-        "tableName": "AD_User_Roles",
-        "tabId": "121",
-        "tabName": "User Roles",
-        "fields": [
-          {
-            "name": "role",
-            "apiKey": "role",
-            "column": "AD_Role_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "roleAdmin",
-            "apiKey": "roleAdmin",
-            "column": "Is_Role_Admin",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "userContact",
-            "apiKey": "userContact",
-            "column": "AD_User_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "AD_User_Roles_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "CreatedBy",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "UpdatedBy",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
-      },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
         "tabId": "9F5F8C2271F248FB856833C1D257CD03",
@@ -1591,38 +1427,6 @@
       },
       {
         "method": "GET",
-        "path": "/userRoles",
-        "entity": "userRoles",
-        "supportedFilters": [
-          "role"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/userRoles/:id",
-        "entity": "userRoles",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/userRoles",
-        "entity": "userRoles",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/userRoles/:id",
-        "entity": "userRoles",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/userRoles/:id",
-        "entity": "userRoles",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
         "path": "/emailConfiguration",
         "entity": "emailConfiguration",
         "supportedFilters": [
@@ -1672,19 +1476,6 @@
         "supportedFilters": [
           "name",
           "email"
-        ]
-      },
-      "userRoles": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": false,
-        "listUrl": "/sws/neo/user/userRoles",
-        "detailUrl": "/sws/neo/user/userRoles/{id}",
-        "supportedFilters": [
-          "role"
         ]
       },
       "emailConfiguration": {
@@ -1784,14 +1575,6 @@
             }
           ]
         }
-      },
-      {
-        "entity": "userRoles",
-        "field": "role",
-        "column": "AD_Role_ID",
-        "reference": "Role",
-        "inputMode": "selector",
-        "url": "/sws/neo/user/userRoles/selectors/role"
       }
     ],
     "actions": [
@@ -1876,13 +1659,6 @@
         "description": "CRUD flags for 'user' should all be booleans"
       },
       {
-        "id": "t-crud-flags-userRoles",
-        "category": "crud-flags",
-        "entity": "userRoles",
-        "runner": "node",
-        "description": "CRUD flags for 'userRoles' should all be booleans"
-      },
-      {
         "id": "t-default-value-type-emailConfiguration-defaultConfiguration",
         "category": "default-value-type",
         "entity": "emailConfiguration",
@@ -1945,14 +1721,6 @@
         "field": "locked",
         "runner": "node",
         "description": "Default value for 'locked' in user should be a string"
-      },
-      {
-        "id": "t-default-value-type-userRoles-roleAdmin",
-        "category": "default-value-type",
-        "entity": "userRoles",
-        "field": "roleAdmin",
-        "runner": "node",
-        "description": "Default value for 'roleAdmin' in userRoles should be a string"
       },
       {
         "id": "t-field-presence-emailConfiguration-active",
@@ -2219,22 +1987,6 @@
         "description": "Field 'supervisor' should be present in user"
       },
       {
-        "id": "t-field-presence-userRoles-role",
-        "category": "field-presence",
-        "entity": "userRoles",
-        "field": "role",
-        "runner": "node",
-        "description": "Field 'role' should be present in userRoles"
-      },
-      {
-        "id": "t-field-presence-userRoles-roleAdmin",
-        "category": "field-presence",
-        "entity": "userRoles",
-        "field": "roleAdmin",
-        "runner": "node",
-        "description": "Field 'roleAdmin' should be present in userRoles"
-      },
-      {
         "id": "t-field-type-emailConfiguration-active",
         "category": "field-type",
         "entity": "emailConfiguration",
@@ -2499,22 +2251,6 @@
         "description": "Field 'supervisor' should have type 'string' in user"
       },
       {
-        "id": "t-field-type-userRoles-role",
-        "category": "field-type",
-        "entity": "userRoles",
-        "field": "role",
-        "runner": "node",
-        "description": "Field 'role' should have type 'string' in userRoles"
-      },
-      {
-        "id": "t-field-type-userRoles-roleAdmin",
-        "category": "field-type",
-        "entity": "userRoles",
-        "field": "roleAdmin",
-        "runner": "node",
-        "description": "Field 'roleAdmin' should have type 'boolean' in userRoles"
-      },
-      {
         "id": "t-rule-declared-AD-Client-of-Role",
         "category": "rule-declared",
         "rule": "AD_Client_of_Role",
@@ -2651,14 +2387,6 @@
         "description": "Field 'name' should be a supported filter for user"
       },
       {
-        "id": "t-searchable-filters-userRoles-role",
-        "category": "searchable-filters",
-        "entity": "userRoles",
-        "field": "role",
-        "runner": "node",
-        "description": "Field 'role' should be a supported filter for userRoles"
-      },
-      {
         "id": "t-selector-endpoint-user-businessPartner",
         "category": "selector-endpoint",
         "entity": "user",
@@ -2713,14 +2441,6 @@
         "field": "supervisor",
         "runner": "node",
         "description": "Selector endpoint for 'supervisor' in user should exist"
-      },
-      {
-        "id": "t-selector-endpoint-userRoles-role",
-        "category": "selector-endpoint",
-        "entity": "userRoles",
-        "field": "role",
-        "runner": "node",
-        "description": "Selector endpoint for 'role' in userRoles should exist"
       },
       {
         "id": "t-system-field-emailConfiguration-client",
@@ -3027,78 +2747,6 @@
         "description": "System field 'viasms' should exist in backend but not frontend for user"
       },
       {
-        "id": "t-system-field-userRoles-active",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-client",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-createdBy",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-creationDate",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-id",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-organization",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-updated",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-updatedBy",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for userRoles"
-      },
-      {
-        "id": "t-system-field-userRoles-userContact",
-        "category": "system-field",
-        "entity": "userRoles",
-        "field": "userContact",
-        "runner": "node",
-        "description": "System field 'userContact' should exist in backend but not frontend for userRoles"
-      },
-      {
         "id": "t-visibility-emailConfiguration",
         "category": "visibility",
         "entity": "emailConfiguration",
@@ -3111,31 +2759,24 @@
         "entity": "user",
         "runner": "node",
         "description": "Entity 'user' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-visibility-userRoles",
-        "category": "visibility",
-        "entity": "userRoles",
-        "runner": "node",
-        "description": "Entity 'userRoles' should only expose visible fields in frontend"
       }
     ],
     "summary": {
-      "total": 163,
+      "total": 145,
       "byCategory": {
         "action-endpoint": 3,
-        "crud-flags": 3,
-        "default-value-type": 9,
-        "field-presence": 35,
-        "field-type": 35,
+        "crud-flags": 2,
+        "default-value-type": 8,
+        "field-presence": 33,
+        "field-type": 33,
         "rule-declared": 16,
-        "searchable-filters": 4,
-        "selector-endpoint": 8,
-        "system-field": 47,
-        "visibility": 3
+        "searchable-filters": 3,
+        "selector-endpoint": 7,
+        "system-field": 38,
+        "visibility": 2
       },
       "byRunner": {
-        "node": 163,
+        "node": 145,
         "junit": 0
       }
     }

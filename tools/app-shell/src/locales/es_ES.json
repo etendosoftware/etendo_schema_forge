@@ -17515,6 +17515,7 @@
     "noRolesAssigned": "Sin roles asignados",
     "saveUserFirstForRoles": "Guarda el usuario primero para asignar roles",
     "roleAssignmentSaveFailed": "No se pudieron guardar los roles asignados",
+    "roleAssignmentSaveFailedAfterUserSaved": "El usuario se guardó, pero los roles no pudieron actualizarse: {detail}",
     "removeRoleAria": "Quitar rol",
     "roleFilterAllRoles": "Todos los roles",
     "roleFilterSearchPlaceholder": "Buscar roles...",

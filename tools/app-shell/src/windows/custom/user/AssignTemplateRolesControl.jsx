@@ -114,7 +114,7 @@ export default function AssignTemplateRolesControl(props) {
             {ui('noRolesAssigned')}
           </span>
         )}
-        {!isEditing && visibleChips.map((role) => (
+        {visibleChips.map((role) => (
           <span
             key={role.id}
             className="inline-flex items-center gap-1 rounded-md bg-secondary text-secondary-foreground px-2 py-0.5 text-xs font-medium"
@@ -134,7 +134,7 @@ export default function AssignTemplateRolesControl(props) {
             </span>
           </span>
         ))}
-        {!isEditing && overflowCount > 0 && (
+        {overflowCount > 0 && (
           <span
             className="inline-flex items-center rounded-md bg-muted text-muted-foreground px-2 py-0.5 text-xs font-medium"
             data-testid="AssignTemplateRolesControl__overflow"
@@ -146,7 +146,7 @@ export default function AssignTemplateRolesControl(props) {
       </button>
 
       {isEditing && (
-        <div className="flex flex-col gap-1 rounded-lg border border-input bg-card p-2" data-testid="AssignTemplateRolesControl__options">
+        <div className="flex flex-col gap-1 rounded-lg border border-input bg-card p-2 pl-4" data-testid="AssignTemplateRolesControl__options">
           {roles.map((role) => {
             const checked = selectedRoleIds.includes(role.id);
             return (

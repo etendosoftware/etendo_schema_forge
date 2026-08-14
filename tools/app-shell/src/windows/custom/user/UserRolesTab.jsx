@@ -111,19 +111,44 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     return () => { cancelled = true; };
   }, [isNew]);
 
+  const allRoles = useMemo(
+    () => (Array.isArray(rolesOverview?.roles) ? rolesOverview.roles : []),
+    [rolesOverview],
+  );
+
+  // Union of every windowId across ALL roles (Admin included) — each role's `windows[]`
+  // is already server-side intersected against Etendo GO's own active spec set
+  // (`resolveActiveEtendoGoWindowIds()` in `SFRolesOverview.java`), so this union IS
+  // exactly "every window Etendo GO actually exposes". `SFListMenu`'s tree (walked by
+  // `flattenWindowRows` below) has no such filter — it returns every native AD menu
+  // node, including classic-only entries (e.g. Application Dictionary) Etendo GO never
+  // surfaces at all (ETP-4906 manual QA finding). Filtering against this set removes
+  // those classic-only rows without a new backend call.
+  const activeWindowIds = useMemo(() => {
+    const ids = new Set();
+    for (const role of allRoles) {
+      for (const w of role.windows ?? []) {
+        if (w?.id != null) ids.add(String(w.id));
+      }
+    }
+    return ids;
+  }, [allRoles]);
+
   const categoryGroups = useMemo(() => {
-    const treeRows = flattenWindowRows(menuTreeData?.tree, null, []);
-    return groupRowsByCategory(treeRows);
-  }, [menuTreeData]);
+    const treeRows = flattenWindowRows(menuTreeData?.tree, null, [])
+      .filter((row) => activeWindowIds.has(row.windowId));
+    // Drop any category left with zero surviving rows — must not render an empty
+    // category header with nothing under it.
+    return groupRowsByCategory(treeRows).filter((group) => group.rows.length > 0);
+  }, [menuTreeData, activeWindowIds]);
 
   const columns = useMemo(() => {
-    const roles = Array.isArray(rolesOverview?.roles) ? rolesOverview.roles : [];
     const selected = new Set((selectedRoleIds ?? []).map(String));
     // Admin is out of scope for composition everywhere (plan Global Constraints) — never a
     // selectable template, so it should never be in selectedRoleIds, but this filter keeps
     // that guarantee even if a caller passes it in by mistake.
-    return roles.filter((role) => !role.isClientAdmin && selected.has(String(role.id)));
-  }, [rolesOverview, selectedRoleIds]);
+    return allRoles.filter((role) => !role.isClientAdmin && selected.has(String(role.id)));
+  }, [allRoles, selectedRoleIds]);
 
   if (isNew) {
     return null;

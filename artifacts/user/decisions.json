@@ -175,22 +175,7 @@
         }
       }
     },
-    "userRoles": {
-      "hideDelete": true,
-      "fields": {
-        "role": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true,
-          "reason": "Role assignment now happens exclusively via the user header's AssignRoleControl (ETP-4512), which enforces a single active role and is the only writer of AD_User_Roles (via UserRoleAssignmentHandler in com.etendoerp.go). This grid becomes a read-only confirmation view; visibility:readOnly on every field in this entity empties addLineFields.entry so the Add-line button no longer renders."
-        },
-        "roleAdmin": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reason": "See role field above — locked read-only alongside it."
-        }
-      }
-    },
+    "userRoles": { "exclude": true },
     "emailConfiguration": {
       "fields": {
         "smtpServer": {
