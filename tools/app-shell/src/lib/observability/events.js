@@ -13,20 +13,24 @@ const OBSERVABILITY_CHANNEL_VALUES = Object.freeze({
 const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   ACTION: 'action',
   ACCURACY: 'accuracy',
-  ACCOUNT_ID: 'accountId',
+  ORG_ID: 'orgId',
   ATTEMPT: 'attempt',
+  BRANCH: 'branch',
   CATEGORY: 'category',
   CLIENT: 'client',
   COUNT: 'count',
   DURATION_MS: 'durationMs',
   ENABLED: 'enabled',
   ENTITY: 'entity',
+  ERROR_CODE: 'errorCode',
   FLAG_KEY: 'flagKey',
   HAS_COMMENT: 'hasComment',
   OPERATION: 'operation',
   POSITION: 'position',
   PROVIDER: 'provider',
   FEEDBACK: 'feedback',
+  REASON: 'reason',
+  UPGRADE_ACTION: 'upgradeAction',
   SCORE: 'score',
   SOURCE: 'source',
   TAGS: 'tags',
@@ -35,7 +39,6 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   STEP: 'step',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
-  USER_ID: 'userId',
   USERNAME: 'username',
   VALUE: 'value',
   VARIANT: 'variant',
@@ -518,22 +521,32 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   SURVEY_SHOWN: defineEvent('survey_shown', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.NPS],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
   SURVEY_RESPONDED: defineEvent('survey_responded', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.NPS],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
-      OBSERVABILITY_PROPERTY_KEYS.FEEDBACK,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
+      OBSERVABILITY_PROPERTY_KEYS.HAS_COMMENT,
       OBSERVABILITY_PROPERTY_KEYS.SCORE,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TAGS,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
+    ],
+  }),
+  // Fired the moment the user picks a score/star, independent of whether they ever press
+  // submit — captures intent even if the survey is dismissed mid-flow (ETP-4352 "Requerimientos
+  // Adicionales": the selected vote must be recorded even without a final submit).
+  SURVEY_SCORE_SELECTED: defineEvent('survey_score_selected', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SCORE,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
     ],
   }),
   MCP_CONNECT_TAB_SELECTED: defineEvent('mcp_connect_tab_selected', {
@@ -545,11 +558,60 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   SURVEY_DISMISSED: defineEvent('survey_dismissed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
+  }),
+  // Checkout funnel for the tenant-upgrade flow (paid-second-tenant, ETP-4686).
+  // See docs/paid-tenant-infrastructure.md §3.6.
+  UPGRADE_PAGE_VIEWED: defineEvent('upgrade_page_viewed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.BRANCH,
+    ],
+  }),
+  UPGRADE_FIRST_TENANT_FREE_CONTINUED: defineEvent('upgrade_first_tenant_free_continued', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_EXISTING_TENANT_NAME_BLOCKED: defineEvent('upgrade_existing_tenant_name_blocked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_SESSION_EXPIRED: defineEvent('upgrade_session_expired', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_CHECKOUT_SUBMITTED: defineEvent('upgrade_checkout_submitted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.UPGRADE_ACTION,
+    ],
+  }),
+  // Currently unreachable from the frontend: Stripe's hosted checkout page
+  // owns card entry and decline handling, so the browser never observes a
+  // decline directly. Kept defined for a future backend-side (webhook) emitter
+  // — see docs/paid-tenant-infrastructure.md §3.6.
+  UPGRADE_PAYMENT_DECLINED: defineEvent('upgrade_payment_declined', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+    ],
+  }),
+  UPGRADE_TENANT_PROVISIONING_SUCCEEDED: defineEvent('upgrade_tenant_provisioning_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.UPGRADE_ACTION,
+    ],
+  }),
+  UPGRADE_TENANT_PROVISIONING_FAILED: defineEvent('upgrade_tenant_provisioning_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  UPGRADE_ENTER_TENANT_FAILED: defineEvent('upgrade_enter_tenant_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
   }),
 });
 

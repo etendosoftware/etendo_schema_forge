@@ -719,6 +719,159 @@ describe('EditAccountModal', () => {
       expect(payload).toMatchObject({ dateTolerance: 0 });
     });
 
+    // The amount tolerance is a PERCENTAGE of the statement line it is measured against, so
+    // anything above 100 stops meaning anything (and the column is numeric(10,2), which a wild
+    // value would overflow). `min`/`max` on an <input type="number"> only bound the spinner arrows
+    // and native form validation — this modal saves through its own handler.
+    //
+    // The field REJECTS an out-of-range value visibly instead of correcting it: an earlier version
+    // silently clamped 446446678787 down to 100 on blur, so the user saved without any warning and
+    // found a number they never typed when they reopened the modal. Looking like the system invented
+    // a value is worse than refusing the input, so the text now stands as typed, an inline error
+    // appears, and Save is blocked until it is fixed.
+    describe('amount tolerance out of range is rejected, not silently corrected', () => {
+      const errorId = 'recon-amount-tolerance-error';
+
+      it('keeps an over-max value as typed, shows the error and blocks Save', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '500');
+
+        // Not rewritten — this is the whole point of the change.
+        expect(amountTol).toHaveValue(500);
+        await user.tab();
+        expect(amountTol).toHaveValue(500);
+
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      it('keeps a negative value as typed, shows the error and blocks Save', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 2 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '-5');
+
+        expect(amountTol).toHaveValue(-5);
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      it('rejects the real-world overflow value that prompted the change', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '446446678787');
+
+        expect(amountTol).toHaveValue(446446678787);
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      // The form must not be a dead end: correcting the value clears the error and lets the save
+      // through. Without this, a rejection that never releases Save is indistinguishable from a
+      // permanently broken modal.
+      it('clears the error and re-enables Save once the value is corrected', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '500');
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+        await user.clear(amountTol);
+        await user.type(amountTol, '50');
+
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 50 });
+      });
+
+      it('shows no error for an in-range value, both bounds included', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        for (const value of ['0', '1', '2.5', '100']) {
+          await user.clear(amountTol);
+          await user.type(amountTol, value);
+          expect(amountTol).toHaveValue(Number(value));
+          expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        }
+      });
+
+      it('persists an in-range decimal exactly as typed', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '2.5');
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 2.5 });
+      });
+
+      // An empty box means "no tolerance", NOT an invalid entry — so clearing the field must never
+      // raise the error or block the save. It also must stay empty (the raw-string design), rather
+      // than snapping to a 0 the caret would then sit behind.
+      it('treats an emptied box as valid: no error, Save stays available', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 5 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+
+        expect(amountTol).toHaveValue(null);
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        await user.tab();
+        expect(amountTol).toHaveValue(null);
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      });
+
+      it('still persists an emptied amount tolerance as 0', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 5 } });
+        await user.clear(screen.getByTestId('recon-amount-tolerance-input'));
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 0 });
+      });
+
+      // The dirty check compares NUMBERS, so re-typing the stored value in another shape is not a
+      // change. Distinct from the rejection above: here Save is disabled because nothing changed,
+      // and no error is shown.
+      it('is not dirty when the stored value is re-typed in a different shape', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 100 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        expect(amountTol).toHaveValue(100);
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+        await user.clear(amountTol);
+        await user.type(amountTol, '100.0');
+
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not render the reconciliation section for a cash account', () => {
       renderModal({ account: { id: 'acc-c', name: 'Caja', type: 'C', bankConnected: false } });
       expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();

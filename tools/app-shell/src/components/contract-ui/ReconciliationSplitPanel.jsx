@@ -16,6 +16,9 @@ import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal
 import {
   WriteoffBreakdown, WriteoffToggleRow, writeoffState,
 } from './WriteoffAdjustment.jsx';
+import {
+  DifferenceBanner, DifferenceModal, differenceState,
+} from './ReconciliationDifference.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
@@ -48,6 +51,7 @@ import {
   useReconcileGroup,
   useRemoveOperation,
   useReactivateSelected,
+  useReconcileDifference,
 } from '@/hooks/useReconciliation';
 
 // Amounts that differ by <= this absolute value are treated as balanced.
@@ -549,7 +553,7 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle 
 function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
-  onRemoveOperation, reconciledMode = false,
+  onRemoveOperation, reconciledMode = false, differenceBanner = null,
 }) {
   const ui = useUI();
   // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
@@ -673,6 +677,10 @@ function CandidateOperationsPanel({
 
   const toolbar = (
     <>
+      {/* Difference banner (design option 1B): the first thing in the panel, so the offer to close
+          the remainder sits where the problem is. Composed by the parent, which owns the dismiss
+          state and the modal. */}
+      {differenceBanner}
       {/* "Conciliado" block: matched documents of a PARTIAL line (with per-row unlink), above the
           remainder candidates. A FULLY reconciled line does NOT use this block — its documents are
           shown directly in the candidate list below, with checkboxes (no redundant % header). */}
@@ -1089,6 +1097,14 @@ export function ReconciliationSplitPanel({
   // ETP-4797: FIN_Financial_Account.Writeofflimit. Null/absent means "no limit configured", NOT
   // "nothing may be written off" — see ReconciliationHandler.assertWithinWriteoffLimit.
   writeoffLimit = null,
+  // EM_ETGO_Amount_Tolerance (a PERCENTAGE) — caps the remainder that may be posted to an
+  // accounting concept. Unlike writeoffLimit above, 0/absent here means "no difference may be
+  // posted", so the difference banner stays hidden until an admin configures it. Same column the
+  // automatch engine reads with the opposite convention — see ReconciliationDifferenceSupport.
+  amountTolerance = null,
+  // The account's configured difference concept ({id, name}), used to preselect the modal's picker.
+  // Absent → the banner renders with its action disabled and an explanation.
+  glItemDifference = null,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1107,6 +1123,11 @@ export function ReconciliationSplitPanel({
   // ETP-4797. Opt-in and reset on every open (see handleReconcile) so a previous match can never
   // silently carry a write-off into the next one.
   const [writeoff, setWriteoff] = useState(false);
+  // "Dejar pendiente" only hides the banner — it changes no data, the line stays partial. Scoped to
+  // the current selection and reset whenever it changes (see the effect below), so reselecting the
+  // line brings the offer back, per the design's `bannerDismissed` state model.
+  const [diffDismissed, setDiffDismissed] = useState(false);
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
 
   const leftBounds = useMemo(() => getDateBounds(leftDateRange), [leftDateRange]);
   const rightBounds = useMemo(() => getDateBounds(rightDateRange), [rightDateRange]);
@@ -1145,6 +1166,19 @@ export function ReconciliationSplitPanel({
   const { reconcile, loading: reconciling } = useReconcileGroup();
   const { removeOperation, loading: removing } = useRemoveOperation();
   const { reactivateSelected, loading: reactivating } = useReactivateSelected();
+  const { reconcileDifference, loading: postingDifference } = useReconcileDifference();
+  // Whether the remainder of the selected line may be posted to an accounting concept. Recomputed
+  // (and re-validated) server-side on confirm — this only decides what to offer.
+  const differenceInfo = useMemo(() => differenceState({
+    line: selectedLine,
+    amountTolerance,
+    dismissed: diffDismissed,
+  }), [selectedLine, amountTolerance, diffDismissed]);
+  // Same idiom CandidateOperationsPanel uses for its own per-line state: keyed on the line id, so a
+  // list reload (which rebuilds the object) does not spuriously re-show a dismissed banner.
+  useEffect(() => {
+    setDiffDismissed(false);
+  }, [selectedLine?.id]);
   // Pending un-reconcile request (single row OR the bulk selection):
   // { ids, hasAuto, count, mode }. `mode: 'reactivate'` picks the lighter draft-preserving action.
   const [removeRequest, setRemoveRequest] = useState(null);
@@ -1372,6 +1406,30 @@ export function ReconciliationSplitPanel({
     submitReconcile(selectedMethodId);
   };
 
+  /**
+   * Posts the remainder to the chosen accounting concept. Targets `remainderLineId` (the pending
+   * sub-line), never the merged head. No amount is sent: the backend recomputes it and would ignore
+   * one anyway.
+   */
+  const confirmDifference = async ({ glItemId, description }) => {
+    try {
+      await reconcileDifference({
+        financialAccountId: accountId,
+        statementLineId: candidateLineId,
+        glItemId,
+        ...(description ? { description } : {}),
+      });
+      toast.success(ui('financeReconcileDiffToastSuccess'));
+      setDiffModalOpen(false);
+      setSelectedLineSel(null);
+      setSelectedOpIds(new Set());
+      reloadLines();
+      onReconcileSuccess?.();
+    } catch (err) {
+      toast.error(err?.message || ui('financeReconcileToastError'));
+    }
+  };
+
   // Whether any of the given transaction ids is an auto-created payment (drives the confirm hint that
   // the invoice returns to unpaid). Matched-doc auto-created flags live on selectedLine.txns.
   const anyAutoCreated = (ids) => {
@@ -1485,6 +1543,14 @@ export function ReconciliationSplitPanel({
           onRemoveOperation={requestRemoveOne}
           reconciledMode={isReconciledLine}
           readOnly={isReconciledLine}
+          differenceBanner={
+            <DifferenceBanner
+              info={differenceInfo}
+              currency={currency}
+              onDismiss={() => setDiffDismissed(true)}
+              onPost={() => setDiffModalOpen(true)}
+              data-testid="DifferenceBanner__d0f4d5" />
+          }
           source={rightSource}
           onSourceChange={changeSource}
           sourceCounts={sourceCounts}
@@ -1533,6 +1599,15 @@ export function ReconciliationSplitPanel({
         currency={currency}
         isReceipt={lineAmount >= 0}
         data-testid="PaymentMethodModal__d0f4d5" />
+      <DifferenceModal
+        open={diffModalOpen}
+        info={differenceInfo}
+        currency={currency}
+        defaultGlItem={glItemDifference}
+        busy={postingDifference}
+        onConfirm={confirmDifference}
+        onClose={() => setDiffModalOpen(false)}
+        data-testid="DifferenceModal__d0f4d5" />
     </div>
   );
 }
