@@ -21,6 +21,7 @@ const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: 'Asset Category', required: true },
   { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: 'Purchase Date', dot: false },
+  { key: 'depreciate', column: 'IsDepreciated', type: 'boolean', label: 'Depreciate', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, required: true },
   { key: 'depreciationStartDate', column: 'Amortizationstartdate', type: 'date', label: 'Depreciation Start Date', dot: false },
   { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'amount', label: 'Depreciation Amt.', summable: true },
   { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: 'Asset Value', summable: true },

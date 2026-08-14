@@ -65,6 +65,12 @@ async function installMocks(page, { registerBehavior = 'success', onboardingResu
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ environments: [] }) })
   );
 
+  // Draft autosave/restore — handleNext() awaits this before advancing steps,
+  // so leaving it unmocked hangs every "Continuar" click forever.
+  await page.route('**/sws/go/onboarding/draft', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) })
+  );
+
   await page.route('**/sws/go/onboarding', route =>
     route.fulfill({
       status: 200,
