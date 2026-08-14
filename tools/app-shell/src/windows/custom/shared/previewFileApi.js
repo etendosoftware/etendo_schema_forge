@@ -11,7 +11,11 @@
  * Extracted from usePreviewAttachment so the OCR flow can fill the slot
  * imperatively after its batch commits, without duplicating the encoding and
  * URL rules (ETP-4855).
+ *
+ * The `error` values below are machine codes: callers branch on them or log
+ * them, they are never rendered, so they stay untranslated.
  */
+// i18n-allowlist: ["missing_params", "empty_file", "store_failed", "delete_failed"]
 
 /** `apiBaseUrl` is a spec URL (…/sws/neo/purchase-invoice); the endpoint sits one level up. */
 function neoBaseOf(apiBaseUrl) {
