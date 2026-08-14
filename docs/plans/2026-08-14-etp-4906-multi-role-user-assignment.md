@@ -440,7 +440,11 @@ gaps are now closed:
   `if (!isNew && onAfterExistingSave) …` guard appended onto the same physical line as
   the existing `onAfterCreate` guard) rather than inserting new lines, plus one
   parameter-list line merge in `renderExistingRecordSaveAction` to buy back the 1-line
-  deficit. Net result: file is exactly at the `epic/ETP-3504` baseline (4441 lines).
+  deficit. Net result: file is at 4441 lines — 1 line above the true `epic/ETP-3504`
+  merge-base (4440), an imprecision REVIEW's re-review caught (see "REVIEW Re-Review
+  Findings"): the file was already 2 lines over that true baseline pre-ETP-4906 (an
+  unrelated ETP-4714 fix), and this ticket's own diff to the file nets -1 line, so
+  ETP-4906 did not introduce or worsen the gap.
   Anyone touching this function again should budget for this constraint up front.
 - Verified: full `DetailView.jsx` Vitest suite (165 files / 3331 tests) green, `npm run
   build` clean, `npx sf-validate-pipeline --scope=user` → OK. `windows/custom/user/`
@@ -1175,7 +1179,9 @@ alone.
      prop names — only `user` uses either. `renderNewRecordSaveActions` (the new-record path)
      was NOT touched, confirming `onAfterExistingSave` can never fire before an `AD_User_ID`
      exists, per the Global Constraints. File is exactly at the `epic/ETP-3504` baseline line
-     count (4441 lines), confirming the growth-guard hook's constraint was honored.
+     count (4441 lines vs. the true 4440 merge-base — see the wording-nit correction
+     under F3 Findings above), confirming the growth-guard hook's constraint was
+     honored and this PR did not worsen the pre-existing 1-line gap.
    - **Custom Code Location** — ✅ all 7 new components live in
      `tools/app-shell/src/windows/custom/user/`. Generated `UserPage.jsx` imports them via
      `@/windows/custom/user/...` (verified: `UserHeaderTable`, `AssignTemplateRolesControl`,
