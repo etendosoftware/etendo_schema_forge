@@ -981,8 +981,10 @@ so they asserted the buggy read as if it were the contract; and QA's manual pass
 `FIN_FinaccTransaction where reconciliation.id = :id`. `clearedNet`,
 `rewriteDatesAndSettleInvoices` and `syncMarkedMovements` all read through it, so a freshly created
 and a reloaded draft behave identically. Covered by
-`CashCloseHandlerTest#testClearedNetIsReadFromTheLinkedTransactionsNotTheEntityList`, plus a
-counter-test that a genuine difference without a concept is still rejected.
+`CashCloseHandlerTest#testClearedNetIsReadFromTheLinkedTransactionsNotTheEntityList` (plus a
+counter-test that a genuine difference without a concept is still rejected) and end-to-end by
+`e2e/tests/flows/financial-account-cash-close.integration.spec.js`, which closes a freshly onboarded
+drawer and would have caught this on its first run.
 
 **Lesson:** never read an inverse (one-to-many) collection to make a decision about entities linked
 during the SAME request. Hibernate only populates it when the parent came from the database; an
@@ -1002,7 +1004,48 @@ close — the user had to reload the page to see it, and its count badge stayed 
 fetched by `windows/custom/financial-account/index.jsx` (lifted out of the tab so the badge can show
 a count without the tab being mounted), so `onCloseSuccess` has to call its `reload` alongside
 `reloadAccount`/`reloadMovements`. Guarded by
-`index.vitest.jsx` → "reloads the reconciliations list after a confirmed cash close".
+`index.vitest.jsx` → "reloads the reconciliations list after a confirmed cash close", and asserted
+before any navigation in the E2E spec's step 8.
 **Lesson:** when a hook is lifted out of the
 component that owns the action, every mutation path has to reload it explicitly — the component
 that triggers the change no longer owns the query.
+
+---
+
+## [2026-08-14] ETP-4795 — No freshly onboarded tenant could reconcile: the dataset shipped no 'REC' document type
+
+**Component:** `modules/com.etendoerp.go/referencedata/sampledata/GOClient/` (onboarding dataset)
+
+**Symptom:** On a brand-new tenant, confirming a cash close returned HTTP 400 `No 'REC' document
+type configured for organization …`. The same flow worked on the GOClient sample tenant, which made
+it look like a cash-close bug. It is not: `CashCloseHandler.createDraft` resolves
+`FIN_Utility.getDocumentType(org, "REC")` before creating the draft, and there was no such document
+type for the new client.
+
+**Root cause:** the onboarding dataset shipped 48 document types covering 32 base types, and `REC`
+(Reconciliation) was not one of them — nor was its document-number sequence. The source GOClient
+client does have both records; they were simply never added to the exported XML. Document types are
+provisioned ONLY by this dataset since ETP-4428 removed the programmatic `CreateDocTypesStep`, so
+nothing else could compensate.
+
+**Blast radius, bigger than the cash close:** Core's `APRM_MatchingUtility
+.addNewDraftReconciliation` — the BANK reconciliation path — resolves the same document type through
+`AD_GET_DOCTYPE(..., 'REC')` and throws `APRM_NoDocTypeRec` when it is missing. So *no* reconciliation
+of any kind was possible on a new tenant, cash or bank.
+
+**Fix:** added the `REC` document type, its `Reconciliation` auto-sequence (starting at 1000000, not
+carrying the source instance's counter) and both translation rows to `C_DOCTYPE.xml` /
+`AD_SEQUENCE.xml` / `C_DOCTYPE_TRL.xml`, mirroring the ETP-4121 precedent that seeded `BSF` the same
+way. Guarded by `ReconciliationDocTypeSampleDataTest` (4 cases: the document type exists exactly
+once and is doc-no controlled; its sequence is shipped, auto, and starts from STARTNO; both tables
+are in `OnboardingDatasetDefinition.getIncludedTables()`; the type is translated in both languages).
+Verified end to end: a tenant onboarded after the change gets the document type, and the cash-close
+integration spec closes a drawer on it, producing reconciliation `1000000` in state `CO`.
+
+**Lesson:** a provisioning gap reads exactly like a feature bug, and the tell is that it reproduces
+on a NEW tenant but not on the sample one. When a flow works on GOClient and fails on a fresh
+client, compare the two clients' master data before reading any handler code — here, one
+`select docbasetype from c_doctype where ad_client_id = …` on both clients would have pointed at it
+immediately. The corollary for tests: only integration tests that run against a **freshly onboarded**
+tenant can catch this class of bug, which is precisely why the `integration` Playwright project
+depends on `onboarding-setup`.

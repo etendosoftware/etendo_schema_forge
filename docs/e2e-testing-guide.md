@@ -70,6 +70,57 @@ Each run creates a unique user (random suffix), so the test is repeatable withou
 
 ---
 
+## Financial Account Integration Specs (`E2E_FINANCE_INTEGRATION`)
+
+Financial-account flows that need a live backend are gated by the **domain-level** flag
+`E2E_FINANCE_INTEGRATION=1` (same shape as `E2E_SALES_INTEGRATION`, which covers five
+sales/purchase document specs). `scripts/run-e2e-full.sh` exports it for the integration suite, so
+`make test-e2e-headless` and `.githooks/pre-push` pick these specs up automatically. New
+financial-account integration specs should reuse this flag rather than adding a per-feature one.
+
+Current spec:
+
+| Spec | Covers |
+|---|---|
+| `financial-account-cash-close.integration.spec.js` | Cash close (ETP-4795). **Case 1: happy path** — create a cash account → create and confirm a sales invoice → collect it in cash into that account → tick the resulting movement, declare the calculated balance, confirm the close → verify the reconciliation is processed and the balance carried forward |
+
+Cash close cases are numbered (`test('Case N: …')`, same convention as `assets.integration.spec.js`)
+and live in that one file. The number is a stable reference used in review and QA notes, so add new
+cases at the end and **never renumber an existing one**. The spec's own docblock lists the cases
+worth adding next.
+
+Run only this spec against local Etendo:
+
+```bash
+E2E_SUITE=integration E2E_FILES=tests/flows/financial-account-cash-close.integration.spec.js make test-e2e-headless
+```
+
+`E2E_FILES` implies `--no-deps` — the `onboarding-setup` project does **not** run, so it needs either
+an existing `e2e/.auth-credentials.json` or `E2E_USER` + `E2E_PASSWORD`.
+
+**The cash close spec creates its own account (`Caja E2E <timestamp>`) rather than using the seeded
+`Caja`**, and is therefore repeatable against the same tenant — it never consumes shared seed data.
+That is also what makes its arithmetic exact: a brand-new drawer opens at 0 with zero movements, so
+after collecting one invoice the pending list holds exactly one movement of a known amount. The
+chain through the invoice is deliberate — it is the real way a movement lands in a cash drawer (Core
+writes the `FIN_FinaccTransaction` when the payment is processed), and it exercises the account
+wizard's own contract on the way: `FinancialAccountSupport` auto-assigns the Efectivo payment method
+to every type-`C` account on creation, which is what makes the account collectable in cash at all.
+A **sales** invoice specifically, so the collection is money coming IN and the drawer ends on a
+positive counted balance — a purchase payment would leave the only movement as an outflow and the
+balanced close would have to declare a negative balance.
+
+Because it spans four windows, its timeout is 600s (not the 300s the other integration specs use).
+
+The spec asserts on the **backend payloads captured from the app's own requests**
+(`waitForResponse` → `response.data`), never on formatted currency read out of the DOM: the money
+formatting is already covered by `cashCloseMath.test.js`, and re-parsing `1.234,56 €` in an E2E spec
+only buys locale brittleness. The two UI-level assertions about the arithmetic are deliberately
+boolean — `cash-close-unbalanced-note` before declaring, `cash-close-balanced-pill` after — which is
+what proves the live recalculation without pinning a number to a locale.
+
+---
+
 ## Deployed MCP OAuth2 Smoke
 
 `e2e/tests/flows/mcp-oauth-pkce.smoke.spec.js` validates the public MCP/OAuth integration after deploy. It models the browser flow started by `opencode mcp auth etendo`: clean session, OAuth authorize URL, login, requested permissions, explicit authorization, local callback, and PKCE token exchange. The UI preserves the original `/authorize?...` URL through onboarding with a local-only `returnTo` parameter, then resumes the authorization screen after environment login. It is skipped by default because it targets a deployed environment, uses real smoke credentials, can create an OAuth client through DCR, and binds a local callback server.
