@@ -997,3 +997,215 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — create-contact pre-fill — ETP-4855
+
+When the OCR reader cannot match the invoice's supplier to an existing business partner, the
+vendor field offers "create contact" and opens `CreateContactModal`. That popup used to open
+**completely empty**, discarding everything the extraction had already read — the user retyped
+the name, tax ID and address by hand.
+
+### The pre-fill chain
+
+Four links, each of which has to carry the data:
+
+| Step | File | Role |
+|---|---|---|
+| 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
+| 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
+| 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
+| 4 | `CreateContactModalAdapter.jsx` | forwards the whole map as the modal's `prefill` prop |
+
+`createPrefilledFrom` is keyed by **form field id**, not by AD column: `name`, `taxID`,
+`address`, `postalCode`, `city`, `country`, `etgoEmail`, `etgoPhone`. Adding a field to the
+popup is one entry there plus one `extraHeaderFields` entry — no component change.
+
+### Why `country` is special
+
+Text fields are seeded straight into `EntityCreationModal`'s `initialValues`. `country` (and
+`region`) cannot be: the form holds an **option id**, while the invoice prints a **label**
+("España"). Writing the label in would satisfy the required-field check with a value the API
+rejects.
+
+So those two are resolved through `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) against
+the country selector — accent- and case-insensitive, exact match first, then a prefix match in
+either direction so `España` still finds `ESPAÑA (ES)`. **No match leaves the field empty**
+rather than guessing: a wrong country id is invisible to the user, an empty picker is not.
+
+The selector options are fetched *after* the modal mounts, and `EntityCreationModal` snapshots
+`initialValues` in a `useState` initializer — so a late value cannot be delivered through it.
+That is what the `patchValues` prop is for: it merges into fields that are **still empty**,
+which makes it both idempotent and safe against clobbering something the user typed while the
+options were loading. Resolving the country also seeds `currentCountry`, because the region
+selector only loads once a country is known.
+
+### Side effect worth knowing
+
+`CreateContactModal` creates the BP up front (`BP → address → contacts → banks → billing
+PATCH`) and posts the address whenever `address || city || country` is set. Pre-filling the
+address block therefore means the new BP now gets a location — which is what
+`resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
+header's `partnerAddress` (NOT NULL on `C_Invoice`). Before this change, a BP created from the
+OCR popup had no location at all.
+
+### Automated evidence
+
+- `src/lib/__tests__/matchOptionLabel.test.js` — label matching, including the refusal to
+  prefix-match a 2-character option label and the empty-on-no-match contract.
+- `src/components/contract-ui/__tests__/CreateContactModal.vitest.jsx` → `describe('CreateContactModal — pre-fill')`
+  — free-text seeding, country label kept out of the form, resolution once the selector loads,
+  and `initialQuery` precedence.
+- `src/components/contract-ui/__tests__/EntityCreationModal.vitest.jsx` → `describe('EntityCreationModal — patchValues')`
+  — fills empty, never overwrites typed input, successive patches.
+- `src/components/copilot/ocr/__tests__/ocrDocTypes.prefill.vitest.js` — every
+  `createPrefilledFrom` source must be a key the extraction schema actually emits. A typo there
+  fails silently at runtime (the field just looks unextracted), so it is asserted in CI.
+
+## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
+
+### Three removals
+
+The panel shipped with UI that did nothing:
+
+- **"Messages" / "History" tabs** — both rendered a permanent `ComingSoon` placeholder.
+- **The context-menu button** (`MoreVertical`) — had no `onClick` at all.
+
+With a single view left there is no tab bar to render, so the whole header row is gone and
+`OcrSidePanel` renders the file view directly. The i18n keys (`ocrSidePanelTabFile`,
+`ocrSidePanelTabMessages`, `ocrSidePanelTabHistory`, `ocrSidePanelComingSoon`,
+`ocrSidePanelMore`) were removed from **both** locale files.
+
+### Attaching from the panel
+
+In edit mode `AttachmentsView` was **read-only** — it listed attachments and rendered the first
+PDF, with no way to add one. It can now attach, and the requirement that the file "quede visible
+en la sección de Adjuntos" needs no synchronisation at all:
+
+| Path | Endpoint | Store |
+|---|---|---|
+| Side panel (read) — `listAttachments` | `GET /sws/neo/attachments/{table}/{id}` | `AD_Attachment` |
+| Side panel (write) — `uploadAttachment` **(new)** | `POST /sws/neo/attachments/{table}/{id}` | `AD_Attachment` |
+| Attachments tab — `useAttachments` | same endpoint | `AD_Attachment` |
+| OCR post-commit — `attachFile` | `POST /webhooks/?name=AttachFile` (by `AD_Tab_ID`) | `AD_Attachment` |
+| Document preview — `usePreviewAttachment` | `/sws/neo/preview-file` | **`ETGO_PREVIEW_FILE`** |
+
+> The two "Side panel" rows describe this pass only. The Error 4 fix below moved the
+> panel onto the document slot: it now reads `ETGO_PREVIEW_FILE` and *mirrors* the
+> write into the attachments endpoint. The table is kept because the rest of this
+> section reasons about it.
+
+The panel and the Attachments tab were already reading the same endpoint; only the write side was
+missing. `uploadAttachment` lives in `listAttachments.js` — the documented thin client for
+`/sws/neo/attachments/*` — and returns `{ ok, error }` rather than throwing, matching its
+siblings. `useAttachments` keeps its own `upload` (hook layer, with toasts and optimistic
+state); de-duplicating the two is a follow-up, not part of this fix.
+
+**PDF first, images once the slot landed.** This pass accepted PDF only, because the view
+rendered the attachment in a PDF viewer and the ticket requires the attached file and the one on
+screen to be the same document. Sharing the slot with the grid preview made that too narrow — a
+scanned JPG dropped there has to render — so `ACCEPTED_TYPES` now covers PDF plus the common
+image types, and the panel renders images through `<img>` instead of the PDF viewer.
+
+### Why the OCR reader cannot run on a hand-captured invoice
+
+No flag was needed. `OcrInlineUploader` is the only thing that dispatches the extraction event,
+and `FileTab` mounts it **only** when `isNew`. On a saved record the panel renders
+`AttachmentsView`, which attaches a file and never triggers extraction. The gap the ticket
+described was the missing attach capability, not a missing guard — the guard is structural.
+`OcrSidePanel.vitest.jsx` asserts the uploader is never mounted for a saved record, so a future
+refactor cannot quietly reintroduce it.
+
+### Keeping the two views in sync
+
+The panel and the Attachments tab each hold their own copy of the list, and
+DetailView keeps inactive tabs **mounted** — so a write through one left the other
+showing stale data until the user left form view and came back. `useAttachments`
+also only ever loaded eagerly on mount, never again.
+
+They share a server store, not a client one, so the fix is a notification, not
+shared state: `components/attachments/attachmentsBus.js`. A writer calls
+`notifyAttachmentsChanged({ tableName, recordId, source })` **after** the server
+confirms; every other view of the same record reloads via
+`useAttachmentsChanged(...)`. Same `window` CustomEvent mechanism the OCR
+extraction flow already uses to cross component boundaries.
+
+Each view passes its own `source` (from `newAttachmentsSource()`) and skips its own
+events — otherwise the tab would fire a redundant GET after every optimistic
+mutation and undo its own optimistic UX. Events are addressed by
+`(tableName, recordId)`, compared as strings, and a notification without a record
+is dropped rather than broadcast to every view.
+
+Emitters: the panel's upload, and `useAttachments`' `upload` / `remove` /
+`removeAll` — the three operations that change the *set* of attachments.
+`updateDescription` deliberately does not emit: the panel does not render
+descriptions.
+
+### Superseded: the preview modal — the document slot
+
+An earlier pass made the grid preview read `AD_Attachment` directly. That was
+replaced once a simpler invariant surfaced: **a purchase invoice has no generated
+report** (`useInvoicePreview` passes `null` to `useInvoicePdf` unless the spec is
+`sales-invoice`, and no jsreport template exists for it), so nothing competes for
+its `ETGO_PREVIEW_FILE` slot — one file per `(specName, recordId)`.
+
+That makes the slot the definition of *"the document of this record"*, which is
+exactly what the team asked the panels to show: only the OCR source, and nothing
+for invoices captured by hand or imported historically.
+
+| | |
+|---|---|
+| **Read** | both side panels (grid preview and form view) read the slot via `usePreviewAttachment` |
+| **Write** | storing from a panel writes the slot **and** mirrors the file into `/sws/neo/attachments`, so it appears in the Attachments tab |
+| **OCR flow** | after the batch commits, `OcrInlineUploader` fills the slot alongside its existing `attachFile` call — that webhook is untouched |
+| **Manual / historic** | no slot row → panels empty |
+
+The mirror is opt-in per caller via `attachmentConfig.tableName`. Generated-PDF
+caches (sales invoice, order, quotation) omit it: nobody attached those files, so
+they must not appear as attachments.
+
+**The cost, stated plainly:** the bytes live twice — once in `C_File`, once
+base64-encoded in `ETGO_PREVIEW_FILE.file_data` (~33% larger). For scanned
+supplier documents that is not free. It buys zero backend work: no AD column, no
+Java, no `export.database`.
+
+**Deletions are kept consistent in both directions**, because a stale slot is the
+same class of bug as the one fixed above:
+
+- deleting from a panel empties the slot and removes the mirrored attachment —
+  but only when exactly one attachment matches the slot file's name; an ambiguous
+  match is left untouched rather than guessing which copy to remove
+- deleting from the Attachments tab fires the attachments bus; the hook then
+  checks whether its slot file is still attached and, if not, empties the slot
+
+Both panels now share `usePreviewAttachment`, so `OcrSidePanel` no longer carries
+its own listing logic — the duplication between the two disappeared.
+
+### Also removed: the preview modals' placeholder tabs
+
+The Messages / History tabs were permanent `EmptyPanel` placeholders in every
+preview modal, injected in four files directly and in three more through a shared
+`makeStaticPreviewTabs(ui)` builder (goods receipt and both return windows). The
+builder and all call sites are gone, along with two dead local `EmptyPanel`
+helpers and eight orphaned locale keys across the three locale files.
+
+### Automated evidence
+
+- `src/windows/custom/shared/__tests__/OcrSidePanel.vitest.jsx` → `describe('OcrSidePanel —
+  removed placeholder UI')`, `describe('… — OCR reader gating')` and `describe('… — the document
+  slot')` — the three removals (no tab bar, no `tablist`/`tab` roles, no context-menu button), the
+  uploader never mounting on a saved record, and the slot contract: which arguments the hook is
+  asked for, empty slot ⇒ nothing rendered, PDF vs image rendering, rejected file type, failed
+  store surfaced, attach action hidden without a record id.
+- `src/windows/custom/shared/__tests__/usePreviewAttachment.vitest.jsx` — the slot itself: the
+  mirror written on store, a failed mirror staying non-fatal, mirror deletion only on an
+  unambiguous name match, and the bus-driven slot cleanup.
+- `src/components/copilot/ocr/__tests__/listAttachments.upload.vitest.js` — transport contract:
+  multipart body, **no** hand-set `Content-Type` (it would drop the boundary), and never throwing.
+- `src/components/attachments/__tests__/attachmentsBus.vitest.jsx` — addressing rules:
+  own-source suppression, per-record and per-table filtering, string id comparison,
+  unsubscribe on unmount, no broadcast without a record.
+- `src/components/attachments/__tests__/useAttachments.vitest.jsx` →
+  `describe('useAttachments — cross-view sync')` — the tab reloading on a foreign write and
+  staying silent on its own, including silence when the write failed.
+
+The previous `OcrSidePanel.test.js` was deleted: it asserted the removed tabs via source regex,
+and it was matched by neither npm test script, so it had never run.
