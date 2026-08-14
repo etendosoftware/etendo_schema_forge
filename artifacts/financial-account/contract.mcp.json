@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
+  "version": "0.28.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-11T14:14:14.274Z",
-  "contractChecksum": "0ec1af3e8cd9a13c",
+  "updatedAt": "2026-08-14T04:23:52.377Z",
+  "contractChecksum": "92833d67e61cd70a",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -136,6 +136,14 @@
       },
       {
         "entity": "transaction",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/product"
+      },
+      {
+        "entity": "transaction",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -189,6 +197,14 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "column": "EM_ETGO_Finacc_Trans_Dest",
+        "reference": "Finacc_Transaction",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
       },
       {
         "entity": "accountingConfiguration",
@@ -1192,6 +1208,10 @@
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
           },
+          "product": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
           "project": {
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
@@ -1233,6 +1253,9 @@
           "etprRemoveTransaction": {
             "required": true,
             "defaultValue": "N"
+          },
+          "eTGOFinaccTransDest": {
+            "readOnly": true
           }
         }
       },
@@ -1503,5 +1526,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b6736eb7c7cfd618"
+  "checksum": "75c3e02bff0c61d5"
 }

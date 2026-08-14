@@ -18884,6 +18884,8 @@
     "financeAccountMovementsDimSalesregion": "Región de ventas",
     "financeAccountMovementsDimUser1": "Primera dimensión",
     "financeAccountMovementsDimUser2": "Segunda dimensión",
+    "financeAccountMovementsTransferTo": "Cuenta destino",
+    "financeAccountMovementsTransferFrom": "Cuenta origen",
     "financeAccountMovementsPosted": "Contabilizado",
     "financeAccountMovementsNotPosted": "Sin contabilizar",
     "financeAccountMovementsStatusVoided": "Anulado",
