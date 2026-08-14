@@ -2,12 +2,13 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import UserTable from './UserTable';
+import UserTable from '@/windows/custom/user/UserHeaderTable';
 import UserForm from './UserForm';
 import UserRolesTable from './UserRolesTable';
 import UserRolesForm from './UserRolesForm';
-import AssignRoleControl from '@/windows/custom/user/AssignRoleControl';
+import AssignTemplateRolesControl from '@/windows/custom/user/AssignTemplateRolesControl';
 import { AttachmentsTab } from '@/components/attachments';
+import UserRolesTab from '@/windows/custom/user/UserRolesTab';
 import catalogs from './mockCatalogs';
 
 
@@ -268,8 +269,8 @@ export default function UserPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        formFooter={AssignRoleControl}
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
+        formFooter={AssignTemplateRolesControl}
+        customTabs={[{ key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
       />

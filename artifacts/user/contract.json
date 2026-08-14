@@ -1,17 +1,27 @@
 {
   "version": "0.19.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-07T16:09:22.004Z",
-  "checksum": "7e6dbf8f1a309fc6",
+  "updatedAt": "2026-08-14T14:12:19.014Z",
+  "checksum": "0da2f148d0daf780",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
-      "headerExtra": {
-        "customForm": "AssignRoleControl"
+      "customComponents": {
+        "headerTable": "UserHeaderTable"
       },
+      "headerExtra": {
+        "customForm": "AssignTemplateRolesControl"
+      },
+      "customPanelTabs": [
+        {
+          "key": "roles",
+          "labelKey": "userRolesTabLabel",
+          "component": "UserRolesTab"
+        }
+      ],
       "layoutType": "default"
     },
     "entities": {
@@ -851,9 +861,19 @@
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "customComponents": {
+        "headerTable": "UserHeaderTable"
+      },
       "headerExtra": {
-        "customForm": "AssignRoleControl"
-      }
+        "customForm": "AssignTemplateRolesControl"
+      },
+      "customPanelTabs": [
+        {
+          "key": "roles",
+          "labelKey": "userRolesTabLabel",
+          "component": "UserRolesTab"
+        }
+      ]
     },
     "entities": {
       "user": {

@@ -5,7 +5,17 @@
     "category": "settings",
     "name": "User",
     "headerExtra": {
-      "customForm": "AssignRoleControl"
+      "customForm": "AssignTemplateRolesControl"
+    },
+    "customPanelTabs": [
+      {
+        "key": "roles",
+        "labelKey": "userRolesTabLabel",
+        "component": "UserRolesTab"
+      }
+    ],
+    "customComponents": {
+      "headerTable": "UserHeaderTable"
     }
   },
   "discardPatterns": ["EM_*"],
