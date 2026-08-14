@@ -16831,6 +16831,26 @@
         }
       ]
     },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "dcd0a34526ad842952cb2e5c0ad7a17454be686c85dd082e09dc076a48e5c135",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": [
+        {
+          "column_id": "DB141BB0EEE7482CB93C3B53A9DEF96C",
+          "columnname": "C_Costcenter_ID",
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
+          "field_id": "ADDA9474A23F4C0182BB3BE4EAA6B87C",
+          "name": "Cost Center",
+          "readonlylogic": null,
+          "tab_id": "2DBFD0E6ACF444D0BDAA29269B80E455",
+          "tab_name": "Cost Center",
+          "table_id": "9072A1C049584DB69E4F42AE20B5CB66",
+          "table_name": "C_Costcenter"
+        }
+      ]
+    },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "ab993470e853f4bf6d505a5ad96871e1d831bce6a8a5201a3cf2f4887ad02df5",
       "params": [
@@ -16972,6 +16992,374 @@
           "tab_name": "Token",
           "table_id": "841B4C4C286A4D8C81A051D2821885DF",
           "table_name": "ETRX_Token_Info"
+        }
+      ]
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "ac2a6478bffd2d9400654ddf03fd335f6bdb9348b586c158f7ce7972a203e925",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "column_id": "5745",
+          "columnname": "DateContract",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800054",
+          "name": "Planned End Date",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5746",
+          "columnname": "DateFinish",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800055",
+          "name": "Real End Date",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5752",
+          "columnname": "SalesRep_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800048",
+          "name": "Sales Representative",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "803242",
+          "columnname": "Responsible_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "1005900010",
+          "name": "Person in Charge",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5755",
+          "columnname": "PlannedAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800049",
+          "name": "Planned Amount",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5756",
+          "columnname": "PlannedQty",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800061",
+          "name": "Planned Quantity",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5757",
+          "columnname": "PlannedMarginAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800070",
+          "name": "Planned Margin",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "3904",
+          "columnname": "IsCommitment",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800063",
+          "name": "Legally Binding Contract",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8978",
+          "columnname": "IsCommitCeiling",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "field_id": "800069",
+          "name": "Price Ceiling",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "3907",
+          "columnname": "CommittedAmt",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "field_id": "800053",
+          "name": "Contract Amount",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8759",
+          "columnname": "CommittedQty",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "field_id": "800067",
+          "name": "Contract Quantity",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "3902",
+          "columnname": "C_BPartner_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800064",
+          "name": "Business Partner",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5798",
+          "columnname": "C_BPartner_Location_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800060",
+          "name": "Partner Address",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5797",
+          "columnname": "AD_User_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800057",
+          "name": "User/Contact",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5794",
+          "columnname": "POReference",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800062",
+          "name": "Order Reference",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "828EE0AE80255FA1E040007F010067C7",
+          "columnname": "FIN_Paymentmethod_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "830698140BDE4AC3E040007F01000289",
+          "name": "Payment Method",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "5796",
+          "columnname": "C_PaymentTerm_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800051",
+          "name": "Payment Terms",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "1005900007",
+          "columnname": "Createtemppricelist",
+          "displaylogic": null,
+          "field_id": "1005900015",
+          "name": "Create Temporary Price List",
+          "readonlylogic": "@Projectstatus@!'OP'",
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "800152",
+          "columnname": "M_PriceList_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800162",
+          "name": "Price List",
+          "readonlylogic": "@Projectstatus@!'OP'",
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "3901",
+          "columnname": "C_Currency_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800052",
+          "name": "Currency",
+          "readonlylogic": "@ProjectCategory@='S' | @Projectstatus@!'OP'",
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "800136",
+          "columnname": "ChangeProjectStatus",
+          "displaylogic": "@Processed@='N' & @ProjectStatus@!'OC'",
+          "field_id": "800044",
+          "name": "Change Project Status",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8754",
+          "columnname": "CopyFrom",
+          "displaylogic": "@IsSummary@='N' & @Processed@='N' & @ProjectStatus@!'OC'",
+          "field_id": "800072",
+          "name": "Copy Details",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "800135",
+          "columnname": "GenerateOrder",
+          "displaylogic": "@Processed@='N' & @ProjectStatus@!'OC'& @ProjectStatus@!'OP'",
+          "field_id": "800043",
+          "name": "Create Sales Order from Project",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8756",
+          "columnname": "InvoicedQty",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800068",
+          "name": "Invoice Quantity",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8753",
+          "columnname": "InvoicedAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800071",
+          "name": "Invoice Amount",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "8758",
+          "columnname": "ProjectBalanceAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "field_id": "800073",
+          "name": "Project Balance",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "800169",
+          "columnname": "PaymentRule",
+          "displaylogic": "@IsSummary@='N' & @FinancialManagement@=''",
+          "field_id": "800180",
+          "name": "Form of Payment",
+          "readonlylogic": null,
+          "tab_id": "800002",
+          "tab_name": "Service Project",
+          "table_id": "203",
+          "table_name": "C_Project"
+        },
+        {
+          "column_id": "800157",
+          "columnname": "GenerateOrder",
+          "displaylogic": "@ProjectStatus@!'OP'",
+          "field_id": "800167",
+          "name": "Create Purchase Order from Project",
+          "readonlylogic": null,
+          "tab_id": "800005",
+          "tab_name": "Supplier",
+          "table_id": "800002",
+          "table_name": "C_Project_Vendor"
+        },
+        {
+          "column_id": "800888",
+          "columnname": "Projectwon",
+          "displaylogic": "@ProjectStatus@='OP' & @IsActive@='Y'",
+          "field_id": "801116",
+          "name": "Process a Winning Bid",
+          "readonlylogic": null,
+          "tab_id": "800004",
+          "tab_name": "Proposal",
+          "table_id": "800003",
+          "table_name": "C_ProjectProposal"
+        },
+        {
+          "column_id": "800889",
+          "columnname": "PaymentRule",
+          "displaylogic": "@FinancialManagement@=''",
+          "field_id": "801166",
+          "name": "Form of Payment",
+          "readonlylogic": null,
+          "tab_id": "800004",
+          "tab_name": "Proposal",
+          "table_id": "800003",
+          "table_name": "C_ProjectProposal"
         }
       ]
     },
