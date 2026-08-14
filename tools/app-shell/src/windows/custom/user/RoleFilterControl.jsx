@@ -9,12 +9,13 @@ import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.
  * as `financial-account`'s `StatementStatusFilter.jsx` → `DistinctValuesFilter`, which
  * this component wraps directly — see that file for the precedent this mirrors).
  *
- * Options = `SFRolesOverview`'s `roles` array, ALL of them (4 composable templates +
- * the client-admin role) — Admin is a valid FILTER value here even though it is never a
- * selectable template in `AssignTemplateRolesControl` (see this ticket's Global
- * Constraints: Admin is out of scope for composition, but a user can still carry the
- * classic Admin role directly and admins must be findable via this filter, per
- * `Filtro Usuarios Admin.png`).
+ * Options = the combined roles array `useUserRoleGridData()` (`RoleChipsCell.jsx`) builds
+ * from BOTH `SFSystemRoleTemplates` (the 4 composable templates, ETP-4906 Manual QA
+ * Feedback Round 2 finding 2) and `SFRolesOverview` (the tenant's own client-admin row) —
+ * Admin is a valid FILTER value here even though it is never a selectable template in
+ * `AssignTemplateRolesControl` (see this ticket's Global Constraints: Admin is out of
+ * scope for composition, but a user can still carry the classic Admin role directly and
+ * admins must be findable via this filter, per `Filtro Usuarios Admin.png`).
  *
  * This component does not decide HOW a role id filters the row set — that's
  * `UserHeaderTable.jsx`'s job (it owns the selected value and applies it to `data`
@@ -25,8 +26,8 @@ import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.
  * @param {string|null} props.value - currently selected role id, or `null` for "all".
  * @param {(next: string|null) => void} props.onChange
  * @param {Array<{id: string, name: string, isClientAdmin?: boolean}>} props.roles -
- *   `SFRolesOverview`'s `roles` array (already fetched once for the grid — see
- *   `RoleChipsCell.jsx`'s `useUserRoleGridData`, shared with the chips column so this
+ *   the combined template + client-admin roles array (already fetched once for the grid —
+ *   see `RoleChipsCell.jsx`'s `useUserRoleGridData`, shared with the chips column so this
  *   filter never triggers its own fetch).
  */
 export function RoleFilterControl({ value, onChange, roles }) {

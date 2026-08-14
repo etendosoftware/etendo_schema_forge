@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUI } from '@/i18n';
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 
@@ -63,9 +63,19 @@ export function resolveDefaultRoleId(row) {
 }
 
 /**
- * Fetches `SFRolesOverview` (roles catalog, for names + the client-admin id) and the
- * bulk `SFUserRoleAssignments` (applied template roles per user) once, in parallel.
- * Intended to be called exactly once per grid page, by the `headerTable` wrapper.
+ * Fetches the roles catalog and the bulk `SFUserRoleAssignments` (applied template roles
+ * per user) once, in parallel. Intended to be called exactly once per grid page, by the
+ * `headerTable` wrapper.
+ *
+ * **Two role sources, combined (ETP-4906 Manual QA Feedback Round 2, finding 2).** The
+ * catalog needs BOTH: `fetchTemplateRoles()` (`SFSystemRoleTemplates`) for the 4 fixed
+ * template names — chips/filter options for NEW compositions carry system-level role ids
+ * going forward, and this endpoint is the only one that still resolves those names once a
+ * tenant deactivates its own per-client copies — and `fetchRolesOverview()`
+ * (`SFRolesOverview`), kept ONLY for its client-admin row: classic Admin is explicitly
+ * client-level per this ticket's own architecture (never a system-level template), and this
+ * grid's Admin-detection branch (`adminRoleId` below) must stay tenant-scoped. The combined
+ * `roles` array is the 4 templates plus (if present) the tenant's own client-admin role.
  *
  * @returns {{
  *   roles: Array<{id: string, name: string, isClientAdmin?: boolean}>,
@@ -81,11 +91,14 @@ export function useUserRoleGridData() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchRolesOverview(), fetchUserRoleAssignments()])
-      .then(([rolesResult, assignmentsResult]) => {
+    Promise.all([fetchTemplateRoles(), fetchRolesOverview(), fetchUserRoleAssignments()])
+      .then(([templateRolesResult, overviewResult, assignmentsResult]) => {
         if (cancelled) return;
+        const templateRoles = Array.isArray(templateRolesResult?.roles) ? templateRolesResult.roles : [];
+        const overviewRoles = Array.isArray(overviewResult?.roles) ? overviewResult.roles : [];
+        const adminRole = overviewRoles.find((role) => role?.isClientAdmin === true) ?? null;
         setState({
-          roles: Array.isArray(rolesResult?.roles) ? rolesResult.roles : [],
+          roles: adminRole ? [...templateRoles, adminRole] : templateRoles,
           assignments: assignmentsResult?.assignments ?? {},
           loading: false,
           error: null,

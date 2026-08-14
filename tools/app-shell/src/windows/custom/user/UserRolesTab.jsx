@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useRoleSelection } from './roleSelectionContext.js';
@@ -12,7 +12,7 @@ import { useRoleSelection } from './roleSelectionContext.js';
  *
  * **The cross-task coupling point with Task F3.** The column set is the role picker's
  * (`AssignTemplateRolesControl.jsx`) CURRENTLY locally-selected set, not the saved one —
- * toggling a chip must update this matrix instantly with zero extra network calls (the two
+ * toggling a chip must update this matrix instantly with zero extra network calls (the three
  * fetches below run once on mount; every re-render after that is pure local recomputation
  * over already-fetched data). Read via `useRoleSelection()` (`./roleSelectionContext.js`,
  * built by Task F3/developer-2): `UserRolesTab` (a `window.customPanelTabs` entry) and
@@ -25,6 +25,18 @@ import { useRoleSelection } from './roleSelectionContext.js';
  * component was originally written against a plain `selectedRoleIds` prop before F3's
  * concrete mechanism landed; it now consumes the same context F3 built rather than that prop
  * shape, so both slots read one shared source of truth.
+ *
+ * **Two role sources, two different jobs (ETP-4906 Manual QA Feedback Round 2, finding 2).**
+ * The matrix's own COLUMNS (which roles, and their per-window tier data) come from
+ * `fetchTemplateRoles()` (`SFSystemRoleTemplates`) — the 4 fixed templates at the SYSTEM
+ * client, matching what `AssignTemplateRolesControl` now offers and what `selectedRoleIds`
+ * will hold going forward. `fetchRolesOverview()` (`SFRolesOverview`) is kept ONLY for
+ * `activeWindowIds` below — the Etendo-GO-window-exposure filter (fix #5, DEV wave 6) needs
+ * the union across ALL of the CALLING TENANT's roles INCLUDING its client-admin row, since a
+ * few real windows (e.g. "Roles", "Usuario") are deliberately granted to none of the 4
+ * templates but must still appear as `—` rows (see `com.etendoerp.go`'s ETP-4878 docs) —
+ * `fetchTemplateRoles()`'s response has no client-admin row at all, so it can't serve that
+ * union on its own.
  */
 function flattenWindowRows(nodes, category, out) {
   for (const node of nodes ?? []) {
@@ -78,6 +90,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
   const { selectedRoleIds } = useRoleSelection();
   const [menuTreeData, setMenuTreeData] = useState(null);
   const [rolesOverview, setRolesOverview] = useState(null);
+  const [templateRoles, setTemplateRoles] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -94,13 +107,16 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    // Two independent fetches, not shared with AssignTemplateRolesControl (see file-level
+    // Three independent fetches, not shared with AssignTemplateRolesControl (see file-level
     // JSDoc) — an accepted duplicate-fetch fallback per the plan (Task F5), not a blocker.
-    Promise.all([fetchMenuTree(), fetchRolesOverview()])
-      .then(([tree, overview]) => {
+    // `fetchRolesOverview()` + `fetchTemplateRoles()` serve two different jobs — see the
+    // file-level JSDoc's "Two role sources" note.
+    Promise.all([fetchMenuTree(), fetchRolesOverview(), fetchTemplateRoles()])
+      .then(([tree, overview, templates]) => {
         if (cancelled) return;
         setMenuTreeData(tree);
         setRolesOverview(overview);
+        setTemplateRoles(templates);
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -111,28 +127,40 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     return () => { cancelled = true; };
   }, [isNew]);
 
-  const allRoles = useMemo(
+  // Tenant-scoped roles (from `fetchRolesOverview()`), used ONLY for `activeWindowIds`
+  // below — see the file-level JSDoc's "Two role sources" note.
+  const overviewRoles = useMemo(
     () => (Array.isArray(rolesOverview?.roles) ? rolesOverview.roles : []),
     [rolesOverview],
   );
 
-  // Union of every windowId across ALL roles (Admin included) — each role's `windows[]`
-  // is already server-side intersected against Etendo GO's own active spec set
-  // (`resolveActiveEtendoGoWindowIds()` in `SFRolesOverview.java`), so this union IS
+  // The 4 system-level templates (from `fetchTemplateRoles()`) — the matrix's actual
+  // column source, matching what `AssignTemplateRolesControl` offers and what
+  // `selectedRoleIds` holds going forward.
+  const allTemplateRoles = useMemo(
+    () => (Array.isArray(templateRoles?.roles) ? templateRoles.roles : []),
+    [templateRoles],
+  );
+
+  // Union of every windowId across ALL of the tenant's own roles (Admin included) — each
+  // role's `windows[]` is already server-side intersected against Etendo GO's own active
+  // spec set (`resolveActiveEtendoGoWindowIds()` in `SFRolesOverview.java`), so this union IS
   // exactly "every window Etendo GO actually exposes". `SFListMenu`'s tree (walked by
   // `flattenWindowRows` below) has no such filter — it returns every native AD menu
   // node, including classic-only entries (e.g. Application Dictionary) Etendo GO never
   // surfaces at all (ETP-4906 manual QA finding). Filtering against this set removes
-  // those classic-only rows without a new backend call.
+  // those classic-only rows without a new backend call. Deliberately still sourced from
+  // `overviewRoles`, not `allTemplateRoles` — the client-admin row it carries is what makes
+  // this union cover windows granted to none of the 4 templates (e.g. "Roles", "Usuario").
   const activeWindowIds = useMemo(() => {
     const ids = new Set();
-    for (const role of allRoles) {
+    for (const role of overviewRoles) {
       for (const w of role.windows ?? []) {
         if (w?.id != null) ids.add(String(w.id));
       }
     }
     return ids;
-  }, [allRoles]);
+  }, [overviewRoles]);
 
   const categoryGroups = useMemo(() => {
     const treeRows = flattenWindowRows(menuTreeData?.tree, null, [])
@@ -144,20 +172,20 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
 
   const columns = useMemo(() => {
     const selected = new Set((selectedRoleIds ?? []).map(String));
-    // Admin is out of scope for composition everywhere (plan Global Constraints) — never a
-    // selectable template, so it should never be in selectedRoleIds, but this filter keeps
-    // that guarantee even if a caller passes it in by mistake.
-    return allRoles.filter((role) => !role.isClientAdmin && selected.has(String(role.id)));
-  }, [allRoles, selectedRoleIds]);
+    // SFSystemRoleTemplates never returns a client-admin row (there is none at system
+    // level), so no `!role.isClientAdmin` guard is needed here anymore — every entry in
+    // `allTemplateRoles` is already a composable template by construction.
+    return allTemplateRoles.filter((role) => selected.has(String(role.id)));
+  }, [allTemplateRoles, selectedRoleIds]);
 
   if (isNew) {
     return null;
   }
 
   // loading/error MUST be checked before the "no roles selected" empty state below:
-  // `columns` is derived from `rolesOverview`, which stays `null` for the entire in-flight
+  // `columns` is derived from `templateRoles`, which stays `null` for the entire in-flight
   // fetch AND forever after a rejected fetch (the .catch above only sets `error`, never
-  // `rolesOverview`). Checking columns.length === 0 first would make it always win during a
+  // `templateRoles`). Checking columns.length === 0 first would make it always win during a
   // fetch or after a failure, regardless of how many roles are actually selected, leaving the
   // loading/error branches permanently unreachable (ETP-4906 F9 Findings — dead-code bug).
   if (loading) {

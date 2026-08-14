@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { useRoleSelection } from './roleSelectionContext.js';
 
 const MAX_COLLAPSED_CHIPS = 3;
@@ -45,11 +45,12 @@ export default function AssignTemplateRolesControl(props) {
     }
     let cancelled = false;
     setLoading(true);
-    fetchRolesOverview()
+    fetchTemplateRoles()
       .then((res) => {
         if (cancelled) return;
-        const templateRoles = (res?.roles ?? []).filter((r) => r?.isClientAdmin !== true);
-        setRoles(templateRoles);
+        // No isClientAdmin filter needed — SFSystemRoleTemplates never returns a client-admin
+        // row at all (there is none at system level, see its class javadoc).
+        setRoles(res?.roles ?? []);
       })
       .catch(() => {
         if (!cancelled) setRoles([]);
@@ -87,7 +88,7 @@ export default function AssignTemplateRolesControl(props) {
 
   if (!hasPersistedUser) {
     return (
-      <div className="flex flex-col gap-2 max-w-[420px]" data-testid="AssignTemplateRolesControl__save-first">
+      <div className="flex flex-col gap-2 max-w-[420px] px-6" data-testid="AssignTemplateRolesControl__save-first">
         <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
         <p className="text-sm text-muted-foreground">{ui('saveUserFirstForRoles')}</p>
       </div>
@@ -99,7 +100,7 @@ export default function AssignTemplateRolesControl(props) {
   const overflowCount = selectedRoles.length - visibleChips.length;
 
   return (
-    <div className="flex flex-col gap-2 max-w-[420px]" ref={containerRef} data-testid="AssignTemplateRolesControl">
+    <div className="flex flex-col gap-2 max-w-[420px] px-6" ref={containerRef} data-testid="AssignTemplateRolesControl">
       <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
 
       <button
