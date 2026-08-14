@@ -37,6 +37,16 @@ describe('OcrSidePanel — structure', () => {
   });
 });
 
+describe('OcrSidePanel — dead kebab button removed (ETP-4842)', () => {
+  it('does not import MoreVertical from lucide-react', () => {
+    assert.doesNotMatch(src, /MoreVertical/);
+  });
+
+  it('does not render a standalone icon-only button next to the tablist', () => {
+    assert.doesNotMatch(src, /aria-label=\{ui\('ocrSidePanelMore'\)\}/);
+  });
+});
+
 describe('OcrSidePanel — FileTab gating', () => {
   it('renders the OcrInlineUploader when isNew (new record path)', () => {
     assert.match(src, /if \(props\.isNew\)/);

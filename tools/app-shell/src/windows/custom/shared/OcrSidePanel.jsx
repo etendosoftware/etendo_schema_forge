@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { MoreVertical, FileText, MessageSquare, History, Loader2 } from 'lucide-react';
+import { FileText, MessageSquare, History, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { listAttachments, fetchAttachmentBlobUrl } from '@/components/copilot/ocr/listAttachments';
@@ -174,13 +174,6 @@ export default function OcrSidePanel(props) {
             );
           })}
         </div>
-        <button
-          type="button"
-          className="rounded-md border border-border-subtle bg-card p-1.5 text-muted-foreground hover:text-foreground"
-          aria-label={ui('ocrSidePanelMore')}
-        >
-          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c851a1" />
-        </button>
       </div>
       <div className="flex-1 overflow-auto">
         {body}

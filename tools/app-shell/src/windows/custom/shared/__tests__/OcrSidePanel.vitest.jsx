@@ -19,7 +19,6 @@ vi.mock('@/components/copilot/ocr/listAttachments', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  MoreVertical: (props) => <span data-testid="icon-more" {...props} />,
   FileText: (props) => <span data-testid="icon-file" {...props} />,
   MessageSquare: (props) => <span data-testid="icon-msg" {...props} />,
   History: (props) => <span data-testid="icon-history" {...props} />,
@@ -83,9 +82,21 @@ describe('OcrSidePanel', () => {
     expect(screen.getByText('ocrSidePanelComingSoon')).toBeInTheDocument();
   });
 
-  it('renders more button', () => {
+  // ── ETP-4842: dead kebab button removed ──────────────────────────────────
+  // A trailing icon-only <button> (MoreVertical, no onClick/menu) used to
+  // always render next to the tablist — dead UI that never did anything on
+  // click. Assert it's gone and every button in the tab area has a real
+  // accessible name (no leftover icon-only button).
+  it('does not render a dead kebab/more button next to the tablist', () => {
     render(<OcrSidePanel {...defaultProps} />);
-    expect(screen.getByLabelText('ocrSidePanelMore')).toBeInTheDocument();
+    expect(screen.queryByLabelText('ocrSidePanelMore')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('icon-more')).not.toBeInTheDocument();
+    const tablist = screen.getByRole('tablist');
+    const tabsContainer = tablist.parentElement;
+    const buttons = tabsContainer.querySelectorAll('button');
+    buttons.forEach((btn) => {
+      expect(btn.textContent.trim().length).toBeGreaterThan(0);
+    });
   });
 
   it('shows OCR uploader when isNew=true on file tab', () => {
