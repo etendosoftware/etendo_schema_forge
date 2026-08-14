@@ -1414,37 +1414,46 @@ function EditFooter({
   //                          swapping it out.
   //   - !archived+!deletable→ only Archivar applies; a plain button (no chevron) is correct
   //                          since there's nothing else to reveal.
+  function renderArchiveOrDeleteButton() {
+    if (archived) {
+      return (
+        <FooterButton
+          icon={RotateCcw}
+          label={ui('financeAccountsMenuUnarchive')}
+          onClick={() => onArchive?.(account)}
+          disabled={busy}
+          danger={false}
+          data-testid="FooterButton__73027d" />
+      );
+    }
+    if (deleteMode) {
+      return (
+        <FooterSplitButton
+          icon={Archive}
+          label={ui('financeAccountsBankConnectionEditArchive')}
+          onClick={() => onArchive?.(account)}
+          disabled={busy}
+          menuIcon={Trash2}
+          menuLabel={ui('financeAccountsMenuDelete')}
+          onMenuClick={() => onDelete?.(account)}
+          testId="archive-account-split"
+          data-testid="FooterSplitButton__73027d" />
+      );
+    }
+    return (
+      <FooterButton
+        icon={Archive}
+        label={ui('financeAccountsBankConnectionEditArchive')}
+        onClick={() => onArchive?.(account)}
+        disabled={busy}
+        danger
+        data-testid="FooterButton__73027d" />
+    );
+  }
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        {archived ? (
-          <FooterButton
-            icon={RotateCcw}
-            label={ui('financeAccountsMenuUnarchive')}
-            onClick={() => onArchive?.(account)}
-            disabled={busy}
-            danger={false}
-            data-testid="FooterButton__73027d" />
-        ) : deleteMode ? (
-          <FooterSplitButton
-            icon={Archive}
-            label={ui('financeAccountsBankConnectionEditArchive')}
-            onClick={() => onArchive?.(account)}
-            disabled={busy}
-            menuIcon={Trash2}
-            menuLabel={ui('financeAccountsMenuDelete')}
-            onMenuClick={() => onDelete?.(account)}
-            testId="archive-account-split"
-            data-testid="FooterSplitButton__73027d" />
-        ) : (
-          <FooterButton
-            icon={Archive}
-            label={ui('financeAccountsBankConnectionEditArchive')}
-            onClick={() => onArchive?.(account)}
-            disabled={busy}
-            danger
-            data-testid="FooterButton__73027d" />
-        )}
+        {renderArchiveOrDeleteButton()}
         {connected ? (
           <FooterSplitButton
             icon={Unlink2}
