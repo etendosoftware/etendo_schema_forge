@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertPersistedTaxDerivation } from './testUtils/documentPdfPersistedTotalsAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useOrderPdf.js'), 'utf8');
@@ -85,8 +86,8 @@ describe('useOrderPdf', () => {
     assert.match(sharedSrc, /import \{ ORDER_LINE_CONFIG \} from '@\/hooks\/useLineGrossAmount';/);
   });
 
-  it('uses taxAmt from computeDocumentTotals for printed tax', () => {
-    assert.match(sharedSrc, /const taxAmount = taxAmt \?\? 0/);
+  it('ETP-4777: derives printed tax from persisted header totals, not the live recompute', () => {
+    assertPersistedTaxDerivation(assert, sharedSrc);
   });
 
   it('uses grandTotal returned by computeDocumentTotals for printed total', () => {
@@ -144,12 +145,16 @@ describe('useOrderPdf', () => {
       assert.match(sharedSrc, /lineTotal: l\.lineGrossAmount \?\? l\.grossAmount \?\? l\.lineNetAmount \?\? l\.lineAmount \?\? 0/);
     });
 
-    it('derives netAmount from netSubtotal minus totalDiscountAmt', () => {
-      assert.match(sharedSrc, /const netAmount = \(netSubtotal \?\? 0\) - \(totalDiscountAmt \?\? 0\)/);
+    it('ETP-4777: derives netAmount from the persisted header field, not a live netSubtotal recompute', () => {
+      // Printed netAmount must match the Form panel / Grid, both of which read
+      // the backend-persisted header total rather than recomputing from lines.
+      assert.match(sharedSrc, /const netAmount = Number\(header\.summedLineAmount \?\? header\.totalLines \?\? 0\)/);
     });
 
-    it('uses taxAmt returned by computeDocumentTotals', () => {
-      assert.match(sharedSrc, /const taxAmount = taxAmt \?\? 0/);
+    it('ETP-4777: uses grandTotal/netAmount (both derived from persisted header fields) for printed tax', () => {
+      assert.match(sharedSrc, /const grandTotal = Number\(header\.grandTotalAmount \?\? 0\)/);
+      assert.match(sharedSrc, /const netAmount = Number\(header\.summedLineAmount \?\? header\.totalLines \?\? 0\)/);
+      assert.match(sharedSrc, /const taxAmount = grandTotal - netAmount/);
     });
 
     it('passes null for grossAmount when discountAmt is 0', () => {

@@ -35,9 +35,11 @@ const crearAmortizacionBtn = (page) => page.getByRole('button', { name: /Crear A
 /** Open Assets and start a new record (detail form in edit mode). */
 async function openNewAsset(page) {
   await page.goto('/assets');
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('action-new').click();
-  await expect(page.getByTestId('detail-view')).toBeVisible();
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if spinner never appeared
 }
 
 /** Pick the real "Genérico" category in the Grupo activo selector.
@@ -64,15 +66,17 @@ async function selectGrupoActivoOtros(page) {
 /** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
  *  next "Crear Amortización" runs against the persisted record (no save race). */
 async function saveAsset(page) {
-  const saveBtn = page.getByTestId('action-save');
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
   // Nothing pending (form already clean) → skip; clicking a disabled button hangs.
-  if (await saveBtn.isDisabled().catch(() => false)) return;
+  if (await saveBtn.first().isDisabled().catch(() => false)) return;
   const saved = page.waitForResponse(
     (r) => /\/sws\/neo\/assets\/assets\/[^/?]+/.test(r.url())
-      && ['PUT', 'PATCH', 'POST'].includes(r.request().method()),
+      && ['PUT', 'PATCH', 'POST'].includes(r.request().method())
+      && r.status() < 400,
     { timeout: 12_000 },
   ).catch(() => null);
-  await saveBtn.click();
+  await saveBtn.first().click();
   await saved;
 }
 
@@ -173,7 +177,7 @@ async function findByNameAndGrupo(page, name) {
  *  it no longer appears. */
 async function verifyAssetNotInList(page, name) {
   await page.goto('/assets');
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
   await applyNameAndGrupoFilter(page, name);
   await expect(page.locator('tbody tr').filter({ hasText: name })).toHaveCount(0, { timeout: 10_000 });
 }
@@ -193,7 +197,7 @@ async function gotoDeepLink(page, url) {
  *  (Confirmar → "Confirmar amortización" modal). */
 async function confirmAmortizationForAsset(page, amortizationUrl, name) {
   await gotoDeepLink(page, amortizationUrl); // SPA period-link nav doesn't re-render; force load
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
   await page.locator('tbody tr').filter({ hasText: name }).getByRole('checkbox').check();
   await page.getByTestId('action-save').click(); // "Confirmar" → opens the confirm modal
   // The modal's confirm button is disabled while it loads the totals, and the
@@ -214,7 +218,7 @@ async function confirmAmortizationForAsset(page, amortizationUrl, name) {
 /** Open the Amortization doc and reactivate it via the kebab menu. */
 async function reactivateAmortization(page, amortizationUrl) {
   await gotoDeepLink(page, amortizationUrl);
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('action-more').click();
   await page.getByRole('button', { name: /reactivar|reactivate/i }).click();
   // Reactivation returns the document to "Borrador" (no extra confirm).
@@ -439,7 +443,7 @@ test.describe('Assets (real backend)', () => {
     // Force the UI to Spanish (via the user menu) so the expected backend/UI
     // messages match the assertions, regardless of the logged-in user's prefs.
     // Wait for the dashboard to settle so the topbar menu is actionable.
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('topbar-user-menu')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('topbar-user-menu').click();
     await page.getByTestId('user-menu-language-es_ES').click();
   });
@@ -543,8 +547,7 @@ test.describe('Assets (real backend)', () => {
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     // Navigate straight to the list (the blocked-delete dialog is discarded).
     await page.goto('/assets');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
     await findByNameAndGrupo(page, name);
     await verifyGridAmortizationBar(page);
 
@@ -637,8 +640,7 @@ test.describe('Assets (real backend)', () => {
 
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
     await findByNameAndGrupo(page, name);
     await verifyGridAmortizationBar(page);
 
@@ -724,8 +726,7 @@ test.describe('Assets (real backend)', () => {
 
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
     await findByNameAndGrupo(page, name);
     await verifyGridAmortizationBar(page);
 
@@ -945,8 +946,7 @@ test.describe('Assets (real backend)', () => {
       await gotoDeepLink(page, assetUrl);
       await verifyDepreciatedSidebar(page, 100);
       await page.goto('/assets');
-      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-      await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
       await findByNameAndGrupo(page, name);
       await verifyGridAmortizationBar(page, 100);
 

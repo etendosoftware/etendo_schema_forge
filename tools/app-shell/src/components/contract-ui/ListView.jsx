@@ -319,6 +319,12 @@ export function ListView({
   window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
+  // ETP-4871 — optional `(row) => boolean` gating ListView's own bulk-delete button (the
+  // selection-bar "Delete selected", not to be confused with a window's own per-row delete
+  // affordance). Absent means "every row is deletable" — unchanged default behavior for every
+  // window that does not pass it. When present, the button disables the moment the CURRENT
+  // selection includes a row that fails the predicate, with a tooltip explaining how many.
+  isRowDeletable = null,
   listViewOptions = {},
   baseFilter = null,
   quickFilters = null,
@@ -902,6 +908,13 @@ export function ListView({
     hiddenColumns,
   };
 
+  // ETP-4871 — how many of the CURRENT selection fail `isRowDeletable`, if the host passed one.
+  // 0 (the default, `isRowDeletable` absent) means the bulk-delete button behaves exactly as
+  // before for every other window — this must never regress an existing window's bulk delete.
+  const blockedDeleteCount = isRowDeletable
+    ? selectedRows.filter((row) => !isRowDeletable(row)).length
+    : 0;
+
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
@@ -957,14 +970,20 @@ export function ListView({
                     selectionBarRightActions for an unrelated reason must opt out
                     explicitly — inferring it from that prop's mere presence was fragile,
                     since selectionBarRightActions can be used for things other than
-                    delete). */}
+                    delete).
+                    ETP-4871 — additionally disabled (with an explanatory tooltip) once the
+                    selection includes a row the host's `isRowDeletable` rejects; absent, this
+                    never differs from the pre-existing behavior. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
                     variant="outline"
                     size={selectionBarSize}
                     className="gap-1.5"
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
+                    title={blockedDeleteCount > 0
+                      ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
+                      : undefined}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                     {ui('bulkDeleteSelected')} ({selectedRows.length})
