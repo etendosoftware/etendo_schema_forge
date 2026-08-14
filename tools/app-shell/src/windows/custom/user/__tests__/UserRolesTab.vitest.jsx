@@ -52,6 +52,29 @@ const ROLES_OVERVIEW = {
   ],
 };
 
+// ETP-4906 DEV wave 6 fix #5 fixture — `MENU_TREE` above has NO classic-only leaf: w1/w2/w3
+// all appear in at least one role's `windows[]` (Admin covers all 3), so `activeWindowIds`
+// (the union of every role's `windows[].id`, Admin included) never actually excludes
+// anything against it — every existing test above passes the filter as a no-op. This
+// second tree adds a "Diccionario de la aplicación" category whose only leaf (`w4`) is
+// NOT present in ANY role's `windows[]` — not even Admin's — the exact shape of a
+// classic-only AD menu node `SFListMenu` returns but Etendo GO never exposes
+// (`resolveActiveEtendoGoWindowIds()` server-side). The filter must drop `w4`'s row AND
+// the now-empty "Diccionario de la aplicación" category header entirely, not render it
+// with all-'—' rows.
+const MENU_TREE_WITH_CLASSIC_ONLY_CATEGORY = {
+  tree: [
+    ...MENU_TREE.tree,
+    {
+      type: 'folder',
+      name: 'Diccionario de la aplicación',
+      children: [
+        { name: 'Módulo', windowId: 'w4' },
+      ],
+    },
+  ],
+};
+
 function renderTab({ isNew = false, onVisibilityChange = vi.fn(), selectedRoleIds = [] } = {}) {
   return render(
     <RoleSelectionProvider value={{ selectedRoleIds, setSelectedRoleIds: vi.fn() }}>
@@ -228,6 +251,23 @@ describe('UserRolesTab', () => {
       expect(cells[0]).toHaveTextContent('Proveedores');
       expect(cells[1]).toHaveTextContent('—');
       expect(cells[2]).toHaveTextContent('—');
+    });
+
+    // ETP-4906 DEV wave 6 fix #5 regression: a classic-only category (zero windows in it
+    // present in ANY role's windows[], Admin included) must be dropped entirely, not
+    // rendered with every row showing '—'.
+    it('drops a classic-only category (and its rows) that no role, including Admin, exposes any window for', async () => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE_WITH_CLASSIC_ONLY_CATEGORY);
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      expect(within(table).queryByText('Diccionario de la aplicación')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Módulo')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__row-w4')).not.toBeInTheDocument();
+
+      // The two real categories are unaffected by the classic-only one being dropped.
+      const categoryHeaders = within(table).getAllByText(/^(Comercial|Compras)$/);
+      expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Comercial', 'Compras']);
     });
   });
 });

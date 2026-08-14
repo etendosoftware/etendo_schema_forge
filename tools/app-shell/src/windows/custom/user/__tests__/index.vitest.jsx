@@ -17,7 +17,11 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // Interpolates params into the returned string (rather than the trivial `(key) => key`)
+  // so tests asserting the toast call shape can distinguish between a `detail` sourced
+  // from the rejection's domain message vs. the `roleAssignmentSaveFailed` i18n fallback
+  // key — both otherwise collapse to the same bare key under `(key) => key`.
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
 vi.mock('@/components/attachments', () => ({
@@ -230,7 +234,14 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 
     await expect(lastUserPageProps.onAfterExistingSave({ id: 'user-1' })).resolves.not.toThrow();
 
-    expect(toastError).toHaveBeenCalledWith('Admin role cannot be assigned');
+    // The generic AD_User save already succeeded and shown its own toast by the time this
+    // fires (`onAfterExistingSave`) — the error toast must frame the failure as "user saved,
+    // roles didn't" (`roleAssignmentSaveFailedAfterUserSaved`, not a bare domain message) and
+    // stay up longer (`duration: 8000`) so it isn't lost behind the success toast.
+    expect(toastError).toHaveBeenCalledWith(
+      'roleAssignmentSaveFailedAfterUserSaved:{"detail":"Admin role cannot be assigned"}',
+      { duration: 8000 },
+    );
   });
 
   it('falls back to the generic i18n error key when the rejection has no message', async () => {
@@ -244,7 +255,12 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 
     await lastUserPageProps.onAfterExistingSave({ id: 'user-1' });
 
-    expect(toastError).toHaveBeenCalledWith('roleAssignmentSaveFailed');
+    // No `err.message` → `detail` falls back to the `roleAssignmentSaveFailed` i18n key,
+    // which is then embedded as `{detail}` inside the after-user-saved wrapper message.
+    expect(toastError).toHaveBeenCalledWith(
+      'roleAssignmentSaveFailedAfterUserSaved:{"detail":"roleAssignmentSaveFailed"}',
+      { duration: 8000 },
+    );
   });
 });
 

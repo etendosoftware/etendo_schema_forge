@@ -34,12 +34,29 @@ import { login } from '../helpers/auth.js';
 
 const USER_ROW = { id: 'row-001', name: 'Test User', firstName: '', lastName: '', email: 'test.user@example.com', locked: false };
 
+// `role-admin.windows[]` must list every window `MENU_TREE` declares ('108' AND '143') —
+// DEV wave 6 fix #5 filters `UserRolesTab`'s matrix rows to the UNION of every role's
+// `windows[].id` (Admin included), matching production's `resolveActiveEtendoGoWindowIds()`
+// (every window Etendo GO actually exposes lands in Admin's own `windows[]`, per
+// `SFRolesOverview.java`). A window absent from ALL roles here — Admin included — is now
+// correctly treated as "classic-only" and dropped from the matrix entirely (fix #5); leaving
+// '108' out of every role's `windows[]`, as an earlier draft of this fixture did, silently
+// dropped its row and broke the "shows '—' for a role with no access" assertion below —
+// not a source bug, just an unrealistic fixture that predates fix #5.
 const ROLES = [
   { id: 'role-finance', name: 'Finance', isClientAdmin: false, windows: [{ id: '143', name: 'Pedido de venta', tier: 'full' }] },
   { id: 'role-sales', name: 'Sales', isClientAdmin: false, windows: [{ id: '143', name: 'Pedido de venta', tier: 'readOnly' }] },
   { id: 'role-purchasing', name: 'Purchasing', isClientAdmin: false, windows: [] },
   { id: 'role-inventory', name: 'Inventory', isClientAdmin: false, windows: [] },
-  { id: 'role-admin', name: 'Admin', isClientAdmin: true, windows: [] },
+  {
+    id: 'role-admin',
+    name: 'Admin',
+    isClientAdmin: true,
+    windows: [
+      { id: '108', name: 'Usuario', tier: 'full' },
+      { id: '143', name: 'Pedido de venta', tier: 'full' },
+    ],
+  },
 ];
 
 const MENU_TREE = {
@@ -169,9 +186,11 @@ test.describe('User role assignment — detail form (existing user)', () => {
     await page.goto(`/user/${USER_ROW.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // The generated `userRoles` detail tab is ALSO labeled "Roles del usuario" (an AD
-    // tab-name coincidence, not a bug in this control) — target the custom tab by its
-    // stable `tab-custom:<key>` testid, never by visible text.
+    // The native `userRoles` (AD_User_Roles) detail tab used to duplicate this same
+    // "Roles del usuario" label (an AD tab-name coincidence) until DEV wave 6 fix #4
+    // excluded it entirely (`decisions.json`'s `userRoles: { exclude: true }`) — this
+    // custom tab is now the only one with that label. Still target it by its stable
+    // `tab-custom:<key>` testid rather than visible text, as a matter of convention.
     await page.getByTestId('tab-custom:roles').click();
     // `UserRolesTab.jsx` only stamps the `UserRolesTab` container testid on its FINAL
     // (non-empty) return — the empty-state early return only carries
@@ -186,8 +205,11 @@ test.describe('User role assignment — detail form (existing user)', () => {
 
     await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
     await page.getByTestId('AssignTemplateRolesControl__toggle-role-finance').click();
-    // Chips (`AssignTemplateRolesControl__chip-*`) only render in the COLLAPSED view
-    // (`!isEditing`) — close the inline options editor before asserting them.
+    // Chips (`AssignTemplateRolesControl__chip-*`) render in both the collapsed and
+    // expanded (`isEditing`) trigger view (DEV wave 6 fix #2 removed the `!isEditing`
+    // guard so the trigger is never blank while editing) — the editor is closed here
+    // anyway, matching the natural end-of-interaction state, not because it's required
+    // for the chips themselves to appear.
     await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-finance')).toBeVisible();
 
@@ -259,7 +281,8 @@ test.describe('User role assignment — detail form (existing user)', () => {
 
     await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
     await page.getByTestId('AssignTemplateRolesControl__toggle-role-sales').click(); // finance (saved) + sales (new)
-    // Chips only render in the collapsed (!isEditing) view — close the editor first.
+    // Chips render regardless of isEditing (DEV wave 6 fix #2) — closed here just to
+    // mirror the natural end-of-interaction state before asserting on the trigger.
     await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-finance')).toBeVisible();
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-sales')).toBeVisible();
