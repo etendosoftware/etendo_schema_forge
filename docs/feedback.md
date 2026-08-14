@@ -948,3 +948,61 @@ into ETP-4841.
 **Lesson:** a passing test suite proves nothing about files the runner never collects. When
 adding tests under a directory that is not the runner's root, confirm they actually execute
 (`--reporter=verbose` and look for the filename) before treating them as coverage.
+
+---
+
+## [2026-08-14] ETP-4795 — First cash close read its cleared movements off a collection that is never populated
+
+**Component:** `CashCloseSupport.java` / `CashCloseHandler.java` (com.etendoerp.go) — cash close
+confirm flow
+
+**Symptom:** Confirming the FIRST close of a cash account was rejected with
+`There is a difference of <full counted amount> and this account has no accounting concept
+configured for it.` — even though the panel showed *La caja cuadra* and *Diferencia 0,00 €*.
+Pressing "Confirmar cierre de caja" a second time succeeded. On an account that DOES have a GL
+Item Difference configured the first attempt did not error at all: it silently posted an
+adjustment transaction for the entire counted amount and completed the reconciliation.
+
+**Root cause:** `clearedNet()` summed `draft.getFINFinaccTransactionList()`. When the draft was
+created earlier in the same request, it comes from `OBProvider.getInstance().get(...)` (inside
+`AdvPaymentMngtDao.getNewReconciliation`), so that one-to-many list is a plain in-memory
+collection that is **never** loaded from the database — while linking a movement sets the FK on the
+owning side (`trx.setReconciliation(draft)`), which never appears in it. The cleared net therefore
+read as 0 and the whole declared balance looked like a discrepancy. The second attempt worked
+because `findDraft()` then returned a draft loaded from the DB, whose collection is a real lazy
+proxy. `rewriteDatesAndSettleInvoices()` iterated the same list, so on a first close it also
+skipped pushing post-dated movements forward and settling the invoices of linked payments.
+
+**Why the test suites missed it:** the unit tests stubbed `getFINFinaccTransactionList()` directly,
+so they asserted the buggy read as if it were the contract; and QA's manual pass exercised
+"Guardar borrador" before confirming, which is exactly the path that reloads the draft from the DB.
+
+**Fix:** new `CashCloseHandler.linkedTransactions(rec)` seam that queries
+`FIN_FinaccTransaction where reconciliation.id = :id`. `clearedNet`,
+`rewriteDatesAndSettleInvoices` and `syncMarkedMovements` all read through it, so a freshly created
+and a reloaded draft behave identically. Covered by
+`CashCloseHandlerTest#testClearedNetIsReadFromTheLinkedTransactionsNotTheEntityList`, plus a
+counter-test that a genuine difference without a concept is still rejected.
+
+**Lesson:** never read an inverse (one-to-many) collection to make a decision about entities linked
+during the SAME request. Hibernate only populates it when the parent came from the database; an
+entity built by `OBProvider` carries an empty list that stays empty no matter how many owning-side
+FKs point at it. Query the owning side instead. The tell-tale symptom is "it works the second
+time".
+
+**Companion fix (same ticket):** the handler's rejections are hardcoded English literals with no
+`AD_Message` behind them, so they reached the toast untranslated. They are now mapped through
+`translateBackendError` (`backendError.cashClose*` keys in both locales). The difference amount is
+deliberately dropped rather than interpolated — the backend sends a raw
+`BigDecimal.toPlainString()`, and rendering that as money would break the repo's currency-format
+policy; the formatted figure is already on screen in the close summary.
+
+**Second companion fix (same ticket):** the Reconciliations tab did not refresh after a confirmed
+close — the user had to reload the page to see it, and its count badge stayed stale. That list is
+fetched by `windows/custom/financial-account/index.jsx` (lifted out of the tab so the badge can show
+a count without the tab being mounted), so `onCloseSuccess` has to call its `reload` alongside
+`reloadAccount`/`reloadMovements`. Guarded by
+`index.vitest.jsx` → "reloads the reconciliations list after a confirmed cash close".
+**Lesson:** when a hook is lifted out of the
+component that owns the action, every mutation path has to reload it explicitly — the component
+that triggers the change no longer owns the query.

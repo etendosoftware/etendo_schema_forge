@@ -74,6 +74,16 @@ vi.mock('../MovementsTab.jsx', () => ({
 vi.mock('../ReconciliationTab.jsx', () => ({
   ReconciliationTab: () => <div data-testid="tab-reconciliation" />,
 }));
+// The cash-close screen replaces the split panel on a cash account. Stubbed down to a button that
+// fires `onCloseSuccess`, so the reload wiring behind a confirmed close is assertable without
+// standing up the whole close flow (which has its own suites).
+vi.mock('../CashClose/index.jsx', () => ({
+  CashCloseTab: ({ onCloseSuccess }) => (
+    <button type="button" data-testid="tab-cash-close" onClick={() => onCloseSuccess?.()}>
+      cash close
+    </button>
+  ),
+}));
 // Exposes the same ref API the real tab does, driven per-test by mockStatementsApi.
 let mockStatementsApi = { selected: [], filtered: [] };
 vi.mock('../ImportedStatementsTab.jsx', () => ({
@@ -124,11 +134,21 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 import FinancialAccountWindow from '../index.jsx';
 
+// Reload handles are hoisted so a test can assert what a child's success callback re-fetches.
+let reloadAccountMock;
+let reloadMovementsMock;
+let reloadReconciliationsMock;
+
 function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [], reconciliations = [] } = {}) {
-  useFinancialAccountMock.mockReturnValue({ account, loading: false, error: null, reload: vi.fn() });
-  useAccountMovementsMock.mockReturnValue({ movements, totals, loading, error: null, reload: vi.fn() });
+  reloadAccountMock = vi.fn();
+  reloadMovementsMock = vi.fn();
+  reloadReconciliationsMock = vi.fn();
+  useFinancialAccountMock.mockReturnValue({ account, loading: false, error: null, reload: reloadAccountMock });
+  useAccountMovementsMock.mockReturnValue({ movements, totals, loading, error: null, reload: reloadMovementsMock });
   useBankStatementsMock.mockReturnValue({ statements, loading: false, error: null, reload: vi.fn() });
-  useReconciliationsMock.mockReturnValue({ reconciliations, loading: false });
+  useReconciliationsMock.mockReturnValue({
+    reconciliations, loading: false, reload: reloadReconciliationsMock,
+  });
 }
 
 describe('FinancialAccountWindow', () => {
@@ -313,6 +333,20 @@ describe('FinancialAccountWindow', () => {
     });
     render(<FinancialAccountWindow recordId="acc-1" />);
     expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('reloads the reconciliations list after a confirmed cash close', () => {
+    setHooks({ account: { id: 'acc-1', name: 'Caja', type: 'C', pendingCount: 0 } });
+    render(<FinancialAccountWindow recordId="acc-1" />);
+    fireEvent.click(screen.getByText('financeAccountDetailTabReconciliation'));
+
+    fireEvent.click(screen.getByTestId('tab-cash-close'));
+
+    // The list is fetched by the window, not by the tab, so a close that does not reload it here
+    // only shows up after the user refreshes the page by hand — and the tab badge stays stale too.
+    expect(reloadReconciliationsMock).toHaveBeenCalled();
+    expect(reloadAccountMock).toHaveBeenCalled();
+    expect(reloadMovementsMock).toHaveBeenCalled();
   });
 
   it('leaves the reconciliations query idle on a non-cash account', () => {
