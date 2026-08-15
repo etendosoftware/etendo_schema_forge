@@ -31,6 +31,22 @@ afterEach(() => {
 });
 
 describe('product import descriptor', () => {
+  it('carries the configured product UOM default into batch product operations', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url.includes('/sws/neo/product/product/defaults')) {
+        return { ok: true, json: async () => ({ defaults: { uOM: 'configured-unit-id' } }) };
+      }
+      return { ok: true, json: async () => ({ items: SALES_ITEMS }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ops = await buildOperations({ ...baseRow }, productConfig('tok-uom-default'));
+
+    assert.equal(ops[0].body.uOM, 'configured-unit-id');
+    assert.equal(fetchMock.mock.calls.length, 1);
+    assert.ok(fetchMock.mock.calls[0][0].includes('/sws/neo/product/product/defaults'));
+  });
+
   it('builds a product op plus a parentRef-linked price op when the row has a valid price, resolving the sales PLV once', async () => {
     const fetchMock = stubFetch(SALES_ITEMS);
     const ops = await buildOperations({ ...baseRow, price: '1234.50' }, productConfig('tok-valid'));
@@ -50,8 +66,9 @@ describe('product import descriptor', () => {
     assert.equal(price.body.listPrice, '1234.5');
     assert.equal(price.body.priceLimit, '1234.5');
     // The selector endpoint was hit with the spec-scoped URL and the bearer token.
-    assert.equal(fetchMock.mock.calls.length, 1);
-    const [url, opts] = fetchMock.mock.calls[0];
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 1);
+    const [url, opts] = priceFetchCalls[0];
     assert.ok(url.includes('/sws/neo/product/price/selectors/M_PriceList_Version_ID'), `unexpected url: ${url}`);
     assert.equal(opts.headers.Authorization, 'Bearer tok-valid');
   });
@@ -75,7 +92,8 @@ describe('product import descriptor', () => {
     assert.equal(absent.length, 1);
     assert.equal(absent[0].id, 'product');
     // A product-only row must never touch the price-list selector.
-    assert.equal(fetchMock.mock.calls.length, 0);
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 0);
   });
 
   it('throws a classified invalid-price error for a non-numeric cell — localized via config.translate, English fallback without', async () => {
@@ -126,7 +144,8 @@ describe('product import descriptor', () => {
       assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-1');
     }
     // The PENDING promise is cached synchronously, so even concurrent rows fire the fetch once.
-    assert.equal(fetchMock.mock.calls.length, 1);
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 1);
   });
 
   describe('category resolution and auto-creation', () => {

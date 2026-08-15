@@ -4,7 +4,8 @@ import { parseBoolean } from '@/lib/parseBoolean.js';
 
 // The simplified Products CSV import supports: searchKey (código),
 // name (nombre), description (descripción), price (precio), and category (categoryCode/categoryName/category).
-// uOM/taxCategory resolve on their own server-side via NeoDefaultsService.
+// uOM is copied from the official product defaults endpoint for batch creates;
+// taxCategory continues to resolve server-side via the product defaults handler.
 const PRODUCT_TARGETS = ['searchKey', 'name', 'description'];
 
 // `price` is NOT a product field — in this system prices live in a separate M_ProductPrice
@@ -77,6 +78,37 @@ function parsePrice(raw) {
 // synchronously so the bounded-concurrency pool's first few rows don't each fire the fetch.
 const salesPlvCache = new Map();
 
+// Batch operations do not pass through the product NeoHandler, so they cannot
+// receive the product defaults injected by ProductDefaultsHandler. Resolve the
+// same official defaults endpoint once per import run and carry the UOM into
+// every product operation explicitly. This keeps the value tenant-configurable
+// and avoids duplicating a database ID in the frontend.
+const productDefaultsCache = new Map();
+
+async function fetchProductDefaults(token) {
+  const base = detectEtendoBase();
+  const url = `${base}/sws/neo/product/product/defaults`;
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return {};
+    const json = await res.json().catch(() => null);
+    return json?.defaults ?? json?.response?.defaults ?? {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function resolveProductDefaults(token) {
+  const key = token || 'default';
+  if (!productDefaultsCache.has(key)) {
+    productDefaultsCache.set(key, fetchProductDefaults(token));
+  }
+  return productDefaultsCache.get(key);
+}
+
 async function fetchSalesPriceListVersion(spec, token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
@@ -130,6 +162,11 @@ function getExistingCategories(token, existingCategoriesOverride) {
 registerImportDescriptor('product', async (row, config) => {
   const productBody = pick(row, PRODUCT_TARGETS);
   const ops = [];
+
+  const productDefaults = await resolveProductDefaults(config.token);
+  if (!productBody.uOM && productDefaults.uOM) {
+    productBody.uOM = productDefaults.uOM;
+  }
 
   // Category resolution / creation
   const hasCategoryInput = Boolean(row.categoryCode || row.categoryName || row.category);
