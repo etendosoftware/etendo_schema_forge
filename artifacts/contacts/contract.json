@@ -1,8 +1,8 @@
 {
   "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-10T11:24:59.285Z",
-  "checksum": "cc53b8a90aa98594",
+  "updatedAt": "2026-08-15T02:39:57.162Z",
+  "checksum": "f39d96692da049ca",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -167,6 +167,46 @@
             "label": "Commercial Name",
             "required": true,
             "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigo categoria",
+              "código categoría",
+              "codigo de categoria",
+              "código de categoría",
+              "codigocategoria",
+              "códigocategoría"
+            ],
+            "label": "Contact Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombre categoria",
+              "nombre categoría",
+              "nombre de categoria",
+              "nombre de categoría",
+              "nombrecategoria",
+              "nombrecategoría"
+            ],
+            "label": "Contact Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto"
+            ],
+            "label": "Contact Category"
           },
           {
             "target": "etgoFirstname",
@@ -5159,6 +5199,46 @@
             "label": "Commercial Name",
             "required": true,
             "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigo categoria",
+              "código categoría",
+              "codigo de categoria",
+              "código de categoría",
+              "codigocategoria",
+              "códigocategoría"
+            ],
+            "label": "Contact Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombre categoria",
+              "nombre categoría",
+              "nombre de categoria",
+              "nombre de categoría",
+              "nombrecategoria",
+              "nombrecategoría"
+            ],
+            "label": "Contact Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto"
+            ],
+            "label": "Contact Category"
           },
           {
             "target": "etgoFirstname",

@@ -142,6 +142,9 @@
       "descriptor": "contacts",
       "fields": [
         { "target": "name", "aliases": ["nombre comercial", "razon social"], "label": "Commercial Name" },
+        { "target": "categoryCode", "aliases": ["codigo categoria", "código categoría", "codigo de categoria", "código de categoría", "codigocategoria", "códigocategoría"], "label": "Contact Category Code" },
+        { "target": "categoryName", "aliases": ["nombre categoria", "nombre categoría", "nombre de categoria", "nombre de categoría", "nombrecategoria", "nombrecategoría"], "label": "Contact Category Name" },
+        { "target": "category", "aliases": ["categoria", "categoría", "categoria de contacto", "categoría de contacto"], "label": "Contact Category" },
         { "target": "etgoFirstname", "aliases": ["nombre"], "label": "First Name (Company)" },
         { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name (Company)" },
         { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email (Company)" },

@@ -1,9 +1,43 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
+import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'oBTIKTaxIDKey', 'creditLimit', 'taxID'];
 const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
 const HAS_ADDRESS = (row) => Boolean(row.address || row.city || row.postal || row.country);
+const businessPartnerCategoriesCache = new Map();
+
+function detectEtendoBase() {
+  if (typeof window !== 'undefined' && window.location) {
+    const path = window.location.pathname;
+    const webIdx = path.indexOf('/web/');
+    if (webIdx !== -1) return path.substring(0, webIdx);
+  }
+  return import.meta.env?.VITE_API_BASE || '';
+}
+
+async function fetchBusinessPartnerCategories(token) {
+  const base = detectEtendoBase();
+  const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
+  try {
+    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data ?? json?.data ?? [];
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function getExistingBusinessPartnerCategories(token, existingCategoriesOverride) {
+  if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
+  const key = token || 'default';
+  if (!businessPartnerCategoriesCache.has(key)) {
+    businessPartnerCategoriesCache.set(key, fetchBusinessPartnerCategories(token));
+  }
+  return businessPartnerCategoriesCache.get(key);
+}
 
 function pick(row, targets) {
   const body = {};
@@ -46,6 +80,55 @@ registerImportDescriptor('contacts', async (row, config) => {
   // server-side for every create path (this /batch one included, BatchService routes
   // through handleWithHooks), so this line is belt-and-braces rather than the only guard.
   const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: String(bpFields.name || '').slice(0, 40) };
+
+  // Contact Category is a C_BP_Group record. Keep the same resolution contract as
+  // product categories: exact code first, normalized name second, deterministic
+  // creation when absent, and one in-flight creation per import run.
+  const hasCategoryInput = Boolean(row.categoryCode || row.categoryName || row.category);
+  if (hasCategoryInput) {
+    const categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+    const runCache = getResolutionCache(config.token || 'contacts-import');
+    const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
+      const base = detectEtendoBase();
+      const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({ searchKey, name }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const errDetail = errJson?.error?.message || errJson?.message || 'Contact category creation failed';
+        throw new Error(errDetail);
+      }
+      const json = await res.json().catch(() => null);
+      const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
+      const createdId = record?.id ?? record?.cBpGroupId ?? record?.C_BP_Group_ID;
+      if (createdId) categories.push({ id: createdId, searchKey, name });
+      return { id: createdId, searchKey, name };
+    });
+
+    const categoryResolution = await resolveOrAutoCreateDependentEntity({
+      code: row.categoryCode,
+      name: row.categoryName,
+      fallbackValue: row.category,
+      existingRecords: categories,
+      allowCreate: true,
+      createFn,
+      cache: runCache,
+      translate: config.translate,
+    });
+
+    if (categoryResolution.status === 'error' || categoryResolution.status === 'unresolved') {
+      throw categoryResolution.error || new Error('Contact category could not be resolved');
+    }
+    if (categoryResolution.id) bpBody.businessPartnerCategory = categoryResolution.id;
+  }
+
   const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };
   const ops = [bpOp];
 

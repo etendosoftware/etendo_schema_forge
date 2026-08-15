@@ -2,7 +2,7 @@
   "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
   "updatedAt": "2026-08-05T11:53:17.917Z",
-  "contractChecksum": "cc53b8a90aa98594",
+  "contractChecksum": "f39d96692da049ca",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",

@@ -216,6 +216,14 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 
 **Row-level dedupe by email.** `window.import.dedupe` is `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice.
 
+## ETP-4905 — Contact category resolution during import
+
+The Contacts CSV import supports the same dependent-category behavior as the Product import. A row may provide `categoryCode` (exact `C_BP_Group.Value`), `categoryName` (accent/case/whitespace-insensitive `C_BP_Group.Name`), or the legacy `category` column. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
+
+When no category matches, the descriptor creates one through the `business-partner-category` endpoint using a deterministic uppercase code derived from the category name. The resolver cache stores in-flight promises per import token, so concurrent rows with the same new category create one record and reuse its ID. Ambiguous normalized names fail the individual row without guessing; category-creation failures also remain row-level errors, while valid rows in the same file continue. Files without any category column preserve legacy behavior and let the backend defaults apply.
+
+The import mapping exposes aliases for Spanish compact and spaced headers: `codigocategoria`, `nombrecategoria`, and `categoria` (plus accented/spaced variants). The complete functional and visual evidence is in [`artifacts/delivery-evidence/ETP-4905/README.md`](../../artifacts/delivery-evidence/ETP-4905/README.md), including the happy path, category reuse, ambiguous-category error, and category-creation failure.
+
 **Review queue is a real per-field data grid.** Instead of collapsing a row into one cell, the queue renders one column per declared field with a frozen leading Status column (line number, status pill, inline Retry/Copy/Skip icons, and — for an already-skipped row — an "Edit again" action that brings it back for another look). A field that failed FK matching (e.g. `country`) renders as a click-to-open popover backed by the same SimSearch candidates already computed for it, with a live, debounced re-search as the user types and a "browse all" fallback when there were no close candidates at all — fixing the row is picking the right record, not retyping text and hoping "Re-validate" matches this time.
 
 **Known gap.** The country/region SimSearch matching is only as good as Etendo's own SimSearch fuzzy scoring (e.g. "España" alone can rank real matches surprisingly low); the pick-a-value/browse-all UI above exists specifically to make that recoverable without re-editing the source file.

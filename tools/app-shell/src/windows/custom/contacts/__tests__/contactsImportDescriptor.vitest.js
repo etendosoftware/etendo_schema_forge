@@ -160,4 +160,99 @@ describe('contacts import descriptor', () => {
     assert.equal(ops[0].body.searchKey.length, 40);
     assert.equal(ops[0].body.name, longName);
   });
+
+  describe('contact category resolution and auto-creation', () => {
+    const existingCategories = [
+      { id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' },
+      { id: 'BPG-SUPPLIERS', searchKey: 'SUPPLIERS', name: 'Proveedores' },
+      { id: 'BPG-DUP-1', searchKey: 'SERVICES-1', name: 'Servicios' },
+      { id: 'BPG-DUP-2', searchKey: 'SERVICES-2', name: 'Servicios' },
+    ];
+
+    const contactConfig = (token, overrides = {}) => ({
+      spec: 'contacts', descriptorName: 'contacts', token,
+      existingCategories: [...existingCategories],
+      ...overrides,
+    });
+
+    it('resolves an existing contact category by exact categoryCode', async () => {
+      const ops = await buildOperations(
+        { name: 'Acme Corp', categoryCode: 'CLIENTS' },
+        contactConfig('contacts-cat-code'),
+      );
+      assert.equal(ops[0].body.businessPartnerCategory, 'BPG-CLIENTS');
+    });
+
+    it('resolves an existing contact category by normalized categoryName', async () => {
+      const ops = await buildOperations(
+        { name: 'Acme Corp', categoryName: '  CLIENTÉS  ' },
+        contactConfig('contacts-cat-name'),
+      );
+      assert.equal(ops[0].body.businessPartnerCategory, 'BPG-CLIENTS');
+    });
+
+    it('resolves an existing contact category through the legacy category column', async () => {
+      const ops = await buildOperations(
+        { name: 'Acme Corp', category: 'Proveedores' },
+        contactConfig('contacts-cat-legacy'),
+      );
+      assert.equal(ops[0].body.businessPartnerCategory, 'BPG-SUPPLIERS');
+    });
+
+    it('auto-creates a missing contact category with a deterministic code', async () => {
+      const createCategoryFn = vi.fn(async ({ searchKey, name }) => ({ id: 'BPG-NEW', searchKey, name }));
+      const ops = await buildOperations(
+        { name: 'Acme Corp', category: 'Distribución Especial' },
+        contactConfig('contacts-cat-create', { createCategoryFn }),
+      );
+      assert.equal(ops[0].body.businessPartnerCategory, 'BPG-NEW');
+      assert.deepEqual(createCategoryFn.mock.calls[0][0], {
+        searchKey: 'DISTRIBUCION_ESPECIAL', name: 'Distribución Especial',
+      });
+    });
+
+    it('reuses one in-flight category creation across concurrent contact rows', async () => {
+      const createCategoryFn = vi.fn(async ({ searchKey, name }) => ({ id: 'BPG-SHARED', searchKey, name }));
+      const rows = [
+        { name: 'Acme One', category: 'Retail' },
+        { name: 'Acme Two', category: 'Retail' },
+        { name: 'Acme Three', category: 'Retail' },
+      ];
+      const results = await Promise.all(rows.map((row) => buildOperations(
+        row,
+        contactConfig('contacts-cat-concurrent', { createCategoryFn }),
+      )));
+      assert.equal(createCategoryFn.mock.calls.length, 1);
+      for (const ops of results) assert.equal(ops[0].body.businessPartnerCategory, 'BPG-SHARED');
+    });
+
+    it('rejects ambiguous normalized category names without guessing', async () => {
+      await assert.rejects(
+        () => buildOperations(
+          { name: 'Acme Corp', categoryName: 'Servicios' },
+          contactConfig('contacts-cat-ambiguous'),
+        ),
+        /Multiple records match "Servicios"/,
+      );
+    });
+
+    it('keeps legacy imports valid when no category column is present', async () => {
+      const ops = await buildOperations(
+        { name: 'Acme Corp', etgoEmail: 'legacy@example.com' },
+        contactConfig('contacts-cat-legacy-empty'),
+      );
+      assert.equal(ops[0].body.businessPartnerCategory, undefined);
+    });
+
+    it('surfaces category creation failures as row-level errors', async () => {
+      const createCategoryFn = vi.fn().mockRejectedValue(new Error('Category service unavailable'));
+      await assert.rejects(
+        () => buildOperations(
+          { name: 'Acme Corp', category: 'Blocked Category' },
+          contactConfig('contacts-cat-create-error', { createCategoryFn }),
+        ),
+        /Category service unavailable/,
+      );
+    });
+  });
 });
