@@ -358,6 +358,10 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
       {
         evidenceStem: 'ETP-4894-cross-client-org2',
         afterDashboard: async (page) => {
+          // The dashboard opens with the Etendo side menu collapsed. Expand it
+          // before asserting the company switcher, matching the real user path.
+          const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
+          if (await expandMenu.isVisible()) await expandMenu.click();
           await expect(page.getByLabel('switchCompany')).toContainText(org2Name);
           await page.getByLabel('switchCompany').click();
           const options = page.locator('[data-testid^="company-option-"]');
