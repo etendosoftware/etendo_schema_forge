@@ -2048,3 +2048,21 @@ STRIP itself, in order: Roles del usuario, Configuración del correo electrónic
 Adjuntos.
 
 **Dispatch:** schema-forge-developer, `etendo_schema_forge` only, frontend-only.
+
+**DEV wave 10 Findings (developer-10, landed, commit `1fc06ede4`) — verified with a
+genuine before/after/before regression test, not just a single pass:** added
+`detailTabOrder={1}` to `windows/custom/user/index.jsx`'s `<UserPage>` call (flows
+through `UserPage`'s `{...props}` spread → `DetailView`'s own destructured
+`detailTabOrder` prop → `buildInitialTabs`'s `computeLinesEntryKey`), giving the
+email-config lines tab weight `1` — between `roles` (0) and `attachments` (999 default).
+Also documented the mechanism in `docs/generated-custom-windows/user.md` (self-doc
+policy). **Verification this time actually exercises the real component tree**: a
+throwaway Playwright spec (deleted after use) navigated the real `index.jsx` → generated
+`UserPage` → `DetailView` tree and read the tab strip's DOM order — confirmed correct
+(`Roles del usuario, Configuración del correo electrónico, Adjuntos`) WITH the fix; then
+**stashed the fix and reran the identical test** — order regressed to the old
+(wrong) sequence, proving the test genuinely reflects the code change rather than a
+cached/stale build; then restored the fix and confirmed correct order one more time.
+`index.vitest.jsx` (21 tests) unaffected — nothing currently pins `detailTabOrder`,
+so nothing broke, though Tester may want to add explicit coverage for it as a
+follow-up (optional, not blocking).
