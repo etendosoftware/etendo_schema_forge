@@ -10,25 +10,38 @@
 
 **⚠️ CURRENT OVERALL STATE (2026-08-16, read this before trusting the REVIEW/QA/DOCS
 rows below):** REVIEW/QA/DOCS all APPROVED/DONE against the code as it existed on
-2026-08-14, BEFORE four rounds of human manual testing found real bugs/cosmetic issues.
-Since then, **DEV waves 6-9 have all landed** (frontend-only from wave 8 onward; wave 7
-is the only one touching `com.etendoerp.go`) — see each "Manual QA Feedback... DEV wave
-N" section near the end of this file for full detail:
+2026-08-14, BEFORE seven rounds of human manual testing found real bugs/cosmetic
+issues. Since then, **DEV waves 6-12 have all landed** — see each "Manual QA
+Feedback... DEV wave N" section near the end of this file for full detail:
 - Wave 6 (5 fixes) — DONE + tested (commit `7f75e37f7`).
 - Wave 7 (new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint) —
-  code done (`6b40bc7dd` frontend, `90f08997` backend).
+  code done (`6b40bc7dd` frontend, `90f08997` backend). Tester follow-up DONE
+  (agentId `a24834dfa45baed65`) — Vitest 646/12017/0 failed, Playwright 7/7.
 - Wave 8 (layout: `inlineInHeaderCard`) — done, empirically verified (`b20afd7`).
 - Wave 9 (grid column label + tab order) — done, empirically verified (`8b7e2f4`).
-**Tester follow-up for waves 7-9 is DONE** (agentId `a24834dfa45baed65`, 2026-08-16) —
-all mock gaps closed, new coverage added for waves 8/9, a genuinely broken Playwright
-spec fixed (missing route mock for the new `systemroletemplates` endpoint). Final
-counts: Vitest 646/646 files, 12017 passed, 0 failed; Playwright 7/7. **No real bugs
-found — this was all test/mock debt.** DEV+Tester work for waves 6-9 is now fully
-closed. **REVIEW and QA have NOT been re-run against ANY of waves 6-9 — their ✅ rows
+- Wave 10 (tab-order real root cause, `detailTabOrder`) — done, regression-tested
+  (`1fc06ede4`).
+- Wave 11 (matrix visual polish — pills, casing, role icons) — done, verified against
+  screenshot (`8fe4753d8`).
+- Wave 12 (discarded duplicate `firstName`/`lastName` User fields, fixed a real Nombre
+  label collision) — done, verified via screenshot (`404a0ce70`). The 2 known-stale
+  test items left for Tester are **now FIXED** (commit `ac30aed`): both
+  `UserHeaderTable.vitest.jsx` (5-column assertion, `tools/app-shell` `user/`
+  suite 108/108 green) and `e2e/tests/flows/user-role-assignment.mocked.spec.js`
+  (switched the "unrelated field edit" from deleted `field-lastName` to `field-email`,
+  spec 7/7 green) — see DEV wave 12 Findings for exact detail.
+- **B5 (new, dispatched 2026-08-16):** real-seed-data access-control JUnit tests
+  (no-access both directions, read-only, full, most-permissive-wins) — see Task B5
+  section near end of file. Not yet landed.
+**REVIEW and QA have NOT been re-run against ANY of waves 6-12 or B5 — their ✅ rows
 below are stale for the CURRENT diff, do not treat this ticket as PR-ready based on
-those rows alone. That re-run is the next step.** If resuming cold: check `git log` in
+those rows alone.** Also still owed to the human: the manual-eyeball-test checklist
+requested earlier, once REVIEW comes back clean. If resuming cold: check `git log` in
 both repos against the commits named in each wave's Findings section to see exactly how
-much of this has actually landed before assuming anything is pending.
+much of this has actually landed before assuming anything is pending. **Concrete next
+steps, in order: (1) let B5 land, (2) dispatch Tester for the 2 wave-12 stale-test
+items, (3) dispatch a fresh REVIEW covering waves 6-12 + B5, (4) QA, (5) DOCS refresh
+for wave 10-12 UI changes, (6) hand the human the manual-test checklist.**
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -49,7 +62,8 @@ much of this has actually landed before assuming anything is pending.
 | F10 | Docs (Sage) | ⚠️ STALE — done for pre-wave-6/7 code, not yet updated for the new `SFSystemRoleTemplates` endpoint or wave 6's tab/matrix behavior changes (2026-08-14) | Updated `docs/generated-custom-windows/user.md` (multi-role picker, "Roles del usuario" matrix tab incl. the 3-General-row/9-gap-row convention, grid role chips/filter, `onAfterExistingSave` as a reusable `DetailView.jsx` extension point). Closed both stale-doc mentions REVIEW flagged: `docs/generated-custom-windows/user.md`'s old evidence line and `docs/functionalidad/02-capacidades-y-flujos.md`'s CAP-ROL-02 (rewritten to describe the ETP-4906 flow; old ETP-4512 `AD_User_Roles`/`Default_Ad_Role_ID` sync noted as orphaned-but-untouched in a new "Huecos abiertos" bullet) — no dangling references to deleted files remain in either. Also fixed one more dangling `AssignRoleControl.jsx` mention found in `docs/functionalidad/01-actores-y-superficies.md` (not flagged by REVIEW, same root cause, trivial one-line fix). Confirmed `docs/decisions-reference.md` needs no changes — `git show 3466f43fa -- artifacts/user/decisions.json` shows only `customPanelTabs`/`customComponents.headerTable`/`headerExtra.customForm`, all pre-existing extension points, no new key. |
 | DEV wave 6 | 5 manual-QA fixes (spacing, blank-trigger, toast sequencing, duplicate tab, unfiltered matrix) | ✅ DONE + tested | Frontend only. Commits `66c0df38b` (fix) + `7f75e37f7` (Tester follow-up). See "Manual QA Feedback... DEV wave 6" section. |
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
-| REVIEW | Alex | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (re-review, 2026-08-14, agentId `a055d5018a6ab98e8`) | 0 blockers, 0 warnings, 1 wording-nit suggestion (see "REVIEW Re-Review Findings" below). B1 blocker independently re-confirmed fixed (spec re-run live, 7/7). Figma access — tried again, same denial as first pass; recorded as a standing, agent-unfixable human-sign-off item, NOT a blocker (per Global Constraints). Backend tests accepted per targeted-class results, no redundant full `gradlew test` run. **REVIEW is done. Next: QA (Sentinel).** |
+| B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | 🔄 DISPATCHED 2026-08-16 | See Task B5 section near end of file. `com.etendoerp.go`, JUnit, developer writes tests directly (not Tester — see B5 Dispatch note). Not yet landed as of dispatch time. |
+| REVIEW | Alex | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (re-review, 2026-08-14, agentId `a055d5018a6ab98e8`) | 0 blockers, 0 warnings, 1 wording-nit suggestion (see "REVIEW Re-Review Findings" below). B1 blocker independently re-confirmed fixed (spec re-run live, 7/7). Figma access — tried again, same denial as first pass; recorded as a standing, agent-unfixable human-sign-off item, NOT a blocker (per Global Constraints). Backend tests accepted per targeted-class results, no redundant full `gradlew test` run. **REVIEW is done for pre-wave-6 code only — waves 6-12 AND B5 still need a re-run. Next: dispatch fresh REVIEW once DEV wave 12 fixups (F9/UserHeaderTable stale-test items below) + B5 all land.** |
 | QA | Sentinel | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (2026-08-14, agentId `a3f39375a6133d5c0`) | Full suites re-confirmed green (Vitest 646/12011/0 failed, matches plan exactly; Playwright `user-role-assignment.mocked.spec.js` 7/7). DB reference data (GOClient `ad_client_id`, all 4 template role ids, all 5 test usernames) independently re-verified against the live `etendogoclean` DB — all still accurate, no drift. **Could NOT complete the live browser-driven pass** (assign roles to a real user via the UI, save, reload) — blocked on a missing plaintext password for `goadmin@etendo.software`/any GOClient user (not retrievable; this repo's own `E2E_PASSWORD`/`onboarding-setup` mechanism only self-registers a BRAND NEW tenant with no ETP-4852 template roles, not GOClient). Flagged as a standing, agent-unfixable credentials gap — same class as REVIEW's own Figma-access gap — NOT a blocker. **Adapted the most-permissive-wins DB verification to the Java-integration level instead:** found the exact scenario already has real-DB (`WeldBaseTest`) regression coverage from prior ETP-4852/4878 work (`UserRoleCompositionServiceOverlapIntegrationTest`), confirmed ETP-4906's B2 diff never touches that write path (purely additive read methods), then closed a real gap the existing suite missed — added `testGetAppliedTemplateRoleIdsReflectsARealOverlappingComposition` (same file) proving the NEW B2 read method reflects a REAL overlapping composition's most-permissive-wins result, not just a mocked one. `:compileTestJava` confirmed it compiles; a full `./gradlew test` run was kicked off in background to confirm it passes (still running — same tooling limitation REVIEW hit, not waited on further). **Follow-up live pass (credentials supplied by the human, 2026-08-14):** logged in as `goadmin@etendo.software` for real against `make dev`; found a real DB-state gap unrelated to this ticket's code (Finance/Sales currently `AD_Role.IsTemplate='N'` in this environment — needs `update.database` or a manual fix); retried with Purchasing+Inventory (both `IsTemplate='Y'`) and **confirmed the write path + Guardar-enablement fix live against the real DB** (personal role, `AD_Role_Inheritance`, `AD_User_Roles`, `Default_Ad_Role_ID` all correct after save). **Could not confirm reload/grid persistence** — root-caused to `SFUserRoleAssignments` (B2's new webhook) returning 404 on the backend currently serving this environment, i.e. `com.etendoerp.go` needs a rebuild/redeploy to pick up commits `bc2b6c8c`/`fba31d67` — an infra gap, not a code defect (sibling webhooks like `SFRolesOverview` work fine). See "Live Browser Pass Follow-Up" under "QA Findings" below for full detail. Cleaned up test user + deleted throwaway scripts. **QA is done. Recommend: redeploy `com.etendoerp.go` + re-run the live pass once more before treating this as fully closed; otherwise proceed to DOCS (Sage) — DOCS already ran (see commit `acf7e78cf`).** |
 
 **If resuming this ticket cold (e.g. a fresh session after running out of tokens):**
@@ -2210,15 +2224,29 @@ screenshots** (not just the agent's description): detail form now shows exactly 
 columns are `Nombre, Contacto, Correo electrónico, Bloqueado, Roles` — no orphaned
 first/last-name columns. **Genuinely fixed.**
 
-**2 things now broken, both flagged for Tester, neither fixed yet:**
-1. `UserHeaderTable.vitest.jsx:118` — asserts the old 7-column list including
-   `firstName`/`lastName`; needs updating to the new 5-column list.
+**2 things now broken, both flagged for Tester — BOTH NOW FIXED (Tester,
+2026-08-16, commit `ac30aed` — "Feature ETP-4906: Fix wave-12 stale User
+grid/role-save tests"):**
+1. `UserHeaderTable.vitest.jsx:118` — asserted the old 7-column list including
+   `firstName`/`lastName`; updated to the new 5-column list
+   (`name, businessPartner, email, locked, defaultRole`), matching
+   `UserHeaderTable.jsx`'s hardcoded `columns` array. `user/` suite: 108/108 green.
 2. `e2e/tests/flows/user-role-assignment.mocked.spec.js:345` — the "a role-only chip
-   change enables Guardar..." test fills `field-lastName` (as the "unrelated field
-   edit" to prove the save-wiring contract) — that field no longer exists. Needs
-   switching to a still-present editable field (e.g. `field-email`).
+   change enables Guardar..." test filled `field-lastName` (as the "unrelated field
+   edit" to prove the save-wiring contract) — that field no longer exists. Switched to
+   `field-email` (still editable per `artifacts/user/generated/web/user/UserForm.jsx`).
+   Full spec: 7/7 green.
 
-## Backend Test Gap — Real Access-Control Scenarios (Human question, 2026-08-14) — NOT DISPATCHED, plan only
+## Task B5 — Backend Test Gap: Real Access-Control Scenarios (Human question, 2026-08-14; DISPATCHED 2026-08-16)
+
+**2026-08-16 update: human confirmed this should be dispatched now.** Framing was
+relaxed — exact scenario wording below is a strong starting point, not a rigid spec:
+the actual bar is proving, against real seed data, that the composition engine
+delivers all 4 outcomes correctly — **no access**, **read-only access**, **full
+access**, and **most-permissive-wins when two roles disagree on the same window**.
+Implementer may substitute different real windows/roles than the ones named below if
+they hit the same 4 outcomes more cleanly against current seed data — the DB-level
+assertion pattern matters more than the exact window IDs.
 
 Human asked, pointedly: can we be SURE the permission system actually works —
 specifically that a Sales-only composed user can't see Purchase Invoice, a
@@ -2244,21 +2272,27 @@ rather than trusting memory:**
   and this session hasn't independently re-verified; presumably solid since every other
   window in the app depends on it, but that's an assumption.
 
-**Human decision: record this gap in the plan for now, do NOT dispatch yet.**
+**Original human decision (2026-08-14): record this gap in the plan, do NOT dispatch
+yet. Superseded 2026-08-16 — now dispatched, see status table row B5.**
 
-**If/when this is picked up — 3 concrete test scenarios, using the REAL seeded
-`SystemRoleTemplates` role ids (not a synthetic window):**
-1. Compose a personal role from `SystemRoleTemplates.SALES_ROLE_ID` ONLY. Assert NO
-   active `AD_Window_Access` row exists for window `183` (Purchase Invoice — granted
-   only by Purchasing's real seed data, never Sales').
-2. Compose a personal role from `SystemRoleTemplates.PURCHASING_ROLE_ID` ONLY. Assert
-   NO active `AD_Window_Access` row exists for window `167` (Sales Invoice — granted
-   only by Sales' real seed data, never Purchasing's).
-3. Compose a personal role from `SALES_ROLE_ID` + `FINANCE_ROLE_ID` together. Assert
-   window `192` (Categoría de contacto / BP Category — Sales grants read-only, Finance
-   grants full, per `TemplateRoleWindowAccess`'s real matrix) resolves to
-   `isEditableField() === true` on the composed personal role — the REAL most-permissive
-   -wins case, not a synthetic stand-in.
+**4 outcomes to prove, using the REAL seeded `SystemRoleTemplates` role ids (not a
+synthetic window) — the 3 numbered scenarios below cover all 4 (no-access appears
+twice, in each direction):**
+1. **No access.** Compose a personal role from `SystemRoleTemplates.SALES_ROLE_ID`
+   ONLY. Assert NO active `AD_Window_Access` row exists for window `183` (Purchase
+   Invoice — granted only by Purchasing's real seed data, never Sales').
+2. **No access (other direction).** Compose a personal role from
+   `SystemRoleTemplates.PURCHASING_ROLE_ID` ONLY. Assert NO active `AD_Window_Access`
+   row exists for window `167` (Sales Invoice — granted only by Sales' real seed data,
+   never Purchasing's).
+3. **Read-only vs. full vs. most-permissive-wins.** Compose a personal role from
+   `SALES_ROLE_ID` alone against window `192` (BP Category) and assert it resolves
+   read-only (`isEditableField() === false`) — proves the read-only outcome in
+   isolation. Then compose `SALES_ROLE_ID` + `FINANCE_ROLE_ID` together and assert the
+   SAME window resolves `isEditableField() === true` — proves both the full-access
+   outcome (Finance alone) and most-permissive-wins (the composed role beats Sales'
+   read-only grant), per `TemplateRoleWindowAccess`'s real matrix. This is the REAL
+   most-permissive-wins case, not a synthetic stand-in.
 
 Natural home: either new methods appended to
 `UserRoleCompositionServiceOverlapIntegrationTest.java` (same `WeldBaseTest` pattern,
@@ -2266,5 +2300,14 @@ reusing its existing role-id constants) or a new sibling test class if that file
 scope (synthetic-overlap mechanism proof) shouldn't be mixed with real-seed-data
 scenarios — implementer's call. **Runtime/HTTP-level enforcement (actually hitting the
 purchase-invoice/sales-invoice spec as a composed user and confirming a real
-403/empty-data response) is a further, larger step beyond these 3 DB-level assertions —
+403/empty-data response) is a further, larger step beyond these DB-level assertions —
 not included in this gap's scope unless explicitly asked for separately.**
+
+**B5 Dispatch:** schema-forge-developer, `com.etendoerp.go` only (Java/JUnit,
+`WeldBaseTest`, plain branch checkout per Global Constraints — never a worktree). Per
+this repo's testing conventions, JUnit backend tests are written directly by the
+developer agent (the mandatory Tester-delegation rule is scoped to Vitest/Node/
+Playwright only — see CLAUDE.md Testing section; B2's own JUnit tests were written the
+same way). Commit locally only, do not push. After landing, this task still owes a
+REVIEW pass same as any other DEV work — fold it into whatever REVIEW re-run covers
+waves 6-12 rather than a separate one-off review.
