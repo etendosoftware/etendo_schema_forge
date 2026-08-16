@@ -1877,3 +1877,24 @@ layout; don't repeat that.
 involvement this time). Tester follow-up after, for the same reason as prior waves —
 existing Vitest snapshots/assertions on this component's markup may need updating for
 the new class list.
+
+**DEV wave 8 Findings (developer-8, landed, commit `b20afd7`) — independently
+re-confirmed by the coordinator, not just trusted:** `AssignTemplateRolesControl.inlineInHeaderCard = true`
+added; both root divs changed from `flex flex-col gap-2 max-w-[420px] px-6` to
+`flex flex-col gap-2 w-full` (dropped both the fixed max-width and wave 7's now-obsolete
+`px-6`). **Empirically verified, not just source-read** — measured `getBoundingClientRect()`
+live against `make dev`: "Roles asignados" now has IDENTICAL `left`/`right`/`width`
+(66/349/283) to "Nombre" in the same grid column, just at a different `top`. The
+coordinator independently re-viewed the actual screenshot (not just the agent's
+numbers) — confirms it visually: the control now sits cleanly inside the same header
+card as the native fields, full column width, correctly left-aligned, no detached block,
+no double padding, and the wave 6 fix (no duplicate native tab) still holds in the same
+screenshot. **This layout issue is genuinely resolved.**
+
+**Pre-existing test failures, NOT caused by this change (confirmed via `git stash`
+before/after comparison):** `AssignTemplateRolesControl.vitest.jsx` was already 15
+failed/5 passed before this fix, same count after — root cause is an unrelated mock gap
+(`fetchTemplateRoles` missing from the file's `vi.mock('@/lib/rolesApi.js', ...)`, the
+same class of gap DEV wave 7 already flagged for Tester across 4 files). No test in this
+file asserts on the old `max-w-[420px]`/`px-6` classes, so this wave adds zero new test
+debt on top of wave 7's already-pending Tester follow-up.
