@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { DataTable } from '@/components/contract-ui';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import RoleChipsCell, { resolveDefaultRoleId, resolveUserId, useUserRoleGridData } from './RoleChipsCell.jsx';
 import { RoleFilterControl } from './RoleFilterControl.jsx';
 
@@ -48,6 +49,26 @@ const filters = ['name', 'email'];
 export default function UserHeaderTable(props) {
   const { roles, rolesById, adminRoleId, assignments, loading } = useUserRoleGridData();
   const [roleFilter, setRoleFilter] = useState(null);
+  const ui = useUI();
+  const { locale } = useLocaleSwitch();
+
+  // ETP-4906 Round 4 — `t('Default_Ad_Role_ID')` (the shared native AD dictionary
+  // entry) always wins over this column's own `label` in `DataTable`'s header
+  // resolution (`t(col.column) ?? col.label ?? col.key`), so the grid header still
+  // read "Default Role"/"Rol por Defecto" even after the chip-render swap above.
+  // Do NOT edit the shared dictionary entry — other windows/contexts reference that
+  // same native column. Scope the override to just THIS grid via `labelOverrides`
+  // instead, merging with anything the generated page already passes down.
+  const labelOverrides = useMemo(() => {
+    const incoming = props.labelOverrides ?? {};
+    return {
+      ...incoming,
+      [locale]: {
+        ...incoming[locale],
+        Default_Ad_Role_ID: ui('usersGridRolesColumn'),
+      },
+    };
+  }, [props.labelOverrides, locale, ui]);
 
   const roleColumn = useMemo(() => ({
     key: 'defaultRole',
@@ -104,6 +125,7 @@ export default function UserHeaderTable(props) {
         filters={filters}
         {...props}
         data={filteredData}
+        labelOverrides={labelOverrides}
         data-testid="DataTable__UserHeaderTable" />
     </>
   );

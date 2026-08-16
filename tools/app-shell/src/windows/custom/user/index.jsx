@@ -103,7 +103,13 @@ export default function UserWindow(props) {
   // `artifacts/user/generated/web/user/UserPage.jsx`'s own `customTabs` prop after any
   // `make regen ONLY=user` that touches `window.attachments`.
   const customTabs = useMemo(() => [
-    { key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab', props: { selectedRoleIds } },
+    // ETP-4906 Round 4 — `tabOrder: 0` places "Roles del usuario" before the native
+    // "Configuración del correo electrónico" secondary tab (default weight 99) and
+    // before the `attachments` custom tab below (default weight 999) — see
+    // `DetailView.jsx`'s `buildInitialTabs` (`detailViewHelpers.jsx`), which sorts by
+    // weight then insertion index. `attachments` is left at its implicit default so
+    // it keeps sorting after both.
+    { key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab', tabOrder: 0, props: { selectedRoleIds } },
     { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'AD_User', config: {} } },
   ], [selectedRoleIds]);
 
