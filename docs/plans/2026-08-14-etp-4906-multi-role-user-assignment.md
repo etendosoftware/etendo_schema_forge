@@ -2217,3 +2217,54 @@ first/last-name columns. **Genuinely fixed.**
    change enables Guardar..." test fills `field-lastName` (as the "unrelated field
    edit" to prove the save-wiring contract) — that field no longer exists. Needs
    switching to a still-present editable field (e.g. `field-email`).
+
+## Backend Test Gap — Real Access-Control Scenarios (Human question, 2026-08-14) — NOT DISPATCHED, plan only
+
+Human asked, pointedly: can we be SURE the permission system actually works —
+specifically that a Sales-only composed user can't see Purchase Invoice, a
+Purchasing-only user can't see Sales Invoice, and a Sales+Finance user gets FULL (not
+read-only) access to BP Category (window `192`)? **Honest answer, verified by directly
+reading `UserRoleCompositionServiceOverlapIntegrationTest.java` (`com.etendoerp.go`)
+rather than trusting memory:**
+
+- **Mechanism-level confidence is solid.** That file's 4 tests prove most-permissive-wins
+  composition works against a REAL DB (`WeldBaseTest`) — order-independent, idempotent
+  on re-run, and the read path matches the write. Strong evidence the LOGIC is correct
+  for any overlapping window in general.
+- **But it uses a synthetic injected overlap on window `100`** ("Tables and Columns"),
+  not the real production seed data — so nothing has ever exercised the SPECIFIC
+  real-world case (Sales=read-only + Finance=full on window `192`) end to end.
+- **Exclusion is untested entirely.** Nothing asserts a Sales-only composed role's
+  `AD_Window_Access` genuinely has NO row for Purchase Invoice (window `183`) or that a
+  Purchasing-only role has none for Sales Invoice (window `167`) — true by construction
+  (composition only ever copies what a requested template grants, no code path adds
+  extra access), but never regression-tested.
+- **Runtime enforcement is out of scope for ETP-4906 entirely** —
+  `NeoAccessHelper.hasWindowAccess()` is pre-existing machinery this ticket didn't build
+  and this session hasn't independently re-verified; presumably solid since every other
+  window in the app depends on it, but that's an assumption.
+
+**Human decision: record this gap in the plan for now, do NOT dispatch yet.**
+
+**If/when this is picked up — 3 concrete test scenarios, using the REAL seeded
+`SystemRoleTemplates` role ids (not a synthetic window):**
+1. Compose a personal role from `SystemRoleTemplates.SALES_ROLE_ID` ONLY. Assert NO
+   active `AD_Window_Access` row exists for window `183` (Purchase Invoice — granted
+   only by Purchasing's real seed data, never Sales').
+2. Compose a personal role from `SystemRoleTemplates.PURCHASING_ROLE_ID` ONLY. Assert
+   NO active `AD_Window_Access` row exists for window `167` (Sales Invoice — granted
+   only by Sales' real seed data, never Purchasing's).
+3. Compose a personal role from `SALES_ROLE_ID` + `FINANCE_ROLE_ID` together. Assert
+   window `192` (Categoría de contacto / BP Category — Sales grants read-only, Finance
+   grants full, per `TemplateRoleWindowAccess`'s real matrix) resolves to
+   `isEditableField() === true` on the composed personal role — the REAL most-permissive
+   -wins case, not a synthetic stand-in.
+
+Natural home: either new methods appended to
+`UserRoleCompositionServiceOverlapIntegrationTest.java` (same `WeldBaseTest` pattern,
+reusing its existing role-id constants) or a new sibling test class if that file's own
+scope (synthetic-overlap mechanism proof) shouldn't be mixed with real-seed-data
+scenarios — implementer's call. **Runtime/HTTP-level enforcement (actually hitting the
+purchase-invoice/sales-invoice spec as a composed user and confirming a real
+403/empty-data response) is a further, larger step beyond these 3 DB-level assertions —
+not included in this gap's scope unless explicitly asked for separately.**
