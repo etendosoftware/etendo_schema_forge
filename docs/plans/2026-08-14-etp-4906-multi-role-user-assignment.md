@@ -1828,3 +1828,52 @@ frontend files will need updating to mock the new fetch instead/additionally.
   `AssignTemplateRolesControl.vitest.jsx` (15), `RoleChipsCell.vitest.jsx` (7),
   `UserHeaderTable.vitest.jsx` (9), `UserRolesTab.vitest.jsx` (13). **Tester follow-up
   needed before this goes back to the human for another manual pass.**
+
+## Manual QA Feedback Round 3 (Human, 2026-08-14) — DEV wave 8, layout fix
+
+**Both prior padding attempts (waves 6 and 7) were treating the wrong problem.** Human
+screenshot shows "Roles asignados" rendering as a visually DETACHED block below the
+"Nombre"/"Correo electrónico" card, with its own narrower width — not a spacing/padding
+nit, a structural placement issue.
+
+**Root cause, confirmed directly from source this time (not guessed):**
+`artifacts/user/generated/web/user/UserPage.jsx` passes `AssignTemplateRolesControl` as
+`formFooter`, not `headerExtra` (corrects an earlier wrong trace in this plan). In
+`DetailView.jsx`'s `buildHeaderFooter` (~line 1194-1203), `footerInline =
+!!formFooter.inlineInHeaderCard` — since `AssignTemplateRolesControl` never sets that
+static flag, it defaults to the "detached block below the card" path (`{!footerInline
+&& footerElement}`, ~line 3386), which is exactly the screenshot.
+
+**There is already a real, working precedent for the OTHER path:**
+`tools/app-shell/src/windows/custom/shared/TaxSifField.jsx` sets
+`TaxSifField.inlineInHeaderCard = true` (line 134) and renders via a nested
+`<EntityForm renderAsFragment>` (its own comment, line ~94-101: "Render as bare grid
+CELLS... DetailView splices these fragments into the principal header form's grid via
+its `trailing` slot... each field flows into the next free cell of the native header
+grid, aligned and spaced exactly like a native field"). Confirmed the render path: when
+`footerInline` is true, `buildHeaderFooter` sets `inlineTrailing = footerNode`
+(line 1202), which `DetailView.jsx` passes as `trailing={inlineTrailing}` to the
+PRINCIPAL `<Form layout="horizontal" section="principal">` (line 3349) — and
+`EntityForm.jsx`'s non-fragment render path appends `{trailing}` INSIDE
+`<div className={gridClass} style={gridStyle}>` (line 1513-1520), i.e. the exact same
+CSS Grid container "Nombre"/"Correo electrónico" live in.
+
+**Fix:** set `AssignTemplateRolesControl.inlineInHeaderCard = true`. Because this
+component is a hand-built chip widget (not routed through `EntityForm`'s per-field
+cell renderer like `TaxSifField` is), simply flipping the flag moves WHERE it renders
+(into the grid, as a grid child) but its OWN internal classes still determine its
+footprint within that cell — the current `max-w-[420px]` cap likely needs to become
+`w-full` (so it fills its grid cell like a native field does, rather than possibly
+under- or over-shooting a fixed pixel width), and wave 7's `px-6` addition almost
+certainly needs to be REMOVED once the component is a grid child (the grid's own
+`gridStyle`/`gridClass` positions it — an extra manual `px-6` would now double up
+against, not compensate for, missing card padding, likely reintroducing a
+misalignment in the other direction). **Whoever picks this up must actually look at
+it live (Playwright screenshot or ask the human) before declaring success** — this
+plan has already guessed wrong twice on pure source-reading for this exact control's
+layout; don't repeat that.
+
+**Dispatch:** schema-forge-developer, `etendo_schema_forge` only (no backend
+involvement this time). Tester follow-up after, for the same reason as prior waves —
+existing Vitest snapshots/assertions on this component's markup may need updating for
+the new class list.
