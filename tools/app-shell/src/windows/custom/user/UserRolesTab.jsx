@@ -1,9 +1,48 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
+import { TrendingUp, Package, Landmark, FileText } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useRoleSelection } from './roleSelectionContext.js';
+
+/**
+ * ETP-4906 Manual QA Feedback Round 6 (DEV wave 11) — one small semantic icon per role
+ * column, rendered inline before the role's display name. Keyed by the raw AD_Role.name
+ * (Finance/Sales/Purchasing/Inventory) — the SAME 4 literal keys `roleNameI18n.js`'s
+ * `ROLE_NAME_I18N_KEYS` map uses, deliberately not a new naming scheme, so a role name
+ * that resolves a display-name translation also resolves an icon here. Any role name not
+ * in this map (there shouldn't be one among `columns`, since `AssignTemplateRolesControl`
+ * only ever offers these 4) renders with no icon rather than guessing one.
+ */
+const ROLE_ICONS = {
+  Sales: TrendingUp,
+  Inventory: Package,
+  Finance: Landmark,
+  Purchasing: FileText,
+};
+
+/**
+ * ETP-4906 Manual QA Feedback Round 6 (DEV wave 11) — colored pill/badge for a cell's
+ * access tier, reusing the same `status-success`/`status-warning` semantic Tailwind
+ * utilities (backed by `--status-success-*`/`--status-warning-*` CSS custom properties,
+ * both with dark-mode variants) that `getStatusBadgeProps()` (`lib/statusBadge.js`) and
+ * `FiscalStatusBadge.jsx` already use elsewhere in this app — not a new ad-hoc raw-green
+ * Tailwind color, since a closer-matching dark-mode-aware convention already exists.
+ * `tier === null` (no access, '—') intentionally renders as plain text, no pill.
+ */
+function TierPill({ tier, children }) {
+  if (!tier) return children;
+  const toneClass =
+    tier === 'full'
+      ? 'border-status-success-border bg-status-success text-status-success-foreground'
+      : 'border-status-warning-border bg-status-warning text-status-warning-foreground';
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
 
 /**
  * ETP-4906 — "Roles del usuario" tab: a live per-role permission-preview matrix, one column
@@ -215,10 +254,15 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     );
   }
 
+  // Returns both the display text AND the tier ('full' | 'readonly' | null for no access)
+  // so the caller can wrap it in a colored `TierPill` — 'null' means render plain text,
+  // no pill (ETP-4906 Manual QA Feedback Round 6, DEV wave 11).
   const cellValue = (row, role) => {
     const windowEntry = (role.windows ?? []).find((w) => String(w.id) === row.windowId);
-    if (!windowEntry) return '—';
-    return windowEntry.tier === 'full' ? '✓' : ui('accessTierReadOnly');
+    if (!windowEntry) return { tier: null, text: '—' };
+    return windowEntry.tier === 'full'
+      ? { tier: 'full', text: '✓' }
+      : { tier: 'readonly', text: ui('accessTierReadOnly') };
   };
 
   return (
@@ -229,11 +273,17 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
             <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
               {ui('userRolesTabWindowColumn')}
             </th>
-            {columns.map((role) => (
-              <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
-                {resolveRoleDisplayName(ui, role.name)}
-              </th>
-            ))}
+            {columns.map((role) => {
+              const RoleIcon = ROLE_ICONS[role.name];
+              return (
+                <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
+                  <span className="inline-flex items-center justify-center gap-1">
+                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {resolveRoleDisplayName(ui, role.name)}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
@@ -241,7 +291,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
             <tr className="bg-muted/30">
               <th
                 colSpan={columns.length + 1}
-                className="text-left text-xs font-semibold uppercase text-muted-foreground py-1.5 pr-4"
+                className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
               >
                 {ui('userRolesTabGeneralCategory')}
               </th>
@@ -251,7 +301,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                 <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
                 {columns.map((role) => (
                   <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                    {'✓'}
+                    <TierPill tier="full">{'✓'}</TierPill>
                   </td>
                 ))}
               </tr>
@@ -262,7 +312,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               <tr className="bg-muted/30">
                 <th
                   colSpan={columns.length + 1}
-                  className="text-left text-xs font-semibold uppercase text-muted-foreground py-1.5 pr-4"
+                  className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
                 >
                   {tMenu(group.category)}
                 </th>
@@ -270,11 +320,14 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               {group.rows.map((row) => (
                 <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
                   <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
-                  {columns.map((role) => (
-                    <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                      {cellValue(row, role)}
-                    </td>
-                  ))}
+                  {columns.map((role) => {
+                    const { tier, text } = cellValue(row, role);
+                    return (
+                      <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
+                        <TierPill tier={tier}>{text}</TierPill>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </Fragment>
