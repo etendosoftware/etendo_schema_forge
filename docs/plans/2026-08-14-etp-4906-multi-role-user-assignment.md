@@ -10,22 +10,26 @@
 
 **⚠️ CURRENT OVERALL STATE (2026-08-16, read this before trusting the REVIEW/QA/DOCS
 rows below):** REVIEW/QA/DOCS all APPROVED/DONE against the code as it existed on
-2026-08-14, BEFORE two rounds of human manual testing found real bugs. Since then:
-**DEV wave 6** (5 fixes: spacing, blank-trigger-while-editing, error/success toast
-sequencing, duplicate/leaking native tab, unfiltered matrix categories — see "Manual QA
-Feedback... DEV wave 6" section) and **DEV wave 7** (corrected padding fix + a whole new
-backend endpoint, `SFSystemRoleTemplates`, plus a 4-file frontend repoint off the
-tenant-scoped `SFRolesOverview` — see "Manual QA Feedback Round 2... DEV wave 7"
-section) have both landed. **Tester follow-up for wave 6 is done** (commit `7f75e37f7`).
-**Tester follow-up for wave 7 is NOT dispatched yet** — 46 Vitest tests are currently
-RED (mechanical mock gap, `fetchTemplateRoles` not mocked in 4 test files — not a sign
-of a real bug, see DEV wave 7 Findings) — **paused on explicit human instruction**
-("let's not get to tester yet") to first confirm the backend rebuild/redeploy (in
-progress as of this note) actually works live. **REVIEW and QA have NOT been re-run
-against waves 6/7 — their ✅ rows below are stale for the CURRENT diff, do not treat
-this ticket as PR-ready based on those rows alone.** If resuming cold: check `git log`
-in both repos against the commits named in the wave 6/7 Findings sections below to see
-exactly how much of this has actually landed before assuming anything is pending.
+2026-08-14, BEFORE four rounds of human manual testing found real bugs/cosmetic issues.
+Since then, **DEV waves 6-9 have all landed** (frontend-only from wave 8 onward; wave 7
+is the only one touching `com.etendoerp.go`) — see each "Manual QA Feedback... DEV wave
+N" section near the end of this file for full detail:
+- Wave 6 (5 fixes) — DONE + tested (commit `7f75e37f7`).
+- Wave 7 (new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint) —
+  code done (`6b40bc7dd` frontend, `90f08997` backend).
+- Wave 8 (layout: `inlineInHeaderCard`) — done, empirically verified (`b20afd7`).
+- Wave 9 (grid column label + tab order) — done, empirically verified (`8b7e2f4`).
+**Tester dispatched 2026-08-16** (agentId `a24834dfa45baed65`) to close out ALL
+accumulated test debt from waves 7/8/9 in one pass (mock gaps for `fetchTemplateRoles`
+and `useLocaleSwitch` across ~5 files, new coverage for wave 8/9's behavior changes, and
+a likely-broken Playwright spec — it has zero route mock for the new
+`systemroletemplates` endpoint). **Not yet confirmed landed as of this note** — check
+`git log`/`ListAgents` for that agentId's actual outcome before assuming done.
+**REVIEW and QA have NOT been re-run against ANY of waves 6-9 — their ✅ rows below are
+stale for the CURRENT diff, do not treat this ticket as PR-ready based on those rows
+alone.** If resuming cold: check `git log` in both repos against the commits named in
+each wave's Findings section to see exactly how much of this has actually landed before
+assuming anything is pending.
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
