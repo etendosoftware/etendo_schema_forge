@@ -103,12 +103,11 @@ export default function UserWindow(props) {
   // `artifacts/user/generated/web/user/UserPage.jsx`'s own `customTabs` prop after any
   // `make regen ONLY=user` that touches `window.attachments`.
   const customTabs = useMemo(() => [
-    // ETP-4906 Round 4 — `tabOrder: 0` places "Roles del usuario" before the native
-    // "Configuración del correo electrónico" secondary tab (default weight 99) and
-    // before the `attachments` custom tab below (default weight 999) — see
-    // `DetailView.jsx`'s `buildInitialTabs` (`detailViewHelpers.jsx`), which sorts by
-    // weight then insertion index. `attachments` is left at its implicit default so
-    // it keeps sorting after both.
+    // ETP-4906 Round 4 — `tabOrder: 0` places "Roles del usuario" before the
+    // `attachments` custom tab below (default weight 999) — see `DetailView.jsx`'s
+    // `buildInitialTabs` (`detailViewHelpers.jsx`), which sorts by weight then
+    // insertion index. `attachments` is left at its implicit default so it keeps
+    // sorting after both `roles` and the email-config lines tab below.
     { key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab', tabOrder: 0, props: { selectedRoleIds } },
     { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'AD_User', config: {} } },
   ], [selectedRoleIds]);
@@ -120,6 +119,20 @@ export default function UserWindow(props) {
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}
         customTabs={customTabs}
+        // ETP-4906 Round 5 (DEV wave 10) — "Configuración del correo electrónico" is NOT
+        // a plain secondaryTabs entry; the generated `UserPage.jsx` renders it via
+        // `DetailTable={EmailConfigurationTable}`, which `buildInitialTabs` treats as the
+        // special LINES-tab slot (`detailViewHelpers.jsx`'s `computeLinesEntryKey`). With
+        // no `detailTabOrder`/`detailTabIndex` passed anywhere, that slot silently
+        // defaulted to `LINES_DEFAULT_WEIGHT = -1` — LOWER than `roles`' `tabOrder: 0` —
+        // so email-config kept sorting first despite Round 4's fix (confirmed live by the
+        // human, not just theorized). `detailTabOrder` is the helper's own documented
+        // "preferred" mechanism for this: passed straight through `UserPage`'s `{...props}`
+        // spread into `DetailView`, same path as `onAfterExistingSave`/`additionalDirtyState`
+        // above. `1` sits strictly between `roles` (0) and `attachments` (999, implicit),
+        // giving the final order: Roles del usuario, Configuración del correo
+        // electrónico, Adjuntos.
+        detailTabOrder={1}
       />
     </RoleSelectionProvider>
   );
