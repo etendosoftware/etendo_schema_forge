@@ -88,7 +88,7 @@ export default function AssignTemplateRolesControl(props) {
 
   if (!hasPersistedUser) {
     return (
-      <div className="flex flex-col gap-2 max-w-[420px] px-6" data-testid="AssignTemplateRolesControl__save-first">
+      <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__save-first">
         <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
         <p className="text-sm text-muted-foreground">{ui('saveUserFirstForRoles')}</p>
       </div>
@@ -100,7 +100,7 @@ export default function AssignTemplateRolesControl(props) {
   const overflowCount = selectedRoles.length - visibleChips.length;
 
   return (
-    <div className="flex flex-col gap-2 max-w-[420px] px-6" ref={containerRef} data-testid="AssignTemplateRolesControl">
+    <div className="flex flex-col gap-2 w-full" ref={containerRef} data-testid="AssignTemplateRolesControl">
       <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
 
       <button
@@ -171,3 +171,13 @@ export default function AssignTemplateRolesControl(props) {
     </div>
   );
 }
+
+// Opt into DetailView rendering this footer INSIDE the header card, aligned in the
+// same horizontal grid as the native header fields (see buildHeaderFooter in
+// DetailView.jsx: footerInline gates whether it lands in the principal Form's
+// `trailing` slot vs. the detached below-card block). Precedent:
+// TaxSifField.jsx:134. Unlike TaxSifField this component is NOT restructured to
+// render as EntityForm grid-cell fragments — it stays a self-contained widget —
+// so it occupies one grid cell as a whole and sizes itself with `w-full` (not a
+// fixed max-width) to fill that cell like a native field does.
+AssignTemplateRolesControl.inlineInHeaderCard = true;
