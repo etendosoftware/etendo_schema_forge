@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-14T18:20:12.546Z",
-  "contractChecksum": "0cf71994391da7bb",
+  "updatedAt": "2026-08-16T16:28:20.141Z",
+  "contractChecksum": "3642d4e0deca769b",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -228,8 +228,6 @@
           "name": {
             "required": true
           },
-          "firstName": {},
-          "lastName": {},
           "password": {},
           "isPasswordExpired": {
             "readOnly": true,
@@ -401,5 +399,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "6057f348e0ff1e98"
+  "checksum": "ec549005b85affb8"
 }

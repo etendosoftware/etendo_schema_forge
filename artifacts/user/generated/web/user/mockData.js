@@ -4,8 +4,6 @@ export const user = [
   {
     "id": "mock-user-001",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Standard order for Q1 delivery",
@@ -25,8 +23,6 @@ export const user = [
   {
     "id": "mock-user-002",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Rush order - priority shipping required",
@@ -46,8 +42,6 @@ export const user = [
   {
     "id": "mock-user-003",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Bulk purchase for warehouse restocking",
@@ -67,8 +61,6 @@ export const user = [
   {
     "id": "mock-user-004",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Sample order for client evaluation",
@@ -88,8 +80,6 @@ export const user = [
   {
     "id": "mock-user-005",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Recurring monthly supply order",
@@ -109,8 +99,6 @@ export const user = [
   {
     "id": "mock-user-006",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Special pricing agreement applies",
@@ -130,8 +118,6 @@ export const user = [
   {
     "id": "mock-user-007",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Consolidated order from multiple requests",
@@ -151,8 +137,6 @@ export const user = [
   {
     "id": "mock-user-008",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Trial order for new product line",
@@ -172,8 +156,6 @@ export const user = [
   {
     "id": "mock-user-009",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Replacement for damaged goods",
@@ -193,8 +175,6 @@ export const user = [
   {
     "id": "mock-user-010",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Pre-season inventory build-up",
@@ -214,8 +194,6 @@ export const user = [
   {
     "id": "mock-user-011",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Customer-specific configuration",
@@ -235,8 +213,6 @@ export const user = [
   {
     "id": "mock-user-012",
     "name": "Sample name",
-    "firstName": "Sample firstName",
-    "lastName": "Sample lastName",
     "password": "Sample password",
     "isPasswordExpired": "Sample isPasswordExpired",
     "description": "Government contract fulfillment",

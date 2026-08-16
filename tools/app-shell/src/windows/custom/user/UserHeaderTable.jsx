@@ -37,8 +37,6 @@ import { RoleFilterControl } from './RoleFilterControl.jsx';
  */
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'firstName', column: 'Firstname', type: 'string', label: 'First Name' },
-  { key: 'lastName', column: 'Lastname', type: 'string', label: 'Last Name' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
   { key: 'email', column: 'Email', type: 'string', label: 'Email', required: true },
   { key: 'locked', column: 'IsLocked', type: 'boolean', label: 'Locked', required: true },

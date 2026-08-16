@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-14T18:20:12.546Z",
-  "checksum": "0cf71994391da7bb",
+  "updatedAt": "2026-08-16T16:28:20.141Z",
+  "checksum": "3642d4e0deca769b",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -46,44 +46,6 @@
             "section": "principal",
             "validation": {
               "required": true,
-              "maxLength": 60
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
-            }
-          },
-          {
-            "name": "firstName",
-            "apiKey": "firstName",
-            "column": "Firstname",
-            "label": "First Name",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "section": "principal",
-            "validation": {
-              "maxLength": 60
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
-            }
-          },
-          {
-            "name": "lastName",
-            "apiKey": "lastName",
-            "column": "Lastname",
-            "label": "Last Name",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "section": "principal",
-            "validation": {
               "maxLength": 60
             },
             "callout": {
@@ -849,7 +811,7 @@
             "apiKey": "firstName",
             "column": "Firstname",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -857,7 +819,7 @@
             "apiKey": "lastName",
             "column": "Lastname",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1907,28 +1869,12 @@
         "description": "Field 'email' should be present in user"
       },
       {
-        "id": "t-field-presence-user-firstName",
-        "category": "field-presence",
-        "entity": "user",
-        "field": "firstName",
-        "runner": "node",
-        "description": "Field 'firstName' should be present in user"
-      },
-      {
         "id": "t-field-presence-user-isPasswordExpired",
         "category": "field-presence",
         "entity": "user",
         "field": "isPasswordExpired",
         "runner": "node",
         "description": "Field 'isPasswordExpired' should be present in user"
-      },
-      {
-        "id": "t-field-presence-user-lastName",
-        "category": "field-presence",
-        "entity": "user",
-        "field": "lastName",
-        "runner": "node",
-        "description": "Field 'lastName' should be present in user"
       },
       {
         "id": "t-field-presence-user-lastPasswordUpdate",
@@ -2171,28 +2117,12 @@
         "description": "Field 'email' should have type 'string' in user"
       },
       {
-        "id": "t-field-type-user-firstName",
-        "category": "field-type",
-        "entity": "user",
-        "field": "firstName",
-        "runner": "node",
-        "description": "Field 'firstName' should have type 'string' in user"
-      },
-      {
         "id": "t-field-type-user-isPasswordExpired",
         "category": "field-type",
         "entity": "user",
         "field": "isPasswordExpired",
         "runner": "node",
         "description": "Field 'isPasswordExpired' should have type 'boolean' in user"
-      },
-      {
-        "id": "t-field-type-user-lastName",
-        "category": "field-type",
-        "entity": "user",
-        "field": "lastName",
-        "runner": "node",
-        "description": "Field 'lastName' should have type 'string' in user"
       },
       {
         "id": "t-field-type-user-lastPasswordUpdate",
@@ -2611,6 +2541,14 @@
         "description": "System field 'fax' should exist in backend but not frontend for user"
       },
       {
+        "id": "t-system-field-user-firstName",
+        "category": "system-field",
+        "entity": "user",
+        "field": "firstName",
+        "runner": "node",
+        "description": "System field 'firstName' should exist in backend but not frontend for user"
+      },
+      {
         "id": "t-system-field-user-grantPortalAccess",
         "category": "system-field",
         "entity": "user",
@@ -2665,6 +2603,14 @@
         "field": "lastContactResult",
         "runner": "node",
         "description": "System field 'lastContactResult' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-system-field-user-lastName",
+        "category": "system-field",
+        "entity": "user",
+        "field": "lastName",
+        "runner": "node",
+        "description": "System field 'lastName' should exist in backend but not frontend for user"
       },
       {
         "id": "t-system-field-user-organization",
@@ -2762,21 +2708,21 @@
       }
     ],
     "summary": {
-      "total": 145,
+      "total": 143,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 2,
         "default-value-type": 8,
-        "field-presence": 33,
-        "field-type": 33,
+        "field-presence": 31,
+        "field-type": 31,
         "rule-declared": 16,
         "searchable-filters": 3,
         "selector-endpoint": 7,
-        "system-field": 38,
+        "system-field": 40,
         "visibility": 2
       },
       "byRunner": {
-        "node": 145,
+        "node": 143,
         "junit": 0
       }
     }
