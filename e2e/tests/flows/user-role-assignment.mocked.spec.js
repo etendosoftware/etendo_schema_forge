@@ -341,8 +341,10 @@ test.describe('User role assignment — detail form (existing user)', () => {
 
     // A second, unrelated save (no role selection change) must not re-fire the webhook —
     // `index.jsx`'s `sameIdSet` no-op guard — verified via an unrelated field edit, which
-    // is the only way to re-enable Guardar without changing roles again.
-    await page.getByTestId('field-lastName').fill('Ipsen II');
+    // is the only way to re-enable Guardar without changing roles again. (`firstName`/
+    // `lastName` were discarded from the User window in DEV wave 12 — `email` is the
+    // still-present editable field used here instead.)
+    await page.getByTestId('field-email').fill('ipsen.updated@example.com');
     await expect(page.getByTestId('action-save')).toBeEnabled();
     await page.getByTestId('action-save').click();
     await page.waitForTimeout(500);

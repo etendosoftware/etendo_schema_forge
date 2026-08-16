@@ -116,7 +116,7 @@ describe('UserHeaderTable — layout', () => {
 
     await screen.findByTestId('data-table');
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'firstName', 'lastName', 'businessPartner', 'email', 'locked', 'defaultRole',
+      'name', 'businessPartner', 'email', 'locked', 'defaultRole',
     ]);
   });
 
