@@ -19,17 +19,16 @@ N" section near the end of this file for full detail:
   code done (`6b40bc7dd` frontend, `90f08997` backend).
 - Wave 8 (layout: `inlineInHeaderCard`) — done, empirically verified (`b20afd7`).
 - Wave 9 (grid column label + tab order) — done, empirically verified (`8b7e2f4`).
-**Tester dispatched 2026-08-16** (agentId `a24834dfa45baed65`) to close out ALL
-accumulated test debt from waves 7/8/9 in one pass (mock gaps for `fetchTemplateRoles`
-and `useLocaleSwitch` across ~5 files, new coverage for wave 8/9's behavior changes, and
-a likely-broken Playwright spec — it has zero route mock for the new
-`systemroletemplates` endpoint). **Not yet confirmed landed as of this note** — check
-`git log`/`ListAgents` for that agentId's actual outcome before assuming done.
-**REVIEW and QA have NOT been re-run against ANY of waves 6-9 — their ✅ rows below are
-stale for the CURRENT diff, do not treat this ticket as PR-ready based on those rows
-alone.** If resuming cold: check `git log` in both repos against the commits named in
-each wave's Findings section to see exactly how much of this has actually landed before
-assuming anything is pending.
+**Tester follow-up for waves 7-9 is DONE** (agentId `a24834dfa45baed65`, 2026-08-16) —
+all mock gaps closed, new coverage added for waves 8/9, a genuinely broken Playwright
+spec fixed (missing route mock for the new `systemroletemplates` endpoint). Final
+counts: Vitest 646/646 files, 12017 passed, 0 failed; Playwright 7/7. **No real bugs
+found — this was all test/mock debt.** DEV+Tester work for waves 6-9 is now fully
+closed. **REVIEW and QA have NOT been re-run against ANY of waves 6-9 — their ✅ rows
+below are stale for the CURRENT diff, do not treat this ticket as PR-ready based on
+those rows alone. That re-run is the next step.** If resuming cold: check `git log` in
+both repos against the commits named in each wave's Findings section to see exactly how
+much of this has actually landed before assuming anything is pending.
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -1974,3 +1973,31 @@ verified, not just source-read:**
   `RoleChipsCell.vitest.jsx` (7), `UserHeaderTable.vitest.jsx` (9 orig + 11 new = needs
   re-check, likely superset), `UserRolesTab.vitest.jsx` (13). **Tester still not
   dispatched — paused on human instruction.**
+
+**Tester follow-up for waves 7-9 (landed 2026-08-16, agentId `a24834dfa45baed65`) —
+all test debt closed, no real bugs found:**
+- Fixed the `fetchTemplateRoles`/`fetchRolesOverview` mock gap across all 4 files, per
+  each component's actual combined-fetch usage (`RoleChipsCell`/`UserHeaderTable`/
+  `UserRolesTab` mock BOTH — `fetchRolesOverview` is kept solely for the tenant's
+  client-admin row; `AssignTemplateRolesControl` mocks only `fetchTemplateRoles`).
+  Corrected one now-wrong test in `AssignTemplateRolesControl.vitest.jsx` that asserted
+  a client-admin-exclusion filter that no longer exists (`SFSystemRoleTemplates` never
+  returns an admin row at all, so there's nothing to filter).
+- `UserHeaderTable.vitest.jsx`: added the missing `useLocaleSwitch` mock, plus 2 new
+  tests asserting the `labelOverrides` resolve `Default_Ad_Role_ID` to
+  `usersGridRolesColumn` and that incoming overrides are merged, not clobbered.
+- New coverage for wave 8 (`inlineInHeaderCard === true`, `w-full` not
+  `max-w-[420px]`/`px-6`) and wave 9 (`index.vitest.jsx` now explicitly asserts
+  `tabOrder: 0` on the roles tab, `undefined` on attachments — the prior
+  `toMatchObject` silently ignored this field).
+- **Playwright was genuinely broken** (0/7 before fix, confirmed by actually running
+  it) — exactly the predicted cause: no route mock for `/sws/neo/systemroletemplates`,
+  so the fetch fell through to the generic catch-all and rejected. Added the missing
+  mock (4 non-admin roles) to both `beforeEach` blocks. No other spec changes needed —
+  waves 8/9 don't touch anything this spec asserts on.
+- **Final counts:** Vitest 646/646 files, 12017 passed, 0 failed, 3 skipped (up from
+  642/646, 11966/46 failed). Playwright 7/7 (up from 0/7). **No real product bugs
+  found** — everything was test/mock debt, exactly as scoped.
+- **This closes out ALL DEV+Tester work from waves 6 through 9. Next: re-REVIEW and
+  re-QA against the full current diff before this is PR-ready** — REVIEW/QA rows above
+  are still stale for this code.
