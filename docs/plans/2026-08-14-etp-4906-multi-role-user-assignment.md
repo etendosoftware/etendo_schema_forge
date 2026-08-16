@@ -2001,3 +2001,50 @@ all test debt closed, no real bugs found:**
 - **This closes out ALL DEV+Tester work from waves 6 through 9. Next: re-REVIEW and
   re-QA against the full current diff before this is PR-ready** — REVIEW/QA rows above
   are still stale for this code.
+
+## Manual QA Feedback Round 5 (Human, 2026-08-14) — DEV wave 10, tab order still wrong
+
+Live screenshot (real user, real URL, not the mock) shows the SAME order as before
+wave 9's fix: "Configuración del correo electrónico" first, "Roles del usuario" second,
+"Adjuntos" third. Wave 9's `tabOrder: 0` fix did NOT actually work live, despite passing
+an isolated unit check — **root cause of why that check was misleading, confirmed by
+re-reading the actual generated file this time:**
+
+`artifacts/user/generated/web/user/UserPage.jsx` passes
+`DetailTable={EmailConfigurationTable}` (line 255) but NEVER passes `detailTabIndex` or
+`detailTabOrder` — so "Configuración del correo electrónico" is not a plain
+`secondaryTabs` entry at all, it's `buildInitialTabs`'s special LINES-tab path
+(`detailViewHelpers.jsx` line 558-560), whose weight comes from
+`computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries)` — with both
+args `undefined`, that function falls through to `{ weight: LINES_DEFAULT_WEIGHT,
+insertionIndex: -0.5 }` (line ~527), i.e. weight **`-1`**, not `SECONDARY_DEFAULT_WEIGHT
+= 99` as wave 9's isolated check assumed when it hand-built its "actual tab shape" test
+fixture. Since `-1 < 0` (roles' `tabOrder`), the lines tab still sorts first. The
+isolated `buildInitialTabs` call in wave 9's verification used a fixture that modeled
+email-config as a generic secondary tab, not the actual lines-tab shape this window
+really uses — a real gap in that verification, not a fluke.
+
+**Fix — two options, pick whichever is cleaner (developer's call, but explain the
+choice):**
+- **(A, likely cleaner)** Have `windows/custom/user/index.jsx` pass an explicit
+  `detailTabOrder` prop through to `<UserPage>` (it already flows straight through to
+  `DetailView` via `UserPage`'s `{...props}` spread, exactly like `onAfterExistingSave`/
+  `additionalDirtyState` already do) — e.g. `detailTabOrder={1}`, so ordering becomes
+  `roles (0) < emailConfig (1, explicit) < attachments (999, default)`. This uses the
+  comment's own documented "preferred" mechanism (`detailViewHelpers.jsx` line 510:
+  "`detailTabOrder` (new, preferred) is used directly as the weight when set") instead
+  of relying on an implicit relationship between two different default constants.
+- **(B)** Lower `roles`' own `tabOrder` from `0` to something below `LINES_DEFAULT_WEIGHT
+  (-1)`, e.g. `-2`. Simpler one-line change, but more fragile — depends on knowing/
+  remembering `LINES_DEFAULT_WEIGHT`'s exact value rather than being self-documenting.
+
+**Mandatory this time: verify against the REAL generated user page for a REAL existing
+user (the same kind of check the human just did), not just an isolated
+`buildInitialTabs()` call with a hand-built fixture** — that exact kind of isolated
+check is what produced a false-positive in wave 9. Use Playwright against live `make
+dev` (or a component-level render test that goes through the actual generated
+`UserPage`/`index.jsx`, not a bare call to the helper function) and confirm the tab
+STRIP itself, in order: Roles del usuario, Configuración del correo electrónico,
+Adjuntos.
+
+**Dispatch:** schema-forge-developer, `etendo_schema_forge` only, frontend-only.
