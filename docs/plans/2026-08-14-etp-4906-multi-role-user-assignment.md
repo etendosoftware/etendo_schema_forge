@@ -2149,3 +2149,52 @@ classes — a better, more consistent fix than what this plan originally specifi
   `textContent`-based matchers, unaffected by the new wrapping `<span>`/class changes.
   **Tester follow-up (optional, not blocking):** add dedicated coverage for the
   tier-specific pill classes and per-role icon presence, neither currently asserted.
+
+## Manual QA Feedback Round 7 (Human, 2026-08-14) — DEV wave 12, duplicate "Nombre" field
+
+**Not related to role assignment — a pre-existing field-config issue on the User
+window itself**, surfaced only because the human was in this form testing waves 6-11.
+Fixing it now since we're already deep in this window's `decisions.json`.
+
+**Root cause, confirmed:** `artifacts/user/decisions.json`'s `user` entity has both
+`name` (`AD_User.Name`, mandatory, `required` — the field with the red asterisk) and
+`firstName` (`AD_User.Firstname`) visible on the form. In English these are clearly
+distinct ("Name" vs "First Name" — checked `en_US.json`, no collision). In Spanish they
+collide: `Firstname`'s native AD dictionary label is ALSO `"Nombre"` (checked
+`es_ES.json` — `Name` → "Nombre", `Firstname` → "Nombre", `Lastname` → "Apellido", no
+collision on the last one). Genuinely different underlying columns, not a bug in this
+ticket's own work.
+
+**Not simply dead weight — there's a real, currently-`"Keep"` feature attached:** rules
+`SL_User_Name_Firstname`/`SL_User_Name_Lastname` (native callouts) auto-compose the
+mandatory `name` field from `firstName`+`lastName` as the admin types them. **However,
+every single test user created during this entire session's manual QA (`NewUsertest`,
+`Test User`, `row-001`, etc.) had `name` typed directly and `firstName`/`lastName` left
+BLANK** — confirming in practice nobody uses this auto-compose path, matching the
+human's own read that these are redundant.
+
+**Fix:** discard BOTH `firstName` AND `lastName` (not just the one causing the visible
+label collision) — keeping only `lastName` visible alone, with `firstName` gone, would
+leave an orphaned "Apellido" field with no paired "Nombre" counterpart, which is more
+confusing than the current duplicate, not less. Concretely:
+1. `artifacts/user/decisions.json`: change `firstName` and `lastName` entities'
+   `"visibility"` to `"discarded"` (removes from BOTH the header form AND the grid,
+   since both currently have `"grid": true"`).
+2. Update `SL_User_Name_Firstname`/`SL_User_Name_Lastname` rule decisions from `"Keep"`
+   to `"Omit"`, matching the exact pattern already used two entries below them for
+   `SL_User_Name_Name` (`"impactIfOmitted"`/`"reason"` explaining there's nothing left
+   to type into once the fields are gone) — don't leave stale "Keep" decisions
+   describing a feature that no longer has fields to attach to.
+3. `make regen ONLY=user`, verify contract per Window Change Integrity Protocol Step 3.
+4. **`tools/app-shell/src/windows/custom/user/UserHeaderTable.jsx`'s hardcoded
+   `columns` array (lines 38-44) must be re-synced to match** — its own file comment
+   requires this ("Re-verify this list against [the generated table] whenever
+   `decisions.json`'s `user` entity's grid fields change") — drop `firstName`/
+   `lastName` from that array too, or the custom grid override will show 2 columns the
+   generated page no longer has.
+
+**Dispatch:** schema-forge-developer, `etendo_schema_forge` only, frontend-only (pure
+`decisions.json` + regen + one custom-grid-file sync, no new component logic). Verify
+visually (both the header form no longer shows a duplicate "Nombre", and the Users LIST
+GRID no longer shows orphaned first/last-name columns) before reporting done. Tester
+follow-up after for `UserHeaderTable.vitest.jsx`'s column-list assertions.
