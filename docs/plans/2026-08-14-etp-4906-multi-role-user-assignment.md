@@ -2198,3 +2198,22 @@ confusing than the current duplicate, not less. Concretely:
 visually (both the header form no longer shows a duplicate "Nombre", and the Users LIST
 GRID no longer shows orphaned first/last-name columns) before reporting done. Tester
 follow-up after for `UserHeaderTable.vitest.jsx`'s column-list assertions.
+
+**DEV wave 12 Findings (developer-12, landed, commit `404a0ce70`) — independently
+re-confirmed by the coordinator via screenshot:** `firstName`/`lastName` discarded in
+`decisions.json`, `SL_User_Name_Firstname`/`SL_User_Name_Lastname` rules flipped to
+`"Omit"` (matching `SL_User_Name_Name`'s pattern), `make regen ONLY=user` run (contract
+0.20.0 → 0.21.0), `UserHeaderTable.jsx`'s hardcoded column array re-synced.
+`npx sf-validate-pipeline --scope=user` → OK. **Coordinator independently viewed both
+screenshots** (not just the agent's description): detail form now shows exactly one
+"Nombre" field + "Correo electrónico" + "Roles asignados", no duplicate; list grid
+columns are `Nombre, Contacto, Correo electrónico, Bloqueado, Roles` — no orphaned
+first/last-name columns. **Genuinely fixed.**
+
+**2 things now broken, both flagged for Tester, neither fixed yet:**
+1. `UserHeaderTable.vitest.jsx:118` — asserts the old 7-column list including
+   `firstName`/`lastName`; needs updating to the new 5-column list.
+2. `e2e/tests/flows/user-role-assignment.mocked.spec.js:345` — the "a role-only chip
+   change enables Guardar..." test fills `field-lastName` (as the "unrelated field
+   edit" to prove the save-wiring contract) — that field no longer exists. Needs
+   switching to a still-present editable field (e.g. `field-email`).
