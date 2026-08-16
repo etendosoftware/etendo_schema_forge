@@ -15,15 +15,19 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
+  fetchTemplateRoles: vi.fn(),
 }));
 vi.mock('@/lib/userRoleAssignmentsApi.js', () => ({
   fetchUserRoleAssignments: vi.fn(),
 }));
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  // ETP-4906 Round 4 (DEV wave 9) — UserHeaderTable now calls useLocaleSwitch() to build
+  // its labelOverrides memo keyed by the current locale.
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 
 let tableProps = null;
@@ -54,11 +58,20 @@ vi.mock('../RoleFilterControl.jsx', () => ({
 
 import UserHeaderTable from '../UserHeaderTable.jsx';
 
-const ROLES = [
+// ETP-4906 DEV wave 7 — `useUserRoleGridData` (RoleChipsCell.jsx) now combines the 4
+// system-level templates from `fetchTemplateRoles()` with `fetchRolesOverview()`'s
+// tenant client-admin row. `ROLES` (the combined, merged shape) stays for assertions
+// that only care about the final count/rendering.
+const TEMPLATE_ROLES = [
   { id: 'role-fin', name: 'Finance' },
   { id: 'role-sales', name: 'Sales' },
+];
+
+const OVERVIEW_ROLES = [
   { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true },
 ];
+
+const ROLES = [...TEMPLATE_ROLES, ...OVERVIEW_ROLES];
 
 const ROWS = [
   { id: 'user-1', name: 'Alice', defaultRole: 'role-composed-1' },
@@ -67,10 +80,12 @@ const ROWS = [
 ];
 
 function mockDataOk({
-  roles = ROLES,
+  templateRoles = TEMPLATE_ROLES,
+  overviewRoles = OVERVIEW_ROLES,
   assignments = { 'user-1': ['role-fin'], 'user-2': ['role-sales'] },
 } = {}) {
-  fetchRolesOverview.mockResolvedValue({ roles });
+  fetchTemplateRoles.mockResolvedValue({ roles: templateRoles });
+  fetchRolesOverview.mockResolvedValue({ roles: overviewRoles });
   fetchUserRoleAssignments.mockResolvedValue({ assignments });
 }
 
@@ -132,6 +147,35 @@ describe('UserHeaderTable — layout', () => {
 
     expect(await screen.findByTestId('data-table')).toBeInTheDocument();
     expect(screen.queryByTestId(/^row-/)).not.toBeInTheDocument();
+  });
+
+  // ETP-4906 Round 4 (DEV wave 9) — `t('Default_Ad_Role_ID')` (the shared native AD
+  // dictionary entry) always wins over `col.label` in DataTable's own header resolution
+  // (`t(col.column) ?? col.label ?? col.key`), so the grid header kept reading "Default
+  // Role"/"Rol por Defecto" even after the chip-render swap. `UserHeaderTable` now scopes
+  // an override to just this grid via `labelOverrides`, keyed by locale, resolving
+  // `Default_Ad_Role_ID` to the new `usersGridRolesColumn` i18n key instead of editing the
+  // shared dictionary entry (which other windows/contexts also reference).
+  it('overrides Default_Ad_Role_ID via labelOverrides to the usersGridRolesColumn i18n key, scoped to the current locale', async () => {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    await screen.findByTestId('data-table');
+    expect(tableProps.labelOverrides.en_US.Default_Ad_Role_ID).toBe('usersGridRolesColumn');
+  });
+
+  it('merges with (does not clobber) any labelOverrides already passed down from the generated page', async () => {
+    mockDataOk();
+    render(
+      <UserHeaderTable
+        data={ROWS}
+        labelOverrides={{ en_US: { SomeOtherColumn: 'Some Other Label' } }}
+      />,
+    );
+
+    await screen.findByTestId('data-table');
+    expect(tableProps.labelOverrides.en_US.SomeOtherColumn).toBe('Some Other Label');
+    expect(tableProps.labelOverrides.en_US.Default_Ad_Role_ID).toBe('usersGridRolesColumn');
   });
 });
 

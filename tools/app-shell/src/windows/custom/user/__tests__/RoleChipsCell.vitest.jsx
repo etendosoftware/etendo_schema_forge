@@ -14,24 +14,36 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
+  fetchTemplateRoles: vi.fn(),
 }));
 
 vi.mock('@/lib/userRoleAssignmentsApi.js', () => ({
   fetchUserRoleAssignments: vi.fn(),
 }));
 
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import RoleChipsCell, {
   resolveUserId, resolveDefaultRoleId, useUserRoleGridData,
 } from '../RoleChipsCell.jsx';
 
-const ROLES = [
+// ETP-4906 DEV wave 7 — `useUserRoleGridData` now combines TWO sources: the 4 system-level
+// templates from `fetchTemplateRoles()` (`SFSystemRoleTemplates`, never a client-admin row)
+// and `fetchRolesOverview()` (`SFRolesOverview`), kept ONLY for its tenant client-admin row.
+// The hook's `roles` output is `[...templateRoles, adminRole]` (if an admin row is present).
+const TEMPLATE_ROLES = [
   { id: 'role-fin', name: 'Finance' },
   { id: 'role-sales', name: 'Sales' },
   { id: 'role-purch', name: 'Purchasing' },
+];
+
+const OVERVIEW_ROLES_WITH_ADMIN = [
   { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true },
 ];
+
+// Combined shape the hook is expected to expose — used directly by the RoleChipsCell
+// rendering tests below (which drive the component via props, not the hook).
+const ROLES = [...TEMPLATE_ROLES, ...OVERVIEW_ROLES_WITH_ADMIN];
 
 const ROLES_BY_ID = Object.fromEntries(ROLES.map((r) => [r.id, r]));
 
@@ -81,6 +93,7 @@ describe('useUserRoleGridData', () => {
   });
 
   it('starts in a loading state with empty roles/assignments', () => {
+    fetchTemplateRoles.mockReturnValue(new Promise(() => {}));
     fetchRolesOverview.mockReturnValue(new Promise(() => {}));
     fetchUserRoleAssignments.mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useUserRoleGridData());
@@ -91,12 +104,14 @@ describe('useUserRoleGridData', () => {
     expect(result.current.adminRoleId).toBeNull();
   });
 
-  it('fetches both SFRolesOverview and the bulk SFUserRoleAssignments once, in parallel', async () => {
-    fetchRolesOverview.mockResolvedValue({ roles: ROLES });
+  it('fetches SFSystemRoleTemplates, SFRolesOverview and the bulk SFUserRoleAssignments once, in parallel', async () => {
+    fetchTemplateRoles.mockResolvedValue({ roles: TEMPLATE_ROLES });
+    fetchRolesOverview.mockResolvedValue({ roles: OVERVIEW_ROLES_WITH_ADMIN });
     fetchUserRoleAssignments.mockResolvedValue({ assignments: { 'user-1': ['role-fin'] } });
     renderHook(() => useUserRoleGridData());
 
     await waitFor(() => {
+      expect(fetchTemplateRoles).toHaveBeenCalledTimes(1);
       expect(fetchRolesOverview).toHaveBeenCalledTimes(1);
       expect(fetchUserRoleAssignments).toHaveBeenCalledTimes(1);
     });
@@ -104,20 +119,22 @@ describe('useUserRoleGridData', () => {
     expect(fetchUserRoleAssignments).toHaveBeenCalledWith();
   });
 
-  it('resolves roles, rolesById and the bulk assignments map after both fetches settle', async () => {
-    fetchRolesOverview.mockResolvedValue({ roles: ROLES });
+  it('resolves roles (templates + tenant client-admin row), rolesById and the bulk assignments map after all fetches settle', async () => {
+    fetchTemplateRoles.mockResolvedValue({ roles: TEMPLATE_ROLES });
+    fetchRolesOverview.mockResolvedValue({ roles: OVERVIEW_ROLES_WITH_ADMIN });
     fetchUserRoleAssignments.mockResolvedValue({ assignments: { 'user-1': ['role-fin', 'role-sales'] } });
     const { result } = renderHook(() => useUserRoleGridData());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.roles).toEqual(ROLES);
-    expect(result.current.rolesById['role-fin']).toEqual(ROLES[0]);
+    expect(result.current.rolesById['role-fin']).toEqual(TEMPLATE_ROLES[0]);
     expect(result.current.assignments).toEqual({ 'user-1': ['role-fin', 'role-sales'] });
     expect(result.current.error).toBeNull();
   });
 
-  it('resolves adminRoleId from the roles[].isClientAdmin entry', async () => {
-    fetchRolesOverview.mockResolvedValue({ roles: ROLES });
+  it('resolves adminRoleId from SFRolesOverview\'s isClientAdmin entry (never from the templates)', async () => {
+    fetchTemplateRoles.mockResolvedValue({ roles: TEMPLATE_ROLES });
+    fetchRolesOverview.mockResolvedValue({ roles: OVERVIEW_ROLES_WITH_ADMIN });
     fetchUserRoleAssignments.mockResolvedValue({ assignments: {} });
     const { result } = renderHook(() => useUserRoleGridData());
 
@@ -125,17 +142,20 @@ describe('useUserRoleGridData', () => {
     expect(result.current.adminRoleId).toBe('role-admin');
   });
 
-  it('leaves adminRoleId null when no role carries isClientAdmin', async () => {
-    fetchRolesOverview.mockResolvedValue({ roles: ROLES.filter((r) => !r.isClientAdmin) });
+  it('leaves adminRoleId null when SFRolesOverview carries no client-admin row', async () => {
+    fetchTemplateRoles.mockResolvedValue({ roles: TEMPLATE_ROLES });
+    fetchRolesOverview.mockResolvedValue({ roles: [] });
     fetchUserRoleAssignments.mockResolvedValue({ assignments: {} });
     const { result } = renderHook(() => useUserRoleGridData());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.adminRoleId).toBeNull();
+    expect(result.current.roles).toEqual(TEMPLATE_ROLES);
   });
 
-  it('sets error and stops loading when either fetch rejects', async () => {
-    fetchRolesOverview.mockRejectedValue(new Error('boom'));
+  it('sets error and stops loading when any of the three fetches rejects', async () => {
+    fetchTemplateRoles.mockRejectedValue(new Error('boom'));
+    fetchRolesOverview.mockResolvedValue({ roles: OVERVIEW_ROLES_WITH_ADMIN });
     fetchUserRoleAssignments.mockResolvedValue({ assignments: {} });
     const { result } = renderHook(() => useUserRoleGridData());
 
@@ -144,6 +164,7 @@ describe('useUserRoleGridData', () => {
   });
 
   it('defaults roles/assignments defensively when the responses omit the expected arrays/objects', async () => {
+    fetchTemplateRoles.mockResolvedValue({});
     fetchRolesOverview.mockResolvedValue({});
     fetchUserRoleAssignments.mockResolvedValue({});
     const { result } = renderHook(() => useUserRoleGridData());

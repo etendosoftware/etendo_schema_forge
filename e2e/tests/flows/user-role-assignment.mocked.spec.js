@@ -59,6 +59,17 @@ const ROLES = [
   },
 ];
 
+// DEV wave 7 — `SFSystemRoleTemplates` (`GET /sws/neo/systemroletemplates`) resolves the 4
+// FIXED template roles at the SYSTEM client (`ad_client_id='0'`) — no `userCount`, no
+// client-admin row at all (there is none at system level, see its own class javadoc). This is
+// the ONLY source `AssignTemplateRolesControl.jsx`/`UserRolesTab.jsx` use for the selectable
+// template roles now (see `lib/rolesApi.js`'s `fetchTemplateRoles()` doc comment) — the
+// tenant-scoped `rolesoverview` mock above is kept ONLY for its client-admin row
+// (`activeWindowIds`/grid Admin-detection), never for the composable template list itself.
+// Same 4 roles/windows as `ROLES` above, minus the admin entry, so every existing assertion
+// on Finance/Sales window access continues to hold unchanged.
+const SYSTEM_TEMPLATE_ROLES = ROLES.filter((role) => !role.isClientAdmin);
+
 const MENU_TREE = {
   tree: [
     { type: 'folder', name: 'Configuracion', children: [{ windowId: '108', name: 'Usuario' }] },
@@ -80,11 +91,12 @@ const MENU_TREE = {
  */
 async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
   const assignCalls = [];
-  const counts = { rolesoverview: 0, userroleassignments: 0, listmenu: 0, assignuserroles: 0 };
+  const counts = { rolesoverview: 0, systemroletemplates: 0, userroleassignments: 0, listmenu: 0, assignuserroles: 0 };
 
   page.on('request', (req) => {
     const url = req.url();
     if (url.includes('/sws/neo/rolesoverview')) counts.rolesoverview++;
+    else if (url.includes('/sws/neo/systemroletemplates')) counts.systemroletemplates++;
     else if (url.includes('/sws/neo/userroleassignments')) counts.userroleassignments++;
     else if (url.includes('/sws/neo/listmenu')) counts.listmenu++;
     else if (url.includes('/sws/neo/assignuserroles')) counts.assignuserroles++;
@@ -94,6 +106,19 @@ async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ roles: ROLES }),
+  }));
+
+  // Missing this mock resolves to the generic `**/sws/**` catch-all's `{ data: [],
+  // totalRows: 0 }` shape, which `fetchNeoWebhookRoles` (`lib/rolesApi.js`) rejects as
+  // "returned an unexpected shape" (neither `.roles[]` nor `.result`) — every surface that
+  // calls `fetchTemplateRoles()` (`AssignTemplateRolesControl`, `UserRolesTab`,
+  // `RoleChipsCell`'s `useUserRoleGridData`) then renders its own empty/error state instead
+  // of the real template roles, which is exactly what this spec was failing on before this
+  // route was added.
+  await page.route('**/sws/neo/systemroletemplates**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ roles: SYSTEM_TEMPLATE_ROLES }),
   }));
 
   await page.route('**/sws/neo/userroleassignments**', (route) => {
@@ -363,6 +388,13 @@ test.describe('User role assignment — Users grid role filter', () => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ roles: ROLES }),
+    }));
+    // See the detail-form `installUserDetailMocks`'s identical route for why this is
+    // required — `RoleChipsCell.jsx`'s `useUserRoleGridData` also calls `fetchTemplateRoles()`.
+    await page.route('**/sws/neo/systemroletemplates**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ roles: SYSTEM_TEMPLATE_ROLES }),
     }));
     await page.route('**/sws/neo/userroleassignments**', (route) => route.fulfill({
       status: 200,

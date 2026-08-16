@@ -145,6 +145,24 @@ describe('UserWindow — customTabs wiring', () => {
     });
   });
 
+  // ETP-4906 Round 4 (DEV wave 9) — pins the exact `tabOrder` field on each entry
+  // directly, rather than relying on `toMatchObject` above (which silently ignores
+  // extra/changed fields — this is exactly how the wave 9 regression this locks in
+  // slipped past the equivalent `toMatchObject` check once before). `tabOrder: 0` places
+  // "Roles del usuario" before the native "Configuración del correo electrónico"
+  // secondary tab (default weight 99, see `detailViewHelpers.jsx`'s `buildInitialTabs`)
+  // and before `attachments` (default weight 999, no explicit `tabOrder` of its own —
+  // it must keep sorting after both `roles` and the native tab).
+  it('pins tabOrder: 0 on the roles tab and leaves attachments at its implicit default weight', async () => {
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
+    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+
+    await screen.findByTestId('user-page');
+    const [rolesTab, attachmentsTab] = lastUserPageProps.customTabs;
+    expect(rolesTab.tabOrder).toBe(0);
+    expect(attachmentsTab.tabOrder).toBeUndefined();
+  });
+
   it('passes onAfterExistingSave through to the generated UserPage', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
     render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);

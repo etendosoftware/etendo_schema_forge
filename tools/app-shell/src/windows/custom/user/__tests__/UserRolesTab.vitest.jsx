@@ -13,13 +13,14 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
+  fetchTemplateRoles: vi.fn(),
 }));
 
 vi.mock('@/lib/menuTree.js', () => ({
   fetchMenuTree: vi.fn(),
 }));
 
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import UserRolesTab from '../UserRolesTab.jsx';
 import { RoleSelectionProvider } from '../roleSelectionContext.js';
@@ -50,6 +51,17 @@ const ROLES_OVERVIEW = {
     { id: 'role-sales', name: 'Sales', windows: [{ id: 'w1', tier: 'full' }, { id: 'w2', tier: 'readonly' }] },
     { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true, windows: [{ id: 'w1', tier: 'full' }, { id: 'w2', tier: 'full' }, { id: 'w3', tier: 'full' }] },
   ],
+};
+
+// ETP-4906 DEV wave 7 — the matrix's own COLUMNS (which roles, and their per-window tier
+// data) now come from `fetchTemplateRoles()` (`SFSystemRoleTemplates`), NOT from
+// `fetchRolesOverview()` — see the component's own "Two role sources, two different jobs"
+// doc comment. `ROLES_OVERVIEW` above is kept ONLY for `activeWindowIds` (needs the union
+// across ALL of the tenant's roles, Admin included). Same fin/sales window data as
+// `ROLES_OVERVIEW` (minus admin, which `SFSystemRoleTemplates` never returns) so every
+// existing cell-value assertion below continues to hold unchanged.
+const TEMPLATE_ROLES = {
+  roles: ROLES_OVERVIEW.roles.filter((role) => !role.isClientAdmin),
 };
 
 // ETP-4906 DEV wave 6 fix #5 fixture — `MENU_TREE` above has NO classic-only leaf: w1/w2/w3
@@ -100,10 +112,11 @@ describe('UserRolesTab', () => {
       expect(onVisibilityChange).toHaveBeenCalledWith(false);
     });
 
-    it('never fetches the menu tree or roles overview when isNew', () => {
+    it('never fetches the menu tree, roles overview, or template roles when isNew', () => {
       renderTab({ isNew: true });
       expect(fetchMenuTree).not.toHaveBeenCalled();
       expect(fetchRolesOverview).not.toHaveBeenCalled();
+      expect(fetchTemplateRoles).not.toHaveBeenCalled();
     });
   });
 
@@ -111,6 +124,7 @@ describe('UserRolesTab', () => {
     it('reports itself as visible via onVisibilityChange(true)', () => {
       fetchMenuTree.mockResolvedValue(MENU_TREE);
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       const onVisibilityChange = vi.fn();
       renderTab({ isNew: false, onVisibilityChange });
       expect(onVisibilityChange).toHaveBeenCalledWith(true);
@@ -119,6 +133,7 @@ describe('UserRolesTab', () => {
     it('renders the empty state when zero roles are currently selected', async () => {
       fetchMenuTree.mockResolvedValue(MENU_TREE);
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       renderTab({ selectedRoleIds: [] });
 
       expect(await screen.findByTestId('UserRolesTab__empty')).toBeInTheDocument();
@@ -127,17 +142,19 @@ describe('UserRolesTab', () => {
 
     // Regression coverage for a since-fixed bug (ETP-4906 F9 Findings): the render-branch
     // order in UserRolesTab.jsx used to check `columns.length === 0` (the empty state)
-    // BEFORE checking `loading`/`error`. `columns` is derived from `rolesOverview`
-    // (`useMemo` over `rolesOverview?.roles`), which stays `null` for the entire duration
-    // of the in-flight fetch AND forever after a rejected fetch (the `.catch` only sets
-    // `error`, never `rolesOverview`) — so `columns.length` was 0 in both cases regardless
-    // of how many roles were selected, making the empty state always win and the
-    // loading/error branches dead code. The branch order has since been fixed
+    // BEFORE checking `loading`/`error`. `columns` is derived from `templateRoles`
+    // (`useMemo` over `templateRoles?.roles`, DEV wave 7 — the column source moved from
+    // `rolesOverview` to `fetchTemplateRoles()`), which stays `null` for the entire
+    // duration of the in-flight fetch AND forever after a rejected fetch (the `.catch`
+    // only sets `error`, never `templateRoles`) — so `columns.length` was 0 in both cases
+    // regardless of how many roles were selected, making the empty state always win and
+    // the loading/error branches dead code. The branch order has since been fixed
     // (loading/error are now checked first); the two tests below pin that behavior.
-    it('shows a loading indicator (not the empty state) while the two fetches are in flight, with roles selected', async () => {
+    it('shows a loading indicator (not the empty state) while the fetches are in flight, with roles selected', async () => {
       let resolveMenu;
       fetchMenuTree.mockReturnValue(new Promise((resolve) => { resolveMenu = resolve; }));
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       renderTab({ selectedRoleIds: ['role-fin'] });
 
       expect(screen.getByTestId('UserRolesTab__loading')).toBeInTheDocument();
@@ -149,6 +166,7 @@ describe('UserRolesTab', () => {
     it('shows an error message (not the empty state) when a fetch rejects, with roles selected', async () => {
       fetchMenuTree.mockRejectedValue(new Error('network down'));
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       renderTab({ selectedRoleIds: ['role-fin'] });
 
       await waitFor(() => expect(fetchMenuTree).toHaveBeenCalled());
@@ -160,6 +178,7 @@ describe('UserRolesTab', () => {
       let resolveMenu;
       fetchMenuTree.mockReturnValue(new Promise((resolve) => { resolveMenu = resolve; }));
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const { unmount } = renderTab({ selectedRoleIds: ['role-fin'] });
@@ -175,6 +194,7 @@ describe('UserRolesTab', () => {
   describe('the rendered matrix', () => {
     beforeEach(() => {
       fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
     });
 

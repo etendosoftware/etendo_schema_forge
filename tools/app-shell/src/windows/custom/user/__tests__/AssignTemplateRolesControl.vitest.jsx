@@ -12,10 +12,10 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('@/lib/rolesApi.js', () => ({
-  fetchRolesOverview: vi.fn(),
+  fetchTemplateRoles: vi.fn(),
 }));
 
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { fetchTemplateRoles } from '@/lib/rolesApi.js';
 import AssignTemplateRolesControl from '../AssignTemplateRolesControl.jsx';
 import { RoleSelectionProvider } from '../roleSelectionContext.js';
 
@@ -26,8 +26,8 @@ const TEMPLATE_ROLES = [
   { id: 'role-inv', name: 'Inventory' },
 ];
 
-function mockOverviewOk(roles = TEMPLATE_ROLES) {
-  fetchRolesOverview.mockResolvedValue({ roles });
+function mockTemplatesOk(roles = TEMPLATE_ROLES) {
+  fetchTemplateRoles.mockResolvedValue({ roles });
 }
 
 function renderControl({
@@ -66,41 +66,47 @@ describe('AssignTemplateRolesControl', () => {
 
     it('never fetches roles when there is no persisted user', () => {
       renderControl({ data: {} });
-      expect(fetchRolesOverview).not.toHaveBeenCalled();
+      expect(fetchTemplateRoles).not.toHaveBeenCalled();
     });
   });
 
   describe('fetching template roles (existing user)', () => {
-    it('fetches SFRolesOverview once on mount for an existing user', async () => {
-      mockOverviewOk();
+    it('fetches SFSystemRoleTemplates once on mount for an existing user', async () => {
+      mockTemplatesOk();
       renderControl();
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalledTimes(1));
     });
 
-    it('excludes the client-admin role from the selectable options', async () => {
-      mockOverviewOk([...TEMPLATE_ROLES, { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true }]);
+    // DEV wave 7 — `fetchTemplateRoles()` (`SFSystemRoleTemplates`) never returns a
+    // client-admin row at all (there is none at the system client), so the component
+    // itself carries no `isClientAdmin` filter (see its own doc comment: "No
+    // isClientAdmin filter needed"). This test locks in that every fetched role is
+    // offered as-is, with no local filtering logic to regress.
+    it('offers every fetched role as a selectable option (no local admin-filtering logic)', async () => {
+      mockTemplatesOk();
       renderControl({ selectedRoleIds: [] });
 
       const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
       await userEvent.click(toggle);
 
-      expect(screen.queryByTestId('AssignTemplateRolesControl__toggle-role-admin')).not.toBeInTheDocument();
-      expect(screen.getByTestId('AssignTemplateRolesControl__toggle-role-fin')).toBeInTheDocument();
+      for (const role of TEMPLATE_ROLES) {
+        expect(screen.getByTestId(`AssignTemplateRolesControl__toggle-${role.id}`)).toBeInTheDocument();
+      }
     });
 
     it('does not fetch when token is missing', () => {
       renderControl({ token: null });
-      expect(fetchRolesOverview).not.toHaveBeenCalled();
+      expect(fetchTemplateRoles).not.toHaveBeenCalled();
     });
 
     it('does not fetch when apiBaseUrl is missing', () => {
       renderControl({ apiBaseUrl: null });
-      expect(fetchRolesOverview).not.toHaveBeenCalled();
+      expect(fetchTemplateRoles).not.toHaveBeenCalled();
     });
 
     it('falls back to an empty roles list (no crash) when the fetch rejects', async () => {
-      fetchRolesOverview.mockRejectedValue(new Error('network down'));
+      fetchTemplateRoles.mockRejectedValue(new Error('network down'));
       renderControl();
 
       await waitFor(() => expect(screen.getByTestId('AssignTemplateRolesControl__toggle-expand')).not.toBeDisabled());
@@ -109,7 +115,7 @@ describe('AssignTemplateRolesControl', () => {
 
     it('does not update state after unmount while a fetch is still in flight', async () => {
       let resolveFetch;
-      fetchRolesOverview.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
+      fetchTemplateRoles.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const { unmount } = renderControl();
@@ -125,27 +131,27 @@ describe('AssignTemplateRolesControl', () => {
 
   describe('rendering the current selection', () => {
     it('shows the empty-selection placeholder when no roles are selected', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl({ selectedRoleIds: [] });
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       expect(screen.getByTestId('AssignTemplateRolesControl__empty')).toBeInTheDocument();
     });
 
     it('renders a chip per selected role, translated through resolveRoleDisplayName', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl({ selectedRoleIds: ['role-fin', 'role-sales'] });
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       expect(screen.getByTestId('AssignTemplateRolesControl__chip-role-fin')).toHaveTextContent('roleNameFinance');
       expect(screen.getByTestId('AssignTemplateRolesControl__chip-role-sales')).toHaveTextContent('roleNameSales');
     });
 
     it('collapses beyond MAX_COLLAPSED_CHIPS (3) into a "+N" overflow badge', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl({ selectedRoleIds: ['role-fin', 'role-sales', 'role-purch', 'role-inv'] });
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       expect(screen.getByTestId('AssignTemplateRolesControl__overflow')).toHaveTextContent('+1');
       // Only the first MAX_COLLAPSED_CHIPS (3) selected roles render as their own chip —
       // the 4th (role-inv) is counted in the overflow badge, not rendered as a chip.
@@ -156,17 +162,17 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('does not render an overflow badge when the selection is within the collapsed limit', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl({ selectedRoleIds: ['role-fin'] });
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       expect(screen.queryByTestId('AssignTemplateRolesControl__overflow')).not.toBeInTheDocument();
     });
   });
 
   describe('editing (expand / toggle / remove)', () => {
     it('expands the options list on toggle click, listing every fetched (non-admin) role', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl();
 
       const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
@@ -179,7 +185,7 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('collapses the options list on a second toggle click', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl();
 
       const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
@@ -191,7 +197,7 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('calls setSelectedRoleIds adding a role when its checkbox is toggled on', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       const setSelectedRoleIds = vi.fn();
       renderControl({ selectedRoleIds: ['role-fin'], setSelectedRoleIds });
 
@@ -206,7 +212,7 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('calls setSelectedRoleIds removing a role when its checkbox is toggled off', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       const setSelectedRoleIds = vi.fn();
       renderControl({ selectedRoleIds: ['role-fin', 'role-sales'], setSelectedRoleIds });
 
@@ -220,11 +226,11 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('removes a role via the chip\'s own remove control, without toggling edit mode', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       const setSelectedRoleIds = vi.fn();
       renderControl({ selectedRoleIds: ['role-fin'], setSelectedRoleIds });
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       const removeBtn = screen.getByTestId('AssignTemplateRolesControl__chip-remove-role-fin');
       await userEvent.click(removeBtn);
 
@@ -236,7 +242,7 @@ describe('AssignTemplateRolesControl', () => {
     });
 
     it('closes the expanded editor on an outside click', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       renderControl();
 
       const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
@@ -248,12 +254,44 @@ describe('AssignTemplateRolesControl', () => {
     });
   });
 
+  // DEV wave 8 — `AssignTemplateRolesControl` opts into `DetailView.jsx`'s inline-header-card
+  // footer path (`buildHeaderFooter`'s `footerInline = !!formFooter.inlineInHeaderCard`),
+  // the same static-flag mechanism `TaxSifField.jsx` (line 134) already uses, so it renders
+  // as a grid child inside the native header card instead of a detached block below it.
+  describe('inlineInHeaderCard layout (DEV wave 8)', () => {
+    it('opts into DetailView\'s inline-header-card footer path via the static flag', () => {
+      expect(AssignTemplateRolesControl.inlineInHeaderCard).toBe(true);
+    });
+
+    it('sizes both root divs to fill their grid cell (w-full), not a fixed max-width', async () => {
+      // Structural/source-reading style check: the save-first placeholder (no persisted
+      // user) and the normal render path both use the same root className. Wave 7's
+      // now-obsolete `px-6` (superseded once the control became a grid child, positioned
+      // by the grid's own gridStyle/gridClass instead) must also not reappear.
+      const { container: saveFirstContainer } = renderControl({ data: {} });
+      const saveFirstRoot = saveFirstContainer.querySelector(
+        '[data-testid="AssignTemplateRolesControl__save-first"]',
+      );
+      expect(saveFirstRoot.className).toContain('w-full');
+      expect(saveFirstRoot.className).not.toContain('max-w-[420px]');
+      expect(saveFirstRoot.className).not.toContain('px-6');
+
+      mockTemplatesOk();
+      const { container } = renderControl();
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
+      const root = container.querySelector('[data-testid="AssignTemplateRolesControl"]');
+      expect(root.className).toContain('w-full');
+      expect(root.className).not.toContain('max-w-[420px]');
+      expect(root.className).not.toContain('px-6');
+    });
+  });
+
   describe('inert fallback when rendered outside a RoleSelectionProvider', () => {
     it('renders with an empty selection and never throws', async () => {
-      mockOverviewOk();
+      mockTemplatesOk();
       render(<AssignTemplateRolesControl data={{ id: 'user-1' }} token="tok" apiBaseUrl="/sws/neo/user" />);
 
-      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      await waitFor(() => expect(fetchTemplateRoles).toHaveBeenCalled());
       expect(screen.getByTestId('AssignTemplateRolesControl__empty')).toBeInTheDocument();
     });
   });
