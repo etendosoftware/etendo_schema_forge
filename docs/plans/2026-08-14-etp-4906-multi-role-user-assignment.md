@@ -1939,3 +1939,34 @@ backend. Both fixes are small and precisely scoped from direct source investigat
 lower risk than the layout issue, but still verify visually/empirically before reporting
 done, same discipline as wave 8. Tester follow-up after, for any test asserting the old
 tab order or the old (unused) `label` string.
+
+**DEV wave 9 Findings (developer-9, landed, commit `8b7e2f4`) — both empirically
+verified, not just source-read:**
+
+- **Column label:** new key `usersGridRolesColumn` ("Roles", both locales) in
+  `en_US.json`/`es_ES.json`. `UserHeaderTable.jsx` now builds a `labelOverrides` memo
+  (merging any incoming `props.labelOverrides` with the new override for
+  `Default_Ad_Role_ID`), passed to `<DataTable>` after the `{...props}` spread. Verified
+  via 3 throwaway Vitest checks (written, run, deleted): the override resolves to
+  "Roles" in both locales through the REAL `resolveLabel`/`useLabel` chain and real
+  locale dictionaries, while confirming the un-overridden shared dictionary entry
+  elsewhere is untouched (still "Default Role"/"Rol por Defecto").
+- **Tab order:** `tabOrder: 0` added to the `roles` custom-tab entry in
+  `windows/custom/user/index.jsx`. Verified by calling the REAL `buildInitialTabs`
+  with this window's actual tab shape: result order is
+  `['custom:roles', 'emailConfig', 'custom:attachments']` — Roles first, as requested.
+- **Test impact (Tester's job, not fixed here):** `UserHeaderTable.vitest.jsx` — all 11
+  tests now fail on a NEW mock gap (`vi.mock('@/i18n', ...)` doesn't stub
+  `useLocaleSwitch`, which the fix now calls) — needs
+  `useLocaleSwitch: () => ({ locale: 'en_US', setLocale: null })` added to that file's
+  mock; worth also adding an assertion on the built `labelOverrides` while there.
+  `index.vitest.jsx` — unaffected (its `customTabs` assertion uses `toMatchObject`,
+  which ignores the new `tabOrder` field). `UserRolesTab.vitest.jsx`'s 13 failures are
+  the SAME pre-existing wave-7 `fetchTemplateRoles` mock gap, confirmed via `git stash`
+  to predate and be unrelated to this wave.
+- **Accumulated Tester backlog across waves 7+9, all from the same 2 mock-gap
+  root causes (`fetchTemplateRoles` not mocked; now also `useLocaleSwitch` not mocked
+  in one more file), nothing else:** `AssignTemplateRolesControl.vitest.jsx` (15),
+  `RoleChipsCell.vitest.jsx` (7), `UserHeaderTable.vitest.jsx` (9 orig + 11 new = needs
+  re-check, likely superset), `UserRolesTab.vitest.jsx` (13). **Tester still not
+  dispatched — paused on human instruction.**
