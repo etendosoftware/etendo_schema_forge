@@ -2115,3 +2115,37 @@ tab). Verify against the actual screenshot the human shared (visually compare a 
 screenshot of the rendered result side-by-side), not just "the classes look
 plausible" — same discipline as waves 8/10. Tester follow-up after for any Vitest
 assertion on the old plain-text cell values or old header classes.
+
+**DEV wave 11 Findings (developer-11, landed, commit `8fe4753d8`) — independently
+re-confirmed by the coordinator via screenshot, not just trusted:**
+
+**Correction to this section's own claim above:** "no existing success/warning token"
+was WRONG — developer-11 found `--status-success-*`/`--status-warning-*` CSS custom
+properties (with light/dark variants) already shipped in
+`@etendosoftware/app-shell-core`'s `styles.css`, backing Tailwind utilities
+(`bg-status-success`/`text-status-success-foreground`/`border-status-success-border`,
+`warning` equivalents) already used by `lib/statusBadge.js`'s `getStatusBadgeProps()`
+and `FiscalStatusBadge.jsx`. Used those instead of inventing raw `green-50`/`amber-50`
+classes — a better, more consistent fix than what this plan originally specified.
+
+- **Fix 1 (pills):** new local `TierPill` component; `cellValue()` now returns
+  `{tier, text}`, `tier: null` (no access) still renders plain `—` text, no pill.
+- **Fix 2 (category case):** `uppercase` removed, `font-semibold` → `font-medium`, on
+  both the hardcoded General header and the real `tMenu(group.category)` headers.
+- **Fix 3 (role icons):** new `ROLE_ICONS` map (`Sales: TrendingUp, Inventory: Package,
+  Finance: Landmark, Purchasing: FileText`), keyed by the same literal role names
+  `roleNameI18n.js`'s `ROLE_NAME_I18N_KEYS` already uses — no new naming scheme
+  introduced. Icon renders inline before the role label in each column `<th>`.
+- **Coordinator's own independent visual check** (screenshot at
+  `.../scratchpad/etp4906-roles-matrix.png`, not just trusting the agent's description):
+  confirmed all 3 — green ✓ pills and amber "Solo lectura" pill on General/Finanzas/
+  Ventas rows, plain `—` (no pill) on the "Usuario" row (a real Admin-only window,
+  correctly showing `—` for both templates rather than being omitted — matches
+  `TemplateRoleWindowAccess`'s documented exclusion list), "General"/"Configuracion"/
+  "Comercial" category headers in normal mixed case at lighter weight, and a
+  Landmark/TrendingUp icon before "Finanzas"/"Ventas" respectively. Tab order
+  (wave 10's fix) also reconfirmed correct in the same screenshot.
+- **Tests:** `UserRolesTab.vitest.jsx` 16/16 unaffected — every existing assertion uses
+  `textContent`-based matchers, unaffected by the new wrapping `<span>`/class changes.
+  **Tester follow-up (optional, not blocking):** add dedicated coverage for the
+  tier-specific pill classes and per-role icon presence, neither currently asserted.
