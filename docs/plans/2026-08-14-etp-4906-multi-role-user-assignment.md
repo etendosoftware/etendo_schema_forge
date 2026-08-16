@@ -1898,3 +1898,44 @@ failed/5 passed before this fix, same count after — root cause is an unrelated
 same class of gap DEV wave 7 already flagged for Tester across 4 files). No test in this
 file asserts on the old `max-w-[420px]`/`px-6` classes, so this wave adds zero new test
 debt on top of wave 7's already-pending Tester follow-up.
+
+## Manual QA Feedback Round 4 (Human, 2026-08-14) — DEV wave 9, 2 cosmetic requests
+
+Both root-caused directly against source before dispatch, both use EXISTING mechanisms
+already built into this codebase — no new infrastructure needed.
+
+1. **Grid column header "Rol por Defecto"/"Default Role" → "Roles"/"Roles".**
+   `UserHeaderTable.jsx`'s `defaultRole` column has `label: 'Default Role'`, but that's
+   dead fallback text — confirmed in `DataTable.jsx` (line 996):
+   `t(col.column) ?? col.label ?? col.key`, and `t('Default_Ad_Role_ID')` DOES resolve
+   (from the SHARED native AD dictionary entry in `en_US.json`/`es_ES.json`), so the
+   dictionary lookup always wins over `col.label`. **Do NOT edit that shared dictionary
+   entry** — `Default_Ad_Role_ID` is a generic native AD_User column other
+   windows/contexts could reference, and mutating its global label risks bleeding into
+   unrelated places. **Fix:** `DataTable` already accepts a `labelOverrides` prop
+   (`useLabel(labelOverrides)`, same mechanism `TaxSifField.jsx`/`EntityForm` use,
+   keyed `{[locale]: {[column]: label}}`) — pass one from `UserHeaderTable.jsx`,
+   scoped to just this grid, overriding `Default_Ad_Role_ID` to a NEW i18n key (e.g.
+   `usersGridRolesColumn`, value `"Roles"` in both `en_US.json`/`es_ES.json`). Check
+   whether `props.labelOverrides` already arrives from the generated page before adding
+   — merge rather than clobber if so (place after the `{...props}` spread either way, to
+   guarantee this override wins, matching how `data={filteredData}` is already placed
+   after the spread in the same component for the same reason).
+
+2. **"Roles del usuario" tab should render FIRST**, before the native "Configuración
+   del correo electrónico" tab and before "Adjuntos". `DetailView.jsx`'s
+   `buildInitialTabs` (`detailViewHelpers.jsx` line 544) already has a weight-based
+   ordering system: `secondaryTabs` (native, e.g. email config) default to weight
+   `SECONDARY_DEFAULT_WEIGHT = 99`; `tabCustomTabs` (our `roles`/`attachments` entries)
+   default to `CUSTOM_DEFAULT_WEIGHT = 999`; either can override via an explicit
+   `tabOrder` field on the tab's own descriptor, and the final sort is
+   `weight, then insertionIndex`. **Fix:** add `tabOrder: 0` to the `roles` entry in
+   `windows/custom/user/index.jsx`'s `customTabs` array (leave `attachments` untouched,
+   so it still sorts after both `roles` and the native email-config tab, preserving
+   relative order between those two).
+
+**Dispatch:** schema-forge-developer, `etendo_schema_forge` only, frontend-only, no
+backend. Both fixes are small and precisely scoped from direct source investigation —
+lower risk than the layout issue, but still verify visually/empirically before reporting
+done, same discipline as wave 8. Tester follow-up after, for any test asserting the old
+tab order or the old (unused) `label` string.
