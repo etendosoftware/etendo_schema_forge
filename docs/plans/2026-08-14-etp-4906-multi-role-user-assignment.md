@@ -2066,3 +2066,52 @@ cached/stale build; then restored the fix and confirmed correct order one more t
 `index.vitest.jsx` (21 tests) unaffected — nothing currently pins `detailTabOrder`,
 so nothing broke, though Tester may want to add explicit coverage for it as a
 follow-up (optional, not blocking).
+
+## Manual QA Feedback Round 6 (Human, 2026-08-14) — DEV wave 11, matrix visual polish
+
+Human shared a Figma screenshot of the "Roles del usuario" matrix and asked to match it
+more closely. **Coordinator tried Figma file access directly this session (not a
+sub-agent) — same "you don't have edit access to this file" denial as both prior
+attempts (REVIEW, QA).** This is now confirmed 3 times independently — a real, standing
+access gap, not fixable from this session. All 3 fixes below are derived from the
+human's shared screenshot alone, not the live Figma source — flag for a final human
+visual sign-off once done, same as the General-row/9-gap-row decision already carries.
+
+**No existing precedent found in the codebase for any of these 3** (checked: no
+`success`/`warning` CSS tokens in the theme, no existing tier-badge component, no
+per-role icon mapping anywhere) — this is genuinely new visual work, not a
+reuse-something-that-already-exists fix like most prior waves.
+
+1. **Cell values need to be colored pill badges, not plain text.** `UserRolesTab.jsx`'s
+   `cellValue()` and the hardcoded General-row cells both render bare strings
+   (`'✓'`, `ui('accessTierReadOnly')`, `'—'`) directly as `<td>` text with no
+   background. Figma shows: full access (`✓`) as a light-green rounded pill with a
+   green checkmark; read-only ("Solo lectura") as a light-amber rounded pill with amber
+   text; no-access (`—`) stays plain text, no pill. No existing success/warning color
+   token exists in this theme — use standard Tailwind semantic colors with dark-mode
+   variants (e.g. `bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300`
+   for full, equivalent amber family for read-only), consistent with how the rest of
+   this app handles dark-mode-aware color (check `hsl(var(--...))` custom-property
+   usage elsewhere first in case there's a closer-matching existing convention).
+2. **Category headers are force-uppercased; Figma shows normal case.** Both the
+   hardcoded "General" header and `tMenu(group.category)` category headers currently
+   have Tailwind's `uppercase` class applied — Figma shows "General"/"Comercial"/
+   "Ventas" in their natural mixed case, lighter/smaller, not bold. Remove `uppercase`
+   (and likely reduce `font-semibold` to a lighter weight — compare directly against
+   the screenshot, don't just take this description's word for it).
+3. **Role column headers need a small icon before the role name.** Figma shows a
+   distinct icon per role (something chart/trend-like for Ventas, a box/package for
+   Almacén, a building/landmark for Financiero, a document for Compras). No per-role
+   icon mapping exists anywhere in this codebase today (checked `RolesOverviewPage.jsx`,
+   `roleNameI18n.js` — neither has one) — pick reasonable `lucide-react` icons (already
+   the icon library this codebase uses elsewhere, e.g. `RoleFilterControl`/
+   `RolesOverviewPage`) per role, semantically matched, and render icon+label inline in
+   each `<th>`.
+
+**Dispatch:** schema-forge-developer, `etendo_schema_forge` only, frontend-only
+(`UserRolesTab.jsx` is the only file touched — no backend, no decisions.json change
+expected since this is pure presentational styling within an already-registered custom
+tab). Verify against the actual screenshot the human shared (visually compare a live
+screenshot of the rendered result side-by-side), not just "the classes look
+plausible" — same discipline as waves 8/10. Tester follow-up after for any Vitest
+assertion on the old plain-text cell values or old header classes.
