@@ -161,7 +161,7 @@ export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments
   if (adminRoleId && defaultRoleId && defaultRoleId === adminRoleId) {
     return (
       <span className="inline-flex items-center gap-1.5" data-testid="RoleChipsCell__admin">
-        <RoleChip>{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
+        <RoleChip data-testid="RoleChip__8d5e33">{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
       </span>
     );
   }
@@ -182,7 +182,7 @@ export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments
 
   return (
     <span className="inline-flex items-center gap-1.5 max-w-full" data-testid="RoleChipsCell__chips">
-      {shown.map((name, i) => <RoleChip key={`${name}-${i}`}>{name}</RoleChip>)}
+      {shown.map((name, i) => <RoleChip key={`${name}-${i}`} data-testid="RoleChip__8d5e33">{name}</RoleChip>)}
       {extra > 0 && (
         <span
           className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]"

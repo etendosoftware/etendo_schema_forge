@@ -113,7 +113,9 @@ export default function UserWindow(props) {
   ], [selectedRoleIds]);
 
   return (
-    <RoleSelectionProvider value={{ selectedRoleIds, setSelectedRoleIds }}>
+    <RoleSelectionProvider
+      value={{ selectedRoleIds, setSelectedRoleIds }}
+      data-testid="RoleSelectionProvider__853799">
       <UserPage
         {...props}
         onAfterExistingSave={handleRoleAssignmentSave}
@@ -133,7 +135,7 @@ export default function UserWindow(props) {
         // giving the final order: Roles del usuario, Configuración del correo
         // electrónico, Adjuntos.
         detailTabOrder={1}
-      />
+        data-testid="UserPage__853799" />
     </RoleSelectionProvider>
   );
 }

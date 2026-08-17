@@ -102,7 +102,6 @@ export default function AssignTemplateRolesControl(props) {
   return (
     <div className="flex flex-col gap-2 w-full" ref={containerRef} data-testid="AssignTemplateRolesControl">
       <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
-
       <button
         type="button"
         className="flex flex-wrap items-center gap-1.5 min-h-10 w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm disabled:cursor-not-allowed"
@@ -131,7 +130,7 @@ export default function AssignTemplateRolesControl(props) {
               className="hover:text-destructive"
               data-testid={`AssignTemplateRolesControl__chip-remove-${role.id}`}
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3" data-testid="X__16443b" />
             </span>
           </span>
         ))}
@@ -143,9 +142,10 @@ export default function AssignTemplateRolesControl(props) {
             +{overflowCount}
           </span>
         )}
-        <ChevronDown className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
+        <ChevronDown
+          className="h-3.5 w-3.5 ml-auto text-muted-foreground"
+          data-testid="ChevronDown__16443b" />
       </button>
-
       {isEditing && (
         <div className="flex flex-col gap-1 rounded-lg border border-input bg-card p-2 pl-4" data-testid="AssignTemplateRolesControl__options">
           {roles.map((role) => {

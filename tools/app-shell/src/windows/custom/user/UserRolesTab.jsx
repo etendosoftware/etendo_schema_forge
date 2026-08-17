@@ -278,7 +278,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               return (
                 <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
                   <span className="inline-flex items-center justify-center gap-1">
-                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="RoleIcon__71bdc9" />}
                     {resolveRoleDisplayName(ui, role.name)}
                   </span>
                 </th>
@@ -287,7 +287,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          <Fragment key="general">
+          <Fragment key="general" data-testid="Fragment__71bdc9">
             <tr className="bg-muted/30">
               <th
                 colSpan={columns.length + 1}
@@ -301,14 +301,14 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                 <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
                 {columns.map((role) => (
                   <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                    <TierPill tier="full">{'✓'}</TierPill>
+                    <TierPill tier="full" data-testid="TierPill__71bdc9">{'✓'}</TierPill>
                   </td>
                 ))}
               </tr>
             ))}
           </Fragment>
           {categoryGroups.map((group) => (
-            <Fragment key={group.category}>
+            <Fragment key={group.category} data-testid="Fragment__71bdc9">
               <tr className="bg-muted/30">
                 <th
                   colSpan={columns.length + 1}
@@ -324,7 +324,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                     const { tier, text } = cellValue(row, role);
                     return (
                       <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                        <TierPill tier={tier}>{text}</TierPill>
+                        <TierPill tier={tier} data-testid="TierPill__71bdc9">{text}</TierPill>
                       </td>
                     );
                   })}
