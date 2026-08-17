@@ -3,6 +3,8 @@ import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { selectSifFields } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
 
@@ -51,13 +53,29 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  * `InlineLinesPanel`-shaped `rowActions` entry that only shows when the row's own tax
  * is missing its key. Also returns the modal JSX to render (portaled by the caller).
  *
+ * The tax selector endpoint fails CLOSED — it returns an empty catalog (not the
+ * full one) when called without the same context params `InlineSearchCombo` sends
+ * when a user opens the tax field's own search combo in edit mode: `parentId`,
+ * `isSOTrx`/`IsSOTrx`, `priceList`, `DateInvoiced`, `C_BPartner_Location_ID`,
+ * `currency`. This hook fetches the invoice's own header record (`recordId` — the
+ * hook needs no other AD knowledge) and reuses `buildLineSelectorContext` — the
+ * SAME helper `DetailView.jsx` uses to build that exact context — to compute them,
+ * instead of hand-rolling a second implementation (ETP-4888 bugfix).
+ *
  * @param {object} args
  * @param {string} args.apiBaseUrl the CALLING window's own NEO base (e.g. `/sws/neo/sales-invoice`)
  * @param {string} args.token NEO bearer token
  * @param {boolean} [args.enabled=true] set false to disable entirely (returns `{ rowActions: [], modal: null }`)
+ * @param {string|null} [args.recordId] the invoice's own header record id — needed to fetch
+ *   the header record that supplies the selector's required context params. On a
+ *   brand-new (unsaved) record there is nothing to enrich yet, so the catalog fetch
+ *   is skipped cleanly until it exists.
+ * @param {string|null} [args.windowCategory] window category (`'sales'` | `'purchases'`) —
+ *   forwarded to `buildLineSelectorContext`, which derives `isSOTrx`/`IsSOTrx` from it
+ *   the same way `DetailView.jsx` does. Sales windows resolve to `Y`, purchase windows to `N`.
  * @returns {{ rowActions: Array<object>, modal: import('react').ReactNode }}
  */
-export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true }) {
+export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -66,19 +84,35 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true }) {
   const [modalTaxId, setModalTaxId] = useState(null);
 
   useEffect(() => {
-    if (!enabled || !apiBaseUrl || !token) return undefined;
+    if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
     let cancelled = false;
-    fetch(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}?limit=${TAX_SELECTOR_PAGE_LIMIT}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.items) return;
-        setTaxById(Object.fromEntries(data.items.map((item) => [item.id, item])));
-      })
-      .catch(() => {});
+
+    async function loadTaxCatalog() {
+      const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const headerRecord = headerResponse.ok ? await headerResponse.json() : null;
+      if (cancelled) return;
+
+      const selectorContext = buildLineSelectorContext({ windowCategory, parentId: recordId, headerRecord });
+      // Not part of buildLineSelectorContext (DetailView.jsx also merges it in
+      // separately, alongside an org-session fallback this hook has no access to).
+      const currency = headerRecord?.['currency$_identifier'] ?? null;
+      const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
+        limit: TAX_SELECTOR_PAGE_LIMIT,
+        ...selectorContext,
+        ...(currency ? { currency } : {}),
+      });
+
+      const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data = taxResponse.ok ? await taxResponse.json() : null;
+      if (cancelled || !data?.items) return;
+      setTaxById(Object.fromEntries(data.items.map((item) => [item.id, item])));
+    }
+
+    loadTaxCatalog().catch(() => {});
     return () => { cancelled = true; };
-  }, [apiBaseUrl, token, enabled]);
+  }, [apiBaseUrl, token, enabled, recordId, windowCategory]);
 
   const rowActions = useMemo(() => {
     if (!enabled) return [];

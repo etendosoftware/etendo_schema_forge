@@ -141,7 +141,7 @@ export default function SalesInvoiceWindow(props) {
   const breadcrumb = 'Sales / Sales Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { rowActions: taxSifRowActions, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED,
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
   });
 
   const { requestDelete, deleteDialog } = useRowDelete({
