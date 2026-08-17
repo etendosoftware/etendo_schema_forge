@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.27.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "updatedAt": "2026-08-06T13:47:46.616Z",
-  "checksum": "eed628b2edf5cbce",
+  "updatedAt": "2026-08-13T15:16:00.897Z",
+  "checksum": "24d8a4ee4c3eaf41",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -12,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -555,6 +560,7 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },
@@ -710,6 +716,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"

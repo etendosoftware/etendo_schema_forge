@@ -12,6 +12,7 @@
     "linesLayout": "inlineEditable",
     "noHeaderBorder": true,
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": true,
     "maxDetailLines": 0,
     "customComponents": {
       "bottomSection": "ReturnMaterialReceiptBottomPanel",
@@ -360,6 +361,7 @@
         "product": {
           "grid": true,
           "gridOrder": 1,
+          "gridReadOnly": true,
           "searchable": true,
           "inputMode": "search",
           "readOnlyLogic": null,
@@ -382,6 +384,7 @@
           "visibility": "readOnly",
           "grid": true,
           "gridOrder": 3,
+          "gridReadOnly": true,
           "section": "principal"
         },
         "salesOrderLine": {

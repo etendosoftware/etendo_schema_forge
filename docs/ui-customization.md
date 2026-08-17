@@ -513,6 +513,43 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 standard `ListView` (nothing to declare). `contacts` is the one window that
 currently opts out (see the known gap above).
 
+### 9d. `isRowDeletable` — gating bulk delete for a mixed selection (ETP-4871)
+
+An optional `ListView` prop, `(row) => boolean`, for windows where deletability is a
+**per-row, data-driven condition** rather than a blanket rule — e.g. `financial-account`,
+where an account is only really deletable once it has zero dependent records anywhere
+(every FK into `FIN_Financial_Account` is RESTRICT). Without this prop, `hideBulkDelete`
+(9c above) is all-or-nothing for the whole window; `isRowDeletable` instead lets the grid
+stay bulk-deletable in general while blocking the specific action on a bad selection.
+
+```jsx
+<ListView
+  isRowDeletable={(row) => row.deletable !== false}
+  ...
+/>
+```
+
+- **Absent (the default) behaves exactly as before ETP-4871** — every row counts as
+  deletable, so this never regresses any other window's bulk delete. This is a plain prop
+  passed straight to `ListView` (through a generated page's `{...props}` spread, same as
+  `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
+- When present, `ListView` recomputes on every selection change how many of the
+  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
+  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
+  batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
+  exists as a defense-in-depth backstop for a row that changed state between selection and
+  click, but the button being disabled up front is the primary UX).
+- `bulkDeleteBlockedTooltip` is a **generic**, entity-agnostic i18n key (`ListView` is
+  shared by every window) — "{count} registro(s) seleccionado(s) no se pueden eliminar." —
+  not a `financeAccounts*`-scoped one, even though `financial-account` is its first
+  consumer.
+- This is orthogonal to the per-row kebab delete affordance (`AccountRowMenu`'s "Eliminar
+  cuenta" item, gated the same way but reading `row.deletable` directly) — `isRowDeletable`
+  only concerns `ListView`'s own generic bulk-delete button.
+- **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
+  the only current consumer.
+
 ---
 
 ### 10. `window.dateFilterKey` — date range filter column
@@ -813,6 +850,8 @@ Clicking either the chevron or the hover action toggles the same expand state �
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
 
 **Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
+
+**ETP-4803 fix — the exclusion must ALSO apply to `DataTable`'s hidden add-row colgroup.** `DataTable.jsx` computes a hidden `<colgroup>` (used only while `hideHeader=true`, i.e. the inline add-line form) that must reproduce `InlineLinesPanel`'s flex math exactly — see `tools/app-shell/src/lib/linesColumnWidth.js`'s file header. When `DataTable`'s own `visibleColumns` filter never dropped `dimensionsPanel` (unlike `InlineLinesPanel`'s), any window with that column type got a phantom fixed-width column in the colgroup that the real header didn't have, desyncing `growColumnWidth()`'s fixed/grow totals for every column after it — misaligning the add-line form's inputs against the saved-rows header on purchase-invoice, sales-invoice, purchase-shipment, and sales-shipment. Fixed by extracting the exclusion into `isLineGridColumn(col)` (`linesColumnWidth.js`) and having **both** `InlineLinesPanel` and `DataTable` filter `visibleColumns` through it, so the two renderers can't diverge on this axis again. Any future column type that renders out-of-band (not as a fixed grid column in either renderer) must be added to `NON_GRID_COLUMN_TYPES` in that same file, not to one renderer's filter alone.
 
 **Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content). **Update (same ticket, follow-up pass):** `AmortizationLinesTable.jsx` also stopped using `DimSummary`/`DimBadge` — it hand-patched the same static Layers/"Edit dimensions" hover-action pattern (see below) instead of the permanent grid-column summary it used to render. `DimSummary`/`DimBadge` currently have no consumer left in this repo but remain exported as reusable building blocks.
 

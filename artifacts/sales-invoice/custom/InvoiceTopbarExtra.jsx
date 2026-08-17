@@ -4,6 +4,7 @@ import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHi
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
+import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
@@ -212,17 +213,18 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
-  // Credit instruments (ETP-4737: unified RECTIFICATIVA subtype, formerly separate
-  // NC / DEV) — mirror the grid's "Pendiente de pago" cell: green "Aplicada" once
-  // the note is fully consumed, else a purple "Saldo a favor · remaining" badge
-  // that opens the same payment history modal the grid opens (listing the
-  // payments that consumed the note).
-  const arSubtype = getArSubtype(data);
-  const isCreditInstrument = arSubtype === 'RECTIFICATIVA';
+  // Credit instruments — mirror the grid's "Pendiente de pago" cell: green "Aplicada"
+  // once fully consumed, else a "Saldo a favor · remaining" badge that opens the same
+  // payment history modal the grid opens (listing the payments that consumed it).
+  //
+  // ETP-4841: identified by the SIGN of the total, not by the document type — a POSITIVE
+  // Factura Rectificativa is payable and falls through to the normal branches below,
+  // while a NEGATIVE ordinary Factura is a credit and enters here.
+  const isCreditInstrument = resolveInvoicePaymentBadge(data).isCredit;
   if (isCompleted && isCreditInstrument) {
-    // Credit notes carry negative amounts end to end — installments (when loaded) are the
-    // fresh source, data.outstandingAmount the fallback snapshot; either way the remaining
-    // unused balance is the absolute value.
+    // Credit instruments carry negative amounts end to end — installments (when loaded) are
+    // the fresh source, data.outstandingAmount the fallback snapshot; either way the
+    // remaining unused balance is the absolute value.
     const outstandingAbs = Math.abs(installments.length > 0
       ? installments.reduce((s, i) => s + (parseFloat(i.outstandingAmount) || 0), 0)
       : parseFloat(data?.outstandingAmount ?? 0));

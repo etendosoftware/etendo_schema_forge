@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import {
   GLC_SEED_PAYLOAD,
+  mapDimensionRows,
 } from './mockCatalogs.js';
 
 /**
@@ -42,7 +43,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
   const mapPayload = useCallback((payload) => ({
     general: payload?.general ?? seed.general,
     defaults: payload?.defaults ?? seed.defaults,
-    dimensions: Array.isArray(payload?.dimensions) ? payload.dimensions : seed.dimensions,
+    dimensions: mapDimensionRows(Array.isArray(payload?.dimensions) ? payload.dimensions : seed.dimensions),
     orgInfo: payload?.orgInfo ?? seed.orgInfo,
     catalogs: {
       accounts: Array.isArray(payload?.catalogs?.accounts) ? payload.catalogs.accounts : seed.catalogs.accounts,

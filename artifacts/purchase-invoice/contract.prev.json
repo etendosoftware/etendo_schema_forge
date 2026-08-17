@@ -1,8 +1,8 @@
 {
-  "version": "0.85.0",
+  "version": "0.83.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-13T14:06:22.056Z",
-  "checksum": "ee45b7f389bd312b",
+  "updatedAt": "2026-08-11T19:52:32.867Z",
+  "checksum": "758dfc90eed3f4b7",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -12,7 +12,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -43,11 +43,9 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
-      },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
       },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
@@ -1008,7 +1006,7 @@
             "label": "Accounting register date",
             "type": "date",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": false,
             "form": false,
@@ -1087,6 +1085,40 @@
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
               "evaluable": true,
               "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiPurDescription",
+            "apiKey": "aeatsiiPurDescription",
+            "column": "EM_Aeatsii_Pur_Description_ID",
+            "label": "SII purchase description master",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            },
+            "reference": "aeatsii_description",
+            "inputMode": "selector",
+            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
+            "validation": {
+              "maxLength": 32
+            },
+            "callout": {
+              "className": "org.openbravo.module.sii.callouts.SiiDescriptionCallout"
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='N')) & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || (record['documentStatus'] === 'VO' && record['em_aeatsii_issent'] === 'N')) && record['processed'] === true"
             }
           },
           {
@@ -1206,34 +1238,51 @@
             }
           },
           {
-            "name": "aeatsiiErrorRegistral",
-            "apiKey": "aeatsiiErrorRegistral",
-            "column": "EM_Aeatsii_Error_Registral",
-            "label": "Register Error Modified",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
+            "name": "aeatsiiEjercicio",
+            "apiKey": "aeatsiiEjercicio",
+            "column": "EM_Aeatsii_Ejercicio",
+            "label": "SII exercise",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
             "grid": false,
             "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
             "validation": {
-              "required": true,
-              "maxLength": 1
+              "maxLength": 4
             },
             "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII2@='Y' & @em_aeatsii_issent@='Y' & (@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@!'VO')",
+              "raw": "@AEATSII_AcogidaSII2@='Y'",
               "evaluable": true
             },
             "readOnlyLogic": {
-              "raw": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+              "raw": "true",
               "evaluable": true,
-              "js": "(record['em_aeatsii_estado'] !== 'CO' && record['em_aeatsii_estado'] !== 'AE') || record['em_aeatsii_modified'] === 'Y' || record['documentStatus'] === 'VO'"
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiPeriodo",
+            "apiKey": "aeatsiiPeriodo",
+            "column": "EM_Aeatsii_Periodo",
+            "label": "SII period",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 2
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
             }
           },
           {
@@ -1259,30 +1308,6 @@
             },
             "callout": {
               "className": "org.openbravo.module.sii.callouts.SiiAuthorizationCallout"
-            }
-          },
-          {
-            "name": "aeatsiiAuthorizationno",
-            "apiKey": "aeatsiiAuthorizationno",
-            "column": "EM_Aeatsii_Authorizationno",
-            "label": "Authorization No.",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 15
-            },
-            "displayLogic": {
-              "raw": "@EM_Aeatsii_Isauthorization@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
             }
           },
           {
@@ -1321,46 +1346,6 @@
             "inputMode": "selector",
             "validation": {
               "maxLength": 32
-            }
-          },
-          {
-            "name": "aeatsiiErrorCode",
-            "apiKey": "aeatsiiErrorCode",
-            "column": "EM_Aeatsii_Error_Code",
-            "label": "EM_Aeatsii_Error_Code",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 10
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
-            }
-          },
-          {
-            "name": "aeatsiiErrorMsg",
-            "apiKey": "aeatsiiErrorMsg",
-            "column": "EM_Aeatsii_Error_Msg",
-            "label": "EM_Aeatsii_Error_Msg",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 255
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
             }
           },
           {
@@ -1680,6 +1665,13 @@
             }
           },
           {
+            "name": "aeatsiiPurDescription",
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            }
+          },
+          {
             "name": "aeatsiiDescripcionSii",
             "derivation": {
               "type": "lookup",
@@ -1691,13 +1683,6 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
-            }
-          },
-          {
-            "name": "aeatsiiErrorRegistral",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           },
           {
@@ -5140,7 +5125,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -5171,11 +5156,9 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
-      },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
       },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
@@ -5752,7 +5735,7 @@
             "apiKey": "aeatsiiFechaRegCont",
             "column": "EM_Aeatsii_Fecha_Reg_Cont",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5768,7 +5751,7 @@
             "apiKey": "aeatsiiPurDescription",
             "column": "EM_Aeatsii_Pur_Description_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -5792,7 +5775,7 @@
             "apiKey": "aeatsiiErrorRegistral",
             "column": "EM_Aeatsii_Error_Registral",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -5808,7 +5791,7 @@
             "apiKey": "aeatsiiEjercicio",
             "column": "EM_Aeatsii_Ejercicio",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5816,7 +5799,7 @@
             "apiKey": "aeatsiiPeriodo",
             "column": "EM_Aeatsii_Periodo",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5832,7 +5815,7 @@
             "apiKey": "aeatsiiAuthorizationno",
             "column": "EM_Aeatsii_Authorizationno",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -6032,7 +6015,7 @@
             "apiKey": "aeatsiiErrorCode",
             "column": "EM_Aeatsii_Error_Code",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -6040,7 +6023,7 @@
             "apiKey": "aeatsiiErrorMsg",
             "column": "EM_Aeatsii_Error_Msg",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -9956,6 +9939,14 @@
       },
       {
         "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "column": "EM_Aeatsii_Pur_Description_ID",
+        "reference": "aeatsii_description",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiPurDescription"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiCauseExemption",
         "column": "EM_Aeatsii_Cause_Exemption_ID",
         "reference": "aeatsii_cause_exemption",
@@ -10893,14 +10884,6 @@
         "description": "Default value for 'aeatsiiDescripcionSii' in header should be a string"
       },
       {
-        "id": "t-default-value-type-header-aeatsiiErrorRegistral",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "Default value for 'aeatsiiErrorRegistral' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-aeatsiiEstado",
         "category": "default-value-type",
         "entity": "header",
@@ -10931,6 +10914,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Default value for 'aeatsiiIssent' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiPurDescription",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiPurDescription' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-currency",
@@ -11133,14 +11124,6 @@
         "description": "Default value for 'lineNo' in tax should be a string"
       },
       {
-        "id": "t-displaylogic-evaluable-header-aeatsiiAuthorizationno",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiAuthorizationno' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-aeatsiiClaveTipoFc",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11157,12 +11140,12 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-aeatsiiErrorRegistral",
+        "id": "t-displaylogic-evaluable-header-aeatsiiEjercicio",
         "category": "displaylogic-evaluable",
         "entity": "header",
-        "field": "aeatsiiErrorRegistral",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Display logic for 'aeatsiiErrorRegistral' in header should have evaluable flag"
+        "description": "Display logic for 'aeatsiiEjercicio' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-aeatsiiEstado",
@@ -11187,6 +11170,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiPeriodo",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiPurDescription",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-costcenter",
@@ -11325,14 +11324,6 @@
         "description": "Display logic for 'aEAT349Period' in reversedInvoices should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-valid-header-aeatsiiAuthorizationno",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiAuthorizationno' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-header-aeatsiiClaveTipoFc",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11349,12 +11340,12 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-aeatsiiErrorRegistral",
+        "id": "t-displaylogic-valid-header-aeatsiiEjercicio",
         "category": "displaylogic-valid",
         "entity": "header",
-        "field": "aeatsiiErrorRegistral",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Display logic for 'aeatsiiErrorRegistral' in header should be valid JS"
+        "description": "Display logic for 'aeatsiiEjercicio' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-aeatsiiEstado",
@@ -11379,6 +11370,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiPeriodo",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiPurDescription",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-costcenter",
@@ -11805,14 +11812,6 @@
         "description": "Field 'toCurrency' should be present in exchangeRates"
       },
       {
-        "id": "t-field-presence-header-aeatsiiAuthorizationno",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Field 'aeatsiiAuthorizationno' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-aeatsiiCauseExemption",
         "category": "field-presence",
         "entity": "header",
@@ -11837,28 +11836,12 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
-        "id": "t-field-presence-header-aeatsiiErrorCode",
+        "id": "t-field-presence-header-aeatsiiEjercicio",
         "category": "field-presence",
         "entity": "header",
-        "field": "aeatsiiErrorCode",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Field 'aeatsiiErrorCode' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiErrorMsg",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "Field 'aeatsiiErrorMsg' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiErrorRegistral",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "Field 'aeatsiiErrorRegistral' should be present in header"
+        "description": "Field 'aeatsiiEjercicio' should be present in header"
       },
       {
         "id": "t-field-presence-header-aeatsiiEstado",
@@ -11891,6 +11874,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiPeriodo",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Field 'aeatsiiPeriodo' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiPurDescription",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Field 'aeatsiiPurDescription' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -13045,14 +13044,6 @@
         "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
       },
       {
-        "id": "t-field-type-header-aeatsiiAuthorizationno",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Field 'aeatsiiAuthorizationno' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-aeatsiiCauseExemption",
         "category": "field-type",
         "entity": "header",
@@ -13077,28 +13068,12 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-aeatsiiErrorCode",
+        "id": "t-field-type-header-aeatsiiEjercicio",
         "category": "field-type",
         "entity": "header",
-        "field": "aeatsiiErrorCode",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Field 'aeatsiiErrorCode' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiErrorMsg",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "Field 'aeatsiiErrorMsg' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiErrorRegistral",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "Field 'aeatsiiErrorRegistral' should have type 'boolean' in header"
+        "description": "Field 'aeatsiiEjercicio' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-aeatsiiEstado",
@@ -13131,6 +13106,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiPeriodo",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Field 'aeatsiiPeriodo' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiPurDescription",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Field 'aeatsiiPurDescription' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-businessPartner",
@@ -14045,14 +14036,6 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiAuthorizationno",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiAuthorizationno' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiClaveTipoFc",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -14069,28 +14052,12 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorCode",
+        "id": "t-readonlylogic-evaluable-header-aeatsiiEjercicio",
         "category": "readonlylogic-evaluable",
         "entity": "header",
-        "field": "aeatsiiErrorCode",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorCode' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorMsg",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorRegistral",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorRegistral' in header should have evaluable flag"
+        "description": "Read-only logic for 'aeatsiiEjercicio' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-aeatsiiEstado",
@@ -14115,6 +14082,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiPeriodo",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPeriodo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiPurDescription",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
@@ -14613,14 +14596,6 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-aeatsiiAuthorizationno",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiAuthorizationno' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-aeatsiiClaveTipoFc",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -14637,28 +14612,12 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-aeatsiiErrorCode",
+        "id": "t-readonlylogic-valid-header-aeatsiiEjercicio",
         "category": "readonlylogic-valid",
         "entity": "header",
-        "field": "aeatsiiErrorCode",
+        "field": "aeatsiiEjercicio",
         "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorCode' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiErrorMsg",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiErrorRegistral",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiErrorRegistral' in header should be valid JS"
+        "description": "Read-only logic for 'aeatsiiEjercicio' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiEstado",
@@ -14683,6 +14642,22 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiPeriodo",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPeriodo' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiPurDescription",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-businessPartner",
@@ -15476,6 +15451,14 @@
         "field": "aeatsiiCauseExemption",
         "runner": "node",
         "description": "Selector endpoint for 'aeatsiiCauseExemption' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-aeatsiiPurDescription",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "Selector endpoint for 'aeatsiiPurDescription' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-businessPartner",
@@ -16462,6 +16445,14 @@
         "description": "System field 'activity' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-aeatsiiAuthorizationno",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "System field 'aeatsiiAuthorizationno' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-aeatsiiAutofactura",
         "category": "system-field",
         "entity": "header",
@@ -16510,12 +16501,28 @@
         "description": "System field 'aeatsiiDup' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiEjercicio",
+        "id": "t-system-field-header-aeatsiiErrorCode",
         "category": "system-field",
         "entity": "header",
-        "field": "aeatsiiEjercicio",
+        "field": "aeatsiiErrorCode",
         "runner": "node",
-        "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
+        "description": "System field 'aeatsiiErrorCode' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiErrorMsg",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "System field 'aeatsiiErrorMsg' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiErrorRegistral",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "System field 'aeatsiiErrorRegistral' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaDua",
@@ -16588,22 +16595,6 @@
         "field": "aeatsiiMultiDua",
         "runner": "node",
         "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiPeriodo",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "System field 'aeatsiiPeriodo' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiPurDescription",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "System field 'aeatsiiPurDescription' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiSend",
@@ -18463,16 +18454,16 @@
         "action-endpoint": 26,
         "crud-flags": 13,
         "default-value-type": 37,
-        "displaylogic-evaluable": 24,
-        "displaylogic-valid": 24,
-        "field-presence": 155,
-        "field-type": 155,
-        "readonlylogic-evaluable": 71,
-        "readonlylogic-valid": 71,
+        "displaylogic-evaluable": 25,
+        "displaylogic-valid": 25,
+        "field-presence": 154,
+        "field-type": 154,
+        "readonlylogic-evaluable": 70,
+        "readonlylogic-valid": 70,
         "rule-declared": 23,
         "searchable-filters": 6,
-        "selector-endpoint": 52,
-        "system-field": 326,
+        "selector-endpoint": 53,
+        "system-field": 327,
         "visibility": 13
       },
       "byRunner": {

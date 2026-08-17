@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLocale, useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useQuotationPdf } from './useQuotationPdf.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -24,8 +24,13 @@ const QUOTATION_SPECS = [
 
 function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
+  // Pass the DB-sourced status dictionary (same one DataTable.jsx uses via
+  // useLocale()) so this preview resolves the exact same "Bajo evaluación"
+  // AD_Ref_List_Trl label the grid shows, instead of falling back to the
+  // generic statusUnderEvaluation ("En evaluación") key.
+  const dictionary = useLocale();
   const statusCode = quotation.documentStatus;
-  const statusLabel = resolveStatusLabel(statusCode, null, ui);
+  const statusLabel = resolveStatusLabel(statusCode, dictionary, ui);
 
   return (
     <div className="pb-4">
@@ -164,22 +169,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="QuotationGeneralTab__7eb018" />,
-    },
-    {
-      key: 'messages',
-      label: ui('quotationPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('quotationPreviewMessages')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
-    {
-      key: 'history',
-      label: ui('quotationPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('quotationPreviewHistory')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
     },
   ];
 

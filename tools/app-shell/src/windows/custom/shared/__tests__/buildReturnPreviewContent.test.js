@@ -24,8 +24,8 @@ describe('buildReturnPreviewContent', () => {
 
   // ── Imports ────────────────────────────────────────────────────────────────
 
-  it('imports PreviewActionButtons and makeStaticPreviewTabs from PreviewActionButtons.jsx', () => {
-    assert.match(src, /import PreviewActionButtons.*makeStaticPreviewTabs.*from '\.\.\/PreviewActionButtons\.jsx'/);
+  it('imports PreviewActionButtons as the default export of PreviewActionButtons.jsx', () => {
+    assert.match(src, /import PreviewActionButtons from '\.\.\/PreviewActionButtons\.jsx'/);
   });
 
   it('imports ReturnDocStatsPanel from local preview-cards', () => {
@@ -102,10 +102,13 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /specs=\{specs\}/);
   });
 
-  // ── makeStaticPreviewTabs spread ──────────────────────────────────────────
+  // ── tabs — general only ───────────────────────────────────────────────────
 
-  it('spreads makeStaticPreviewTabs(ui) into the tabs array', () => {
-    assert.match(src, /\.\.\.makeStaticPreviewTabs\(ui\)/);
+  // ETP-4855 — the Messages/History placeholders were removed everywhere, and
+  // with them makeStaticPreviewTabs, the helper that injected them into the
+  // three windows built through here.
+  it('injects no static placeholder tabs', () => {
+    assert.doesNotMatch(src, /makeStaticPreviewTabs/);
   });
 
   // ── i18n — no hardcoded user-visible strings ──────────────────────────────

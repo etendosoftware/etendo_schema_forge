@@ -17,6 +17,10 @@ import {
   getFiscalRecordId,
   mapSiiRecordToForm,
   getTerritoryDefaults,
+  isActiveRecord,
+  activeOrNull,
+  getChangeSifNoticeKey,
+  getSystemsToDeactivate,
 } from '../fiscalConfig.utils.js';
 
 // ---------------------------------------------------------------------------
@@ -596,5 +600,143 @@ describe('getTerritoryDefaults', () => {
   it('unknown territory returns all null', () => {
     const d = getTerritoryDefaults('unknown', true);
     expect(d).toEqual({ sii: null, verifactu: null, tbai: null });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isActiveRecord (ETP-4785 — "Change SIF" active-row resolution, addresses N1)
+// ---------------------------------------------------------------------------
+
+describe('isActiveRecord', () => {
+  it('returns false for null record', () => {
+    expect(isActiveRecord(null)).toBe(false);
+  });
+
+  it('returns false for undefined record', () => {
+    expect(isActiveRecord(undefined)).toBe(false);
+  });
+
+  it('treats a MISSING active property as active (never hide on absent flag)', () => {
+    expect(isActiveRecord({ id: 'x' })).toBe(true);
+  });
+
+  it('treats active === undefined as active', () => {
+    expect(isActiveRecord({ id: 'x', active: undefined })).toBe(true);
+  });
+
+  it('treats active === null as active', () => {
+    expect(isActiveRecord({ id: 'x', active: null })).toBe(true);
+  });
+
+  it('returns true for active === true (boolean)', () => {
+    expect(isActiveRecord({ active: true })).toBe(true);
+  });
+
+  it('returns true for active === "Y"', () => {
+    expect(isActiveRecord({ active: 'Y' })).toBe(true);
+  });
+
+  it('returns true for active === "true"', () => {
+    expect(isActiveRecord({ active: 'true' })).toBe(true);
+  });
+
+  it('returns false for active === false (boolean) — Change SIF trace row', () => {
+    expect(isActiveRecord({ active: false })).toBe(false);
+  });
+
+  it('returns false for active === "N" — Change SIF trace row', () => {
+    expect(isActiveRecord({ active: 'N' })).toBe(false);
+  });
+
+  it('returns false for active === "false"', () => {
+    expect(isActiveRecord({ active: 'false' })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// activeOrNull
+// ---------------------------------------------------------------------------
+
+describe('activeOrNull', () => {
+  it('returns the record when it is active', () => {
+    const rec = { id: 'x', active: 'Y' };
+    expect(activeOrNull(rec)).toBe(rec);
+  });
+
+  it('returns the record when active flag is absent (treated active)', () => {
+    const rec = { id: 'x' };
+    expect(activeOrNull(rec)).toBe(rec);
+  });
+
+  it('returns null when the record is inactive (Change SIF trace)', () => {
+    expect(activeOrNull({ id: 'x', active: 'N' })).toBeNull();
+  });
+
+  it('returns null for a null record', () => {
+    expect(activeOrNull(null)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getChangeSifNoticeKey (per-SIF permanence notice, informational only)
+// ---------------------------------------------------------------------------
+
+describe('getChangeSifNoticeKey', () => {
+  it('returns the SII notice key for "sii"', () => {
+    expect(getChangeSifNoticeKey('sii')).toBe('fiscal.changeSif.notice.sii');
+  });
+
+  it('returns the SII notice key for "sii-navarra"', () => {
+    expect(getChangeSifNoticeKey('sii-navarra')).toBe('fiscal.changeSif.notice.sii');
+  });
+
+  it('returns the Verifactu notice key for "verifactu"', () => {
+    expect(getChangeSifNoticeKey('verifactu')).toBe('fiscal.changeSif.notice.verifactu');
+  });
+
+  it('returns the TBAI notice key for "tbai"', () => {
+    expect(getChangeSifNoticeKey('tbai')).toBe('fiscal.changeSif.notice.tbai');
+  });
+
+  it('returns the SII+TBAI notice key for "sii+tbai"', () => {
+    expect(getChangeSifNoticeKey('sii+tbai')).toBe('fiscal.changeSif.notice.siiTbai');
+  });
+
+  it('returns null for an unknown / unconfigured profile', () => {
+    expect(getChangeSifNoticeKey('unconfigured')).toBeNull();
+    expect(getChangeSifNoticeKey('conflict')).toBeNull();
+    expect(getChangeSifNoticeKey(null)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSystemsToDeactivate (which config records a Change SIF must deactivate)
+// ---------------------------------------------------------------------------
+
+describe('getSystemsToDeactivate', () => {
+  it('returns ["sii"] for "sii"', () => {
+    expect(getSystemsToDeactivate('sii')).toEqual(['sii']);
+  });
+
+  it('returns ["sii"] for "sii-navarra"', () => {
+    expect(getSystemsToDeactivate('sii-navarra')).toEqual(['sii']);
+  });
+
+  it('returns ["tbai"] for "tbai"', () => {
+    expect(getSystemsToDeactivate('tbai')).toEqual(['tbai']);
+  });
+
+  it('returns ["verifactu"] for "verifactu"', () => {
+    expect(getSystemsToDeactivate('verifactu')).toEqual(['verifactu']);
+  });
+
+  it('returns BOTH ["sii", "tbai"] for "sii+tbai" (order matters — sequential PUTs)', () => {
+    expect(getSystemsToDeactivate('sii+tbai')).toEqual(['sii', 'tbai']);
+  });
+
+  it('returns an empty array for an unknown / unconfigured profile', () => {
+    expect(getSystemsToDeactivate('unconfigured')).toEqual([]);
+    expect(getSystemsToDeactivate('conflict')).toEqual([]);
+    expect(getSystemsToDeactivate(null)).toEqual([]);
   });
 });

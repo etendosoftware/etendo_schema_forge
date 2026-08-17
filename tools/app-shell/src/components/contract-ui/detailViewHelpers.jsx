@@ -109,19 +109,19 @@ export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
   return null;
 }
 
-export function normalizePatchFieldValues(patchEdits, fieldValues) {
+/**
+ * `fields` (addLineFields entry list, `{ key, column, ... }`) is optional so
+ * existing callers/tests that don't have field metadata handy keep the prior
+ * blanket numeric-string coercion. When provided, `_ID`-backed columns are
+ * left as strings — see buildRowValueCoercer for the full rationale (ETP-4886).
+ */
+export function normalizePatchFieldValues(patchEdits, fieldValues, fields) {
+  const coerce = buildRowValueCoercer(fields);
   for (const [k, v] of Object.entries(patchEdits)) {
     if (k.endsWith('$_identifier')) continue;
     // NEO Headless PATCH expects camelCase API keys, not DB column names.
     // Always use k (the API key) as the field name.
-    // Convert numeric strings to numbers for BigDecimal compatibility.
-    // Only strip when the value is already in standard format (no commas).
-    // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-    if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-      fieldValues[k] = parseFloat(v);
-    } else {
-      fieldValues[k] = v;
-    }
+    fieldValues[k] = coerce(v, k);
   }
 }
 
@@ -277,8 +277,36 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
     if (k.endsWith('$_identifier')) continue;
     // Skip internal markers and metadata that aren't valid fields.
     if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
-    fieldValues[k] = coerce(v);
+    fieldValues[k] = coerce(v, k);
   }
+}
+
+/**
+ * ETP-4886 — builds a `coerce(value, key)` function for the inline-line PATCH
+ * flow (DetailView's `buildInlineRowUpdateHandler`). NEO Headless expects
+ * numeric-looking strings coerced to Number for BigDecimal/Integer columns,
+ * but every `_ID` column is ALWAYS a string by repo convention (see
+ * CLAUDE.md "Etendo AD Database Conventions") even when its value looks
+ * numeric — e.g. `attributeSetValue` (backed by `M_AttributeSetInstance_ID`)
+ * uses the sentinel `"0"` for "no attribute set". Blindly regex-coercing that
+ * to `Number 0` makes NEO reject the PATCH with 400 (it expects a
+ * JSONObject/string there, not a number).
+ *
+ * `fields` is the addLineFields entry list (`{ key, column, ... }`); each
+ * field's `column` is the real AD DB column backing it, which is the most
+ * reliable signal already available on the field object — `type` there is
+ * the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or
+ * `discount` render as `type: 'text'`), so it can't be used to distinguish
+ * IDs from amounts. A key with no matching field (not in `fields`) falls
+ * back to the original numeric-looking heuristic to avoid regressing any
+ * coercion path this fix doesn't have field metadata for.
+ */
+export function buildRowValueCoercer(fields) {
+  const fieldsByKey = new Map((fields || []).map(f => [f.key, f]));
+  const isIdColumn = (key) => /_ID$/i.test(fieldsByKey.get(key)?.column || '');
+  return (v, key) => (
+      typeof v === 'string' && !isIdColumn(key) && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v
+  );
 }
 
 /**
@@ -666,6 +694,39 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
+/**
+ * Tailwind classes for a header process button, keyed by `p.style` (+ `salesTheme`/`isPrimary`).
+ *
+ * `ghost-danger` (the Reactivar/Undo button): full-opacity `--destructive` border and an explicit
+ * `hover:text` pin were restored here after ETP-4554 ("Migrate shared theme styles") diluted the
+ * border to `--destructive/0.3` — the pre-token version was a solid light pink-red, not an
+ * alpha-reduced one — and never pinned a hover text color, leaving the base `Button` outline variant's own
+ * `hover:text-accent-foreground` free to win on hover and turn the label gray instead of staying
+ * red like Figma shows (found while verifying ETP-4797).
+ */
+export function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-card border-[hsl(var(--destructive))] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]';
+  }
+  if (salesTheme) {
+    if (p.style === 'destructive') {
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
+    } else {
+      if (isPrimary) {
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
+      } else {
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
+      }
+    }
+  } else {
+    if (p.style === 'destructive') {
+      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
+    } else {
+      return '';
+    }
+  }
+}
+
 export // ETP-4479 — windows where a plain header DELETE fails once the record has
 // ever been referenced (FK constraints); the NEO action reactivates and
 // removes it server-side instead. Hardcoded here (not decisions.json-driven)
@@ -683,6 +744,18 @@ export // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACT
 const WINDOW_DELETE_CONFIRM_MODALS = {
   'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
   'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
+};
+
+export // ETP-4797 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: no
+// decisions.json field exists yet for "suppress the primary status pill for a given enum value",
+// so this stays a hardcoded windowName lookup instead. RPPC ("Payment Cleared") already gets its
+// own badge — PaymentConciliadoBadge, wired as this window's topbarExtra — which shows "Conciliado"
+// with a link to the matched bank transaction. Showing the generic status pill (e.g. "Cobro
+// depositado") next to it duplicated the same fact under two different labels; this set hides the
+// generic pill for exactly that one status so "Conciliado" is the only status indicator on screen.
+const WINDOW_HIDE_STATUS_PILL_FOR = {
+  'payment-in': new Set(['RPPC']),
+  'payment-out': new Set(['RPPC']),
 };
 
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {

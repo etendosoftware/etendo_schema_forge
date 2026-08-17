@@ -187,6 +187,8 @@ When a purchase order is denominated in a currency different from the organizati
 
 `GET /sws/neo/validate-exchange-rate` is implemented in `NeoExchangeRateService.java`. It queries `C_Conversion_Rate` for the most recent active row valid on the document date. Both ISO 4217 codes and internal DB IDs are accepted. If the direct `FROM→TO` row is absent, the endpoint tries the inverse direction and returns `1/rate`, so configuring only one direction in Etendo is sufficient. Full parameter reference: see the Sales Order dual-currency section above.
 
+Rows are scoped `AD_Client_ID IN ('0', <client>)`, so the System-level rates that currencyLayer syncs (ETP-4474) are visible to every tenant. The header callout's `noExchangeRateAvailable` warning resolves availability through the same helper since ETP-4838 — see `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of truth".
+
 ### Currency change handling (ETP-4027 functional model)
 
 The `currency` field on the header form is **always editable on draft purchase orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
@@ -248,3 +250,31 @@ This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the 
 total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
 If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
 the only thing telling the agent what is legal.
+
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` now shows once the order is Completado, backed by the pre-existing
+`print-purchase-order` report — verified rendering real order data end-to-end during this
+ticket. No custom component was added: `PurchaseOrderActions.jsx` (this window's
+`topbarRight`) and its `usePurchaseOrderPdf` hook — used only to feed the "Enviar documento"
+preview modal — are unrelated and untouched. See `docs/decisions-reference.md`
+("Print Visibility") for the generic mechanism.
+
+**Review catch:** swapping `hidePrint: true` for `hidePrintWhen` only affects the detail view —
+the generator's `hidePrintListProp` still keys off the plain `hidePrint`, so the list view's
+bulk "Print (N)" and toolbar Print buttons would otherwise become visible for every row
+regardless of status. `decisions.json` also declares `"listViewOptions": { "hidePrint": true }`
+to keep the list-level print exactly as hidden as it was before this ticket — only the detail
+view gained the new conditional behavior.
+
+**Second catch — the custom wrapper bypasses the generated `listViewOptions` too.**
+`tools/app-shell/src/windows/custom/purchase-order/index.jsx` hand-rolls its own `<ListView>`
+for the list route instead of delegating to the generated `HeaderPage.jsx` (only the
+detail/record route goes through the generated component), so the generator's literal
+`listViewOptions={{"hidePrint":true}}` emitted into `HeaderPage.jsx` is never reached for the
+list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
+this file's own `<ListView>` call, matching the existing pattern already used there for
+`dateFilterKey` and other generator-derived list props.

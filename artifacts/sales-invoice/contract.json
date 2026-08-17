@@ -1,8 +1,8 @@
 {
-  "version": "0.73.0",
+  "version": "0.72.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-13T14:06:22.318Z",
-  "checksum": "9bd46ce1c77033aa",
+  "updatedAt": "2026-08-17T12:04:09.145Z",
+  "checksum": "e3216f3c984912c6",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -43,7 +43,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "salesTheme": true,
@@ -65,6 +66,9 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -2720,7 +2724,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "salesTheme": true,
@@ -2742,6 +2747,9 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "subsetFilters": [
         {

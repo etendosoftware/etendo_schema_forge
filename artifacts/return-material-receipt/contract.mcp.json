@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-04T17:47:50.269Z",
-  "contractChecksum": "b4a039d37f7e2442",
+  "updatedAt": "2026-08-13T14:49:16.332Z",
+  "contractChecksum": "075b9fa1753ce067",
   "apiPrediction": {
     "specName": "return-material-receipt",
     "baseUrl": "/sws/neo/return-material-receipt",
