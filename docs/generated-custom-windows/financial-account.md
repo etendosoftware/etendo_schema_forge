@@ -6,7 +6,8 @@
 
 - `+ Nueva cuenta` button in the Cuentas list opens a **multi-step wizard** (`NewAccountWizard.jsx`) for offline account creation.
 - Each row kebab gains **Edit account** (opens `EditAccountModal.jsx`) and **Archive account** (opens `ArchiveAccountDialog.jsx`).
-- A new backend spec `financial-account` (`FinancialAccountHandler`) powers create / update / archive / defaults over a single report-style endpoint.
+- ETP-4871 adds a real **Delete account** action (opens `DeleteAccountDialog.jsx`), shown only when the row's `deletable` flag is true — independent of Archive/Unarchive, so both can be offered on the same account.
+- A new backend spec `financial-account` (`FinancialAccountHandler`) powers create / update / archive / delete / defaults over a single report-style endpoint.
 
 ## New Account Wizard — step flow
 
@@ -278,7 +279,10 @@ Pencil icon) in the tab-strip row, to the left of the Export/Automatch button �
 `EditAccountModal`. On save it reloads via `useFinancialAccount`'s `reload`. Archive from this
 entry point reuses `ArchiveAccountDialog` (same component as the Cuentas list) and, on success,
 navigates back to `/finance/accounts` (there is no reason to stay on the detail page of an
-account that was just archived). Connecting a bank from this entry point is **fully wired** too —
+account that was just archived). **Delete** (ETP-4871, only offered when the account is
+`deletable`) mirrors the same shape through `DeleteAccountDialog` and also navigates back on
+success — unconditionally, unlike archive/unarchive, since a delete never leaves a record to
+stay on. Connecting a bank from this entry point is **fully wired** too —
 `index.jsx` runs its own `useBankConnectionFlow({ onDone: reloadAccount })` and mounts
 `BankConnectionFlowUI`, exactly mirroring `FinancialAccountsPage.jsx`'s wiring
 (`onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}`).
@@ -373,17 +377,39 @@ default) for cash/card accounts and for any bank account without a logo — incl
 that fails to load, caught via the `<img>`'s `onError`, so a dead or 403 URL degrades to the icon
 instead of showing a broken image.
 
-## Archive / Unarchive Dialog
+## Archive / Unarchive / Delete Dialogs
 
 `ArchiveAccountDialog.jsx` — rendered from the row kebab and from the Edit modal's destructive action.
 
 - Confirmation dialog: title + body copy + Cancel / confirm buttons.
-- Archive calls `archiveAccount(id)`. On 409 (open reconciliations) the backend message surfaces as a toast error — the dialog stays open.
+- Archive calls `archiveAccount(id)`, a `PATCH {active: false}` (ETP-4871 — DELETE used to soft-archive; that verb is now a real delete, see below). On 409 (open reconciliations) the backend message surfaces as a toast error — the dialog stays open.
 - On success the dialog closes and the list reloads.
 
 **The dialog is bidirectional.** Filtering the list by *Inactivas* used to be a dead end: the only action offered was "Archive account" on an already-archived account, so there was no way back. The component now derives its direction from the record instead of taking it as a prop — `isUnarchiveMode(account)` returns `account.active === false` — and picks its copy, its button label and its mutation from a `MODES` map. The Edit modal's destructive action follows the same helper, so an archived account offers *Desarchivar* in both entry points.
 
-**No backend change was needed.** `NeoFieldFilter` hardcodes `active` as both included and writable regardless of the contract, so `unarchiveAccount(id)` is a plain `PATCH {active: true}` through the generic CRUD — the mirror image of what archiving already did.
+**No backend change was needed for unarchive.** `NeoFieldFilter` hardcodes `active` as both included and writable regardless of the contract, so `unarchiveAccount(id)` is a plain `PATCH {active: true}` through the generic CRUD — the mirror image of what archive now does.
+
+**`DeleteAccountDialog.jsx` (ETP-4871) is a sibling, not a mode, of `ArchiveAccountDialog`** — same
+confirmation-dialog shape (title + body + Cancel/confirm), but a distinct component, rendered from
+the row kebab (`AccountRowMenu`'s "Eliminar cuenta" item), from `AccountsHeaderTable.jsx`'s edit
+modal wiring, and from the detail view's `index.jsx`. It is offered **only when
+`account.deletable === true`** (injected server-side — true only when the account has zero
+dependent records anywhere: movements, statements, reconciliations, payments, payment proposals,
+journal lines, bank-file exceptions, defaulting business partners, or an active bank connection),
+and is independent of Archive/Unarchive — a deletable, still-active account can be archived
+*instead of* deleted, so both menu items can appear together. Confirm calls `deleteAccount(id)`
+(`DELETE`); a 409 (a dependency appeared after the row was loaded) surfaces the backend's
+human-readable message verbatim as a toast, same defense-in-depth shape as the archive dialog's
+open-reconciliations guard. `EditAccountModal`'s destructive footer slot renders one of three
+shapes depending on `isDeleteMode(account)` (exported from `EditAccountModal.jsx`, alongside
+`isUnarchiveMode`): **archived** → a plain button, *Desarchivar* (no chevron — nothing to
+reveal); **not archived and deletable** → a `FooterSplitButton`, mirroring the bank-connection
+"Desconectar banco ▾" pattern in the row below — *Archivar cuenta* stays the always-visible
+primary action, with a chevron revealing *Eliminar cuenta* as the one item in its dropdown, so
+both actions stay reachable from this single slot instead of one hiding the other; **not
+archived and not deletable** → a plain button, *Archivar cuenta* (no chevron, nothing else to
+offer). The split-button chevron therefore only appears when the account genuinely has both
+options available.
 
 ## Backend endpoint — `financial-account` spec (W, generic CRUD + hook)
 
@@ -391,18 +417,19 @@ instead of showing a broken image.
 
 | Operation | HTTP | URL | Notes |
 |-----------|------|-----|-------|
-| List | `GET` | `/sws/neo/financial-account/account` | generic list (included fields only) |
+| List | `GET` | `/sws/neo/financial-account/account` | generic list (included fields only); every row now carries `deletable`/`deleteBlockedReason` (ETP-4871) alongside the pre-existing `hasTransactions` |
 | Create | `POST` | `/sws/neo/financial-account/account` | body (DAL names): `{ name, currency, type?, iBAN?, swiftCode? }` |
 | Update | `PUT` | `/sws/neo/financial-account/account/{id}` | omitting `iBAN`/`swiftCode` keys preserves stored values |
-| Archive | `DELETE` | `/sws/neo/financial-account/account/{id}` | hook short-circuits with a **soft-archive** (`IsActive='N'`); 409 if open reconciliations |
+| Archive | `PATCH` | `/sws/neo/financial-account/account/{id}` `{active: false}` | soft-archive (`IsActive='N'`); 409 if open reconciliations. ETP-4871: this used to be the `DELETE` verb (short-circuited into an archive) — DELETE now does a real delete instead, see below |
+| Delete | `DELETE` | `/sws/neo/financial-account/account/{id}` | **ETP-4871 — a real delete**, gated by `deletable`: every FK into `FIN_Financial_Account` is RESTRICT, so the row is only deletable with zero dependent records anywhere (movements, statements, reconciliations, payments, payment proposals, journal lines, bank-file exceptions, defaulting business partners, an active bank connection). 409 (with a human-readable message) if a dependency appeared since the row was loaded — defense-in-depth against the list-load/click race |
 | Currencies | `GET` | `/sws/neo/financial-account/account/selectors/C_Currency_ID` | generic FK selector (replaces `?action=defaults` currency list); restricted to EUR/USD/GBP by `CurrencyIsoAllowlistSelectorPolicy` (a `SelectorContextPolicy` keyed on the `Currency` target entity, registered in `NeoSelectorPolicy`) — applies to every Currency TableDir selector, not just this one |
 | Defaults | `GET` | `/sws/neo/financial-account/account/defaults` | generic defaults; `defaults.currency` = org currency |
 
 **Hook behavior (`handle()` pre-phase):**
 - POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then **mutates the request body** injecting `country` (derived from the IBAN ISO prefix — required by trigger `FIN_FINANCIAL_ACCOUNT_TRG2`) and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
-- PUT/PATCH: name uniqueness (excluding self) + IBAN→country re-sync via body mutation.
-- DELETE: open-reconciliations guard (409), otherwise soft-archives and returns 204 (never reaches the generic hard delete).
-- `country` and `matchingAlgorithm` are declared `visibility: "system"` in `decisions.json` so their `ETGO_SF_FIELD` rows stay **included** — required for the injected values to survive `NeoFieldFilter`.
+- PUT/PATCH: name uniqueness (excluding self) + IBAN→country re-sync via body mutation; a bare `{active}` PATCH (archive/unarchive) passes straight through since it only validates keys the body actually carries.
+- DELETE (ETP-4871): re-validates `deletable` server-side and 409s if any dependency exists, otherwise performs the real, permanent delete.
+- `country` and `matchingAlgorithm` are declared `visibility: "system"` in `decisions.json` so their `ETGO_SF_FIELD` rows stay **included** — required for the injected values to survive `NeoFieldFilter`. `deletable`/`deleteBlockedReason` are virtual, handler-injected fields, the same shape as `hasTransactions`/`pendingCount`.
 
 **MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` by `Java_Qualifier` and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `neo_create` / `neo_update` / `neo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
 
@@ -422,7 +449,7 @@ The spec + entity + field source-data records live in `src-db/database/sourcedat
 
 | Hook | Operations |
 |------|------------|
-| `hooks/useAccountMutations.js` | `createAccount(payload)`, `updateAccount(id, payload)`, `archiveAccount(id)`, `fetchDefaults()` — plain `fetch` with bearer-token auth against the W CRUD endpoints (`POST`/`PUT`/`DELETE /sws/neo/financial-account/account[...]`). Callers keep the SPA payload `{ name, type, currencyId, iban, swiftCode }`; the hook maps it to DAL names (`currency`, `iBAN`) and parses the W envelope (`response.data[0]`). `fetchDefaults()` keeps its legacy return shape (`{ currencies: [{id, iso, symbol}], defaultCurrencyId }`) but is now backed by the generic currency selector + `/defaults`. Errors carry `.status` so callers can branch (e.g. 409 → inline message). |
+| `hooks/useAccountMutations.js` | `createAccount(payload)`, `updateAccount(id, payload)`, `archiveAccount(id)` (`PATCH {active: false}`), `unarchiveAccount(id)` (`PATCH {active: true}`), `deleteAccount(id)` (`DELETE`, ETP-4871 — a real delete), `fetchDefaults()` — plain `fetch` with bearer-token auth against the W CRUD endpoints. Callers keep the SPA payload `{ name, type, currencyId, iban, swiftCode }`; the hook maps it to DAL names (`currency`, `iBAN`) and parses the W envelope (`response.data[0]`). `fetchDefaults()` keeps its legacy return shape (`{ currencies: [{id, iso, symbol}], defaultCurrencyId }`) but is now backed by the generic currency selector + `/defaults`. Errors carry `.status` so callers can branch (e.g. 409 → inline message). |
 | `hooks/useFinancialAccountAccounting.js` (ETP-4530) | `fetchAccountingConfiguration(accountId)` → GET, `saveAccountingConfiguration(accountId, { fINAssetAcct, fINTransitoryAcct })` → POST, both against `/sws/neo/financial-account/accountingConfiguration`, fully owned by `FinancialAccountAccountingHandler`. |
 
 ## New utilities
@@ -439,8 +466,10 @@ All keys added to both `en_US.json` and `es_ES.json`.
 |-----------|--------|
 | `financeAccountsNew*` | Wizard steps, type picker, connection toggle, bank picker, institution list, form fields, validation messages, toasts |
 | `financeAccountsEdit*` | Edit modal sections, save button, success/error toasts |
-| `financeAccountsArchive*` | Confirmation dialog copy, button labels, success/error toasts including the 409 open-reconciliation message |
-| `financeAccountsMenu*` | Row kebab actions (`financeAccountsMenuEdit`, `financeAccountsMenuArchive`) |
+| `financeAccountsArchive*` / `financeAccountsUnarchive*` | Confirmation dialog copy, button labels, success/error toasts including the 409 open-reconciliation message |
+| `financeAccountsDelete*` (ETP-4871) | Delete dialog copy (`financeAccountsDeleteConfirmTitle`/`...Message`/`...Confirm`), success/error toasts. The backend's 409 message is shown verbatim (no local conflict key) |
+| `financeAccountsMenu*` | Row kebab actions (`financeAccountsMenuEdit`, `financeAccountsMenuArchive`, `financeAccountsMenuUnarchive`, `financeAccountsMenuDelete`) |
+| `bulkDeleteBlockedTooltip` (generic, ETP-4871, not `financeAccounts*`-scoped) | ListView's disabled-bulk-delete tooltip when the selection includes an undeletable row — entity-agnostic, shared by every window that passes `isRowDeletable` |
 | `financeAccountTransfer*` | Funds transfer modal (ETP-4272): action/title, source/destination, amount, currency-from/to, conversion rate, bank fee, description, confirm/cancel, success + validation errors |
 | `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, accounting section title, Cuenta bancaria/transitoria field labels + required error, empty-ledger message |
 
@@ -672,6 +701,99 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
+
+#### Posting the unreconciled remainder to an accounting concept (ETP-4796)
+
+When a statement line is only PARTIALLY reconciled — statement of 12,50 € matched against a 12,00 €
+transaction — the leftover 0,50 € used to have no resolution path: the line stayed pending forever.
+It can now be closed by posting the remainder to an accounting concept (GL item), the same primitive
+the cash close uses (ETP-4795), applied to a statement line. Classic does the same thing at
+`Reconciliation.java:290-300`.
+
+- **Where it appears.** An amber banner at the top of the RIGHT panel (design option 1B — the offer
+  sits where the problem is, not in the bottom action bar, whose `Conciliar` button stays
+  independent). `DifferenceBanner` / `DifferenceModal` live in
+  `components/contract-ui/ReconciliationDifference.jsx`; the decision logic is a separate pure module,
+  `components/contract-ui/reconciliationDifferenceMath.js` (a plain `.js` so the `node:test` runner
+  can import it — the same split as `writeoffMath.js` and `CashClose/cashCloseMath.js`).
+- **`Dejar pendiente`** hides the banner for that line for the current session only and changes no
+  data; reselecting the line brings it back. **`Llevar a concepto contable`** opens the confirmation
+  modal (breakdown + GL-item picker + optional description).
+- **The amount is NOT editable.** The backend recomputes the remainder from the statement line and
+  ignores any amount in the body, so the modal shows the figure in its "Diferencia a ajustar"
+  breakdown row rather than offering a field that would promise control the server does not grant.
+  (The design prototype had an editable amount; it was dropped for this reason.)
+- **A missing account default is not a dead end.** The account's `Concepto contable` only
+  *preselects* the modal's picker; the banner's action is always enabled and the user can choose any
+  concept there. This mirrors the backend, which accepts whatever `glItemId` the modal sends and only
+  falls back to the account default when none is given. The real guard is the modal's own confirm,
+  disabled until a concept is picked — an adjustment is never posted without a destination account.
+  (An earlier iteration disabled the banner and told the user to go configure the account; that was
+  wrong, since the concept is choosable right there in the modal.)
+- **The remainder is its own physical row.** A partially reconciled *logical* line is several
+  `FIN_BankStatementLine` rows sharing a match-group id, and the pending one is exposed as
+  `remainderLineId`. Both the panel (`candidateLineId`) and this action target that row, never the
+  merged head — sending the head gets a 409 whose body carries the correct `remainderLineId` so the
+  client can retarget. `EM_ETGO_Pending_Amount` is deliberately NOT used for the amount: it is
+  `abs()`-valued (it would post a deposit for an outflow difference) and observer-maintained, so
+  older rows may have none. The signed `cramount - dramount` of the remainder row is authoritative.
+
+**Tolerance — the gate, and a divergence worth knowing.** The action is offered only when
+`|remainder| <= |original line amount| * EM_ETGO_Amount_Tolerance / 100`. Two things follow:
+
+1. **The denominator is the match-group total, not the remainder row's own amount.** Since the
+   remainder is its own row, taking a percentage of it would compare a number against itself: always
+   false below 100 %, and — worse — always TRUE at 100 %, which would authorise posting an entire
+   line of any size through an endpoint meant to move cents.
+2. **`EM_ETGO_Amount_Tolerance` defaults to 0, and is 0 in every account of the local instance, so
+   the banner does not appear until an administrator raises it.** This is configuration, not a
+   defect, but note that the SAME column is read with the OPPOSITE convention by
+   `AutoMatchSupport.computeAmountTolerance`, where 0 means "one cent of slack, never zero". One field
+   with two meanings is a support trap ("why does the panel suggest this match but refuse to close
+   it?"), so the server's 400 spells out the configured percentage and the resulting limit.
+
+**Backend.** New POST action `reconcileDifference` (`?action=`, like every other one — the dispatcher
+is the `ROUTES` map, now `Map.ofEntries` because `Map.of` caps at 10 pairs and it had reached 9).
+Payload `{ financialAccountId, statementLineId, glItemId?, description? }` — no amount.
+
+The logic lives in **`ReconciliationDifferenceSupport`**, not on `ReconciliationHandler`: that class
+sits at 34 methods against Sonar S1448's threshold of 35, which is why
+`ReconciliationWriteoffSupport`, `ReactivationSupport`, `ReconciliationHandlerSupport` and
+`ReconciliationSupport` all exist. It is the one dispatch `case` that calls a support class instead
+of the handler.
+
+**Order of operations is the safety mechanism, not a style choice.** A returned
+`NeoResponse.error(...)` does NOT roll back — it commits: `DalThreadHandler.doFinal` only takes the
+rollback branch when an exception escapes the filter chain, and `runPostAction` catches everything
+and *returns*. So every validation (account, line, belongs-to-account, already-reconciled, is-partial,
+one-pending-row, non-negligible remainder, tolerance, GL item) runs BEFORE the single write. Two
+consequences worth keeping in mind when editing this code:
+
+- The negligible-remainder guard is load-bearing: `createTransactionForRule` treats a zero spec
+  amount as "not supplied" and substitutes the WHOLE line amount.
+- Success delegates to `reconcileGroup` with a synthesized single-operation body, reusing its guards,
+  match-group tagging and 201 envelope. A defensive `doRollbackAndClose()` runs if that delegate ever
+  returns an error, because the invariant that it cannot is a property of today's `reconcileGroup`.
+
+**Concurrency.** The action takes a `SELECT … FOR UPDATE NOWAIT` row lock on the statement line as
+its first DB statement. Core does not reject a re-match — `APRM_MatchingUtility` silently
+`unmatch()`es the previous one — so without the lock a double click would leave two processed
+adjustments and an orphaned match. The second request now exits with a 409 having written nothing.
+
+**Un-reconciling removes the adjustment, with no new code.** `createTransactionForRule` already calls
+`ReactivationSupport.markAutoCreated`, and the payment-less branch of
+`ReconciliationHandlerSupport.reverseMatchedTransaction` deletes such transactions via
+`TransactionRemovalUtil.reactivateAndRemove`. The remainder row returns to unmatched keeping its
+match-group tag, so the group goes back to PARTIAL.
+
+**Account configuration (previously undocumented anywhere).** Both reconciliation tolerances and the
+difference concept are edited in **Editar cuenta → General**: `Tolerancia de fecha (días)`
+(`EM_ETGO_Date_Tolerance`, default 3) and `Tolerancia de importe (%)`
+(`EM_ETGO_Amount_Tolerance`, default 0) under "Configuración de conciliación", and `Concepto contable`
+(`EM_Aprm_Glitem_Diff`) under "Configuración de diferencias". Until ETP-4796 the amount tolerance fed
+only the automatch engine. They reach the modal under two different key spellings depending on where
+it was opened from — see `EditAccountModal.readTolerances`; `ReconciliationTab` does the same dual
+read (`eTGOAmountTolerance ?? amountTolerance ?? 0`) when threading the value to the panel.
 
 #### Multi-currency reconciliation (ETP-4502)
 
@@ -1254,15 +1376,32 @@ confirm one DELETE per row goes out in parallel, then a single toast reports the
   DataTable's internal Set via `deselectTrigger` + `deselectRowIds`.
 - **all failed** → no refetch, selection untouched.
 
-**"Delete" here means archive.** The generic path issues
-`DELETE {apiBaseUrl}/{entity}/{id}` = `DELETE /sws/neo/financial-account/account/{id}`,
-which is byte-for-byte the endpoint `useAccountMutations().archiveAccount(id)` calls. So
-`FinancialAccountHandler`'s open-reconciliations guard (409) and its soft-archive
-(`IsActive='N'`) apply unchanged, and a guarded account simply lands in the "failed"
-bucket of the partial-failure branch above. That equivalence is *why* no bespoke
-`useBatchDeleteDialog` + `archiveAccount` wiring was added here — unlike the **Movimientos**
+**"Delete" here now means a real delete (ETP-4871) — this section used to say "Delete" means
+archive; that stopped being true the moment DELETE was split from archive.** The generic path
+still issues `DELETE {apiBaseUrl}/{entity}/{id}` = `DELETE /sws/neo/financial-account/account/{id}`
+per selected row, and that is still byte-for-byte the same endpoint
+`useAccountMutations().deleteAccount(id)` calls — but that endpoint no longer soft-archives.
+`FinancialAccountHandler`'s DELETE branch now re-validates `deletable` server-side and performs a
+real, permanent delete when it holds, 409ing otherwise; archiving moved to its own
+`PATCH {active: false}` (`archiveAccount(id)`), which the generic bulk-delete path does **not**
+call. A row with any dependent record (movements, statements, reconciliations, payments, payment
+proposals, journal lines, bank-file exceptions, defaulting business partners, an active bank
+connection) simply lands in the "failed" bucket of the partial-failure branch above via the 409 —
+same mechanics as the old open-reconciliations guard, just a stricter, real-delete gate behind it.
+That equivalence with the plain per-row `DELETE` is still *why* no bespoke
+`useBatchDeleteDialog` + mutation wiring was added here — unlike the **Movimientos**
 and **Extractos importados** detail tabs, which are not `ListView`s and therefore must keep
 their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
+
+**`isRowDeletable` (ETP-4871, generic `ListView` prop) gates the button itself for a mixed
+selection.** `windows/custom/financial-account/index.jsx` passes
+`isRowDeletable={(row) => row.deletable !== false}` to `AccountPage` (forwarded straight through
+to `ListView` via its `{...props}` spread). `ListView` computes, on every selection change, how
+many of the *currently selected* rows fail that predicate; if any do, **Eliminar seleccionados**
+disables and shows a tooltip (`bulkDeleteBlockedTooltip`, generic/entity-agnostic) naming how many
+are blocked, instead of letting the batch go out and resolving as a confusing partial failure. The
+prop is optional and defaults to "every row is deletable" — every other `ListView` window is
+unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
 
 **Two things were load-bearing to make this work, and both are easy to re-break:**
 

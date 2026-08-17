@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-08-13T12:12:37.051Z",
-  "checksum": "18ebd05bb87becbb",
+  "updatedAt": "2026-08-17T11:20:18.327Z",
+  "checksum": "d2916d345847c345",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -560,6 +560,7 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },

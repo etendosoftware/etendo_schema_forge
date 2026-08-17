@@ -255,3 +255,37 @@ describe('AccountsHeaderTable — i18n', () => {
     assert.match(src, /column: col\.column/);
   });
 });
+
+// ETP-4871 — the same deleteTarget/onDelete/DeleteAccountDialog wiring index.jsx (the detail
+// view) got, mirrored here for the list view. Behavioural coverage:
+// tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.handlers.vitest.jsx
+describe('AccountsHeaderTable — delete wiring (ETP-4871)', () => {
+  it('imports DeleteAccountDialog as a sibling of ArchiveAccountDialog', () => {
+    assert.match(
+      src,
+      /import \{ DeleteAccountDialog \} from '@\/windows\/custom\/financial-account\/DeleteAccountDialog\.jsx'/,
+    );
+  });
+
+  it('holds its own deleteTarget state, the same shape as archiveTarget', () => {
+    assert.match(src, /const \[deleteTarget, setDeleteTarget\] = useState\(null\)/);
+  });
+
+  it('routes the row kebab\'s delete action to setDeleteTarget', () => {
+    assert.match(src, /onDelete:\s*setDeleteTarget,/);
+  });
+
+  it('threads onDelete through the _rowActions column into AccountRowActions', () => {
+    assert.match(src, /<AccountRowActions[\s\S]*?onDelete=\{handlers\.onDelete\}[\s\S]*?\/>/);
+  });
+
+  it('mounts DeleteAccountDialog gated by deleteTarget and refreshes the list on delete', () => {
+    assert.match(src, /<DeleteAccountDialog\b/);
+    assert.match(src, /open=\{!!deleteTarget\}/);
+    assert.match(src, /account=\{deleteTarget\}/);
+    assert.match(src, /onClose=\{\(\) => setDeleteTarget\(null\)\}/);
+    // Both ArchiveAccountDialog and DeleteAccountDialog reuse the same `reload` (a thin
+    // `onDataMutated?.()` wrapper) as their success callback.
+    assert.match(src, /<DeleteAccountDialog[\s\S]*?onDeleted=\{reload\}/);
+  });
+});

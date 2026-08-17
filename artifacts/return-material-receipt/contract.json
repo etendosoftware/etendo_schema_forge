@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-08-13T11:56:58.624Z",
-  "updatedAt": "2026-08-13T12:12:36.891Z",
-  "checksum": "b7c115e694dc9287",
+  "updatedAt": "2026-08-17T11:20:17.905Z",
+  "checksum": "9b370811c1932692",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -563,6 +563,7 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },
@@ -676,6 +677,7 @@
             "form": true,
             "section": "principal",
             "gridOrder": 3,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             },

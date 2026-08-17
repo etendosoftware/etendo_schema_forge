@@ -2,15 +2,27 @@ import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/gen
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
+import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { useMenuLabel } from '@/i18n';
 
-function ReturnToVendorShipmentBulkActions({ selectedRows, windowName }) {
+// ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
+// buildInOutActions only offers CO (confirm) when a draft is selected; it never
+// offers RE (reactivate) for completed rows — this window must stay DR→CO only.
+function ReturnToVendorShipmentBulkActions(props) {
   return (
-    <CopyLinkButton
-      selectedRows={selectedRows}
-      windowName={windowName}
-      data-testid="CopyLinkButton__a5f79c" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        entity="returnToVendorShipment"
+        buildActions={buildInOutActions}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__a5f79c" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__a5f79c" />
+    </>
   );
 }
 
