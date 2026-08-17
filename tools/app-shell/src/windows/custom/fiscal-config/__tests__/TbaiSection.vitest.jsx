@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -93,14 +93,6 @@ describe('TbaiSection — validation', () => {
     expect(screen.queryByText('fiscal.tbai.err.enrollDate')).not.toBeInTheDocument();
   });
 
-  it('shows description error when invoiceDescription is empty', async () => {
-    const ref = createRef();
-    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, invoiceDescription: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.tbai.err.invoiceDesc')).toBeInTheDocument();
-    });
-  });
 });
 
 describe('TbaiSection — save', () => {

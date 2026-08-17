@@ -1,6 +1,4 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
@@ -45,7 +43,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
-    invoiceDescription: record?.invoiceDescription ?? '',
     autoSendInvoices:   normalizeEtendoBoolean(record?.autoSendInvoices),
     jasperreportPath:   record?.jasperreportPath  ?? '',
   });
@@ -55,7 +52,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
   function validate() {
-    if (!form.invoiceDescription) return ui('fiscal.tbai.err.invoiceDesc');
     return null;
   }
 
@@ -76,6 +72,11 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(serializeBooleanFields({
           ...form,
+          // ETP-4783: invoiceDescription is not exposed in the UI — the value already in the
+          // record (set by Classic during onboarding) is preserved on every save. Classic
+          // defaults it to 'Descripcion Factura'; new tenants get that same value via the
+          // onboarding flow, so we never need to derive or override it here.
+          invoiceDescription:      record?.invoiceDescription ?? 'Descripcion Factura',
           tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || new Date().toISOString().slice(0, 10),
           productionEnv:           'Y',
           uSEAsproductDesc:        'N',
@@ -114,14 +115,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
               onCheckedChange={v => set('autoSendInvoices', v ? 'Y' : 'N')}
               data-testid="Switch__f06d4b" />
             <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.autoSend')}</span>
-          </div>
-          <div className="space-y-1 w-[376px]">
-            <Label data-testid="Label__f06d4b">{ui('fiscal.tbai.field.invoiceDesc')}</Label>
-            <Input
-              value={form.invoiceDescription}
-              onChange={e => set('invoiceDescription', e.target.value)}
-              className="bg-card"
-              data-testid="Input__f06d4b" />
           </div>
         </div>
       </SectionRow>
