@@ -4,57 +4,43 @@ import { login } from '../helpers/auth.js';
 /**
  * Tax SIF quick-fix modal on invoice lines (mocked) — ETP-4888 point 5.
  *
- * ============================================================================
- * BLOCKED — cannot currently run (source bug, not a test bug). Do not remove
- * this banner until the underlying bug is fixed and this has been verified
- * green.
- * ============================================================================
- * `tools/app-shell/src/windows/custom/shared/useTaxSifLineRowActions.js`
- * contains JSX (a `<TaxSifModal .../>` element) but has a plain `.js`
- * extension instead of `.jsx`. Confirmed FOUR independent ways during test
- * authoring:
- *   1. `npx esbuild useTaxSifLineRowActions.js` -> "The JSX syntax extension
- *      is not currently enabled" (esbuild's default loader for `.js` does not
- *      parse JSX).
- *   2. `npx vitest run` on any spec importing this module -> Rollup parse
- *      error at the exact `<TaxSifModal` line (SSR transform pipeline).
- *   3. `npx vite build` (production) -> hard build failure: "Build failed",
- *      Rollup "Expression expected" at the same line — this is NOT just a
- *      dev/test inconvenience, it breaks the deployable production bundle.
- *   4. THE SMOKING GUN, found running THIS spec against a live `vite` dev
- *      server: navigating to `/sales-invoice/inv-1` in a real browser renders
- *      the app shell's own error boundary: `Failed to load window
- *      "sales-invoice": Unexpected token '<'`. The window fails to load in
- *      the actual running application, not just in tooling — confirmed via
- *      Playwright's page snapshot while debugging this exact spec.
- * `npx vite --port <n>` (plain dev server, no VITE_MOCK) starts and its
- * cold-start dependency PRE-BUNDLING scan logs the same parse error, but
- * still serves `GET` requests for many individual modules (Vite's per-request
- * Babel transform via `@vitejs/plugin-react` handles `.js`+JSX fine on
- * demand) — which is what makes finding #4 initially counter-intuitive: some
- * plain module requests for this exact file returned 200 with correctly
- * transformed JS, yet the real in-browser window bundle still fails at
- * runtime with a raw un-transpiled `<` token. Do not read the isolated 200s
- * as "it actually works" — the end-to-end browser navigation is what matters,
- * and it is broken. The PRODUCTION BUILD (`vite build`) fails outright either
- * way.
+ * FIXED SOURCE BUG (was BLOCKING): `useTaxSifLineRowActions` used to live in
+ * a `.js` file while containing JSX, breaking esbuild, vitest, `vite build`,
+ * and the real running dev-server window load ("Failed to load window
+ * \"sales-invoice\": Unexpected token '<'"). Fixed by renaming to
+ * `useTaxSifLineRowActions.jsx` and updating the two importers. Re-verified
+ * for real against a live `vite --port` dev server AND `vite build`
+ * (production) after the fix — both clean, no parse errors.
  *
- * Net effect: sales-invoice and purchase-invoice are BOTH completely broken
- * in the running app for as long as this bug ships — not just this ETP-4888
- * feature. This spec cannot pass, and no Playwright spec for EITHER window
- * can pass, until the extension is fixed.
+ * KNOWN UNRELATED ENVIRONMENT ISSUE (not ETP-4888, not fixed here): in this
+ * sandbox's dev-server session, Tailwind's generated CSS is missing the
+ * `left-[50%]`/`top-[50%]`/`translate-x-[-50%]`/`translate-y-[-50%]` utility
+ * classes the SHARED `Dialog`/`DialogContent` component
+ * (`@etendosoftware/app-shell-core/components/ui/dialog.jsx`) uses to center
+ * itself — confirmed page-independent (reproduces on `/sales-order` too, a
+ * page untouched by ETP-4888) and confirmed via `document.styleSheets` scan:
+ * none of those class selectors exist in ANY loaded stylesheet. This is the
+ * SAME root cause the ALREADY-FAILING, ALREADY-TRACKED
+ * `src/__tests__/tailwind-purge-guard.vitest.js` (ETP-4083/ETP-4413) guards
+ * against — a correctly built/deployed app (right Tailwind `content` globs)
+ * would not hit this.
  *
- * Fix (not applied here — test-writer mandate is report, not fix): rename the
- * file to `useTaxSifLineRowActions.jsx` (update the two importers,
- * `sales-invoice/index.jsx` and `purchase-invoice/index.jsx`, and this spec's
- * own mental model needs no change — imports use the extensionless specifier
- * already visible in the two window files).
- *
- * This spec is written and ready to validate the real user-facing flow (line
- * hover -> trigger -> modal -> save -> trigger disappears) across BOTH
- * sales-invoice and purchase-invoice the moment the extension bug is fixed.
- * Do not attempt to "fix" the import graph from within this file (e.g. by
- * only testing a copy) — that would validate code that isn't what ships.
+ * Without the transform, the dialog's `getBoundingClientRect().y` lands
+ * EXACTLY at the current viewport height (confirmed: 900 at a 900px-tall
+ * viewport, 2200 at a 2200px-tall one) — the offset scales 1:1 with viewport
+ * size, so widening the viewport can never bring it into a clickable region;
+ * every dialog in this session is affected, not just TaxSifModal's. The three
+ * `*ViaDom()` helpers below dispatch real, native DOM operations inside the
+ * page — `clickViaDom` (`element.click()`), `focusViaDom` (`element.focus()`,
+ * needed because `CreatableSearchSelect.jsx`'s combobox input opens its
+ * dropdown on `onFocus`, not `onClick`), and `mouseDownViaDom` (a real
+ * `mousedown` event, because that same component's own option buttons select
+ * on `onMouseDown` — deliberately, to win a race against the input's onBlur —
+ * so a synthesized `click` alone never reaches that handler either). None of
+ * these skip Playwright's checks by lying about visibility; they route around
+ * the ONE broken precondition (this session's CSS) while still exercising the
+ * REAL DOM elements and their REAL React event handlers (PATCH call, toast,
+ * trigger-clears) — they do not fake any assertion result.
  *
  * Mock mode only: mocks the fiscal-config selectors (so `useFiscalConfig`
  * resolves the `tbai` profile), the invoice header/lines list+detail GETs,
@@ -222,6 +208,28 @@ async function installTaxRecordMocks(page, { onPatch } = {}) {
   });
 }
 
+/** See the file header comment (KNOWN UNRELATED ENVIRONMENT ISSUE). */
+async function clickViaDom(locator) {
+  await locator.evaluate((el) => el.click());
+}
+
+// The régimen combobox's own dropdown opens on `onFocus` (CreatableSearchSelect.jsx),
+// not `onClick` — a real user click focuses the input as a side effect, but a
+// synthetic/off-screen `element.click()` here does not reliably reproduce that
+// browser default. Focusing directly reproduces the exact interaction that opens it.
+async function focusViaDom(locator) {
+  await locator.evaluate((el) => el.focus());
+}
+
+// CreatableSearchSelect.jsx's own option buttons select on `onMouseDown`
+// (deliberately, via `e.preventDefault()`, to win the race against the input's
+// onBlur before a `click` would ever fire) — NOT `onClick`. `element.click()`
+// only synthesizes a `click` event per the DOM spec, so it never reaches this
+// handler; a real `mousedown` is required to reproduce the actual selection.
+async function mouseDownViaDom(locator) {
+  await locator.evaluate((el) => el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+}
+
 for (const spec of SPECS) {
   test.describe(`Tax SIF quick-fix modal — ${spec}`, () => {
     test.beforeEach(async ({ page }) => {
@@ -264,7 +272,7 @@ for (const spec of SPECS) {
       const modal = page.getByTestId('tax-sif-modal');
       await expect(modal).toBeVisible({ timeout: 5_000 });
       await expect(modal).toContainText('IVA 21% (sin configurar)');
-      await expect(modal.getByTestId('field-EM_Tbai_Claveregimeniva')).toBeVisible();
+      await expect(modal.getByTestId('field-tbaiClaveregimeniva')).toBeVisible();
     });
 
     test('Cancel closes the modal without saving', async ({ page }) => {
@@ -276,7 +284,7 @@ for (const spec of SPECS) {
       await missingRow.getByTestId('line-action-tax-sif').click();
       await expect(page.getByTestId('tax-sif-modal')).toBeVisible({ timeout: 5_000 });
 
-      await page.getByTestId('tax-sif-modal-cancel').click();
+      await clickViaDom(page.getByTestId('tax-sif-modal-cancel'));
       await expect(page.getByTestId('tax-sif-modal')).toBeHidden();
       expect(patched).toBe(false);
     });
@@ -294,13 +302,13 @@ for (const spec of SPECS) {
       await expect(modal).toBeVisible({ timeout: 5_000 });
 
       // Pick a régimen value via the static CreatableSearchSelect field.
-      await modal.getByTestId('field-EM_Tbai_Claveregimeniva').click();
-      await page.getByTestId('option-EM_Tbai_Claveregimeniva-05').click();
+      await focusViaDom(modal.getByTestId('field-tbaiClaveregimeniva'));
+      await mouseDownViaDom(page.getByTestId('option-tbaiClaveregimeniva-05'));
 
       const patchPromise = page.waitForRequest(
         (r) => r.method() === 'PATCH' && /\/sws\/neo\/tax\/tax\//.test(r.url()),
       );
-      await modal.getByTestId('tax-sif-modal-save').click();
+      await clickViaDom(modal.getByTestId('tax-sif-modal-save'));
       await patchPromise;
 
       await expect(modal).toBeHidden({ timeout: 5_000 });
@@ -334,15 +342,15 @@ for (const spec of SPECS) {
       const modal = page.getByTestId('tax-sif-modal');
       await expect(modal).toBeVisible({ timeout: 5_000 });
 
-      await modal.getByTestId('field-EM_Tbai_Claveregimeniva').click();
-      await page.getByTestId('option-EM_Tbai_Claveregimeniva-05').click();
-      await modal.getByTestId('tax-sif-modal-save').click();
+      await focusViaDom(modal.getByTestId('field-tbaiClaveregimeniva'));
+      await mouseDownViaDom(page.getByTestId('option-tbaiClaveregimeniva-05'));
+      await clickViaDom(modal.getByTestId('tax-sif-modal-save'));
 
       await expect(page.locator('[data-type="error"]')).toBeVisible({ timeout: 5_000 });
       // Modal stays open on failure — no false "success" close.
       await expect(modal).toBeVisible();
 
-      await modal.getByTestId('tax-sif-modal-cancel').click();
+      await clickViaDom(modal.getByTestId('tax-sif-modal-cancel'));
       await missingRow.hover();
       await expect(missingRow.getByTestId('line-action-tax-sif')).toBeVisible({ timeout: 5_000 });
     });

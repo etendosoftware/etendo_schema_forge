@@ -54,7 +54,7 @@ describe('PurchaseInvoiceWindow — wiring', () => {
 // forwards both the resulting rowActions and the modal portal to HeaderPage.
 describe('PurchaseInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
   it('imports useTaxSifLineRowActions from the shared hook module', () => {
-    assert.match(src, /import\s*\{\s*useTaxSifLineRowActions\s*\}\s*from\s*'\.\.\/shared\/useTaxSifLineRowActions\.js'/);
+    assert.match(src, /import\s*\{\s*useTaxSifLineRowActions\s*\}\s*from\s*'\.\.\/shared\/useTaxSifLineRowActions\.jsx'/);
   });
 
   it('declares LINE_TAX_SIF_TRIGGER_ENABLED as a local true constant', () => {
