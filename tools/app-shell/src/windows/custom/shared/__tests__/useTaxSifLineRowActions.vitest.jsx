@@ -1,12 +1,15 @@
-// FIXED SOURCE BUG (ETP-4888): `useTaxSifLineRowActions` used to live in a
-// `.js` file while containing JSX (a `<TaxSifModal .../>` element), which
-// broke esbuild, vitest's SSR transform, `vite build` (production), and the
-// real running dev-server window load ("Failed to load window
-// \"sales-invoice\": Unexpected token '<'"). Fixed by renaming the source
-// file to `useTaxSifLineRowActions.jsx` and updating the two importers
-// (sales-invoice/index.jsx, purchase-invoice/index.jsx). This test file was
-// written against the pre-fix source and could not run at all until then —
-// now verified green against the renamed module.
+// Rewritten for ETP-4888's 3 post-original rounds of changes:
+//   1. Selector-context bugfixes — the hook now fetches the invoice header record
+//      (`recordId`) and builds proper selector context via `buildLineSelectorContext`
+//      (needs `windowCategory` too).
+//   2. Design-polish round (commit df238c9f3) — the hook returns `cellBadges.tax`
+//      (an InlineLinesPanel-shaped `{ [columnKey]: (row) => ReactNode }` map),
+//      NOT `rowActions` anymore. The trigger button uses the shared warning-color
+//      token `text-status-warning-foreground`, not a neutral hover-strip style.
+//   3. Pagination fix (commit 556d032c8) — `loadTaxCatalog()` now pages through the
+//      FULL tax catalog via `offset`/`hasMore` instead of trusting a single request
+//      (NeoSelectorService.MAX_LIMIT=100 silently clamps), capped by
+//      `TAX_SELECTOR_MAX_PAGES` as a safety net against a misbehaving `hasMore`.
 
 // Mocks must come before imports (Vitest hoisting)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -50,32 +53,42 @@ vi.mock('../TaxSifModal.jsx', () => ({
 }));
 
 import { render, screen, renderHook, act, waitFor } from '@testing-library/react';
-import { AlertTriangle } from 'lucide-react';
 import { useTaxSifLineRowActions, isTaxSifMissing } from '../useTaxSifLineRowActions.jsx';
 
 const TOKEN = 'test-token';
 const API_BASE_URL = '/sws/neo/sales-invoice';
+const RECORD_ID = 'inv-1';
 
 function jsonResponse(body) {
   return Promise.resolve({ ok: true, json: async () => body });
 }
 
+function headerResponse(record) {
+  return jsonResponse({ response: { data: [record] } });
+}
+
+function taxSelectorResponse(items, hasMore = false) {
+  return jsonResponse({ items, hasMore });
+}
+
+// fetch is called twice per load: header GET, then the tax selector GET.
+// Tests that don't care about the header content use this default.
+function installDefaultFetch({ taxItems = [], hasMore = false } = {}) {
+  globalThis.fetch = vi.fn((url) => {
+    if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+    return taxSelectorResponse(taxItems, hasMore);
+  });
+}
+
 // Tiny harness so the modal (returned as JSX) goes through a real render cycle,
-// same convention as useRowEmailModal.vitest.jsx's Harness.
+// same convention as useRowEmailModal.vitest.jsx's Harness. Drives `cellBadges.tax`
+// instead of the old `rowActions[0]`.
 function Harness({ options }) {
-  const { rowActions, modal } = useTaxSifLineRowActions(options);
-  const action = rowActions[0];
+  const { cellBadges, modal } = useTaxSifLineRowActions(options);
+  const badge = cellBadges.tax?.({ tax: 'tax-1' });
   return (
     <div>
-      {action && (
-        <button
-          type="button"
-          data-testid="trigger-action"
-          onClick={() => action.onClick({ tax: 'tax-1' })}
-        >
-          trigger
-        </button>
-      )}
+      {badge}
       {modal}
     </div>
   );
@@ -83,7 +96,7 @@ function Harness({ options }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.fetch = vi.fn(() => jsonResponse({ items: [] }));
+  installDefaultFetch();
   useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
   useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
 });
@@ -107,9 +120,8 @@ describe('isTaxSifMissing — pure completeness check', () => {
   });
 
   it('TBAI exención: true when the exemption cause column is blank, false once set', () => {
-    const exemptCtx = ctx;
-    expect(isTaxSifMissing({ taxExempt: 'Y', EM_Tbai_Exemptioncause: null }, exemptCtx)).toBe(true);
-    expect(isTaxSifMissing({ taxExempt: 'Y', EM_Tbai_Exemptioncause: 'E1' }, exemptCtx)).toBe(false);
+    expect(isTaxSifMissing({ taxExempt: 'Y', EM_Tbai_Exemptioncause: null }, ctx)).toBe(true);
+    expect(isTaxSifMissing({ taxExempt: 'Y', EM_Tbai_Exemptioncause: 'E1' }, ctx)).toBe(false);
   });
 
   it('TBAI no-sujeción: true when the non-subject cause column is blank, false once set', () => {
@@ -141,113 +153,316 @@ describe('isTaxSifMissing — pure completeness check', () => {
   });
 });
 
-describe('useTaxSifLineRowActions — fetch wiring', () => {
-  it('enabled=false: does not fetch, returns empty rowActions and null modal', () => {
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: false }));
+describe('useTaxSifLineRowActions — fetch gating', () => {
+  it('enabled=false: does not fetch, returns empty cellBadges and null modal', () => {
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: false, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(result.current.rowActions).toEqual([]);
+    expect(result.current.cellBadges).toEqual({});
     expect(result.current.modal).toBeNull();
   });
 
-  it('enabled=true: fetches the tax selector once with limit=200 and the Authorization header', async () => {
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
-
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
-      `${API_BASE_URL}/lines/selectors/C_Tax_ID?limit=200`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
-    ));
-  });
-
-  it('does not fetch when apiBaseUrl or token is missing', () => {
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: '', token: TOKEN, enabled: true }));
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: '', enabled: true }));
+  it('does not fetch when apiBaseUrl, token, or recordId is missing', () => {
+    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: '', token: TOKEN, enabled: true, recordId: RECORD_ID }));
+    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: '', enabled: true, recordId: RECORD_ID }));
+    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: null }));
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('a failed fetch (ok:false) is swallowed — no crash, taxById stays empty', async () => {
+  it('a failed header fetch (ok:false) is swallowed — no crash, cellBadges.tax stays absent for the row', async () => {
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(false);
+    expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
   });
 
-  it('a network-level rejection is swallowed — no crash, taxById stays empty', async () => {
+  it('a network-level rejection is swallowed — no crash', async () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(false);
+    expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
   });
 });
 
-describe('useTaxSifLineRowActions — rowActions shape (InlineLinesPanel hover-action contract)', () => {
-  it('exposes exactly one action: key, icon, tooltip, testId', () => {
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
-    const [action] = result.current.rowActions;
-    expect(action.key).toBe('taxSifTrigger');
-    expect(action.icon).toBe(AlertTriangle);
-    expect(action.tooltip).toBe('taxSif.trigger.tooltip');
-    expect(action.testId).toBe('line-action-tax-sif');
-    expect(typeof action.show).toBe('function');
-    expect(typeof action.onClick).toBe('function');
+describe('useTaxSifLineRowActions — header fetch + selector context wiring', () => {
+  it('fetches the header record first, then the tax selector with the built context params', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) {
+        return headerResponse({
+          id: RECORD_ID,
+          priceList: 'PL-1',
+          invoiceDate: '2026-01-15',
+          partnerAddress: 'ADDR-1',
+          'currency$_identifier': 'EUR',
+        });
+      }
+      return taxSelectorResponse([]);
+    });
+
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/header/${RECORD_ID}`,
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
+    ));
+
+    await waitFor(() => {
+      const selectorCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCall).toBeTruthy();
+      const [url, init] = selectorCall;
+      expect(url).toContain(`${API_BASE_URL}/lines/selectors/C_Tax_ID`);
+      expect(url).toContain('limit=200');
+      expect(url).toContain('offset=0');
+      expect(url).toContain('parentId=inv-1');
+      expect(url).toContain('isSOTrx=Y');
+      expect(url).toContain('priceList=PL-1');
+      expect(url).toContain('C_BPartner_Location_ID=ADDR-1');
+      expect(url).toContain('currency=EUR');
+      expect(init).toEqual({ headers: { Authorization: `Bearer ${TOKEN}` } });
+    });
+  });
+
+  it('windowCategory: "purchases" derives isSOTrx=N via buildLineSelectorContext', async () => {
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases',
+    }));
+
+    await waitFor(() => {
+      const selectorCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCall).toBeTruthy();
+      expect(selectorCall[0]).toContain('isSOTrx=N');
+    });
+  });
+
+  it('unwraps the NEO envelope ({ response: { data: [...] } }) for the header GET, not the raw envelope', async () => {
+    // If the hook read the envelope directly (instead of .response.data[0]),
+    // headerRecord would carry none of the expected keys and priceList would
+    // never make it into the selector URL.
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID, priceList: 'PL-ENVELOPE-TEST' });
+      return taxSelectorResponse([]);
+    });
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => {
+      const selectorCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCall?.[0]).toContain('priceList=PL-ENVELOPE-TEST');
+    });
+  });
+
+  it('a header GET that fails (ok:false) skips the selector context, but the selector is still fetched (no context params)', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return Promise.resolve({ ok: false });
+      return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }]);
+    });
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => expect(result.current.cellBadges.tax({ tax: 'tax-1' })).not.toBeNull());
   });
 });
 
-describe('useTaxSifLineRowActions — show(row): recomputes via selectSifFields against the ENRICHED selector data, does not trust a pre-baked backend boolean', () => {
-  it('true when the enriched tax data is missing its TBAI régimen column', async () => {
-    globalThis.fetch = vi.fn(() => jsonResponse({
-      items: [{ id: 'tax-1', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }],
+describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
+  it('single-page catalog (hasMore: false): fetches exactly ONE selector page', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: '05' }], false);
+    });
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
-    await waitFor(() => expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(true));
+
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(1);
+    });
   });
 
-  it('false when the enriched tax data already carries its TBAI régimen column', async () => {
-    globalThis.fetch = vi.fn(() => jsonResponse({
-      items: [{ id: 'tax-1', name: 'IVA 21%', EM_Tbai_Claveregimeniva: '05' }],
+  // Confirmed live: an org with 179 taxes gets back only the first 100 from
+  // NeoSelectorService.MAX_LIMIT clamping, silently hiding ~44% of the catalog
+  // from the completeness check — loadTaxCatalog() must page through offset=0
+  // (100 items, hasMore:true) then offset=100 (the remaining 79, hasMore:false).
+  it('179-taxes/100-then-79 scenario (confirmed live): pages through BOTH requests and merges all 179 items', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ id: `tax-${i}`, EM_Tbai_Claveregimeniva: '05' }));
+    const page2 = Array.from({ length: 79 }, (_, i) => ({ id: `tax-${100 + i}`, EM_Tbai_Claveregimeniva: '05' }));
+    // The tax the row actually cares about is missing its régimen, buried in page 2.
+    page2[78] = { id: 'tax-179th', EM_Tbai_Claveregimeniva: null };
+
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      const u = String(url);
+      if (u.includes('offset=0')) return taxSelectorResponse(page1, true);
+      if (u.includes('offset=100')) return taxSelectorResponse(page2, false);
+      throw new Error(`Unexpected selector URL: ${u}`);
+    });
+
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
+
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(2);
+    });
+    // Without full pagination this tax (only on page 2) would never be found —
+    // the row's completeness check would silently report "not missing" (false negative).
+    expect(result.current.cellBadges.tax({ tax: 'tax-179th' })).not.toBeNull();
+    // A tax present on either page but already configured stays "not missing".
+    expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
+  });
+
+  it('offset advances by the PAGE\'S OWN item count, not the requested limit', async () => {
+    const page1 = Array.from({ length: 37 }, (_, i) => ({ id: `tax-${i}` }));
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      const u = String(url);
+      if (u.includes('offset=0')) return taxSelectorResponse(page1, true);
+      if (u.includes('offset=37')) return taxSelectorResponse([], false);
+      throw new Error(`Unexpected selector URL: ${u}`);
+    });
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(2);
+    });
+  });
+
+  it('stops after an empty items page even if hasMore were somehow true (loop-termination safety)', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      return taxSelectorResponse([], true);
+    });
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(1);
+    });
+  });
+
+  // TAX_SELECTOR_MAX_PAGES = 20 — a pathological `hasMore: true` forever case
+  // must stop, not hang the effect in an infinite fetch loop.
+  it('a pathological hasMore:true forever case stops after TAX_SELECTOR_MAX_PAGES (20) pages, does not hang', async () => {
+    let callCount = 0;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      callCount += 1;
+      // Always returns exactly 1 item and hasMore:true, forever.
+      return taxSelectorResponse([{ id: `tax-page-${callCount}` }], true);
+    });
+
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(20);
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Tax catalog pagination stopped after 20 pages'));
+    warnSpy.mockRestore();
+  });
+});
+
+describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel extension-point contract)', () => {
+  it('exposes ONLY a "tax" key when enabled — the badge renderer function', async () => {
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(false);
+    expect(Object.keys(result.current.cellBadges)).toEqual(['tax']);
+    expect(typeof result.current.cellBadges.tax).toBe('function');
   });
 
-  it('ignores any hypothetical pre-computed flag from the backend — still computes from the raw SIF columns', async () => {
-    // Even if the enriched item carried an unrelated boolean like this, the hook must
-    // still derive "missing" from the actual raw column, proving it never trusts a
-    // server-sent verdict — it always recomputes via selectSifFields()/isTaxSifMissing().
-    globalThis.fetch = vi.fn(() => jsonResponse({
-      items: [{ id: 'tax-1', sifMissing: false, EM_Tbai_Claveregimeniva: null }],
+  it('renders null (no badge) for a row whose tax is not missing anything', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: '05' }] });
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
-    await waitFor(() => expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(true));
-  });
-
-  it('false for a row whose tax id has no entry in the fetched catalog', async () => {
-    globalThis.fetch = vi.fn(() => jsonResponse({ items: [{ id: 'tax-other', EM_Tbai_Claveregimeniva: null }] }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(result.current.rowActions[0].show({ tax: 'tax-unknown' })).toBe(false);
+    expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
   });
 
-  it('reflects the SII edge case: a fully-configured / SII tax never shows the trigger', async () => {
+  it('renders null for a row whose tax id has no entry in the fetched catalog', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-other', EM_Tbai_Claveregimeniva: null }] });
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    expect(result.current.cellBadges.tax({ tax: 'tax-unknown' })).toBeNull();
+  });
+
+  it('reflects the SII edge case: a fully-configured / SII tax never renders the badge', async () => {
     useFiscalConfigMock.mockReturnValue({ profile: 'sii', verifactuRecord: null });
-    globalThis.fetch = vi.fn(() => jsonResponse({ items: [{ id: 'tax-1' }] }));
-    const { result } = renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }));
+    installDefaultFetch({ taxItems: [{ id: 'tax-1' }] });
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(result.current.rowActions[0].show({ tax: 'tax-1' })).toBe(false);
+    expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
+  });
+
+  it('renders a button with the AlertTriangle icon, aria-label/title from taxSif.trigger.tooltip, testId line-action-tax-sif, and the shared warning-color token', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+
+    const button = await screen.findByTestId('line-action-tax-sif');
+    expect(button).toHaveAttribute('aria-label', 'taxSif.trigger.tooltip');
+    expect(button).toHaveAttribute('title', 'taxSif.trigger.tooltip');
+    expect(button.className).toContain('text-status-warning-foreground');
+    expect(screen.getByTestId('AlertTriangleIcon__taxSifBadge')).toBeInTheDocument();
+  });
+
+  it('clicking the badge stops event propagation (so it does not also trigger a parent cell click-to-edit handler)', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+    const parentClick = vi.fn();
+
+    function WrappedHarness() {
+      const { cellBadges, modal } = useTaxSifLineRowActions({
+        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      });
+      return (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        <div onClick={parentClick}>
+          {cellBadges.tax({ tax: 'tax-1' })}
+          {modal}
+        </div>
+      );
+    }
+
+    render(<WrappedHarness />);
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
+    expect(parentClick).not.toHaveBeenCalled();
   });
 });
 
 describe('useTaxSifLineRowActions — modal wiring', () => {
-  it('modal is null before any row action is clicked', () => {
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }} />);
+  it('modal is null before the badge is clicked', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    await screen.findByTestId('line-action-tax-sif');
     expect(screen.queryByTestId('tax-sif-modal-stub')).not.toBeInTheDocument();
   });
 
-  it('clicking the action opens the modal with taxId taken from the row (row.tax)', async () => {
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }} />);
-    await waitFor(() => expect(screen.getByTestId('trigger-action')).toBeInTheDocument());
+  it('clicking the badge opens the modal with taxId taken from the row (row.tax)', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    const button = await screen.findByTestId('line-action-tax-sif');
 
-    await act(async () => { screen.getByTestId('trigger-action').click(); });
+    await act(async () => { button.click(); });
 
     const modal = screen.getByTestId('tax-sif-modal-stub');
     expect(modal).toHaveAttribute('data-tax-id', 'tax-1');
@@ -256,26 +471,28 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
   });
 
   it('onClose from the modal clears modalTaxId — the modal unmounts', async () => {
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true }} />);
-    await act(async () => { screen.getByTestId('trigger-action').click(); });
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
     expect(screen.getByTestId('tax-sif-modal-stub')).toBeInTheDocument();
 
     await act(async () => { screen.getByTestId('modal-close').click(); });
     expect(screen.queryByTestId('tax-sif-modal-stub')).not.toBeInTheDocument();
   });
 
-  it('onSaved merges the updated tax into taxById (row re-evaluates as no-longer-missing) and closes the modal', async () => {
-    globalThis.fetch = vi.fn(() => jsonResponse({
-      items: [{ id: 'tax-1', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }],
-    }));
+  it('onSaved merges the updated tax into taxById (row re-evaluates as no-longer-missing) and closes the modal, WITHOUT a refetch', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }] });
 
     function FullHarness() {
-      const { rowActions, modal } = useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true });
-      const action = rowActions[0];
+      const { cellBadges, modal } = useTaxSifLineRowActions({
+        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      });
+      const badge = cellBadges.tax?.({ tax: 'tax-1' });
       return (
         <div>
-          <div data-testid="still-missing">{String(action?.show({ tax: 'tax-1' }))}</div>
-          <button type="button" data-testid="open" onClick={() => action.onClick({ tax: 'tax-1' })}>open</button>
+          <div data-testid="still-missing">{String(badge !== null)}</div>
+          {badge}
           {modal}
         </div>
       );
@@ -284,8 +501,11 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     render(<FullHarness />);
     await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('true'));
 
-    await act(async () => { screen.getByTestId('open').click(); });
+    const button = screen.getByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
     expect(screen.getByTestId('tax-sif-modal-stub')).toBeInTheDocument();
+
+    const fetchCallsBeforeSave = globalThis.fetch.mock.calls.length;
 
     // Stub's "save" button calls onSaved({ id: 'tax-1', EM_Tbai_Claveregimeniva: '05' }).
     await act(async () => { screen.getByTestId('modal-save').click(); });
@@ -295,6 +515,7 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     // The row is no longer "missing" WITHOUT any refetch — completeness was
     // re-evaluated locally from the merged taxById entry.
     expect(screen.getByTestId('still-missing')).toHaveTextContent('false');
+    expect(globalThis.fetch.mock.calls.length).toBe(fetchCallsBeforeSave);
   });
 
   // Realistic scenario: many invoice lines often share the SAME C_Tax_ID. taxById is
@@ -303,20 +524,21 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
   // no per-row bookkeeping and no second fetch. Regression guard for anyone who might
   // later key the completeness cache by row instead of by tax id.
   it('two DIFFERENT lines sharing the SAME tax id both flip to not-missing after ONE of them saves the modal', async () => {
-    globalThis.fetch = vi.fn(() => jsonResponse({
-      items: [{ id: 'tax-shared', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }],
-    }));
+    installDefaultFetch({ taxItems: [{ id: 'tax-shared', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }] });
 
     function TwoLinesHarness() {
-      const { rowActions, modal } = useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true });
-      const action = rowActions[0];
+      const { cellBadges, modal } = useTaxSifLineRowActions({
+        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      });
+      const badge1 = cellBadges.tax?.({ tax: 'tax-shared' });
+      const badge2 = cellBadges.tax?.({ tax: 'tax-shared' });
       return (
         <div>
           {/* Two distinct grid rows, both referencing tax-shared — mirrors two invoice
               lines that use the identical tax rate. */}
-          <div data-testid="line1-missing">{String(action?.show({ tax: 'tax-shared' }))}</div>
-          <div data-testid="line2-missing">{String(action?.show({ tax: 'tax-shared' }))}</div>
-          <button type="button" data-testid="open-line1" onClick={() => action.onClick({ tax: 'tax-shared' })}>open line1</button>
+          <div data-testid="line1-missing">{String(badge1 !== null)}</div>
+          <div data-testid="line2-missing">{String(badge2 !== null)}</div>
+          {badge1}
           {modal}
         </div>
       );
@@ -328,7 +550,7 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     expect(screen.getByTestId('line2-missing')).toHaveTextContent('true');
 
     // Open and save the modal from LINE 1 only.
-    await act(async () => { screen.getByTestId('open-line1').click(); });
+    await act(async () => { screen.getByTestId('line-action-tax-sif').click(); });
     await act(async () => { screen.getByTestId('modal-save').click(); });
 
     // LINE 2 was never clicked and never opened its own modal, yet it re-evaluates

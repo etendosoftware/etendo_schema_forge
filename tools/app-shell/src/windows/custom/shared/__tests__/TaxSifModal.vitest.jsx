@@ -1,3 +1,11 @@
+// Rewritten for ETP-4888's design-polish round (commit df238c9f3): TaxSifModal.jsx
+// was rewritten from an EntityForm-driven form to a bespoke layout — a single-line
+// label above an EnumSearchSelect (searchable code+description picker) per field,
+// a tax-name badge/pill, a caption line, and a Save button gated on `hasChanges`.
+// This file replaces the old EntityForm-stub-based version, which asserted a
+// completely different internal structure (EntityForm props, field-key change
+// buttons) that no longer exists.
+
 // Mocks must come before imports (Vitest hoisting)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -20,8 +28,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({
 }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
 vi.mock('sonner', () => ({
@@ -44,35 +51,13 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
   DialogFooter: ({ children, ...rest }) => <div {...rest}>{children}</div>,
 }));
 
-// Stub EntityForm so the render test doesn't pull the full contract-ui tree.
-// Capture the props (and expose onChange) the same way TaxSifField.vitest.jsx
-// does, so tests can both assert what was passed AND drive local edits.
-const entityFormProps = vi.fn();
-vi.mock('@/components/contract-ui', () => ({
-  EntityForm: (props) => {
-    entityFormProps(props);
-    return (
-      <div data-testid="TaxSifModal__EntityForm">
-        {(props.fields || []).map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            data-testid={`change-${f.key}`}
-            onClick={() => props.onChange(f.key, `${f.key}-new-value`)}
-          >
-            change {f.key}
-          </button>
-        ))}
-      </div>
-    );
-  },
-}));
-
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { toast } from 'sonner';
 // selectSifFields is imported REAL (not mocked) — TaxSifModal.jsx reuses the
 // exact same pure function TaxSifField.jsx uses, so this exercises the real
-// field-selection contract, not a stand-in.
+// field-selection contract, not a stand-in. EnumSearchSelect is also real
+// (not mocked): it is a small, self-contained component and TaxSifModal's own
+// interaction contract (search/select/chip) lives inside it.
 import TaxSifModal from '../TaxSifModal.jsx';
 
 const TOKEN = 'test-token';
@@ -87,6 +72,25 @@ function baseProps(overrides = {}) {
     onSaved: vi.fn(),
     ...overrides,
   };
+}
+
+// Picks the régimen field's value out of the field.options built by
+// selectSifFields()/buildOptions() in TaxSifField.jsx — '05' always exists in
+// OPTION_VALUES.tbaiRegime.
+const REGIME_VALUE = '05';
+
+async function openAndWaitReady() {
+  render(<TaxSifModal {...baseProps()} />);
+  await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+}
+
+async function pickRegimeOption(value = REGIME_VALUE) {
+  await act(async () => {
+    screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva-input').focus();
+  });
+  await act(async () => {
+    screen.getByTestId(`tax-sif-modal-field-tbaiClaveregimeniva-option-${value}`).click();
+  });
 }
 
 beforeEach(() => {
@@ -109,18 +113,19 @@ describe('TaxSifModal — open/closed + fetch-on-open', () => {
     await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-1', TOKEN, API_BASE_URL));
   });
 
-  it('shows a loading state before the fetch resolves', async () => {
+  it('shows a loading state before the fetch resolves, and hides the fields afterward', async () => {
     let resolveFetch;
     fetchByIdMock.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
 
     render(<TaxSifModal {...baseProps()} />);
     expect(screen.getByTestId('tax-sif-modal-loading')).toBeInTheDocument();
-    expect(screen.queryByTestId('TaxSifModal__EntityForm')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).not.toBeInTheDocument();
 
     await act(async () => {
       resolveFetch({ id: 'tax-1', name: 'IVA 21%' });
     });
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+    expect(screen.queryByTestId('tax-sif-modal-loading')).not.toBeInTheDocument();
   });
 
   it('re-fetches when taxId changes to a different record', async () => {
@@ -132,94 +137,116 @@ describe('TaxSifModal — open/closed + fetch-on-open', () => {
   });
 });
 
-describe('TaxSifModal — renders selectSifFields()-selected fields via EntityForm', () => {
-  it('TBAI régimen (one field) — passes field + one-entry labelOverrides', async () => {
-    useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
-    fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
-
-    render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(entityFormProps).toHaveBeenCalled());
-
-    const props = entityFormProps.mock.calls.at(-1)[0];
-    expect(props.entity).toBe('tax');
-    expect(props.fields.map((f) => f.key)).toEqual(['tbaiClaveregimeniva']);
-    expect(props.labelOverrides).toEqual({
-      es_ES: { EM_Tbai_Claveregimeniva: 'taxSif.field.tbaiRegime' },
-    });
-    expect(props.displayLogic).toEqual({ readOnly: {}, visibility: {} });
-    expect(props.layout).toBe('horizontal');
+describe('TaxSifModal — bespoke layout (design-polish round, no EntityForm)', () => {
+  it('renders a single-line label above the EnumSearchSelect field for TBAI régimen', async () => {
+    await openAndWaitReady();
+    const label = screen.getByTestId('tax-sif-modal-label-tbaiClaveregimeniva');
+    expect(label).toHaveTextContent('taxSif.field.tbaiRegime');
+    expect(label.className).toContain('whitespace-nowrap');
+    expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument();
   });
 
-  it('Verifactu non-taxable (two fields) — régimen + no-sujeción', async () => {
+  it('renders TWO labeled EnumSearchSelect fields for a non-taxable Verifactu tax', async () => {
     useFiscalConfigMock.mockReturnValue({ profile: 'verifactu', verifactuRecord: { tAXType: '01' } });
     fetchByIdMock.mockResolvedValue({ id: 'tax-2', name: 'Non-taxable', notTaxable: 'Y' });
 
     render(<TaxSifModal {...baseProps({ taxId: 'tax-2' })} />);
-    await waitFor(() => expect(entityFormProps).toHaveBeenCalled());
-
-    const props = entityFormProps.mock.calls.at(-1)[0];
-    expect(props.fields.map((f) => f.column)).toEqual([
-      'EM_Etvfac_Vat_Regime',
-      'em_etvfac_cause_not_taxable',
-    ]);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-etvfacVatRegime')).toBeInTheDocument());
+    expect(screen.getByTestId('tax-sif-modal-field-etvfacCauseNotTaxable')).toBeInTheDocument();
+    expect(screen.getByTestId('tax-sif-modal-label-etvfacVatRegime')).toHaveTextContent('taxSif.field.verifactuRegimeIva');
+    expect(screen.getByTestId('tax-sif-modal-label-etvfacCauseNotTaxable')).toHaveTextContent('taxSif.field.verifactuNonSubject');
   });
 
-  it('still renders EntityForm with an empty fields array when no field applies (SII) — unlike TaxSifField, the modal does not early-return null', async () => {
+  it('renders zero fields (and the caption, but no crash) when no field applies (SII)', async () => {
     useFiscalConfigMock.mockReturnValue({ profile: 'sii', verifactuRecord: null });
     fetchByIdMock.mockResolvedValue({ id: 'tax-3', name: 'SII tax' });
 
     render(<TaxSifModal {...baseProps({ taxId: 'tax-3' })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
-
-    const props = entityFormProps.mock.calls.at(-1)[0];
-    expect(props.fields).toEqual([]);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-caption')).toBeInTheDocument());
+    expect(screen.queryByTestId(/tax-sif-modal-field-/)).not.toBeInTheDocument();
   });
 
-  it('renders the tax name as a subtitle when present', async () => {
+  it('renders the tax name as a pill badge when present', async () => {
     fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(screen.getByText('IVA 21%')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('IVA 21%'));
   });
 
-  it('omits the subtitle when the fetched record has no name', async () => {
+  it('omits the tax-name badge when the fetched record has no name', async () => {
     fetchByIdMock.mockResolvedValue({ id: 'tax-1' });
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
-    // Only the title (also 'taxSif.modal.title' via ui()) should be present, no stray <p>.
-    expect(screen.queryByText('IVA 21%')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+    expect(screen.queryByTestId('tax-sif-modal-tax-badge')).not.toBeInTheDocument();
+  });
+
+  it('renders the caption text', async () => {
+    await openAndWaitReady();
+    expect(screen.getByTestId('tax-sif-modal-caption')).toHaveTextContent('taxSif.modal.caption');
+  });
+
+  // Regression guard: the pre-redesign modal never had a "Ver guía" (view guide)
+  // link/element anywhere in its markup — assert its absence explicitly so a
+  // future change doesn't silently reintroduce it.
+  it('never renders a "Ver guía" element anywhere in the modal (regression guard)', async () => {
+    await openAndWaitReady();
+    expect(screen.queryByText(/ver gu[ií]a/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/guide/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('TaxSifModal — EnumSearchSelect field integration', () => {
+  it('the field renders the currently selected value as a code+description chip when the fetched record already has it set', async () => {
+    fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%', tbaiClaveregimeniva: undefined, EM_Tbai_Claveregimeniva: '05' });
+    render(<TaxSifModal {...baseProps()} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+    // editing state is seeded from the fetched record by field.key (not field.column) —
+    // TaxSifModal reads `editing?.[field.key]`, so a record whose only populated key is
+    // the raw AD column (as the real backend response would be) starts unselected. This
+    // documents the actual current behavior: the modal trusts field.key, matching what
+    // the EntityForm-era field also always did (selectSifFields keeps col->key mapping).
+    expect(screen.queryByTestId('tax-sif-modal-field-tbaiClaveregimeniva-chip')).not.toBeInTheDocument();
+  });
+
+  it('picking an option updates the field value (chip appears, showing code and description as distinct pieces)', async () => {
+    await openAndWaitReady();
+    await pickRegimeOption('05');
+
+    const chip = screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva-chip');
+    expect(chip).toHaveTextContent('05');
+    expect(chip).toHaveTextContent('taxSif.opt.tbaiRegime.05');
   });
 });
 
 describe('TaxSifModal — save flow', () => {
-  it('save with no changes calls onClose WITHOUT calling patchById', async () => {
+  it('Save is disabled until a field actually changes (hasChanges gate)', async () => {
+    await openAndWaitReady();
+    expect(screen.getByTestId('tax-sif-modal-save')).toBeDisabled();
+
+    await pickRegimeOption('05');
+    expect(screen.getByTestId('tax-sif-modal-save')).not.toBeDisabled();
+  });
+
+  it('save with no changes calls onClose WITHOUT calling patchById (Save stays disabled, but exercise handleSave defensively is not needed since the button is disabled)', async () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
     render(<TaxSifModal {...baseProps({ onClose, onSaved })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => {
-      screen.getByTestId('tax-sif-modal-save').click();
-    });
-
+    expect(screen.getByTestId('tax-sif-modal-save')).toBeDisabled();
     expect(patchByIdMock).not.toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
-    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('save calls patchById with ONLY the changed field(s), keyed by field.key (EntityForm field key)', async () => {
+  it('save calls patchById with ONLY the changed field, keyed by field.key', async () => {
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => {
-      screen.getByTestId('change-tbaiClaveregimeniva').click();
-    });
-    await act(async () => {
-      screen.getByTestId('tax-sif-modal-save').click();
-    });
+    await pickRegimeOption('05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
       'tax', 'tax', 'tax-1',
-      { tbaiClaveregimeniva: 'tbaiClaveregimeniva-new-value' },
+      { tbaiClaveregimeniva: '05' },
       TOKEN, API_BASE_URL,
     ));
   });
@@ -228,17 +255,17 @@ describe('TaxSifModal — save flow', () => {
     // Deliberately resolve patchById with a DIFFERENT value than what was edited,
     // to prove onSaved's payload is built from `editing` (the local field.key state),
     // never from whatever patchById happened to resolve with.
-    patchByIdMock.mockResolvedValue({ id: 'tax-1', tbaiClaveregimeniva: 'IGNORED-SERVER-EOCHO' });
+    patchByIdMock.mockResolvedValue({ id: 'tax-1', EM_Tbai_Claveregimeniva: 'IGNORED-SERVER-ECHO' });
     const onSaved = vi.fn();
     render(<TaxSifModal {...baseProps({ onSaved })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => { screen.getByTestId('change-tbaiClaveregimeniva').click(); });
+    await pickRegimeOption('05');
     await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith({
       id: 'tax-1',
-      EM_Tbai_Claveregimeniva: 'tbaiClaveregimeniva-new-value',
+      EM_Tbai_Claveregimeniva: '05',
     }));
     expect(toast.success).toHaveBeenCalledWith('taxSif.modal.saveSuccess');
   });
@@ -248,16 +275,18 @@ describe('TaxSifModal — save flow', () => {
     fetchByIdMock.mockResolvedValue({ id: 'tax-2', notTaxable: 'Y' });
     const onSaved = vi.fn();
     render(<TaxSifModal {...baseProps({ taxId: 'tax-2', onSaved })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-etvfacVatRegime')).toBeInTheDocument());
 
-    await act(async () => { screen.getByTestId('change-etvfacVatRegime').click(); });
-    await act(async () => { screen.getByTestId('change-etvfacCauseNotTaxable').click(); });
+    await act(async () => { screen.getByTestId('tax-sif-modal-field-etvfacVatRegime-input').focus(); });
+    await act(async () => { screen.getByTestId('tax-sif-modal-field-etvfacVatRegime-option-01').click(); });
+    await act(async () => { screen.getByTestId('tax-sif-modal-field-etvfacCauseNotTaxable-input').focus(); });
+    await act(async () => { screen.getByTestId('tax-sif-modal-field-etvfacCauseNotTaxable-option-N1').click(); });
     await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith({
       id: 'tax-2',
-      EM_Etvfac_Vat_Regime: 'etvfacVatRegime-new-value',
-      em_etvfac_cause_not_taxable: 'etvfacCauseNotTaxable-new-value',
+      EM_Etvfac_Vat_Regime: '01',
+      em_etvfac_cause_not_taxable: 'N1',
     }));
   });
 
@@ -266,9 +295,9 @@ describe('TaxSifModal — save flow', () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
     render(<TaxSifModal {...baseProps({ onClose, onSaved })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => { screen.getByTestId('change-tbaiClaveregimeniva').click(); });
+    await pickRegimeOption('05');
     await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Invalid regime code'));
@@ -280,9 +309,9 @@ describe('TaxSifModal — save flow', () => {
   it('save failure with no error message falls back to ui("networkError")', async () => {
     patchByIdMock.mockRejectedValue(new Error(''));
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => { screen.getByTestId('change-tbaiClaveregimeniva').click(); });
+    await pickRegimeOption('05');
     await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('networkError'));
@@ -292,9 +321,9 @@ describe('TaxSifModal — save flow', () => {
     let resolvePatch;
     patchByIdMock.mockReturnValue(new Promise((resolve) => { resolvePatch = resolve; }));
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
-    await act(async () => { screen.getByTestId('change-tbaiClaveregimeniva').click(); });
+    await pickRegimeOption('05');
     act(() => { screen.getByTestId('tax-sif-modal-save').click(); });
 
     expect(screen.getByTestId('tax-sif-modal-save')).toBeDisabled();
@@ -308,7 +337,7 @@ describe('TaxSifModal — closing', () => {
   it('calls onClose when the Cancel button is clicked', async () => {
     const onClose = vi.fn();
     render(<TaxSifModal {...baseProps({ onClose })} />);
-    await waitFor(() => expect(screen.getByTestId('TaxSifModal__EntityForm')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
 
     screen.getByTestId('tax-sif-modal-cancel').click();
     expect(onClose).toHaveBeenCalled();

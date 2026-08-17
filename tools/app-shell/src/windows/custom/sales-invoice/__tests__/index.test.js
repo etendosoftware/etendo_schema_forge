@@ -43,9 +43,11 @@ describe('SalesInvoiceWindow — wiring', () => {
 // file only proves the WIRING: the window imports the hook, gates it behind a
 // local LINE_TAX_SIF_TRIGGER_ENABLED constant (hand-mirroring
 // artifacts/sales-invoice/decisions.json -> window.lineTaxSifTrigger, since
-// DetailView's lineRowActions prop has no generate-frontend.js wiring — see the
+// DetailView's lineCellBadges prop has no generate-frontend.js wiring — see the
 // constant's own comment in index.jsx), and forwards both the resulting
-// rowActions and the modal portal to HeaderPage.
+// cellBadges and the modal portal to HeaderPage. Updated for the ETP-4888
+// design-polish round: the hook now returns `cellBadges` (not `rowActions`)
+// and is called with `recordId`/`windowCategory` (selector-context bugfix).
 describe('SalesInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
   it('imports useTaxSifLineRowActions from the shared hook module', () => {
     assert.match(src, /import\s*\{\s*useTaxSifLineRowActions\s*\}\s*from\s*'\.\.\/shared\/useTaxSifLineRowActions\.jsx'/);
@@ -55,22 +57,22 @@ describe('SalesInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
     assert.match(src, /const\s+LINE_TAX_SIF_TRIGGER_ENABLED\s*=\s*true\s*;/);
   });
 
-  it('calls the hook with apiBaseUrl, token and enabled: LINE_TAX_SIF_TRIGGER_ENABLED', () => {
+  it('calls the hook with apiBaseUrl, token, enabled, recordId and windowCategory: "sales"', () => {
     assert.match(
       src,
-      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,?\s*\n?\s*\}\)/,
+      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'sales',?\s*\n?\s*\}\)/,
     );
   });
 
-  it('destructures rowActions/modal as taxSifRowActions/taxSifModal', () => {
+  it('destructures cellBadges/modal as taxSifCellBadges/taxSifModal', () => {
     assert.match(
       src,
-      /const\s*\{\s*rowActions:\s*taxSifRowActions,\s*modal:\s*taxSifModal\s*\}\s*=\s*useTaxSifLineRowActions/,
+      /const\s*\{\s*cellBadges:\s*taxSifCellBadges,\s*modal:\s*taxSifModal\s*\}\s*=\s*useTaxSifLineRowActions/,
     );
   });
 
-  it('forwards taxSifRowActions to HeaderPage as lineRowActions', () => {
-    assert.match(src, /lineRowActions=\{taxSifRowActions\}/);
+  it('forwards taxSifCellBadges to HeaderPage as lineCellBadges', () => {
+    assert.match(src, /lineCellBadges=\{taxSifCellBadges\}/);
   });
 
   it('renders the taxSifModal portal alongside contactPortal', () => {
