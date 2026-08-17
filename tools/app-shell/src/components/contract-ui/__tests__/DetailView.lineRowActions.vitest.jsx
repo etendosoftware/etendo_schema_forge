@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 // Regression/coverage for ETP-4888: DetailView's new `lineRowActions` prop is a
 // generic per-row action slot, forwarded verbatim to the line grid (`DetailTable`
 // / InlineLinesPanel) as its own `rowActions` prop — see docs/ui-customization.md.
-// First consumer: useTaxSifLineRowActions.js (the invoice-lines "tax needs SIF
+// First consumer: useTaxSifLineRowActions.jsx (the invoice-lines "tax needs SIF
 // configuration" hover shortcut), wired via sales-invoice/purchase-invoice's
 // index.jsx.
 //
