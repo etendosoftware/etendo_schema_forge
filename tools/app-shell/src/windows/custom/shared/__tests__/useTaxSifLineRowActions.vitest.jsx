@@ -296,4 +296,44 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     // re-evaluated locally from the merged taxById entry.
     expect(screen.getByTestId('still-missing')).toHaveTextContent('false');
   });
+
+  // Realistic scenario: many invoice lines often share the SAME C_Tax_ID. taxById is
+  // keyed by tax id (not by row/line), so a save triggered from ONE line's modal must
+  // clear the "missing" trigger for EVERY OTHER line pointing at that same tax — with
+  // no per-row bookkeeping and no second fetch. Regression guard for anyone who might
+  // later key the completeness cache by row instead of by tax id.
+  it('two DIFFERENT lines sharing the SAME tax id both flip to not-missing after ONE of them saves the modal', async () => {
+    globalThis.fetch = vi.fn(() => jsonResponse({
+      items: [{ id: 'tax-shared', name: 'IVA 21%', EM_Tbai_Claveregimeniva: null }],
+    }));
+
+    function TwoLinesHarness() {
+      const { rowActions, modal } = useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true });
+      const action = rowActions[0];
+      return (
+        <div>
+          {/* Two distinct grid rows, both referencing tax-shared — mirrors two invoice
+              lines that use the identical tax rate. */}
+          <div data-testid="line1-missing">{String(action?.show({ tax: 'tax-shared' }))}</div>
+          <div data-testid="line2-missing">{String(action?.show({ tax: 'tax-shared' }))}</div>
+          <button type="button" data-testid="open-line1" onClick={() => action.onClick({ tax: 'tax-shared' })}>open line1</button>
+          {modal}
+        </div>
+      );
+    }
+
+    render(<TwoLinesHarness />);
+    await waitFor(() => expect(screen.getByTestId('line1-missing')).toHaveTextContent('true'));
+    // Both lines start out "missing" — same tax, same enriched (blank) data.
+    expect(screen.getByTestId('line2-missing')).toHaveTextContent('true');
+
+    // Open and save the modal from LINE 1 only.
+    await act(async () => { screen.getByTestId('open-line1').click(); });
+    await act(async () => { screen.getByTestId('modal-save').click(); });
+
+    // LINE 2 was never clicked and never opened its own modal, yet it re-evaluates
+    // as no-longer-missing too — both reads hit the SAME taxById['tax-shared'] entry.
+    expect(screen.getByTestId('line1-missing')).toHaveTextContent('false');
+    expect(screen.getByTestId('line2-missing')).toHaveTextContent('false');
+  });
 });
