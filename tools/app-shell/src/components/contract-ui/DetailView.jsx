@@ -1020,7 +1020,7 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
 
 export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
-  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl }); if (!isNew && onAfterExistingSave) await onAfterExistingSave(saved, { token, apiBaseUrl });
+  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {

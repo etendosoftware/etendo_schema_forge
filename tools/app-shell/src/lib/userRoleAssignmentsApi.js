@@ -102,7 +102,8 @@ export async function fetchUserRoleAssignments(userId) {
   const params = new URLSearchParams();
   if (userId) params.set('UserId', userId);
   const query = params.toString();
-  const url = `${NEO_BASE}/userroleassignments${query ? `?${query}` : ''}`;
+  const queryPart = query ? `?${query}` : '';
+  const url = `${NEO_BASE}/userroleassignments${queryPart}`;
   return fetchNeoJson(url, 'SFUserRoleAssignments');
 }
 
