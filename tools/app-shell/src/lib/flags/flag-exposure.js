@@ -15,9 +15,18 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
  * - **Never disturb evaluation.** `after` runs inside flag resolution, which is
  *   called on every render through `useFeatureFlag`. It never awaits and never
  *   throws; a reporting failure must not change what a flag resolves to.
- * - **Deduplicate.** One event per flag/value combination per session, not one
- *   per render. A flag that flips back and forth reports each distinct value
- *   once, which is what makes the event countable.
+ * - **Deduplicate per flag/value/provider, not per flag/value.** `initFeatureFlags`
+ *   registers this hook before the real provider is ready (`createFlagProvider`
+ *   awaits a dynamic import and, for ConfigCat, a network round-trip), so the
+ *   very first evaluation on every page load — for essentially every session,
+ *   since React's initial render is synchronous and always wins that race —
+ *   goes through OpenFeature's built-in no-op default. A dedupe key that
+ *   ignores the provider lets that first, transient no-op result permanently
+ *   claim the session's report for that value, silently suppressing every
+ *   later evaluation once the real provider (in-memory or ConfigCat) takes
+ *   over — even though it may resolve the exact same boolean. Keying on the
+ *   provider too reports each one exactly once instead of only the first to
+ *   answer.
  */
 
 /** Flag/value combinations already reported this session (page lifetime). */
@@ -50,7 +59,8 @@ export function createFlagExposureHook({ trackImpl = track } = {}) {
         const { flagKey, value } = { flagKey: hookContext?.flagKey, value: evaluationDetails?.value };
         if (!flagKey || typeof value !== 'boolean') return;
 
-        const dedupeKey = `${flagKey}:${value}`;
+        const provider = hookContext?.providerMetadata?.name;
+        const dedupeKey = `${flagKey}:${value}:${provider}`;
         if (reported.has(dedupeKey)) return;
         reported.add(dedupeKey);
 

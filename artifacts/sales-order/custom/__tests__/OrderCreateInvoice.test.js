@@ -199,7 +199,7 @@ describe('OrderCreateInvoice', () => {
         /const handleClose\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(orderConfirmed\s*\|\|\s*shipmentResult\s*\|\|\s*invoiceResult\)[\s\S]*?onConfirmed\(\{[\s\S]*?shipment:\s*shipmentResult[\s\S]*?invoice:\s*invoiceResult[\s\S]*?\}\)[\s\S]*?return;[\s\S]*?\}[\s\S]*?onClose\(\);/,
       );
       // Cancel button + X button + overlay click all use handleClose, not onClose directly
-      assert.match(src, /<div onClick=\{handleClose\} style=\{overlayStyle\}>/);
+      assert.match(src, /<div data-testid="sales-order-confirm-modal" onClick=\{handleClose\} style=\{overlayStyle\}>/);
       assert.match(src, /onClick=\{handleClose\} style=\{closeBtn\}/);
       assert.match(src, /onClick=\{handleClose\} disabled=\{loading\}/);
     });

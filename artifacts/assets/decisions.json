@@ -143,7 +143,14 @@
         },
         "depreciate": {
           "form": false,
-          "searchable": true
+          "searchable": true,
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          }
         },
         "depreciationType": {
           "form": false,
@@ -221,7 +228,7 @@
         },
         "depreciationAmt": {
           "grid": true,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "summable": true,
           "form": false,
           "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
