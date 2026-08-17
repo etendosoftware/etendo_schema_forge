@@ -11,10 +11,20 @@ import TaxSifModal from './TaxSifModal.jsx';
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
 // LinesTable.jsx declares for both sales-invoice and purchase-invoice.
 const TAX_SELECTOR_COLUMN = 'C_Tax_ID';
-// Generous page size: one request covers the whole tax catalog visible to the client
-// (a few dozen active rates in practice), replacing what would otherwise be N
-// per-distinct-tax fetches (one per row's tax, deduplicated) with exactly ONE call.
+// Generous page size: covers the whole tax catalog visible to the client in ONE
+// request for the common case (a few dozen active rates in practice), replacing
+// what would otherwise be N per-distinct-tax fetches (one per row's tax,
+// deduplicated) with a single call. NeoSelectorService.MAX_LIMIT (100) silently
+// clamps whatever we ask for server-side, so orgs with a larger catalog (seen live:
+// 179 taxes) get back a partial page with `hasMore: true` — loadTaxCatalog() below
+// pages through the rest instead of trusting this to be the only request (ETP-4888
+// bugfix: a tax outside the first page was silently treated as "nothing to fix").
 const TAX_SELECTOR_PAGE_LIMIT = 200;
+// Safety cap on pagination loop iterations, in case `hasMore` ever misbehaves (e.g.
+// a future selector policy that always reports true). 20 pages at up to ~100 items
+// each (the server's own MAX_LIMIT) covers ~2000 items — far beyond any real tax
+// catalog — while still guaranteeing the loop terminates.
+const TAX_SELECTOR_MAX_PAGES = 20;
 
 /**
  * Pure completeness check: does `taxRow` (a tax record — or selector item — carrying
@@ -113,16 +123,41 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       // Not part of buildLineSelectorContext (DetailView.jsx also merges it in
       // separately, alongside an org-session fallback this hook has no access to).
       const currency = headerRecord?.['currency$_identifier'] ?? null;
-      const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
-        limit: TAX_SELECTOR_PAGE_LIMIT,
-        ...selectorContext,
-        ...(currency ? { currency } : {}),
-      });
 
-      const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      const data = taxResponse.ok ? await taxResponse.json() : null;
-      if (cancelled || !data?.items) return;
-      setTaxById(Object.fromEntries(data.items.map((item) => [item.id, item])));
+      // Pages through the full catalog instead of trusting a single request — see
+      // TAX_SELECTOR_PAGE_LIMIT's comment above. Stops as soon as the server reports
+      // `hasMore: false`, so the common (single-page) case still does exactly ONE
+      // fetch. `offset` advances by the page's own item count (not the requested
+      // limit) so it stays correct even though the server silently clamps `limit`.
+      const allItems = [];
+      let offset = 0;
+      let page = 0;
+      for (;;) {
+        const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
+          limit: TAX_SELECTOR_PAGE_LIMIT,
+          offset,
+          ...selectorContext,
+          ...(currency ? { currency } : {}),
+        });
+        const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const data = taxResponse.ok ? await taxResponse.json() : null;
+        if (cancelled || !data?.items) return;
+        allItems.push(...data.items);
+        page += 1;
+        if (!data.hasMore || data.items.length === 0) break;
+        if (page >= TAX_SELECTOR_MAX_PAGES) {
+          // eslint-disable-next-line no-console -- deliberate operator-facing warning,
+          // not routine logging: signals the SIF completeness check is incomplete.
+          console.warn(
+            `[useTaxSifLineRowActions] Tax catalog pagination stopped after ${TAX_SELECTOR_MAX_PAGES} pages ` +
+              `(hasMore was still true) — some taxes may be missing from the SIF completeness check.`,
+          );
+          break;
+        }
+        offset += data.items.length;
+      }
+      if (cancelled) return;
+      setTaxById(Object.fromEntries(allItems.map((item) => [item.id, item])));
     }
 
     loadTaxCatalog().catch(() => {});
