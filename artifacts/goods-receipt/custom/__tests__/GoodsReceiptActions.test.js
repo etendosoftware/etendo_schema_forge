@@ -69,4 +69,35 @@ describe('GoodsReceiptActions', () => {
       assert.match(src, /from\s*['"]@\/i18n['"]/);
     });
   });
+
+  // ETP-4779 — QA regression: the "Documentos" related-docs section on
+  // Purchase Goods Receipt required a manual page reload to show a newly
+  // generated Purchase Invoice / return-to-vendor shipment. Root cause: this
+  // component discarded the `onRefresh` prop DetailView's topbarRight slot
+  // already passes (see DetailView.jsx TopbarRightComponent), calling a full
+  // `window.location.reload()` instead — which is also visibly slower and
+  // loses in-memory client state (scroll position, other open modals).
+  describe('partial refresh instead of full page reload (ETP-4779)', () => {
+    it('accepts an onRefresh prop', () => {
+      assert.match(src, /export default function GoodsReceiptActions\(\{[^}]*onRefresh[^}]*\}\)/);
+    });
+
+    it('never calls window.location.reload', () => {
+      assert.doesNotMatch(src, /window\.location\.reload/);
+    });
+
+    it('calls onRefresh (not a reload) when closing the invoice-confirmation result modal, unless the user navigated away', () => {
+      assert.match(
+        src,
+        /setConfirmedDocs\(null\);\s*setTimeout\(\(\) => \{\s*[\s\S]*?if\s*\(!resultNavigatedRef\.current\)\s*onRefresh\?\.\(\);/,
+      );
+    });
+
+    it('calls onRefresh (not a reload) when closing the purchase-return result modal, unless the user navigated away', () => {
+      assert.match(
+        src,
+        /setReturnedDoc\(null\);\s*setTimeout\(\(\) => \{\s*[\s\S]*?if\s*\(!resultNavigatedRef\.current\)\s*onRefresh\?\.\(\);/,
+      );
+    });
+  });
 });
