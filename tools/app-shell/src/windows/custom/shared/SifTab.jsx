@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -286,7 +286,6 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   const {
     ui,
     siiTypeField,
-    siiDescriptionMasterIdentifier,
     siiTypeOptions,
     showSii,
     showVerifactu,
@@ -304,6 +303,52 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // read-only when the invoice no longer carries any exempt tax.
   const hasExemptTaxes = data?.hasExemptTaxes === true || data?.hasExemptTaxes === 'Y';
   const exemptionCauseEditable = hasExemptTaxes && isDraft && !siiFieldReadOnly;
+
+  // ETP-4783: Replicates SiiAuthorizationCallout for the Go frontend (ETP-4783).
+  // fireCallout in DetailView filters out 'Y'/'N' values (only UUIDs/numbers/dates pass),
+  // so we fire the callout manually here when the authorization checkbox changes.
+  // The backend's afterCallout → applySiiAuthorizationCallout validates AEATSIIConfig and
+  // either returns the authorization number (injected into updates) or an ERROR message.
+  const handleAuthorizationToggle = useCallback(async (val) => {
+    onChange?.('aeatsiiIsauthorization', val); // optimistic update
+    if (!apiBaseUrl || !token) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/header/callout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: 'aeatsiiIsauthorization', value: val ? 'Y' : 'N', formState: data ?? {} }),
+      });
+      if (!res.ok) return;
+      const result = await res.json();
+      let hasError = false;
+      for (const msg of (result.messages ?? [])) {
+        const text = msg.text || msg.message || '';
+        if (!text) continue;
+        const type = (msg.type || '').toUpperCase();
+        if (type === 'ERROR') { toast.error(text); hasError = true; }
+        else if (type === 'WARNING') toast.warning(text);
+        else toast.info(text);
+      }
+      if (hasError) {
+        onChange?.('aeatsiiIsauthorization', !val); // revert on error
+      } else {
+        for (const [field, value] of Object.entries(result.updates ?? {})) {
+          onChange?.(field, value);
+        }
+      }
+    } catch { /* network error — keep optimistic state */ }
+  }, [apiBaseUrl, token, data, onChange]);
+
+  // ETP-4783: Per-field lock conditions that differ from the general siiFieldReadOnly gate.
+  // Classic parity: SII desc and accounting-register date are editable even on completed
+  // invoices — they only lock once the invoice has been sent to SII (aeatsiiIssent = 'Y').
+  // aeatsiiIssent has type=boolean in the contract, so the server returns true/false;
+  // handle both boolean and legacy string serializations.
+  const siiSentReadOnly = data?.aeatsiiIssent === true || data?.aeatsiiIssent === 'Y';
+  // Modificada-error-registral follows AD readOnly logic: editable only when SII estado
+  // is CO (Correcto) or AE (Aceptado con errores) and the invoice is not voided.
+  const errorRegistralReadOnly =
+    !['CO', 'AE'].includes(data?.aeatsiiEstado ?? '') || data?.documentStatus === 'VO';
 
   // ETP-4751 (Block B/F): Classic parity for the SII module's ExemptTaxes line-save behaviour.
   // The invoice-LINE NeoHandler (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave) stamps
@@ -429,12 +474,6 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 </SelectContent>
               </Select>
             </Field>
-            <ReadOnlyField
-              id="sif-masterDesc"
-              labelKey="sifDataTabs.field.masterDescription"
-              value={siiDescriptionMasterIdentifier}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.siiDescription')}
               htmlFor="sif-siiDesc"
@@ -444,7 +483,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 type="text"
                 value={getVal('aeatsiiDescripcionSii')}
                 onChange={e => onChange?.('aeatsiiDescripcionSii', e.target.value)}
-                disabled={siiFieldReadOnly}
+                disabled={siiSentReadOnly}
+                className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
             <ExemptionCauseField
@@ -463,21 +503,41 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 id="sif-auth"
                 checked={Boolean(getVal('aeatsiiIsauthorization'))}
                 disabled={siiFieldReadOnly}
-                onToggle={val => onChange?.('aeatsiiIsauthorization', val)}
+                onToggle={handleAuthorizationToggle}
                 data-testid="CheckboxField__b99c8b" />
             </Field>
-            <ReadOnlyField
-              id="sif-siiYear"
-              labelKey="sifDataTabs.field.siiYear"
-              value={data?.aeatsiiEjercicio}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-siiPeriod"
-              labelKey="sifDataTabs.field.siiPeriod"
-              value={data?.aeatsiiPeriodo}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
+            {getVal('aeatsiiIsauthorization') && (
+              <ReadOnlyField
+                id="sif-authorizationNo"
+                labelKey="sifDataTabs.field.authorizationNo"
+                value={getVal('aeatsiiAuthorizationno')}
+                ui={ui}
+                data-testid="ReadOnlyField__b99c8b" />
+            )}
+            <Field
+              label={ui('sifDataTabs.field.accountingRegDate')}
+              htmlFor="sif-accountingRegDate"
+              data-testid="Field__b99c8b">
+              <DateField
+                id="sif-accountingRegDate"
+                value={getDateVal('aeatsiiFechaRegCont')}
+                onChange={iso => onChange?.('aeatsiiFechaRegCont', iso)}
+                disabled={siiSentReadOnly}
+                data-testid="DateField__b99c8b" />
+            </Field>
+            {siiSentReadOnly && (
+              <Field
+                label={ui('sifDataTabs.field.registerError')}
+                htmlFor="sif-registerError"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-registerError"
+                  checked={Boolean(getVal('aeatsiiErrorRegistral'))}
+                  disabled={errorRegistralReadOnly}
+                  onToggle={val => onChange?.('aeatsiiErrorRegistral', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
           </Panel>
         )}
 
@@ -527,6 +587,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 value={getVal('etvfacVerifacDesc')}
                 onChange={e => onChange?.('etvfacVerifacDesc', e.target.value)}
                 disabled={dateReadOnly}
+                className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
             {shouldShowSimplifiedArt7273(vfInvType) && (

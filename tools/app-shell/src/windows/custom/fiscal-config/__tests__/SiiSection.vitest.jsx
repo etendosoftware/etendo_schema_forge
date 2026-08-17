@@ -65,11 +65,15 @@ const BASE_RECORD = { plazoLmiteDeEnvoASII: 4 };
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('SiiSection — rendering', () => {
-  it('renders section labels (ETP-4783: status+env sections removed)', () => {
+  it('renders section labels (ETP-4783: status+env+sends sections removed)', () => {
     render(<SiiSection {...PROPS} />);
     expect(screen.queryByText('fiscal.sii.legend.status')).not.toBeInTheDocument();
     expect(screen.queryByText('fiscal.sii.legend.env')).not.toBeInTheDocument();
-    expect(screen.getByText('fiscal.sii.legend.sends')).toBeInTheDocument();
+    // ETP-4783: "Envíos" section removed from SiiSection
+    expect(screen.queryByText('fiscal.sii.legend.sends')).not.toBeInTheDocument();
+    // Remaining sections should still render
+    expect(screen.getByText('fiscal.sii.legend.special')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.sii.legend.specialAuth')).toBeInTheDocument();
   });
 
   it('renders the CertSection when hideCert is false', () => {
@@ -93,14 +97,15 @@ describe('SiiSection — rendering', () => {
   });
 });
 
+// ETP-4783: The "Envíos" section (plazo/cadencia/postedInvoices) was removed from the UI.
+// The plazoLmiteDeEnvoASII validation is no longer enforced — save proceeds even when empty.
 describe('SiiSection — validation', () => {
-  it('shows deadline error when plazo is empty and save is attempted', async () => {
+  it('save succeeds even when plazoLmiteDeEnvoASII is empty (Envíos section removed)', async () => {
+    const onSave = vi.fn();
     const ref = createRef();
-    render(<SiiSection {...PROPS} record={{ plazoLmiteDeEnvoASII: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.sii.err.deadline')).toBeInTheDocument();
-    });
+    render(<SiiSection {...PROPS} onSave={onSave} record={{ plazoLmiteDeEnvoASII: '' }} ref={ref} />);
+    await ref.current.save();
+    expect(onSave).toHaveBeenCalled();
   });
 });
 

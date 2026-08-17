@@ -261,19 +261,19 @@ describe('SifTab', () => {
 
     it('shows the authorization checkbox', () => {
       render(<SifTab {...makeProps()} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toBeInTheDocument();
     });
 
     it('checkbox reflects unchecked state initially', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: false } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toHaveAttribute('aria-checked', 'false');
     });
 
     it('checkbox reflects checked state when field is true', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: true } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toHaveAttribute('aria-checked', 'true');
     });
 
@@ -284,20 +284,20 @@ describe('SifTab', () => {
     it('calls onChange with the toggled value when the checkbox is clicked', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: false }, onChange })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       fireEvent.click(checkbox);
       expect(onChange).toHaveBeenCalledWith('aeatsiiIsauthorization', true);
     });
 
     it('SII fields disabled when invoice has been sent to SII', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIssent: 'Y' } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toBeDisabled();
     });
 
     it('SII fields enabled when invoice has NOT been sent to SII', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIssent: false } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).not.toBeDisabled();
     });
 
@@ -712,7 +712,7 @@ describe('SifTab', () => {
     it('checkbox click calls onChange with the field key regardless of apiBaseUrl-derived specName', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/sales-invoice', data: { documentStatus: 'DR', aeatsiiIsauthorization: false }, onChange })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       fireEvent.click(checkbox);
       expect(onChange).toHaveBeenCalledWith('aeatsiiIsauthorization', true);
     });
@@ -1075,14 +1075,15 @@ describe('SifTab', () => {
     // ETP-4390: the field this test originally exercised (sif-vfDate /
     // etvfacDateIssue) was removed from the Verifactu panel. The em-dash
     // placeholder behavior it targets lives in the shared ReadOnlyValue helper
-    // and is still exercised in production by the SII panel's read-only fields
-    // (e.g. sif-siiYear), so repoint the test there instead of dropping the
-    // coverage.
+    // and is exercised via the ExemptionCauseField when rendered as read-only
+    // (aeatsiiCauseExemption$_identifier undefined → '—' placeholder).
+    // ETP-4783: redirected again from sif-siiYear (removed from SII panel)
+    // to sif-exemption (visible when hasExemptTaxes is falsy — always read-only).
     it('ReadOnlyValue shows em-dash placeholder when value is null/undefined', () => {
       mockFiscalConfig('sii');
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiEjercicio: undefined } })} />);
-      const yearInput = screen.getByTestId('input-sif-siiYear');
-      expect(yearInput).toHaveValue('—');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
+      const exemptionInput = screen.getByTestId('input-sif-exemption');
+      expect(exemptionInput).toHaveValue('—');
     });
   });
 
