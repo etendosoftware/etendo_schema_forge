@@ -865,16 +865,43 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 **Why a new prop instead of declaring it on `decisions.json` end-to-end:** the natural home for a NEW per-window boolean is `decisions.json` + `generate-frontend.js` baking a literal prop into the generated `HeaderPage.jsx` (like `hidePrintWhen`, `documentDateField`, etc.). `generate-frontend.js` lives in `schema_forge_core` — out of reach for a window-specific feature living entirely in this repo. The decision is still declared in `decisions.json` (`window.lineTaxSifTrigger`, see `docs/decisions-reference.md`) as the source of truth; only the WIRING is hand-mirrored today, exactly like this repo's `sales-invoice`/`purchase-invoice` `index.jsx` already hand-mirrors `subsetFilters`/`labelOverrides` for their hand-rolled list route (see the comments on `SUBSET_FILTERS`/`LABEL_OVERRIDES` in those files). If a future ticket adds `generate-frontend.js` support for this, the hand-mirrored constant + hook call in each window's `index.jsx` can simply be deleted.
 
-**Real example — "tax needs SIF configuration" trigger (ETP-4888 point 5):** on `sales-invoice`'s and `purchase-invoice`'s lines grid, the `tax` cell shows a warning icon (via a `rowActions` entry) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII (which has nothing to configure at tax level; see `docs/decisions-reference.md`'s `lineTaxSifTrigger` row). Clicking it opens `TaxSifModal.jsx`, a standalone `EntityForm entity="tax"` dialog that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to pick the same 0–2 applicable fields the Tax window itself would show, and saves via a new cross-spec `patchById()` helper (`components/related-documents/helpers.js`, sibling of the existing `fetchById()`).
+**Real example — "tax needs SIF configuration" trigger (ETP-4888 point 5):** originally shipped as a `rowActions` entry (see the superseded note in §14e below); the design-polish round moved it to the `cellBadges` slot instead so the warning icon sits inline next to the `tax` value it's about, not grouped with Edit/Delete at the far right of the row. See §14e for the current mechanism and the full real-example writeup.
+
+---
+
+### 14e. `InlineLinesPanel` per-column trailing-badge extension slot (`cellBadges` prop) — ETP-4888 design-polish round
+
+**What it does:** a generic extension point, sibling to §14c's `rowActions`, for rendering a small icon/badge INLINE next to a specific column's own cell value (in both read and edit mode) instead of grouping it into the row's hover-action strip at the far right. Added when the "tax needs SIF configuration" trigger (§14d's real example) turned out to "go unnoticed" living in the generic, neutral-colored, hover-only `rowActions` strip, far from the value it was actually about.
+
+**Prop shape:**
+```jsx
+<InlineLinesPanel
+  columns={columns}
+  data={data}
+  // ...
+  cellBadges={{
+    tax: (row) => (isTaxMissingSomething(row) ? <WarningIconButton onClick={...} /> : null),
+  }}
+/>
+```
+- Keys are column `key`s (matching `columns[].key`, e.g. `tax`). Each value is `(row) => ReactNode | null` — return `null`/`undefined` to render nothing extra for that row.
+- `InlineLinesPanel`'s `renderLineCell` only wraps the cell's own content (`EditCell`/`ReadCell`) in the extra flex row when a badge is ACTUALLY returned for that row — a column with no badge, or a caller that never passes `cellBadges` at all (every existing caller before this slot existed), renders byte-for-byte the same single-child markup as before.
+- Rendered in BOTH read and edit mode — unlike `rowActions` (hover/edit-only, gated by `!isDocumentReadOnly`), a `cellBadges` renderer decides its own visibility per row/mode; nothing in `InlineLinesPanel` itself gates it on hover or document read-only state.
+
+**Real example — "tax needs SIF configuration" trigger (ETP-4888 point 5, design-polish round):** on `sales-invoice`'s and `purchase-invoice`'s lines grid, the `tax` cell shows an amber warning icon (`text-status-warning-foreground` — the same warning-color token `SifTab.jsx`'s `PILL_CLS.pending` uses) right next to the tax value itself, ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII (which has nothing to configure at tax level; see `docs/decisions-reference.md`'s `lineTaxSifTrigger` row). Clicking it opens `TaxSifModal.jsx` (see `docs/ui-design-guidelines.md`-compliant modal: rounded card, tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer). Unlike the superseded `rowActions` placement, this badge is NOT gated by hover or `isDocumentReadOnly` — the shortcut edits the TAX record, not the invoice, so it stays actionable even on a completed invoice.
 
 ```
 tools/app-shell/src/windows/custom/shared/
-  useTaxSifLineRowActions.jsx  // hook: builds `rowActions` (§14c shape) + the modal JSX
-  TaxSifModal.jsx              // the quick-fix dialog itself (EntityForm entity="tax")
+  useTaxSifLineRowActions.jsx  // hook: builds `cellBadges.tax` (§14e shape) + the modal JSX
+  TaxSifModal.jsx              // the quick-fix dialog (own vertical layout, EnumSearchSelect per field)
   TaxSifField.jsx              // pre-existing; selectSifFields() is reused, not duplicated
+tools/app-shell/src/components/contract-ui/
+  EnumSearchSelect.jsx         // generic searchable code+description picker for static enum fields
 ```
 
 The "missing" check needs each row's tax record without an extra per-tax fetch. Instead of enriching every invoice line's own GET response, the hook calls the SAME tax selector (`{apiBaseUrl}/lines/selectors/C_Tax_ID`) ONCE per invoice with a large page size — the backend (`InvoiceLineTaxSifSelectorPolicy` in `com.etendoerp.go`, a `SelectorEnrichmentPolicy`) projects `taxExempt`/`notTaxable` plus the TBAI/Verifactu key columns onto each selector item, scoped to exactly these two windows via `NeoSelectorService.SOURCE_WINDOW_ID_PARAM` (AD_Window_Id `167`/`183`) so no other window's tax/product selectors are affected. The frontend then re-runs `selectSifFields()` against each enriched tax row and flags it "missing" when any resolved field's value is blank — the same pure function decides WHICH fields apply on both the Tax window's own form and this modal, so the business rule is never duplicated.
+
+**`DetailView`'s `lineCellBadges` prop** mirrors §14d's `lineRowActions` exactly: `<DetailTable ... cellBadges={lineCellBadges} />`, defaulting to `{}` so every window that doesn't pass it renders byte-for-byte the same as before this prop existed. `sales-invoice`/`purchase-invoice`'s `index.jsx` hand-wire it from `useTaxSifLineRowActions`'s `cellBadges` return value, same convention as §14d.
 
 ---
 

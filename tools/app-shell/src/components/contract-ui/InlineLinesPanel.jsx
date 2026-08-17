@@ -254,7 +254,7 @@ function renderLineCell({
   col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
   visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
-  locale, t, ui, onCommit, onCellClick,
+  locale, t, ui, onCommit, onCellClick, cellBadges,
 }) {
   const isTrailing = col === trailingColumn;
   // The trailing column is hidden when the action strip is showing,
@@ -277,6 +277,45 @@ function renderLineCell({
   };
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
+  const cellContent = editable ? (
+    <EditCell
+      // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
+      // its defaultValue whenever a callout updates this field externally
+      // (e.g., listPrice changes after the user picks a different product).
+      // The user's currently-focused cell never has its value mutated mid-typing,
+      // so this does not interrupt their input.
+      key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
+      col={col}
+      row={row}
+      value={row[col.key]}
+      displayLabel={resolveIdentifier(row, col.key)}
+      autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
+      entity={entity}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      selectorContext={selectorContext}
+      isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
+      onCommit={(val, extras) => onCommit(row, col, val, extras)}
+      ui={ui}
+      data-testid="EditCell__3b7ec2" />
+  ) : (
+    <ReadCell
+      row={row}
+      col={col}
+      locale={locale}
+      t={t}
+      ui={ui}
+      data-testid="ReadCell__3b7ec2" />
+  );
+
+  // ETP-4888 — optional per-column trailing badge (e.g. the amber "needs SIF
+  // config" trigger next to an invoice line's tax value), see `cellBadges` on
+  // InlineLinesPanel itself. Only wraps cellContent in the extra flex row when
+  // this column actually has a badge to show for this row — every other column,
+  // and every caller that doesn't pass `cellBadges` at all, renders byte-for-byte
+  // the same single-child markup as before this slot existed.
+  const badge = cellBadges?.[col.key]?.(row) ?? null;
+
   return (
     <div
       key={col.key}
@@ -285,36 +324,12 @@ function renderLineCell({
       data-cell-key={col.key}
       onClick={cellClickable ? () => onCellClick(row, idx, col) : undefined}
     >
-      {editable ? (
-        <EditCell
-          // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
-          // its defaultValue whenever a callout updates this field externally
-          // (e.g., listPrice changes after the user picks a different product).
-          // The user's currently-focused cell never has its value mutated mid-typing,
-          // so this does not interrupt their input.
-          key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
-          col={col}
-          row={row}
-          value={row[col.key]}
-          displayLabel={resolveIdentifier(row, col.key)}
-          autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
-          entity={entity}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          selectorContext={selectorContext}
-          isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
-          onCommit={(val, extras) => onCommit(row, col, val, extras)}
-          ui={ui}
-          data-testid="EditCell__3b7ec2" />
-      ) : (
-        <ReadCell
-          row={row}
-          col={col}
-          locale={locale}
-          t={t}
-          ui={ui}
-          data-testid="ReadCell__3b7ec2" />
-      )}
+      {badge ? (
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          <div className="min-w-0 flex-1 truncate">{cellContent}</div>
+          {badge}
+        </div>
+      ) : cellContent}
     </div>
   );
 }
@@ -673,6 +688,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // through the exact same mechanism, so it and any future caller-supplied
   // action share one code path.
   rowActions = [],
+  // ETP-4888 — generic per-column trailing-badge extension slot: an optional map
+  // of `{ [columnKey]: (row) => ReactNode | null }`. Any caller can render a small
+  // icon/badge right next to a specific column's own value (read AND edit mode —
+  // see `renderLineCell`'s `cellBadges` usage), instead of grouping it into the
+  // unrelated hover `rowActions` strip at the far right of the row. Returning
+  // `null`/`undefined` for a given row renders nothing extra for that cell — the
+  // wrapping layout itself is only added when a badge is actually present (see
+  // `renderLineCell`), so a caller that never returns a badge (or never passes
+  // this prop at all — every existing caller today) renders byte-for-byte the
+  // same as before this slot existed.
+  cellBadges = {},
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1121,7 +1147,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
               visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
-              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick,
+              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick, cellBadges,
             }))}
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells

@@ -23,7 +23,7 @@ import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 // Mirrors artifacts/purchase-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
 // point 5, docs/decisions-reference.md). See sales-invoice/index.jsx's identical constant
-// for the full rationale: DetailView's `lineRowActions` prop has no generate-frontend.js
+// for the full rationale: DetailView's `lineCellBadges` prop has no generate-frontend.js
 // wiring, so it's hand-added on the `<HeaderPage>` call like this window's other extras
 // (topbarRight, sidePanel, notesField below). Keep in sync with the decisions.json flag.
 const LINE_TAX_SIF_TRIGGER_ENABLED = true;
@@ -135,7 +135,7 @@ export default function PurchaseInvoiceWindow(props) {
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   const breadcrumb = 'Purchases / Purchase Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
-  const { rowActions: taxSifRowActions, modal: taxSifModal } = useTaxSifLineRowActions({
+  const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
     apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
   });
 
@@ -196,7 +196,7 @@ export default function PurchaseInvoiceWindow(props) {
           onAfterSave={true}
           refetchAfterSave={true}
           transformRecord={applyDocTypeLabels}
-          lineRowActions={taxSifRowActions}
+          lineCellBadges={taxSifCellBadges}
           data-testid="HeaderPage__c20e53" />
         {contactPortal}
         {taxSifModal}

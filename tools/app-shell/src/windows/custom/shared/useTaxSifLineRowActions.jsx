@@ -50,8 +50,15 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  * `taxExempt`/`notTaxable` + the TBAI/Verifactu key columns by
  * `InvoiceLineTaxSifSelectorPolicy` (com.etendoerp.go) — instead of one fetch per
  * distinct tax on the grid, builds a per-tax-id completeness map, and exposes an
- * `InlineLinesPanel`-shaped `rowActions` entry that only shows when the row's own tax
- * is missing its key. Also returns the modal JSX to render (portaled by the caller).
+ * `InlineLinesPanel`-shaped `cellBadges.tax` renderer that only renders when the row's
+ * own tax is missing its key. ETP-4888 design-polish round moved the trigger OUT of the
+ * generic hover `rowActions` strip (grouped far right with Edit/Delete, neutral gray,
+ * only visible on hover) and INTO this per-column badge slot instead: it now renders
+ * inline right next to the tax value itself, in the shared warning-color token
+ * (`text-status-warning-foreground` — see SifTab.jsx's `PILL_CLS.pending` for the same
+ * token used elsewhere), and is not gated by hover/`isDocumentReadOnly` — the SIF
+ * shortcut edits the TAX record, not the invoice, so it stays actionable even once the
+ * invoice itself is completed. Also returns the modal JSX to render (portaled by the caller).
  *
  * The tax selector endpoint fails CLOSED — it returns an empty catalog (not the
  * full one) when called without the same context params `InlineSearchCombo` sends
@@ -73,7 +80,7 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  * @param {string|null} [args.windowCategory] window category (`'sales'` | `'purchases'`) —
  *   forwarded to `buildLineSelectorContext`, which derives `isSOTrx`/`IsSOTrx` from it
  *   the same way `DetailView.jsx` does. Sales windows resolve to `Y`, purchase windows to `N`.
- * @returns {{ rowActions: Array<object>, modal: import('react').ReactNode }}
+ * @returns {{ cellBadges: object, modal: import('react').ReactNode }}
  */
 export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null }) {
   const ui = useUI();
@@ -122,16 +129,31 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     return () => { cancelled = true; };
   }, [apiBaseUrl, token, enabled, recordId, windowCategory]);
 
-  const rowActions = useMemo(() => {
-    if (!enabled) return [];
-    return [{
-      key: 'taxSifTrigger',
-      icon: AlertTriangle,
-      tooltip: ui('taxSif.trigger.tooltip'),
-      show: (row) => isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui }),
-      onClick: (row) => setModalTaxId(row?.tax ?? null),
-      testId: 'line-action-tax-sif',
-    }];
+  // ETP-4888 design-polish round — renders the trigger inline next to the "tax"
+  // column's own value (InlineLinesPanel's `cellBadges` slot) instead of the
+  // generic hover `rowActions` strip. `stopPropagation` keeps the click from also
+  // bubbling into the cell's own click-to-edit handler (InlineLinesPanel's
+  // `renderLineCell` wraps this in the same per-cell div that toggles row-edit
+  // mode on click).
+  const cellBadges = useMemo(() => {
+    if (!enabled) return {};
+    return {
+      tax: (row) => {
+        if (!isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui })) return null;
+        return (
+          <button
+            type="button"
+            aria-label={ui('taxSif.trigger.tooltip')}
+            title={ui('taxSif.trigger.tooltip')}
+            onClick={(e) => { e.stopPropagation(); setModalTaxId(row?.tax ?? null); }}
+            className="shrink-0 rounded-full p-0.5 text-status-warning-foreground hover:bg-status-warning/20"
+            data-testid="line-action-tax-sif"
+          >
+            <AlertTriangle className="h-4 w-4" data-testid="AlertTriangleIcon__taxSifBadge" />
+          </button>
+        );
+      },
+    };
   }, [enabled, taxById, profile, verifactuRecord, ui]);
 
   const modal = modalTaxId ? (
@@ -150,5 +172,5 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       data-testid="TaxSifModal__useTaxSifLineRowActions" />
   ) : null;
 
-  return { rowActions, modal };
+  return { cellBadges, modal };
 }

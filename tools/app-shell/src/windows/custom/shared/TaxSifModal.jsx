@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { EntityForm } from '@/components/contract-ui';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +7,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
-import { useUI, useLocaleSwitch } from '@/i18n';
+import { EnumSearchSelect } from '@/components/contract-ui/EnumSearchSelect.jsx';
+import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { fetchById, patchById } from '@/components/related-documents/helpers.js';
@@ -30,12 +30,14 @@ const TAX_ENTITY_NAME = 'tax';
  *
  * Reuses `selectSifFields()` (the same pure function `TaxSifField.jsx` uses on
  * the Tax window's own header form) to pick the same 0–2 applicable fields, then
- * renders them through a standalone `EntityForm entity="tax"` — NOT
- * `renderAsFragment`/`inlineInHeaderCard` like `TaxSifField` (those splice into
- * an existing header grid; this modal owns its own boxed form). SII never
- * reaches this modal in practice: `selectSifFields()` returns `[]` for it, so
- * the row-action trigger that opens this modal (see
- * `useTaxSifLineRowActions.jsx`) never shows for an SII-only tax.
+ * renders each one directly with `EnumSearchSelect` — NOT through `EntityForm`
+ * like `TaxSifField` does (that component splices bare grid cells into an
+ * existing header grid; this modal owns its own vertical layout: a single-line
+ * label above a searchable code+description picker, so the label never wraps
+ * regardless of which of the 3 fiscal systems' label text is longest — ETP-4888
+ * design polish round). SII never reaches this modal in practice:
+ * `selectSifFields()` returns `[]` for it, so the row-action trigger that opens
+ * this modal (see `useTaxSifLineRowActions.jsx`) never shows for an SII-only tax.
  *
  * @param {object}   props
  * @param {string|null} props.taxId      C_Tax_ID of the record to edit. Modal is open
@@ -51,7 +53,6 @@ const TAX_ENTITY_NAME = 'tax';
  */
 export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved }) {
   const ui = useUI();
-  const { locale } = useLocaleSwitch();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
   const { profile, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
@@ -123,16 +124,19 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     }
   }, [editing, original, selectedFields, taxId, token, apiBaseUrl, onSaved, onClose, ui]);
 
-  const labelOverrides = useMemo(() => ({
-    [locale]: Object.fromEntries(selectedFields.map((f) => [f.column, f.label])),
-  }), [locale, selectedFields]);
+  // Drives the Save button's disabled state: nothing to persist until at least one
+  // selected field's value actually differs from the record as originally loaded.
+  const hasChanges = useMemo(
+    () => selectedFields.some((field) => editing?.[field.key] !== original?.[field.key]),
+    [selectedFields, editing, original],
+  );
 
   return (
     <Dialog open={Boolean(taxId)} onOpenChange={handleOpenChange} data-testid="Dialog__taxsifmodal">
-      <DialogContent className="max-w-md" data-testid="tax-sif-modal">
+      <DialogContent className="max-w-lg rounded-2xl" data-testid="tax-sif-modal">
         <DialogHeader data-testid="DialogHeader__taxsifmodal">
           <DialogTitle
-            className="text-lg font-semibold text-[hsl(var(--foreground))]"
+            className="text-lg font-semibold text-foreground"
             data-testid="DialogTitle__taxsifmodal">
             {ui('taxSif.modal.title')}
           </DialogTitle>
@@ -145,20 +149,39 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
         ) : (
           <>
             {original?.name && (
-              <p className="text-sm text-muted-foreground -mt-2 mb-2">{original.name}</p>
+              <span
+                className="inline-flex w-fit items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                data-testid="tax-sif-modal-tax-badge"
+              >
+                {original.name}
+              </span>
             )}
-            <EntityForm
-              entity={TAX_ENTITY_NAME}
-              fields={selectedFields}
-              data={editing}
-              onChange={handleChange}
-              catalogs={{}}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              displayLogic={{ readOnly: {}, visibility: {} }}
-              layout="horizontal"
-              labelOverrides={labelOverrides}
-              data-testid="TaxSifModal__EntityForm" />
+
+            <div className="space-y-4">
+              {selectedFields.map((field) => (
+                <div key={field.key} className="space-y-1.5">
+                  <label
+                    htmlFor={`tax-sif-field-${field.key}`}
+                    className="block whitespace-nowrap text-sm font-medium text-foreground"
+                    data-testid={`tax-sif-modal-label-${field.key}`}
+                  >
+                    {field.label}
+                  </label>
+                  <EnumSearchSelect
+                    id={`tax-sif-field-${field.key}`}
+                    options={field.options}
+                    value={editing?.[field.key]}
+                    onChange={(value) => handleChange(field.key, value)}
+                    placeholder={ui('taxSif.modal.searchPlaceholder')}
+                    ui={ui}
+                    testId={`tax-sif-modal-field-${field.key}`} />
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs italic text-muted-foreground" data-testid="tax-sif-modal-caption">
+              {ui('taxSif.modal.caption')}
+            </p>
           </>
         )}
 
@@ -176,7 +199,7 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
             type="button"
             data-testid="tax-sif-modal-save"
             onClick={handleSave}
-            disabled={saving || loading}
+            disabled={saving || loading || !hasChanges}
             className="px-5 py-2 text-sm font-medium text-primary-foreground bg-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--foreground))] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? ui('loading') : ui('save')}

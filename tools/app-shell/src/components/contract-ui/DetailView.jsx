@@ -1339,7 +1339,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [], lineRowActions = [], // ETP-4888: generic per-row action slot forwarded to DetailTable.rowActions (docs/ui-customization.md)
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -3515,7 +3515,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions}
+                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{

@@ -24,7 +24,7 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 // Mirrors artifacts/sales-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
-// point 5, docs/decisions-reference.md). `DetailView`'s `lineRowActions` prop is a
+// point 5, docs/decisions-reference.md). `DetailView`'s `lineCellBadges` prop is a
 // plain generic passthrough with NO generate-frontend.js wiring (schema_forge_core is
 // out of reach for this window-specific feature) — same convention this file already
 // uses for bottomSection/topbarRight/notesField below, extra props the generated
@@ -140,7 +140,7 @@ export default function SalesInvoiceWindow(props) {
   const { pdfUrl: emailPdfUrl, loading: emailPdfLoading } = useInvoicePdf(emailRow?.id ?? null, apiBaseUrl, token);
   const breadcrumb = 'Sales / Sales Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
-  const { rowActions: taxSifRowActions, modal: taxSifModal } = useTaxSifLineRowActions({
+  const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
     apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
   });
 
@@ -190,7 +190,7 @@ export default function SalesInvoiceWindow(props) {
           onAfterSave={true}
           refetchAfterSave={true}
           breadcrumb={breadcrumb}
-          lineRowActions={taxSifRowActions}
+          lineCellBadges={taxSifCellBadges}
           data-testid="HeaderPage__c01c21" />
         {contactPortal}
         {taxSifModal}
