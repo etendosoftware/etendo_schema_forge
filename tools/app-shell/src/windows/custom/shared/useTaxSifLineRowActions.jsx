@@ -91,7 +91,15 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const headerRecord = headerResponse.ok ? await headerResponse.json() : null;
+      const headerJson = headerResponse.ok ? await headerResponse.json() : null;
+      // NEO envelopes single-record GETs as { response: { data: [ {...} ], status } } —
+      // same unwrapping useFiscalConfig.js's fetchRecord() already does. Reading the
+      // envelope itself (instead of .response.data[0]) silently produced an object with
+      // none of the expected keys, so buildLineSelectorContext's headerRecord branch
+      // never matched and only parentId/isSOTrx (which don't read headerRecord) made it
+      // into the URL — this was the actual reason priceList/DateInvoiced/
+      // C_BPartner_Location_ID/currency were still missing after the first ETP-4888 fix.
+      const headerRecord = headerJson?.response?.data?.[0] ?? null;
       if (cancelled) return;
 
       const selectorContext = buildLineSelectorContext({ windowCategory, parentId: recordId, headerRecord });
