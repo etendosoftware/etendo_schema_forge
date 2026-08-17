@@ -98,7 +98,7 @@ just those changes, (3) QA, (4) hand the human the manual-test checklist.**
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
 | B6 | Widen ETP-4852's overlap-corruption fix to protect ALL roles inheriting from a touched template, not just the one actively being composed | ✅ DONE — all 5 rounds live-confirmed by the human (2026-08-16/17) | `com.etendoerp.go` commit `d8dc97976a49a7da4d9e857420110556b9d55c55` fixed the ADD-side ownership corruption (adding a 2nd overlapping template) — JUnit 5/5 + 3/3 green, AND live-confirmed by the human in Classic. Commit `58f114ea` closed the REMOVE-side ownership gap — JUnit 6/6 + 3/3 green, human's real role verified untouched via `psql`, deployed and live-confirmed by the human. Commit `e8b6ffc6` closed a 4th gap (silently WRONG most-permissive-wins result outside `assignTemplateRoles`) — JUnit 7/7 + 3/3 green, deployed, live-confirmed by the human. **Commit `978e23e2` (this round) closes a 5th gap the human found immediately after, on the REMOVE direction of the SAME scenario: `widenInheritedAccessLevelIfNeeded` (round 4) corrected the visible access level but never corrected `InheritedFrom` on the same row, so removing the template that actually justified the widened value never re-triggered re-derivation (confirmed live via `psql`: `isreadwrite='Y'` but `inherited_from` still pointed at the OTHER, non-justifying template) — the row stayed stuck at full forever.** Fix: `widenInheritedAccessLevelIfNeeded` now also repoints `InheritedFrom` to whichever OTHER active template actually justifies the widened value, via the same `event.setCurrentState` mechanism already used for the level and for ownership; `anyOtherActiveTemplateGrantsFullAccess` (boolean) was changed into `findActiveTemplateGrantingFullAccess` (returns the justifying `Role`), and `findActiveTemplatesFor`'s underlying query now orders by `AD_Role_Inheritance.SeqNo` DESCENDING so the tie-break (2+ equally-responsible templates) deterministically picks the highest-sequence one — mirroring core's own `RoleInheritanceManager#propagateDeletedAccess` heuristic. **A second, same-flush race was found and fixed while verifying this empirically** (JUnit red before the fix): the freshly re-derived row's widen-check, nested inside the SAME flush that is still mid-way through deleting the just-removed template's own `RoleInheritance` row, could still see that row as `active=true` (Hibernate runs Deletions after Insertions in its default action-queue order) and immediately re-widen the row right back, undoing the removal within the same flush. Closed via a new `TEMPLATES_BEING_REMOVED` thread-local marker (populated by `guardRemovedInheritance`, consulted by `findActiveTemplatesFor`, cleared once per transaction via a new `onTransactionComplete(TransactionCompletedEvent)` observer — safe because a marker surviving until transaction end can only make the guard MORE conservative, never less correct). New JUnit test `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` (bystander role: full template added first, read-only second — the exact order that reproduces the bookkeeping bug — asserts `InheritedFrom` is repointed to the justifying template, THEN removes that template's inheritance and asserts the window downgrades to the remaining template's read-only level, not stuck at full). Also updated the pre-existing round-3 test's now-stale "last write wins" sanity assertion, which had been silently encoding the round-5 bug's own symptom as expected behavior (InheritedFrom==Sales) — now correctly expects InheritedFrom==Finance, consistent with round 5's immediate repoint. Full suite: **`UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 green**, fresh `--rerun-tasks` run from `etendo` root. Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reverified untouched via read-only `psql`. Also confirmed, via read-only `psql` against the human's own live `ClassicDebug` role (`77E57880608E49D9966BC7C87F37A786`), that the CURRENT (pre-fix-deploy) live state exhibits exactly the reported bug (`isreadwrite='Y'`, `inherited_from` = `ClassicTemplateTest1Read`, not `ClassicTemplateTest2Broad`, which had already been removed) — confirms the repro is real and matches this fix's target. `./gradlew smartbuild` + Tomcat restart completed (`Server startup` confirmed in logs), deployed live — **human's own Classic re-confirmation is the last acceptance step, not yet performed: re-add `ClassicTemplateTest2Broad`'s inheritance to `ClassicDebug` (full, confirms round 4 still works) → remove it again → Business Partner must now correctly downgrade to `ClassicTemplateTest1Read`'s read-only level, not stay stuck at full.** See "B6 Findings — InheritedFrom bookkeeping fix (developer, 2026-08-16)" below. |
-| REVIEW | Alex | ❌ REJECT (2026-08-17) — **3 blockers FIXED by DEV, ready for re-review** | 3 blockers, 0 warnings, 2 suggestions (see "REVIEW Findings — Full Re-Review" below). **All 3 blockers closed same-day (DEV, 2026-08-17) — docs/cleanup only, no logic changes; see "Blockers Closed" note under that section for commit hashes.** Backend: `WindowAccessOverlapCorruptionGuard`/`UserRoleCompositionService`/webhooks/dispatcher read in full — sound design, thoroughly reasoned; `UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 independently re-confirmed with a fresh `--rerun-tasks` run (not just UP-TO-DATE cache). Frontend: targeted Vitest 145/145, Playwright `user-role-assignment.mocked.spec.js` 7/7, `sf-validate-pipeline --scope=user` OK, i18n keys complete in both locales. **Blockers are all documentation/cleanup debt, not functional bugs:** (1) orphaned `UserRolesTable.jsx`/`UserRolesForm.jsx` still committed in `artifacts/user/generated/web/user/` despite `userRoles` being `exclude: true`d since DEV wave 6 — Regeneration Invariant violation; (2) `docs/neo-headless.md` has zero mention of B6's `WindowAccessOverlapCorruptionGuard` — the exact gap the plan's own Status banner already flagged as owed; (3) `docs/generated-custom-windows/user.md` is stale/actively wrong in two places (role-catalog source still says `SFRolesOverview` post-wave-7 repoint; Gap assessment + Manual verification step 7 tell QA to confirm Email Configuration is absent when the generated `UserPage.jsx` now mounts it). Fix is DOCS/cleanup only — no code logic changes needed; re-review should be fast once done. |
+| REVIEW | Alex | ❌ REJECT (2026-08-17) — **re-review found B1/B2 closed clean, B3 only partially closed (1 new blocker: a self-contradicting doc line)** | See "REVIEW Findings — Re-Review After Blocker Fixes" below for the full re-review. Original 3 blockers, 0 warnings, 2 suggestions (see "REVIEW Findings — Full Re-Review" below). B1 (orphaned files) and B2 (`WindowAccessOverlapCorruptionGuard` docs) independently re-verified CLOSED — files gone, `sf-validate-pipeline --scope=user` OK, doc section cross-checked line-by-line against the real class and test files, both JUnit suites (8/8 + 3/3) re-confirmed green on a fresh `--rerun-tasks` run. B3 was only partially closed: the two spots REVIEW originally cited (role-catalog attribution, Gap assessment/step 7 Email Configuration absence) are correctly fixed, but the SAME fix commit (`b020f8c06`) left a third, previously-unflagged sentence in the "Window shape" bullet (`user.md:25`) uncorrected — it still asserts "no child entity is mounted on the detail page," directly contradicted by the Gap assessment/Automated evidence sections 20 lines below in the same file (and by the real `UserPage.jsx`, confirmed `detailEntity="emailConfiguration"`). New blocker: [B4]. Commit `63ac8be60` (core-proposal doc) confirmed genuinely inert — discussion-only, all code marked `[proposed]`/not implemented. Frontend Vitest 145/145 and the regression test re-confirmed green; no other regressions found in the fix-commit diff. |
 | QA | Sentinel | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (2026-08-14, agentId `a3f39375a6133d5c0`) | Full suites re-confirmed green (Vitest 646/12011/0 failed, matches plan exactly; Playwright `user-role-assignment.mocked.spec.js` 7/7). DB reference data (GOClient `ad_client_id`, all 4 template role ids, all 5 test usernames) independently re-verified against the live `etendogoclean` DB — all still accurate, no drift. **Could NOT complete the live browser-driven pass** (assign roles to a real user via the UI, save, reload) — blocked on a missing plaintext password for `goadmin@etendo.software`/any GOClient user (not retrievable; this repo's own `E2E_PASSWORD`/`onboarding-setup` mechanism only self-registers a BRAND NEW tenant with no ETP-4852 template roles, not GOClient). Flagged as a standing, agent-unfixable credentials gap — same class as REVIEW's own Figma-access gap — NOT a blocker. **Adapted the most-permissive-wins DB verification to the Java-integration level instead:** found the exact scenario already has real-DB (`WeldBaseTest`) regression coverage from prior ETP-4852/4878 work (`UserRoleCompositionServiceOverlapIntegrationTest`), confirmed ETP-4906's B2 diff never touches that write path (purely additive read methods), then closed a real gap the existing suite missed — added `testGetAppliedTemplateRoleIdsReflectsARealOverlappingComposition` (same file) proving the NEW B2 read method reflects a REAL overlapping composition's most-permissive-wins result, not just a mocked one. `:compileTestJava` confirmed it compiles; a full `./gradlew test` run was kicked off in background to confirm it passes (still running — same tooling limitation REVIEW hit, not waited on further). **Follow-up live pass (credentials supplied by the human, 2026-08-14):** logged in as `goadmin@etendo.software` for real against `make dev`; found a real DB-state gap unrelated to this ticket's code (Finance/Sales currently `AD_Role.IsTemplate='N'` in this environment — needs `update.database` or a manual fix); retried with Purchasing+Inventory (both `IsTemplate='Y'`) and **confirmed the write path + Guardar-enablement fix live against the real DB** (personal role, `AD_Role_Inheritance`, `AD_User_Roles`, `Default_Ad_Role_ID` all correct after save). **Could not confirm reload/grid persistence** — root-caused to `SFUserRoleAssignments` (B2's new webhook) returning 404 on the backend currently serving this environment, i.e. `com.etendoerp.go` needs a rebuild/redeploy to pick up commits `bc2b6c8c`/`fba31d67` — an infra gap, not a code defect (sibling webhooks like `SFRolesOverview` work fine). See "Live Browser Pass Follow-Up" under "QA Findings" below for full detail. Cleaned up test user + deleted throwaway scripts. **QA is done. Recommend: redeploy `com.etendoerp.go` + re-run the live pass once more before treating this as fully closed; otherwise proceed to DOCS (Sage) — DOCS already ran (see commit `acf7e78cf`).** |
 
 **If resuming this ticket cold (e.g. a fresh session after running out of tokens):**
@@ -1544,6 +1544,108 @@ while investigating any of them. Ready for a scoped REVIEW re-check.
 `AD_Window_Access` overlap-corruption fix proposal doc referenced earlier in this plan — was also
 committed during this pass since it was sitting dirty in the tree; unrelated to the 3 blockers
 above, not gated on REVIEW. `etendo_schema_forge` commit `63ac8be60`.)
+
+## REVIEW Findings — Re-Review After Blocker Fixes (Alex, 2026-08-17)
+
+**VERDICT: REJECT**
+
+```
+BLOCKERS (1):
+- [B4] docs/generated-custom-windows/user.md:25 — the "Window shape" bullet still reads
+  "master-child in the contract (`user` + `emailConfiguration`), but no child entity is
+  mounted on the detail page." This is now FALSE and self-contradicting within the SAME
+  document: the "Gap assessment" section (line 46) and "Automated evidence" (line 75), both
+  corrected by this exact fix commit (`b020f8c06`), correctly state `UserPage.jsx` mounts
+  `emailConfiguration` as `detailEntity` with `DetailTable`/`DetailForm`. Independently
+  confirmed against the real generated file: `grep -n "detailEntity\|DetailTable" UserPage.jsx`
+  shows `detailEntity="emailConfiguration"` at line 253, `DetailTable={EmailConfigurationTable}`
+  at line 255. `git show b020f8c06 -- docs/generated-custom-windows/user.md` confirms the diff
+  touched this exact line (to drop the stale mention of the now-deleted `UserRolesTable.jsx`/
+  `UserRolesForm.jsx` orphans) but left the "no child entity is mounted" clause untouched —
+  the fix was partial, not a miss of a different spot. This is the identical bug class the
+  original B3 blocker was raised for (a manual-verification/description doc asserting the
+  ABSENCE of a feature the generated code actually mounts), just a third location the original
+  pass didn't catch, now exposed once the other two were fixed and made it inconsistent with
+  its own neighbors. `Detail behavior` (line 27) is also silent on `emailConfiguration` but
+  doesn't affirmatively claim absence, so it's not counted as a second instance — only line 25's
+  explicit "but no child entity is mounted on the detail page" is factually wrong.
+  Fix: rewrite line 25 to state `emailConfiguration` IS the mounted detail child (matching
+  lines 46/75), consistent with the rest of the same document.
+
+WARNINGS (0)
+
+SUGGESTIONS (0) — S1/S2 from the prior pass are unchanged/unaddressed but were never blocking;
+not re-litigated here since this pass is scoped to the 3 blocker fixes.
+```
+
+**Verification performed on B1 (orphaned files) — CLOSED:**
+- `ls artifacts/user/generated/web/user/UserRolesTable.jsx artifacts/user/generated/web/user/UserRolesForm.jsx` — both gone (`No such file or directory`).
+- `git show --stat 9c58d4e99` — confirms exactly those 2 files deleted, 51 lines removed, nothing else touched.
+- Repo-wide grep for `UserRolesTable`/`UserRolesForm` (excluding `.git`/`node_modules`) — only 2 hits, both expected: the regression test's own negative assertion (`artifacts/__tests__/etp-4906-user-roles-tab-exclusion.test.js:62`, matching against their ABSENCE) and `user.md:25`'s past-tense mention that they were deleted (itself fine — see B4 above, the problem on that line is a different clause).
+- `npx sf-validate-pipeline --scope=user` → `Pipeline validation: OK`.
+- `node --test artifacts/__tests__/etp-4906-user-roles-tab-exclusion.test.js` → 3/3 pass, freshly re-run.
+
+**Verification performed on B2 (`WindowAccessOverlapCorruptionGuard` docs) — CLOSED:**
+- `grep -n "WindowAccessOverlapCorruptionGuard" docs/neo-headless.md` (in `com.etendoerp.go`) — 4 hits: the new §8d subsection (lines 1437–1500) plus 2 refreshed §9 testing-table rows plus a §9 lead-in sentence.
+- Read the full new subsection against the real class
+  (`src/com/etendoerp/go/roles/WindowAccessOverlapCorruptionGuard.java`) line by line: the 4
+  guarded triggers, the `@Priority` "runs before core's unprioritized observers" ordering claim,
+  the `TEMPLATES_BEING_REMOVED` `ThreadLocal` + `TransactionCompletedEvent` cleanup mechanism, and
+  the `widenInheritedAccessLevelIfNeeded` method name all match the real source exactly
+  (`grep -n "@Priority\|TEMPLATES_BEING_REMOVED\|widenInheritedAccessLevelIfNeeded\|TransactionCompletedEvent"` on the class confirms every claim). Not superficial — this is an accurate,
+  detailed summary, not a restated javadoc pointer.
+- The refreshed §9 test-count claims ("8 tests" / "3 tests") match the real files:
+  `grep -c "@Test" UserRoleCompositionServiceOverlapIntegrationTest.java` → 8;
+  `UserRoleCompositionServiceRealAccessControlIntegrationTest.java` → 3.
+- `cd etendo && ./gradlew :test --tests "com.etendoerp.go.roles.UserRoleCompositionServiceOverlapIntegrationTest" --tests "com.etendoerp.go.roles.UserRoleCompositionServiceRealAccessControlIntegrationTest" --rerun-tasks` → `BUILD SUCCESSFUL`; JUnit XML reports independently confirm `tests="8" failures="0" errors="0"` and `tests="3" failures="0" errors="0"`, freshly timestamped 2026-08-17 04:24 UTC (not a cached UP-TO-DATE result — `--rerun-tasks` forces real execution, same discipline as the prior pass).
+
+**Verification performed on B3 (`user.md` stale claims) — PARTIALLY CLOSED, see B4 above:**
+- Role-catalog attribution: `user.md` lines 15 and 40 now correctly say `fetchTemplateRoles()`/
+  `SFSystemRoleTemplates`, cross-checked against `AssignTemplateRolesControl.jsx` and
+  `UserRolesTab.jsx` source directly — CORRECT, matches the original B3 finding's fix
+  instruction exactly.
+- Email Configuration mounted: Gap assessment (line 46-47), Automated evidence (line 75), and
+  Manual verification step 7 (line 62) now all correctly state `emailConfiguration` is mounted
+  with the SMTP test process — cross-checked against `UserPage.jsx`'s
+  `detailEntity`/`DetailTable`/`DetailForm`/`detailProcesses` — CORRECT.
+- BUT the "Window shape" bullet (line 25), touched by the same commit to drop a different stale
+  mention, still contains the pre-existing "no child entity is mounted on the detail page"
+  clause, which the Gap assessment fix two paragraphs later directly contradicts — this is B4.
+
+**Commit `63ac8be60` (core-proposal doc) — confirmed inert, not scope creep:**
+- Read `docs/etendo-ad/role-inheritance-window-access-overlap-core-proposal.md` in full (177
+  lines). Every claim is explicitly tagged `[confirmed]` (verified against real core source,
+  read-only) or `[proposed]` (a code snippet offered as discussion material, not applied
+  anywhere) — no `[proposed]` snippet exists outside this markdown file. The doc's own opening
+  paragraph and closing section explicitly state Schema Forge is not waiting on it and the
+  accepted path remains the module-level `com.etendoerp.go` fix (Task B6). `git show 63ac8be60
+  -- docs/etendo-ad/index.md` shows only a 1-line table-row addition linking to the new doc.
+  Genuinely inert — a discussion/proposal doc, touches no shipped code path. Not flagged.
+
+**Sanity check — nothing else changed unexpectedly:**
+`git diff --stat 463eb9ffe..e7a13125f` (the range covering exactly the 4 post-original-REVIEW
+commits, excluding the plan doc itself) touches only: the 2 deleted orphan files, the new
+core-proposal doc + its 1-line index entry, and 15 changed lines in `user.md` — exactly the
+scope of the 3 blocker fixes, no unrelated source/generated/test file touched.
+
+**Frontend regression check:**
+`cd tools/app-shell && npx vitest run src/windows/custom/user/
+src/components/contract-ui/__tests__/DetailView.saveActions.vitest.js
+src/lib/__tests__/userRoleAssignmentsApi.vitest.js` → 9 files, 145/145 passed (unchanged from
+the prior pass — expected, since none of the 4 fix commits touch frontend source, only
+generated/docs).
+
+**Next steps:** Single-line doc fix in `user.md:25` — rewrite the "Window shape" bullet to state
+`emailConfiguration` IS the mounted detail child, matching lines 46/75 of the same file. No code,
+test, or other doc changes needed. Recommend a scoped re-check of just that one line once fixed.
+
+**[B4] Fixed (DEV, 2026-08-17) — commit `3ed4bc7`.** Rewrote the "Window shape" bullet in
+`docs/generated-custom-windows/user.md:25`: it now states `emailConfiguration` is mounted as the
+detail child (`detailEntity="emailConfiguration"`, `DetailTable={EmailConfigurationTable}`,
+`DetailForm={EmailConfigurationForm}`), matching the Gap assessment (line 46) and Automated
+evidence (line 75) sections it previously contradicted. The rest of the bullet (the `userRoles`
+exclusion explanation) is unchanged. Single-line doc-only change, no code/test impact. Ready for
+Alex's scoped re-check of just this line.
 
 ## Self-Review Notes
 
