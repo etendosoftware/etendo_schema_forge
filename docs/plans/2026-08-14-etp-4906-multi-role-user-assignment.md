@@ -46,16 +46,36 @@ Feedback... DEV wave N" section near the end of this file for full detail:
   mis-logged as "dev-DB test pollution to clean up" — that was wrong. The real user
   account is valid evidence of a real gap, not noise; it must not be deleted. Human
   decision: widen the fix instead — see Task B6.**
-**REVIEW and QA have NOT been re-run against ANY of waves 6-12 or B5 — their ✅ rows
-below are stale for the CURRENT diff, do not treat this ticket as PR-ready based on
-those rows alone.** Also still owed to the human: the manual-eyeball-test checklist
-requested earlier, once REVIEW comes back clean. If resuming cold: check `git log` in
-both repos against the commits named in each wave's Findings section to see exactly how
-much of this has actually landed before assuming anything is pending. **Concrete next
-steps, in order: (1) B6 (widen the overlap-corruption fix to protect ALL roles
-inheriting from a touched template, not just the actively-composed one) — dispatched,
-see Task B6, (2) dispatch a fresh REVIEW covering waves 6-12 + B5 + B6, (3) QA, (4) DOCS
-refresh for wave 10-12 UI changes, (5) hand the human the manual-test checklist.**
+- **B6 — DONE (2026-08-16/17), 5 rounds, ALL live-confirmed by the human in Classic**
+  (not just JUnit — every round was re-verified against the running app after the
+  first round's JUnit-only sign-off turned out to be insufficient):
+  1. `d8dc9797` — ADD-path ownership corruption (2 overlapping templates composed).
+  2. `58f114ea` — REMOVE-path ownership corruption (removing one of two overlapping
+     templates).
+  3. `e8b6ffc6` — most-permissive-wins wasn't enforced outside `assignTemplateRoles`
+     (adding a lower-access template silently downgraded an existing full grant).
+  4. `978e23e2` — the fix from #3 corrected the access LEVEL but not the
+     `InheritedFrom` bookkeeping field, so removing the template that actually
+     justified a widened grant never re-triggered re-derivation (stuck at full
+     forever) — plus a same-flush race (Hibernate's Delete-after-Insert action-queue
+     order) found and fixed in the same commit.
+  `UserRoleCompositionServiceOverlapIntegrationTest` now 8/8,
+  `UserRoleCompositionServiceRealAccessControlIntegrationTest` (B5) 3/3, human's real
+  role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reconfirmed untouched throughout. Full detail
+  per round in the "B6 Findings" subsections near the end of this file.
+**UPDATE (2026-08-17): REVIEW has now been re-run against waves 6-12 + B5 + B6 — see "REVIEW
+Findings — Full Re-Review" below — and came back REJECT (3 blockers, all documentation/cleanup
+debt, zero functional code bugs found).** QA has NOT been re-run yet — do not proceed to QA
+until the 3 REVIEW blockers are closed and REVIEW comes back clean. Also still owed to the
+human: the manual-eyeball-test checklist requested earlier, once REVIEW comes back clean. If
+resuming cold: check `git log` in both repos against the commits named in each wave's Findings
+section to see exactly how much of this has actually landed before assuming anything is
+pending. **Concrete next steps, in order: (1) DEV closes the 3 REVIEW blockers — delete the 2
+orphaned `UserRoles*.jsx` generated files, add a `WindowAccessOverlapCorruptionGuard` section to
+`docs/neo-headless.md`, fix the 2 stale spots + the wrong Manual-verification step in
+`docs/generated-custom-windows/user.md` (all documentation/cleanup, no logic changes needed —
+see the REVIEW section for exact locations), (2) re-dispatch REVIEW for a scoped re-check of
+just those changes, (3) QA, (4) hand the human the manual-test checklist.**
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -77,8 +97,8 @@ refresh for wave 10-12 UI changes, (5) hand the human the manual-test checklist.
 | DEV wave 6 | 5 manual-QA fixes (spacing, blank-trigger, toast sequencing, duplicate tab, unfiltered matrix) | ✅ DONE + tested | Frontend only. Commits `66c0df38b` (fix) + `7f75e37f7` (Tester follow-up). See "Manual QA Feedback... DEV wave 6" section. |
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
-| B6 | Widen ETP-4852's overlap-corruption fix to protect ALL roles inheriting from a touched template, not just the one actively being composed | ✅ DONE (2026-08-16, redesigned) | `com.etendoerp.go` commit `d8dc97976a49a7da4d9e857420110556b9d55c55` — "Feature ETP-4906: Redesign B6 window-access overlap guard as prevention". `WindowAccessOverlapCorruptionGuard` rebuilt as a prevention-based (not reactive) `EntityPersistenceEventObserver`. `UserRoleCompositionServiceOverlapIntegrationTest`: **5/5 pass** (was 4/5 failing pre-redesign), including the bystander-role test with zero `UserRoleCompositionService` code in the call stack. `UserRoleCompositionServiceRealAccessControlIntegrationTest`: **3/3 pass**. Verified via a real, fresh (`--rerun-tasks`) `./gradlew :test` run, not just compilation — see "B6 Findings — Redesign (developer, 2026-08-16)" below for full implementation detail and how each of 5 distinct empirically-discovered failure modes was diagnosed and fixed in turn. |
-| REVIEW | Alex | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (re-review, 2026-08-14, agentId `a055d5018a6ab98e8`) | 0 blockers, 0 warnings, 1 wording-nit suggestion (see "REVIEW Re-Review Findings" below). B1 blocker independently re-confirmed fixed (spec re-run live, 7/7). Figma access — tried again, same denial as first pass; recorded as a standing, agent-unfixable human-sign-off item, NOT a blocker (per Global Constraints). Backend tests accepted per targeted-class results, no redundant full `gradlew test` run. **REVIEW is done for pre-wave-6 code only — waves 6-12 AND B5 still need a re-run. Next: dispatch fresh REVIEW once DEV wave 12 fixups (F9/UserHeaderTable stale-test items below) + B5 all land.** |
+| B6 | Widen ETP-4852's overlap-corruption fix to protect ALL roles inheriting from a touched template, not just the one actively being composed | ✅ DONE — all 5 rounds live-confirmed by the human (2026-08-16/17) | `com.etendoerp.go` commit `d8dc97976a49a7da4d9e857420110556b9d55c55` fixed the ADD-side ownership corruption (adding a 2nd overlapping template) — JUnit 5/5 + 3/3 green, AND live-confirmed by the human in Classic. Commit `58f114ea` closed the REMOVE-side ownership gap — JUnit 6/6 + 3/3 green, human's real role verified untouched via `psql`, deployed and live-confirmed by the human. Commit `e8b6ffc6` closed a 4th gap (silently WRONG most-permissive-wins result outside `assignTemplateRoles`) — JUnit 7/7 + 3/3 green, deployed, live-confirmed by the human. **Commit `978e23e2` (this round) closes a 5th gap the human found immediately after, on the REMOVE direction of the SAME scenario: `widenInheritedAccessLevelIfNeeded` (round 4) corrected the visible access level but never corrected `InheritedFrom` on the same row, so removing the template that actually justified the widened value never re-triggered re-derivation (confirmed live via `psql`: `isreadwrite='Y'` but `inherited_from` still pointed at the OTHER, non-justifying template) — the row stayed stuck at full forever.** Fix: `widenInheritedAccessLevelIfNeeded` now also repoints `InheritedFrom` to whichever OTHER active template actually justifies the widened value, via the same `event.setCurrentState` mechanism already used for the level and for ownership; `anyOtherActiveTemplateGrantsFullAccess` (boolean) was changed into `findActiveTemplateGrantingFullAccess` (returns the justifying `Role`), and `findActiveTemplatesFor`'s underlying query now orders by `AD_Role_Inheritance.SeqNo` DESCENDING so the tie-break (2+ equally-responsible templates) deterministically picks the highest-sequence one — mirroring core's own `RoleInheritanceManager#propagateDeletedAccess` heuristic. **A second, same-flush race was found and fixed while verifying this empirically** (JUnit red before the fix): the freshly re-derived row's widen-check, nested inside the SAME flush that is still mid-way through deleting the just-removed template's own `RoleInheritance` row, could still see that row as `active=true` (Hibernate runs Deletions after Insertions in its default action-queue order) and immediately re-widen the row right back, undoing the removal within the same flush. Closed via a new `TEMPLATES_BEING_REMOVED` thread-local marker (populated by `guardRemovedInheritance`, consulted by `findActiveTemplatesFor`, cleared once per transaction via a new `onTransactionComplete(TransactionCompletedEvent)` observer — safe because a marker surviving until transaction end can only make the guard MORE conservative, never less correct). New JUnit test `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` (bystander role: full template added first, read-only second — the exact order that reproduces the bookkeeping bug — asserts `InheritedFrom` is repointed to the justifying template, THEN removes that template's inheritance and asserts the window downgrades to the remaining template's read-only level, not stuck at full). Also updated the pre-existing round-3 test's now-stale "last write wins" sanity assertion, which had been silently encoding the round-5 bug's own symptom as expected behavior (InheritedFrom==Sales) — now correctly expects InheritedFrom==Finance, consistent with round 5's immediate repoint. Full suite: **`UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 green**, fresh `--rerun-tasks` run from `etendo` root. Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reverified untouched via read-only `psql`. Also confirmed, via read-only `psql` against the human's own live `ClassicDebug` role (`77E57880608E49D9966BC7C87F37A786`), that the CURRENT (pre-fix-deploy) live state exhibits exactly the reported bug (`isreadwrite='Y'`, `inherited_from` = `ClassicTemplateTest1Read`, not `ClassicTemplateTest2Broad`, which had already been removed) — confirms the repro is real and matches this fix's target. `./gradlew smartbuild` + Tomcat restart completed (`Server startup` confirmed in logs), deployed live — **human's own Classic re-confirmation is the last acceptance step, not yet performed: re-add `ClassicTemplateTest2Broad`'s inheritance to `ClassicDebug` (full, confirms round 4 still works) → remove it again → Business Partner must now correctly downgrade to `ClassicTemplateTest1Read`'s read-only level, not stay stuck at full.** See "B6 Findings — InheritedFrom bookkeeping fix (developer, 2026-08-16)" below. |
+| REVIEW | Alex | ❌ REJECT (2026-08-17) — **3 blockers FIXED by DEV, ready for re-review** | 3 blockers, 0 warnings, 2 suggestions (see "REVIEW Findings — Full Re-Review" below). **All 3 blockers closed same-day (DEV, 2026-08-17) — docs/cleanup only, no logic changes; see "Blockers Closed" note under that section for commit hashes.** Backend: `WindowAccessOverlapCorruptionGuard`/`UserRoleCompositionService`/webhooks/dispatcher read in full — sound design, thoroughly reasoned; `UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 independently re-confirmed with a fresh `--rerun-tasks` run (not just UP-TO-DATE cache). Frontend: targeted Vitest 145/145, Playwright `user-role-assignment.mocked.spec.js` 7/7, `sf-validate-pipeline --scope=user` OK, i18n keys complete in both locales. **Blockers are all documentation/cleanup debt, not functional bugs:** (1) orphaned `UserRolesTable.jsx`/`UserRolesForm.jsx` still committed in `artifacts/user/generated/web/user/` despite `userRoles` being `exclude: true`d since DEV wave 6 — Regeneration Invariant violation; (2) `docs/neo-headless.md` has zero mention of B6's `WindowAccessOverlapCorruptionGuard` — the exact gap the plan's own Status banner already flagged as owed; (3) `docs/generated-custom-windows/user.md` is stale/actively wrong in two places (role-catalog source still says `SFRolesOverview` post-wave-7 repoint; Gap assessment + Manual verification step 7 tell QA to confirm Email Configuration is absent when the generated `UserPage.jsx` now mounts it). Fix is DOCS/cleanup only — no code logic changes needed; re-review should be fast once done. |
 | QA | Sentinel | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (2026-08-14, agentId `a3f39375a6133d5c0`) | Full suites re-confirmed green (Vitest 646/12011/0 failed, matches plan exactly; Playwright `user-role-assignment.mocked.spec.js` 7/7). DB reference data (GOClient `ad_client_id`, all 4 template role ids, all 5 test usernames) independently re-verified against the live `etendogoclean` DB — all still accurate, no drift. **Could NOT complete the live browser-driven pass** (assign roles to a real user via the UI, save, reload) — blocked on a missing plaintext password for `goadmin@etendo.software`/any GOClient user (not retrievable; this repo's own `E2E_PASSWORD`/`onboarding-setup` mechanism only self-registers a BRAND NEW tenant with no ETP-4852 template roles, not GOClient). Flagged as a standing, agent-unfixable credentials gap — same class as REVIEW's own Figma-access gap — NOT a blocker. **Adapted the most-permissive-wins DB verification to the Java-integration level instead:** found the exact scenario already has real-DB (`WeldBaseTest`) regression coverage from prior ETP-4852/4878 work (`UserRoleCompositionServiceOverlapIntegrationTest`), confirmed ETP-4906's B2 diff never touches that write path (purely additive read methods), then closed a real gap the existing suite missed — added `testGetAppliedTemplateRoleIdsReflectsARealOverlappingComposition` (same file) proving the NEW B2 read method reflects a REAL overlapping composition's most-permissive-wins result, not just a mocked one. `:compileTestJava` confirmed it compiles; a full `./gradlew test` run was kicked off in background to confirm it passes (still running — same tooling limitation REVIEW hit, not waited on further). **Follow-up live pass (credentials supplied by the human, 2026-08-14):** logged in as `goadmin@etendo.software` for real against `make dev`; found a real DB-state gap unrelated to this ticket's code (Finance/Sales currently `AD_Role.IsTemplate='N'` in this environment — needs `update.database` or a manual fix); retried with Purchasing+Inventory (both `IsTemplate='Y'`) and **confirmed the write path + Guardar-enablement fix live against the real DB** (personal role, `AD_Role_Inheritance`, `AD_User_Roles`, `Default_Ad_Role_ID` all correct after save). **Could not confirm reload/grid persistence** — root-caused to `SFUserRoleAssignments` (B2's new webhook) returning 404 on the backend currently serving this environment, i.e. `com.etendoerp.go` needs a rebuild/redeploy to pick up commits `bc2b6c8c`/`fba31d67` — an infra gap, not a code defect (sibling webhooks like `SFRolesOverview` work fine). See "Live Browser Pass Follow-Up" under "QA Findings" below for full detail. Cleaned up test user + deleted throwaway scripts. **QA is done. Recommend: redeploy `com.etendoerp.go` + re-run the live pass once more before treating this as fully closed; otherwise proceed to DOCS (Sage) — DOCS already ran (see commit `acf7e78cf`).** |
 
 **If resuming this ticket cold (e.g. a fresh session after running out of tokens):**
@@ -1322,6 +1342,208 @@ human instruction not to block on a full unfiltered `./gradlew test` run — tar
 results against `bc2b6c8c` (unchanged since B2) stand as sufficient evidence.
 
 **REVIEW phase is closed. Proceeding to QA (Sentinel).**
+
+## REVIEW Findings — Full Re-Review (Alex, 2026-08-17)
+
+**VERDICT: REJECT**
+
+```
+BLOCKERS (3):
+- [B1] artifacts/user/generated/web/user/UserRolesTable.jsx,
+  artifacts/user/generated/web/user/UserRolesForm.jsx — orphaned generated output, still
+  committed. `artifacts/user/decisions.json`'s `entities.userRoles` has been the bare
+  `{ "exclude": true }` since DEV wave 6 (`git log` shows both files last touched 2026-08-14,
+  UNCHANGED since — no commit in waves 6-12/B5/B6 deletes them), so a clean `make regen
+  ONLY=user` never produces them anymore (confirmed: `UserPage.jsx` mounts `emailConfiguration`
+  as its only detail entity, not `userRoles`; `contract.json` has no `userRoles` key, per the
+  new `artifacts/__tests__/etp-4906-user-roles-tab-exclusion.test.js` regression test). This is
+  exactly the "Files in `generated/` that the pipeline does not produce" case the Regeneration
+  Invariant rule calls a BLOCKER, and the "Stale Files After Entity Rename" rule's own worked
+  example (old files must be deleted when the entity that produced them stops producing them).
+  Self-acknowledged in the window's own doc (`docs/generated-custom-windows/user.md:25`: "remain
+  on disk as orphaned generated output") but never actually cleaned up across 12 dev waves.
+  Fix: `git rm` both files (or re-run `make regen ONLY=user` with the current decisions.json,
+  which will simply not re-emit them) and re-verify `sf-validate-pipeline --scope=user` still
+  reports OK afterward.
+- [B2] com.etendoerp.go/docs/neo-headless.md — zero mention of
+  `WindowAccessOverlapCorruptionGuard` (`src/com/etendoerp/go/roles/`, 915 lines, Task B6, 5
+  live-tested rounds). `grep -n "WindowAccessOverlapCorruptionGuard" docs/neo-headless.md`
+  returns nothing. This is a NEW, system-wide `EntityPersistenceEventObserver` that changes
+  core `AD_Window_Access`/`AD_Role_Inheritance` persistence behavior for every role/template in
+  the system, not just this window's flow — squarely the kind of behavioral change CLAUDE.md's
+  Documentation Freshness policy requires REVIEW to reject ("Code change + doc update = one
+  atomic unit... REVIEW must reject PRs that change behavior without updating docs"). The class's
+  own javadoc is excellent (arguably doc-complete on its own), but nothing in the project-level
+  `neo-headless.md` reference — where `UserRoleCompositionService`'s own overlap-corruption fix
+  IS documented (§8d) — points a future reader at this class at all; §8d's prose still describes
+  only the two role-scoped helpers, silently omitting the system-wide guard that now backs them
+  up. The plan doc's own Status banner already named this exact gap as owed ("(3) DOCS refresh
+  ... AND for B6's new backend mechanism... check if B6's event-observer pattern needs a
+  mention") — it was never done. Fix: add an §8g (or a subsection under §8d) summarizing what
+  `WindowAccessOverlapCorruptionGuard` does, why it's a separate class from
+  `UserRoleCompositionService`'s helpers, and a `docs/neo-headless.md` §9 testing-table row (the
+  class has no dedicated unit test file today — it's exercised entirely through
+  `UserRoleCompositionServiceOverlapIntegrationTest`/`RealAccessControlIntegrationTest` — that
+  table linkage should be made explicit too).
+- [B3] docs/generated-custom-windows/user.md — stale/actively incorrect in two places, not
+  just missing:
+  - Lines 15 and 40 still say the role picker/matrix catalog is "sourced from `SFRolesOverview`'s
+    roles array (`isClientAdmin` roles excluded...)". DEV wave 7 repointed both
+    `AssignTemplateRolesControl.jsx` and `UserRolesTab.jsx` to `fetchTemplateRoles()`
+    (`SFSystemRoleTemplates`) for the actual role/column catalog — confirmed by reading both
+    files directly (`AssignTemplateRolesControl.jsx:48`, `UserRolesTab.jsx:153,179-182`).
+    `fetchRolesOverview()`/`SFRolesOverview` is now used ONLY for the `activeWindowIds`
+    Etendo-GO-window-exposure filter in `UserRolesTab` and the admin-detection branch in
+    `RoleChipsCell`'s `useUserRoleGridData` — never the role catalog itself anymore. This is
+    the exact gap the plan's own F10 row already flagged as owed ("not yet updated for the new
+    `SFSystemRoleTemplates` endpoint").
+  - The "Gap assessment" section (lines 46-48) and Manual verification step 7 (line 62) say
+    Email Configuration is NOT mounted on this window ("UserPage.jsx only mounts `userRoles`",
+    "no visible evidence that a user can trigger [the SMTP] test", "confirm the current page
+    does NOT surface an Email Configuration child pane, SMTP connection test action"). This is
+    now FALSE: the generated `UserPage.jsx` in THIS diff mounts `detailEntity="emailConfiguration"`
+    with `DetailTable={EmailConfigurationTable}`/`DetailForm={EmailConfigurationForm}` and a new
+    `detailProcesses` array containing `smtpconnectiontest` (confirmed by reading the generated
+    file directly, lines ~37-41 and ~250-265). A QA engineer following this doc's own
+    step-by-step manual-verification checklist would be told to confirm the ABSENCE of a feature
+    that is actually present — actively misleading, not merely outdated. (Whether mounting
+    `emailConfiguration` was an intended part of this ticket's scope or a side effect of
+    excluding `userRoles` and letting the next child entity become the detail slot is a DEV
+    question, not a REVIEW one — either way the doc must match what `UserPage.jsx` now does.)
+
+WARNINGS (0)
+
+SUGGESTIONS (2):
+- [S1] tools/app-shell/src/windows/custom/user/index.jsx:111 passes
+  `props: { selectedRoleIds }` into the `roles` custom-tab entry, but
+  `UserRolesTab.jsx:126` only destructures `{ isNew, onVisibilityChange }` from its
+  props — `selectedRoleIds` is read exclusively via `useRoleSelection()` (context), so the
+  prop is dead. Harmless today (both channels carry the identical value from the same
+  `index.jsx` state, so they can never diverge), but `roleSelectionContext.js`'s own doc
+  comment ("index.jsx CAN thread selectedRoleIds to UserRolesTab as a plain prop... and
+  does, since that is the interface UserRolesTab.jsx was already written against") is
+  itself stale about this — worth a small cleanup pass (drop the dead prop or update the
+  comment) next time this file is touched.
+- [S2] tools/app-shell/src/components/contract-ui/DetailView.jsx:1036 — two `if`
+  statements (`onAfterCreate`/`onAfterExistingSave`) were combined onto one physical line
+  rather than given their own lines. Reads as an odd style choice in isolation, but given
+  the prior REVIEW pass's own S1 finding about this file sitting right at its line-count
+  budget (a "God Component" already flagged for extraction, per the
+  `extract-hotspot-component` skill), keeping this net-neutral on line count looks
+  deliberate rather than accidental. Not blocking; flagging so a future formatting pass
+  doesn't have to rediscover the reasoning.
+```
+
+**Scope of this pass:** frontend diff `4c37dd0d0..HEAD` in `etendo_schema_forge` (39 files, the
+correct base per `git merge-base origin/epic/ETP-3504 HEAD` — the branch's real fork point;
+local `main` in this checkout is far too stale to diff against directly, do not use it) and the
+ETP-4906-only backend diff `bc2b6c8c^1..HEAD` in `com.etendoerp.go` (12 files — deliberately
+excluding the earlier ETP-4852/ETP-4878 commits also present on this branch, which were already
+reviewed under their own tickets and are out of THIS review's scope). Read in full:
+`WindowAccessOverlapCorruptionGuard.java`, `UserRoleCompositionService.java`'s ETP-4906 diff,
+`SFUserRoleAssignments.java`, `SFSystemRoleTemplates.java`, `NeoPseudoSpecDispatcher.java`'s
+diff, `DetailView.jsx`'s diff, `windows/custom/user/index.jsx`,
+`AssignTemplateRolesControl.jsx`, `UserRolesTab.jsx`, `RoleChipsCell.jsx`,
+`RoleFilterControl.jsx`, `UserHeaderTable.jsx`, `roleSelectionContext.js`, both locale diffs,
+`decisions.json`'s diff, generated `UserPage.jsx`'s diff, and both doc diffs.
+
+**Backend scrutiny (B6's `WindowAccessOverlapCorruptionGuard`, the class explicitly called out
+for "real scrutiny not a rubber stamp").** Read the full 915-line file including every javadoc
+section. The design is sound and unusually well-reasoned for a workaround this deep into core
+Hibernate/CDI event ordering: the prevention-over-correction rationale (§"Why this design"),
+the `@Priority` ordering argument, the bulk-HQL-delete-not-OBDal.remove()+flush() reasoning, and
+the `TEMPLATES_BEING_REMOVED` ThreadLocal race-closing mechanism are all independently
+verifiable against the reasoning given, not just asserted. Two things checked specifically and
+found correct: (1) registration pattern matches the existing `ContactNameSyncHandler`/
+`BankStatementLineAggregateHandler` precedent (plain `extends EntityPersistenceEventObserver`,
+no `@Named`/`@ApplicationScoped` needed — that requirement is specific to the unrelated
+`NeoHandler` CDI pattern per this repo's own CLAUDE.md, not applicable here); (2)
+`guardRemovedInheritance` does not gate on `removedTemplate.isTemplate()` the way
+`guardNewInheritance` does, but this is harmless, not a bug — `findActiveTemplatesFor`'s own
+`isTemplate()` filter means a non-template id added to `TEMPLATES_BEING_REMOVED` can never
+suppress a real template from that method's result set. No behavioral bug found in this class
+after this pass; both integration suites 8/8 + 3/3 on a fresh `--rerun-tasks` run (not the
+misleadingly-cached first `UP-TO-DATE` run — see Verification below).
+
+**Verification performed (not just re-stated from the plan doc):**
+- `cd etendo && ./gradlew :test --tests "...OverlapIntegrationTest" --tests
+  "...RealAccessControlIntegrationTest"` — first run reported `UP-TO-DATE` (Gradle's
+  incremental-build cache short-circuiting real execution, the same class of false-green risk
+  as the NO-SOURCE trap already in this project's memory notes); re-ran with `--rerun-tasks` to
+  force real execution — `BUILD SUCCESSFUL`, and the JUnit XML reports
+  (`build/test-results/test/TEST-*.xml`) confirm `tests="8" failures="0" errors="0"` and
+  `tests="3" failures="0" errors="0"` respectively, freshly timestamped 2026-08-17.
+- `cd tools/app-shell && npx vitest run src/windows/custom/user/
+  src/components/contract-ui/__tests__/DetailView.saveActions.vitest.js
+  src/lib/__tests__/userRoleAssignmentsApi.vitest.js` — 9 files, 145/145 passed.
+- `cd e2e && npx playwright test tests/flows/user-role-assignment.mocked.spec.js` (against the
+  already-running `make dev` on :3100) — 7/7 passed.
+- `npx sf-validate-pipeline --scope=user` — `Pipeline validation: OK`. (An unscoped
+  repo-wide `npx sf-validate-pipeline` run separately errored on an unrelated
+  `node_modules/@etendosoftware/artifacts` ENOENT — a pre-existing local environment issue, not
+  something this diff touches or could have caused; not counted against this PR.)
+- i18n: diffed `en_US.json`/`es_ES.json` against every `ui('...')` key actually referenced in
+  the changed `windows/custom/user/*.jsx` files — full 1:1 coverage in both locales, no gaps.
+- Read `decisions.json`'s diff and the generated `UserPage.jsx`'s diff side by side — every
+  changed line in the generated file falls inside `@sf-generated-start`/`@sf-generated-end`
+  markers and traces directly to a `decisions.json` change (the `userRoles` exclusion, the
+  `customForm`/`customPanelTabs`/`customComponents.headerTable` swaps) — no evidence of a
+  hand-edit to generated output.
+
+**Not re-litigated (per dispatch instructions):** Figma design-file access remains a standing,
+agent-unfixable gap, not a blocker. No unfiltered `./gradlew test` run was attempted — the
+targeted-class results above are the accepted evidence standard for this ticket. Backend JUnit
+tests were written directly by developers per this repo's testing-delegation rule (Tester only
+covers Vitest/Node/Playwright).
+
+**Next steps:** all 3 blockers are documentation/cleanup only — no functional code changes are
+needed, so this should be a fast turnaround back to REVIEW once DEV closes them out. Recommend a
+single DEV pass: delete the 2 orphaned files, add the `WindowAccessOverlapCorruptionGuard`
+section to `neo-headless.md`, and fix the 2 stale spots (+ the Manual verification step) in
+`user.md`, then re-dispatch REVIEW for a scoped re-check of just those changes rather than a
+full re-review.
+
+### Blockers Closed (DEV, 2026-08-17)
+
+All 3 blockers fixed, docs/cleanup only — no source logic changed, no new functional bug found
+while investigating any of them. Ready for a scoped REVIEW re-check.
+
+- **[B1] Orphaned `UserRolesTable.jsx`/`UserRolesForm.jsx` deleted.** `git rm` both files, then
+  confirmed via `make regen ONLY=user SKIP_EXTRACT=1` that a clean regeneration does not
+  recreate them (contract has no `userRoles` key, `UserPage.jsx` mounts `emailConfiguration`
+  only). `npx sf-validate-pipeline --scope=user` still reports OK afterward. A repo-wide grep for
+  `UserRolesTable`/`UserRolesForm` outside git history now returns only the regression test's own
+  assertion that they must NOT appear
+  (`artifacts/__tests__/etp-4906-user-roles-tab-exclusion.test.js`, still green,
+  `node --test`). `etendo_schema_forge` commit `9c58d4e99` (file deletion) +
+  `b020f8c06` (the B3 doc fixes below also touch the same file's now-dangling references to
+  these files).
+- **[B2] `WindowAccessOverlapCorruptionGuard` documented.** Added a section under
+  `com.etendoerp.go/docs/neo-headless.md` §8d summarizing what the class does, why it is a
+  separate class from `UserRoleCompositionService`'s two role-scoped helpers, its 4 guarded
+  triggers (template gains a grant / role gains a new inheritance / role loses an inheritance /
+  most-permissive-wins enforcement + `InheritedFrom` bookkeeping on widen), and its `@Priority`
+  ordering rationale. Refreshed the §9 testing table: `UserRoleCompositionServiceOverlapIntegrationTest`
+  now correctly shows 8 tests (was stale at 3, predating the B6 rounds) covering all 4 triggers,
+  and added the previously-missing `UserRoleCompositionServiceRealAccessControlIntegrationTest`
+  (B5) row — both rows now explicitly state `WindowAccessOverlapCorruptionGuard` has no dedicated
+  test class of its own and is exercised entirely through these two. `com.etendoerp.go` commit
+  `5ad8eb2a`.
+- **[B3] `docs/generated-custom-windows/user.md` stale spots fixed.** Role-catalog source
+  corrected from `SFRolesOverview` to `fetchTemplateRoles()`/`SFSystemRoleTemplates` (DEV wave 7)
+  in both the header-control paragraph and the matrix-tab paragraph, verified against
+  `AssignTemplateRolesControl.jsx`/`UserRolesTab.jsx` source directly. Gap assessment and manual
+  verification step 7 corrected to state Email Configuration IS mounted (`detailEntity=
+  "emailConfiguration"`, `DetailTable`/`DetailForm`, `smtpconnectiontest` process), verified
+  against the generated `UserPage.jsx` directly. Also fixed 2 references this same cleanup
+  exposed as newly-stale: the "Window shape" line's mention of the (now-deleted) orphaned files,
+  and the "Automated evidence" line grounding User Roles child columns in the now-deleted
+  `UserRolesTable.jsx`. `etendo_schema_forge` commit `b020f8c06`.
+
+(A 4th, pre-existing uncommitted change in the `etendo_schema_forge` worktree — the core-level
+`AD_Window_Access` overlap-corruption fix proposal doc referenced earlier in this plan — was also
+committed during this pass since it was sitting dirty in the tree; unrelated to the 3 blockers
+above, not gated on REVIEW. `etendo_schema_forge` commit `63ac8be60`.)
 
 ## Self-Review Notes
 
@@ -2812,3 +3034,601 @@ template data has drifted to overlap. No further widening (e.g. to other
   is structurally the same shape as the human's original live repro; recommend a final
   live Classic UI confirmation before closing this out fully, given how expensive the
   first dead end was).
+
+### B6 Findings — REMOVE path gap (coordinator, 2026-08-16)
+
+**Live confirmation, human, immediately after the ADD-path fix was deployed:** creating
+`ClassicTemplateTest1Read` then `ClassicTemplateTest2Broad` on the same personal role
+now works — log line confirms the guard fired: `Prevented cross-template
+AD_Window_Access overlap corruption: cleared role ... window 123 access (previously
+inherited from ...) before template ...'s own grant propagates, forcing core onto the
+safe CREATE path`. **But removing one of the two templates from that same role
+immediately reproduces the ORIGINAL `OBSecurityException`** — same window (`123`), same
+role (`77E57880608E49D9966BC7C87F37A786`), a different `AD_Window_Access` row id
+(`D9F5A3896CFB4D179894F6562A868E05`) than the ones seen in earlier attempts, confirming
+this is a fresh row core tried to write, not a stale leftover.
+
+**Root cause, coordinator-confirmed via `grep`:** `WindowAccessOverlapCorruptionGuard`
+only defines `onSave` (`@Observes EntityNewEvent`) and `onUpdate` (`@Observes
+EntityUpdateEvent`) — there is no `onDelete`/`EntityDeleteEvent` handler anywhere in the
+class. This class's own javadoc (see the redesign's "second, symmetric trigger"
+paragraph) already documents 2 triggers it guards — a template's own `AD_Window_Access`
+gaining a grant, and a role gaining a NEW `AD_Role_Inheritance` — but never anticipated
+a THIRD: **`RoleInheritanceManager.propagateDeletedAccess`**
+(`RoleInheritanceManager.java:448-493`, cited in the earlier core-behavior research —
+see `docs/etendo-ad/role-inheritance-window-access-overlap-core-proposal.md`) runs
+whenever a `RoleInheritance` is REMOVED. For each affected access, if the role still
+inherits from ANOTHER active template that also grants the same window, it calls the
+exact same `updateRoleAccess` (blind `DalUtil.copyToTarget`, no `client`/`organization`
+skip) to re-derive the row from that remaining template — **the identical
+corrupting-UPDATE mechanism the ADD-path fix already solved, now reached from a THIRD,
+still-unguarded entry point.** Since the guard never observes `EntityDeleteEvent` for
+`RoleInheritance`, this trigger sails through completely unprotected.
+
+**What the fix needs to do:** add an `onDelete` handler (`@Observes @Priority(...)
+EntityDeleteEvent`) for `RoleInheritance`. When a `RoleInheritance` is about to be
+deleted, BEFORE control reaches core's own deletion propagation
+(`InheritedAccessEnabledEventHandler`'s delete path, and from there
+`RoleInheritanceManager.propagateDeletedAccess`), proactively delete the dependent
+role's conflicting `AD_Window_Access` row for every window the REMAINING template(s)
+would re-derive it from — same "clear it so core is forced onto the CREATE path
+instead of UPDATE" strategy the ADD-path fix already proved, same bulk-HQL-delete +
+`OBDal.refresh(dependent)` mechanics already worked out empirically for the ADD case
+(see the class's own javadoc, "Empirically verified while building this redesign" —
+reuse that exact recipe, don't re-derive it). **Careful:** `propagateDeletedAccess`'s
+own logic already tries to pick the "first remaining template by sequence order" (see
+the core proposal doc's "Removal already re-derives" section) — the guard must not
+fight that resolution, only protect the WRITE of whatever core decides to re-derive to,
+the same way the ADD-path guard never second-guesses which template "wins," only
+protects the ownership of the row core is about to write.
+
+**Re-dispatch:** schema-forge-developer, `com.etendoerp.go` only, branch
+`feature/ETP-4906`. Definition of done: (1) a new JUnit test proving the REMOVE-path
+scenario — a role composed from 2 overlapping real templates, remove one, assert the
+remaining template's access level survives AND no `OBSecurityException`/corruption
+occurs (mirror `testBystanderRoleNotPassedToAssignTemplateRolesIsAlsoProtected`'s
+"zero `UserRoleCompositionService` code in the call stack" shape, but for deletion);
+(2) both existing test files (`UserRoleCompositionServiceOverlapIntegrationTest`,
+`UserRoleCompositionServiceRealAccessControlIntegrationTest`) still green; (3) a live
+Classic re-confirmation using the human's own `ClassicTemplateTest1Read`/`2Broad`
+fixture — remove one after having both, confirm no exception AND confirm the
+remaining template's access level is what's left (not deleted, not stuck at the old
+level) — is the real acceptance bar this time, not just JUnit, given the ADD-path fix
+already passed JUnit alone once before a live gap was found.
+
+**Status: REMOVE path fixed and live-confirmed (2026-08-16, human).** Commit
+`58f114ea`. Human removed `ClassicTemplateTest1Read` from a role that also had
+`ClassicTemplateTest2Broad`, live in Classic — no exception, correct result. B6's
+crash-prevention job (all 3 known triggers: template gains a grant, role gains a new
+inheritance, role loses an inheritance) is now complete and live-verified end to end.
+
+### B6 Findings — 4th gap found during human self-review (2026-08-16): most-permissive-wins is NOT enforced outside our own webhook
+
+**Immediately after confirming the REMOVE-path fix, the human did one more manual
+self-review pass and found a 4th, DIFFERENT gap** (access-LEVEL correctness, not the
+ownership-corruption crash B6 has been fixing): starting from a role with only
+`ClassicTemplateTest2Broad` (full access to Business Partner), the human then ADDED
+`ClassicTemplateTest1Read` (read-only, same window) back — no crash this time (B6's
+ADD-path fix works), but Business Partner ended up **read-only**, not full. Most-
+permissive-wins was silently violated.
+
+**Root cause, confirmed by the coordinator via source read:** `WindowAccessOverlapCorruptionGuard`'s
+own class javadoc (line 139) explicitly documents this as OUT of its scope: "never
+widens/narrows any grant level." The guard's entire job is preventing the
+`OBSecurityException` crash — it deliberately never decides which template's access
+LEVEL should win when 2+ overlap. That decision is currently made ONLY by
+`UserRoleCompositionService.reconcileWindowAccessAfterComposition`
+(`UserRoleCompositionService.java`), which runs EXCLUSIVELY inside
+`assignTemplateRoles` — i.e., only when composing roles through ETP-4906's own
+"Asignar roles" screen/webhook. Any OTHER entry point (Classic UI, any future direct
+`AD_Role_Inheritance`/`AD_Window_Access` edit) has NO most-permissive-wins enforcement
+at all — core just applies whichever template was propagated most recently, full stop.
+This is silently WRONG data, arguably worse than the crash B6 already fixes, since
+there's no error to notice.
+
+**Human decision (2026-08-16, after being asked explicitly about scope): fix this now,
+4th round on this same mechanism.** Rationale: B6 already proved (3 times over) that
+any entry point touching these tables needs to be defended, not just our own webhook —
+leaving access-level correctness only guaranteed through one entry point while B6
+already guarantees crash-safety through all of them is an inconsistent guarantee.
+
+**Proposed design (coordinator, not yet implemented) — read before building:** the
+guard already has the right extension point for this, reusing proven mechanics — no new
+hook needed. `WindowAccessOverlapCorruptionGuard.correctInheritedOwnership`
+(`WindowAccessOverlapCorruptionGuard.java:307-339`) already fires on `EntityNewEvent`
+for EVERY freshly-created inherited `AD_Window_Access` row on a non-template role
+(i.e., precisely the row created right after the guard clears a conflicting one to
+force the CREATE path) — and already proves `event.setCurrentState(...)` reliably
+corrects a CREATE-path row before the security check runs (that's how ownership
+correction already works). Extend this same method (or a sibling called from the same
+`onSave` branch) to ALSO check access level: before returning, look up
+`access.getRole()`'s OTHER currently-active template inheritances, resolve whether ANY
+of them grants the SAME window at a MORE permissive level (`isEditableField() ==
+true`) than what's about to be created; if so, `event.setCurrentState(editableFieldProperty,
+true)` the same way ownership is corrected. This mirrors
+`reconcileWindowAccessAfterComposition`'s own most-permissive-wins logic
+(`mostPermissiveWindowAccess`/`activeWindowIdsFor` in `UserRoleCompositionService.java`
+— reuse the query pattern, don't reinvent it), just applied universally to any newly
+created inherited row, not only ones created via `assignTemplateRoles`. Never narrow
+(matches the existing rule: "a full grant, once resolved, always wins").
+
+**Re-dispatch:** schema-forge-developer, `com.etendoerp.go` only, branch
+`feature/ETP-4906`, same file. Definition of done: (1) a new JUnit test — bystander
+role (zero `UserRoleCompositionService` in the call stack, matching the pattern of the
+other 2 bystander tests already in this suite) composed from a full-access template,
+then gains inheritance from a read-only template on the SAME window — assert the
+window STAYS full, not downgraded; (2) existing test suite still green
+(`UserRoleCompositionServiceOverlapIntegrationTest`,
+`UserRoleCompositionServiceRealAccessControlIntegrationTest`); (3) live Classic
+re-confirmation is the real acceptance bar again — human will redo the exact scenario
+that surfaced this (`ClassicTemplateTest2Broad` alone → add `ClassicTemplateTest1Read`
+→ Business Partner must STAY full) after redeploy. Redeploy via the same
+`smartbuild` + `tomcat restart` sequence used for the last 2 rounds, and leave it
+running for the human.
+
+**Status: fixed, live-confirmed by human (2026-08-16). Commit `e8b6ffc6`.** Human redid
+the exact repro — Business Partner correctly stayed full after adding the read-only
+template on top of the full one.
+
+### B6 Findings — 5th gap found during human self-review (2026-08-16): widening doesn't update `InheritedFrom`, breaking later removal
+
+**Immediately after confirming the most-permissive-wins ADD fix, the human continued
+self-review with the REMOVE direction on the SAME composed role** (now holding both
+`ClassicTemplateTest1Read` + `ClassicTemplateTest2Broad`, Business Partner correctly
+full): removed `ClassicTemplateTest2Broad` (the full-access one, keeping only the
+read-only one) — expected Business Partner to downgrade to read-only, but Classic still
+showed **full access**, stale.
+
+**Root cause, confirmed by the coordinator via a direct, read-only `psql` query against
+role `77E57880608E49D9966BC7C87F37A786`, window `123`:**
+
+```
+isreadwrite = 'Y'  (full — correct value, from the round-4 fix)
+inherited_from = 86B02D2175B14875BA5FA65282F17DD9 = ClassicTemplateTest1Read (!!)
+```
+
+The row's actual VALUE (full) can only be explained by `ClassicTemplateTest2Broad` —
+but its `InheritedFrom` bookkeeping field still points at `ClassicTemplateTest1Read`,
+because round 4's `widenInheritedAccessLevelIfNeeded` corrects `isEditableField` via
+`event.setCurrentState(...)` but never touches `InheritedFrom` on the same row. This
+makes the row's bookkeeping actively WRONG about which template is responsible for its
+current effective value.
+
+**Why this breaks removal specifically:** BOTH core's own removal re-derivation
+(`RoleInheritanceManager`'s `applyRemoveInheritance`/`calculateAccesses` path) AND our
+own round-3 REMOVE-path guard (`guardRemovedInheritance`) decide whether a given
+`AD_Window_Access` row needs re-evaluating when a `RoleInheritance` is removed by
+checking whether that row's `InheritedFrom` matches the template being removed. Since
+this row's `InheritedFrom` says "Read" (not "Broad"), removing Broad's inheritance
+never touches this row at all in EITHER mechanism — it is not recognized as
+Broad-derived, even though its current value only makes sense because of Broad. The
+row is permanently stuck at "full" until something else happens to touch it.
+
+**Proposed fix (coordinator, not yet implemented):** `widenInheritedAccessLevelIfNeeded`
+must ALSO correct `InheritedFrom` to point at whichever OTHER active template it found
+justifying the widened value — the SAME template whose full grant it just used to
+decide to widen — via `event.setCurrentState(inheritedFromProperty, thatTemplateRole)`,
+identical mechanism to how `isEditableField`/ownership are already corrected on this
+same event. This keeps the single `InheritedFrom` pointer an accurate "who is
+currently responsible for this row's effective value" at all times, so a LATER removal
+of that exact template correctly triggers both core's own and our round-3 guard's
+re-derivation logic, cascading correctly to whatever remains (in this case, back down
+to `ClassicTemplateTest1Read`'s read-only grant). If multiple other active templates
+are equally responsible (2+ also grant full), picking any one of them consistently
+(e.g. highest sequence number, mirroring the heuristic
+`RoleInheritanceManager.propagateDeletedAccess` itself already uses elsewhere) is
+sufficient — exact tie-break behavior is the implementer's call, document whichever is
+chosen.
+
+**Re-dispatch:** schema-forge-developer, `com.etendoerp.go` only, branch
+`feature/ETP-4906`, same file (5th round). Definition of done: (1) a new JUnit test —
+bystander role composed from a read-only template then a full template (most-
+permissive-wins correctly resolves to full, reusing round 4's own fixed behavior),
+THEN remove the full template's inheritance — assert the window correctly downgrades
+to the remaining read-only template's level, not stuck at full; (2) full existing
+suite still green (`UserRoleCompositionServiceOverlapIntegrationTest`,
+`UserRoleCompositionServiceRealAccessControlIntegrationTest`) — fresh
+`--rerun-tasks` run, not just compilation; (3) live Classic re-confirmation is the real
+acceptance bar — human will redo the exact sequence that surfaced this (`Read` + `Broad`
+→ Business Partner full → remove `Broad` → Business Partner must become read-only,
+not stay full) after redeploy. Redeploy via the same `smartbuild` + `tomcat restart`
+sequence used for the last 3 rounds, leave it running. Also verify, via read-only
+`psql`, that the row's `InheritedFrom` ends up correctly pointing at
+`ClassicTemplateTest1Read` after the fix (not just that the level is right) — this
+exact field was the root cause, confirm it directly, don't infer it only from the
+UI-visible level.
+
+### B6 Findings — InheritedFrom bookkeeping fix (developer, 2026-08-16)
+
+**Result: `com.etendoerp.go` commit `978e23e2`.** `UserRoleCompositionServiceOverlapIntegrationTest`
+**8/8 pass** (7 pre-existing + 1 new); `UserRoleCompositionServiceRealAccessControlIntegrationTest`
+**3/3 pass** — both verified via a genuinely fresh `./gradlew :test --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceOverlapIntegrationTest" --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceRealAccessControlIntegrationTest"
+--rerun-tasks` run from the `etendo` root. A direct read-only `psql` check afterward reconfirmed
+the human's real personal role (`6AD5C0CC21F14050A65A3E62DC2FF9A2`) still exists, is still active,
+client `802509E12436405C86BA1FD5B1DF508C`, org `0` — untouched throughout. `./gradlew smartbuild`
+completed clean, the Tomcat container was restarted, and `Server startup in [52221] milliseconds`
+was confirmed in the container logs — **live, and ready for the human's own Classic click-through
+re-confirmation.**
+
+**Live-state confirmation before touching any code.** Before writing the fix, a direct read-only
+`psql` query against the human's own `ClassicDebug` role (`77E57880608E49D9966BC7C87F37A786`)
+confirmed the currently-deployed (pre-fix) state exhibits exactly the reported bug:
+
+```
+ad_window_id=123  isreadwrite='Y'   inherited_from='86B02D2175B14875BA5FA65282F17DD9' (ClassicTemplateTest1Read)
+```
+
+`ClassicTemplateTest2Broad`'s `AD_Role_Inheritance` row was already removed (the human's own
+repro steps), yet the window is still full — matching the coordinator's root-cause write-up
+exactly and confirming the fix target is real, not a misreading of the report.
+
+**What was built — implementing the coordinator's sketched design.**
+`WindowAccessOverlapCorruptionGuard.java`:
+
+1. **`widenInheritedAccessLevelIfNeeded(EntityNewEvent, WindowAccess)`** — extended (not
+   rewritten): after widening `editableField` via `event.setCurrentState`, now ALSO repoints
+   `inheritedFrom` to the SAME template it resolved as justifying the widened value, via the
+   identical `event.setCurrentState(inheritedFromProperty, justifyingTemplate)` mechanism already
+   used for the level and for ownership in `correctInheritedOwnership`. Only runs in the branch
+   that actually widens — a row whose CREATE-sourced template already grants full needs no
+   repointing, since that template already IS a valid justifying source (see the method's own
+   early-return comment for the full reasoning).
+2. **`anyOtherActiveTemplateGrantsFullAccess(Role, Window)` → `findActiveTemplateGrantingFullAccess(Role, Window)`**
+   — round 4's boolean-returning helper changed to return the justifying `Role` (or `null`), per
+   the dispatch's explicit instruction. Iterates `findActiveTemplatesFor(dependent, null)` and
+   returns the FIRST template found granting full access.
+3. **`findActiveTemplatesFor(Role, String)`** — added `.addOrderBy(RoleInheritance.PROPERTY_SEQUENCENUMBER, false)`
+   (descending) to its underlying `OBCriteria` query. This is the tie-break for 2+ equally-
+   responsible templates: deliberately mirrors core's OWN heuristic in
+   `RoleInheritanceManager#propagateDeletedAccess` ("retrieve the list of templates, ordered by
+   sequence number descending, to update the access with the first one available (highest
+   sequence number)"), read directly from core source before choosing this — not an invented
+   rule. Because the list is now ordered, `findActiveTemplateGrantingFullAccess`'s simple
+   first-match loop automatically implements the same tie-break.
+
+**A second, independent gap found and fixed while verifying this empirically — a same-flush
+staleness race.** The first cut of the fix above made the new JUnit test's SETUP assertion pass
+(widen + repoint both correct immediately after gaining the read-only template) but the test's
+REMOVAL assertion still failed: after removing the FULL template's inheritance, the row's
+`InheritedFrom` stayed pointed at the just-removed FULL template instead of the remaining
+read-only one, and the level stayed full. Root-caused with a debug-instrumented single-test run
+(temporary `System.out.println`s, removed before commit): the log showed `guardRemovedInheritance`
+correctly deleting the stale row and forcing CREATE sourced from the remaining (read-only)
+template — immediately followed, in the SAME flush, by ANOTHER "Widened ... and repointed
+InheritedFrom" log line putting it right back to the template that was JUST removed. Cause:
+Hibernate's default action-queue execution order runs entity Deletions AFTER Insertions/Updates,
+so the just-removed template's `AD_Role_Inheritance` row is still `active=true` as far as any
+fresh `OBCriteria` SELECT can see, for the remainder of that same flush — including the widen
+check's own query, which runs NESTED inside core's own (unprioritized) `RoleInheritanceEventHandler`
+handling of the SAME delete event, itself triggered synchronously from `OBDal.save()` inside
+`RoleInheritanceManager#applyRemoveInheritance`.
+
+Fixed via a new `TEMPLATES_BEING_REMOVED` (`ThreadLocal<Set<String>>`) marker: populated by
+`guardRemovedInheritance` (added, deliberately NOT cleared at the end of that same method — by
+the time the nested CREATE this marker protects against actually fires, `guardRemovedInheritance`'s
+own stack frame has already returned, since core's unprioritized observer for the SAME event runs
+strictly AFTER this class's prioritized one), consulted by `findActiveTemplatesFor` (filters out
+any template whose id is in the set, on top of the existing `excludedInheritanceId` parameter,
+which is not sufficient alone here — `findActiveTemplateGrantingFullAccess` has no specific
+`RoleInheritance` id to pass, since it is reached from a completely unrelated event). Cleared once
+per transaction via a new `onTransactionComplete(@Observes TransactionCompletedEvent)` observer —
+this class's own javadoc already documented `TransactionCompletedEvent` as being forwarded through
+the same interceptor, just unused until now. Safe timing: a marker surviving until transaction end
+(fires on both commit AND rollback) can only make the guard MORE conservative (skip a template
+that is, by then, genuinely gone), never less correct.
+
+**Test added.** `UserRoleCompositionServiceOverlapIntegrationTest
+#testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` — bystander-role
+shape, zero `UserRoleCompositionService` in the call stack. Deliberately uses Finance (full)
+added FIRST, Sales (read-only) added SECOND — the SAME order as round 4's own delivered test, and
+the ONLY order that actually reproduces the bookkeeping bug (verified by tracing the opposite
+order: it resolves correctly by construction, since core sources the fresh CREATE directly from
+the newly-added, already-most-permissive template — nothing to widen or repoint). Asserts, in
+order: (1) sanity — most-permissive-wins still resolves to full (round 4's own fix); (2) THE
+ROUND-5 ASSERTION — `InheritedFrom` correctly repointed to Finance, not left at Sales; (3) removes
+Finance's inheritance; (4) the row survives, ownership still correct, `InheritedFrom` now correctly
+re-derived to Sales, and the level correctly downgrades to read-only — the exact live-reported
+regression.
+
+**A pre-existing test's assertion was updated, not just left to fail.**
+`testRemovingOneOfTwoOverlappingTemplateInheritancesIsAlsoProtected` (round 3) asserted, as a
+"Sanity" check, that after gaining Finance (full) then Sales (read-only) in that order, the row's
+`InheritedFrom` would be Sales ("last write wins"). That assertion was accidentally encoding this
+exact round-5 bug's own symptom as "expected" — round 4's widen already silently left
+`InheritedFrom` wrong there too, just never asserted on. With round 5's fix, the row is now
+IMMEDIATELY repointed to Finance in the same flush, so the sanity assertion now correctly expects
+Finance. Traced through the rest of that test to confirm the later removal-step assertions (which
+remove Sales, not Finance) still hold unchanged — since the row was already correctly sourced from
+the one template that survives that particular removal, `guardRemovedInheritance`'s own
+"already correctly sourced, skip" branch means nothing needs to change, and the test still exactly
+verifies what it always did (no throw, correct ownership, correct final state) — updated the
+comments to say so explicitly and pointed to the new round-5 test as the complementary case that
+exercises actual re-derivation.
+
+**No other split "value + supporting pointer" gaps found in this file on this pass** — audited
+every `event.setCurrentState` call site: `correctInheritedOwnership` sets `client`/`organization`
+directly from the owning role's own fields (no derived pointer involved, nothing else to keep in
+sync), and `widenInheritedAccessLevelIfNeeded` is now the only other site, fixed above.
+`AD_Window_Access` itself has exactly one level field (`editableField`) and one source-pointer
+field (`inheritedFrom`) — no sibling fields like a hypothetical `printable`/`deleteable` exist on
+this entity to raise the same risk. **Worth flagging to the coordinator regardless:** the THREE
+`guard*` delete-forcing-create-path methods (`guardDependentsOf`, `guardNewInheritance`,
+`guardRemovedInheritance`) all rely on core's own CREATE path picking a single "correct enough"
+source template and don't verify or correct WHICH one core picked beyond forcing the CREATE path
+to run at all — `widenInheritedAccessLevelIfNeeded` is the only place that actually double-checks
+and corrects core's choice, and it does so for exactly ONE field pair (level + `InheritedFrom`).
+If this module ever grows a SECOND per-template-varying `AD_Window_Access` field with its own
+override semantics (there isn't one today), the same "widen-and-repoint" pattern would need to be
+extended for that field too, deliberately, rather than assumed already covered by this fix.
+
+**Files changed:**
+- `com.etendoerp.go/src/com/etendoerp/go/roles/WindowAccessOverlapCorruptionGuard.java` — extended
+  `widenInheritedAccessLevelIfNeeded` to repoint `InheritedFrom`; renamed/changed
+  `anyOtherActiveTemplateGrantsFullAccess` → `findActiveTemplateGrantingFullAccess` (returns the
+  justifying `Role`); added deterministic sequence-number-descending ordering to
+  `findActiveTemplatesFor`; added the `TEMPLATES_BEING_REMOVED` thread-local marker, its
+  population point in `guardRemovedInheritance`, its consultation in `findActiveTemplatesFor`, and
+  the new `onTransactionComplete(TransactionCompletedEvent)` cleanup observer; extended the class
+  javadoc with a new "InheritedFrom bookkeeping" section.
+- `com.etendoerp.go/src-test/src/com/etendoerp/go/roles/UserRoleCompositionServiceOverlapIntegrationTest.java`
+  — added `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades`; updated
+  `testRemovingOneOfTwoOverlappingTemplateInheritancesIsAlsoProtected`'s now-stale sanity
+  assertion and surrounding comments.
+
+**Not done / open items for the coordinator:**
+- Commit is local-only, not pushed, per instructions.
+- Deployed live (smartbuild + Tomcat restart both completed clean, `Server startup` confirmed) —
+  but the human's own Classic click-through re-confirmation has NOT been performed by this
+  session. Because the human's own `ClassicDebug` role currently only has
+  `ClassicTemplateTest1Read` + `ClassicTemplateTest3OtherWindow` active (Broad's inheritance was
+  already removed during the round-5 repro), the human will need to RE-ADD
+  `ClassicTemplateTest2Broad`'s inheritance first (confirms round 4 still works, full), THEN
+  remove it again (confirms round 5's fix — Business Partner must now correctly downgrade to
+  read-only, not stay stuck at full).
+- As with every prior round: this is the 5th fix on the same underlying core gap
+  (`RoleInheritanceManager`/`AccessTypeInjector` never differentiating client/organization NOR
+  access level NOR source-template bookkeeping when propagating a template's grant across role
+  inheritance changes). If the human's live re-confirmation surfaces a 6th, distinct sub-case, the
+  same event-observer extension point (`WindowAccessOverlapCorruptionGuard`) is almost certainly
+  still the right place to extend, per the pattern established across all 5 rounds so far.
+
+### B6 Findings — most-permissive-wins fix (developer, 2026-08-16)
+
+**Result: `com.etendoerp.go` commit `e8b6ffc6`.** `UserRoleCompositionServiceOverlapIntegrationTest`
+**7/7 pass** (6 pre-existing + 1 new); `UserRoleCompositionServiceRealAccessControlIntegrationTest`
+**3/3 pass** — both verified via a genuinely fresh `./gradlew :test --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceOverlapIntegrationTest" --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceRealAccessControlIntegrationTest"
+--rerun-tasks` run from the `etendo` root. A direct read-only `psql` check afterward reconfirmed
+the human's real personal role (`6AD5C0CC21F14050A65A3E62DC2FF9A2`) still exists, is still active,
+client `802509E12436405C86BA1FD5B1DF508C`, org `0` — untouched throughout. `./gradlew smartbuild`
+completed clean, the Tomcat container was restarted, and `Server startup in [54330] milliseconds`
+was confirmed in the container logs — **live, and ready for the human's own Classic
+click-through re-confirmation.**
+
+**What was built.** Implemented exactly the coordinator's sketched design, no redesign:
+`WindowAccessOverlapCorruptionGuard.java`'s `onSave(EntityNewEvent)` non-template branch now
+calls a new sibling method right after `correctInheritedOwnership`:
+
+```java
+} else {
+  correctInheritedOwnership(event, access);
+  widenInheritedAccessLevelIfNeeded(event, access);
+}
+```
+
+1. **`widenInheritedAccessLevelIfNeeded(EntityNewEvent, WindowAccess)`** — for the SAME
+   freshly-created inherited row `correctInheritedOwnership` just fixed ownership on: reads the
+   about-to-be-persisted `editableField` value via `event.getCurrentState(editableFieldProperty)`
+   (same API `correctInheritedOwnership` already proved reaches Hibernate's bound `state[]`, not
+   just the live Java object — required for the same reason ownership correction needed it: a
+   plain setter never reaches the array the eventual INSERT reads from). If already `true`,
+   nothing to do. Otherwise calls `anyOtherActiveTemplateGrantsFullAccess(owner, window)`; if any
+   OTHER template the role is currently, actively inheriting from grants the SAME window full
+   access, corrects the row via `event.setCurrentState(editableFieldProperty, true)` — the exact
+   same mechanism `correctInheritedOwnership` uses, applied to a different field. One-directional
+   only: the method only ever flips `false`→`true`, never the reverse (matches the ticket's
+   existing "a full grant, once resolved, always wins" rule).
+2. **`anyOtherActiveTemplateGrantsFullAccess(Role, Window)`** — small helper, loops
+   `findActiveTemplatesFor(dependent, null)` and checks each template's own `AD_Window_Access` row
+   for the window via the already-existing `findActiveWindowAccess(Role, Window)`. Reads the
+   templates' OWN current grants as the source of truth, mirroring
+   `UserRoleCompositionService#mostPermissiveWindowAccess`'s own choice (not whatever level core's
+   per-window propagation happened to leave on the dependent).
+3. **`findActiveTemplatesFor(Role, String excludedInheritanceId)`** — per the dispatch's explicit
+   instruction to reuse the query pattern rather than reinvent it, refactored the existing
+   `findOtherActiveTemplates(Role, RoleInheritance)` (used by the REMOVE-path fix) into a thin
+   wrapper (`findActiveTemplatesFor(dependent, excludedInheritance.getId())`) over this new,
+   more general method — same HQL/criteria shape, now with the exclusion made optional (`null` =
+   include every active template). No behavior change for the REMOVE-path caller.
+
+**Why a separate method instead of folding into `correctInheritedOwnership` itself.** Ownership
+correction is unconditional — a row's client/organization is either wrong or not, no extra lookup
+needed beyond the owning role's own fields. Level widening requires an additional query across the
+role's OTHER template inheritances and a strictly one-directional rule; keeping it a distinct,
+separately-documented method (called from the same `onSave` branch, same event, same row) reads
+more clearly and keeps each method's javadoc focused on the ONE thing it decides — matches this
+file's existing pattern of one well-documented private method per concern (`guardDependentsOf`,
+`guardNewInheritance`, `guardRemovedInheritance` are already split the same way, despite similar
+overlap in what they each touch).
+
+**Ordering / correctness reasoning (why this is not a race with core's own propagation).** This
+fires on `EntityNewEvent` for a WindowAccess row on a non-template role — a row core's own
+`RoleInheritanceManager#copyRoleAccess` is IN THE PROCESS of creating, before the interceptor's
+security check and before core's insert executes (same timing `correctInheritedOwnership` already
+relies on). `findActiveTemplatesFor` queries `AD_Role_Inheritance` fresh against the DB — it only
+ever sees PREVIOUSLY COMMITTED inheritance rows (from an earlier, already-flushed transaction),
+never the one currently being saved in THIS same flush (per `FlushMode.COMMIT`, confirmed by this
+class's own extensive javadoc on `deleteForcingCreatePath`). This is exactly what the fix needs:
+the human's repro is "already-composed FULL template, then ADD a read-only one" — the full
+template's inheritance and its own window-access grant are both already committed by the time the
+new template's inheritance triggers this code path, so the fresh query finds them correctly. The
+reverse order (read-only committed first, full template added second) needs no widening at all —
+the new row is already created full from the newly-added template's own grant, so
+`event.getCurrentState(editableFieldProperty)` is already `true` and the method returns
+immediately, still correct.
+
+**Doc updated in the same file.** `WindowAccessOverlapCorruptionGuard`'s class javadoc: corrected
+the sentence claiming the class "never widens/narrows any grant level" (now scoped explicitly to
+the three `guard*` delete-forcing methods, which is still true for them — they only force the safe
+CREATE path, they don't decide the level) and added a full "A fourth trigger" section describing
+this gap and fix, matching the existing per-trigger documentation style for the other three.
+
+**Test added.** `UserRoleCompositionServiceOverlapIntegrationTest
+#testGainingReadOnlyTemplateInheritanceNeverDowngradesExistingFullAccess` — same "bystander role,
+zero `UserRoleCompositionService` code in the call stack" shape as the other two bystander tests in
+this file, but deliberately mirrors the human's EXACT repro order: grants Finance (full) and Sales
+(read-only) their own window-access rows first, then adds ONLY the Finance inheritance to the
+bystander role and asserts full access propagated (sanity check), THEN adds the Sales inheritance
+and asserts the window is STILL full afterward (the actual regression assertion), plus the existing
+ownership assertions (client/organization match the bystander role's own).
+
+**Files changed:**
+- `com.etendoerp.go/src/com/etendoerp/go/roles/WindowAccessOverlapCorruptionGuard.java` — added
+  `widenInheritedAccessLevelIfNeeded`, `anyOtherActiveTemplateGrantsFullAccess`, refactored
+  `findOtherActiveTemplates` into a wrapper over the new `findActiveTemplatesFor`; updated the
+  class javadoc (scoped the "never widens/narrows" claim, added the fourth-trigger section).
+- `com.etendoerp.go/src-test/src/com/etendoerp/go/roles/UserRoleCompositionServiceOverlapIntegrationTest.java`
+  — added `testGainingReadOnlyTemplateInheritanceNeverDowngradesExistingFullAccess`.
+
+**Not done / open items for the coordinator:**
+- Commit is local-only, not pushed, per instructions.
+- Deployed live (smartbuild + Tomcat restart both completed clean, `Server startup` confirmed) —
+  but the human's own Classic click-through re-confirmation of THIS exact scenario has NOT been
+  performed by this session — the explicit, human-only last acceptance step, same pattern as the
+  prior 2 rounds on this file.
+- As with the prior rounds: this is the 4th fix on the same underlying core gap
+  (`RoleInheritanceManager`/`AccessTypeInjector` never differentiating client/organization NOR
+  access level when propagating a template's grant across role inheritance changes). If the human's
+  live re-confirmation surfaces a 5th, distinct sub-case, the same event-observer extension point
+  (`WindowAccessOverlapCorruptionGuard`) is almost certainly still the right place to extend, per
+  the pattern established across all 4 rounds so far.
+
+### B6 Findings — REMOVE path fix (developer, 2026-08-16)
+
+**Result: `com.etendoerp.go` commit `58f114ea`.**
+`UserRoleCompositionServiceOverlapIntegrationTest` **6/6 pass** (5 pre-existing +
+1 new); `UserRoleCompositionServiceRealAccessControlIntegrationTest` **3/3 pass** —
+both verified via a genuinely fresh `./gradlew :test --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceOverlapIntegrationTest" --tests
+"com.etendoerp.go.roles.UserRoleCompositionServiceRealAccessControlIntegrationTest"
+--rerun-tasks` run from the `etendo` root (not `:modules:com.etendoerp.go:test`,
+which reports NO-SOURCE in this checkout). A direct read-only `psql` check afterward
+confirmed the human's real personal role (`6AD5C0CC21F14050A65A3E62DC2FF9A2`) still
+exists, is still active, and its real window-143 grant (inherited from the real
+"Inventory" template) still has correct, non-corrupted client (`802509E12436405C86BA1FD5B1DF508C`)
+— untouched throughout. `./gradlew smartbuild` completed clean and the Tomcat
+container was restarted with the new WAR deployed — **live, and ready for the
+human's own Classic click-through re-confirmation.**
+
+**Root cause, traced with method-level precision (not just the doc's paraphrase).**
+The plan doc's coordinator write-up cites `RoleInheritanceManager.propagateDeletedAccess`
+(lines 448-493) as the REMOVE-path trigger. Reading that exact core checkout
+(`/Users/gremiger/workspaces/etendogoclean/etendo/src/org/openbravo/role/inheritance/RoleInheritanceManager.java`)
+directly, `propagateDeletedAccess` is in fact only ever called from
+`InheritedAccessEnabledEventHandler#onDelete` — i.e. when a TEMPLATE's OWN
+`AD_Window_Access` row is deleted, not when a `RoleInheritance` is deleted. The
+human's actual live repro ("removing one of the two templates from that role") is a
+`RoleInheritance` deletion, which core routes through a DIFFERENT method with the
+IDENTICAL corrupting mechanism:
+
+1. `RoleInheritanceEventHandler#onDelete` (`RoleInheritanceEventHandler.java:104`,
+   unprioritized) fires on the `EntityDeleteEvent` for the deleted `AD_Role_Inheritance`
+   row and calls `manager.applyRemoveInheritance(inheritance)`.
+2. `applyRemoveInheritance` (`RoleInheritanceManager.java:227-239`) computes
+   `inheritanceList` = every OTHER active `RoleInheritance` the dependent role still
+   has (`getUpdatedRoleInheritancesList(inheritance, deleting=true)`, excludes the
+   just-deleted row by id, NOT by DB-visible state) and calls `calculateAccesses(
+   inheritanceList, inheritanceRoleIdList, roleInheritanceToDelete=inheritance,
+   injector, false)` for each access type (WindowAccess included).
+3. `calculateAccesses` (`RoleInheritanceManager.java:546-572`) loops over EVERY
+   REMAINING template's own access rows and calls `handleAccess` for each — the SAME
+   method `applyNewInheritance`/`propagateNewAccess` already use on the ADD side.
+4. `handleAccess` (`RoleInheritanceManager.java:588-608`): if the dependent role
+   already has an access row for that window, `isPrecedent` decides whether to
+   override it. Critically: `isPrecedent` returns `true` (override) whenever the
+   row's CURRENT `inheritedFrom` id is NOT FOUND in the updated (post-removal)
+   template-id list — which is unconditionally true for a row still sourced from the
+   just-removed template, `indexOf(...) == -1` — driving straight into
+   `updateRoleAccess`'s blind `DalUtil.copyToTarget` (client/organization included),
+   the EXACT SAME corrupting write the ADD-path fix already defends against, just
+   reached from a third call chain the guard never observed.
+5. Confirmed empirically via the new test (see below) that this is genuinely a
+   "last write wins" re-derivation, not precedence-by-sequence-number: in the
+   bystander setup (Finance granted FULL first, Sales granted READ-ONLY second), the
+   guard's own ADD-path "last write wins" mechanism (`guardDependentsOf`) had already
+   left the shared window sourced from SALES before any removal — so the test removes
+   the SALES inheritance (the current source) to correctly exercise the corrupting
+   re-derivation onto the one remaining template, Finance.
+
+The doc's `propagateDeletedAccess` citation and this trace describe the SAME
+underlying bug (core's `RoleInheritanceManager` never differentiating client/
+organization when copying a template's access onto a dependent role) reached via a
+different, correctly-identified call path; the fix below defends the actual observed
+mechanism, verified line-by-line against the checkout in this environment.
+
+**What was built.** Same file, `WindowAccessOverlapCorruptionGuard.java` (already
+protecting ADD-path triggers via `onSave`/`onUpdate`) — added a THIRD observer method,
+`onDelete(@Observes @Priority(1) EntityDeleteEvent)`, same priority pattern as the
+existing two, guaranteeing it fires before core's own unprioritized
+`RoleInheritanceEventHandler#onDelete` on the identical `RoleInheritance` delete
+event.
+
+1. **`guardRemovedInheritance(RoleInheritance)`** — for the dependent role losing an
+   inheritance, iterates every OTHER template it still actively inherits from
+   (`findOtherActiveTemplates`, mirrors core's own `getUpdatedRoleInheritancesList`
+   exclude-by-id approach rather than trusting DB-visible state mid-flush). For each
+   remaining template's own granted windows, if the dependent's existing row for that
+   window is not ALREADY sourced from that exact remaining template, deletes it via
+   the SAME `deleteForcingCreatePath` helper the ADD-path fix already proved (bulk
+   HQL `DELETE` + `OBDal.refresh(dependent)` — reused verbatim, not re-derived, per
+   the dispatch's explicit instruction). Deliberately does NOT restrict itself to
+   "only rows currently sourced from the template being removed" — the same
+   "already correctly sourced from THIS template, skip" check the ADD-path helpers
+   use is sufficient on its own, since `isPrecedent` in core will force an override
+   for ANY row not sourced from the given remaining template regardless of what it IS
+   currently sourced from (manually granted, or inherited from yet another template).
+2. **`findOtherActiveTemplates(Role, RoleInheritance)`** — small helper query,
+   `crossClientCriteria(RoleInheritance.class)` scoped to the dependent role, active,
+   excluding the about-to-be-deleted inheritance by id.
+3. A row whose window is granted by NO remaining template is deliberately left
+   untouched — core's own `deleteRoleAccess` cleanup step (`RoleInheritanceManager.java:150-177`)
+   removes it via a normal, non-corrupting `OBDal.remove()`, no cross-client field
+   copy involved, nothing to prevent there.
+
+**No new empirical surprises this round** — the delete-before-write mechanics
+(`deleteForcingCreatePath`, `crossClientCriteria`, `OBDal.refresh` vs `evict`) were
+already fully worked out by the ADD-path redesign and reused without modification, as
+instructed. The only new work was correctly identifying WHICH core call chain to
+intercept and building the query that walks it from the opposite (deletion) direction.
+
+**Test added.** `UserRoleCompositionServiceOverlapIntegrationTest
+#testRemovingOneOfTwoOverlappingTemplateInheritancesIsAlsoProtected` — same
+"bystander role, zero `UserRoleCompositionService` code in the call stack" shape as
+`testBystanderRoleNotPassedToAssignTemplateRolesIsAlsoProtected`, extended with a
+direct `OBDal.remove()` + `flush()` on the `RoleInheritance` row currently sourcing
+the shared window. Asserts: no exception; the shared window's access survives, now
+re-derived from the one remaining template; client/organization still match the
+BYSTANDER role's own (never a template's); the surviving access LEVEL matches the
+remaining template's own grant.
+
+**Files changed:**
+- `com.etendoerp.go/src/com/etendoerp/go/roles/WindowAccessOverlapCorruptionGuard.java`
+  — added `onDelete`, `guardRemovedInheritance`, `findOtherActiveTemplates`, plus a
+  new "third trigger" class-javadoc section. No changes to the existing ADD-path
+  methods.
+- `com.etendoerp.go/src-test/src/com/etendoerp/go/roles/UserRoleCompositionServiceOverlapIntegrationTest.java`
+  — added `testRemovingOneOfTwoOverlappingTemplateInheritancesIsAlsoProtected` and a
+  small `findInheritance` query helper.
+
+**Not done / open items for the coordinator:**
+- Commit is local-only, not pushed, per instructions.
+- Deployed live to the human's own `make dev`-managed Tomcat (smartbuild + container
+  restart both completed clean) — but the human's own Classic click-through
+  re-confirmation using `ClassicTemplateTest1Read`/`2Broad` (remove one after having
+  both, confirm no exception AND the remaining template's access level survives) has
+  NOT been performed by this session — that is the explicit, human-only last step per
+  the dispatch's own acceptance bar, given the ADD-path fix already passed JUnit alone
+  once before a live gap was found in this exact code area.
