@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
+import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
@@ -523,6 +524,27 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     expect(totalsAfterNegative.total,
       '[ETP-4567] PO total should decrease once the negative line is added',
     ).toBeLessThan(totalsBeforeNegative.total);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 4.5: Ensure enough stock on hand for the negative line's ACTUAL
+    // product (read back from the row itself — never assume which product
+    // productIndex: 1 landed on). Confirming the PO into a receipt inverts
+    // the normal stock-movement direction for a negative-quantity line, so
+    // Etendo's core M_CHECK_STOCK validation correctly rejects the confirm
+    // when on-hand is too low. This suite was observed draining shared
+    // dev-DB stock for whatever product landed at that index — "Cerveza",
+    // then "Queso Sardo" (warehouse "Almacen GO" / locator "AG-0-0-0") — down
+    // toward zero on 2026-08-17 from repeated runs. Provisioned via a real,
+    // audited Physical Inventory count (ensureStockOnHand) — never a raw SQL
+    // UPDATE. minQty=200 is a generous buffer meant to survive several
+    // repeated runs of this suite in a single day.
+    // ═══════════════════════════════════════════════════════════════════════
+    const negPoProductName = (await negPoRow.locator('[data-cell-key="product"]').textContent())?.trim();
+    await ensureStockOnHand(page, {
+      productName: negPoProductName,
+      warehouseName: 'Almacen GO',
+      minQty: 200,
+    });
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 5: Confirm PO — "Create receipt" only
