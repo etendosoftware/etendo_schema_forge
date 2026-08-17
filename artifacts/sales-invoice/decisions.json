@@ -430,7 +430,7 @@
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiCauseExemption": {
           "visibility": "editable",
@@ -440,13 +440,17 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "aeatsiiFechaRegCont": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiErrorRegistral": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiIssent": {
           "visibility": "readOnly",
@@ -484,7 +488,7 @@
         },
         "etvfacVerifacDesc": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "etvfacSimpinvart7273": {
           "visibility": "editable",

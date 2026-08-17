@@ -52,7 +52,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod', 'currency', 'aeatsiiErrorRegistral'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

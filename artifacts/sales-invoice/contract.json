@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.73.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-12T14:53:46.264Z",
-  "checksum": "7c8a76933473df4e",
+  "updatedAt": "2026-08-13T14:06:22.318Z",
+  "checksum": "9bd46ce1c77033aa",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -940,7 +940,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "validation": {
               "maxLength": 500
             },
@@ -1174,7 +1174,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "derivation": {
               "type": "lookup",
               "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
@@ -1290,7 +1290,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -1359,6 +1359,30 @@
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiAuthorizationno",
+            "apiKey": "aeatsiiAuthorizationno",
+            "column": "EM_Aeatsii_Authorizationno",
+            "label": "Authorization No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 15
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeatsii_Isauthorization@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
             }
           },
           {
@@ -1447,7 +1471,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "derivation": {
               "type": "lookup",
               "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
@@ -3578,7 +3602,7 @@
             "apiKey": "aeatsiiAuthorizationno",
             "column": "EM_Aeatsii_Authorizationno",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -6280,6 +6304,14 @@
         "description": "Display logic for 'adOrgId' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiAuthorizationno",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiAuthorizationno' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiCauseExemption",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6510,6 +6542,14 @@
         "field": "adOrgId",
         "runner": "node",
         "description": "Display logic for 'adOrgId' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiAuthorizationno",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiAuthorizationno' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-aeatsiiCauseExemption",
@@ -6774,6 +6814,14 @@
         "field": "adOrgId",
         "runner": "node",
         "description": "Field 'adOrgId' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiAuthorizationno",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Field 'aeatsiiAuthorizationno' should be present in header"
       },
       {
         "id": "t-field-presence-header-aeatsiiCauseExemption",
@@ -7376,6 +7424,14 @@
         "description": "Field 'adOrgId' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiAuthorizationno",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Field 'aeatsiiAuthorizationno' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiCauseExemption",
         "category": "field-type",
         "entity": "header",
@@ -7976,6 +8032,14 @@
         "description": "Read-only logic for 'adOrgId' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiAuthorizationno",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiAuthorizationno' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiClaveTipo",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8350,6 +8414,14 @@
         "field": "adOrgId",
         "runner": "node",
         "description": "Read-only logic for 'adOrgId' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiAuthorizationno",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiAuthorizationno",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiAuthorizationno' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiClaveTipo",
@@ -9100,14 +9172,6 @@
         "field": "adClientId",
         "runner": "node",
         "description": "System field 'adClientId' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiAuthorizationno",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiAuthorizationno",
-        "runner": "node",
-        "description": "System field 'aeatsiiAuthorizationno' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiAutofactura",
@@ -10674,25 +10738,25 @@
       }
     ],
     "summary": {
-      "total": 610,
+      "total": 615,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 27,
-        "displaylogic-evaluable": 29,
-        "displaylogic-valid": 29,
-        "field-presence": 75,
-        "field-type": 75,
-        "readonlylogic-evaluable": 47,
-        "readonlylogic-valid": 47,
+        "displaylogic-evaluable": 30,
+        "displaylogic-valid": 30,
+        "field-presence": 76,
+        "field-type": 76,
+        "readonlylogic-evaluable": 48,
+        "readonlylogic-valid": 48,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 208,
+        "system-field": 207,
         "visibility": 5
       },
       "byRunner": {
-        "node": 610,
+        "node": 615,
         "junit": 0
       }
     }

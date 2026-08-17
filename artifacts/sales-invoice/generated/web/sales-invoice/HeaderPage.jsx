@@ -55,7 +55,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'aeatsiiErrorRegistral'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

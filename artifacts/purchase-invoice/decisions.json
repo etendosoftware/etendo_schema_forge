@@ -468,7 +468,7 @@
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiCauseExemption": {
           "visibility": "editable",
@@ -476,6 +476,10 @@
         },
         "aeatsiiIsauthorization": {
           "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
           "form": false
         },
         "aeatsiiIssent": {
@@ -501,11 +505,11 @@
         },
         "aeatsiiFechaRegCont": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiErrorRegistral": {
           "visibility": "editable",
-          "form": true
+          "form": false
         },
         "aeatsiiEjercicio": {
           "visibility": "discarded"

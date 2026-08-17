@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.73.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-12T14:53:46.264Z",
-  "contractChecksum": "7c8a76933473df4e",
+  "updatedAt": "2026-08-13T14:06:22.318Z",
+  "contractChecksum": "9bd46ce1c77033aa",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1141,6 +1141,10 @@
             "required": true,
             "defaultValue": "N"
           },
+          "aeatsiiAuthorizationno": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
           "etgoTotalDiscount": {},
           "processed": {
             "readOnly": true,
@@ -1507,5 +1511,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "3e3019e5cbc5ab04"
+  "checksum": "30e16b08cfe004f8"
 }

@@ -61,12 +61,15 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {
     // ETP-4783: aeatsiiEjercicio, aeatsiiPeriodo, aeatsiiPurDescription removed (discarded — never had values in GO)
-    // ETP-4783: aeatsiiDescripcionSii and aeatsiiFechaRegCont changed to form:true
+    // ETP-4783: SII fields rendered by SifTab.jsx custom component — must stay out of the generated header form
     const expectedNames = [
       'aeatsiiClaveTipoFc',
       'aeatsiiEstado',
       'aeatsiiIsauthorization',
       'aeatsiiIssent',
+      'aeatsiiDescripcionSii',
+      'aeatsiiFechaRegCont',
+      'aeatsiiErrorRegistral',
       'etsgDateOperation',
       'etvfacInvoiceStatus',
     ];
@@ -75,20 +78,8 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       const field = headerField(name);
       assert.ok(field, `header contract must include ${name}`);
       assert.notEqual(field.visibility, 'discarded', `${name} must not be discarded`);
-      assert.equal(field.form, false, `${name} must stay out of the main header form`);
+      assert.equal(field.form, false, `${name} must stay out of the generated header form (rendered by SifTab)`);
     }
-
-    // aeatsiiDescripcionSii is editable and in the form (ETP-4783)
-    const descSii = headerField('aeatsiiDescripcionSii');
-    assert.ok(descSii, 'aeatsiiDescripcionSii must be in header contract');
-    assert.equal(descSii.visibility, 'editable', 'aeatsiiDescripcionSii must be editable');
-    assert.equal(descSii.form, true, 'aeatsiiDescripcionSii must be in the form (ETP-4783)');
-
-    // aeatsiiFechaRegCont is now editable and in the form (ETP-4783)
-    const fechaRegCont = headerField('aeatsiiFechaRegCont');
-    assert.ok(fechaRegCont, 'aeatsiiFechaRegCont must be in header contract');
-    assert.equal(fechaRegCont.visibility, 'editable', 'aeatsiiFechaRegCont must be editable');
-    assert.equal(fechaRegCont.form, true, 'aeatsiiFechaRegCont must be in the form (ETP-4783)');
   });
 
   it('discards tbaiIssent from the frontend contract now that TbaiConfigSequenceHandler chains TBAI sequencing on the backend (ETP-4401)', () => {
