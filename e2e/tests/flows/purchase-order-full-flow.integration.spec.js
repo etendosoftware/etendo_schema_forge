@@ -5,7 +5,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
-  readDocumentTotals, verifyTotalsConsistency, parseAmount,
+  readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -33,6 +33,21 @@ import {
 
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
+
+/**
+ * Locates the line row whose given quantity cell is negative. Mirrors the
+ * identically-named helper in sales-quotation-full-flow.integration.spec.js.
+ */
+async function findNegativeLineRow(page, qtyFieldKey) {
+  const rows = page.locator('[data-testid^="line-row-"]');
+  const count = await rows.count();
+  for (let i = 0; i < count; i++) {
+    const row = rows.nth(i);
+    const qtyText = await row.locator(`[data-cell-key="${qtyFieldKey}"]`).textContent().catch(() => '');
+    if (parseAmount(qtyText) < 0) return row;
+  }
+  throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
+}
 
 test.describe('Purchase Order — Full flow with receipt and invoice (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
