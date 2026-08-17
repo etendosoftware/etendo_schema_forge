@@ -73,31 +73,6 @@ export function usePreviewSendModal() {
 }
 
 /**
- * Returns the shared messages + history tab definitions used in all preview modals.
- * @param {function} ui — the useUI() hook result
- */
-export function makeStaticPreviewTabs(ui) {
-  return [
-    {
-      key: 'messages',
-      label: ui('invoicePreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('invoicePreviewNoMessagesYet')}
-        data-testid="PreviewEmptyPanel__9ccdc3" />,
-    },
-    {
-      key: 'history',
-      label: ui('invoicePreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('invoicePreviewNoActivityRecorded')}
-        data-testid="PreviewEmptyPanel__9ccdc3" />,
-    },
-  ];
-}
-
-/**
  * Conditionally renders the SendDocumentModal with the props common to all preview modals.
  * Eliminates the repeated {showSendModal && <SendDocumentModal .../>} block per window.
  */

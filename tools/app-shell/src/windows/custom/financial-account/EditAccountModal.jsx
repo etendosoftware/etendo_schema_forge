@@ -59,6 +59,24 @@ function formatTypeLabel(type, ui) {
   return labels[type] || type;
 }
 
+/**
+ * `true` when the modal's destructive footer action should offer a real delete instead of
+ * archiving (ETP-4871): the account is not archived AND the row confirmed it has zero dependent
+ * records anywhere (`deletable`, injected server-side — every FK into `FIN_Financial_Account` is
+ * RESTRICT). Mirrors {@link isUnarchiveMode}'s style (a small pure predicate over the account
+ * record) but lives here rather than in `ArchiveAccountDialog.jsx`: this is what picks WHICH
+ * dialog the footer opens, one level above the direction `isUnarchiveMode` picks inside the
+ * archive dialog itself.
+ *
+ * Deliberately independent of `isUnarchiveMode`: an archived account never enters delete mode
+ * (it must be unarchived first), but a deletable, still-active account is offered Eliminar
+ * instead of Archivar — Archivar/Desarchivar and Eliminar are separate actions, not two directions
+ * of the same one, so the account can still be archived if the user prefers it over deleting.
+ */
+export function isDeleteMode(account) {
+  return account?.active !== false && account?.deletable === true;
+}
+
 /** Localized re-auth banner text, or '' when no consent expiry should be shown. */
 function buildReauthMessage(status, locale, ui) {
   if (status?.connected !== true || !status?.consentExpiresAt) {
@@ -404,6 +422,34 @@ function toleranceValue(raw) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Highest amount tolerance that means anything: 100 % of the line is the whole line. */
+const MAX_AMOUNT_TOLERANCE_PCT = 100;
+
+/**
+ * Constrains the amount tolerance to 0…100 — the last line of defence for the saved value.
+ *
+ * The input carries `min={0} max={100}`, but on `<input type="number">` those only bound the spinner
+ * arrows and native form validation, and this modal saves through its own handler. Out-of-range
+ * input is REJECTED visibly by {@link isAmountToleranceInvalid} rather than clamped behind the
+ * user's back; this clamp stays as a belt-and-braces guard on the payload itself (the column is
+ * `numeric(10,2)`, so a wild value would otherwise overflow it) and mirrors the server-side bound in
+ * `FinancialAccountHandler.validateAmountTolerance`.
+ */
+function clampTolerancePct(value) {
+  return Math.min(MAX_AMOUNT_TOLERANCE_PCT, Math.max(0, value));
+}
+
+/**
+ * True when what the user typed is a real value outside 0…100. An empty box is not invalid — it
+ * means "no tolerance" and settles on 0 — so clearing the field never blocks saving.
+ */
+function isAmountToleranceInvalid(raw) {
+  const text = String(raw).trim();
+  if (text === '') return false;
+  const n = Number(text);
+  return !Number.isFinite(n) || n < 0 || n > MAX_AMOUNT_TOLERANCE_PCT;
+}
+
 /**
  * Both tolerances are held as the RAW STRING the user typed, not as a number, so the box can be
  * emptied while editing. Storing `Number(e.target.value)` instead made the field impossible to
@@ -432,7 +478,15 @@ function useReconciliationSettings(open, account) {
   }, [open, account]);
 
   const dateToleranceValue = toleranceValue(dateTolerance);
-  const amountToleranceValue = toleranceValue(amountTolerance);
+  // Clamped here, at the single point where the raw string becomes the number that is both
+  // dirty-checked and sent in the payload — so an out-of-range value can never be persisted, however
+  // it was typed or pasted.
+  const amountToleranceValue = clampTolerancePct(toleranceValue(amountTolerance));
+  // Out-of-range input is surfaced, not silently rewritten: an earlier version clamped the text on
+  // blur, which meant typing 500 and pressing Save stored 100 with no explanation and the value
+  // "changed by itself" on reopening. The field now keeps what was typed, shows the error under it
+  // and blocks Save (same shape as accounting.assetAcctMissing).
+  const amountToleranceInvalid = isAmountToleranceInvalid(amountTolerance);
   // Compared numerically, so re-typing the stored value in a different shape ("03", "3.0")
   // correctly reads as unchanged rather than triggering a pointless write.
   const dateDirty = dateToleranceValue !== snapshot.dateTolerance;
@@ -442,6 +496,7 @@ function useReconciliationSettings(open, account) {
   return {
     dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance,
     dateToleranceValue, amountToleranceValue, dateDirty, amountDirty,
+    amountToleranceInvalid,
     writeoffLimit, setWriteoffLimit, writeoffDirty, dirty,
   };
 }
@@ -482,13 +537,18 @@ function ReconciliationSettingsSection({ ui, recon }) {
           <Input
             type="number"
             min={0}
-            max={100}
+            max={MAX_AMOUNT_TOLERANCE_PCT}
             step={0.1}
             value={recon.amountTolerance}
             onChange={(e) => recon.setAmountTolerance(e.target.value)}
             className={FIELD_INPUT}
             data-testid="recon-amount-tolerance-input"
           />
+          {recon.amountToleranceInvalid ? (
+            <p className="text-xs text-destructive" data-testid="recon-amount-tolerance-error">
+              {ui('financeAccountsReconciliationAmountToleranceInvalid')}
+            </p>
+          ) : null}
         </Field>
         {SHOW_WRITEOFF_LIMIT_FIELD && (
           <Field
@@ -741,10 +801,13 @@ function AccountingConfigurationSection({ ui, accounting }) {
  *   onClose: () => void,
  *   onSaved?: () => void,
  *   onArchive?: (account: object) => void,
+ *   onDelete?: (account: object) => void,
  *   onConnect?: (account: object) => void,
  * }} props
  */
-export function EditAccountModal({ open, onClose, onSaved, account, onArchive, onConnect }) {
+export function EditAccountModal({
+  open, onClose, onSaved, account, onArchive, onDelete, onConnect,
+}) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const { updateAccount } = useAccountMutations();
@@ -820,7 +883,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !accounting.assetAcctMissing;
+    && !accounting.assetAcctMissing && !recon.amountToleranceInvalid;
   const busy = saving || bankConnection.busy;
 
   const handleSave = async () => {
@@ -975,7 +1038,9 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           reconnectable={bankConnection.reconnectable}
           busy={busy}
           canSave={canSave}
+          deleteMode={isDeleteMode(account)}
           onArchive={onArchive}
+          onDelete={onDelete}
           onDisconnect={() => setConfirmDisconnectOpen(true)}
           onDeleteConnection={() => setConfirmDeleteConnectionOpen(true)}
           onCancel={onClose}
@@ -1333,23 +1398,62 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
 }
 
 function EditFooter({
-  ui, account, connected, reconnectable, busy, canSave,
-  onArchive, onDisconnect, onDeleteConnection, onCancel, onSave,
+  ui, account, connected, reconnectable, busy, canSave, deleteMode,
+  onArchive, onDelete, onDisconnect, onDeleteConnection, onCancel, onSave,
 }) {
+  const archived = account?.active === false;
+  // Three reachable states for this one footer slot (ETP-4871):
+  //   - archived           → the row kebab's inverse action, "Desarchivar" (not destructive).
+  //                          Nothing to reveal here (an archived account isn't offered Eliminar
+  //                          until it's unarchived, per `isDeleteMode`), so this stays a single
+  //                          plain button, no chevron.
+  //   - !archived+deletable → both Archivar AND Eliminar are genuinely available for this
+  //                          account, so — mirroring the bank connection split button one row
+  //                          down in this same footer — Archivar stays the always-visible
+  //                          primary action, with Eliminar reachable via the chevron instead of
+  //                          swapping it out.
+  //   - !archived+!deletable→ only Archivar applies; a plain button (no chevron) is correct
+  //                          since there's nothing else to reveal.
+  function renderArchiveOrDeleteButton() {
+    if (archived) {
+      return (
+        <FooterButton
+          icon={RotateCcw}
+          label={ui('financeAccountsMenuUnarchive')}
+          onClick={() => onArchive?.(account)}
+          disabled={busy}
+          danger={false}
+          data-testid="FooterButton__73027d" />
+      );
+    }
+    if (deleteMode) {
+      return (
+        <FooterSplitButton
+          icon={Archive}
+          label={ui('financeAccountsBankConnectionEditArchive')}
+          onClick={() => onArchive?.(account)}
+          disabled={busy}
+          menuIcon={Trash2}
+          menuLabel={ui('financeAccountsMenuDelete')}
+          onMenuClick={() => onDelete?.(account)}
+          testId="archive-account-split"
+          data-testid="FooterSplitButton__73027d" />
+      );
+    }
+    return (
+      <FooterButton
+        icon={Archive}
+        label={ui('financeAccountsBankConnectionEditArchive')}
+        onClick={() => onArchive?.(account)}
+        disabled={busy}
+        danger
+        data-testid="FooterButton__73027d" />
+    );
+  }
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        {/* Mirrors the row kebab: on an already-archived account the only useful action is the
-            inverse one, so the button flips to "restore" and drops the destructive treatment. */}
-        <FooterButton
-          icon={account?.active === false ? RotateCcw : Archive}
-          label={account?.active === false
-            ? ui('financeAccountsMenuUnarchive')
-            : ui('financeAccountsBankConnectionEditArchive')}
-          onClick={() => onArchive?.(account)}
-          disabled={busy}
-          danger={account?.active !== false}
-          data-testid="FooterButton__73027d" />
+        {renderArchiveOrDeleteButton()}
         {connected ? (
           <FooterSplitButton
             icon={Unlink2}

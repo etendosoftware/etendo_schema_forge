@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { attachFile } from './attachFile';
+import { storePreviewFile } from '@/windows/custom/shared/previewFileApi.js';
 import { buildOcrSchema } from './buildOcrSchema';
 import { useOcrExtraction } from './useOcrExtraction';
 import { useOcrFlow } from './useOcrFlow';
@@ -62,9 +63,10 @@ export default function OcrInlineUploader({
 
   // After a successful batch commit:
   //   1. attach the source PDF to the new record (if a tabId is registered)
-  //   2. hop from /<window>/new to /<window>/<newId> so the form binds to it
-  // Attachment failure is non-fatal — the document was created, the file just
-  // didn't get persisted; we still navigate so the user sees the result.
+  //   2. store it in the record's document slot, so both side panels show it
+  //   3. hop from /<window>/new to /<window>/<newId> so the form binds to it
+  // Both writes are non-fatal — the document was created, the file just didn't
+  // get persisted; we still navigate so the user sees the result.
   useEffect(() => {
     if (!result?.committed || !result?.recordId || !docType?.routePrefix) return;
     const newId = result.recordId;
@@ -81,9 +83,24 @@ export default function OcrInlineUploader({
           console.warn('[OCR] AttachFile failed (non-fatal):', res.error);
         }
       }
+      // ETP-4855 — the slot is what both side panels render, and holding the OCR
+      // source is precisely what distinguishes an OCR-captured invoice from one
+      // typed by hand (which has no slot file, so its panels stay empty).
+      if (sourceFile && token && apiBaseUrl) {
+        const slot = await storePreviewFile({
+          token,
+          apiBaseUrl,
+          specName: docType.id,
+          recordId: newId,
+          file: sourceFile,
+        });
+        if (!slot?.ok) {
+          console.warn('[OCR] preview-file store failed (non-fatal):', slot?.error);
+        }
+      }
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
     })();
-  }, [result?.committed, result?.recordId, docType, navigate, token]);
+  }, [result?.committed, result?.recordId, docType, navigate, token, apiBaseUrl]);
   const { extract, status, error, reset } = useOcrExtraction({
     token,
     toolName: docType?.toolName,
