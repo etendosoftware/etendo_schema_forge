@@ -6,7 +6,7 @@ import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useOrderPdf } from './useOrderPdf.js';
 import { usePurchaseOrderPdf } from './usePurchaseOrderPdf.js';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -174,22 +174,6 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         ratePrecision={ratePrecision}
         onSend={isSendable ? openEmailModal : undefined}
         data-testid="OrderGeneralTab__90f59a" />,
-    },
-    {
-      key: 'messages',
-      label: ui('orderPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('orderPreviewMessages')}
-        data-testid="PreviewEmptyPanel__90f59a" />,
-    },
-    {
-      key: 'history',
-      label: ui('orderPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('orderPreviewHistory')}
-        data-testid="PreviewEmptyPanel__90f59a" />,
     },
   ];
 

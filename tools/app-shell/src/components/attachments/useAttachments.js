@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
 /**
  * Format a byte size into a human readable string.
@@ -106,6 +107,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // AbortController shared by all read requests for the current record.
   const abortRef = useRef(null);
 
+  // Identity used to skip our own change notifications (ETP-4855): this hook
+  // already updates `items` optimistically, so reloading on its own event would
+  // just add a redundant GET and undo the optimistic UX.
+  const sourceRef = useRef(null);
+  if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
+  const announceChange = useCallback(() => {
+    notifyAttachmentsChanged({ tableName, recordId, source: sourceRef.current });
+  }, [tableName, recordId]);
+
   // Tracks the latest items synchronously so optimistic operations can snapshot
   // them before a setState updater runs (React 18 defers the updater function).
   const itemsRef = useRef(items);
@@ -169,6 +179,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableName, recordId]);
 
+  // Reload when another view attaches or deletes a file on this record — e.g.
+  // the OCR side panel, which is mounted alongside this tab in form view.
+  useAttachmentsChanged({ tableName, recordId, source: sourceRef.current }, list);
+
   // ── upload ──────────────────────────────────────────────────────────────
   const upload = useCallback(async (file) => {
     if (!file || !tableName || !recordId) return;
@@ -198,6 +212,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         // Fallback: reload list when the server did not return the new item.
         await list();
       }
+      announceChange();
       toast.success(ui('attachmentsUploadSuccess'));
     } catch (err) {
       toast.error(err.message || ui('attachmentsUploadError'));
@@ -208,7 +223,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui]);
+  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui, announceChange]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
@@ -262,12 +277,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         const msg = await extractErrorMessage(res);
         throw new Error(msg || `HTTP ${res.status}`);
       }
+      announceChange();
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, authHeaders, ui, announceChange]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -285,12 +301,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
           })
         )
       );
+      announceChange();
       toast.success(ui('attachmentsDeleteAllSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, authHeaders, ui, announceChange]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {

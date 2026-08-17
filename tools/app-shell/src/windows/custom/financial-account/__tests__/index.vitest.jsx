@@ -99,6 +99,17 @@ vi.mock('../ArchiveAccountDialog.jsx', () => ({
     <div data-testid="archive-account-dialog-stub" data-open={String(open)} />
   ),
 }));
+// ETP-4871 — a sibling of ArchiveAccountDialog, not a mode of it: index.jsx mounts it the same
+// unconditional way. Without this stub the REAL component renders and its own
+// `useAccountMutations()` call reaches the real (unmocked) `useAuth()`, throwing "useAuth must
+// be used within AuthProvider" for every test in this file (this suite mocks
+// '@/auth/AuthContext.jsx' with only `useWindowAccess`/`WindowAccessGuard` — same isolation
+// reason as the two mocks above and below).
+vi.mock('../DeleteAccountDialog.jsx', () => ({
+  DeleteAccountDialog: ({ open }) => (
+    <div data-testid="delete-account-dialog-stub" data-open={String(open)} />
+  ),
+}));
 // ETP-4530: index.jsx now runs useBankConnectionFlow (→ useBankConnectionActions → useAuth) itself so the Edit
 // modal's "Connect bank" button works from this entry point too. Stubbed here for the same
 // isolation reason as the two mocks above.
