@@ -63,19 +63,17 @@ Feedback... DEV wave N" section near the end of this file for full detail:
   `UserRoleCompositionServiceRealAccessControlIntegrationTest` (B5) 3/3, human's real
   role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reconfirmed untouched throughout. Full detail
   per round in the "B6 Findings" subsections near the end of this file.
-**UPDATE (2026-08-17): REVIEW has now been re-run against waves 6-12 + B5 + B6 — see "REVIEW
-Findings — Full Re-Review" below — and came back REJECT (3 blockers, all documentation/cleanup
-debt, zero functional code bugs found).** QA has NOT been re-run yet — do not proceed to QA
-until the 3 REVIEW blockers are closed and REVIEW comes back clean. Also still owed to the
-human: the manual-eyeball-test checklist requested earlier, once REVIEW comes back clean. If
-resuming cold: check `git log` in both repos against the commits named in each wave's Findings
-section to see exactly how much of this has actually landed before assuming anything is
-pending. **Concrete next steps, in order: (1) DEV closes the 3 REVIEW blockers — delete the 2
-orphaned `UserRoles*.jsx` generated files, add a `WindowAccessOverlapCorruptionGuard` section to
-`docs/neo-headless.md`, fix the 2 stale spots + the wrong Manual-verification step in
-`docs/generated-custom-windows/user.md` (all documentation/cleanup, no logic changes needed —
-see the REVIEW section for exact locations), (2) re-dispatch REVIEW for a scoped re-check of
-just those changes, (3) QA, (4) hand the human the manual-test checklist.**
+**UPDATE (2026-08-17): REVIEW's 3 blockers (B1-B3) plus the B4 blocker they exposed are all now
+CLOSED — see "REVIEW Findings — Final Verdict" below — REVIEW's overall verdict is APPROVE.
+QA has now also run a full pass — see "QA Findings — Full Pass (Sentinel, 2026-08-17)" below —
+and returned APPROVE as well, with one MEDIUM, non-blocking, pre-existing (not caused by this
+ticket) data-integrity finding (BUG-1) recommended for a separate Remedy follow-up. Both DEV
+(waves 6-12, B5, B6) and REVIEW are fully closed; QA is now also closed.** Still owed to the
+human: the manual-eyeball-test checklist requested earlier. **Concrete next steps, in order:
+(1) hand the human the manual-test checklist, (2) DOCS (Sage) — already ran once (commit
+`acf7e78cf`) against earlier code, worth a freshness check against waves 6-12/B5/B6 before
+calling the ticket fully done, (3) optionally track BUG-1 as a separate Remedy data-fix task,
+unrelated to this ticket's own scope.**
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -98,8 +96,8 @@ just those changes, (3) QA, (4) hand the human the manual-test checklist.**
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
 | B6 | Widen ETP-4852's overlap-corruption fix to protect ALL roles inheriting from a touched template, not just the one actively being composed | ✅ DONE — all 5 rounds live-confirmed by the human (2026-08-16/17) | `com.etendoerp.go` commit `d8dc97976a49a7da4d9e857420110556b9d55c55` fixed the ADD-side ownership corruption (adding a 2nd overlapping template) — JUnit 5/5 + 3/3 green, AND live-confirmed by the human in Classic. Commit `58f114ea` closed the REMOVE-side ownership gap — JUnit 6/6 + 3/3 green, human's real role verified untouched via `psql`, deployed and live-confirmed by the human. Commit `e8b6ffc6` closed a 4th gap (silently WRONG most-permissive-wins result outside `assignTemplateRoles`) — JUnit 7/7 + 3/3 green, deployed, live-confirmed by the human. **Commit `978e23e2` (this round) closes a 5th gap the human found immediately after, on the REMOVE direction of the SAME scenario: `widenInheritedAccessLevelIfNeeded` (round 4) corrected the visible access level but never corrected `InheritedFrom` on the same row, so removing the template that actually justified the widened value never re-triggered re-derivation (confirmed live via `psql`: `isreadwrite='Y'` but `inherited_from` still pointed at the OTHER, non-justifying template) — the row stayed stuck at full forever.** Fix: `widenInheritedAccessLevelIfNeeded` now also repoints `InheritedFrom` to whichever OTHER active template actually justifies the widened value, via the same `event.setCurrentState` mechanism already used for the level and for ownership; `anyOtherActiveTemplateGrantsFullAccess` (boolean) was changed into `findActiveTemplateGrantingFullAccess` (returns the justifying `Role`), and `findActiveTemplatesFor`'s underlying query now orders by `AD_Role_Inheritance.SeqNo` DESCENDING so the tie-break (2+ equally-responsible templates) deterministically picks the highest-sequence one — mirroring core's own `RoleInheritanceManager#propagateDeletedAccess` heuristic. **A second, same-flush race was found and fixed while verifying this empirically** (JUnit red before the fix): the freshly re-derived row's widen-check, nested inside the SAME flush that is still mid-way through deleting the just-removed template's own `RoleInheritance` row, could still see that row as `active=true` (Hibernate runs Deletions after Insertions in its default action-queue order) and immediately re-widen the row right back, undoing the removal within the same flush. Closed via a new `TEMPLATES_BEING_REMOVED` thread-local marker (populated by `guardRemovedInheritance`, consulted by `findActiveTemplatesFor`, cleared once per transaction via a new `onTransactionComplete(TransactionCompletedEvent)` observer — safe because a marker surviving until transaction end can only make the guard MORE conservative, never less correct). New JUnit test `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` (bystander role: full template added first, read-only second — the exact order that reproduces the bookkeeping bug — asserts `InheritedFrom` is repointed to the justifying template, THEN removes that template's inheritance and asserts the window downgrades to the remaining template's read-only level, not stuck at full). Also updated the pre-existing round-3 test's now-stale "last write wins" sanity assertion, which had been silently encoding the round-5 bug's own symptom as expected behavior (InheritedFrom==Sales) — now correctly expects InheritedFrom==Finance, consistent with round 5's immediate repoint. Full suite: **`UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 green**, fresh `--rerun-tasks` run from `etendo` root. Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reverified untouched via read-only `psql`. Also confirmed, via read-only `psql` against the human's own live `ClassicDebug` role (`77E57880608E49D9966BC7C87F37A786`), that the CURRENT (pre-fix-deploy) live state exhibits exactly the reported bug (`isreadwrite='Y'`, `inherited_from` = `ClassicTemplateTest1Read`, not `ClassicTemplateTest2Broad`, which had already been removed) — confirms the repro is real and matches this fix's target. `./gradlew smartbuild` + Tomcat restart completed (`Server startup` confirmed in logs), deployed live — **human's own Classic re-confirmation is the last acceptance step, not yet performed: re-add `ClassicTemplateTest2Broad`'s inheritance to `ClassicDebug` (full, confirms round 4 still works) → remove it again → Business Partner must now correctly downgrade to `ClassicTemplateTest1Read`'s read-only level, not stay stuck at full.** See "B6 Findings — InheritedFrom bookkeeping fix (developer, 2026-08-16)" below. |
-| REVIEW | Alex | ❌ REJECT (2026-08-17) — **re-review found B1/B2 closed clean, B3 only partially closed (1 new blocker: a self-contradicting doc line)** | See "REVIEW Findings — Re-Review After Blocker Fixes" below for the full re-review. Original 3 blockers, 0 warnings, 2 suggestions (see "REVIEW Findings — Full Re-Review" below). B1 (orphaned files) and B2 (`WindowAccessOverlapCorruptionGuard` docs) independently re-verified CLOSED — files gone, `sf-validate-pipeline --scope=user` OK, doc section cross-checked line-by-line against the real class and test files, both JUnit suites (8/8 + 3/3) re-confirmed green on a fresh `--rerun-tasks` run. B3 was only partially closed: the two spots REVIEW originally cited (role-catalog attribution, Gap assessment/step 7 Email Configuration absence) are correctly fixed, but the SAME fix commit (`b020f8c06`) left a third, previously-unflagged sentence in the "Window shape" bullet (`user.md:25`) uncorrected — it still asserts "no child entity is mounted on the detail page," directly contradicted by the Gap assessment/Automated evidence sections 20 lines below in the same file (and by the real `UserPage.jsx`, confirmed `detailEntity="emailConfiguration"`). New blocker: [B4]. Commit `63ac8be60` (core-proposal doc) confirmed genuinely inert — discussion-only, all code marked `[proposed]`/not implemented. Frontend Vitest 145/145 and the regression test re-confirmed green; no other regressions found in the fix-commit diff. |
-| QA | Sentinel | ⚠️ STALE — APPROVE was for pre-wave-6/7 code (2026-08-14, agentId `a3f39375a6133d5c0`) | Full suites re-confirmed green (Vitest 646/12011/0 failed, matches plan exactly; Playwright `user-role-assignment.mocked.spec.js` 7/7). DB reference data (GOClient `ad_client_id`, all 4 template role ids, all 5 test usernames) independently re-verified against the live `etendogoclean` DB — all still accurate, no drift. **Could NOT complete the live browser-driven pass** (assign roles to a real user via the UI, save, reload) — blocked on a missing plaintext password for `goadmin@etendo.software`/any GOClient user (not retrievable; this repo's own `E2E_PASSWORD`/`onboarding-setup` mechanism only self-registers a BRAND NEW tenant with no ETP-4852 template roles, not GOClient). Flagged as a standing, agent-unfixable credentials gap — same class as REVIEW's own Figma-access gap — NOT a blocker. **Adapted the most-permissive-wins DB verification to the Java-integration level instead:** found the exact scenario already has real-DB (`WeldBaseTest`) regression coverage from prior ETP-4852/4878 work (`UserRoleCompositionServiceOverlapIntegrationTest`), confirmed ETP-4906's B2 diff never touches that write path (purely additive read methods), then closed a real gap the existing suite missed — added `testGetAppliedTemplateRoleIdsReflectsARealOverlappingComposition` (same file) proving the NEW B2 read method reflects a REAL overlapping composition's most-permissive-wins result, not just a mocked one. `:compileTestJava` confirmed it compiles; a full `./gradlew test` run was kicked off in background to confirm it passes (still running — same tooling limitation REVIEW hit, not waited on further). **Follow-up live pass (credentials supplied by the human, 2026-08-14):** logged in as `goadmin@etendo.software` for real against `make dev`; found a real DB-state gap unrelated to this ticket's code (Finance/Sales currently `AD_Role.IsTemplate='N'` in this environment — needs `update.database` or a manual fix); retried with Purchasing+Inventory (both `IsTemplate='Y'`) and **confirmed the write path + Guardar-enablement fix live against the real DB** (personal role, `AD_Role_Inheritance`, `AD_User_Roles`, `Default_Ad_Role_ID` all correct after save). **Could not confirm reload/grid persistence** — root-caused to `SFUserRoleAssignments` (B2's new webhook) returning 404 on the backend currently serving this environment, i.e. `com.etendoerp.go` needs a rebuild/redeploy to pick up commits `bc2b6c8c`/`fba31d67` — an infra gap, not a code defect (sibling webhooks like `SFRolesOverview` work fine). See "Live Browser Pass Follow-Up" under "QA Findings" below for full detail. Cleaned up test user + deleted throwaway scripts. **QA is done. Recommend: redeploy `com.etendoerp.go` + re-run the live pass once more before treating this as fully closed; otherwise proceed to DOCS (Sage) — DOCS already ran (see commit `acf7e78cf`).** |
+| REVIEW | Alex | ✅ APPROVE (2026-08-17) — **B4 fix confirmed clean, all blockers (B1-B6) now closed** | See "REVIEW Findings — Final Verdict" below. Narrow re-check of the sole remaining blocker: `docs/generated-custom-windows/user.md:25`'s "Window shape" bullet, fixed by commit `3ed4bc7ea`. Verified lines 20-32 are now internally consistent with lines 46/75 (all three describe `emailConfiguration` as the mounted detail child, no contradiction left), and independently re-verified against the real `UserPage.jsx` (`detailEntity="emailConfiguration"` line 253, `DetailTable={EmailConfigurationTable}` line 255, `DetailForm={EmailConfigurationForm}` line 256). No new issues found. Prior full re-review (see "REVIEW Findings — Re-Review After Blocker Fixes" below) had already independently re-verified B1/B2/B5/B6 CLOSED and B3 mostly closed — this pass closes the last gap (B4). Ticket is APPROVE end to end: waves 6-12, B5, B6, and this final blocker-fix round. |
+| QA | Sentinel | ✅ APPROVE (2026-08-17, full pass against waves 6-12/B5/B6/B1-B4) | See "QA Findings — Full Pass (Sentinel, 2026-08-17)" below. Every automated suite re-confirmed green on a FRESH run (Vitest 646/12017/3 skipped/0 failed; Playwright 7/7; backend `OverlapIntegrationTest` 8/8 + `RealAccessControlIntegrationTest` 3/3 via freshly-timestamped JUnit XML, `--rerun-tasks` from `etendo` root; `sf-validate-pipeline --scope=user` OK). DB reference data re-verified — GOClient id, the 4 CURRENT system-level `SystemRoleTemplates` ids, and all B6 test-role ids all match live DB, zero drift. **The prior pass's #1 open item (backend redeploy) is now CLOSED** — confirmed via `docker inspect` the Tomcat container restarted `2026-08-16T23:17Z` and `SFUserRoleAssignments` now returns a normal 401 (not the old 404 "Spec not found"). Live browser E2E still blocked on the same standing credentials gap (checked for a stored password this pass, found none — not fabricated) — not a blocker, same precedent as before. Adapted verification: inspected the real, live `Personal – NewUsertest` account (role `6AD5C0CC21F14050A65A3E62DC2FF9A2`) DB state directly — all 4 templates composed, 33 `AD_Window_Access` rows, 0 ownership mismatches, `Default_Ad_Role_ID` correct — strong real-account evidence under maximal composition. Independently read-verified B6's `WindowAccessOverlapCorruptionGuard` for regression risk on unrelated role edits — confirmed narrowly gated, no misfire risk found. **One MEDIUM finding (BUG-1):** pre-existing, ETP-4906-unrelated `AD_Window_Access` ownership corruption on GOClient's `RoleFinanzas` role (27 rows, dated 2026-08-13/14, predates B6's guard entirely) — not retroactively healed by the guard (prevention-only by design), not a blocker, recommend a separate Remedy data-fix pass. No Critical/High bugs. **QA is done, APPROVE. Recommend proceeding to DOCS (Sage) — DOCS already ran once (commit `acf7e78cf`) but a freshness check against waves 6-12/B5/B6 is worth a quick look.** |
 
 **If resuming this ticket cold (e.g. a fresh session after running out of tokens):**
 1. Read this table first, then only the task sections whose status isn't ✅/🚫 — each
@@ -1585,6 +1583,25 @@ not re-litigated here since this pass is scoped to the 3 blocker fixes.
 - `npx sf-validate-pipeline --scope=user` → `Pipeline validation: OK`.
 - `node --test artifacts/__tests__/etp-4906-user-roles-tab-exclusion.test.js` → 3/3 pass, freshly re-run.
 
+## REVIEW Findings — Final Verdict (Alex, 2026-08-17)
+
+**VERDICT: APPROVE**
+
+Scope of this pass: narrow re-check of the single remaining B4 blocker only (`docs/generated-custom-windows/user.md:25`), per the coordinator's brief — not a full re-review. Everything else (waves 6-12, B5, B6, B1-B3 and their fixes) was already independently verified across the prior two review passes and is not re-litigated here.
+
+```
+BLOCKERS (0)
+WARNINGS (0)
+SUGGESTIONS (0)
+```
+
+**B4 fix verified — CLOSED:**
+- `git log -1 3ed4bc7ea` — "Feature ETP-4906: Fix contradicting Window shape clause in user.md" — the fix commit under review.
+- Read `docs/generated-custom-windows/user.md:20-32` in full. Line 25 now reads: "Window shape: master-child in the contract (`user` + `emailConfiguration`), and `emailConfiguration` is mounted as the detail child on the detail page (`detailEntity="emailConfiguration"`, `DetailTable={EmailConfigurationTable}`, `DetailForm={EmailConfigurationForm}`)." The self-contradicting "but no child entity is mounted on the detail page" clause is gone.
+- Cross-checked against line 46 (Gap assessment) and line 75 (Automated evidence) in the same file — all three now assert the same fact in the same terms (`detailEntity="emailConfiguration"`, `DetailTable={EmailConfigurationTable}`, `DetailForm={EmailConfigurationForm}`). No remaining internal contradiction in this section.
+- Independently re-verified against the real generated file: `grep -n 'detailEntity=\|DetailTable=\|DetailForm=' artifacts/user/generated/web/user/UserPage.jsx` → `detailEntity="emailConfiguration"` (line 253), `DetailTable={EmailConfigurationTable}` (line 255), `DetailForm={EmailConfigurationForm}` (line 256). The doc's claim is accurate.
+
+With B4 closed and no new issues found in the ~12 lines under review, all blockers raised across the full REVIEW history of ETP-4906 (B1-B6) are now closed. Approving the full ticket: waves 6-12, B5, B6, and this blocker-fix round.
 **Verification performed on B2 (`WindowAccessOverlapCorruptionGuard` docs) — CLOSED:**
 - `grep -n "WindowAccessOverlapCorruptionGuard" docs/neo-headless.md` (in `com.etendoerp.go`) — 4 hits: the new §8d subsection (lines 1437–1500) plus 2 refreshed §9 testing-table rows plus a §9 lead-in sentence.
 - Read the full new subsection against the real class
@@ -1934,6 +1951,172 @@ follow-ups recommended, neither a reason to revisit REVIEW/QA's approval of the 
    template roles in this DB (currently `'N'`) — unrelated to ETP-4906's own changes, but it
    currently makes 2 of the 4 advertised template roles unusable end to end in this
    environment.
+
+## QA Findings — Full Pass (Sentinel, 2026-08-17)
+
+**VERDICT: APPROVE**
+
+Scope: full QA pass against the code as it exists after waves 6-12, B5, B6, and all 3 REVIEW
+rounds (B1-B4), per the coordinator's dispatch. This pass deliberately does not re-run REVIEW's
+own code-reading checks (already done, three times, by Alex) or redo the 4 live Classic scenarios
+the human already personally reproduced for B6 — it covers what neither of those passes did:
+fresh automated-suite re-execution, DB reference-data drift, the live end-to-end credentials gap,
+and B6's system-wide regression risk.
+
+**Automated suites, fresh (all re-run from a clean invocation, not restated from the plan):**
+- `cd tools/app-shell && npx vitest run` (full, untruncated) — **646 test files passed, 12017
+  tests passed, 3 skipped, 0 failed.** Exact match to the plan's last recorded count, no drift.
+- `cd e2e && npx playwright test tests/flows/user-role-assignment.mocked.spec.js` — **7 passed, 0
+  failed**, matching F9/REVIEW's count exactly (list: chip toggle, matrix update, reload
+  persistence, chip removal, grid role chips + Admin branch, role-filter narrowing, Admin-only
+  filter).
+- `cd etendo && ./gradlew :test --tests "com.etendoerp.go.roles.UserRoleCompositionServiceOverlapIntegrationTest" --tests "com.etendoerp.go.roles.UserRoleCompositionServiceRealAccessControlIntegrationTest" --rerun-tasks` (from the `etendo` root, per this project's known NO-SOURCE
+  module-wiring trap, `--rerun-tasks` per REVIEW's own anti-cache discipline) — `BUILD SUCCESSFUL`.
+  Verified against the freshly-timestamped JUnit XML reports directly (not just the gradle summary
+  line): `TEST-...OverlapIntegrationTest.xml` → `tests="8" failures="0" errors="0"
+  timestamp="2026-08-17T04:33:17"`; `TEST-...RealAccessControlIntegrationTest.xml` → `tests="3"
+  failures="0" errors="0" timestamp="2026-08-17T04:33:25"` — both freshly generated by this run,
+  not a stale cached artifact.
+- `npx sf-validate-pipeline --scope=user` (from `etendo_schema_forge`) → `Pipeline validation: OK`.
+- Did **not** re-run `./gradlew clean` (per dispatch instruction — this checkout's `src-gen` broke
+  from it earlier in this ticket's history) and did not attempt an unfiltered `./gradlew test`
+  (accepted targeted-class evidence standard, same as REVIEW).
+
+**DB reference data re-verified live, read-only, against `etendogoclean` (port 5416):**
+- GOClient `ad_client_id` = `802509E12436405C86BA1FD5B1DF508C` — confirmed, name `GOClient`, no
+  drift.
+- The 4 **system-level** template role ids the code actually reads today
+  (`SystemRoleTemplates.java`'s hardcoded constants, used by `SFSystemRoleTemplates` since DEV
+  wave 7's repoint) — Finance `B88A34B5D1874F8685FA6F3C3A609412`, Sales
+  `15ECC46CFBD74CF3A76D1F4DC8BA9F80`, Purchasing `5E279F5102F9410F9B8CCBA424741F46`, Inventory
+  `73581A7B4F414A2C9059C83CE7BE97BF` — all confirmed `AD_Client_ID='0'`, `IsTemplate='Y'`, active,
+  in the live DB. **Zero drift on the ids the running system actually uses.**
+- Note on the 2026-08-14 QA pass's own recorded "template role ids"
+  (`127AE77FE2994067B7FE6495FC21D51E` etc.): those are GOClient's OWN **per-client copies** of the
+  same 4 role names, not the system-level templates — confirmed still present in the DB but now
+  `IsTemplate='N'` for **all 4** (drifted further since 2026-08-14, when Purchasing/Inventory were
+  still `'Y'` — see that pass's "Live Browser Pass Follow-Up"). This is **not a new bug**: DEV wave
+  7 already repointed the role catalog away from these per-client copies specifically because of
+  this exact drift risk (`SFSystemRoleTemplates`'s own class javadoc explains why), and B3's REVIEW
+  fix already corrected `user.md`'s doc references to match. Flagging only so a future QA pass
+  doesn't re-verify the wrong id set.
+- `ClassicDebug` (`77E57880608E49D9966BC7C87F37A786`), `ClassicTemplateTest1Read`
+  (`86B02D2175B14875BA5FA65282F17DD9`), `ClassicTemplateTest2Broad`
+  (`F17708435A1E4730AC08CC8EFD9FCA08`) — all present, ids match every citation across the B6
+  Findings sections.
+- Usernames on GOClient: 8 total today (`asd@mail.com`, `financetest@etendo.software`,
+  `goadmin@etendo.software`, `gouser@etendo.software`, `inventorytest@etendo.software`,
+  `noroletest@etendo.software`, `purchasetest@etendo.software`,
+  `salestest@etendo.software`) — the 5 named in the 2026-08-14 pass all still exist (with the
+  `@etendo.software` suffix the DB actually stores, vs. that pass's shorthand), plus one new
+  exploration account (`gouser@etendo.software`) not previously recorded. No missing users.
+
+**Backend redeploy status — the 2026-08-14 QA pass's #1 open item is now CLOSED.** That pass could
+not verify reload/grid persistence because `SFUserRoleAssignments` 404'd ("Spec not found") on the
+then-live backend. Checked this pass: `docker inspect etendogoclean-tomcat-1` shows the container
+was restarted `2026-08-16T23:17:17Z` (matches B6's own "`./gradlew smartbuild` + Tomcat restart
+completed" note). `curl http://localhost:8080/etendogoclean/sws/neo/userroleassignments` (and
+`.../systemroletemplates`, `.../rolesoverview` as a sibling control) all now return
+`{"error":{"message":"Missing or invalid Authorization header","status":401}}` — the NORMAL
+"reached the handler, needs a real token" response, not the framework-level "Spec not found: ..."
+404 the last pass hit. **The webhook is now correctly wired and reachable on the live backend**;
+only a valid session/bearer token stands between this and a full live read-after-write check.
+
+**Live browser-driven E2E pass — still blocked on credentials, not a new gap, not a blocker.**
+Checked whether credentials are available this time before flagging, per dispatch instruction:
+`etendo_schema_forge/.env` (the only non-example env file in the repo) contains DB/Jenkins
+credentials only, no GOClient login; no other credential store found. Per this ticket's own
+established precedent (REVIEW's identical Figma-access gap, and this exact gap in the 2026-08-14
+QA pass, both explicitly ruled "not a blocker"), **not treating this as a blocker again** — it is a
+standing, agent-unfixable infrastructure gap, now narrower than before (routing/deployment is
+confirmed correct; only auth remains unverified live).
+
+**Adapted verification, real DB, no login required — stronger than the last pass's adaptation.**
+Directly inspected the exact real, legitimately-composed account both B5 and B6 cite as their real-
+world evidence (`Personal – NewUsertest`, role `6AD5C0CC21F14050A65A3E62DC2FF9A2`, user
+`asd@mail.com` / `2DD62C68875A4989AFE6B76DCB3974BC`) — this is the SAME account the 2026-08-14 pass
+composed live via the UI and then reverted to zero roles; the human has since continued using it
+for B6's own live rounds, per that task's explicit "must not be deleted, it's real evidence"
+correction. Current live state:
+- All 4 real system templates actively inherited (Finance/Sales/Purchasing/Inventory,
+  `AD_Role_Inheritance` seqno 10/20/30/40) — the maximal composition case.
+- 33 active `AD_Window_Access` rows, **0 client/organization ownership mismatches** against the
+  role's own client — the exact invariant B6's guard exists to protect, holding under the broadest
+  real composition this account has ever carried.
+- `AD_User.Default_Ad_Role_ID` correctly synced to the personal role.
+This is real, live, unmocked evidence — stronger than a fresh JUnit fixture — that the write path
+and B6's ownership-correction fix hold correctly for a real account under maximal load, not just
+synthetic test data.
+- **Bonus observation, not independently verified end-to-end by me:** `ClassicDebug`'s live DB
+  state shows `ClassicTemplateTest2Broad` currently re-added (active inheritance, seqno 50) and its
+  Business Partner window access correctly `full` with `InheritedFrom` pointing at
+  `ClassicTemplateTest2Broad` — i.e., the FIRST half of the "last acceptance step, not yet
+  performed" the B6 status row flagged as outstanding (re-add the broad template, confirm round 4
+  still works) now appears to have happened. I did **not** perform the second half (remove it again,
+  confirm the downgrade to `ClassicTemplateTest1Read`'s read-only level) myself — that would mutate
+  the human's own live test fixture, out of scope for read-only QA verification. Flagging for the
+  coordinator/human to confirm whether that final loop has been closed, or is mid-sequence.
+
+**B6 regression-risk sanity check (dispatch item 5 — does the guard misfire on an ordinary,
+unrelated role edit?).** Read the full 915-line `WindowAccessOverlapCorruptionGuard.java` end to
+end, independent of REVIEW's own pass. Confirmed the class is narrowly gated at every entry point:
+`onSave`/`onUpdate` only act when the target `WindowAccess` row's owning role
+`isTemplate() == true` (`guardDependentsOf`) or, for a non-template role's row,
+`correctInheritedOwnership`/`widenInheritedAccessLevelIfNeeded` both early-return immediately when
+`access.getInheritedFrom() == null` — i.e. any manually-granted, non-inherited access row (the
+common case for an ordinary role edit with no template involved at all) is untouched. `onDelete`
+only acts on `RoleInheritance` deletes. A plain edit to an unrelated, non-template role's window
+access, or a template-less role gaining/losing an ordinary (non-template) inheritance, hits these
+observers but no-ops at the first guard check every time. Cross-checked this reading against the
+passing JUnit suites (8/8 `OverlapIntegrationTest` includes bystander-role scenarios; 3/3
+`RealAccessControlIntegrationTest` covers no-access/read-only/full outcomes) and a live DB spot
+check: queried every active inherited `AD_Window_Access` row instance-wide
+(`WHERE inherited_from IS NOT NULL AND isactive='Y'`) for client-ownership mismatches — see BUG-1
+below for the one finding that surfaced, which is pre-existing and unrelated to this ticket's own
+code, not a new misfire. No new regression risk found in the guard itself.
+
+**Findings:**
+
+```
+- [MEDIUM] BUG-1: Pre-existing AD_Window_Access ownership corruption on GOClient's `RoleFinanzas`
+  role, not caused by ETP-4906, not retroactively healed by B6's guard (by design — prevention-
+  only, documented extensively in the class's own javadoc).
+  Steps: `SELECT wa.*, r.ad_client_id AS role_client FROM ad_window_access wa JOIN ad_role r ON
+  r.ad_role_id = wa.ad_role_id WHERE wa.inherited_from IS NOT NULL AND wa.isactive='Y' AND
+  wa.ad_client_id <> r.ad_client_id;` against the live `etendogoclean` DB.
+  Expected: every active inherited `AD_Window_Access` row's `ad_client_id` matches its owning
+  role's own `ad_client_id`.
+  Actual: 27 of 62 active inherited rows are mismatched — all 27 belong to `RoleFinanzas`
+  (GOClient, client `802509E12436405C86BA1FD5B1DF508C`), each stuck at `ad_client_id='0'` (the
+  system client) across 27 different windows. `created`/`updated` timestamps on every one of these
+  27 rows are `2026-08-13`/`2026-08-14` — a full 2-3 days BEFORE `WindowAccessOverlapCorruptionGuard`
+  was even deployed (container restart confirmed `2026-08-16T23:17:17Z`). This is legacy corruption
+  from before the guard existed, not something the guard is failing to prevent today — a fresh
+  instance-wide scan found no NEWLY-corrupted rows post-deployment (`ClassicDebug`'s own rows,
+  updated as recently as `2026-08-17 04:02`, are correctly owned; the `Personal – NewUsertest` role's
+  33 rows, the most recently and heavily exercised composition in this environment, are also 100%
+  correctly owned).
+  Why not a blocker for ETP-4906: this ticket's own code (B6's guard) is a prevention mechanism by
+  explicit design — its own javadoc documents at length why a reactive/correction-based approach
+  does not work at all (`SecurityChecker.checkWriteAccess` races). It was never going to retroactively
+  fix rows corrupted before it existed. `RoleFinanzas` is not one of this ticket's own template roles
+  or test fixtures either.
+  Recommend: a separate one-time data-fix pass (delegate to Remedy per this repo's
+  `cli/src/data-fixes/` convention) to clean up already-corrupted `AD_Window_Access` rows
+  instance-wide — likely the same underlying legacy bug ETP-4852/4878 were already chasing, just
+  caught here on a role neither of those tickets' own test suites happened to touch. Track
+  separately from ETP-4906; does not gate this ticket's approval.
+```
+
+**No Critical/High bugs found.** REVIEW's approval stands; this pass independently re-confirms
+(not merely re-states) every automated suite green on a fresh run, closes the backend-redeploy
+half of the previous QA pass's one open item, adds stronger live-DB evidence for the write path
+under maximal real composition, does its own independent regression-risk read of B6's system-wide
+guard, and surfaces one pre-existing, unrelated data-integrity finding worth tracking separately.
+
+**QA phase is closed. Recommend proceeding to DOCS (Sage)** — note DOCS already ran once
+(commit `acf7e78cf`) against earlier code; worth a quick freshness check against waves 6-12/B5/B6
+given how much landed since, but that is DOCS's own call, not a QA blocker.
 
 ## Manual QA Feedback (Human, 2026-08-14) — DEV wave 6, 5 findings
 
