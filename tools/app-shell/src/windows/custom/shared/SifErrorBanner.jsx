@@ -3,8 +3,11 @@ import { useUI } from '@/i18n';
 // SII states that indicate a sending error worth surfacing
 const SII_ERROR_STATES = new Set(['AE', 'EE']);
 
-// Verifactu states that indicate a problem (accepted-with-errors, invalid, rejected)
-const VERIFACTU_ERROR_STATES = new Set(['AE', 'IN', 'ER']);
+// Verifactu states that indicate a transmission error worth surfacing as a banner.
+// 'IN' (Inválida) is intentionally excluded: it reflects a local validation failure
+// that is already visible in the SIF tab — showing it as a prominent red banner in
+// the invoice form is redundant and alarming to the user (ETP-4783).
+const VERIFACTU_ERROR_STATES = new Set(['AE', 'ER']);
 
 function siiStatusLabel(ui, estado) {
   const MAP = {
