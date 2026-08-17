@@ -68,12 +68,16 @@ CLOSED — see "REVIEW Findings — Final Verdict" below — REVIEW's overall ve
 QA has now also run a full pass — see "QA Findings — Full Pass (Sentinel, 2026-08-17)" below —
 and returned APPROVE as well, with one MEDIUM, non-blocking, pre-existing (not caused by this
 ticket) data-integrity finding (BUG-1) recommended for a separate Remedy follow-up. Both DEV
-(waves 6-12, B5, B6) and REVIEW are fully closed; QA is now also closed.** Still owed to the
-human: the manual-eyeball-test checklist requested earlier. **Concrete next steps, in order:
-(1) hand the human the manual-test checklist, (2) DOCS (Sage) — already ran once (commit
-`acf7e78cf`) against earlier code, worth a freshness check against waves 6-12/B5/B6 before
-calling the ticket fully done, (3) optionally track BUG-1 as a separate Remedy data-fix task,
-unrelated to this ticket's own scope.**
+(waves 6-12, B5, B6) and REVIEW are fully closed; QA is now also closed. **DOCS has now also run
+a full freshness pass — see "DOCS Findings — Full Pass (Sage, 2026-08-17)" below — and is
+closed**, having found and fixed real staleness in `user.md` and `02-capacidades-y-flujos.md` that
+both the original DOCS pass and REVIEW's narrower re-checks missed (the discarded First
+Name/Last Name callout, wave 11's undocumented matrix visual polish, wave 12's missing
+pipeline-regeneration entry, and a stale claim that the excluded `userRoles` tab still renders).
+DEV/REVIEW/QA/DOCS are all now closed.** Still owed to the human: the manual-eyeball-test
+checklist requested earlier. **Concrete next steps, in order: (1) hand the human the manual-test
+checklist, (2) optionally track BUG-1 as a separate Remedy data-fix task, unrelated to this
+ticket's own scope, (3) ticket looks ready for Clerk to prepare the PR(s) once (1) is done.**
 
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
@@ -91,7 +95,7 @@ unrelated to this ticket's own scope.**
 | F7 | Invite snackbar | 🚫 DESCOPED, moved to ETP-4830 | Human decision 2026-08-14, same pattern as B4/F4 → ETP-4889: no invite-email mechanism exists for admin-created users today (see F7 Findings), so no snackbar ships in ETP-4906. `InviteRolesSnackbar.jsx` will land together with the real email flow when ETP-4830 (already assigned to the human, status TBD) is picked up. |
 | F8 | i18n keys | ⏳ PENDING | Rolls into F3/F5/F6 as they land — no standalone dispatch. F7 is descoped, so it contributes no i18n keys. |
 | F9 | Tests (Tester) | ✅ DONE (Vitest + Playwright done, both known bugs FIXED, stale tests updated, i18n gap closed — see F9 Findings, DEV wave 4 + Tester wave 5) | Vitest coverage landed for F2/F3/F5/F6 + the `DetailView.jsx` `onAfterExistingSave` prop (F1/F3) — 9 files, 135 new tests, full suite green. Playwright landed: `e2e/tests/flows/user-role-assignment.mocked.spec.js`, multi-role assign flow on an existing user (chip toggle/removal, live matrix, save wiring, reload persistence) + grid role filter (template role + Admin). F7's invite snackbar stayed out of scope (descoped to ETP-4830, no component exists). A real, severe bug was found while writing the Save-flow scenario: role-only chip changes could never enable the "Guardar" button — **FIXED (DEV wave 4):** `additionalDirtyState` wired through `windows/custom/user/index.jsx`. A second, smaller i18n gap (4 missing locale keys in `AssignTemplateRolesControl.jsx`) was also found and **FIXED same session.** **Tester wave 5 (2026-08-14, this session) — DONE:** folded the stale `KNOWN BUG` Playwright test into `once Guardar is clickable…`, renamed to `a role-only chip change enables Guardar and, once clicked, calls SFAssignUserRoles exactly once with the full desired role-id set`, now asserting the fixed behavior end to end (role-only toggle enables Guardar, toggling back disables it, save fires the webhook once, post-save Guardar disables again, an unrelated second save doesn't re-fire) — spec now 7 tests, all green. Added 4 new Vitest tests in `index.vitest.jsx` directly covering the `additionalDirtyState` prop (initial `false`, becomes `true` on toggle, returns to `false` on toggle-back, and the critical post-save regression case). Also closed the adjacent `roleAssignmentSaveFailed` i18n gap (both locale files) noticed but left unfixed by DEV wave 4. See "F9 Findings" and "Tester Wave 5 Verification" below for full detail. |
-| F10 | Docs (Sage) | ⚠️ STALE — done for pre-wave-6/7 code, not yet updated for the new `SFSystemRoleTemplates` endpoint or wave 6's tab/matrix behavior changes (2026-08-14) | Updated `docs/generated-custom-windows/user.md` (multi-role picker, "Roles del usuario" matrix tab incl. the 3-General-row/9-gap-row convention, grid role chips/filter, `onAfterExistingSave` as a reusable `DetailView.jsx` extension point). Closed both stale-doc mentions REVIEW flagged: `docs/generated-custom-windows/user.md`'s old evidence line and `docs/functionalidad/02-capacidades-y-flujos.md`'s CAP-ROL-02 (rewritten to describe the ETP-4906 flow; old ETP-4512 `AD_User_Roles`/`Default_Ad_Role_ID` sync noted as orphaned-but-untouched in a new "Huecos abiertos" bullet) — no dangling references to deleted files remain in either. Also fixed one more dangling `AssignRoleControl.jsx` mention found in `docs/functionalidad/01-actores-y-superficies.md` (not flagged by REVIEW, same root cause, trivial one-line fix). Confirmed `docs/decisions-reference.md` needs no changes — `git show 3466f43fa -- artifacts/user/decisions.json` shows only `customPanelTabs`/`customComponents.headerTable`/`headerExtra.customForm`, all pre-existing extension points, no new key. |
+| F10 | Docs (Sage) | ✅ DONE (2026-08-17, full freshness pass against waves 6-12/B5/B6) | See "DOCS Findings — Full Pass (Sage, 2026-08-17)" below. Fixed real staleness the earlier pass (commit `acf7e78cf`) and REVIEW's narrower re-checks both missed: `user.md`'s field list/reactive-behavior/gap-assessment text still described the discarded First Name/Last Name callout (wave 12) as live; wave 11's matrix visual polish (pills, category-header casing, per-role icons) had zero doc coverage; the pipeline-regeneration section didn't cover wave 12's independent `decisions.json` diff; `02-capacidades-y-flujos.md`'s CAP-ROL-02 "Huecos abiertos" bullet still claimed the excluded `userRoles` tab "still reflects" its legacy row post-wave-6, when it no longer renders at all. Also added `user` as a "Real example" in `ui-customization.md`'s `headerExtra`/`customComponents.headerTable` sections and refreshed `INDEX.md`'s stale ETP-4512-era one-liner for `user.md`. Verified `docs/neo-headless.md` §8d's `WindowAccessOverlapCorruptionGuard` subsection (REVIEW's own addition) is complete and well-integrated — no changes needed there. Checked `onAfterExistingSave`/B6's `EntityPersistenceEventObserver` pattern for cross-cutting indexing gaps — both intentionally out of scope for existing doc structures (consistent with their own precedents, `onAfterCreate`/`ContactNameSyncHandler`, also undocumented there) — flagged as non-blocking suggestions, not fixed. All i18n keys the doc relies on independently re-verified present in both locale files. |
 | DEV wave 6 | 5 manual-QA fixes (spacing, blank-trigger, toast sequencing, duplicate tab, unfiltered matrix) | ✅ DONE + tested | Frontend only. Commits `66c0df38b` (fix) + `7f75e37f7` (Tester follow-up). See "Manual QA Feedback... DEV wave 6" section. |
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
@@ -2117,6 +2121,151 @@ guard, and surfaces one pre-existing, unrelated data-integrity finding worth tra
 **QA phase is closed. Recommend proceeding to DOCS (Sage)** — note DOCS already ran once
 (commit `acf7e78cf`) against earlier code; worth a quick freshness check against waves 6-12/B5/B6
 given how much landed since, but that is DOCS's own call, not a QA blocker.
+
+## DOCS Findings — Full Pass (Sage, 2026-08-17)
+
+**Scope:** full independent freshness pass against the code as it stands after waves 6-12, B5, B6,
+and all REVIEW/QA rounds — not a re-trust of the original 2026-08-14 DOCS pass (commit `acf7e78cf`,
+already updated once for the original multi-role picker design) or of REVIEW's own narrow doc fixes
+(2 staleness bugs already closed by REVIEW in `user.md`: role-catalog source attribution, Email
+Configuration mount claim — not re-litigated here). Read the plan's Status table, all 12 DEV wave
+sections, Tasks B5/B6, and the 3 REVIEW Findings + QA Full Pass sections in full before touching any
+doc. Files touched are all in `etendo_schema_forge` — no `com.etendoerp.go` doc changes were needed
+(see below).
+
+**Real staleness found and fixed, `docs/generated-custom-windows/user.md`:**
+1. **"What this window should allow" (line 9, pre-existing gap, not caught by REVIEW's narrower
+   pass):** still listed "First Name, Last Name" as maintained identity fields — stale since DEV
+   wave 12 (commit `404a0ce70`) discarded both from `decisions.json` entirely. Verified directly
+   against the current file (`python3` read of `artifacts/user/decisions.json`'s `entities.user.
+   fields.firstName/lastName` → both `visibility: "discarded"`) and against the generated form
+   (`grep -c firstName|lastName artifacts/user/generated/web/user/UserForm.jsx` → 0 hits). Fixed:
+   removed both fields from the prose list, with a forward pointer to the fuller explanation.
+2. **"Reactive behavior and dependencies" (old line 35) — described a synchronization callout that
+   no longer exists.** The doc claimed Name/First Name/Last Name "carry the same `SL_User_Name`
+   callout" and react together; wave 12 flipped `SL_User_Name_Firstname`/`SL_User_Name_Lastname`
+   from `"Keep"` to `"Omit"` (confirmed directly in `decisions.json`'s `rules` block) precisely
+   because the fields themselves are gone. Rewrote the bullet to state the discard/rule-flip as
+   fact, with the wave/commit citation, instead of describing dead behavior.
+3. **Same stale claim echoed in "Gap assessment" (old line 52)** ("callout-backed synchronization
+   ... should not be treated as confirmed UI behavior without manual verification") — this framed a
+   REMOVED feature as an open verification gap. Fixed: replaced with a note that the gap is closed
+   by removal, not by verification, cross-referencing the Reactive-behavior fix above.
+4. **Wave 11's matrix visual polish (pills, category-header casing, per-role icons) was completely
+   undocumented.** Re-read `UserRolesTab.jsx` in full against the doc's "Cell values" sentence,
+   which only described `✓`/`Solo lectura`/`—` as bare values — no mention of the `TierPill`
+   component, the `status-success`/`status-warning` semantic tokens, the removed `uppercase`
+   category-header class, or the `ROLE_ICONS` (`lucide-react`) map added in DEV wave 11 (commit
+   `8fe4753d8`). This is real, currently-shipped, human-visually-confirmed UI behavior with zero
+   doc coverage — added a new paragraph under "Reactive behavior and dependencies" describing all
+   three, grounded directly in the component source (tokens, icon-to-role mapping, weight/casing
+   change) rather than restating the plan doc's prose.
+5. **"Pipeline regeneration — ETP-4906" section only covered the original decisions.json diff**
+   (headerExtra/customPanelTabs/customComponents.headerTable), not wave 12's later, independent
+   `decisions.json` change (firstName/lastName discard + rule flips, contract `0.20.0` → `0.21.0`).
+   Added a "Follow-up regeneration — DEV wave 12" subsection documenting that diff, the
+   `sf-validate-pipeline` confirmation, and the manual `UserHeaderTable.jsx` column re-sync — this
+   is exactly the kind of window-specific pipeline change CLAUDE.md's Documentation Freshness policy
+   requires landing in the same doc.
+
+Everything else in `user.md` was independently re-verified against current source and found
+accurate — **not** just re-trusted from REVIEW's pass: wave 10's `detailTabOrder={1}`/`tabOrder: 0`
+tab-order mechanism (line 29) matches `windows/custom/user/index.jsx` verbatim (read directly, not
+grepped-and-assumed); the 5-column `UserHeaderTable.jsx` grid (`name, businessPartner, email,
+locked`, `defaultRole` via `roleColumn`) matches the doc's grid-behavior claims; `customLoaders['user']`
+registration matches `registry.js`; all locale keys the doc implicitly relies on
+(`assignedRolesLabel`, `noRolesAssigned`, `saveUserFirstForRoles`, `removeRoleAria`,
+`roleAssignmentSaveFailed`, `userRolesTabLabel`, `userRolesTabEmptyState`, the 3
+`userRolesTabDashboardRow`-family keys, `usersGridRolesColumn`, `accessTierReadOnly`) exist in both
+`en_US.json`/`es_ES.json` (nested under `genericLabels`, confirmed by direct read, not assumed from
+key naming).
+
+**Real staleness found and fixed, `docs/functionalidad/02-capacidades-y-flujos.md` (CAP-ROL-02,
+"Huecos abiertos" bullet, old line 344):** claimed the native "User Roles" child tab
+(`userRoles`) "sigue reflejando esa fila legacy" (still reflects the legacy `Default_Ad_Role_ID` row,
+read-only). **False as of DEV wave 6:** `userRoles` is `exclude: true` in `decisions.json` (confirmed
+directly) and no longer renders at all — its generated `UserRolesTable.jsx`/`UserRolesForm.jsx` were
+deleted during REVIEW's cleanup, exactly as `user.md`'s own "Window shape" bullet already documented
+correctly. This bug slipped through the first DOCS pass (which rewrote CAP-ROL-02's main body
+correctly but left this one "Huecos abiertos" bullet describing the pre-wave-6 state) and through
+REVIEW's own narrower re-checks (which focused on `user.md`, not the Spanish functional-flows doc).
+Fixed: the bullet now states the tab renders nothing at all, with the legacy DB row's existence
+(untouched, just surfaceless) kept as the actual remaining gap. `01-actores-y-superficies.md` (line
+25) was independently re-checked and found already accurate — no fix needed there.
+
+**`docs/neo-headless.md` §8d (`com.etendoerp.go`) — read in full, no changes needed.** The
+`WindowAccessOverlapCorruptionGuard` subsection (the four guarded triggers, the `@Priority`
+ordering claim, the `TEMPLATES_BEING_REMOVED` thread-local + `TransactionCompletedEvent` cleanup,
+and the cross-reference to `UserRoleCompositionServiceOverlapIntegrationTest`/
+`RealAccessControlIntegrationTest` at §9) reads as complete and well-integrated with the doc's
+existing §8b–8f numbering and its own precedent subsections (reconcileInheritances, the
+cross-template overlap fix) — consistent with REVIEW's own line-by-line verification against the
+real Java source. No doc-freshness gap found here; not re-editing already-solid REVIEW work.
+
+**Cross-cutting indexing check (item 4 of the dispatch) — `docs/ui-customization.md`:**
+- `onAfterExistingSave` (the `DetailView.jsx` extension point from Task F1) is **not** documented in
+  `ui-customization.md`, and neither is its precedent, `onAfterCreate` (`warehouse/index.jsx`) —
+  confirmed by grep, zero hits for either name anywhere in that file. This is consistent, not a
+  fresh gap: `ui-customization.md`'s own "Core principle" scopes it strictly to
+  `decisions.json`-declared, generator-emitted extension points (`window.*` keys read by
+  `generate-frontend.js`); `onAfterExistingSave`/`onAfterCreate` are runtime props a hand-written
+  `windows/custom/{window}/index.jsx` passes directly to the generated `<Page>` component, a
+  different mechanism class the doc doesn't cover for ANY window, not just `user`. Left undocumented
+  there, matching precedent — already thoroughly documented in `user.md`'s own "Save-lifecycle hook"
+  paragraph (line 31), which explicitly calls out its generic/reusable nature and the `warehouse`
+  precedent. Not fixing this — would be introducing a new doc-scope decision beyond this ticket's
+  remit, not closing a freshness gap.
+- **`window.headerExtra` and `window.customComponents.headerTable`** ARE `decisions.json`-declared,
+  generator-emitted extension points squarely inside `ui-customization.md`'s scope, and `user` is a
+  real, shipped example of both that the doc's own "Real example(s)" convention didn't list yet
+  (only `contacts` and `sales-invoice` respectively). Added `user` (`AssignTemplateRolesControl`,
+  `UserHeaderTable`) to both "Real examples" lines, with a one-line description and a pointer back
+  to `user.md` for the full mechanism — low-risk, factual, directly serves this dispatch's "deserve
+  a mention" ask.
+- **B6's `EntityPersistenceEventObserver` pattern** (`WindowAccessOverlapCorruptionGuard`,
+  `com.etendoerp.go`) is a genuinely different extension mechanism from the `NeoHandler` CDI-hook
+  system `docs/neo-headless-extensibility.md` documents (that doc covers request/response-time hooks
+  into NEO Headless routing; this is a Hibernate/Weld persistence-lifecycle observer, unrelated to
+  NEO Headless at all). Confirmed by grep: `neo-headless-extensibility.md` has zero mentions of
+  `EntityPersistenceEventObserver` or `ContactNameSyncHandler` (the guard's own cited precedent for
+  this pattern) — so this isn't a fresh indexing gap ETP-4906 introduced, it's a pre-existing
+  absence the guard's javadoc + `neo-headless.md` §8d already compensate for in situ. Flagging as a
+  **suggestion, not a blocker:** a future architectural-docs pass could give
+  `EntityPersistenceEventObserver` the same first-class "here's the reusable pattern" treatment
+  `NeoHandler` gets in this repo's CLAUDE.md — out of scope for ETP-4906 itself, since the pattern
+  predates this ticket and the ticket's own usage is already well-documented at the point of use.
+- The multi-role picker's own extension points (`headerExtra`, `customPanelTabs`,
+  `customComponents.headerTable`) were all pre-existing generator capabilities before this ticket
+  (confirmed by the original DOCS pass via `git show 3466f43fa`) — ETP-4906 only exercises them, it
+  didn't add new ones, so there is no new mechanism here needing a `decisions-reference.md` entry
+  beyond the "Real examples" cross-refs added above.
+
+**Minor, non-blocking observation, not fixed (would be scope creep):**
+`docs/decisions-reference.md`'s `hideDelete` property table (around line 709) cites "Added ETP-4512
+(`userRoles` on the `user` window)" as a real example — historically accurate framing ("Added"), but
+now describes a dead example: `userRoles` is fully `exclude: true`d as of DEV wave 6, so its
+`hideDelete` setting never renders at all anymore. Left as-is: it's a historically-true statement in
+a generator-reference doc explicitly out of this ticket's primary scope, and REVIEW already
+confirmed (prior pass) `decisions-reference.md` needed no ETP-4906-driven changes. Noting here in
+case a future cleanup pass wants a better "Real example" citation for that property.
+
+**Commits (this repo, `feature/ETP-4906`, not pushed):**
+- `docs/generated-custom-windows/user.md` — 5 fixes above.
+- `docs/functionalidad/02-capacidades-y-flujos.md` — CAP-ROL-02 "Huecos abiertos" bullet fix.
+- `docs/ui-customization.md` — `user` added to `headerExtra`/`customComponents.headerTable` real
+  examples.
+- `docs/generated-custom-windows/INDEX.md` — `user.md`'s one-line description updated from the
+  stale ETP-4512-era "roles child surface" wording to describe the ETP-4906 multi-role composition
+  feature.
+
+**DOCS phase is closed.** No `com.etendoerp.go` doc changes were needed (verified, not assumed —
+§8d read in full). **Overall ticket read (not this agent's decision to make, but requested by the
+coordinator):** DEV (waves 6-12, B5, B6), REVIEW, QA, and now DOCS are all closed with no open
+blockers. The one remaining loose end recorded in the Status table banner — handing the human the
+manual-eyeball-test checklist — is a human-facing step, not a pipeline-phase gate, and BUG-1 (the
+pre-existing, ETP-4906-unrelated `AD_Window_Access` corruption on `RoleFinanzas`) is already
+correctly scoped to a separate Remedy follow-up by QA. From a pipeline-phase standpoint this ticket
+looks ready for Clerk to prepare the PR(s).
 
 ## Manual QA Feedback (Human, 2026-08-14) — DEV wave 6, 5 findings
 
