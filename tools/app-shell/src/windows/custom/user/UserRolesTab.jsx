@@ -278,7 +278,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               return (
                 <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
                   <span className="inline-flex items-center justify-center gap-1">
-                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="RoleIcon__71bdc9" />}
+                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid={`RoleIcon__${role.id}`} />}
                     {resolveRoleDisplayName(ui, role.name)}
                   </span>
                 </th>
@@ -287,8 +287,8 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          <Fragment key="general" data-testid="Fragment__71bdc9">
-            <tr className="bg-muted/30">
+          <Fragment key="general">
+            <tr className="bg-muted/30" data-testid="UserRolesTab__category-general">
               <th
                 colSpan={columns.length + 1}
                 className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
@@ -301,15 +301,15 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                 <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
                 {columns.map((role) => (
                   <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                    <TierPill tier="full" data-testid="TierPill__71bdc9">{'✓'}</TierPill>
+                    <TierPill tier="full" data-testid={`TierPill__${row.key}-${role.id}`}>{'✓'}</TierPill>
                   </td>
                 ))}
               </tr>
             ))}
           </Fragment>
           {categoryGroups.map((group) => (
-            <Fragment key={group.category} data-testid="Fragment__71bdc9">
-              <tr className="bg-muted/30">
+            <Fragment key={group.category}>
+              <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
                 <th
                   colSpan={columns.length + 1}
                   className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
@@ -324,7 +324,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                     const { tier, text } = cellValue(row, role);
                     return (
                       <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                        <TierPill tier={tier} data-testid="TierPill__71bdc9">{text}</TierPill>
+                        <TierPill tier={tier} data-testid={`TierPill__${row.windowId}-${role.id}`}>{text}</TierPill>
                       </td>
                     );
                   })}

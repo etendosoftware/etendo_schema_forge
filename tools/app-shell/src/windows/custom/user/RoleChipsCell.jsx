@@ -127,11 +127,11 @@ export function useUserRoleGridData() {
   return { ...state, rolesById, adminRoleId };
 }
 
-function RoleChip({ children }) {
+function RoleChip({ children, 'data-testid': dataTestId = 'RoleChipsCell__chip' }) {
   return (
     <span
       className="inline-flex items-center px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 whitespace-nowrap max-w-full truncate"
-      data-testid="RoleChipsCell__chip">
+      data-testid={dataTestId}>
       {children}
     </span>
   );
@@ -161,28 +161,33 @@ export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments
   if (adminRoleId && defaultRoleId && defaultRoleId === adminRoleId) {
     return (
       <span className="inline-flex items-center gap-1.5" data-testid="RoleChipsCell__admin">
-        <RoleChip data-testid="RoleChip__8d5e33">{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
+        <RoleChip data-testid="RoleChip__admin-badge">{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
       </span>
     );
   }
 
   const userId = resolveUserId(row);
   const appliedIds = userId ? (assignments?.[userId] ?? []) : [];
-  const names = appliedIds
+  const roleChips = appliedIds
     .map((id) => rolesById?.[String(id)])
     .filter(Boolean)
-    .map((role) => (role.isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : resolveRoleDisplayName(ui, role.name)));
+    .map((role) => ({
+      id: role.id,
+      label: role.isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : resolveRoleDisplayName(ui, role.name),
+    }));
 
-  if (names.length === 0) {
+  if (roleChips.length === 0) {
     return <span className="text-muted-foreground" data-testid="RoleChipsCell__empty">—</span>;
   }
 
-  const shown = names.slice(0, MAX_CHIPS);
-  const extra = names.length - shown.length;
+  const shown = roleChips.slice(0, MAX_CHIPS);
+  const extra = roleChips.length - shown.length;
 
   return (
     <span className="inline-flex items-center gap-1.5 max-w-full" data-testid="RoleChipsCell__chips">
-      {shown.map((name, i) => <RoleChip key={`${name}-${i}`} data-testid="RoleChip__8d5e33">{name}</RoleChip>)}
+      {shown.map(({ id, label }) => (
+        <RoleChip key={id} data-testid={`RoleChip__${id}`}>{label}</RoleChip>
+      ))}
       {extra > 0 && (
         <span
           className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]"

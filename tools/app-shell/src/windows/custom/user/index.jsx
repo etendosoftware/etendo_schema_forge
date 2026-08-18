@@ -114,8 +114,7 @@ export default function UserWindow(props) {
 
   return (
     <RoleSelectionProvider
-      value={{ selectedRoleIds, setSelectedRoleIds }}
-      data-testid="RoleSelectionProvider__853799">
+      value={{ selectedRoleIds, setSelectedRoleIds }}>
       <UserPage
         {...props}
         onAfterExistingSave={handleRoleAssignmentSave}
