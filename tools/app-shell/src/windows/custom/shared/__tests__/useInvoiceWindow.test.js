@@ -102,6 +102,20 @@ describe('useInvoiceWindow', () => {
       const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, null, () => {}, { showEmail: false });
       assert.equal(result.onEmail, undefined);
     });
+
+    // ETP-4717 — this function builds rowQuickActions by hand (bypassing the
+    // generated contract's rowQuickActions.actions.email.visibleWhen), so the
+    // gate must be asserted here directly. Regression: without it, the Grid
+    // "Enviar" (email) quick action shows on every row regardless of status.
+    it('gates the row-hover email quick action to Confirmed invoices (CO) when showEmail is true (default, sales-invoice)', () => {
+      const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+      assert.equal(result.actions.email.visibleWhen, "@DocumentStatus@='CO'");
+    });
+
+    it('does not set visibleWhen on the email action when showEmail is false (purchase-invoice stays unaffected)', () => {
+      const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, { showEmail: false });
+      assert.equal('visibleWhen' in result.actions.email, false);
+    });
   });
 
   describe('useClearSavedRecord (source shape)', () => {

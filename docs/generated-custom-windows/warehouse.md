@@ -168,23 +168,45 @@ Columns:
 | Column | Alignment | Notes |
 |--------|-----------|-------|
 | Date | left, `font-semibold`, tabular-nums | `DD/MM/YYYY` format |
-| Type | left, `text-muted-foreground` | Resolved from `movementType$_identifier` or mapped via `TYPE_KEY_MAP` i18n key |
+| Type | left, `text-muted-foreground` | Resolved from `etgoDocWindow` via `WINDOW_TYPE_KEY_MAP` when present (distinguishes normal document vs. return — see below); falls back to translated `TYPE_KEY_MAP[movementType]`, then raw `movementType$_identifier`, otherwise |
 | Document | left | Navigable `DocumentLink` (underline + ↗ icon) when `etgoDocWindow` and `etgoDocHeaderId` are present; plain text otherwise |
 | Product | left | `product$_identifier` |
 | Qty | right, tabular-nums, `font-semibold` | Positive: `emerald-600` with leading `+`. Negative: `text-destructive`. |
 
-Movement type to source document mapping (resolved server-side by `ProductTransactionsHandler`):
+Source document mapping (resolved server-side by `ProductTransactionsHandler`), keyed on
+`M_InOut.IsSOTrx` + `C_DocType.IsReturn` — **NOT** on `M_InOut.MovementType`. Verified against
+a real instance: `MovementType` is identical between a normal document and its return
+(`C-`/`C-`, `V+`/`V+`); the actual discriminator is the `IsReturn` flag on the document's
+`C_DocType`, joined in via `M_InOut.C_DocType_ID`:
 
-| MovementType | Source join | GO window |
-|---|---|---|
-| `V+` | `M_InOutLine → M_InOut` | `goods-receipt` |
-| `C-` | `M_InOutLine → M_InOut` (issotrx = Y) | `goods-shipment` |
-| `M+` / `M-` | `M_MovementLine → M_Movement` | `goods-movements` |
-| `I+` / `I-` | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
-| `P+` / `P-` | `M_ProductionLine → M_Production` | No GO window yet — plain text |
-| `D-` / `D+` | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
+| IsSOTrx | C_DocType.IsReturn | Source join | GO window |
+|---|---|---|---|
+| `Y` | `N` (normal sale) | `M_InOutLine → M_InOut ⟕ C_DocType` | `goods-shipment` |
+| `Y` | `Y` (sales return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-material-receipt` |
+| `N` | `N` (normal purchase) | `M_InOutLine → M_InOut ⟕ C_DocType` | `goods-receipt` |
+| `N` | `Y` (purchase return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-to-vendor-shipment` |
+| — | — | `M_MovementLine → M_Movement` | `goods-movements` |
+| — | — | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
+| — | — | `M_ProductionLine → M_Production` | No GO window yet — plain text |
+| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
 
 `documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, or `productionLine$_identifier`.
+
+**Type column resolution:** `M_Transaction.MovementType` is identical between a normal document and
+its return (`C-` for both a customer shipment and its return, `V+` for both a vendor receipt and its
+return), so it cannot be used alone to label the Type column for a return. `resolveTypeLabel()` in
+`WarehouseTransactionsTable.jsx` instead prefers `WINDOW_TYPE_KEY_MAP[tx.etgoDocWindow]` — the same
+document-window discriminator used for navigation — mapping `return-material-receipt` →
+`movTypeCustomerReturn` and `return-to-vendor-shipment` → `movTypeVendorReturn` (normal
+`goods-shipment`/`goods-receipt` reuse the existing `movTypeCustomerShipment`/`movTypeVendorReceipt`
+keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`, production,
+internal consumption) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
+real `M_Transaction.MovementType` codes — `V+`, `I+`, `I-`, `M+`, `M-`, `P+`, `P-`, `C-`, `D-` — see
+`artifacts/return-material-receipt/FINDINGS.md`, which confirms no other codes like `V-`/`C+` are
+actually used in stock transactions), and only drop to the raw `movementType$_identifier` /
+`movementType` code as a last resort when the code is unmapped. The raw identifier must never be
+checked before the translated map — doing so silently reintroduces hardcoded English text
+regardless of locale (see ETP-4864).
 
 Empty state shows `warehouseNoTransactions` centered message.
 

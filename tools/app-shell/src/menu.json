@@ -145,7 +145,8 @@
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
-          "path": "report-viewer?category=purchases"
+          "path": "report-viewer?category=purchases",
+          "hidden": true
         }
       ]
     },
@@ -366,6 +367,12 @@
       "section": "System",
       "items": [
         {
+          "name": "organization",
+          "label": "Organization",
+          "favname": "Organization",
+          "windowId": "110"
+        },
+        {
           "name": "price-list",
           "label": "Price List",
           "favname": "Price List",
@@ -410,13 +417,15 @@
         {
           "name": "smart-scan",
           "label": "Smart Scan",
-          "favname": "Smart Scan"
+          "favname": "Smart Scan",
+          "hidden": true
         },
         {
           "name": "oauth2-clients",
           "label": "OAuth2 Clients",
           "favname": "OAuth2 Clients",
-          "icon": "Shield"
+          "icon": "Shield",
+          "hidden": true
         },
         {
           "name": "fiscal-config",

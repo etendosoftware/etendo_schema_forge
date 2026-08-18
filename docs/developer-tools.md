@@ -2,6 +2,65 @@
 
 CLI tools used by the team to streamline development workflows.
 
+## Optional Kubernetes Pre-push Runner
+
+The normal pre-push hook runs locally. Set `PREPUSH_EXECUTION=cloud` in the
+unversioned `.env` file (or export it) to execute the same canonical hook in a
+persistent Kubernetes runner instead. Cloud mode is authoritative: if it fails,
+the push is blocked; remove the setting or set `local` to use the local fallback.
+
+The kubeconfig is deliberately not stored in the repository. Cloud mode requires
+these local environment values:
+
+```bash
+PREPUSH_EXECUTION=cloud
+PREPUSH_KUBECONFIG=/absolute/path/to/private-kubeconfig.yaml
+```
+
+By default, the runner namespace is derived from `git config user.email` as
+`prepush-<normalized-email>`. Each developer therefore gets a distinct runner
+pod and PVC across all repositories and worktrees. The first cloud pre-push
+provisions that runner automatically; the provisioner can also be run manually:
+
+```bash
+scripts/provision-remote-prepush-runner.sh
+```
+
+The default PVC is 20Gi and persists npm, Sonar, tools, Vite, Git, and run-log
+caches. The Deployment starts at zero replicas, scales to one for a cloud
+pre-push, and is always scaled back to zero when it ends; only the PVC remains.
+The runner uses a 30-second termination grace period, so completed runs release
+their CPU and memory promptly.
+While active, the default runner requests 4 CPU / 8Gi and can burst to 8 CPU /
+16Gi. Its persistent Vite/Vitest cache, npm cache, and Sonar cache are reused
+by later runs. `PREPUSH_NAMESPACE` overrides the derived namespace only when
+needed; `PREPUSH_CPU_REQUEST`, `PREPUSH_CPU_LIMIT`,
+`PREPUSH_MEMORY_REQUEST`, and `PREPUSH_MEMORY_LIMIT` tune resource values.
+
+Other optional values are `PREPUSH_KUBE_CONTEXT`, `PREPUSH_NAMESPACE`,
+`PREPUSH_DEPLOYMENT`, `PREPUSH_SONAR_ENV_FILE`, `PREPUSH_GO_REPO`, and
+`PREPUSH_NPMRC`. When `PREPUSH_NPMRC` is absent, the runner uses
+`npm config get userconfig`; it fails before contacting Kubernetes if neither
+that global npmrc nor the explicit override is a valid file.
+`PREPUSH_GO_REPO` accepts either the `com.etendoerp.go` module directory or the
+Etendo root. When omitted, the runner first checks the current checkout and
+then the primary Git worktree for `etendo_core/modules/com.etendoerp.go`. It
+fails if that sourcedata is not available, so the canonical XML comparison is
+never silently skipped. The
+runner keeps only safe npm and Sonar caches on its persistent volume; the Git
+bundle, npm credentials, and Sonar token are sent to the pod's ephemeral
+`/tmp` directory and removed when the run ends.
+
+The isolated remote checkout cannot prove local commit trailers for inherited
+history, so cloud mode sets `HOOKS_VERIFY_SKIP=1` only for the remote execution.
+The normal local hook retains its trailer validation. For a manual run, execute:
+
+```bash
+PREPUSH_EXECUTION=cloud scripts/run-remote-prepush.sh
+```
+
+Cloud mode accepts one branch update per push. Push multiple refs separately.
+
 ## RTK (Rust Token Killer)
 
 Token-optimized CLI proxy that reduces LLM token consumption by 60-90% on common dev commands. Single Rust binary, zero dependencies. Works transparently via Claude Code hooks — shell commands are automatically rewritten through RTK filters.

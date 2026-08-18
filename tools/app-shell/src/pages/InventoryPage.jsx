@@ -109,7 +109,7 @@ export default function InventoryPage() {
                     <div className={`mt-0.5 rounded-full p-1 ${
                       movement.direction === 'in'
                         ? 'bg-status-success text-status-success-foreground'
-                        : 'bg-destructive text-destructive'
+                        : 'bg-destructive text-destructive-foreground'
                     }`}>
                       {movement.direction === 'in'
                         ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__2d6473" />

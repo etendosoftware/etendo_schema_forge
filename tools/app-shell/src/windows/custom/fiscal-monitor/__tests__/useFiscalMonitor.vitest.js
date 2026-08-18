@@ -6,7 +6,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 const mockApiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch', () => ({ useApiFetch: () => mockApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (url) => url }));
-vi.mock('../../fiscal-config/fiscalConfig.utils.js', () => ({
+vi.mock('../../fiscal-config/fiscalConfig.utils.js', async (importActual) => ({
+  ...(await importActual()),
   detectProfile: vi.fn(),
 }));
 

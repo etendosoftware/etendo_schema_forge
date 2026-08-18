@@ -44,6 +44,12 @@ vi.mock('../attachFile', () => ({
   attachFile: vi.fn().mockResolvedValue({}),
 }));
 
+// ETP-4855 — post-commit the uploader also fills the record's document slot,
+// which is what both side panels render.
+vi.mock('@/windows/custom/shared/previewFileApi.js', () => ({
+  storePreviewFile: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 vi.mock('../buildOcrSchema', () => ({
   buildOcrSchema: () => ({ type: 'object', properties: {} }),
 }));

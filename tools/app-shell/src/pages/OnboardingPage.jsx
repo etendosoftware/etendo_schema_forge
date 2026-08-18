@@ -12,7 +12,12 @@ export default function OnboardingPage() {
   const ui = useUI();
 
   const ES_CONFIG = {
-    apiBase: '',
+    // Lost during the ETP-4346 extraction to etendo-go-core, which hardcoded this to
+    // ''. Production's CloudFront only routes /etendo/sws/* to the API origin — a bare
+    // /sws/go/login falls through to the SPA's S3 bucket. Restores the pre-extraction
+    // behavior (see BASE_URL/detectBaseUrl before that commit), matching the same
+    // VITE_API_BASE convention used by getUpgradeBaseUrl() in UpgradePage.jsx.
+    apiBase: import.meta.env.VITE_API_BASE || '',
     background: <OnboardingDashboardBackdrop data-testid="OnboardingDashboardBackdrop__79cf84" />,
     brandLabel: ui('onboardingBrandName'),
     localeCodes: ['es_ES', 'en_US'],

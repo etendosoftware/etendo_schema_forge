@@ -6,6 +6,7 @@ import {
   normalizeCalloutQty,
   normalizeCalloutResponse,
   applyQtyZeroGuard,
+  resetDescriptionOnProductChange,
   roundAmounts,
   shouldFireCascade,
   buildCascadeState,
@@ -280,6 +281,42 @@ describe('applyQtyZeroGuard', () => {
     const rowValues = { movementQuantity: 2 };
     applyQtyZeroGuard(result, rowValues);
     assert.equal('movementQuantity' in result, false);
+  });
+
+});
+
+// ─── resetDescriptionOnProductChange ──────────────────────────────────────────
+
+describe('resetDescriptionOnProductChange', () => {
+
+  it('resets description to empty string when product changes and callout omitted it', () => {
+    const result = {};
+    resetDescriptionOnProductChange(result, 'product');
+    assert.equal(result.description, '');
+  });
+
+  it('does not overwrite a description the callout already returned', () => {
+    const result = { description: 'From callout' };
+    resetDescriptionOnProductChange(result, 'product');
+    assert.equal(result.description, 'From callout');
+  });
+
+  it('does nothing when the changed field is not product', () => {
+    const result = { unitPrice: 44 };
+    resetDescriptionOnProductChange(result, 'unitPrice');
+    assert.equal('description' in result, false);
+  });
+
+  it('[corner] empty-string description from callout is preserved (not re-reset)', () => {
+    const result = { description: '' };
+    resetDescriptionOnProductChange(result, 'product');
+    assert.equal(result.description, '');
+  });
+
+  it('[corner] explicit null description is treated as absent and reset', () => {
+    const result = { description: null };
+    resetDescriptionOnProductChange(result, 'product');
+    assert.equal(result.description, '');
   });
 
 });

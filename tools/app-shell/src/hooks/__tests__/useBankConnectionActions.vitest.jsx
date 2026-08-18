@@ -183,7 +183,7 @@ describe('useBankConnectionActions — hook', () => {
     expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
   });
 
-  it('disconnect posts the financialAccountId', async () => {
+  it('disconnect posts the financialAccountId and defaults to a soft disconnect', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
     const { result } = renderHook(() => useBankConnectionActions());
@@ -193,7 +193,20 @@ describe('useBankConnectionActions — hook', () => {
 
     const [calledUrl, init] = globalThis.fetch.mock.calls[0];
     expect(calledUrl).toContain('action=disconnect');
-    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
+    // Defaulting to false keeps the recoverable behavior when no mode is given.
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1', permanentDeletion: false });
+  });
+
+  it('disconnect forwards permanentDeletion when a permanent removal is requested', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
+
+    const { result } = renderHook(() => useBankConnectionActions());
+    await act(async () => {
+      await result.current.disconnect('FA-1', { permanentDeletion: true });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1', permanentDeletion: true });
   });
 
   it('sync posts the financialAccountId', async () => {

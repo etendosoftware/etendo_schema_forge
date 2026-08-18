@@ -339,3 +339,64 @@ describe('EntityCreationModal — renderFieldInput field types', () => {
     expect(selectEl.style.fontSize).toBe('14px');
   });
 });
+
+/**
+ * `initialValues` is snapshotted by useState on mount, so anything resolved
+ * later (ETP-4855: an OCR country label matched against selector options that
+ * are still loading) has to arrive through `patchValues`.
+ */
+describe('EntityCreationModal — patchValues', () => {
+  const PROPS = { ...BASE_PROPS, initialValues: { name: '', email: '' } };
+
+  it('fills a field that is still empty', async () => {
+    const { container } = render(
+      <EntityCreationModal {...PROPS} patchValues={{ name: 'Laura Morat' }} />
+    );
+    await waitFor(() => {
+      expect(container.querySelector('input[type="text"]').value).toBe('Laura Morat');
+    });
+  });
+
+  it('never overwrites a value the user already typed', async () => {
+    const user = userEvent.setup();
+    const { container, rerender } = render(
+      <EntityCreationModal {...PROPS} patchValues={null} />
+    );
+    const nameInput = container.querySelector('input[type="text"]');
+    await user.type(nameInput, 'Typed By User');
+
+    rerender(<EntityCreationModal {...PROPS} patchValues={{ name: 'From OCR' }} />);
+
+    await waitFor(() => {
+      expect(nameInput.value).toBe('Typed By User');
+    });
+  });
+
+  it('applies a later patch without undoing an earlier one', async () => {
+    const { container, rerender } = render(
+      <EntityCreationModal {...PROPS} patchValues={{ name: 'Laura Morat' }} />
+    );
+    await waitFor(() => {
+      expect(container.querySelector('input[type="text"]').value).toBe('Laura Morat');
+    });
+
+    rerender(
+      <EntityCreationModal {...PROPS} patchValues={{ name: 'Laura Morat', email: 'a@b.es' }} />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('input[type="email"]').value).toBe('a@b.es');
+    });
+    expect(container.querySelector('input[type="text"]').value).toBe('Laura Morat');
+  });
+
+  it('ignores blank patch entries', async () => {
+    const { container } = render(
+      <EntityCreationModal {...PROPS} patchValues={{ name: '', email: null }} />
+    );
+    await waitFor(() => {
+      expect(container.querySelector('input[type="text"]').value).toBe('');
+    });
+    expect(container.querySelector('input[type="email"]').value).toBe('');
+  });
+});

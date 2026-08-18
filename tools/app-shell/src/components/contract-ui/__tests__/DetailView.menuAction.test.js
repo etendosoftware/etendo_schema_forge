@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+// The kebab menu's action handlers moved verbatim to DetailMoreActionsMenu.jsx.
+// Assertions below that target that block read from there; nothing was relaxed.
+const menuSrc = readFileSync(join(__dirname, '..', 'DetailMoreActionsMenu.jsx'), 'utf8');
 
 /**
  * Regression guard for ETP-3846:
@@ -22,15 +25,15 @@ describe('DetailView — documentAction toast feedback (ETP-3846 regression)', (
   });
 
   it('resolves the success message from action.successKey via ui()', () => {
-    assert.match(src, /action\.successKey\s*\?\s*ui\(\s*action\.successKey\s*\)/);
+    assert.match(menuSrc, /action\.successKey\s*\?\s*ui\(\s*action\.successKey\s*\)/);
   });
 
   it('falls back to action.successMessage when successKey is absent', () => {
-    assert.match(src, /action\.successMessage/);
+    assert.match(menuSrc, /action\.successMessage/);
   });
 
   it('falls back to ui(actionCompleted) when neither successKey nor successMessage is present', () => {
-    assert.match(src, /ui\(['"]actionCompleted['"]\)/);
+    assert.match(menuSrc, /ui\(['"]actionCompleted['"]\)/);
   });
 
   it('calls toast.error on documentAction failure', () => {

@@ -1,1 +1,19 @@
 @import '@etendosoftware/app-shell-core/styles.css';
+
+/*
+ * Scrim (modal backdrop) colour.
+ *
+ * The core's shadcn `DialogOverlay` dims the page with neutral black, while this app's
+ * hand-rolled overlays dim it with `--foreground`, which is a dark navy. Two confirmations
+ * belonging to the same flow therefore greyed the page out in visibly different tints depending
+ * on which of the two they were built on. Naming the neutral value lets a hand-rolled overlay
+ * match the dialog scrim without hardcoding a colour literal, which
+ * `lib/__tests__/semanticThemeUsage.test.js` rejects.
+ *
+ * Same value in both themes on purpose: a scrim darkens whatever sits behind it, so it does not
+ * follow the surface palette the way `--background` / `--card` do.
+ */
+:root,
+.dark {
+  --scrim: 0 0% 0%;
+}

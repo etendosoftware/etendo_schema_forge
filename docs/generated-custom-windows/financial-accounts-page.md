@@ -142,6 +142,14 @@ Archive is rejected (409) when the account has open `FIN_Reconciliation` records
 spec + entity records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml` and
 `ETGO_SF_ENTITY.xml` so they survive `update.database`.
 
+> **This `action=archive` route is part of the superseded report-style spec above, not the
+> current window's backend.** It predates — and is unrelated to — ETP-4871's split of the
+> current `financial-account` **W** spec's verbs (`archiveAccount` → `PATCH {active: false}`,
+> `deleteAccount` → a real `DELETE`, both gated as documented in `financial-account.md`'s
+> "Archive / Unarchive / Delete Dialogs" and backend-endpoint sections). Do not read this
+> legacy `soft-delete (IsActive='N')` archive semantic as still describing what `DELETE`
+> does on the live spec.
+
 ## Frontend file map
 
 > **Superseded by ETP-4658.** The list is no longer a hand-written page on a hardcoded

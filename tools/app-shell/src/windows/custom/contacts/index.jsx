@@ -106,11 +106,11 @@ export default function ContactsWindow(props) {
            // ListView's generic "Delete selected" toolbar action explicitly via
            // `hideBulkDelete` (no more implicit inference from selectionBarRightActions'
            // mere presence). NOTE: this whole object REPLACES — not merges with — the
-           // generated page's own `listViewOptions={{hidePrint,hideEye,hideCounter,hideLink}}`
+           // generated page's own `listViewOptions={{hidePrint,hideCounter,hideLink}}`
            // (same last-prop-wins JSX precedence SUBSET_FILTERS above relies on), so it must
            // keep repeating those flags — keep this in sync if BusinessPartnerPage's
            // generated defaults ever change.
-           listViewOptions={{ hidePrint: true, hideEye: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
+           listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
            enableSecondaryRowDelete={true}
            tabsBarAfter={ContactsPeriodButton}
            headerContent={renderContactsHeaderSummary}

@@ -7,7 +7,7 @@ const columns = [
   { key: 'pairsUpdated', column: 'pairs_updated', type: 'number', label: 'Pairs Updated' },
   { key: 'pairsFailed', column: 'pairs_failed', type: 'number', label: 'Pairs Failed' },
   { key: 'durationms', column: 'duration_ms', type: 'number', label: 'Duration (ms)' },
-  { key: 'status', column: 'status', type: 'status', label: 'Status', enumLabels: { 'FAILED': 'FAILED', 'PARTIAL': 'PARTIAL', 'SUCCESS': 'SUCCESS' } },
+  { key: 'status', column: 'status', type: 'status', label: 'Status', enumLabels: { 'FAILED': 'statusFailed', 'PARTIAL': 'statusPartial', 'SUCCESS': 'statusSuccess' } },
 ];
 // @sf-generated-end columns:conversionRateDownloaderLog
 

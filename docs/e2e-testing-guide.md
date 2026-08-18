@@ -698,6 +698,33 @@ test.describe('My feature — sales-order', () => {
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
 - **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
 
+### Gotcha: a route pattern ending in a bare `word**` does NOT match a sub-path after `word`
+
+Playwright's glob matcher treats `**` as "any characters" only where it is written — `**` glued directly onto a literal (no `/` immediately before it) does **not** cross path separators the way you'd expect. `page.route('**/sws/neo/<entity>/header**', ...)` matches `/header` bare and `/header?query=...` (query string is still "more characters" after the literal), but **not** `/header/{id}`, `/header/defaults`, or `/header/action/...` — any URL with an actual `/` after the literal falls through to whatever more-generic route was registered before it (commonly the catch-all `**/sws/**` installed by `login()`), which silently returns an empty/default payload. The failure this produces looks nothing like a mocking bug: disabled buttons, empty tabs, hidden "Add Line", timeouts waiting for data that was "definitely mocked" — because the specific route handler is just never invoked for that request.
+
+**Fix — register TWO separate routes, do not use a brace pattern:**
+
+```js
+await page.route('**/sws/neo/<entity>/header/**', handler); // any sub-path: /header/{id}, /header/action/post
+await page.route('**/sws/neo/<entity>/header**', handler);  // bare /header and /header?query=...
+```
+
+`word/**` (with the `/` written explicitly before the trailing `**`) correctly crosses path separators for a sub-path of **any depth**, including multi-segment ones like `/header/{id}/action/invoiceAccounts`. `word**` (glued, no `/`) still covers the bare/query-string case as before. Register both under the same handler function if the logic is identical.
+
+**Do NOT use the brace-alternation form `word{/**,}**`** that an earlier version of this note recommended — it looks like it should behave the same, but doesn't: Playwright's `globToRegex` (`playwright-core/lib/utils/isomorphic/urlMatch.js`) only treats `**` as "crosses `/`" when it is immediately preceded **and followed** by `/` (or the start/end of the whole glob). Inside `{/**,}`, the `**` right before the closing `,`/`}` is followed by a brace character, not `/`, so it silently degrades to `[^/]*` — matching exactly **one** path segment past the literal (`/header/{id}` — passes) but not two-or-more (`/header/{id}/action/invoiceAccounts` — silently falls through to the generic catch-all, same symptom as the original bug). This bit three files (`multi-currency-payment-modal`, `not-posted-documents`, `return-material-receipt`) that had already "correctly" applied the brace fix, because their real endpoints hit `/action/<name>` — two segments deep.
+
+Patterns that already end in `/**` (e.g. the generic `**/sws/**` catch-all) are unaffected — a `/` immediately before `**` already crosses path separators correctly, at any depth. Patterns intentionally scoped to query-string-only variants (ending in a literal `?**`, e.g. `**/sws/neo/session?**`) are also a different, deliberate case — leave them as-is unless the endpoint also needs a sub-path.
+
+This was diagnosed against a large batch of pre-existing `.mocked.spec.js` failures (55 tests across ~22 files, then 5 more once the first fix landed) that had nothing to do with the PRs under test — the bug pre-dated them. Reach for the two-route pattern by default in any new `page.route()` call whose real endpoint can receive a sub-path (detail GET by id, `/action/...`, `/defaults`, `/selectors/...`) — especially anything under `/action/<name>`, which is always 2+ segments deep.
+
+### Root cause of the above: a silently downgraded `@playwright/test` pin
+
+The glob-crossing bug described above is not a permanent Playwright limitation — it's specific to `@playwright/test` `1.50.0`. Verified empirically: the exact same isolated repro (two `page.route()` calls, no app code) fails on `1.50.0` and passes cleanly on `1.58.2`.
+
+`e2e/package.json` was pinned to `"1.50.0"` (no caret) by an unrelated commit that was only trying to bump the `schema_forge_core` preview pin (`7c38d5cf2`, ETP-4763) — the Playwright downgrade from `"^1.50.0"` was accidental collateral. Because `e2e/` has **no committed lockfile**, this silently forced every fresh `npm install` onto that exact old version from then on, with no warning. It also explains why the 55-test failure wasn't reproducible for everyone on the team: anyone who ran `npm install` before that commit landed, or who had a stale `node_modules` with a newer resolved version already on disk, never hit it.
+
+**Current pin:** exact `"1.58.2"` (still no caret, deliberately — see reasoning below). If you ever need to bump this again, pin exactly and verify the new version doesn't reintroduce glob-matching regressions before merging; don't switch to a caret range, since a caret + no lockfile is what let this drift happen unnoticed in the first place. Do not remove the two-route fixes above when bumping — they're correct regardless of Playwright version and are cheap insurance against this exact class of regression recurring silently.
+
 ### Canonical reference
 
 `e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
@@ -739,6 +766,14 @@ The locale defaults to `es_ES` in mock mode (no real `LocaleProvider` data). Use
 ```js
 page.getByRole('button', { name: /cerrar|close/i })
 ```
+
+### Gotcha: `VITE_MOCK=true` silently bypasses `page.route()` mocks
+
+`make dev-mock` starts the dev server with `VITE_MOCK=true`, which makes the app shell replace `window.fetch` with a wrapper that serves data straight out of the generated `mockData.js` files, before the request ever reaches the network layer. Playwright's `page.route()` intercepts real network requests — with `VITE_MOCK=true` there is no network request to intercept, so a carefully installed `.mocked.spec.js` route mock is silently ignored and the page renders whatever `mockData.js` happens to contain instead. This broke even the canonical `document-posting.mocked.spec.js` for reasons that had nothing to do with the test's own correctness, until the dev server was restarted as a plain `vite --port <port>` (no `VITE_MOCK`) instead.
+
+**`fiscal-config.mocked.spec.js` specifically:** run it against plain `make dev`, **not** `make dev-mock` / `dev:mock`. Under `dev:mock` the app's `apiBaseUrl` is not wired to the `/sws/neo/*` NEO endpoints the fiscal-config hooks fetch, so config-loading assertions fail with a misleading `HTTP 404` that looks like a test bug but is really the wrong dev-server mode. Start plain `make dev` first.
+
+**Rule of thumb:** for any `.mocked.spec.js` test that installs `page.route()` interceptors, run the dev server WITHOUT `VITE_MOCK` — `make dev`, or `cd tools/app-shell && npx vite --port <port>` directly. Despite its name and its "required for E2E tests" `Makefile` comment, `make dev-mock` is for manual/offline UI browsing against bundled sample data, not for the `page.route()`-based mocked-spec pattern described throughout this guide. If a mocked spec fails in ways that don't match the assertion you wrote (wrong data, mock never hit, unrelated fields), check which dev server mode is running before debugging the test itself.
 
 ## Tips
 

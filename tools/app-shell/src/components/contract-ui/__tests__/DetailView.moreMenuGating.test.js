@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+// The kebab IIFE moved verbatim to DetailMoreActionsMenu.jsx (ETP-4097 guards travelled
+// with it). The 'source structure' block below reads it there; slicing and regexes are
+// byte-identical to before — only the file being read changed.
+const menuSrc = readFileSync(join(__dirname, '..', 'DetailMoreActionsMenu.jsx'), 'utf8');
 
 // Faithful replica of the exported `resolveHideMoreMenu` from DetailView.jsx.
 // We cannot import the real one because the directory's runner is plain
@@ -155,13 +159,13 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
   describe('source structure — gating must precede the button render (no nested-check regression)', () => {
     // Extract the single IIFE that owns the action-more button so assertions
     // are scoped to the fixed block, not to coincidental matches elsewhere.
-    const buttonIdx = src.indexOf('data-testid="action-more"');
-    const moreBlock = src.slice(0, buttonIdx);
+    const buttonIdx = menuSrc.indexOf('data-testid="action-more"');
+    const moreBlock = menuSrc.slice(0, buttonIdx);
     const commentIdx = moreBlock.lastIndexOf('More actions');
-    const iife = src.slice(commentIdx, buttonIdx);
+    const iife = menuSrc.slice(commentIdx, buttonIdx);
 
     it('locates exactly one action-more button in the source', () => {
-      const matches = src.match(/data-testid="action-more"/g) || [];
+      const matches = menuSrc.match(/data-testid="action-more"/g) || [];
       assert.equal(matches.length, 1);
     });
 
@@ -194,8 +198,8 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
     });
 
     it('keeps the empty-state guard ahead of the visibleActions.map render path', () => {
-      const guardIdx = src.indexOf('if (visibleActions.length === 0 && !hasCustomContent) return null;');
-      const mapIdx = src.indexOf('visibleActions.map(');
+      const guardIdx = menuSrc.indexOf('if (visibleActions.length === 0 && !hasCustomContent) return null;');
+      const mapIdx = menuSrc.indexOf('visibleActions.map(');
       assert.ok(guardIdx !== -1, 'empty-state guard must exist');
       assert.ok(mapIdx !== -1, 'visibleActions.map render must exist');
       assert.ok(
@@ -208,8 +212,8 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
       // The dropdown body remains open-state gated; only the empty-state check
       // was lifted out of it. This ensures we did not accidentally remove the
       // open/close behavior while fixing the always-rendered button.
-      assert.match(src, /\{showMoreMenu\s*&&\s*\(/);
-      const openStateIdx = src.indexOf('{showMoreMenu && (', buttonIdx);
+      assert.match(menuSrc, /\{showMoreMenu\s*&&\s*\(/);
+      const openStateIdx = menuSrc.indexOf('{showMoreMenu && (', buttonIdx);
       assert.ok(openStateIdx > buttonIdx, 'showMoreMenu dropdown must render after the button');
     });
   });

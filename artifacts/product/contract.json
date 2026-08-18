@@ -1,8 +1,8 @@
 {
-  "version": "0.26.1",
-  "generatedAt": "2026-07-30T22:44:13.503Z",
-  "updatedAt": "2026-08-04T00:31:37.014Z",
-  "checksum": "1dacf0ff6275a2be",
+  "version": "0.1.1",
+  "generatedAt": "2026-07-31T19:26:42.054Z",
+  "updatedAt": "2026-08-05T02:33:56.657Z",
+  "checksum": "c5aa960de3723932",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -17,7 +17,7 @@
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {
         "accounting": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "fixedAsset",
@@ -2378,7 +2378,7 @@
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {
         "accounting": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "fixedAsset",

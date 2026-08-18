@@ -13,6 +13,10 @@ function runStressCli(args, env = {}) {
     const child = fork(runnerPath, args, {
       env: { ...process.env, ...env },
       silent: true,
+      // Do not inherit Node's --test flag from this parent test process.
+      // Otherwise the stress runner is started as another test worker instead
+      // of executing its CLI flow and closing normally.
+      execArgv: [],
     });
 
     let stdout = '';

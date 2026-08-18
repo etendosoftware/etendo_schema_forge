@@ -9,16 +9,36 @@
 
 ## Relationship to M_InOut
 
-The `M_InOut` table is shared across multiple windows, differentiated by `MovementType` and `IsSOTrx`:
+The `M_InOut` table is shared across multiple windows, differentiated by `IsSOTrx` and
+**`C_DocType.IsReturn`** — NOT by `MovementType`.
 
-| Window | IsSOTrx | MovementType | Direction | Doc Type |
-|--------|---------|-------------|-----------|----------|
-| Goods Shipment (Sales) | Y | C- | Customer outbound | Shipment |
-| Goods Receipt (Purchase) | N | V+ | Vendor inbound | Goods Receipt |
-| **Return Material Receipt** | **Y** | **C+** | **Customer inbound** | **Customer Return Receipt** |
-| Return to Vendor Shipment | N | V- | Vendor outbound | Return to Vendor |
+> **Correction (verified against a real instance, `etendo_go_new`):** an earlier version of
+> this document claimed `MovementType` differs between a normal document and its return
+> (`C-` vs `C+`, `V+` vs `V-`). That is **false**. A live query against `M_InOut` joined to
+> `C_DocType` shows `MovementType` is IDENTICAL between a document and its return — only
+> `C_DocType.IsReturn` differs:
+>
+> ```
+> documentno | issotrx | movementtype | doctype_name  | isreturn
+> -----------+---------+--------------+---------------+---------
+> 1000012    | Y       | C-           | MM Shipment   | N        <- goods-shipment
+> 1000002    | Y       | C-           | RFC Receipt   | Y        <- return-material-receipt (SAME movementtype)
+> 10000000   | N       | V+           | MM Receipt    | N        <- goods-receipt
+> 1000002    | N       | V+           | RTV Shipment  | Y        <- return-to-vendor-shipment (SAME movementtype)
+> ```
+>
+> The correct discriminator table:
 
-The `whereClause` on the tab filters to `IsSOTrx='Y' AND MovementType='C+'` to show only customer return receipts.
+| Window | IsSOTrx | MovementType | C_DocType.IsReturn | Direction | Doc Type |
+|--------|---------|-------------|---------------------|-----------|----------|
+| Goods Shipment (Sales) | Y | C- | N | Customer outbound | Shipment |
+| **Return Material Receipt** | **Y** | **C-** | **Y** | **Customer inbound** | **Customer Return Receipt** |
+| Goods Receipt (Purchase) | N | V+ | N | Vendor inbound | Goods Receipt |
+| Return to Vendor Shipment | N | V+ | Y | Vendor outbound | Return to Vendor |
+
+The `whereClause` on the tab filters to `IsSOTrx='Y' AND [doctype resolves to a return]` to
+show only customer return receipts — in practice this is implemented by joining to
+`C_DocType` and checking `IsReturn='Y'`, since `M_InOut` itself carries no `IsReturn` column.
 
 ## MovementType Encoding
 
@@ -26,7 +46,13 @@ The two-character `MovementType` encodes:
 - First character: `V` = Vendor, `C` = Customer
 - Second character: `+` = Inbound (receiving), `-` = Outbound (shipping)
 
-So `C+` means "inbound from customer" — goods arriving back at the warehouse from a customer return.
+**`MovementType` only encodes direction/party, not return-vs-normal.** A customer return
+receipt still uses `C-`... wait: in the verified data above, `RFC Receipt` (return-material-receipt)
+also shows `movementtype = C-`, the same as a normal `MM Shipment`. The direction letter pair
+does **not** flip on return; the actual physical stock direction (in vs. out) for a return
+document is instead determined by the document's `C_DocType` configuration (`IsReturn`), not
+by a distinct `MovementType` code. Do not rely on `MovementType` to distinguish a return
+document from its non-return counterpart — always join to `C_DocType.IsReturn`.
 
 ## Relationship to Return from Customer (RMA)
 
@@ -53,7 +79,8 @@ When linked to an RMA:
 | Aspect | Return Material Receipt | Return to Vendor Shipment |
 |--------|------------------------|--------------------------|
 | IsSOTrx | Y (sales side) | N (purchase side) |
-| MovementType | C+ (customer inbound) | V- (vendor outbound) |
+| MovementType | C- (same as Goods Shipment) | V+ (same as Goods Receipt) |
+| C_DocType.IsReturn | Y | Y |
 | Stock effect | Increases inventory | Decreases inventory |
 | Locator meaning | Destination bin (receiving) | Source bin (shipping) |
 | Business Partner | Customer (IsCustomer='Y') | Vendor (IsVendor='Y') |
@@ -66,7 +93,8 @@ When linked to an RMA:
 
 | Aspect | Return Material Receipt | Goods Shipment |
 |--------|------------------------|----------------|
-| MovementType | C+ (inbound) | C- (outbound) |
+| MovementType | C- (SAME code as Goods Shipment) | C- |
+| C_DocType.IsReturn | Y | N |
 | Stock effect | Increases inventory | Decreases inventory |
 | Direction | Customer -> Warehouse | Warehouse -> Customer |
 | Typical trigger | RMA authorization | Sales Order |
@@ -82,7 +110,7 @@ When linked to an RMA:
 
 4. **Order line reference (C_OrderLine_ID):** On lines, references SalesOrderLine (not PurchaseOrderLine). Dependent on header's order reference.
 
-5. **MovementQty:** Always positive. The `MovementType = C+` tells the stock engine to add to the locator's inventory.
+5. **MovementQty:** Always positive. The document's `IsSOTrx`/`C_DocType.IsReturn` combination (not a distinct `MovementType` code — see correction above) tells the stock engine to add to the locator's inventory for a customer return.
 
 6. **Locator as destination:** Unlike vendor return (where locator is the source bin), here the locator represents where the returned goods will be stored upon receipt.
 

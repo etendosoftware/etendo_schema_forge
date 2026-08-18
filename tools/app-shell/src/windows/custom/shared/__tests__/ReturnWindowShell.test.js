@@ -68,10 +68,10 @@ describe('ReturnWindowShell', () => {
     assert.match(src, /\.\.\.pageProps/);
   });
 
-  // ── recordId branch — passes hidePrint={true} ──────────────────────────────
+  // ── recordId branch ─────────────────────────────────────────────────────────
 
-  it('passes hidePrint={true} to PageComponent when recordId is truthy', () => {
-    assert.match(src, /hidePrint=\{true\}/);
+  it('does not hardcode hidePrint (ETP-4729 — generic print icon must render)', () => {
+    assert.doesNotMatch(src, /hidePrint/);
   });
 
   it('renders PageComponent directly when recordId is provided', () => {

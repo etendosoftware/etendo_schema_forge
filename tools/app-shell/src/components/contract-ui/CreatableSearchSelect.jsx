@@ -734,15 +734,15 @@ export function CreatableSearchSelect({
   }, [showDropdown]);
 
   // State-dependent classes computed separately (rather than nested inline) so the
-  // className stays a single flat template literal below — same resulting string
-  // for each of the three states: disabled, enabled+chip, enabled+no-chip.
+  // className stays a single flat template literal below. Only two states matter
+  // for hover: disabled (no hover affordance) vs. enabled (always gets the same
+  // full-field hover, whether or not a value is selected as a chip) — an empty
+  // enabled field must highlight on hover just like a populated one.
   let stateClasses;
   if (isDisabled) {
     stateClasses = ' bg-muted text-text-disabled cursor-not-allowed';
-  } else if (showChip) {
-    stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
   } else {
-    stateClasses = ' bg-card';
+    stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
   }
 
   return (

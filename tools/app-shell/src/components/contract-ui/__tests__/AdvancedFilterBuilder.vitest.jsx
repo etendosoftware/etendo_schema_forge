@@ -692,6 +692,46 @@ describe('required-field operator exclusion (ETP-4609)', () => {
   });
 });
 
+// Sibling of the block above, but exercising the exact column SHAPE produced
+// by ListView's `expandMultiFieldColumns` (see ListView.vitest.jsx's "multiField
+// column expansion" tests): a multiField parent explodes into one pseudo-column
+// per `part`, and each pseudo-column intentionally carries no `column` field
+// (see the docstring on expandMultiFieldColumns). The bug this guards: that
+// helper used to copy only `{ key, type, label }` from each part, dropping
+// `part.required` — so a required part (e.g. Product's Name/Identifier
+// identity cell) lost its `required` flag once exploded, and the Advanced
+// Filter still offered "Está vacío"/"No está vacío" for it. Fixed by also
+// copying `required` per part in ListView.jsx.
+describe('required-field operator exclusion for exploded multiField parts (ETP-4609)', () => {
+  const EXPLODED_MULTIFIELD_COLUMNS = [
+    { key: 'searchKey', type: 'text', label: 'Identificador', required: true },
+    { key: 'name', type: 'text', label: 'Nombre' },
+  ];
+
+  it('excludes isEmpty/isNotEmpty for the required exploded pseudo-column', async () => {
+    const user = userEvent.setup();
+    render(<AdvancedFilterBuilder columns={EXPLODED_MULTIFIELD_COLUMNS} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    await user.selectOptions(fieldSelect, 'searchKey');
+
+    expect(screen.getByRole('option', { name: 'opIs' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'opIsEmpty' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'opIsNotEmpty' })).not.toBeInTheDocument();
+  });
+
+  it('still offers isEmpty/isNotEmpty for the non-required exploded pseudo-column (contrast)', async () => {
+    const user = userEvent.setup();
+    render(<AdvancedFilterBuilder columns={EXPLODED_MULTIFIELD_COLUMNS} />);
+
+    const [fieldSelect] = screen.getAllByTestId('select-control');
+    await user.selectOptions(fieldSelect, 'name');
+
+    expect(screen.getByRole('option', { name: 'opIsEmpty' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'opIsNotEmpty' })).toBeInTheDocument();
+  });
+});
+
 describe('custom-column exclusion from filterableColumns (ETP-4609)', () => {
   it('excludes a type:"custom" column with no `column`/`backendFilterKey` from the field selector', () => {
     const cols = [

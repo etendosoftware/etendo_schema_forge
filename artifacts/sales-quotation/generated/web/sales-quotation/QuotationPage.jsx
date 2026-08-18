@@ -475,7 +475,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
+        hidePrintWhen={{"documentStatus":{"notIn":["UE","CA","ETGO_CI","CJ"]}}}
         hideSaveStatuses={["CA","ETGO_CI","CL","VO","CJ"]}
         noHeaderBorder
         notesField="description"
@@ -490,7 +490,6 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
         {...props} window={effectiveWindow}
@@ -508,9 +507,8 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@!='DR'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

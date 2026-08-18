@@ -288,7 +288,7 @@ export default function OrderConfirmModal({
             {ui('salesOrderRef')}{documentNo}
           </div>
           <div style={{
-            background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
+            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
             <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
@@ -299,7 +299,7 @@ export default function OrderConfirmModal({
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('soLines', { count: lineCount }) : '...'}
-              {' '}<span style={{ color: 'var(--status-info-bg)' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-fg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
               <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
                 {formatCurrency(currency, totalLines)}
@@ -379,18 +379,18 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
       onClick={onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        border: checked ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--card))',
+        border: checked ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
         borderRadius: 8, padding: checked ? '11px 13px' : '12px 14px',
         cursor: 'pointer',
-        background: checked ? 'hsl(var(--card))' : 'hsl(var(--card))',
+        background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >
       <div style={{
         width: 32, height: 32, borderRadius: 6, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: checked ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        color: checked ? 'var(--status-info-bg)' : 'hsl(var(--muted))',
+        background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        color: checked ? 'var(--status-info-fg)' : 'hsl(var(--muted))',
       }}>
         {icon}
       </div>
@@ -405,8 +405,8 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
       {/* Checkbox indicator (square, not circle) */}
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: checked ? 'none' : '1.5px solid hsl(var(--card))',
-        background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        border: checked ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+        background: checked ? 'var(--status-info-fg)' : 'hsl(var(--card))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
@@ -431,7 +431,7 @@ function DocPill({ label, total, statusLabel }) {
       )}
       <span style={{
         fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-        background: 'var(--status-warning-bg)', color: 'var(--status-warning-bg)',
+        background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
       }}>
         {statusLabel}
       </span>
@@ -450,15 +450,15 @@ const overlayStyle = {
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-bg)', color: 'hsl(var(--card))', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

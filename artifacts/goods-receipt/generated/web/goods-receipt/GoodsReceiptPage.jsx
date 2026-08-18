@@ -477,7 +477,6 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}
       />

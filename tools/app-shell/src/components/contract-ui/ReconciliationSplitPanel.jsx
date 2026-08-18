@@ -13,6 +13,12 @@ import {
 // lifecycle confirmation in the app looks identical (DetailView.jsx imports its payment sibling the
 // same way).
 import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal';
+import {
+  WriteoffBreakdown, WriteoffToggleRow, writeoffState,
+} from './WriteoffAdjustment.jsx';
+import {
+  DifferenceBanner, DifferenceModal, differenceState,
+} from './ReconciliationDifference.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
@@ -45,6 +51,7 @@ import {
   useReconcileGroup,
   useRemoveOperation,
   useReactivateSelected,
+  useReconcileDifference,
 } from '@/hooks/useReconciliation';
 
 // Amounts that differ by <= this absolute value are treated as balanced.
@@ -546,7 +553,7 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle 
 function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
-  onRemoveOperation, reconciledMode = false,
+  onRemoveOperation, reconciledMode = false, differenceBanner = null,
 }) {
   const ui = useUI();
   // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
@@ -670,6 +677,10 @@ function CandidateOperationsPanel({
 
   const toolbar = (
     <>
+      {/* Difference banner (design option 1B): the first thing in the panel, so the offer to close
+          the remainder sits where the problem is. Composed by the parent, which owns the dismiss
+          state and the modal. */}
+      {differenceBanner}
       {/* "Conciliado" block: matched documents of a PARTIAL line (with per-row unlink), above the
           remainder candidates. A FULLY reconciled line does NOT use this block — its documents are
           shown directly in the candidate list below, with checkboxes (no redundant % header). */}
@@ -979,7 +990,8 @@ function RemoveOperationConfirmDialog({
  * pre-filtered to the line's direction (payin for receipts, payout for payments) from the
  * account's configured methods.
  */
-function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm, onClose }) {
+function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm, onClose,
+  writeoff, onWriteoffChange, writeoffInfo, currency, isReceipt }) {
   const ui = useUI();
   const selectedMethod = methods.find((m) => m.id === methodId) || null;
   // ChipSelect expects a useLookup(query) hook (server-backed elsewhere); the method list is
@@ -1012,6 +1024,32 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
             testId="recon-payment-method"
             data-testid="ChipSelect__recon-payment-method" />
         </div>
+        {/* ETP-4797. Absent unless the selection actually leaves a gap — a balanced match keeps the
+            modal exactly as it was. Restricted to a single invoice on purpose: the backend
+            allocates the line greedily across invoices, so with several selected only the boundary
+            one ends up partial, and the "Σ invoices − statement" figure shown here would not be
+            what gets written off. */}
+        {writeoffInfo?.visible && (
+          <div className="flex flex-col gap-4 pb-2">
+            <WriteoffBreakdown
+              fundedLabel={ui('writeoffBreakdownStatement')}
+              fundedAmount={writeoffInfo.fundedAmount}
+              invoiceLabel={writeoffInfo.invoiceLabel}
+              invoiceAmount={writeoffInfo.invoiceAmount}
+              difference={writeoffInfo.amount}
+              currency={currency}
+              data-testid="recon-writeoff-breakdown" />
+            <WriteoffToggleRow
+              checked={writeoff}
+              onCheckedChange={onWriteoffChange}
+              amount={writeoffInfo.amount}
+              currency={currency}
+              isReceipt={isReceipt}
+              blocked={writeoffInfo.blocked}
+              limit={writeoffInfo.limit}
+              data-testid="recon-writeoff-toggle" />
+          </div>
+        )}
         <DialogFooter data-testid="DialogFooter__recon-payment-method">
           <Button
             variant="outline"
@@ -1056,6 +1094,17 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
  */
 export function ReconciliationSplitPanel({
   accountId, currency = 'EUR', paymentMethods = [], onBack, onReconcileSuccess,
+  // ETP-4797: FIN_Financial_Account.Writeofflimit. Null/absent means "no limit configured", NOT
+  // "nothing may be written off" — see ReconciliationHandler.assertWithinWriteoffLimit.
+  writeoffLimit = null,
+  // EM_ETGO_Amount_Tolerance (a PERCENTAGE) — caps the remainder that may be posted to an
+  // accounting concept. Unlike writeoffLimit above, 0/absent here means "no difference may be
+  // posted", so the difference banner stays hidden until an admin configures it. Same column the
+  // automatch engine reads with the opposite convention — see ReconciliationDifferenceSupport.
+  amountTolerance = null,
+  // The account's configured difference concept ({id, name}), used to preselect the modal's picker.
+  // Absent → the banner renders with its action disabled and an explanation.
+  glItemDifference = null,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1071,6 +1120,14 @@ export function ReconciliationSplitPanel({
   const [selectedOpIds, setSelectedOpIds] = useState(() => new Set());
   const [methodModalOpen, setMethodModalOpen] = useState(false);
   const [selectedMethodId, setSelectedMethodId] = useState('');
+  // ETP-4797. Opt-in and reset on every open (see handleReconcile) so a previous match can never
+  // silently carry a write-off into the next one.
+  const [writeoff, setWriteoff] = useState(false);
+  // "Dejar pendiente" only hides the banner — it changes no data, the line stays partial. Scoped to
+  // the current selection and reset whenever it changes (see the effect below), so reselecting the
+  // line brings the offer back, per the design's `bannerDismissed` state model.
+  const [diffDismissed, setDiffDismissed] = useState(false);
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
 
   const leftBounds = useMemo(() => getDateBounds(leftDateRange), [leftDateRange]);
   const rightBounds = useMemo(() => getDateBounds(rightDateRange), [rightDateRange]);
@@ -1109,6 +1166,19 @@ export function ReconciliationSplitPanel({
   const { reconcile, loading: reconciling } = useReconcileGroup();
   const { removeOperation, loading: removing } = useRemoveOperation();
   const { reactivateSelected, loading: reactivating } = useReactivateSelected();
+  const { reconcileDifference, loading: postingDifference } = useReconcileDifference();
+  // Whether the remainder of the selected line may be posted to an accounting concept. Recomputed
+  // (and re-validated) server-side on confirm — this only decides what to offer.
+  const differenceInfo = useMemo(() => differenceState({
+    line: selectedLine,
+    amountTolerance,
+    dismissed: diffDismissed,
+  }), [selectedLine, amountTolerance, diffDismissed]);
+  // Same idiom CandidateOperationsPanel uses for its own per-line state: keyed on the line id, so a
+  // list reload (which rebuilds the object) does not spuriously re-show a dismissed banner.
+  useEffect(() => {
+    setDiffDismissed(false);
+  }, [selectedLine?.id]);
   // Pending un-reconcile request (single row OR the bulk selection):
   // { ids, hasAuto, count, mode }. `mode: 'reactivate'` picks the lighter draft-preserving action.
   const [removeRequest, setRemoveRequest] = useState(null);
@@ -1250,6 +1320,35 @@ export function ReconciliationSplitPanel({
     return paymentMethods.filter((m) => (isReceiptDirection ? m.payinAllow : m.payoutAllow));
   }, [paymentMethods, lineAmount]);
 
+  // The single selected invoice, or null. Only a one-invoice selection gets the write-off offer:
+  // `createInvoicePayments` allocates the line greedily, so with several invoices only the boundary
+  // one is settled partially and "Σ invoices − line" would overstate what actually gets written off.
+  const soleInvoice = useMemo(() => {
+    const picked = candidates.filter((c) => selectedOpIds.has(c.id) && c.kind === 'invoice');
+    return picked.length === 1 ? picked[0] : null;
+  }, [candidates, selectedOpIds]);
+
+  const writeoffInfo = useMemo(() => {
+    const fundedAmount = Math.abs(lineAmount);
+    const invoiceAmount = Math.abs(selectedSum);
+    const state = writeoffState({
+      difference: invoiceAmount - fundedAmount,
+      limit: writeoffLimit,
+      eligible: invoiceMode && !!soleInvoice,
+    });
+    return {
+      ...state,
+      fundedAmount,
+      invoiceAmount,
+      limit: writeoffLimit,
+      // Matches the mockup's "Factura 10000037 · Laura Morat". Both keys come straight from
+      // ReconciliationHandler's invoice candidate row (documentNo / partnerName).
+      invoiceLabel: soleInvoice
+        ? [soleInvoice.documentNo, soleInvoice.partnerName].filter(Boolean).join(' · ')
+        : '',
+    };
+  }, [invoiceMode, soleInvoice, lineAmount, selectedSum, writeoffLimit]);
+
   const submitReconcile = async (methodId) => {
     try {
       const payload = {
@@ -1264,6 +1363,11 @@ export function ReconciliationSplitPanel({
           .filter((c) => selectedOpIds.has(c.id) && c.kind === 'invoice')
           .map((c) => ({ invoiceId: c.invoiceId, scheduleId: c.scheduleId }));
         if (methodId) payload.paymentMethodId = methodId;
+        // Only sent when the toggle was actually offered AND accepted; the backend re-checks the
+        // limit regardless, since a disabled switch is a convenience, not a boundary.
+        if (writeoff && writeoffInfo.visible && !writeoffInfo.blocked) {
+          payload.writeoffDifference = true;
+        }
       } else {
         // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
@@ -1273,6 +1377,7 @@ export function ReconciliationSplitPanel({
       setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
+      setWriteoff(false);
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
@@ -1290,6 +1395,7 @@ export function ReconciliationSplitPanel({
     if (invoiceMode && directionMethods.length > 0) {
       const preselected = directionMethods.find((m) => m.isDefault) || directionMethods[0];
       setSelectedMethodId(preselected?.id || '');
+      setWriteoff(false);
       setMethodModalOpen(true);
       return;
     }
@@ -1298,6 +1404,30 @@ export function ReconciliationSplitPanel({
 
   const confirmMethodAndReconcile = () => {
     submitReconcile(selectedMethodId);
+  };
+
+  /**
+   * Posts the remainder to the chosen accounting concept. Targets `remainderLineId` (the pending
+   * sub-line), never the merged head. No amount is sent: the backend recomputes it and would ignore
+   * one anyway.
+   */
+  const confirmDifference = async ({ glItemId, description }) => {
+    try {
+      await reconcileDifference({
+        financialAccountId: accountId,
+        statementLineId: candidateLineId,
+        glItemId,
+        ...(description ? { description } : {}),
+      });
+      toast.success(ui('financeReconcileDiffToastSuccess'));
+      setDiffModalOpen(false);
+      setSelectedLineSel(null);
+      setSelectedOpIds(new Set());
+      reloadLines();
+      onReconcileSuccess?.();
+    } catch (err) {
+      toast.error(err?.message || ui('financeReconcileToastError'));
+    }
   };
 
   // Whether any of the given transaction ids is an auto-created payment (drives the confirm hint that
@@ -1413,6 +1543,14 @@ export function ReconciliationSplitPanel({
           onRemoveOperation={requestRemoveOne}
           reconciledMode={isReconciledLine}
           readOnly={isReconciledLine}
+          differenceBanner={
+            <DifferenceBanner
+              info={differenceInfo}
+              currency={currency}
+              onDismiss={() => setDiffDismissed(true)}
+              onPost={() => setDiffModalOpen(true)}
+              data-testid="DifferenceBanner__d0f4d5" />
+          }
           source={rightSource}
           onSourceChange={changeSource}
           sourceCounts={sourceCounts}
@@ -1455,7 +1593,21 @@ export function ReconciliationSplitPanel({
         busy={reconciling}
         onConfirm={confirmMethodAndReconcile}
         onClose={() => setMethodModalOpen(false)}
+        writeoff={writeoff}
+        onWriteoffChange={setWriteoff}
+        writeoffInfo={writeoffInfo}
+        currency={currency}
+        isReceipt={lineAmount >= 0}
         data-testid="PaymentMethodModal__d0f4d5" />
+      <DifferenceModal
+        open={diffModalOpen}
+        info={differenceInfo}
+        currency={currency}
+        defaultGlItem={glItemDifference}
+        busy={postingDifference}
+        onConfirm={confirmDifference}
+        onClose={() => setDiffModalOpen(false)}
+        data-testid="DifferenceModal__d0f4d5" />
     </div>
   );
 }

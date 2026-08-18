@@ -12,8 +12,10 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
+import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
 
 const draftModeWithModal = {
   enabled: true,
@@ -88,6 +90,15 @@ function CustomQuotationTable(props) {
   );
 }
 
+function SalesQuotationBulkActions({ selectedRows, windowName }) {
+  return (
+    <CopyLinkButton
+      selectedRows={selectedRows}
+      windowName={windowName}
+      data-testid="CopyLinkButton__bc8637" />
+  );
+}
+
 export default function SalesQuotationWindow({ windowName, recordId, token, apiBaseUrl, ...rest }) {
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -133,6 +144,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       edit:      { show: true },
       duplicate: { show: true },
       delete:    { show: true },
+      // ETP-4717 — see sendActionVisibility.js
+      email:     { visibleWhen: SEND_VISIBLE_WHEN_NOT_DRAFT },
     },
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),
@@ -171,6 +184,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         rowQuickActions={rowQuickActions}
+        hideLink
+        bulkActions={SalesQuotationBulkActions}
         renderPreview={renderPreview}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}

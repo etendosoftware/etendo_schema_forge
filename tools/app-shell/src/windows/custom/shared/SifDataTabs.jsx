@@ -6,8 +6,8 @@ const inputCls = 'w-full text-xs bg-card border rounded px-2 py-0.5 text-foregro
 const SII_STATUS = {
   CO: { key: 'sifDataTabs.status.sii.correct', cls: 'bg-status-success text-status-success-foreground border-status-success-border' },
   AE: { key: 'sifDataTabs.status.sii.acceptedWithErrors', cls: 'bg-status-warning text-status-warning-foreground border-status-warning-border' },
-  IN: { key: 'sifDataTabs.status.sii.incorrect', cls: 'bg-destructive text-destructive border-destructive' },
-  EE: { key: 'sifDataTabs.status.sii.sendError', cls: 'bg-destructive text-destructive border-destructive' },
+  IN: { key: 'sifDataTabs.status.sii.incorrect', cls: 'bg-destructive text-destructive-foreground border-destructive' },
+  EE: { key: 'sifDataTabs.status.sii.sendError', cls: 'bg-destructive text-destructive-foreground border-destructive' },
   PE: { key: 'sifDataTabs.status.sii.pending', cls: 'bg-muted text-muted-foreground border-border-subtle' },
   AN: { key: 'sifDataTabs.status.sii.cancelled', cls: 'bg-muted text-muted-foreground border-border-subtle' },
   BA: { key: 'sifDataTabs.status.sii.dropped', cls: 'bg-muted text-muted-foreground border-border-subtle' },
@@ -17,8 +17,8 @@ const SII_STATUS = {
 const VERIFACTU_STATUS = {
   AC: { key: 'sifDataTabs.status.verifactu.accepted', cls: 'bg-status-success text-status-success-foreground border-status-success-border' },
   AE: { key: 'sifDataTabs.status.verifactu.acceptedWithErrors', cls: 'bg-status-warning text-status-warning-foreground border-status-warning-border' },
-  IN: { key: 'sifDataTabs.status.verifactu.invalid', cls: 'bg-destructive text-destructive border-destructive' },
-  ER: { key: 'sifDataTabs.status.verifactu.rejected', cls: 'bg-destructive text-destructive border-destructive' },
+  IN: { key: 'sifDataTabs.status.verifactu.invalid', cls: 'bg-destructive text-destructive-foreground border-destructive' },
+  ER: { key: 'sifDataTabs.status.verifactu.rejected', cls: 'bg-destructive text-destructive-foreground border-destructive' },
   PE: { key: 'sifDataTabs.status.verifactu.pending', cls: 'bg-muted text-muted-foreground border-border-subtle' },
 };
 

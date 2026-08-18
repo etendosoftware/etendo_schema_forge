@@ -63,6 +63,7 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 // Edit-mode-only widgets (never rendered by this read-mode test) — stubbed

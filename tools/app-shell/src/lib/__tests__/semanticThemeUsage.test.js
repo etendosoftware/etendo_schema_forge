@@ -40,6 +40,18 @@ const DATA_COLOR_LITERALS = new Map([
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
   ])],
+  // ETP-4797: activity-timeline dots restored to their pre-ETP-4554 literal colors after the
+  // migration mapped both to a token from the wrong lightness range (draft: a much darker amber
+  // instead of the original bright orange; confirmed: a much darker/paler green than the
+  // original) — no existing success/warning-family token reproduces either brightness, so the
+  // literal is kept rather than force-fit. See PaymentDetailSidebarBase.jsx for the color-math
+  // rationale.
+  ['windows/custom/shared/PaymentDetailSidebarBase.jsx', new Set(['#faaf00', '#2dca72'])],
+  // ETP-4797: the draft-banner bold title restored to its pre-ETP-4554 literal near-black after
+  // the migration mapped it to --foreground, a visibly darker/cooler navy-tinted near-black
+  // (confirmed by sampling the Figma reference vs. the rendered pixel). See PaymentDraftBanner.jsx.
+  ['payment-in/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
+  ['payment-out/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;

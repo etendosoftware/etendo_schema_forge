@@ -110,4 +110,24 @@ describe('RelatedDocumentsCard', () => {
     act(() => { refreshBtn.click(); });
     expect(SPECS[0].fetch).toHaveBeenCalledTimes(2);
   });
+
+  // ETP-4779: generating a derived document (e.g. a Purchase Invoice from a
+  // Sales Order/Quotation preview) must refresh this card the same way the
+  // manual refresh button does — via a `docsRefreshSignal` prop threaded
+  // down from DetailView. Currently `docsRefreshSignal` is not part of the
+  // fetch effect's dependency array, so incrementing it does NOT trigger a
+  // refetch. This test is expected to FAIL until that fix lands.
+  it('refetches when docsRefreshSignal prop increments (regression, ETP-4779)', async () => {
+    SPECS[0].fetch.mockResolvedValue([]);
+    const { rerender } = render(
+      <RelatedDocumentsCard documentId="id-1" token="t" apiBaseUrl="/api" specs={SPECS} docsRefreshSignal={0} />,
+    );
+    await waitFor(() => screen.getByText('noRelatedDocuments'));
+
+    rerender(
+      <RelatedDocumentsCard documentId="id-1" token="t" apiBaseUrl="/api" specs={SPECS} docsRefreshSignal={1} />,
+    );
+
+    await waitFor(() => expect(SPECS[0].fetch).toHaveBeenCalledTimes(2));
+  });
 });

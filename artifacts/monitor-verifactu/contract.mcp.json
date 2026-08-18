@@ -1,8 +1,8 @@
 {
   "version": "0.11.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-06-16T14:53:08.146Z",
-  "contractChecksum": "05a2c86f9e16e7ad",
+  "updatedAt": "2026-08-04T14:03:24.110Z",
+  "contractChecksum": "bdeef52685f3538b",
   "apiPrediction": {
     "specName": "monitor-verifactu",
     "baseUrl": "/sws/neo/monitor-verifactu",
@@ -10,10 +10,10 @@
       "cabeceraDeEmisor": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor",
         "detailUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}",
         "supportedFilters": []
@@ -21,10 +21,10 @@
       "facturasRechazadas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasRechazadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}",
         "supportedFilters": []
@@ -32,21 +32,27 @@
       "facturasParcialmenteAceptadas": {
         "get": true,
         "getById": true,
-        "post": true,
+        "post": false,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
       },
       "facturasAceptadas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasAceptadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}",
         "supportedFilters": []
@@ -54,10 +60,10 @@
       "facturasInválidas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasInválidas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasInválidas/{id}",
         "supportedFilters": []
@@ -223,7 +229,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "formState": {
@@ -344,5 +351,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "b87e001f7c66a456"
+  "checksum": "b6e078d5d696c1d2"
 }

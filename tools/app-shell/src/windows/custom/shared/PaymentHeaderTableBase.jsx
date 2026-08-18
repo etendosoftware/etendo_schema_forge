@@ -14,13 +14,19 @@ const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
 function buildColumns(dir, ui, locale) {
   const depositedKey = dir === 'in' ? 'cobroDepositado' : 'pagoDepositado';
-  const depositedEnum = Object.fromEntries(DEPOSITED_STATUSES_LIST.map(s => [s, depositedKey]));
+  // RPPC ("Payment Cleared") is the one deposited status that means the payment was actually
+  // matched against a bank transaction — see PaymentConciliadoBadge, which shows the same
+  // "Conciliado" wording plus a link to that transaction. Bucketing it under the generic
+  // depositedKey here made the grid say "Cobro depositado" for a row that, once opened, showed
+  // "Conciliado" instead — same underlying fact under two different labels (ETP-4797).
+  const depositedEnum = Object.fromEntries(
+    DEPOSITED_STATUSES_LIST.filter(s => s !== 'RPPC').map(s => [s, depositedKey]));
   return [
     { key: 'documentNo', column: 'DocumentNo', type: 'string', label: ui('docNo'), required: true },
     { key: 'paymentDate', column: 'PaymentDate', type: 'date', label: ui('date'), dot: false },
     { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: ui('businessPartner') },
     { key: 'status', column: 'Status', type: 'status', label: ui('statusColumnLabel'), required: true,
-      enumLabels: { ...depositedEnum, RPAP: 'statusDraft', DR: 'statusDraft' } },
+      enumLabels: { ...depositedEnum, RPPC: 'conciliado', RPAP: 'statusDraft', DR: 'statusDraft' } },
     {
       key: 'amount', column: 'Amount', type: 'amount', label: ui('amount'), required: true,
       // `labels` (priority 1 in resolveColumnLabel) must be set so this header

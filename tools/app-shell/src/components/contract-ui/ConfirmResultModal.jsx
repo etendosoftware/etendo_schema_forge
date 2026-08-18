@@ -84,7 +84,7 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
   else if (docs.length > 1) subtitle = ui('confirmResultModal.subtitleMany', { count: docs.length });
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
+    <div data-testid="confirm-result-modal" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
       <div
         onClick={e => e.stopPropagation()}
         style={{ width: 444, borderRadius: 16, background: 'hsl(var(--card))', boxShadow: '0 8px 32px hsl(var(--foreground) / .18), 0 2px 8px hsl(var(--foreground) / .08)', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif', color: 'hsl(var(--foreground))' }}

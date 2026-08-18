@@ -73,7 +73,7 @@ const FAKE_PDF_B64 = Buffer.from('%PDF-1.4 1 0 obj<</Type/Catalog>>endobj%%EOF')
 // ── Route helpers ─────────────────────────────────────────────────────────────
 
 async function seedPurchaseRows(page, rows = [PURCHASE_ROW]) {
-  await page.route('**/sws/neo/purchase-invoice/header**', (route) => {
+  await page.route('**/sws/neo/purchase-invoice/header{/**,}**', (route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -83,7 +83,7 @@ async function seedPurchaseRows(page, rows = [PURCHASE_ROW]) {
 }
 
 async function seedSalesRows(page, rows) {
-  await page.route('**/sws/neo/sales-invoice/header**', (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({
         status: 200,
@@ -101,7 +101,7 @@ async function seedSalesRows(page, rows) {
  * Other methods (POST, DELETE) fall through to the auth.js catch-all.
  */
 async function mockPreviewFileGet(page, response) {
-  await page.route('**/sws/neo/preview-file**', (route) => {
+  await page.route('**/sws/neo/preview-file{/**,}**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({
         status: 200,
@@ -260,7 +260,7 @@ test.describe('Sales invoice — storeCondition gating', () => {
 
     // Track any preview-file GET calls
     let previewFileGetFired = false;
-    await page.route('**/sws/neo/preview-file**', (route) => {
+    await page.route('**/sws/neo/preview-file{/**,}**', (route) => {
       if (route.request().method() === 'GET') previewFileGetFired = true;
       route.fallback();
     });

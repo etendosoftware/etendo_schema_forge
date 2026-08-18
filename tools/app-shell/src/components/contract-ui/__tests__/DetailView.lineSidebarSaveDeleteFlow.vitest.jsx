@@ -247,6 +247,7 @@ function renderDetailView(props = {}) {
         token="test-token"
         apiBaseUrl="/api/sales-order"
         breadcrumb="Sales / Orders"
+        linesLayout="classic"
         {...props}
       />
     </MemoryRouter>,

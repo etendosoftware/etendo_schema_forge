@@ -82,7 +82,7 @@ async function installMocks(page) {
   });
 
   // Goods-shipment list — ImportFromShipmentModal.fetchDocuments
-  await page.route('**/sws/neo/goods-shipment/goodsShipment**', async (route) => {
+  await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,
@@ -92,7 +92,7 @@ async function installMocks(page) {
   });
 
   // Goods-shipment lines — ImportFromShipmentModal.fetchLines
-  await page.route('**/sws/neo/goods-shipment/goodsShipmentLine**', async (route) => {
+  await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,
@@ -240,7 +240,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     });
 
     // Shipment list
-    await page.route('**/sws/neo/goods-shipment/goodsShipment**', async (route) => {
+    await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
       await route.fulfill({
         status: 200,
@@ -250,7 +250,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     });
 
     // Shipment lines — line WITH a salesOrderLine reference
-    await page.route('**/sws/neo/goods-shipment/goodsShipmentLine**', async (route) => {
+    await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
       await route.fulfill({
         status: 200,
@@ -416,7 +416,7 @@ function isPlainLinesPath(url) {
 async function installSourceInvoiceMocks(page, state) {
   // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and the
   // afterImport PATCH that links originInvoice back to the source invoice.
-  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const kind = classifyHeaderRequest(url, SRC_INVOICE_ID2);
@@ -454,7 +454,7 @@ async function installSourceInvoiceMocks(page, state) {
 
   // Lines: detail view's own (empty) fetch, modal fetchDocuments' own-lines lookup
   // (for alreadyImported detection), the source invoice's own lines (fetchLines), and POST.
-  await page.route('**/sws/neo/sales-invoice/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (!isPlainLinesPath(url)) return route.fallback();

@@ -448,5 +448,63 @@ describe('useDisplayLogic', () => {
 
       vi.useFakeTimers();
     });
+
+    // Regression coverage for ETP-4845 bug 2: `evaluate()` used to skip the
+    // evaluate-display call entirely whenever `values.id` was missing, which is correct
+    // for record-dependent logic (e.g. a Posted-based readOnly flag genuinely has nothing
+    // to evaluate on an unsaved record) but wrong for the `@ACCT_DIMENSION_DISPLAY@` macro:
+    // its truth value depends only on GL Configuration, never on the record, so a
+    // brand-new document kept showing dimension fields regardless of the toggle until the
+    // very first save. The fix widens the skip guard to also check
+    // `cacheRef.current.cacheKeySet` — only skip when there are no cacheable keys at all.
+    it('still calls evaluate-display for a new record (no id) when cacheableKeys is declared', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: { project: false, costcenter: true } }),
+      });
+
+      const { result } = renderHook(() =>
+        useDisplayLogic('header', { status: 'DR' }, { ...opts, cacheableKeys: ['project', 'costcenter'] })
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost/api/header/evaluate-display',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ fieldValues: { status: 'DR' } }),
+        }),
+      );
+      expect(result.current.visibility).toEqual({ project: false, costcenter: true });
+    });
+
+    // Contrast case for the test above: without `cacheableKeys` declared, a new record
+    // (no id) must still skip the call entirely — this is unchanged legacy behavior and is
+    // already covered by the top-level 'skips evaluation when record has no id (new
+    // record)' test using the plain `opts` object (no cacheableKeys).
+
+    it('still skips evaluation for a new record when cacheableKeys is an empty array', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: {} }),
+      });
+
+      renderHook(() =>
+        useDisplayLogic('header', { status: 'DR' }, { ...opts, cacheableKeys: [] })
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+
+      // An empty cacheableKeys array produces a cacheKeySet with size 0, which the guard
+      // must treat the same as "no cacheableKeys at all" — still skip for a new record.
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
   });
 });

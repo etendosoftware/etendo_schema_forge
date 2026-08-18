@@ -13,29 +13,64 @@ import { useUI } from '@/i18n';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 
 /**
- * Confirmation dialog for archiving (soft-deleting) a financial account (ETP-4096).
- * The backend rejects with HTTP 409 when the account has open reconciliations; that
- * case surfaces a specific message.
+ * Confirmation dialog for archiving (soft-deleting) a financial account (ETP-4096), and for
+ * restoring one that is already archived.
+ *
+ * The direction is derived from the record itself (`account.active === false` → restore) rather
+ * than passed in as a prop: every call site already hands over the full account, so a `mode` prop
+ * would just be threaded through four places to say something the data already says.
+ *
+ * Archiving can be rejected with HTTP 409 when the account has open reconciliations; that case
+ * surfaces a specific message. Restoring has no such guard.
  */
+
+/** Per-direction copy + behaviour. Same shape as the unreconcile dialog's action maps. */
+const MODES = {
+  archive: {
+    titleKey: 'financeAccountsArchiveConfirmTitle',
+    bodyKey: 'financeAccountsArchiveConfirmBody',
+    confirmKey: 'financeAccountsArchiveConfirm',
+    successKey: 'financeAccountsArchiveSuccess',
+    errorKey: 'financeAccountsArchiveError',
+    conflictKey: 'financeAccountsArchiveOpenRecon',
+    variant: 'destructive',
+  },
+  unarchive: {
+    titleKey: 'financeAccountsUnarchiveConfirmTitle',
+    bodyKey: 'financeAccountsUnarchiveConfirmBody',
+    confirmKey: 'financeAccountsUnarchiveConfirm',
+    successKey: 'financeAccountsUnarchiveSuccess',
+    errorKey: 'financeAccountsUnarchiveError',
+    conflictKey: null,
+    variant: 'default',
+  },
+};
+
+/** `true` when the account is archived, i.e. the dialog restores instead of archiving. */
+export function isUnarchiveMode(account) {
+  return account?.active === false;
+}
+
 export function ArchiveAccountDialog({ open, onClose, onArchived, account }) {
   const ui = useUI();
-  const { archiveAccount } = useAccountMutations();
+  const { archiveAccount, unarchiveAccount } = useAccountMutations();
   const [submitting, setSubmitting] = useState(false);
 
   if (!account) return null;
 
+  const unarchiving = isUnarchiveMode(account);
+  const mode = unarchiving ? MODES.unarchive : MODES.archive;
+
   const handleConfirm = async () => {
     setSubmitting(true);
     try {
-      await archiveAccount(account.id);
-      toast.success(ui('financeAccountsArchiveSuccess'));
+      await (unarchiving ? unarchiveAccount(account.id) : archiveAccount(account.id));
+      toast.success(ui(mode.successKey));
       onArchived?.();
       onClose?.();
     } catch (err) {
-      const message = err.status === 409
-        ? ui('financeAccountsArchiveOpenRecon')
-        : (err.message || ui('financeAccountsArchiveError'));
-      toast.error(message);
+      const conflict = mode.conflictKey && err.status === 409;
+      toast.error(conflict ? ui(mode.conflictKey) : (err.message || ui(mode.errorKey)));
     } finally {
       setSubmitting(false);
     }
@@ -48,8 +83,8 @@ export function ArchiveAccountDialog({ open, onClose, onArchived, account }) {
       data-testid="Dialog__fb3927">
       <DialogContent className="max-w-md" data-testid="archive-account-dialog">
         <DialogHeader data-testid="DialogHeader__fb3927">
-          <DialogTitle data-testid="DialogTitle__fb3927">{ui('financeAccountsArchiveConfirmTitle')}</DialogTitle>
-          <DialogDescription data-testid="DialogDescription__fb3927">{ui('financeAccountsArchiveConfirmBody')}</DialogDescription>
+          <DialogTitle data-testid="DialogTitle__fb3927">{ui(mode.titleKey)}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__fb3927">{ui(mode.bodyKey)}</DialogDescription>
         </DialogHeader>
         <DialogFooter data-testid="DialogFooter__fb3927">
           <Button
@@ -60,12 +95,12 @@ export function ArchiveAccountDialog({ open, onClose, onArchived, account }) {
             {ui('financeAccountsArchiveCancel')}
           </Button>
           <Button
-            variant="destructive"
+            variant={mode.variant}
             onClick={handleConfirm}
             disabled={submitting}
             data-testid="archive-account-confirm"
           >
-            {ui('financeAccountsArchiveConfirm')}
+            {ui(mode.confirmKey)}
           </Button>
         </DialogFooter>
       </DialogContent>

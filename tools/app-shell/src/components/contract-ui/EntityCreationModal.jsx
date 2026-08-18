@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
@@ -374,7 +374,9 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
  *   requiredFields string[] — field IDs that must be non-empty to show Save
  *   onSave         async (form, repeatables) => void
  *   onCancel       () => void
- *   initialValues  object — pre-filled form values
+ *   initialValues  object — pre-filled form values (read once, on mount)
+ *   patchValues    object — late-arriving pre-fill, merged into still-empty
+ *                  fields whenever it changes (see the effect below)
  *   opts           { [optionsKey]: { options, loading, error, onRetry } }
  *   componentMap   { [name]: ReactComponent } — resolves section.component
  *   onFieldChange  (id, value) => void — called after every field change
@@ -396,6 +398,7 @@ export default function EntityCreationModal({
   onSave,
   onCancel,
   initialValues = {},
+  patchValues = null,
   opts = {},
   componentMap = {},
   onFieldChange,
@@ -404,6 +407,32 @@ export default function EntityCreationModal({
   const ui = useUI();
   const [tab, setTab] = useState(sections[0]?.id ?? '');
   const [form, setForm] = useState(initialValues);
+
+  /*
+   * Late-arriving pre-fill. `initialValues` is snapshotted by useState on mount,
+   * so a value that is only known later — e.g. a country *label* extracted by
+   * OCR that must be matched against selector options fetched after mount —
+   * cannot be delivered through it. `patchValues` fills those fields in when
+   * they arrive.
+   *
+   * Only still-empty fields are written, so this can never clobber something
+   * the user typed while the options were loading. Returning the previous state
+   * unchanged makes the merge idempotent: callers do not have to memoize
+   * `patchValues`, because a no-op setForm bails out of re-rendering.
+   */
+  useEffect(() => {
+    if (!patchValues) return;
+    const isEmpty = v => v === '' || v === null || v === undefined;
+    setForm(prev => {
+      let next = prev;
+      for (const [id, value] of Object.entries(patchValues)) {
+        if (isEmpty(value) || !isEmpty(prev[id])) continue;
+        if (next === prev) next = { ...prev };
+        next[id] = value;
+      }
+      return next;
+    });
+  }, [patchValues]);
 
   const [repeatables, setRepeatables] = useState(() =>
     Object.fromEntries(
@@ -606,7 +635,7 @@ export default function EntityCreationModal({
             </div>
           ))}
           {error && (
-            <div className="mt-4 rounded-md bg-destructive border border-destructive px-4 py-3 text-sm text-destructive">
+            <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}

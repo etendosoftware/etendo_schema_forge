@@ -17,6 +17,7 @@ import {
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
   collectRowFieldValues,
+  buildRowValueCoercer,
   resolveCanAddLines,
   parseBackendErrorMessage,
   getDocumentIds,
@@ -42,6 +43,8 @@ import {
   getInlineEditableShrinkClassName,
   sidePanelWrapperCls,
   runAddLineAction,
+  buildInitialTabs,
+  buildLineRowClickHandler,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -128,6 +131,106 @@ describe('normalizePatchFieldValues', () => {
     const out = {};
     normalizePatchFieldValues({ flag: true, n: 7, nil: null }, out);
     expect(out).toEqual({ flag: true, n: 7, nil: null });
+  });
+
+  // ETP-4886 — with field metadata (3rd arg), an `_ID`-backed field with a
+  // numeric-looking value (e.g. the attributeSetValue "0" sentinel) must stay
+  // a string, never be coerced to Number.
+  describe('with field metadata (ETP-4886 — _ID columns stay strings)', () => {
+    const fields = [
+      { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+      { key: 'unitPrice', column: 'PriceActual' },
+    ];
+
+    it('does NOT coerce an _ID-backed field even when its value looks numeric', () => {
+      const out = {};
+      normalizePatchFieldValues({ attributeSetValue: '0' }, out, fields);
+      expect(out).toEqual({ attributeSetValue: '0' });
+      expect(typeof out.attributeSetValue).toBe('string');
+    });
+
+    it('still coerces a real numeric field that is not an _ID column', () => {
+      const out = {};
+      normalizePatchFieldValues({ unitPrice: '10.50' }, out, fields);
+      expect(out).toEqual({ unitPrice: 10.5 });
+    });
+
+    it('falls back to the legacy numeric heuristic for a key absent from fields', () => {
+      const out = {};
+      normalizePatchFieldValues({ unmappedIdLookingKey: '19' }, out, fields);
+      expect(out).toEqual({ unmappedIdLookingKey: 19 });
+    });
+
+    it('without a fields argument at all, behaves exactly like the legacy call (backward compatible)', () => {
+      const out = {};
+      normalizePatchFieldValues({ attributeSetValue: '0' }, out);
+      expect(out).toEqual({ attributeSetValue: 0 });
+    });
+  });
+});
+
+describe('buildRowValueCoercer (ETP-4886)', () => {
+  const fields = [
+    { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+    { key: 'businessPartner', column: 'C_BPartner_ID' },
+    { key: 'unitPrice', column: 'PriceActual' },
+    { key: 'discount', column: 'Discount' },
+  ];
+
+  it('does not coerce an _ID-backed field even when its value looks numeric ("0", "19", negative, decimal)', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('0', 'attributeSetValue')).toBe('0');
+    expect(coerce('19', 'businessPartner')).toBe('19');
+    expect(coerce('-5', 'businessPartner')).toBe('-5');
+    expect(coerce('19.5', 'businessPartner')).toBe('19.5');
+  });
+
+  it('matches the column suffix case-insensitively', () => {
+    const coerce = buildRowValueCoercer([{ key: 'foo', column: 'Some_id' }]);
+    expect(coerce('42', 'foo')).toBe('42');
+  });
+
+  it('coerces real numeric (non-_ID) fields to Number', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('10.50', 'unitPrice')).toBe(10.5);
+    expect(coerce('5', 'discount')).toBe(5);
+    expect(coerce('-3.5', 'unitPrice')).toBe(-3.5);
+  });
+
+  it('falls back to the legacy numeric-looking heuristic for a key not present in fields', () => {
+    const coerce = buildRowValueCoercer(fields);
+    // Not declared in `fields` at all -> old blanket behavior applies.
+    expect(coerce('19', 'someUndeclaredIdField')).toBe(19);
+    expect(coerce('not-a-number', 'someUndeclaredIdField')).toBe('not-a-number');
+  });
+
+  it('with no fields (undefined/empty array) reproduces the full legacy heuristic', () => {
+    const coerceUndefined = buildRowValueCoercer(undefined);
+    const coerceEmpty = buildRowValueCoercer([]);
+    for (const coerce of [coerceUndefined, coerceEmpty]) {
+      expect(coerce('0', 'attributeSetValue')).toBe(0);
+      expect(coerce('10.50', 'unitPrice')).toBe(10.5);
+      expect(coerce('10,50', 'amount')).toBe('10,50');
+    }
+  });
+
+  it('leaves non-string values untouched regardless of field metadata', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce(7, 'unitPrice')).toBe(7);
+    expect(coerce(null, 'attributeSetValue')).toBeNull();
+    expect(coerce(undefined, 'businessPartner')).toBeUndefined();
+    expect(coerce(true, 'discount')).toBe(true);
+    expect(coerce(false, 'attributeSetValue')).toBe(false);
+  });
+
+  it('leaves comma-decimal (locale) strings untouched even for numeric non-_ID fields', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('10,50', 'unitPrice')).toBe('10,50');
+  });
+
+  it('a field present in the map but with no column value falls back to the numeric heuristic', () => {
+    const coerce = buildRowValueCoercer([{ key: 'weirdField' }]);
+    expect(coerce('42', 'weirdField')).toBe(42);
   });
 });
 
@@ -369,5 +472,161 @@ describe('getAddLineMenuActions', () => {
   it('keeps the raw label when the translation comes back empty', () => {
     const get = () => [{ label: 'importLines' }];
     expect(getAddLineMenuActions(get, {}, { current: null }, () => '')[0].label).toBe('importLines');
+  });
+});
+
+describe('buildLineRowClickHandler (ETP-4763 — inlineEditable default)', () => {
+  it('returns a click handler when DetailForm is set and linesLayout is classic', () => {
+    const setSelectedLine = vi.fn();
+    const handler = buildLineRowClickHandler(() => null, 'classic', setSelectedLine);
+
+    expect(typeof handler).toBe('function');
+    handler({ id: 'L1', unitPrice: 10.005 });
+    expect(setSelectedLine).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }));
+  });
+
+  it('returns undefined for the inlineEditable layout, even with a DetailForm', () => {
+    const setSelectedLine = vi.fn();
+    const handler = buildLineRowClickHandler(() => null, 'inlineEditable', setSelectedLine);
+
+    expect(handler).toBeUndefined();
+  });
+
+  it('returns undefined when DetailForm is falsy, regardless of linesLayout', () => {
+    const setSelectedLine = vi.fn();
+    expect(buildLineRowClickHandler(null, 'classic', setSelectedLine)).toBeUndefined();
+    expect(buildLineRowClickHandler(undefined, 'classic', setSelectedLine)).toBeUndefined();
+  });
+});
+
+describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
+  const baseUi = (key) => key;
+  const basePanelCounts = {};
+  const baseHook = { children: [] };
+
+  function makeProps(overrides = {}) {
+    return {
+      secondaryTabs: [],
+      secondaryHooks: [],
+      panelCounts: basePanelCounts,
+      ui: baseUi,
+      DetailTable: null,
+      detailLabel: 'Lines',
+      detailEntity: 'orderLine',
+      hook: baseHook,
+      detailTabIndex: undefined,
+      detailTabOrder: undefined,
+      CustomLines: null,
+      customLinesLabel: 'Invoices',
+      customLinesCount: null,
+      customTabsAfterBottom: false,
+      tabCustomTabs: [],
+      customTabCounts: {},
+      customTabVisibility: {},
+      ...overrides,
+    };
+  }
+
+  it("reproduces today's default order when nothing declares tabOrder: secondaryTabs, then customs (no lines)", () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'custom:pricing']);
+  });
+
+  it('a higher secondaryTabs tabOrder sorts it after a default-weight custom tab', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'accounting']);
+  });
+
+  it('a lower custom-tab tabOrder sorts it before a default-weight secondaryTab', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab', tabOrder: 1 }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'accounting']);
+  });
+
+  it('ties keep insertion order among secondaryTabs (stable sort)', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [
+        { key: 'accounting', label: 'Accounting' },
+        { key: 'tax', label: 'Tax' },
+      ],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'tax']);
+  });
+
+  it('a custom tab hidden via customTabVisibility is excluded before the sort runs', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+      customTabVisibility: { pricing: false },
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting']);
+  });
+
+  it('customTabsAfterBottom suppresses custom tabs from the sorted list entirely', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab', tabOrder: -50 }],
+      customTabsAfterBottom: true,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting']);
+  });
+
+  it("lines tab defaults to first when neither detailTabIndex nor detailTabOrder is set (matches today's unshift)", () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['lines', 'accounting']);
+  });
+
+  it('detailTabIndex splices the lines tab at the same position as the old array-splice behavior', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [
+        { key: 'accounting', label: 'Accounting' },
+        { key: 'tax', label: 'Tax' },
+      ],
+      detailTabIndex: 1,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'lines', 'tax']);
+  });
+
+  it('an out-of-range detailTabIndex falls back to first, matching the old unshift fallback', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      detailTabIndex: 99,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['lines', 'accounting']);
+  });
+
+  it('detailTabOrder takes precedence over detailTabIndex and places the lines tab by weight', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+      detailTabIndex: 0,
+      detailTabOrder: 500,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'lines', 'custom:pricing']);
+  });
+
+  it('Producto acceptance case: Contabilidad sorts after Precio and Attachments', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [
+        { key: 'pricing', label: 'Price', placement: 'tab' },
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab' },
+      ],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'custom:attachments', 'accounting']);
   });
 });

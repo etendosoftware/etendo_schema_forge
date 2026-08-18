@@ -27,7 +27,7 @@ export default function BalanceFooterPanel({
 
   const fmt = (v) => (typeof formatAmount === 'function' ? formatAmount(v, currency) : String(v));
 
-  const divider = <div className="border-t border-border-structural" />;
+  const divider = <div className="border-t border-border" />;
 
   return (
     <div className="mt-1 flex flex-col items-end" data-testid="balance-footer">
@@ -49,7 +49,7 @@ export default function BalanceFooterPanel({
               <span
                 data-testid="balance-status"
                 data-balanced={String(isBalanced)}
-                className={`text-xs rounded px-2 py-0.5 ${isBalanced ? 'bg-status-success text-status-success-foreground' : 'bg-destructive text-destructive'}`}
+                className={`text-xs rounded px-2 py-0.5 ${isBalanced ? 'bg-status-success text-status-success-foreground' : 'bg-destructive text-destructive-foreground'}`}
               >
                 {isBalanced ? `✓ ${ui('balanced')}` : `✗ ${ui('unbalanced')}`}
               </span>

@@ -110,6 +110,20 @@ describe('AccountRowActions', () => {
     expect(handlers.onArchive).toHaveBeenCalledWith(CONNECTED);
   });
 
+  // ETP-4871 — onDelete threads through to the kebab menu the same way onArchive does; the
+  // menu item itself only renders once `account.deletable === true` (covered in
+  // AccountRowMenu.vitest.jsx), so this fixture opts in explicitly.
+  it('forwards onDelete to the kebab menu for a deletable account', async () => {
+    const onDelete = vi.fn();
+    const deletable = { ...CONNECTED, deletable: true };
+    render(<AccountRowActions account={deletable} onDelete={onDelete} />);
+    openMenu('acc-1');
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+    expect(onDelete).toHaveBeenCalledWith(deletable);
+  });
+
   it('offers disconnect for a connected account and connect for an offline one', async () => {
     const onBankConnectionAction = vi.fn();
     const { unmount } = render(

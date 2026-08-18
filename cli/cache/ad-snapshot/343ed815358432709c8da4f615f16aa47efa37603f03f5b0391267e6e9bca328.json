@@ -3010,6 +3010,86 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "a4caa2fe70f72073f4e3a1afe156bb3c06076d0116b575aa7cc2029c4fa01ffe",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "classname": null,
+          "column_name": "Process",
+          "mechanism": "classic_process",
+          "name": "Copy to next year",
+          "obuiapp_process_id": null,
+          "process_id": "6CCCF2729B0E42C88F22AC0AF67944E0"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close",
+          "obuiapp_process_id": null,
+          "process_id": "168"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close",
+          "obuiapp_process_id": null,
+          "process_id": "168"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close All",
+          "obuiapp_process_id": null,
+          "process_id": "167"
+        },
+        {
+          "classname": null,
+          "column_name": "IsReady",
+          "mechanism": "classic_process",
+          "name": "Set as Ready",
+          "obuiapp_process_id": null,
+          "process_id": "53863D4359114ADE92133F772135AEEB"
+        },
+        {
+          "classname": "com.etendoerp.sif.general.process.AddCertificateToOrg",
+          "column_name": "EM_Etsg_Add_Certificate",
+          "mechanism": "obuiapp_process",
+          "name": "Añadir Certificado Digital a Organización",
+          "obuiapp_process_id": "77AAF82CC5344022AAD6ECBC9925E574",
+          "process_id": null
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.email.actionhandler.TestSmtpConnectionActionHandler",
+          "column_name": "Smtpconnectiontest",
+          "mechanism": "obuiapp_process",
+          "name": "Test SMTP Connection",
+          "obuiapp_process_id": "9AB8A39485BD4FB1B6BB38B27E707668",
+          "process_id": null
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "06c7aae421ec9cf41a76f1ee515910f5fdec1b53e18ec6874ee31ae1c19be7ba",
       "params": [
@@ -3355,7 +3435,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "af258182c5826dfe4293121b634078969652023eb58954fc68da8da84516e6e9",
+      "checksum": "8916414633160960baccf1d86eea3336d77fff5d15be5cc24814dd8858f8398f",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -3633,14 +3713,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
-          "column_name": "EM_Psd2_Refresh_Connections",
-          "mechanism": "obuiapp_process",
-          "name": "Refresh Connections",
-          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
-          "process_id": null
-        },
-        {
           "classname": "com.etendoerp.payment.removal.handler.RemoveReconciliation",
           "column_name": "EM_Etpr_Remove_Reconciliation",
           "mechanism": "obuiapp_process",
@@ -3654,6 +3726,14 @@
           "mechanism": "obuiapp_process",
           "name": "Remove Transaction",
           "obuiapp_process_id": "DC4FCAC608324CB78CF92F99C1A94AD0",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
+          "column_name": "EM_Psd2_Refresh_Connections",
+          "mechanism": "obuiapp_process",
+          "name": "Search Recent Transactions",
+          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
           "process_id": null
         }
       ]

@@ -39,7 +39,7 @@ async function fetchLinkedReturnDeliveries(invoiceId, token, apiBaseUrl) {
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   const [purchaseOrder, setPurchaseOrder] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -103,7 +103,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       setOriginInvoice(originResult);
     });
     promise.finally(() => setLoading(false));
-  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 

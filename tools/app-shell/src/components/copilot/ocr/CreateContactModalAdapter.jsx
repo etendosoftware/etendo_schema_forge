@@ -14,12 +14,17 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+  // `prefilled` is keyed by CreateContactModal form field id — the OCR doc type
+  // declares the mapping in `createPrefilledFrom`, so everything the extraction
+  // found for this contact (tax id, address, city, country, email, phone) is
+  // forwarded, not just the name. ETP-4855 Error 1.
   const prefilled = item?.payload?.prefilled || {};
   const initialQuery = prefilled.name || '';
   return (
     <CreateContactModal
       bpApiBaseUrl={bpApiBaseUrl}
       headers={headers}
+      prefill={prefilled}
       initialQuery={initialQuery}
       documentType={item?.payload?.documentType || null}
       onClose={onCancel}

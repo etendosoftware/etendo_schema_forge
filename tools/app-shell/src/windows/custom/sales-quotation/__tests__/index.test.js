@@ -115,4 +115,42 @@ describe('SalesQuotationWindow custom wrapper', () => {
       assert.match(src, /key:\s*['"]reject['"][\s\S]{0,200}icon:\s*XCircle/);
     });
   });
+
+  describe('row quick actions — email visibility gate (ETP-4717)', () => {
+    // This window builds rowQuickActions by hand (bypassing the generated
+    // contract's rowQuickActions.actions.email.visibleWhen), so the gate must
+    // be asserted here directly via source-regex. Regression: without it, the
+    // Grid "Enviar" (email) quick action shows on every row regardless of
+    // status. Quotation email is available from "Bajo evaluación" (UE)
+    // onward, not while still Draft (DR). The literal DocStatus rule now
+    // lives in the shared sendActionVisibility.js constant (dedup fix for a
+    // SonarQube CPD finding); this test asserts both the indirection (the
+    // import + the identifier used on the email action) and the constant's
+    // real value, so it still proves the actual DocStatus rule, not just
+    // that some constant is referenced.
+    it('imports SEND_VISIBLE_WHEN_NOT_DRAFT from the shared sendActionVisibility module', () => {
+      assert.match(
+        src,
+        /import\s*\{\s*SEND_VISIBLE_WHEN_NOT_DRAFT\s*\}\s*from\s*['"]\.\.\/shared\/sendActionVisibility\.js['"]/,
+      );
+    });
+
+    it('sets visibleWhen on the email action to SEND_VISIBLE_WHEN_NOT_DRAFT to hide it while the quotation is still a Draft', () => {
+      assert.match(
+        src,
+        /actions:\s*\{[\s\S]{0,700}email:\s*\{\s*visibleWhen:\s*SEND_VISIBLE_WHEN_NOT_DRAFT\s*\}/,
+      );
+    });
+
+    it("SEND_VISIBLE_WHEN_NOT_DRAFT actually resolves to the DocStatus != Draft rule", () => {
+      const sharedSrc = readFileSync(
+        join(__dirname, '..', '..', 'shared', 'sendActionVisibility.js'),
+        'utf8',
+      );
+      assert.match(
+        sharedSrc,
+        /export const SEND_VISIBLE_WHEN_NOT_DRAFT\s*=\s*["']@DocumentStatus@!='DR'["']/,
+      );
+    });
+  });
 });

@@ -11,14 +11,11 @@ export function useConfirmWithCredit({
   invoiceRoute,
   invoiceType,
   invoiceCreatedTitleKey,
-  generatePdfFn,
-  getPdfLabelsFn,
 }) {
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [result, setResult] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [cloneTargets, setCloneTargets] = useState(null);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
@@ -33,22 +30,6 @@ export function useConfirmWithCredit({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
-
-  const pdfLabels = useMemo(() => getPdfLabelsFn(ui), [getPdfLabelsFn, ui]);
-
-  const handlePrint = useCallback(async () => {
-    setPdfLoading(true);
-    try {
-      const blob = await generatePdfFn(data?.id || recordId, apiBaseUrl, token, pdfLabels);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (err) {
-      toast.error(err.message || ui('failedToGeneratePdf'));
-    } finally {
-      setPdfLoading(false);
-    }
-  }, [data, recordId, apiBaseUrl, token, pdfLabels, ui, generatePdfFn]);
 
   const handleCreateReturnInvoice = useCallback(async () => {
     if (creatingInvoice) return;
@@ -96,9 +77,9 @@ export function useConfirmWithCredit({
     ui,
     status, currency, confirmDisabled, hasReturnInvoice,
     headers, base,
-    pdfLoading, showModal, setShowModal,
+    showModal, setShowModal,
     creatingInvoice, result, setResult,
     cloneTargets, setCloneTargets,
-    handlePrint, handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
+    handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   };
 }

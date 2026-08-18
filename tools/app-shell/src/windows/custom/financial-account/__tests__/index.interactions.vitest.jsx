@@ -44,6 +44,10 @@ const windowAccessCalls = [];
 const reloadAccountMock = vi.fn();
 const reloadMovementsMock = vi.fn();
 const reloadAutoMatchMock = vi.fn();
+vi.mock('@/hooks/useReconciliationList', () => ({
+  useReconciliations: () => ({ reconciliations: [], loading: false }),
+  useClearedItems: () => ({ items: [], loading: false }),
+}));
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: () => ({
     account: { id: 'acc-1', name: 'BBVA', pendingCount: 2 },
@@ -138,11 +142,12 @@ vi.mock('../ImportedStatementsTab.jsx', () => ({
 }));
 
 vi.mock('../EditAccountModal.jsx', () => ({
-  EditAccountModal: ({ open, account, onClose, onSaved, onArchive, onConnect }) => (
+  EditAccountModal: ({ open, account, onClose, onSaved, onArchive, onDelete, onConnect }) => (
     <div data-testid="edit-modal" data-open={String(open)}>
       <button type="button" data-testid="stub-edit-close" onClick={onClose} />
       <button type="button" data-testid="stub-edit-saved" onClick={onSaved} />
       <button type="button" data-testid="stub-edit-archive" onClick={() => onArchive(account)} />
+      <button type="button" data-testid="stub-edit-delete" onClick={() => onDelete(account)} />
       <button type="button" data-testid="stub-edit-connect" onClick={() => onConnect(account)} />
     </div>
   ),
@@ -153,6 +158,17 @@ vi.mock('../ArchiveAccountDialog.jsx', () => ({
     <div data-testid="archive-dialog" data-open={String(open)} data-account={account?.name ?? ''}>
       <button type="button" data-testid="stub-archive-close" onClick={onClose} />
       <button type="button" data-testid="stub-archive-archived" onClick={onArchived} />
+    </div>
+  ),
+}));
+
+// ETP-4871 — a sibling of ArchiveAccountDialog, not a mode of it (see DeleteAccountDialog.jsx's
+// own doc comment): mirrors the archive stub's shape 1:1, but its callback is `onDeleted`.
+vi.mock('../DeleteAccountDialog.jsx', () => ({
+  DeleteAccountDialog: ({ open, account, onClose, onDeleted }) => (
+    <div data-testid="delete-dialog" data-open={String(open)} data-account={account?.name ?? ''}>
+      <button type="button" data-testid="stub-delete-close" onClick={onClose} />
+      <button type="button" data-testid="stub-delete-deleted" onClick={onDeleted} />
     </div>
   ),
 }));
@@ -393,6 +409,41 @@ describe('FinancialAccountDetail — edit / archive / connect hand-offs', () => 
     bankFlowOptions.onDone();
 
     expect(reloadAccountMock).toHaveBeenCalled();
+  });
+});
+
+// ETP-4871 — same shape as the archive hand-offs above, but Delete has no restore/stay branch:
+// a real delete always navigates back to the list.
+describe('FinancialAccountDetail — edit / delete hand-offs (ETP-4871)', () => {
+  it('swaps the edit modal for the delete dialog on Delete', () => {
+    render(<FinancialAccountDetail recordId="acc-1" />);
+    fireEvent.click(screen.getByTestId('financial-account-edit'));
+
+    fireEvent.click(screen.getByTestId('stub-edit-delete'));
+
+    expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
+    expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-account', 'BBVA');
+  });
+
+  it('dismisses the delete dialog without navigating away', () => {
+    render(<FinancialAccountDetail recordId="acc-1" />);
+    fireEvent.click(screen.getByTestId('stub-edit-delete'));
+
+    fireEvent.click(screen.getByTestId('stub-delete-close'));
+
+    expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'false');
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('returns to the accounts list once the account has been deleted', () => {
+    render(<FinancialAccountDetail recordId="acc-1" />);
+    fireEvent.click(screen.getByTestId('stub-edit-delete'));
+
+    fireEvent.click(screen.getByTestId('stub-delete-deleted'));
+
+    expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'false');
+    expect(navigateMock).toHaveBeenCalledWith('/financial-account');
   });
 });
 

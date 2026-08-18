@@ -1,14 +1,10 @@
 // Source-reading tests for the currency-conversion fix (ETP-4029) and the
 // documentDateField generalization inside DetailView.jsx.
 //
-// `applyProductCurrencyConversion` is a module-private helper (not exported,
-// confirmed by reading the file — no `export` keyword precedes its
-// declaration and there is no re-export elsewhere in the module). DetailView.jsx
-// is ~4650 lines with a very heavy dependency tree (router, many hooks,
-// sub-components); importing it directly to reach this private function is not
-// practical, and ES module named exports of non-exported functions are
-// `undefined` on import. Per the test_strategy decision tree, this warrants a
-// source-reading regression test rather than a full component render.
+// `applyProductCurrencyConversion` lives in the shared helper module so the
+// large DetailView component can consume it without carrying the implementation
+// inline. This source-reading regression test keeps the conversion contract
+// explicit without importing the heavy component tree.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+const helpersSrc = readFileSync(join(__dirname, '..', 'detailViewHelpers.jsx'), 'utf8');
 
 function extractFunctionBody(source, functionName) {
   const startMatch = source.match(new RegExp(`function ${functionName}\\([^)]*\\)\\s*\\{`));
@@ -33,12 +30,12 @@ function extractFunctionBody(source, functionName) {
 }
 
 describe('applyProductCurrencyConversion (source-reading)', () => {
-  it('is not exported — testability gap, verified by reading the module (no `export` keyword)', () => {
-    assert.doesNotMatch(src, /export function applyProductCurrencyConversion/);
-    assert.match(src, /(?<!export )function applyProductCurrencyConversion\(/);
+  it('is exported by the shared helper module and consumed by DetailView', () => {
+    assert.match(helpersSrc, /export function applyProductCurrencyConversion\(/);
+    assert.match(src, /applyProductCurrencyConversion\(/);
   });
 
-  const fnBody = extractFunctionBody(src, 'applyProductCurrencyConversion');
+  const fnBody = extractFunctionBody(helpersSrc, 'applyProductCurrencyConversion');
 
   it('only applies when field is "product" and a currency conversion is active', () => {
     assert.match(fnBody, /if \(field !== 'product' \|\| !activeCurrencyConversion\) return;/);

@@ -191,7 +191,8 @@ export const apiOnlyWindows = new Set([
  * Developers can also add entries manually for fully custom windows.
  */
 const customLoaders = {
-  // Auto-registered by pipeline when layoutType: "custom"
+  // Auto-registered by pipeline
+  'organization': () => import('./custom/organization/index.jsx'),
   'calendar': () => import('./custom/calendar/index.jsx'),
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),

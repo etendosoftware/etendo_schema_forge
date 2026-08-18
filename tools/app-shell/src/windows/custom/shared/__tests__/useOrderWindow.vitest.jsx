@@ -176,6 +176,18 @@ describe('useOrderWindow', () => {
     expect(result.current.refreshKey).toBe(2);
   });
 
+  // ETP-4717 — this hook builds rowQuickActions by hand (bypassing the
+  // generated contract's rowQuickActions.actions.email.visibleWhen), so the
+  // gate must be asserted here directly. Regression: without it, the Grid
+  // "Enviar" (email) quick action shows on every row regardless of status,
+  // shared by both sales-order and purchase-order.
+  it('gates the row-hover email quick action to Confirmed orders (CO)', () => {
+    const { result } = renderOrderHook();
+    expect(result.current.rowQuickActions.actions.email).toEqual({
+      visibleWhen: "@DocumentStatus@='CO'",
+    });
+  });
+
   it('blocks confirmation when exchange rate is missing, then opens confirmation and result portals', async () => {
     const { result } = renderOrderHook();
     const row = {

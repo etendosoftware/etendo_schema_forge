@@ -32,6 +32,7 @@ vi.mock('../useFiscalConfig.js', () => ({
     tbaiRecord: null,
     verifactuRecord: null,
     refetch: vi.fn(),
+    createComplementary: vi.fn().mockResolvedValue({ id: 'new-tbai-1' }),
   })),
 }));
 
@@ -43,9 +44,32 @@ vi.mock('../useCertExpiry.js', () => ({
   useCertExpiry: () => ({ daysLeft: null }),
 }));
 
-vi.mock('../fiscalConfig.utils.js', () => ({
+vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
+  ...(await importActual()),
   detectProfile: vi.fn(() => 'sii'),
 }));
+
+// Change SIF dialog renders a portal Dialog; stub it out for page-level tests.
+// The stub is configurable via `__changeSifDialogBehavior`:
+//   - null (default): renders nothing
+//   - 'expose-trigger': renders a button that invokes onChanged when clicked,
+//     letting tests simulate the dialog completing a deactivation
+// This allows specific tests to exercise the page's response to a completed change.
+let __changeSifDialogBehavior = null;
+vi.mock('../ChangeSifDialog.jsx', async () => {
+  const React = await import('react');
+  return {
+    default: (props) => {
+      if (__changeSifDialogBehavior === 'expose-trigger') {
+        return React.createElement('button', {
+          'data-testid': 'ChangeSifDialog__simulateOnChanged',
+          onClick: () => props.onChanged?.(),
+        }, 'simulate-onChanged');
+      }
+      return null;
+    },
+  };
+});
 
 // Section component mocks
 
@@ -110,7 +134,60 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('lucide-react', () => ({
   Save: () => <svg data-testid="icon-save" />,
+  RefreshCw: () => <svg data-testid="icon-refresh" />,
+  PlusCircle: () => <svg data-testid="icon-plus-circle" />,
+  MoreVertical: () => <svg data-testid="icon-more-vertical" />,
 }));
+
+// DropdownMenu: stub out Radix primitives so the content renders only when the
+// trigger has been clicked. Uses a React context inside the factory to share
+// open/setOpen between Trigger and Content — no portals, no a11y machinery.
+vi.mock('@/components/ui/dropdown-menu', async () => {
+  const React = await import('react');
+  const Ctx = React.createContext({ open: false, toggle: () => {} });
+
+  function DropdownMenu({ children }) {
+    const [open, setOpen] = React.useState(false);
+    const toggle = React.useCallback(() => setOpen(o => !o), []);
+    return (
+      <Ctx.Provider value={{ open, toggle }}>
+        <div data-dropdown-root="true">{children}</div>
+      </Ctx.Provider>
+    );
+  }
+
+  function DropdownMenuTrigger({ children, asChild }) {
+    const { toggle } = React.useContext(Ctx);
+    const inner = asChild ? React.Children.only(children) : <button type="button">{children}</button>;
+    return React.cloneElement(inner, {
+      onClick: (e) => {
+        inner.props.onClick?.(e);
+        toggle();
+      },
+    });
+  }
+
+  function DropdownMenuContent({ children }) {
+    const { open } = React.useContext(Ctx);
+    if (!open) return null;
+    return <div data-testid="dropdown-menu-content">{children}</div>;
+  }
+
+  function DropdownMenuItem({ children, onSelect, disabled, ...rest }) {
+    return (
+      <div
+        role="menuitem"
+        tabIndex={disabled ? -1 : 0}
+        onClick={disabled ? undefined : onSelect}
+        aria-disabled={disabled}
+        {...rest}>
+        {children}
+      </div>
+    );
+  }
+
+  return { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem };
+});
 
 // --- Import under test ----------------------------------------------------
 
@@ -296,6 +373,14 @@ describe('FiscalConfigPage — profile: sii', () => {
     expect(screen.getByText('fiscal.cancel')).toBeInTheDocument();
     expect(screen.getByText('fiscal.save')).toBeInTheDocument();
   });
+
+  it('does not show "Add SII" item in the kebab menu when profile is "sii"', () => {
+    renderPage();
+    // The actionsMenu trigger is rendered (canChangeSif is true for sii profile).
+    // Open the dropdown and verify addComplementary is not among the items.
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
 });
 
 describe('FiscalConfigPage — profile: sii-navarra', () => {
@@ -369,6 +454,7 @@ describe('FiscalConfigPage — profile: tbai', () => {
       tbaiRecord: { id: 'tbai-1' },
       verifactuRecord: null,
       refetch: vi.fn(),
+      createComplementary: vi.fn().mockResolvedValue({ id: 'new-sii-1' }),
     });
   });
 
@@ -380,6 +466,35 @@ describe('FiscalConfigPage — profile: tbai', () => {
   it('does not show SiiSection for tbai profile', () => {
     renderPage();
     expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+  });
+
+  it('shows "Add SII" item in the kebab menu when profile is "tbai"', () => {
+    renderPage();
+    // Open the kebab dropdown to expose the menu items.
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    expect(screen.getByTestId('FiscalConfigPage__addComplementary')).toBeInTheDocument();
+  });
+
+  it('calls createComplementary when "Add SII" button is clicked', async () => {
+    const { useFiscalConfig: mockUseFiscalConfig } = await import('../useFiscalConfig.js');
+    const createComplementaryMock = vi.fn().mockResolvedValue({ id: 'new-sii-1' });
+    vi.mocked(mockUseFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: createComplementaryMock,
+    });
+    renderPage();
+    // Open the kebab dropdown, then click the menu item.
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+    await waitFor(() => {
+      expect(createComplementaryMock).toHaveBeenCalledWith('sii', 'org-1');
+    });
   });
 });
 
@@ -581,5 +696,215 @@ describe('FiscalConfigPage — org bar', () => {
   it('renders OrgDropdown showing the selected org name', () => {
     renderPage();
     expect(screen.getByText('Test Org')).toBeInTheDocument();
+  });
+});
+
+// Reset the stub behavior after every test so it doesn't bleed into neighbours.
+afterEach(() => {
+  __changeSifDialogBehavior = null;
+});
+
+describe('FiscalConfigPage — actions kebab menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function setupAuth() {
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+  }
+
+  it('kebab trigger is NOT rendered when profile is "unconfigured" (no actions available)', () => {
+    setupAuth();
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'unconfigured',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    // unconfigured shows the wizard — canAddComplementary and canChangeSif are both false
+    expect(screen.queryByTestId('FiscalConfigPage__actionsMenu')).not.toBeInTheDocument();
+  });
+
+  it('kebab trigger is NOT rendered when addingComplementary is active (complementary already in progress)', async () => {
+    // addingComplementary state is set to 'sii' after clicking "Add SII".
+    // We simulate this by using a tbai profile and clicking "Add SII" so that
+    // the state transitions — after the click the trigger disappears.
+    setupAuth();
+    const createComplementary = vi.fn().mockResolvedValue({ id: 'new-sii-1' });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary,
+    });
+    renderPage();
+    // Trigger is visible initially (canAddComplementary true)
+    expect(screen.getByTestId('FiscalConfigPage__actionsMenu')).toBeInTheDocument();
+    // Open the kebab and click "Add SII" — sets addingComplementary='sii' after the promise resolves
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+    // The condition `!addingComplementary` gates the whole dropdown — wait for the async state update
+    await waitFor(() => {
+      expect(screen.queryByTestId('FiscalConfigPage__actionsMenu')).not.toBeInTheDocument();
+    });
+  });
+
+  it('kebab trigger IS rendered when canChangeSif is true (sii profile)', () => {
+    setupAuth();
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'sii',
+      siiRecord: { id: 'sii-1' },
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('FiscalConfigPage__actionsMenu')).toBeInTheDocument();
+  });
+
+  it('"Add SII" item is only in the kebab for a TBAI-only profile (not SII)', () => {
+    setupAuth();
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: vi.fn().mockResolvedValue({ id: 'new-sii-1' }),
+    });
+    renderPage();
+    // Open the kebab — addComplementary item must be visible
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    expect(screen.getByTestId('FiscalConfigPage__addComplementary')).toBeInTheDocument();
+  });
+
+  it('"Add SII" item is NOT in the kebab for an SII-only profile', () => {
+    setupAuth();
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'sii',
+      siiRecord: { id: 'sii-1' },
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    // Open the kebab — canAddComplementary is false for sii, so the item must be absent
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
+});
+
+describe('FiscalConfigPage — handles deleted:true response from backend', () => {
+  // These tests verify the page's behavior when the ChangeSifDialog calls back
+  // its onChanged prop after a deactivation that returned { deleted: true }.
+  // The page's onChanged is wired to refetch(), which reloads the fiscal config.
+  // The key invariant: no error banner appears, and the page transitions cleanly.
+
+  function setupSiiProfile(refetchMock) {
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'sii',
+      siiRecord: { id: 'sii-1' },
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: refetchMock,
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Enable the configurable stub so the dialog exposes a trigger button
+    __changeSifDialogBehavior = 'expose-trigger';
+  });
+
+  it('when onChanged fires after a regular success, no error banner appears', async () => {
+    const refetch = vi.fn();
+    setupSiiProfile(refetch);
+    renderPage();
+
+    // Open the "Change SIF" dialog by clicking the kebab trigger
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__changeSif'));
+
+    // The stub dialog renders a trigger button when open — simulate the dialog
+    // calling onChanged (what happens after a successful deactivation, whether
+    // the backend deleted the record or just set it inactive).
+    const trigger = screen.getByTestId('ChangeSifDialog__simulateOnChanged');
+    fireEvent.click(trigger);
+
+    // refetch must have been called (proves onChanged → refetch wiring is intact)
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+
+    // No error banner must exist
+    expect(screen.queryByTestId('ChangeSifDialog__error')).not.toBeInTheDocument();
+    // The page-level save error also must not appear
+    expect(screen.queryByText('fiscal.loadError')).not.toBeInTheDocument();
+  });
+
+  it('when onChanged fires (deleted:true scenario), refetch is called exactly once', async () => {
+    const refetch = vi.fn();
+    setupSiiProfile(refetch);
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__changeSif'));
+
+    const trigger = screen.getByTestId('ChangeSifDialog__simulateOnChanged');
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+  });
+
+  it('when onChanged fires for a verifactu profile, no error banner appears', async () => {
+    const refetch = vi.fn();
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'verifactu',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: { id: 'vf-1' },
+      refetch,
+    });
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__changeSif'));
+
+    const trigger = screen.getByTestId('ChangeSifDialog__simulateOnChanged');
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+    expect(screen.queryByTestId('ChangeSifDialog__error')).not.toBeInTheDocument();
+    expect(screen.queryByText('fiscal.loadError')).not.toBeInTheDocument();
   });
 });

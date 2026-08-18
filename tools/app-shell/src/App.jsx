@@ -204,12 +204,13 @@ function ServiceWorkerManager() {
 }
 
 function SurveyManager() {
-  const { activeSurvey, handleRespond, handleClose, handleDismiss } = useSurveyEngine();
+  const { activeSurvey, handleScoreSelected, handleRespond, handleClose, handleDismiss } = useSurveyEngine();
   if (!activeSurvey) return null;
   return createPortal(
     <SurveyModal
       survey={activeSurvey}
       open={!!activeSurvey}
+      onScoreSelected={handleScoreSelected}
       onRespond={handleRespond}
       onClose={handleClose}
       onDismiss={handleDismiss}

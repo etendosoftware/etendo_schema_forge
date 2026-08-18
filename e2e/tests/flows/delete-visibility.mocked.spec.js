@@ -103,7 +103,7 @@ async function installGridListMock(page, spec, cfg) {
     [cfg.docNoField]: r.id === 'row-001' ? 'DOC-001' : 'DOC-002',
     ...cfg.extra,
   }));
-  await page.route(`**/sws/neo/${spec}/${cfg.entityPath}**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/${cfg.entityPath}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !new RegExp(`/${cfg.entityPath}/[^/?]+`).test(url)) {
@@ -244,7 +244,7 @@ const FORM_WINDOWS = {
  */
 async function installFormWindowMocks(page, spec, cfg) {
   for (const record of [cfg.draft, cfg.completed]) {
-    await page.route(`**/sws/neo/${spec}/${cfg.entity}/${record.id}**`, async (route) => {
+    await page.route(`**/sws/neo/${spec}/${cfg.entity}/${record.id}{/**,}**`, async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
@@ -253,7 +253,7 @@ async function installFormWindowMocks(page, spec, cfg) {
       });
     });
   }
-  await page.route(`**/sws/neo/${spec}/${cfg.lineEntity}**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/${cfg.lineEntity}{/**,}**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,

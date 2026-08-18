@@ -72,6 +72,31 @@ describe('LinesBottomSection', () => {
     assert.match(src, /import DocumentTotalsPanel from '\.\/DocumentTotalsPanel\.jsx'/);
   });
 
+  it('ETP-4777: derives persistedTotals from data.grandTotalAmount/totalLines and forwards it to DocumentTotalsPanel', () => {
+    assert.match(src, /data\?\.grandTotalAmount/);
+    assert.match(src, /persistedTotals=\{persistedTotals\}/);
+  });
+
+  it('ETP-4777: net subtotal prefers data.summedLineAmount, falling back to data.totalLines', () => {
+    // The NEO header response exposes the persisted net subtotal as
+    // `summedLineAmount` (confirmed live: purchase-order header GET returns
+    // summedLineAmount=2750, no totalLines field at all) — matches the same
+    // fallback pattern already proven in useInvoicePdf.js/useQuotationPdf.js.
+    assert.match(src, /data\?\.summedLineAmount\s*\?\?\s*data\?\.totalLines/);
+  });
+
+  it('ETP-4777: only passes the two raw header fields — the raw-vs-discounted reconciliation lives in DocumentTotalsPanel', () => {
+    // An earlier version of this fix tried to resolve raw-vs-discounted
+    // net subtotal here using `isReadOnly` (documentStatus), but that signal
+    // is unreliable: an invoice created from an already-discounted order has
+    // its ETGO_DTO discount line materialised immediately, while still
+    // Draft. The reconciliation was moved to DocumentTotalsPanel.jsx, which
+    // can compare against a fresh recompute from the current lines instead
+    // of guessing from status. This component should stay a thin pass-through.
+    assert.match(src, /persistedTotals\s*=\s*data\?\.grandTotalAmount\s*!=\s*null/);
+    assert.doesNotMatch(src, /isAlreadyDiscounted/, 'reconciliation logic must live in DocumentTotalsPanel.jsx, not here');
+  });
+
   it('totals column uses a soft minHeight floor, not a rigid pixel clamp', () => {
     // Previously the panel was locked at height/minHeight/maxHeight: 241 which
     // acted as a floor on the whole bottom section and crushed the lines table

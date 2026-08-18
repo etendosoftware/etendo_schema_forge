@@ -67,7 +67,9 @@ gates provisioning, and the record of which plan a tenant is on.
    Productive comparison and a checkout form: a name for the new tenant, plus cardholder,
    card number, expiry and CVC.
 8. **The user fills the form and submits.** Everything from here to step 12 happens in the
-   browser.
+   browser. In Vite development, the upgrade API calls remain same-origin (`/sws/...`) so
+   the Vite proxy can forward them to the configured Etendo context; `VITE_API_BASE` must not
+   make the browser call Tomcat directly.
 9. **The form is validated locally.** The tenant name must be non-empty and must not match a
    tenant the account already owns — resubmitting an existing name would be treated by the
    backend as *resuming* that tenant rather than creating a new one, so the page rejects it
@@ -208,11 +210,22 @@ While the control plane is local, nothing reports which users saw which variant.
 frontend registers a hook that emits an analytics event on each flag exposure, carrying the
 flag key, the resolved value, the variant name, the provider name and the targeting key.
 
-Two behaviours are deliberate. It is **deduplicated** — one event per flag/value combination
-per session, not one per render, because the flag is re-evaluated on every render and the
-raw stream would be uncountable. And it **never disturbs evaluation** — the hook runs inside
-flag resolution, never awaits and never throws, so a reporting failure cannot change what a
-flag resolves to.
+Two behaviours are deliberate. It is **deduplicated per flag/value/provider** — one event per
+combination per session, not one per render, because the flag is re-evaluated on every render and
+the raw stream would be uncountable. The provider is part of the key on purpose: the hook is
+registered before the real control plane is ready, so the very first evaluation on every page
+load — practically every session, since the initial render is synchronous and the real provider
+needs an async import plus, for ConfigCat, a network round-trip — goes through OpenFeature's
+built-in no-op default. Deduplicating on value alone let that transient result permanently claim
+the session's report, silently swallowing every later evaluation once the real provider took
+over. And it **never disturbs evaluation** — the hook runs inside flag resolution, never awaits
+and never throws, so a reporting failure cannot change what a flag resolves to.
+
+The `provider` value itself is pinned by `createFlagProvider`, not read as-is from the SDK:
+ConfigCat's own provider names itself from its JS class name, which a minifier can rename per
+build — seen as both `_ConfigCatWebProvider` and `ut` across different production deploys. Both
+mean the same live control plane; `createFlagProvider` now reports it as the stable `configcat`
+regardless of build.
 
 This hook is temporary by design: a hosted control plane reports exposures natively, and
 keeping both would double-count.
@@ -349,6 +362,38 @@ There is a trap worth naming: the shared helper that most clients use to fetch e
 returns only the environments array, so it **silently discards every top-level field**. A
 consumer using the helper sees no `accountEmail` and gets no error. Reading it requires a
 direct request.
+
+## 3.6 Checkout funnel events
+
+The exposure hook in §2.5 only reports that the menu item was evaluated, not what the user did
+on `/upgrade`. `UpgradePage.jsx` and `lib/upgrade/` emit their own events, through the same
+`OBSERVABILITY_EVENTS` registry and `track()` call the rest of the app uses (see
+`docs/ops/mixpanel-kpi-emission-spec.md`), so this funnel is queryable in Mixpanel like any
+other product flow:
+
+| Event | Fired when | Key properties |
+| --- | --- | --- |
+| `upgrade_page_viewed` | Account lookup settles, once | `branch`: `checkout` \| `first_tenant_free` \| `unavailable` |
+| `upgrade_first_tenant_free_continued` | User continues from the first-tenant-free panel to onboarding | — |
+| `upgrade_existing_tenant_name_blocked` | Frontend validation catches a `clientName` the account already owns | — |
+| `upgrade_session_expired` | Submit reached `runUpgrade` with no platform token | — |
+| `upgrade_checkout_submitted` | Validated form submitted, before the network call | `currency`, `countryCode` |
+| `upgrade_payment_declined` | Either decline path | `reason`: `test_card` (client-side, never reaches the network) \| `backend_402` |
+| `upgrade_tenant_provisioning_succeeded` | NDJSON stream resolved with `success: true` | `durationMs`, `currency`, `countryCode` |
+| `upgrade_tenant_provisioning_failed` | Stream resolved without success, or the request/stream itself failed for a reason other than a decline | `durationMs`, `errorCode` |
+| `upgrade_enter_tenant_failed` | Post-success "enter the new tenant" step could not switch environments | — |
+
+Two things this table makes possible that flag exposure alone cannot: a **checkout funnel**
+(`upgrade_checkout_submitted` → `upgrade_tenant_provisioning_succeeded`, conversion and drop-off
+by decline reason) and a **provisioning latency KPI** (`durationMs` on the terminal events,
+p50/p90 over time). `durationMs` is measured client-side from the moment the network call starts,
+not from page load, so it excludes however long the user spent filling in the form.
+
+New event property names must also be added to `SAFE_EVENT_PROPERTY_KEYS` in
+`lib/observability/payload.js` — a second, global allowlist independent of the per-event one in
+`events.js`. A property missing from that list is silently stripped from the payload before it
+reaches Mixpanel; the event still fires, just without the property. There is no error and no log
+line, so a report that looks empty for one property but not others is the symptom.
 
 ---
 
@@ -492,9 +537,10 @@ is for.
   the **promotion condition**: if the flag ever pilots before a gateway exists, the three
   flag-on components must be promoted to their own item, because at that point they are
   scheduled work rather than part of the real-payments decision.
-- *Plan badge in the environment picker* — **cosmetic, 1 point.** The backend ships the plan
-  with every environment; nothing renders it, because the picker lives in a shared package that
-  needs its own change and release.
+- *Plan badge in the environment picker* — **implemented.** The app-shell company selector renders
+  `Demo`/`Productive` badges, sorts productive environments first, and the backend uses the same
+  order for the initial post-login environment selection. The shared core onboarding chooser can
+  adopt the badge when its package is upgraded independently.
 
 ## 4.5 The rules that keep the number worth reading
 

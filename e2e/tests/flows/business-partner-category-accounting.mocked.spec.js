@@ -52,7 +52,7 @@ const ACCOUNTING_ROW = {
 };
 
 async function installHeaderMock(page) {
-  await page.route('**/sws/neo/business-partner-category/businessPartnerCategory**', async (route) => {
+  await page.route('**/sws/neo/business-partner-category/businessPartnerCategory{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -77,7 +77,7 @@ async function installHeaderMock(page) {
 }
 
 async function installAccountingMock(page, rows) {
-  await page.route('**/sws/neo/business-partner-category/accounting**', async (route) => {
+  await page.route('**/sws/neo/business-partner-category/accounting{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

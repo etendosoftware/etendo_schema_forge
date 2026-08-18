@@ -75,7 +75,7 @@ async function installMocks(page, {
   lines = [LINE_001],
 } = {}) {
   // Lines endpoint (parentId query and direct)
-  await page.route('**/sws/neo/amortization/lines**', async (route) => {
+  await page.route('**/sws/neo/amortization/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -94,7 +94,7 @@ async function installMocks(page, {
   });
 
   // Header list + detail — must be registered last (lowest priority)
-  await page.route('**/sws/neo/amortization/header**', async (route) => {
+  await page.route('**/sws/neo/amortization/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

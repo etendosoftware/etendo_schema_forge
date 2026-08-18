@@ -155,7 +155,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
             data-testid="CreditLimitStepper__d55d36" />
         </div>
       </div>
-      <hr className="border-t border-border-structural mx-5" />
+      <hr className="border-t border-border mx-5" />
       {/* Preferencias de facturación — layout fila: texto izquierda + contenido derecha */}
       <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
         <div className="flex flex-col gap-1 w-[148px] shrink-0">

@@ -3,14 +3,13 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:user
 const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'username', column: 'UserName', type: 'text', label: 'Username', required: true, section: 'principal' },
   { key: 'firstName', column: 'Firstname', type: 'text', label: 'First Name', section: 'principal' },
   { key: 'lastName', column: 'Lastname', type: 'text', label: 'Last Name', section: 'principal' },
   { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security' },
   { key: 'isPasswordExpired', column: 'Isexpiredpassword', type: 'checkbox', label: 'Expired Password', readOnly: true, section: 'security' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', section: 'details', reference: 'BusinessPartner', inputMode: 'search' },
-  { key: 'email', column: 'Email', type: 'text', label: 'Email', section: 'principal' },
+  { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal' },
   { key: 'locked', column: 'IsLocked', type: 'checkbox', label: 'Locked', required: true, readOnly: true, section: 'security' },
   { key: 'position', column: 'Title', type: 'text', label: 'Position', section: 'details' },
   { key: 'phone', column: 'Phone', type: 'text', label: 'Phone', section: 'details' },

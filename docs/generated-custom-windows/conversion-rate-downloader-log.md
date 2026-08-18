@@ -22,7 +22,7 @@ From the current generated form and decisions, every field is read-only and the 
 - **Implementation type:** generated window loaded through `tools/app-shell/src/windows/registry.js`; `category: settings`.
 - **Window shape:** single-entity window (`conversionRateDownloaderLog`) with no child entities and no process endpoints.
 - **List columns:** Sync Date, Status, Pairs Updated, Pairs Failed, and Duration (ms). `Error Detail` and `Active` are form-only.
-- **Mode:** read-only. The entity exposes the records for inspection; create/edit/delete are not part of the intended flow because the rows are machine-generated.
+- **Mode:** read-only, **UI and API**. `decisions.json` declares `window.readOnly: true`, which derives `hideCreate` + `hideDelete` for the UI and — since ETP-4254 — restricts the `conversionRateDownloaderLog` entity on `ETGO_SF_ENTITY` to `ISGET=Y, ISGETBYID=Y, ISPOST=N, ISPUT=N, ISPATCH=N, ISDELETE=N`. NEO Headless answers `405 "<METHOD> not enabled for conversionRateDownloaderLog"` to the React app *and* to the MCP agent, and `neo_discover` reports `readOnly: true`. Create/edit/delete are not part of the intended flow because the rows are machine-generated. Criteria and mechanism: [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md).
 
 ## Reactive behavior and dependencies
 This window has no reactive UI behavior — there are no selectors, callouts, defaulting, or status-driven actions. Its contents depend entirely on the downloader job:

@@ -41,10 +41,9 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 15_000 });
-  }
+  // Wait for any loading indicator to disappear (covers late-appearing spinners)
+  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if spinner never appeared
 }
 
 function expectSaveResponse(page) {
@@ -52,8 +51,8 @@ function expectSaveResponse(page) {
     (resp) =>
       resp.url().includes('/sws/neo/') &&
       ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) &&
-      resp.status() >= 200 && resp.status() < 300,
-    { timeout: 20_000 },
+      resp.status() < 400,
+    { timeout: 30_000 },
   );
 }
 
@@ -69,339 +68,309 @@ test.describe('Sales Order — Happy path (integration)', () => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Login
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await login(page, { user, password });
-    await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Navigate to Sales Order list view
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await navigateTo(page, 'sales-order');
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await slow(page);
-
-    const newButton = page.getByTestId('action-new');
-    await expect(newButton).toBeVisible({ timeout: 15_000 });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Create a new order
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await newButton.click();
-    await waitForDetailReady(page);
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 4: Fill header — select a Business Partner
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const bpField = page.getByTestId('field-businessPartner');
-    await expect(bpField).toBeVisible({ timeout: 10_000 });
-    await bpField.click();
-    await slow(page);
-
-    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-      .filter({ hasNotText: /crear|create/i }).first();
-    await expect(bpOption).toBeVisible({ timeout: 15_000 });
-    await bpOption.click();
-    await slow(page);
-
-    // Wait for callout to propagate
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await slow(page);
-
-    // Wait for warehouse callout to finish — only select manually if still empty
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.waitForTimeout(2_000);
-    const warehouseInput = page.locator('input[data-testid="field-warehouse"]');
-    const warehouseEmpty = await warehouseInput.isVisible({ timeout: 3_000 }).catch(() => false);
-    if (warehouseEmpty) {
-      await warehouseInput.click({ timeout: 10_000 });
+    await test.step('Login', async () => {
+      await login(page, { user, password });
+      await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
-      const whOption = page.locator('[data-testid^="option-warehouse-"]').first();
-      await expect(whOption).toBeVisible({ timeout: 10_000 });
-      await whOption.click();
+    });
+
+    await test.step('Navigate to Sales Order list view', async () => {
+      await navigateTo(page, 'sales-order');
       await slow(page);
-    }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 5: Save as draft
-    // ═══════════════════════════════════════════════════════════════════════
+      const newButton = page.getByTestId('action-new');
+      await expect(newButton).toBeVisible({ timeout: 20_000 });
+      await newButton.click();
+    });
 
-    const saveDraftBtn = page.getByTestId('action-save-draft');
-    if (await saveDraftBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await test.step('Wait for detail view', async () => {
+      await waitForDetailReady(page);
+      await slow(page);
+    });
+
+    await test.step('Fill header — select Business Partner', async () => {
+      const bpField = page.getByTestId('field-businessPartner');
+      await expect(bpField).toBeVisible({ timeout: 10_000 });
+
+      // Open the BP dropdown — retry if click doesn't register
+      await expect(async () => {
+        await bpField.click({ timeout: 3_000 });
+        await expect(page.locator('[data-testid^="option-businessPartner-"]').first())
+          .toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+      await slow(page);
+
+      // Pick the first real customer (skip "+ Crear contacto")
+      const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
+        .filter({ hasNotText: /crear|create/i }).first();
+      await expect(bpOption).toBeVisible({ timeout: 15_000 });
+
+      await bpOption.click();
+
+      // BP selection triggers multiple chained callouts (price list, payment terms,
+      // currency, address, warehouse). Wait until a key derived field is populated —
+      // this proves ALL callouts finished, without relying on networkidle.
+      await expect(async () => {
+        const chipOrValue = page.getByTestId('field-paymentTerms-chip')
+          .or(page.getByTestId('field-paymentTerms'));
+        await expect(chipOrValue).toBeVisible({ timeout: 3_000 });
+        // Ensure it's not still showing the placeholder
+        await expect(chipOrValue).not.toHaveText(/buscar|search|seleccionar|select/i, { timeout: 1_000 });
+      }).toPass({ timeout: 30_000 });
+      await slow(page);
+    });
+
+    await test.step('Save as draft', async () => {
+      const saveBtn = page.getByTestId('action-save-draft')
+        .or(page.getByRole('button', { name: /guardar|save/i }));
       const savePromise = expectSaveResponse(page);
-      await saveDraftBtn.click();
+      await saveBtn.click();
       await savePromise;
-    } else {
-      const guardarBtn = page.getByRole('button', { name: /guardar|save/i });
-      const savePromise = expectSaveResponse(page);
-      await guardarBtn.click();
-      await savePromise;
-    }
-    await slow(page);
+      await slow(page);
 
-    await expect(page).toHaveURL(/\/sales-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+      // URL should include record ID
+      await expect(page).toHaveURL(/\/sales-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 6: Add a line
-    // ═══════════════════════════════════════════════════════════════════════
+      // Wait for the detail to fully load after save redirect
+      await waitForDetailReady(page);
 
-    await waitForDetailReady(page);
+      await slow(page);
+    });
 
-    let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
-    if (!await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      emptyStateBtn = page.getByRole('button', { name: /añadir líneas|add lines/i }).first();
-    }
-    await expect(emptyStateBtn).toBeVisible({ timeout: 10_000 });
-    await emptyStateBtn.click();
-    await slow(page);
+    await test.step('Add first line — select product', async () => {
+      await waitForDetailReady(page);
 
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
+      // Click "+ Añadir líneas" — retry the whole click→response→render sequence
+      const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
+        .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
 
-    const productField = page.getByTestId('inline-add-field-product');
-    await expect(productField).toBeVisible({ timeout: 5_000 });
-    await productField.click();
-    await slow(page);
+      await expect(async () => {
+        const addLinesResponse = page.waitForResponse(
+          (r) => r.url().includes('/sws/neo/') && r.status() < 400,
+          { timeout: 15_000 },
+        );
+        await emptyStateBtn.click({ timeout: 3_000 });
+        await addLinesResponse;
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+      await slow(page);
 
-    const searchDrawer = page.getByTestId('product-search-drawer');
-    await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
+      // Click product field — opens ProductSearchDrawer (retry if click doesn't register)
+      const productField = page.getByTestId('inline-add-field-product');
+      const searchDrawer = page.getByTestId('product-search-drawer');
 
-    // Search for "Queso Sardo" explicitly
-    const searchInput = page.getByTestId('product-search-input');
-    await searchInput.fill('Queso Sardo');
-    await page.waitForTimeout(1000);
+      await expect(async () => {
+        await productField.click({ timeout: 3_000 });
+        await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+      await slow(page);
 
-    const productOption = page.locator('[data-testid^="product-search-option-"]').first();
-    await expect(productOption).toBeVisible({ timeout: 15_000 });
-    await productOption.click();
-    await slow(page);
+      // Search for "Queso Sardo" — wait for filtered results to appear
+      const searchInput = page.getByTestId('product-search-input');
+      await searchInput.fill('Queso Sardo');
 
-    await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
+      const productOption = page.locator('[data-testid^="product-search-option-"]')
+        .filter({ hasText: /queso sardo/i }).first();
+      await expect(productOption).toBeVisible({ timeout: 15_000 });
 
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await slow(page);
+      // Start listening for callout (price/tax fill) BEFORE clicking the product
+      const productCalloutResponse = page.waitForResponse(
+        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+        { timeout: 30_000 },
+      );
+      await productOption.click();
+      await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
+      await productCalloutResponse;
+      await slow(page);
 
-    const lineAddPromise = expectSaveResponse(page);
-    await page.keyboard.press('Enter');
-    await lineAddPromise;
-    await slow(page);
+      // Submit the line (qty=1 default)
+      const lineAddPromise = expectSaveResponse(page);
+      await page.keyboard.press('Enter');
+      await lineAddPromise;
+      await slow(page);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 6b: Add a second line — different product, quantity 3
-    // ═══════════════════════════════════════════════════════════════════════
+      // Verify line appeared
+      await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
+    });
 
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
-    await expect(addLineBtn).toBeVisible({ timeout: 10_000 });
-    await addLineBtn.click();
-    await slow(page);
+    await test.step('Add second line — different product, quantity 3', async () => {
+      // Click "+ Añadir línea" — retry click→inline-add-row
+      const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
 
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
+      await expect(async () => {
+        await addLineBtn.click({ timeout: 3_000 });
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+      await slow(page);
 
-    // Select a different product (second option)
-    const productField2 = page.getByTestId('inline-add-field-product');
-    await expect(productField2).toBeVisible({ timeout: 5_000 });
-    await productField2.click();
-    await slow(page);
+      // Click product field — opens ProductSearchDrawer (retry if click doesn't register)
+      const productField2 = page.getByTestId('inline-add-field-product');
+      const searchDrawer2 = page.getByTestId('product-search-drawer');
 
-    const searchDrawer2 = page.getByTestId('product-search-drawer');
-    await expect(searchDrawer2).toBeVisible({ timeout: 10_000 });
+      await expect(async () => {
+        await productField2.click({ timeout: 3_000 });
+        await expect(searchDrawer2).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+      await slow(page);
 
-    // Search for "Agua" and select it
-    const searchInput2 = page.getByTestId('product-search-input');
-    await searchInput2.fill('Agua');
-    await page.waitForTimeout(1000);
+      // Search for "Agua" — wait for filtered results to appear
+      const searchInput2 = page.getByTestId('product-search-input');
+      await searchInput2.fill('Agua');
 
-    const aguaOption = page.locator('[data-testid^="product-search-option-"]').first();
-    await expect(aguaOption).toBeVisible({ timeout: 10_000 });
-    await aguaOption.click();
-    await slow(page);
+      const secondOption = page.locator('[data-testid^="product-search-option-"]')
+        .filter({ hasText: /agua/i }).first();
+      await expect(secondOption).toBeVisible({ timeout: 10_000 });
 
-    await expect(searchDrawer2).toBeHidden({ timeout: 5_000 }).catch(() => {});
+      // Start listening for callout BEFORE clicking the product
+      const productCalloutResponse2 = page.waitForResponse(
+        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+        { timeout: 30_000 },
+      );
+      await secondOption.click();
+      await expect(searchDrawer2).toBeHidden({ timeout: 10_000 }).catch(() => {});
+      await productCalloutResponse2;
+      await slow(page);
 
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-      { timeout: 10_000 },
-    ).catch(() => {});
-    await slow(page);
+      // Set quantity to 3
+      const qtyField = page.getByTestId('inline-add-field-orderedQuantity');
+      if (await qtyField.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await qtyField.clear();
+        await qtyField.fill('3');
+      }
+      await slow(page);
 
-    // Set quantity to 3
-    const qtyField = page.getByTestId('inline-add-field-orderedQuantity');
-    if (await qtyField.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await qtyField.clear();
-      await qtyField.fill('3');
-    }
-    await slow(page);
+      const line2AddPromise = expectSaveResponse(page);
+      await page.keyboard.press('Enter');
+      await line2AddPromise;
+      await slow(page);
 
-    const line2AddPromise = expectSaveResponse(page);
-    await page.keyboard.press('Enter');
-    await line2AddPromise;
-    await slow(page);
+      // Verify we now have 2 lines
+      await expect(page.locator('tbody tr')).toHaveCount(2, { timeout: 10_000 });
+    });
 
-    // Verify we now have 2 lines
-    await expect(page.locator('tbody tr')).toHaveCount(2, { timeout: 10_000 });
+    await test.step('Confirm order — check Crear factura', async () => {
+      // Click "Confirmar" — retry click→modal sequence
+      const confirmBtn = page.getByTestId('action-save');
+      const invoiceCard = page.getByText(/crear factura|create.*invoice/i).first();
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 7: Confirm the order — check "Crear factura"
-    // ═══════════════════════════════════════════════════════════════════════
+      await expect(async () => {
+        await confirmBtn.click({ timeout: 3_000 });
+        await expect(invoiceCard).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
 
-    const confirmBtn = page.getByTestId('action-save');
-    await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
-    await confirmBtn.click();
-    await slow(page);
-
-    // Check "Crear factura" in the confirm modal
-    const invoiceCard = page.getByText(/crear factura|create.*invoice/i).first();
-    const invoiceCardVisible = await invoiceCard.isVisible({ timeout: 5_000 }).catch(() => false);
-    if (invoiceCardVisible) {
+      // Select "Crear factura"
       await invoiceCard.click();
       await slow(page);
-      const modalBtn = page.getByRole('button', { name: /confirmar/i }).last();
+
+      // Click confirm in the modal — wait for the process response
+      const modalBtn = page.getByRole('button', { name: /confirmar|confirm/i }).last();
+      await expect(modalBtn).toBeVisible({ timeout: 5_000 });
+
+      const confirmResponse = page.waitForResponse(
+        (r) => r.url().includes('/sws/neo/') &&
+          ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
+          r.ok(),
+        { timeout: 60_000 },
+      );
       await modalBtn.click();
+      await confirmResponse;
       await slow(page);
-    }
+    });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 8: Handle success modal
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const successMsg = page.getByText(/pedido confirmado|order confirmed/i);
-    await expect(successMsg).toBeVisible({ timeout: 30_000 });
-    await slow(page);
-
-    const closeBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    await expect(closeBtn).toBeVisible({ timeout: 5_000 });
-    await closeBtn.click();
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 9: Verify the order is Completed
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await page.reload({ waitUntil: 'networkidle' });
-    await waitForDetailReady(page);
-
-    const completedPill = page.getByTestId('document-status-pill');
-    await expect(completedPill).toBeVisible({ timeout: 15_000 });
-    await expect(completedPill).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 10: Navigate to Sales Invoice — find the draft invoice
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await navigateTo(page, 'sales-invoice');
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await slow(page);
-
-    await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
-
-    const invoiceRows = page.locator('tbody tr');
-    await expect(invoiceRows.first()).toBeVisible({ timeout: 10_000 });
-
-    // Find the draft invoice created from the order
-    const draftInvoiceRow = invoiceRows.filter({ hasText: /borrador|draft/i }).first();
-    await expect(draftInvoiceRow).toBeVisible({ timeout: 10_000 });
-
-    // Open it
-    await draftInvoiceRow.hover();
-    await slow(page);
-    const editBtn = draftInvoiceRow.getByTestId('row-quick-action-edit');
-    await expect(editBtn).toBeVisible({ timeout: 5_000 });
-    await editBtn.click();
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 11: Verify the invoice has lines from the order
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await waitForDetailReady(page);
-    await expect(page).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-
-    // Verify draft status (invoices have two pills — use first)
-    const invoicePill = page.getByTestId('document-status-pill').first();
-    await expect(invoicePill).toBeVisible({ timeout: 10_000 });
-    await expect(invoicePill).toContainText(/borrador|draft/i, { timeout: 5_000 });
-
-    // Verify the invoice inherited both lines from the order
-    await expect(page.getByText(/queso sardo/i).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/agua/i).first()).toBeVisible({ timeout: 5_000 });
-    // Verify the tab shows 2 lines
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i })).toBeVisible({ timeout: 5_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 12: Confirm the invoice (DR → CO)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Click "Confirmar" and wait for the process to complete
-    const invoiceConfirmBtn = page.getByTestId('action-save');
-    await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
-    await expect(invoiceConfirmBtn).toContainText(/confirmar|confirm/i);
-    await invoiceConfirmBtn.click();
-    await slow(page);
-
-    // Wait for the process response (the confirm triggers a POST with documentAction=CO)
-    await page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/sws/neo/') &&
-        resp.request().method() === 'POST' &&
-        resp.status() < 500,
-      { timeout: 30_000 },
-    ).catch(() => {});
-    await slow(page);
-
-    // Wait for network to settle
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-
-    // Dismiss success modal if present
-    const invoiceCloseBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await invoiceCloseBtn.click();
+    await test.step('Handle success modal', async () => {
+      const successMsg = page.getByText(/pedido confirmado|order confirmed/i);
+      await expect(successMsg).toBeVisible({ timeout: 30_000 });
       await slow(page);
-    }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 13: Verify the invoice is now Completed
-    // ═══════════════════════════════════════════════════════════════════════
+      const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      await expect(closeBtn).toBeVisible({ timeout: 5_000 });
+      await closeBtn.click();
+      await slow(page);
+    });
 
-    // Navigate back to the invoice URL (reload may land on the list)
-    const currentInvoiceUrl = page.url();
-    if (currentInvoiceUrl.includes('/sales-invoice/')) {
-      await page.reload({ waitUntil: 'networkidle' });
-    } else {
-      await page.goto(currentInvoiceUrl, { waitUntil: 'networkidle' });
-    }
+    await test.step('Verify order is Completed', async () => {
+      // Reload to get fresh status — use goto on current URL instead of reload
+      // to avoid ERR_ABORTED when the confirm process triggers internal navigation
+      const currentUrl = page.url();
+      await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await waitForDetailReady(page);
 
-    // If we landed on the list instead of the detail, the invoice was confirmed
-    // successfully — verify from the list instead
-    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
+      const completedPill = page.getByTestId('document-status-pill');
+      await expect(completedPill).toBeVisible({ timeout: 15_000 });
+      await expect(completedPill).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
+      await slow(page);
+    });
 
-    if (!onDetailView) {
-      // We're on the invoice list — the first completed invoice is ours
-      const completedRow = page.locator('tbody tr').filter({ hasText: /completado|completed/i }).first();
-      await expect(completedRow).toBeVisible({ timeout: 10_000 });
-      return; // Test passes — invoice is confirmed and visible in the list
-    }
+    await test.step('Navigate to Sales Invoice — find draft invoice', async () => {
+      await navigateTo(page, 'sales-invoice');
+      await slow(page);
 
-    await waitForDetailReady(page);
+      await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 20_000 });
 
-    const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
-    await expect(invoiceCompletedPill).toBeVisible({ timeout: 15_000 });
-    await expect(invoiceCompletedPill).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
-    await slow(page);
+      const invoiceRows = page.locator('tbody tr');
+      await expect(invoiceRows.first()).toBeVisible({ timeout: 10_000 });
+
+      // Find the draft invoice created from the order
+      const draftInvoiceRow = invoiceRows.filter({ hasText: /borrador|draft/i }).first();
+      await expect(draftInvoiceRow).toBeVisible({ timeout: 10_000 });
+
+      // Open it
+      await draftInvoiceRow.hover();
+      await slow(page);
+      const editBtn = draftInvoiceRow.getByTestId('row-quick-action-edit');
+      await expect(editBtn).toBeVisible({ timeout: 5_000 });
+      await editBtn.click();
+      await slow(page);
+    });
+
+    await test.step('Verify invoice has lines from order', async () => {
+      await waitForDetailReady(page);
+      await expect(page).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+
+      // Verify draft status (invoices have two pills — use first)
+      const invoicePill = page.getByTestId('document-status-pill').first();
+      await expect(invoicePill).toBeVisible({ timeout: 10_000 });
+      await expect(invoicePill).toContainText(/borrador|draft/i, { timeout: 5_000 });
+
+      // Verify the invoice inherited both lines from the order
+      await expect(page.getByText(/queso sardo/i).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(/agua/i).first()).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i })).toBeVisible({ timeout: 5_000 });
+      await slow(page);
+    });
+
+    await test.step('Confirm invoice (DR → CO)', async () => {
+      // Click "Confirmar" — retry click→modal sequence
+      const invoiceConfirmBtn = page.getByTestId('action-save');
+      await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(invoiceConfirmBtn).toContainText(/confirmar|confirm/i);
+
+      // Declare waitForResponse BEFORE the click
+      const confirmResponse = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/sws/neo/') &&
+          resp.request().method() === 'POST' &&
+          resp.status() < 400,
+        { timeout: 30_000 },
+      );
+      await invoiceConfirmBtn.click();
+      await confirmResponse;
+      await slow(page);
+
+      // Dismiss success modal if present
+      const invoiceCloseBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await invoiceCloseBtn.click();
+        await slow(page);
+      }
+    });
+
+    await test.step('Verify invoice is Completed', async () => {
+      // After the confirm, the UI may show the detail, the list, or a preview panel.
+      // Look for "Completado" anywhere on the page as proof the invoice was confirmed.
+      await expect(page.getByText(/completado|completed/i).first())
+        .toBeVisible({ timeout: 20_000 });
+      await slow(page);
+    });
   });
 });

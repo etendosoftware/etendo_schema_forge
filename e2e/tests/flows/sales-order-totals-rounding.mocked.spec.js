@@ -9,20 +9,52 @@ import { login } from '../helpers/auth.js';
  * Etendo Classic shows order 1000228 with Total = 40.94 EUR but the Schema
  * Forge UI used to display 40.95 (panel) and 40.95 (confirm modal). Root cause:
  * grandTotal was computed as round(baseGrandTotal * factor), which double-rounds
- * relative to the displayed (rounded) subtotal + tax. The fix in
- * `tools/app-shell/src/lib/documentTotals.js` redefines grandTotal as
- *     round2(netSubtotal * factor) + round2(taxAmt)
- * so the printed/displayed total always equals "Subtotal + Tax" (AEAT and
- * legal-invoice rule).
+ * relative to the displayed (rounded) subtotal + tax. ETP-4017's fix in
+ * `tools/app-shell/src/lib/documentTotals.js` redefines the LIVE-recompute
+ * grandTotal as round2(netSubtotal * factor) + round2(taxAmt), which is what
+ * `ConfirmModal`/`OrderCreateInvoice.jsx` (unaffected by ETP-4777, still using
+ * its own from-scratch recompute) still relies on today.
+ *
+ * ETP-4777 update — why the panel numbers below changed
+ * -------------------------------------------------------
+ * ETP-4777 made `DocumentTotalsPanel` prefer the backend-persisted header
+ * total (`data.grandTotalAmount`) over a live client-side recompute whenever
+ * no line is actively being edited — see `docs/plans/2026-08-12-etp4777-total-
+ * rounding-fix-plan.md` Task 2/3. For a Draft order with an active
+ * `etgoTotalDiscount` whose `ETGO_DTO` line has NOT yet materialized (this
+ * spec's exact scenario), Task 3 made an explicit, documented decision: show
+ * that persisted `grandTotalAmount` **verbatim**, with zero client-side
+ * re-derivation — even though the real backend's own GET-time compensation
+ * for this window is itself a cruder, non-decomposed `raw * factor` estimate.
+ * Rationale (Task 3): the discount genuinely isn't final until Complete in
+ * the backend's own data model, and replicating the trigger's per-tax-group
+ * math in JS just to smooth this one transition was judged not worth the
+ * two-implementations-of-fiscal-math risk.
+ *
+ * Practical consequence for this spec's `BUG_HEADER` fixture (`grandTotalAmount:
+ * 43.56` = the RAW, pre-discount line-gross total — i.e. the backend has NOT
+ * applied any GET-time compensation in this particular fixture): the panel
+ * now shows that raw 43.56 verbatim, NOT the AEAT-decomposed 40.94. The
+ * ConfirmModal, however, is a separate, unmodified component that still
+ * recomputes from scratch (see `OrderCreateInvoice.jsx` lines ~309-325) and
+ * therefore still lands on the correct decomposed 40.94 — so panel and modal
+ * are now EXPECTED to diverge during this specific transient window. This
+ * panel/modal split for the not-yet-materialized case is a known, accepted
+ * tradeoff (see the bug-report doc's "3 separate Confirm modal components"
+ * finding) — not something this spec should paper over.
  *
  * What this spec locks
  * --------------------
- * 1. ETP-4017 case: line(qty=1, price=44, disc=10, gross=43.56), totalDisc=6%
- *    → panel displays Subtotal=37.22, Tax=3.72, Total=40.94 (NOT 40.95).
- * 2. Invariant: parsed subtotal + parsed tax === parsed total in the DOM.
- * 3. Confirm modal mirrors the panel: it shows the same 40.94 total.
+ * 1. ETP-4017 case: line(qty=1, price=44, disc=10, gross=43.56), totalDisc=6%,
+ *    NOT yet materialized → panel displays the persisted grandTotalAmount
+ *    verbatim (43.56), per the ETP-4777 Task 3 decision above.
+ * 2. Invariant: parsed subtotal + parsed tax === parsed total in the DOM
+ *    (holds regardless of which of the two formulas above is in play).
+ * 3. Confirm modal still shows its own independently-recomputed 40.94 (ETP-4017,
+ *    untouched by ETP-4777) — proving that fix wasn't silently regressed.
  * 4. Clean baseline (no discount, integer totals): qty=2, price=100, gross=242
- *    → Total=242.00, invariant still holds.
+ *    → Total=242.00, invariant still holds (no discount means Task 2/3's
+ *    baseline-vs-recompute distinction is moot — both formulas agree).
  *
  * Routing note
  * ------------
@@ -35,9 +67,14 @@ const ORDER_ID_CLEAN = 'mock-so-totals-002';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
-// ETP-4017 bug case. grandTotalAmount on the header is the pre-fix backend
-// value (40.95) so we prove the FRONTEND recomputes it to 40.94 from the
-// line + discount. summedLineAmount keeps the line gross sum for completeness.
+// ETP-4017/ETP-4777 case. grandTotalAmount/summedLineAmount are the RAW,
+// pre-total-discount backend values (no GET-time compensation modeled here,
+// and no ETGO_DTO line materialized yet) with etgoTotalDiscount=6% pending.
+// Per ETP-4777 Task 3, `DocumentTotalsPanel` shows this raw grandTotalAmount
+// (43.56) VERBATIM in this window — see the file header comment above. The
+// ConfirmModal (unmodified, separate component) still independently
+// recomputes 40.94 from these same raw values via its own AEAT-decomposed
+// formula, which test 3/4 below still lock.
 const BUG_HEADER = {
   id: ORDER_ID_BUG,
   documentNo: 'SO-MOCK-RND-001',
@@ -113,7 +150,7 @@ async function installSalesOrderMocks(page, { header, line }) {
     });
   });
 
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -123,7 +160,7 @@ async function installSalesOrderMocks(page, { header, line }) {
   });
 
   // evaluate-display returns {} so client-side logic drives the UI.
-  await page.route('**/sws/neo/sales-order/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/sales-order/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -170,7 +207,7 @@ async function pollAmount(page, testId, timeout = 10_000) {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 test.describe('Sales Order — totals rounding (ETP-4017)', () => {
-  test('panel shows Total = 40.94 for the ETP-4017 line (no 1-cent drift)', async ({ page }) => {
+  test('panel shows the raw persisted grandTotalAmount verbatim while the document discount is not yet materialized (ETP-4777 Task 3)', async ({ page }) => {
     await login(page);
     await installSalesOrderMocks(page, { header: BUG_HEADER, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
@@ -178,13 +215,18 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     // Wait for totals panel to render with a non-zero value.
     const total = await pollAmount(page, 'totals-row-total-value');
 
-    // The displayed Total MUST be 40.94 (not 40.95 — the pre-fix bug value).
-    expect(total).toBeCloseTo(40.94, 2);
-    expect(total).not.toBeCloseTo(40.95, 2);
+    // ETP-4777 Task 3: no ETGO_DTO line yet → the panel trusts
+    // BUG_HEADER.grandTotalAmount (43.56, the raw pre-discount value in this
+    // fixture) verbatim, with zero client-side re-derivation. See the file
+    // header comment for why this is 43.56 and not the AEAT-decomposed 40.94
+    // the ConfirmModal still shows (test 3/4 below).
+    expect(total).toBeCloseTo(43.56, 2);
 
-    // Subtotal and Tax must match the AEAT decomposition:
-    //   subtotal = round2(39.60 × 0.94) = 37.22
-    //   tax      = round2(3.96  × 0.94) = 3.72
+    // Subtotal keeps subtracting the LIVE-recomputed totalDiscountAmt from
+    // the raw persisted net (39.60 − 39.60×6% = 37.22) — that part of the
+    // panel's arithmetic is unaffected by Task 3 and still matches ETP-4017's
+    // decomposition. Tax, however, is derived from the RAW grandTotalAmount
+    // (43.56 − 37.22ish), so it lands on 6.34, not the decomposed 3.72.
     const subtotal = parseAmount(
       (await page.getByTestId('totals-row-subtotal-value').textContent()) || '',
     );
@@ -192,7 +234,7 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
       (await page.getByTestId('totals-row-tax-value').textContent()) || '',
     );
     expect(subtotal).toBeCloseTo(37.22, 2);
-    expect(tax).toBeCloseTo(3.72, 2);
+    expect(tax).toBeCloseTo(6.34, 2);
   });
 
   test('invariant: displayed subtotal + tax === displayed total (ETP-4017 case)', async ({ page }) => {
@@ -235,10 +277,15 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     await installSalesOrderMocks(page, { header: fixedHeader, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
-    // Wait for OrderCreateInvoice (headerExtra) to mount — the send-email button
-    // is rendered by that component when isDraft=true, so its presence guarantees
-    // the `sales-order:open-confirm-modal` listener is already registered.
-    await expect(page.getByTestId('action-send-email')).toBeVisible({ timeout: 10_000 });
+    // Wait for OrderCreateInvoice (headerExtra) to mount before dispatching the
+    // confirm-modal event, so the `sales-order:open-confirm-modal` listener is
+    // already registered. Anchor on the totals panel instead of the send-email
+    // button: since ETP-4717, that button is gated to isCompleted-only (it no
+    // longer renders on Draft — see the ETP-4717 comment in OrderCreateInvoice.jsx),
+    // and this fixture's document is DR. The totals panel is a status-independent
+    // signal that the detail page (and thus OrderCreateInvoice) has mounted —
+    // the same anchor the sibling test below (line ~268) already relies on.
+    await pollAmount(page, 'totals-row-total-value');
 
     // The ConfirmModal opens via a window event dispatched by the draftMode
     // primary action. Trigger it directly — that's how the sales-order custom
@@ -279,11 +326,15 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
     // Wait for the detail page → ensures the custom window mounted and the
-    // sales-order:open-confirm-modal listener is attached. Also sanity-check
-    // that the panel agrees with what the modal must show, so we know panel
-    // and modal stay in lockstep on the DR path.
-    const panelTotalValue = await pollAmount(page, 'totals-row-total-value');
-    expect(panelTotalValue).toBeCloseTo(40.94, 2);
+    // sales-order:open-confirm-modal listener is attached. NOTE: as of
+    // ETP-4777 Task 3, the panel and the modal are NOT expected to agree
+    // during this specific not-yet-materialized-discount window — the panel
+    // now shows the raw persisted grandTotalAmount verbatim (43.56, see the
+    // file header comment), while the ConfirmModal below still independently
+    // recomputes the AEAT-decomposed 40.94. This is a documented, accepted
+    // tradeoff, not a bug — this poll is only used as a mount-readiness
+    // anchor here, not a lockstep assertion.
+    await pollAmount(page, 'totals-row-total-value');
 
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent('sales-order:open-confirm-modal'));

@@ -76,7 +76,7 @@ const ROLES_FIXTURE = [
 ];
 
 async function installRolesOverviewMock(page) {
-  await page.route('**/sws/neo/rolesoverview**', async (route) => {
+  await page.route('**/sws/neo/rolesoverview{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

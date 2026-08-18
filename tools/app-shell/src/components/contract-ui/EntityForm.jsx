@@ -18,6 +18,7 @@ import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
+import PrefixedInput from './PrefixedInput.jsx';
 import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
@@ -432,43 +433,40 @@ function getInputStateClass(isReadOnly) {
   return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
+// Renders only the dependent selector itself (no wrapping label) — the label lives
+// in the caller's wrapper div (renderDependentField), matching the same label/selector
+// split renderSearchSelectField uses, so renderFieldWithError's cloneElement-injected
+// error <p> (ETP-3894) lands inside a real div that renders {props.children} — see
+// ETP-4773. Keeping the label OUT of this component (rather than just deduplicating it)
+// is what makes that injection possible: DependentFkField previously returned its own
+// <div> with no children slot for the caller to append into.
 function DependentFkField(props) {
-  return (
-    <div className={LABEL_GAP}>
-      <Label
-        htmlFor={props.f.key}
-        className="text-sm text-foreground font-medium"
-        data-testid="Label__a8d626">
-        {props.label}{requiredAsterisk(props.f)}
-      </Label>
-      {props.f.column === "C_BPartner_Location_ID" ? (
-          <PartnerAddressPicker
-            field={props.f}
-            value={props.data?.[props.f.key] ?? ""}
-            displayValue={props.data?.[props.f.key + "$_identifier"]}
-            onChange={props.onChange}
-            formData={props.data}
-            resolvedLabel={props.label}
-            selectorUrl={props.selectorUrl}
-            selectorContext={props.selectorContext}
-            token={props.token}
-            apiBaseUrl={props.apiBaseUrl}
-            data-testid="PartnerAddressPicker__a8d626" />
-      ) : (
-          <DependentSelect
-            field={props.f}
-            value={props.data?.[props.f.key] ?? ""}
-            displayValue={props.data?.[props.f.key + "$_identifier"]}
-            onChange={props.onChange}
-            catalogs={props.catalogs}
-            formData={props.data}
-            resolvedLabel={props.label}
-            selectorUrl={props.selectorUrl}
-            selectorContext={props.selectorContext}
-            token={props.token}
-            data-testid="DependentSelect__a8d626" />
-      )}
-    </div>
+  return props.f.column === "C_BPartner_Location_ID" ? (
+      <PartnerAddressPicker
+        field={props.f}
+        value={props.data?.[props.f.key] ?? ""}
+        displayValue={props.data?.[props.f.key + "$_identifier"]}
+        onChange={props.onChange}
+        formData={props.data}
+        resolvedLabel={props.label}
+        selectorUrl={props.selectorUrl}
+        selectorContext={props.selectorContext}
+        token={props.token}
+        apiBaseUrl={props.apiBaseUrl}
+        data-testid="PartnerAddressPicker__a8d626" />
+  ) : (
+      <DependentSelect
+        field={props.f}
+        value={props.data?.[props.f.key] ?? ""}
+        displayValue={props.data?.[props.f.key + "$_identifier"]}
+        onChange={props.onChange}
+        catalogs={props.catalogs}
+        formData={props.data}
+        resolvedLabel={props.label}
+        selectorUrl={props.selectorUrl}
+        selectorContext={props.selectorContext}
+        token={props.token}
+        data-testid="DependentSelect__a8d626" />
   );
 }
 
@@ -629,8 +627,14 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *  - onChange: (fieldKey, value) => void
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
+ *  - trailing: optional React node rendered as an ADDITIONAL grid item after the
+ *    field cells, INSIDE the same grid container — so it flows into the next free
+ *    grid cell instead of starting a new grid. Undefined for every existing caller.
+ *  - renderAsFragment: when true, emit the field cell(s) WITHOUT the wrapping grid
+ *    container (a bare fragment), so the caller can splice them into another
+ *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1077,6 +1081,58 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
 
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
+    // ETP-4749: a fixed, non-editable chip (e.g. "https://") shown immediately before
+    // the input when `f.inputPrefix` is declared — shared with OrganizationPage.jsx's
+    // hand-built "Sitio web" field via PrefixedInput.jsx (single source for the chip
+    // markup, not a parallel hand-copied implementation). `border-0` on the input hands
+    // the border to the wrapper (Input's own cn() merges it correctly regardless of prop
+    // order). `rounded-none focus-visible:ring-0 focus-visible:outline-none` hands the
+    // FOCUS ring to the wrapper too (QA review round) — without this, the input drew its
+    // own rounded ring at its own (larger) radius, floating inside the wrapper's smaller
+    // one instead of the whole chip+input lighting up as one piece. Fields without
+    // `inputPrefix` render exactly as before — PrefixedInput passes `children` through
+    // unwrapped in that case, byte-identical output.
+    const hasPrefix = Boolean(f.inputPrefix);
+    // `prefixed-input-control` is a stable marker (not a Tailwind utility) so
+    // per-window CSS that themes `input.rounded-lg` (e.g. Contacts' contacts.css,
+    // scoped to `.contacts-rows`) can still apply its default/hover background to
+    // this input even though it no longer carries `rounded-lg` — the input lost that
+    // class here on purpose so it stops drawing its own (mismatched-radius) border/
+    // focus ring, but it should still LOOK like every other input otherwise.
+    const inputClassName = getInputStateClass(isReadOnly)
+      + (hasPrefix ? ' border-0 rounded-none focus-visible:ring-0 focus-visible:outline-none prefixed-input-control' : '');
+    const inputEl = calloutOnBlur && !isReadOnly ? (
+      <DeferredInput
+        f={f}
+        committedValue={data?.[f.key] ?? ''}
+        onCommit={onChange}
+        onFieldBlur={onFieldBlur}
+        onValidateBlur={validateNumericOnBlur}
+        placeholder={resolveUiKey(ui, f.placeholderKey)}
+        className={inputClassName}
+        required={f.required && !isReadOnly}
+        disabled={isReadOnly || savingField === f.key}
+        data-testid="DeferredInput__a8d626" />
+    ) : (
+      <Input
+        id={f.key}
+        name={f.key}
+        data-testid={`field-${f.key}`}
+        type={getInputType(f)}
+        value={getFieldValue(isReadOnly, displayValue, data, f)}
+        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+        onBlur={(e) => {
+          if (!isReadOnly) {
+            validateNumericOnBlur(f, e.target.value);
+          }
+          onFieldBlur?.(f.key);
+        }}
+        placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
+        className={inputClassName}
+        required={f.required && !isReadOnly}
+        disabled={isReadOnly || savingField === f.key}
+      />
+    );
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -1085,38 +1141,12 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           data-testid="Label__a8d626">
           {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
         </Label>
-        {calloutOnBlur && !isReadOnly ? (
-          <DeferredInput
-            f={f}
-            committedValue={data?.[f.key] ?? ''}
-            onCommit={onChange}
-            onFieldBlur={onFieldBlur}
-            onValidateBlur={validateNumericOnBlur}
-            placeholder={resolveUiKey(ui, f.placeholderKey)}
-            className={getInputStateClass(isReadOnly)}
-            required={f.required && !isReadOnly}
-            disabled={isReadOnly || savingField === f.key}
-            data-testid="DeferredInput__a8d626" />
-        ) : (
-          <Input
-            id={f.key}
-            name={f.key}
-            data-testid={`field-${f.key}`}
-            type={getInputType(f)}
-            value={getFieldValue(isReadOnly, displayValue, data, f)}
-            onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={(e) => {
-              if (!isReadOnly) {
-                validateNumericOnBlur(f, e.target.value);
-              }
-              onFieldBlur?.(f.key);
-            }}
-            placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
-            className={getInputStateClass(isReadOnly)}
-            required={f.required && !isReadOnly}
-            disabled={isReadOnly || savingField === f.key}
-          />
-        )}
+        <PrefixedInput
+          prefix={f.inputPrefix}
+          testId={`field-${f.key}-prefix-wrapper`}
+          data-testid="PrefixedInput__a8d626">
+          {inputEl}
+        </PrefixedInput>
       </div>
     );
   };
@@ -1166,18 +1196,25 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       else if (!val) onChange?.(f.key + '$_identifier', '');
     };
     return (
-      <DependentFkField
-        key={f.key}
-        f={f}
-        label={label}
-        data={data}
-        onChange={fieldOnChange}
-        selectorUrl={fieldSelectorUrl}
-        selectorContext={effectiveSelectorContext}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        catalogs={catalogs}
-        data-testid="DependentFkField__a8d626" />
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{requiredAsterisk(f)}
+        </Label>
+        <DependentFkField
+          f={f}
+          label={label}
+          data={data}
+          onChange={fieldOnChange}
+          selectorUrl={fieldSelectorUrl}
+          selectorContext={effectiveSelectorContext}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          catalogs={catalogs}
+          data-testid="DependentFkField__a8d626" />
+      </div>
     );
   };
 
@@ -1429,6 +1466,22 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     return node;
   };
 
+  // `renderAsFragment` (opt-in) emits the field cell(s) WITHOUT the wrapping grid
+  // container, so a caller can splice them into ANOTHER EntityForm's grid (e.g. the
+  // Taxes header form's `trailing` slot) and have them flow into the next free grid
+  // cell instead of starting their own grid row. Only the bare cell markup differs —
+  // field registration, readOnly/display logic, errors and onChange are unchanged.
+  // The image-pin layout is a full grid container by definition, so it is never
+  // fragment-rendered (an image footer would not opt into this path).
+  if (renderAsFragment) {
+    return (
+      <>
+        {fieldsToRender.map(renderFieldWithError)}
+        {trailing}
+      </>
+    );
+  }
+
   if (imageField) {
     const imgLabel = imageField.label ?? t(imageField.column) ?? imageField.key;
     const imgReadOnly = formReadOnly
@@ -1439,6 +1492,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       <div className="flex gap-6 items-stretch">
         <div className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
           {fieldsToRender.map(renderFieldWithError)}
+          {trailing}
         </div>
         <div className="shrink-0 w-64 flex flex-col">
           <ImageField
@@ -1459,6 +1513,10 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   return (
     <div className={gridClass} style={gridStyle}>
       {displayFields.map(renderFieldWithError)}
+      {/* Additional grid item(s) rendered INSIDE the same grid container so they
+          flow into the next free cell(s) after the native fields (opt-in; undefined
+          for every existing caller → strictly additive). */}
+      {trailing}
     </div>
   );
 }

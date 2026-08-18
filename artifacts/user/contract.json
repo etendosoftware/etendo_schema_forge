@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-30T02:11:32.597Z",
-  "checksum": "89f16e235abaf513",
+  "updatedAt": "2026-08-07T16:09:22.004Z",
+  "checksum": "7e6dbf8f1a309fc6",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -40,24 +40,6 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
-            }
-          },
-          {
-            "name": "username",
-            "apiKey": "username",
-            "column": "UserName",
-            "label": "Username",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal",
-            "validation": {
-              "required": true,
-              "maxLength": 60
             }
           },
           {
@@ -177,11 +159,12 @@
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
-            "required": false,
+            "required": true,
             "grid": true,
             "form": true,
             "section": "principal",
             "validation": {
+              "required": true,
               "maxLength": 255
             }
           },
@@ -414,7 +397,6 @@
         ],
         "searchableFields": [
           "name",
-          "username",
           "email"
         ],
         "computedFields": [
@@ -908,7 +890,7 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -989,7 +971,7 @@
             "column": "Email",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": true
           },
           {
             "name": "locked",
@@ -1560,7 +1542,6 @@
         "entity": "user",
         "supportedFilters": [
           "name",
-          "username",
           "email"
         ]
       },
@@ -1670,7 +1651,6 @@
         "detailUrl": "/sws/neo/user/user/{id}",
         "supportedFilters": [
           "name",
-          "username",
           "email"
         ]
       },
@@ -2219,14 +2199,6 @@
         "description": "Field 'supervisor' should be present in user"
       },
       {
-        "id": "t-field-presence-user-username",
-        "category": "field-presence",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should be present in user"
-      },
-      {
         "id": "t-field-presence-userRoles-role",
         "category": "field-presence",
         "entity": "userRoles",
@@ -2507,14 +2479,6 @@
         "description": "Field 'supervisor' should have type 'string' in user"
       },
       {
-        "id": "t-field-type-user-username",
-        "category": "field-type",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should have type 'string' in user"
-      },
-      {
         "id": "t-field-type-userRoles-role",
         "category": "field-type",
         "entity": "userRoles",
@@ -2665,14 +2629,6 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be a supported filter for user"
-      },
-      {
-        "id": "t-searchable-filters-user-username",
-        "category": "searchable-filters",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should be a supported filter for user"
       },
       {
         "id": "t-searchable-filters-userRoles-role",
@@ -3027,6 +2983,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for user"
       },
       {
+        "id": "t-system-field-user-username",
+        "category": "system-field",
+        "entity": "user",
+        "field": "username",
+        "runner": "node",
+        "description": "System field 'username' should exist in backend but not frontend for user"
+      },
+      {
         "id": "t-system-field-user-viaemail",
         "category": "system-field",
         "entity": "user",
@@ -3137,21 +3101,21 @@
       }
     ],
     "summary": {
-      "total": 165,
+      "total": 163,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 3,
         "default-value-type": 9,
-        "field-presence": 36,
-        "field-type": 36,
+        "field-presence": 35,
+        "field-type": 35,
         "rule-declared": 16,
-        "searchable-filters": 5,
+        "searchable-filters": 4,
         "selector-endpoint": 8,
-        "system-field": 46,
+        "system-field": 47,
         "visibility": 3
       },
       "byRunner": {
-        "node": 165,
+        "node": 163,
         "junit": 0
       }
     }

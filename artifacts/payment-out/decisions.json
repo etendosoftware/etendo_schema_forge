@@ -61,7 +61,8 @@
       "PPM": "pagoDepositado",
       "PWNC": "pagoDepositado"
     },
-    "statusFieldLabel": "statusColumnLabel",
+    "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {

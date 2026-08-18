@@ -44,8 +44,15 @@
         },
         "default": {
           "visibility": "editable",
+          "grid": true,
+          "gridOrder": 3,
           "section": "principal",
-          "seq": 4
+          "seq": 4,
+          "badge": true,
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          }
         },
         "summaryLevel": {
           "visibility": "discarded"

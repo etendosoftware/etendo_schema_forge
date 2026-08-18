@@ -139,7 +139,7 @@ test.describe('Physical Inventory', () => {
   // The route intercept in auth.js returns a synthetic product suggestion and callout
   // response ({ quantityCount: 42 }), so this test runs without VITE_MOCK=true.
   test('selecting a product overwrites user-typed userCount (forceCalloutFields)', async ({ page }) => {
-    await page.route('**/sws/**/selectors/M_Product_ID**', route => route.fulfill({
+    await page.route('**/sws/**/selectors/M_Product_ID{/**,}**', route => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -154,7 +154,7 @@ test.describe('Physical Inventory', () => {
         totalCount: 1,
       }),
     }));
-    await page.route('**/sws/**/callout**', route => route.fulfill({
+    await page.route('**/sws/**/callout{/**,}**', route => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({

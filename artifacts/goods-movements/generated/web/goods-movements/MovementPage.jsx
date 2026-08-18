@@ -264,7 +264,6 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
         lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}
       />

@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:Dimensiones
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'type', column: 'ElementType', type: 'enum', label: 'Type', enumLabels: { 'AC': 'Account', 'AY': 'Activity', 'AS': 'Asset', 'BP': 'Bus.Partner', 'MC': 'Campaign', 'CC': 'Cost Center', 'LF': 'Location From', 'LT': 'Location To', 'OO': 'Organization', 'PR': 'Product', 'PJ': 'Project', 'SR': 'Sales Region', 'OT': 'Trx. Org', 'U1': 'User 1', 'U2': 'User 2' }, required: true },
+  { key: 'type', column: 'ElementType', type: 'enum', label: 'Type', enumLabels: { 'AC': 'elementTypeAc', 'AY': 'elementTypeAy', 'AS': 'elementTypeAs', 'BP': 'elementTypeBp', 'MC': 'elementTypeMc', 'CC': 'elementTypeCc', 'LF': 'elementTypeLf', 'LT': 'elementTypeLt', 'OO': 'elementTypeOo', 'PR': 'elementTypePr', 'PJ': 'elementTypePj', 'SR': 'elementTypeSr', 'OT': 'elementTypeOt', 'U1': 'elementTypeU1', 'U2': 'elementTypeU2' }, required: true },
   { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', required: true },
   { key: 'mandatory', column: 'IsMandatory', type: 'boolean', label: 'Mandatory', required: true },
   { key: 'balanced', column: 'IsBalanced', type: 'boolean', label: 'Balanced', required: true },

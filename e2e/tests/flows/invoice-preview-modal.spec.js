@@ -32,7 +32,7 @@ const ROW = {
 };
 
 async function seedPurchaseInvoiceRows(page, rows = [ROW]) {
-  await page.route('**/sws/neo/purchase-invoice/header**', (route) => {
+  await page.route('**/sws/neo/purchase-invoice/header{/**,}**', (route) => {
     if (route.request().method() === 'GET') {
       route.fulfill({
         status: 200,
