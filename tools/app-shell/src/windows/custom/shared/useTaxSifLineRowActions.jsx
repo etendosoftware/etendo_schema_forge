@@ -27,6 +27,81 @@ const TAX_SELECTOR_PAGE_LIMIT = 200;
 const TAX_SELECTOR_MAX_PAGES = 20;
 
 /**
+ * Pages through the tax selector endpoint until the server reports `hasMore: false`
+ * (or a safety cap/failure ends it early), accumulating every page's items into one
+ * array. Extracted out of `loadTaxCatalog()` (ETP-4888 Sonar S3776 fix) so the
+ * pagination loop's own nesting/branching no longer counts against the effect's
+ * complexity — behavior is unchanged, only the code's shape moved.
+ *
+ * See `TAX_SELECTOR_PAGE_LIMIT`'s comment above for why pagination is needed at all.
+ * Stops as soon as the server reports `hasMore: false`, so the common (single-page)
+ * case still does exactly ONE fetch. `offset` advances by the page's own item count
+ * (not the requested limit) so it stays correct even though the server silently
+ * clamps `limit`.
+ *
+ * @param {object} args
+ * @param {string} args.apiBaseUrl the calling window's own NEO base
+ * @param {string} args.token NEO bearer token
+ * @param {object} args.selectorContext `buildLineSelectorContext()` output — required
+ *   selector params (parentId, isSOTrx/IsSOTrx, priceList, DateInvoiced, etc.)
+ * @param {string|null} args.currency optional `currency` param, merged in when present
+ * @param {() => boolean} args.isCancelled polled right after each page's fetch
+ *   resolves — teardown (unmount / deps changed) is NOT a failed page, so a `true`
+ *   here bails the whole pagination WITHOUT committing anything (returns `null`),
+ *   since nothing is waiting for the result any more.
+ * @returns {Promise<Array|null>} the accumulated items, or `null` if cancelled
+ *   mid-pagination. A failed/malformed page keeps whatever earlier pages already
+ *   returned instead of discarding everything — degrading to a partial check rather
+ *   than rendering no badges at all (ETP-4888 QA finding).
+ */
+async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, isCancelled }) {
+  const allItems = [];
+  let offset = 0;
+  let page = 0;
+  for (;;) {
+    const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
+      limit: TAX_SELECTOR_PAGE_LIMIT,
+      offset,
+      ...selectorContext,
+      ...(currency ? { currency } : {}),
+    });
+    const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const data = taxResponse.ok ? await taxResponse.json() : null;
+    // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
+    // state, since nothing is waiting for it any more.
+    if (isCancelled()) return null;
+    // A failed/malformed page, on the other hand, keeps whatever earlier pages already
+    // returned and commits it, degrading to a partial check instead of discarding
+    // everything. Returning here made a page-2 blip erase page 1 too, so NO badge
+    // rendered at all — the exact silent "nothing to fix" shape this feature exists to
+    // eliminate (ETP-4888 QA finding). Same contract as the MAX_PAGES branch below.
+    if (!data?.items) {
+      // eslint-disable-next-line no-console -- deliberate operator-facing warning,
+      // not routine logging: signals the SIF completeness check is incomplete.
+      console.warn(
+        `[useTaxSifLineRowActions] Tax catalog pagination failed at page ${page + 1} ` +
+          `(offset ${offset}) — some taxes may be missing from the SIF completeness check.`,
+      );
+      break;
+    }
+    allItems.push(...data.items);
+    page += 1;
+    if (!data.hasMore || data.items.length === 0) break;
+    if (page >= TAX_SELECTOR_MAX_PAGES) {
+      // eslint-disable-next-line no-console -- deliberate operator-facing warning,
+      // not routine logging: signals the SIF completeness check is incomplete.
+      console.warn(
+        `[useTaxSifLineRowActions] Tax catalog pagination stopped after ${TAX_SELECTOR_MAX_PAGES} pages ` +
+          `(hasMore was still true) — some taxes may be missing from the SIF completeness check.`,
+      );
+      break;
+    }
+    offset += data.items.length;
+  }
+  return allItems;
+}
+
+/**
  * Pure completeness check: does `taxRow` (a tax record — or selector item — carrying
  * the SIF-enriched columns) still need its TBAI/Verifactu key filled in?
  *
@@ -130,54 +205,15 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       const currency = headerRecord?.['currency$_identifier'] ?? null;
 
       // Pages through the full catalog instead of trusting a single request — see
-      // TAX_SELECTOR_PAGE_LIMIT's comment above. Stops as soon as the server reports
-      // `hasMore: false`, so the common (single-page) case still does exactly ONE
-      // fetch. `offset` advances by the page's own item count (not the requested
-      // limit) so it stays correct even though the server silently clamps `limit`.
-      const allItems = [];
-      let offset = 0;
-      let page = 0;
-      for (;;) {
-        const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
-          limit: TAX_SELECTOR_PAGE_LIMIT,
-          offset,
-          ...selectorContext,
-          ...(currency ? { currency } : {}),
-        });
-        const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        const data = taxResponse.ok ? await taxResponse.json() : null;
-        // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
-        // state, since nothing is waiting for it any more.
-        if (cancelled) return;
-        // A failed/malformed page, on the other hand, keeps whatever earlier pages already
-        // returned and commits it, degrading to a partial check instead of discarding
-        // everything. Returning here made a page-2 blip erase page 1 too, so NO badge
-        // rendered at all — the exact silent "nothing to fix" shape this feature exists to
-        // eliminate (ETP-4888 QA finding). Same contract as the MAX_PAGES branch below.
-        if (!data?.items) {
-          // eslint-disable-next-line no-console -- deliberate operator-facing warning,
-          // not routine logging: signals the SIF completeness check is incomplete.
-          console.warn(
-            `[useTaxSifLineRowActions] Tax catalog pagination failed at page ${page + 1} ` +
-              `(offset ${offset}) — some taxes may be missing from the SIF completeness check.`,
-          );
-          break;
-        }
-        allItems.push(...data.items);
-        page += 1;
-        if (!data.hasMore || data.items.length === 0) break;
-        if (page >= TAX_SELECTOR_MAX_PAGES) {
-          // eslint-disable-next-line no-console -- deliberate operator-facing warning,
-          // not routine logging: signals the SIF completeness check is incomplete.
-          console.warn(
-            `[useTaxSifLineRowActions] Tax catalog pagination stopped after ${TAX_SELECTOR_MAX_PAGES} pages ` +
-              `(hasMore was still true) — some taxes may be missing from the SIF completeness check.`,
-          );
-          break;
-        }
-        offset += data.items.length;
-      }
-      if (cancelled) return;
+      // TAX_SELECTOR_PAGE_LIMIT's comment above and fetchAllTaxPages()'s own doc.
+      const allItems = await fetchAllTaxPages({
+        apiBaseUrl,
+        token,
+        selectorContext,
+        currency,
+        isCancelled: () => cancelled,
+      });
+      if (cancelled || allItems === null) return;
       setTaxById(Object.fromEntries(allItems.map((item) => [item.id, item])));
     }
 
