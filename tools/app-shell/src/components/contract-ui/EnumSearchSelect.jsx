@@ -105,7 +105,6 @@ export function EnumSearchSelect({ options, value, onChange, placeholder, ui, id
           />
         )}
       </div>
-
       {open && (
         <div
           className="absolute left-0 right-0 top-[calc(100%+4px)] z-[60] overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-lg"
@@ -117,9 +116,9 @@ export function EnumSearchSelect({ options, value, onChange, placeholder, ui, id
               // standalone sentence — rendered alone it reads as a dangling fragment. Append the
               // query the same way CreatableSearchSelect does, and fall back to the complete
               // `noResults` sentence when the panel is empty with no query typed (empty option list).
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+              (<div className="px-3 py-2 text-xs text-muted-foreground">
                 {query.trim() ? <>{ui('noResultsFor')} &ldquo;{query}&rdquo;</> : ui('noResults')}
-              </div>
+              </div>)
             ) : (
               filtered.map((opt) => (
                 <button

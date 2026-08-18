@@ -174,7 +174,8 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
                     onChange={(value) => handleChange(field.key, value)}
                     placeholder={ui('taxSif.modal.searchPlaceholder')}
                     ui={ui}
-                    testId={`tax-sif-modal-field-${field.key}`} />
+                    testId={`tax-sif-modal-field-${field.key}`}
+                    data-testid={"EnumSearchSelect__" + field.id} />
                 </div>
               ))}
             </div>
