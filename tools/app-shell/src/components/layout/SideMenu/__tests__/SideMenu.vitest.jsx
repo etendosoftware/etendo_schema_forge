@@ -522,11 +522,10 @@ describe('SideMenu', () => {
       // both options are exposed via their data-testid rather than a single onClick.
       const reportBugLink = screen.getByTestId('help-menu-report-bug');
       expect(reportBugLink.tagName).toBe('A');
-      // Match on the portal prefix rather than the full path — the exact
-      // group/create IDs are an implementation detail of the Jira Service
-      // Management portal, not part of this component's contract.
-      expect(reportBugLink.getAttribute('href')).toMatch(
-        /^https:\/\/etendoproject\.atlassian\.net\/servicedesk\/customer\/portal\/35/
+      // Points to the generic portals list, not a specific portal/group/create
+      // deep link — customers pick the right service desk themselves.
+      expect(reportBugLink.getAttribute('href')).toBe(
+        'https://etendoproject.atlassian.net/servicedesk/customer/portals'
       );
       expect(reportBugLink).toHaveAttribute('target', '_blank');
       expect(screen.getByText('helpReportBug')).toBeInTheDocument();

@@ -366,7 +366,7 @@ function UnreadBadge({ unreadCount, expanded }) {
 
 // Customer portal for filing a bug report directly (bypasses the AI chat entirely) —
 // a separate, more formal channel from the conversational support flow.
-const REPORT_BUG_URL = 'https://etendoproject.atlassian.net/servicedesk/customer/portal/35/group/43/create/132';
+const REPORT_BUG_URL = 'https://etendoproject.atlassian.net/servicedesk/customer/portals';
 
 function HelpEntryPoint({ expanded, onOpenChat, unreadCount, ui }) {
   const trigger = !expanded ? (
