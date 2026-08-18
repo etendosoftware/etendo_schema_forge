@@ -80,6 +80,20 @@ describe('RolesAccessMatrix', () => {
     expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-inventory`).textContent).toBe('—');
   });
 
+  it('renders a category header with zero rows when its windows array is empty, without crashing', () => {
+    // Should not happen per the backend's own contract (every matrix category always has at
+    // least one window), but a malformed/partial payload must degrade, not crash.
+    const matrixWithEmptyCategory = [
+      { category: 'Finance', rows: [] },
+      ...MATRIX,
+    ];
+    render(<RolesAccessMatrix cards={CARDS} matrix={matrixWithEmptyCategory} />);
+    expect(screen.getByTestId('RolesAccessMatrix__category-Finance')).toBeTruthy();
+    expect(screen.queryByTestId(`RolesAccessMatrix__row-${buildRowKey('Finance', 'anything')}`)).toBeNull();
+    // The categories that DO have rows still render correctly alongside it.
+    expect(screen.getByTestId(`RolesAccessMatrix__row-${buildRowKey('Commercial', 'w-bp-commercial')}`)).toBeTruthy();
+  });
+
   it('renders one column header per card, using the provided icon resolver (passed the whole role object)', () => {
     function Icon(props) { return <svg data-testid="icon" {...props} />; }
     const iconFor = vi.fn(() => Icon);

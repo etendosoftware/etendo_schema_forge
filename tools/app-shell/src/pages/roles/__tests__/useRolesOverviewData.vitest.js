@@ -209,4 +209,49 @@ describe('useRolesOverviewData', () => {
     expect(getResult().cards).toEqual([]);
     expect(getResult().matrix).toEqual([]);
   });
+
+  it('adapts windowCount: 0 and userCount: 0 through unchanged, not dropped/defaulted away', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [{ id: 'r-empty', name: 'Purchasing', userCount: 0, windowCount: 0 }],
+      matrix: { categories: [] },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().cards[0].windowCount).toBe(0);
+    expect(getResult().cards[0].userCount).toBe(0);
+  });
+
+  it('should not happen per the backend contract, but a matrix category with an empty windows array adapts to an empty rows list rather than crashing', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [{ id: 'r-admin', name: 'Admin', isClientAdmin: true }],
+      matrix: { categories: [{ name: 'Finance', windows: [] }] },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().error).toBeNull();
+    expect(getResult().matrix).toEqual([{ category: 'Finance', rows: [] }]);
+  });
+
+  it('passes a role/window pair entirely missing from a malformed/partial access map through as absent (RolesAccessMatrix, not this adapter, defaults it to "none" at render time)', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [
+        { id: 'r-admin', name: 'Admin', isClientAdmin: true },
+        { id: 'r-fin', name: 'Finance' },
+      ],
+      matrix: {
+        categories: [
+          {
+            name: 'Commercial',
+            // r-fin has no entry at all here (partial payload), unlike r-admin.
+            windows: [{ id: 'w-1', name: 'Business Partner', access: { 'r-admin': 'full' } }],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const row = getResult().matrix[0].rows[0];
+    expect(row.access['r-admin']).toBe('full');
+    expect(row.access['r-fin']).toBeUndefined();
+  });
 });

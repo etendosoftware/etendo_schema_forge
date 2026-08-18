@@ -63,4 +63,18 @@ describe('RoleSummaryCard', () => {
     render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 }} />);
     expect(screen.getByTestId('RoleSummaryCard__sales')).toBeTruthy();
   });
+
+  // ETP-4907 QA: a role can legitimately have zero windows/users (e.g. a
+  // newly-provisioned system-template fallback nobody has composed yet, or a
+  // role with no AD_Window_Access rows) — the card must render "0", not blank
+  // or NaN, for both figures.
+  it('renders "0 Windows" (not blank/NaN) for a role with windowCount: 0', () => {
+    render(<RoleSummaryCard role={{ id: 'purchasing', name: 'Purchasing', windowCount: 0, userCount: 2 }} Icon={DummyIcon} />);
+    expect(screen.getByTestId('RoleSummaryCard__windowCount-purchasing').textContent).toBe('0 Windows');
+  });
+
+  it('renders "0" (not blank/NaN) in the user-count badge for a role with userCount: 0', () => {
+    render(<RoleSummaryCard role={{ id: 'inventory', name: 'Inventory', windowCount: 5, userCount: 0 }} Icon={DummyIcon} />);
+    expect(screen.getByTestId('RoleSummaryCard__userCount-inventory').textContent).toContain('0');
+  });
 });
