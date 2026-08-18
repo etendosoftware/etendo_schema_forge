@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
+import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -35,9 +35,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const downloadLinkRef = useRef(null);
 
-  const previewAttachment = usePreviewAttachment({
+  const previewAttachment = useMainAttachment({
     documentId: recordId,
-    specName: 'goods-receipt',
+    tableName: 'M_InOut',
     storeCondition: isCompleted,
     token,
     apiBaseUrl,
