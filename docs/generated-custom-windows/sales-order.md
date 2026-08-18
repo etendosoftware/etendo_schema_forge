@@ -325,3 +325,46 @@ applies. See `docs/decisions-reference.md` ("Print Visibility") for the full col
 The confirmation modal uses information roles for its selected document options,
 warning roles for its irreversible-action notice, and success roles for completed
 optional documents. Each state pairs its background, border, and foreground token.
+
+## Related Documents auto-refresh — event dispatch ordering fix — ETP-4779
+
+Sales Order was the reference implementation the ETP-4779 fix (auto-refresh of the "Documentos"
+panel after generating a derived document) was modeled on for `purchase-order`, `goods-receipt`,
+`goods-shipment`, and `sales-quotation` — QA's original 2026-08-11 pass found it already working.
+A later live user report showed it was **not** actually fixed: generating an invoice from a
+confirmed order still required a manual page reload.
+
+**Root cause**, confirmed by reproducing live on `localhost:3100` (same method used for the
+identical bug found in `purchase-order`'s `PurchaseOrderActions.jsx`): in
+`artifacts/sales-order/custom/OrderCreateInvoice.jsx`'s `ConfirmModal.handleConfirm` — the
+"Confirmar" flow used to confirm a still-Draft order and optionally generate its shipment/invoice
+in the same modal — the `sales-order:document-created` `window` `CustomEvent` was dispatched
+right after **Step 1** (`documentAction=CO`), *before* **Steps 2/3** (`createShipment` /
+`createDraftInvoice`) had even run. `RelatedDocuments.jsx`'s listener reacted correctly and
+refetched immediately, but at that point neither derived document existed yet, so the refetch
+always came back empty — and because nothing dispatched the event again afterward, the panel
+never learned about the documents Steps 2/3 went on to create. Verified live: confirming a Draft
+order with both "Crear albarán" and "Crear factura" checked showed the success modal listing both
+documents, but the "Documentos" row behind it kept showing only the pre-existing linked quotation
+chip, forever — not merely delayed. This is a timing-dependent race (QA's original pass happened
+not to hit it), not a regression from any other change.
+
+`CreateDocsModal` (the separate "Gestionar" modal for already-`CO` orders, further down in the
+same file) never had this bug — it already dispatched once, after its POST(s) resolved.
+
+**Fix:** moved the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle, right
+before `onConfirmed({...})` — mirroring `CreateDocsModal.handleCreate`'s already-correct
+placement — guarded to only fire when a shipment or invoice actually exists
+(`finalShipment || finalInvoice`). Added the same guarded dispatch to `handleClose`'s
+partial-failure path (e.g. the shipment POST succeeds but the invoice POST then fails and the
+user closes instead of retrying), which previously could leave a successfully-created shipment
+with no event at all.
+
+Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
+checkboxes shows the quotation, Envío, and Factura chips together in the "Documentos" row
+immediately, before even closing the success modal — no reload, no lag.
+
+Same fix pattern, same file shape, as
+`docs/generated-custom-windows/purchase-order.md`'s "Related Documents auto-refresh — ETP-4779"
+section — read that one for the fuller before/after narrative (missing-listener pass +
+premature-dispatch pass) since both bugs were found and fixed in the same two-pass sequence.

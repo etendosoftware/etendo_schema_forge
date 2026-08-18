@@ -346,7 +346,6 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
         trackTransactionPosted();
-        window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
       } catch (e) {
         setError(e.message || ui('poErrorOccurred'));
         setLoading(false);
@@ -422,6 +421,18 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     const finalInvoice = currentInvoice ?? invoiceResult;
     if (finalReceipt) result.receipt = finalReceipt;
     if (finalInvoice) result.invoice = finalInvoice;
+    // ETP-4779 — dispatch AFTER the receipt/invoice POSTs above have actually
+    // resolved (not right after Step 1's docAction=CO, as before). Dispatching
+    // immediately after Step 1 fired the event before createGoodsReceipt /
+    // createPurchaseInvoice even ran, so RelatedDocuments.jsx's refetch raced
+    // ahead of document creation, found nothing, and — since no later event
+    // fired to catch up — the "Documentos" panel stayed empty until some
+    // unrelated action (e.g. a later "Gestionar factura" call) happened to
+    // dispatch the event again. Only fire when a document actually exists to
+    // show, mirroring CreateDocsModal.handleCreate below.
+    if (finalReceipt || finalInvoice) {
+      window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
+    }
     onConfirmed(result);
   };
 
@@ -442,6 +453,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       const result = {};
       if (receiptResult) result.receipt = receiptResult;
       if (invoiceResult) result.invoice = invoiceResult;
+      // ETP-4779 — covers the partial-failure path: e.g. the receipt POST
+      // succeeded (receiptResult set) but the invoice POST then failed, and
+      // the user closes instead of retrying. handleConfirm's own dispatch
+      // (above) never runs in that case since it errors out first, so the
+      // successfully-created receipt would otherwise never notify
+      // RelatedDocuments.jsx.
+      if (receiptResult || invoiceResult) {
+        window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
+      }
       onConfirmed(result);
       return;
     }

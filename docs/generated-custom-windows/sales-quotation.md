@@ -334,6 +334,21 @@ restoring list-view print to always-visible as the new, intended, tested baselin
 detail-view `hidePrintWhen` gate above still applies. See `docs/decisions-reference.md`
 ("Print Visibility") for the full collision writeup.
 
+## Related Documents auto-refresh — ETP-4779
+
+Converting a quotation into a Sales Order or Sales Invoice (`QuotationConfirmModal.jsx`) used to
+refresh the "Documentos" tab only via a full `window.location.reload()` on
+`handleCloseAfterCreate`. `QuotationConfirmModal` now dispatches a
+`sales-quotation:document-created` `window` `CustomEvent` right after each conversion action
+succeeds (`Convertquotation` / `createDraftInvoice`), mirroring the
+`sales-order:document-created` / `purchase-order:document-created` convention those two windows
+already use. `RelatedDocuments.jsx` listens for that event and bumps its local `refreshKey`
+(the same key that drives its `fetchByCriteria` effect), so the newly created order/invoice
+chip appears without a manual reload. `QuotationTopbarActions.jsx` (the `topbarRight` component)
+threads the `onRefresh` prop `DetailView.jsx` already passes it down to `QuotationConfirmModal`,
+which now calls it from `handleCloseAfterCreate` instead of reloading — refreshing the header
+badge/readonly state in place of the event, which only covers the related-docs panel.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
