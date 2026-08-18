@@ -121,15 +121,19 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
    * Verifies that GoodsShipmentConfirmModal:
    *  - Opens when the draftMode confirm button is clicked
    *  - Shows the blue summary card (shipmentRef, BP name, total from linkedOrder)
-   *  - Shows the optional invoice generation section with the "Crear factura" card
-   *  - Shows "Confirmar pedido" button when the invoice checkbox is unchecked
+   *  - Shows the optional invoice generation section with the "Crear factura" card,
+   *    checked by default (ETP-4848: GoodsShipmentConfirmModal always renders with
+   *    defaultCreateInvoice=true — its caller only mounts it when invoiceStatus < 100)
+   *  - Reverts the confirm button back to the plain "Confirmar albarán" label when
+   *    the invoice checkbox is unchecked
    *  - Calls documentAction on confirm and closes (reloads page)
    *
-   * The checkbox toggle → "Confirmar + factura →" path is covered implicitly by
-   * GoodsShipmentConfirmModal unit tests and by the CreateInvoiceConfirmModal
-   * describe below (which tests the full invoice creation flow end-to-end).
+   * The "confirm + invoice" happy path (toggle left ON, POST createDraftInvoice) is
+   * covered implicitly by GoodsShipmentConfirmModal unit tests and by the
+   * CreateInvoiceConfirmModal describe below (which tests the full invoice creation
+   * flow end-to-end).
    */
-  test('opens with shipment summary and invoice option; confirm without invoice closes modal', async ({ page }) => {
+  test('opens with shipment summary, invoice option checked by default; unchecking reverts the confirm label; confirm without invoice closes modal', async ({ page }) => {
     const shipment = makeShipment({
       id: 'gs-draft-001',
       documentNo: 'GS-DRAFT-001',
@@ -177,9 +181,24 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
     // Document number appears in the subtitle
     await expect(page.getByTestId('confirm-modal-doc-info')).toContainText('GS-DRAFT-001');
     // Invoice toggle card is visible
-    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toBeVisible({ timeout: 5_000 });
-    // Confirm button is visible
-    await expect(page.getByTestId('confirm-modal-confirm-btn')).toBeVisible({ timeout: 5_000 });
+    const invoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
+    await expect(invoiceToggle).toBeVisible({ timeout: 5_000 });
+
+    // ETP-4848: shipment.invoiceStatus is 0 (< 100, per makeShipment's default) →
+    // GoodsShipmentConfirmModal renders with defaultCreateInvoice=true, so the
+    // toggle must be checked on mount, without any user interaction.
+    await expect(invoiceToggle).toHaveAttribute('aria-checked', 'true');
+
+    // Confirm button is visible and shows the "confirm + invoice" label while the
+    // toggle is checked.
+    const confirmBtn = page.getByTestId('confirm-modal-confirm-btn');
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toHaveText(/confirmar y crear factura/i);
+
+    // ── Unchecking the toggle reverts the confirm button to the plain label ──
+    await invoiceToggle.click();
+    await expect(invoiceToggle).toHaveAttribute('aria-checked', 'false');
+    await expect(confirmBtn).toHaveText(/confirmar albarán/i);
 
     // ── Cancel closes the modal synchronously ─────────────────────────────
     // handleClose() → onClose() → setShowConfirmModal(false) → modal unmounts.
