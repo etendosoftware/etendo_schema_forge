@@ -27,7 +27,8 @@ const mockUseRolesOverviewData = vi.fn();
 vi.mock('../roles/useRolesOverviewData.js', () => ({
   useRolesOverviewData: () => mockUseRolesOverviewData(),
   ROLE_ICONS: {},
-  buildRowKey: (category, windowKey) => `${category}::${windowKey}`,
+  resolveRoleKind: () => null,
+  buildRowKey: (category, windowId) => `${category}::${windowId}`,
 }));
 
 vi.mock('lucide-react', () => ({
@@ -56,12 +57,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import RolesOverviewPage from '../RolesOverviewPage.jsx';
 
+// Realistic-but-arbitrary figures (NOT the earlier Figma reference
+// screenshot's placeholder numbers, which the backend developer confirmed
+// don't match live GOClient data — Admin's 48/2 is the one figure that does).
 const SAMPLE_CARDS = [
   { id: 'admin', name: 'GOClient Admin', isClientAdmin: true, windowCount: 48, userCount: 2 },
-  { id: 'sales', name: 'Sales', windowCount: 17, userCount: 13 },
+  { id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 },
 ];
 const SAMPLE_MATRIX = [
-  { category: 'General', rows: [{ windowKey: 'rolesMatrixWindowDashboard', access: { admin: 'full', sales: 'full' } }] },
+  { category: 'General', rows: [{ windowId: 'w-dashboard', windowName: 'Dashboard', access: { admin: 'full', sales: 'full' } }] },
 ];
 
 describe('RolesOverviewPage', () => {

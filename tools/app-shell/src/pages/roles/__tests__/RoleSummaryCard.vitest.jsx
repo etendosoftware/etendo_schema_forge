@@ -40,27 +40,27 @@ describe('RoleSummaryCard', () => {
   });
 
   it('resolves a fixed role name via the shared roleNameI18n map', () => {
-    render(<RoleSummaryCard role={{ id: 'finance', name: 'Finance', windowCount: 17, userCount: 9 }} Icon={DummyIcon} />);
+    render(<RoleSummaryCard role={{ id: 'finance', name: 'Finance', windowCount: 27, userCount: 2 }} Icon={DummyIcon} />);
     expect(screen.getByTestId('RoleSummaryCard__finance').textContent).toContain('roleNameFinance');
   });
 
   it('renders the user-count badge', () => {
-    render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 17, userCount: 13 }} Icon={DummyIcon} />);
-    expect(screen.getByTestId('RoleSummaryCard__userCount-sales').textContent).toContain('13');
+    render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 }} Icon={DummyIcon} />);
+    expect(screen.getByTestId('RoleSummaryCard__userCount-sales').textContent).toContain('3');
   });
 
   it('renders the interpolated window-count line', () => {
-    render(<RoleSummaryCard role={{ id: 'inventory', name: 'Inventory', windowCount: 18, userCount: 126 }} Icon={DummyIcon} />);
-    expect(screen.getByTestId('RoleSummaryCard__windowCount-inventory').textContent).toBe('18 Windows');
+    render(<RoleSummaryCard role={{ id: 'inventory', name: 'Inventory', windowCount: 13, userCount: 1 }} Icon={DummyIcon} />);
+    expect(screen.getByTestId('RoleSummaryCard__windowCount-inventory').textContent).toBe('13 Windows');
   });
 
   it('renders the given icon', () => {
-    render(<RoleSummaryCard role={{ id: 'purchasing', name: 'Purchasing', windowCount: 17, userCount: 17 }} Icon={DummyIcon} />);
+    render(<RoleSummaryCard role={{ id: 'purchasing', name: 'Purchasing', windowCount: 11, userCount: 1 }} Icon={DummyIcon} />);
     expect(screen.getByTestId('RoleSummaryCard__icon-purchasing')).toBeTruthy();
   });
 
   it('does not crash when no Icon is provided', () => {
-    render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 17, userCount: 13 }} />);
+    render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 }} />);
     expect(screen.getByTestId('RoleSummaryCard__sales')).toBeTruthy();
   });
 });

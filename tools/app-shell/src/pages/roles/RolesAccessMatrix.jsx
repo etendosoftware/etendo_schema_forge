@@ -13,12 +13,17 @@ import { buildRowKey } from './useRolesOverviewData.js';
  * `General`) — no new i18n keys needed for categories, they already resolve
  * correctly in both locales.
  *
- * Each row's React key AND `data-testid` use `buildRowKey(category,
- * windowKey)` (`${category}::${windowKey}`), NOT `windowKey` alone — the mock
- * data (and, per this window's own doc, likely the real data too) has a
- * legitimate duplicate-window-name case: "Contactos" appears in both the
- * `Commercial` and `Inventory` categories with different access per role. See
+ * Each row's React key AND `data-testid` use `buildRowKey(category, windowId)`
+ * (`${category}::${windowId}`) — the backend's real per-window `id`, not its
+ * translatable `name`. The real data has a legitimate duplicate-window-NAME
+ * case ("Contactos" appears in both `Comercial` and `Inventario` with
+ * different access per role), but the backend already disambiguates those as
+ * two separate entries with their own `id` — keying by id sidesteps the
+ * collision entirely rather than needing a name-based composite key. See
  * `useRolesOverviewData.js`'s `buildRowKey` JSDoc for the full rationale.
+ * Each row's window name is translated via `useMenuLabel()`, same convention
+ * as every other real-AD-window-name display in this app (e.g. the pre-
+ * ETP-4907 version of this page's window chips).
  */
 export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
   const ui = useUI();
@@ -33,7 +38,7 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
               {ui('rolesMatrixWindowColumn')}
             </th>
             {cards.map((role) => {
-              const Icon = iconFor?.(role.id);
+              const Icon = iconFor?.(role);
               const displayName = role.isClientAdmin
                 ? ui(ADMIN_NAME_I18N_KEY)
                 : resolveRoleDisplayName(ui, role.name);
@@ -62,10 +67,10 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
                 </th>
               </tr>
               {group.rows.map((row) => {
-                const rowKey = buildRowKey(group.category, row.windowKey);
+                const rowKey = buildRowKey(group.category, row.windowId);
                 return (
                   <tr key={rowKey} data-testid={`RolesAccessMatrix__row-${rowKey}`}>
-                    <td className="py-2.5 pr-4 text-foreground">{ui(row.windowKey)}</td>
+                    <td className="py-2.5 pr-4 text-foreground">{tMenu(row.windowName)}</td>
                     {cards.map((role) => (
                       <td key={role.id} className="py-2.5 px-3 text-center">
                         <AccessTierPill

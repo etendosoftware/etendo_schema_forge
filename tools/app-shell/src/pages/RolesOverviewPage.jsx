@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShieldAlert } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { useRolesOverviewData, ROLE_ICONS } from './roles/useRolesOverviewData.js';
+import { useRolesOverviewData, ROLE_ICONS, resolveRoleKind } from './roles/useRolesOverviewData.js';
 import RoleSummaryCard from './roles/RoleSummaryCard.jsx';
 import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
 
@@ -33,20 +33,17 @@ function StatusCard({ testId, className, children }) {
  * a new reference layout): 5 role summary cards (icon, name, user-count badge, window
  * count) followed by a full window x role access matrix grouped by category, each cell
  * tri-state (full access / read-only / no access). Data comes from
- * `useRolesOverviewData()` (`./roles/useRolesOverviewData.js`) — currently backed by mock
- * data matching the ETP-4907 reference screenshot's numbers, isolated behind a single
- * swap point for the real `com.etendoerp.go` endpoint once its contract is confirmed (see
- * that module's file-level JSDoc). This is a hand-built standalone page (no
- * `decisions.json`/pipeline artifact), routed via `runtime-routes.jsx`'s
- * `lazyRoute('roles', RolesOverviewPage)` and gated in `menu.json` by the
- * `isAdminOrClientAdmin` capability — see `registry.js`'s `filterMenuGroupsByAccess`.
+ * `useRolesOverviewData()` (`./roles/useRolesOverviewData.js`), which calls the real
+ * `GET /sws/neo/rolesoverview` (`lib/rolesApi.js`'s `fetchRolesOverview()`, unchanged
+ * since ETP-4513) and adapts its response into this page's card/matrix shape. This is a
+ * hand-built standalone page (no `decisions.json`/pipeline artifact), routed via
+ * `runtime-routes.jsx`'s `lazyRoute('roles', RolesOverviewPage)` and gated in `menu.json`
+ * by the `isAdminOrClientAdmin` capability — see `registry.js`'s `filterMenuGroupsByAccess`.
  *
  * The empty-state handling below (`cards.length === 0`) is a defense-in-depth fallback for
- * direct navigation / a stale menu, not the primary access control — once the real backend
- * endpoint lands it is expected to mirror `SFRolesOverview.java`'s "deny silently with an
- * empty payload" convention for a non-admin/no-role caller (see `rolesApi.js`'s
- * `fetchRolesOverview()` for that existing convention on the ETP-4513 endpoint this page
- * used before ETP-4907).
+ * direct navigation / a stale menu, not the primary access control — `SFRolesOverview.java`
+ * is the actual enforcement point and always returns an empty `roles`/`matrix` payload for a
+ * non-admin/no-role caller regardless of how the request reached it.
  */
 export default function RolesOverviewPage() {
   const ui = useUI();
@@ -105,10 +102,14 @@ export default function RolesOverviewPage() {
               data-testid="RolesOverviewPage__cards"
             >
               {cards.map((role) => (
-                <RoleSummaryCard key={role.id} role={role} Icon={ROLE_ICONS[role.id]} />
+                <RoleSummaryCard key={role.id} role={role} Icon={ROLE_ICONS[resolveRoleKind(role)]} />
               ))}
             </div>
-            <RolesAccessMatrix cards={cards} matrix={matrix} iconFor={(id) => ROLE_ICONS[id]} />
+            <RolesAccessMatrix
+              cards={cards}
+              matrix={matrix}
+              iconFor={(role) => ROLE_ICONS[resolveRoleKind(role)]}
+            />
           </div>
         );
       })()}
