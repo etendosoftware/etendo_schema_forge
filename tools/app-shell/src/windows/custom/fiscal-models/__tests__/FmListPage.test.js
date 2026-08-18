@@ -13,7 +13,7 @@ describe('FmListPage — exports', () => {
 
 describe('FmListPage — upcoming deadlines widget', () => {
   it('renders upcoming count as KPI value', () => assert.match(src, /upcomingCount/));
-  it('uses computeUpcomingDeadlines', () => assert.match(src, /computeUpcomingDeadlines/));
+  it('uses countUpcomingDeadlines', () => assert.match(src, /countUpcomingDeadlines/));
   it('passes year+model filtered decls to the widget', () => assert.match(src, /decls={modelYearFiltered}/));
 });
 
@@ -66,5 +66,62 @@ describe('FmListPage — 349 result column computation', () => {
     const m349block = src.match(/model === ['"]349['"][\s\S]*?displayResult\s*=/);
     assert.ok(m349block, '349 branch must assign displayResult');
     assert.doesNotMatch(m349block[0], /summary\.result/);
+  });
+});
+
+describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755)', () => {
+  it('defines otherDecls303 and otherDecls349 (non-draft filters)', () => {
+    assert.match(src, /otherDecls303/);
+    assert.match(src, /otherDecls349/);
+  });
+
+  it('otherDecls303/otherDecls349 filter on status !== "draft"', () => {
+    const block303 = src.match(/otherDecls303\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
+    assert.ok(block303, 'otherDecls303 useMemo must exist');
+    assert.match(block303[0], /d\.status !== ['"]draft['"]/);
+
+    const block349 = src.match(/otherDecls349\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
+    assert.ok(block349, 'otherDecls349 useMemo must exist');
+    assert.match(block349[0], /d\.status !== ['"]draft['"]/);
+  });
+
+  it('calls useFiscalAutoCompute 4 times (draft 303, draft 349, other 303, other 349)', () => {
+    const matches = src.match(/useFiscalAutoCompute\s*\(/g);
+    assert.ok(matches && matches.length === 4, `expected exactly 4 useFiscalAutoCompute calls, got ${matches?.length}`);
+  });
+
+  it('defines computedMapOther303 and computedMapOther349', () => {
+    assert.match(src, /computedMapOther303/);
+    assert.match(src, /computedMapOther349/);
+  });
+
+  it('the otherDecls303 hook call has no checkModifiedFn (one-time compute, no polling)', () => {
+    const block = src.match(/useFiscalAutoCompute\(otherDecls303,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block, 'otherDecls303 useFiscalAutoCompute call must exist');
+    assert.doesNotMatch(block[0], /checkModifiedFn/);
+    assert.match(block[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+  });
+
+  it('the otherDecls349 hook call has no checkModifiedFn (one-time compute, no polling)', () => {
+    const block = src.match(/useFiscalAutoCompute\(otherDecls349,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block, 'otherDecls349 useFiscalAutoCompute call must exist');
+    assert.doesNotMatch(block[0], /checkModifiedFn/);
+    assert.match(block[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+  });
+
+  it('the draft hooks still carry a checkModifiedFn (polling stays enabled for drafts)', () => {
+    const block303 = src.match(/useFiscalAutoCompute\(draftDecls303,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block303, 'draftDecls303 useFiscalAutoCompute call must exist');
+    assert.match(block303[0], /checkModifiedFn:\s*checkModified303/);
+
+    const block349 = src.match(/useFiscalAutoCompute\(draftDecls349,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block349, 'draftDecls349 useFiscalAutoCompute call must exist');
+    assert.match(block349[0], /checkModifiedFn:\s*checkModified349/);
+  });
+
+  it('the "Resultado" column picks the map based on decl.status === "draft"', () => {
+    assert.match(src, /const isDraft = decl\.status === ['"]draft['"];/);
+    assert.match(src, /isDraft \? computedMap349\[decl\.id\] : computedMapOther349\[decl\.id\]/);
+    assert.match(src, /isDraft \? computedMap\[decl\.id\] : computedMapOther303\[decl\.id\]/);
   });
 });

@@ -70,6 +70,13 @@ const BACKEND_ERROR_MAP = {
   // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
   'Cannot modify document conversion rate when the invoice is not in draft status.':
     'backendError.conversionRateNotDraft',
+  // Cash close (CashCloseSupport, com.etendoerp.go — ETP-4795) — hardcoded English literals with
+  // no AD_Message involvement, so they reach the toast untranslated whatever the session locale.
+  'The close date cannot be in the future.': 'backendError.cashCloseDateInFuture',
+  'This reconciliation already has bank-statement lines linked to it; cash close and bank reconciliation cannot share the same document.':
+    'backendError.cashCloseHasBankStatementLines',
+  'Cash close is only available for cash-type financial accounts':
+    'backendError.cashCloseOnlyForCashAccount',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -167,6 +174,53 @@ function matchShipmentNotFound(msg) {
   return { id };
 }
 
+// CashCloseSupport.java (com.etendoerp.go — ETP-4795), three cash-close rejections that embed a
+// dynamic value. Same plain-string-slicing rationale as the matchers above: no regex, so there is
+// no backtracking surface over the movement identifier (SonarQube javascript:S5852).
+//
+// The difference amount is deliberately DROPPED rather than interpolated: the backend sends it as a
+// raw `BigDecimal.toPlainString()` ("-162.05"), and pasting that into Spanish copy would render a
+// money value with the wrong decimal separator and no currency symbol — exactly what the repo's
+// currency-formatting policy exists to prevent. The figure is already on screen, formatted, in the
+// close summary right next to the button; the toast only has to name the fix.
+const CASH_CLOSE_NO_CONCEPT_PREFIX = 'There is a difference of ';
+const CASH_CLOSE_NO_CONCEPT_SUFFIX = ' and this account has no accounting concept configured for it.'
+  + ' Configure a GL Item Difference in Edit account before confirming the close.';
+
+function matchCashCloseNoConcept(msg) {
+  if (!msg.startsWith(CASH_CLOSE_NO_CONCEPT_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_NO_CONCEPT_SUFFIX)) return null;
+  const amount = msg.slice(
+    CASH_CLOSE_NO_CONCEPT_PREFIX.length,
+    -CASH_CLOSE_NO_CONCEPT_SUFFIX.length,
+  );
+  return amount ? {} : null;
+}
+
+const CASH_CLOSE_BACKDATED_PREFIX = 'The close date cannot be earlier than the last confirmed close (';
+const CASH_CLOSE_BACKDATED_SUFFIX = ').';
+
+function matchCashCloseBackdated(msg) {
+  if (!msg.startsWith(CASH_CLOSE_BACKDATED_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_BACKDATED_SUFFIX)) return null;
+  const date = msg.slice(CASH_CLOSE_BACKDATED_PREFIX.length, -CASH_CLOSE_BACKDATED_SUFFIX.length);
+  return date ? { date } : null;
+}
+
+const CASH_CLOSE_CLOSED_PERIOD_PREFIX = 'The movement "';
+const CASH_CLOSE_CLOSED_PERIOD_SUFFIX = '" has an accounting date in a closed period.'
+  + ' Reopen that period or unmark the movement before confirming the close.';
+
+function matchCashCloseLineInClosedPeriod(msg) {
+  if (!msg.startsWith(CASH_CLOSE_CLOSED_PERIOD_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_CLOSED_PERIOD_SUFFIX)) return null;
+  const movement = msg.slice(
+    CASH_CLOSE_CLOSED_PERIOD_PREFIX.length,
+    -CASH_CLOSE_CLOSED_PERIOD_SUFFIX.length,
+  );
+  return movement ? { movement } : null;
+}
+
 // Runs the parameterized matchers in order and returns the winning translation
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
@@ -203,6 +257,23 @@ function resolveParameterizedMatch(msg) {
   const shipmentMatch = matchShipmentNotFound(msg);
   if (shipmentMatch) {
     return { key: 'backendError.shipmentNotFound', params: { id: shipmentMatch.id } };
+  }
+
+  if (matchCashCloseNoConcept(msg)) {
+    return { key: 'backendError.cashCloseNoConcept', params: {} };
+  }
+
+  const backdatedMatch = matchCashCloseBackdated(msg);
+  if (backdatedMatch) {
+    return { key: 'backendError.cashCloseDateBeforeLastClose', params: { date: backdatedMatch.date } };
+  }
+
+  const closedPeriodMatch = matchCashCloseLineInClosedPeriod(msg);
+  if (closedPeriodMatch) {
+    return {
+      key: 'backendError.cashCloseLineInClosedPeriod',
+      params: { movement: closedPeriodMatch.movement },
+    };
   }
 
   return null;
