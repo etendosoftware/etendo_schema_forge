@@ -28,7 +28,7 @@ const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0'
   && Boolean(process.env.E2E_PASSWORD || onboardingCredentials);
 const RUN_CROSS_CLIENT = RUN_INTEGRATION && Boolean(secondAdminCredentials);
 const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025';
-const PASSWORD = process.env.E2E_INVITATION_PASSWORD
+const invitationCredential = process.env.E2E_INVITATION_PASSWORD
   || onboardingCredentials?.password
   || secondAdminCredentials?.password
   || process.env.E2E_PASSWORD;
@@ -54,7 +54,7 @@ async function createStandaloneAccount(request, email) {
     data: {
       email,
       name: 'Existing Invitation User',
-      password: PASSWORD,
+      password: invitationCredential,
       language: 'en_US',
     },
   });
@@ -232,7 +232,7 @@ async function acceptNewInvitation(browser, inviteLink, email) {
     await expect(page.locator('#reg-email')).toHaveValue(email);
     await expect(page.locator('#reg-email')).toBeDisabled();
     await page.locator('#reg-name').fill('New Invitation User');
-    await page.locator('#reg-password').fill(PASSWORD);
+    await page.locator('#reg-password').fill(invitationCredential);
     await page.getByTestId('action-register-submit').click();
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
   } finally {
