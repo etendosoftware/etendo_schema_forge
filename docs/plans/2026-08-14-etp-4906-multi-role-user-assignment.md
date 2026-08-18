@@ -44,6 +44,31 @@ or not) and #5 (which lines) directly. #3 flagged to the human (Gradle/Etendo-ro
 operation, matches the established pattern in this ticket of the human running
 redeploy-class commands themselves).
 
+**#2 resolved — flaky, not a regression.** Diffed `origin/epic/ETP-3504...HEAD` for
+anything the `organization` window or its dependencies could be affected by:
+`detailViewHelpers.jsx` (where `computeIsDirty` lives) has ZERO diff; the only shared
+file touched, `DetailView.jsx`, is the already-reviewed `onAfterExistingSave`/
+`additionalDirtyState` wiring — additive, defaults to `false`, doesn't touch
+discard/banner logic at all. Ran the specific failing test
+(`OrganizationPage.vitest.jsx`'s "reveals the unsaved-changes banner...") in isolation
+5 times: **5/5 pass.** It's a timing-sensitive test (`fireEvent.click` →
+`await waitFor`) that only failed once, inside the full 12000+-test CI run — matches
+the exact resource-contention-flakiness pattern already documented elsewhere in this
+ticket's own QA history for other unrelated files. **No code fix needed — just re-run
+the `test` CI job.**
+
+**#5 resolved — exact duplicate blocks identified via the live Sonar API** (not
+guessed): `tools/app-shell/src/lib/rolesApi.js:44-70` (27 lines) duplicates
+`tools/app-shell/src/lib/userRoleAssignmentsApi.js:34-63` (30 lines) — confirmed via
+`api/duplications/show`. Read both files in full: `detectBase()`/`getToken()`/`BASE`/
+`NEO_BASE` are byte-identical in both (lines 1-12), and `fetchNeoWebhookRoles`
+(rolesApi.js)/`fetchNeoJson` (userRoleAssignmentsApi.js) are the same GET+unwrap-
+`{result:"<json>"}` core logic with only the final domain-specific fallback branch
+actually differing (`Array.isArray(data.roles)` vs. `'assignments' in data ||
+'templateRoleIds' in data || 'success' in data`). **Fix:** extract the shared
+boilerplate into one new module, each file's own fallback check passed in as a
+parameter so behavior stays byte-identical — dispatched separately from #1/#4, below.
+
 ---
 
 > **For agentic workers:** This plan follows Forge's own pipeline (`CLAUDE.md`), NOT
