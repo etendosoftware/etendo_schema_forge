@@ -69,6 +69,48 @@ actually differing (`Array.isArray(data.roles)` vs. `'assignments' in data ||
 boilerplate into one new module, each file's own fallback check passed in as a
 parameter so behavior stays byte-identical — dispatched separately from #1/#4, below.
 
+**All 5 items now closed except #3 (Offline Regen Check, awaiting the human's
+`export.database` run — see below).** Two dispatches died mid-task from API connection
+errors (infra, not task failures); coordinator inspected the uncommitted working tree
+directly, confirmed both were functionally complete and correct, then dispatched a
+follow-up to finish the last piece and independently re-verify+commit everything.
+
+- **#1/#4 (i18n + nested-button a11y) — commit `9974bcb5a`.** `UserHeaderTable.jsx`'s
+  5 hardcoded labels removed; `AssignTemplateRolesControl.jsx`'s outer `<button>` →
+  `<div role="button" tabIndex={0}>`, inner chip-remove `<span role="button">` → a real
+  `<button>`. **A real bug was found and fixed during live verification, not just
+  assumed correct:** the outer container's `onKeyDown` had no `e.target !==
+  e.currentTarget` guard, so a keydown bubbling up from the nested chip-remove button
+  ALSO toggled the outer picker and called `preventDefault()`, silently breaking
+  keyboard-driven chip removal. Fixed with the standard bubbling guard (independently
+  re-confirmed by the coordinator by reading the diff directly). Verified via a
+  throwaway Playwright script against live `make dev` (not just source-reading):
+  Enter/Space now correctly expand/collapse the picker AND remove a focused chip.
+  Vitest 652/652 files, 12149 tests, 0 failures, both before and after the bugfix. The
+  repo's own local `sf-quality-gate` binary (`SF_ROOT=<repo> npx sf-quality-gate
+  --window user --format json` — note `cli/sonar-check.sh` referenced elsewhere in this
+  repo's docs no longer exists post-split) confirms `i18n: pass` for the `user` window.
+  **One pre-existing, unrelated E2E failure noted, not touched:** `user-role-assignment
+  .mocked.spec.js`'s "grid renders role chips per user" fails identically on a clean
+  `git stash` of this session's changes — confirmed pre-existing, not a regression from
+  this work, left for separate investigation.
+- **#5 (Sonar duplication) — commit `4500f5ba9`.** New
+  `tools/app-shell/src/lib/neoWebhookClient.js` (`NEO_BASE` +
+  `fetchNeoWebhookJson(url, webhookName, resolveFallback)`); both `rolesApi.js` and
+  `userRoleAssignmentsApi.js` migrated to it, each passing its own domain-specific
+  fallback predicate so behavior is byte-identical to before. Re-ran the actual
+  project-wide Sonar analysis (`./run-sonar.sh --base-ref origin/epic/ETP-3504
+  --fail-on-gate`, not a stale/removed script): **Quality Gate OK, 0 open issues, 0
+  new-code issues, Duplicated Lines Density 1.4%** — duplication confirmed gone, not
+  just assumed. Vitest 652/652 files, 12149 tests, 0 failures.
+- **#2 (Organization flakiness)** — resolved above, needs a CI re-run only.
+- **#3 (Offline Regen Check)** — the only remaining item. Human wants to run a full
+  `update.database` + `smartbuild` + `make install` compilation cycle first to confirm
+  everything is clean, THEN have the coordinator run `make regen` scoped correctly, and
+  the human runs `export.database` themselves to produce the corrected
+  `sourcedata/*.xml`. **Coordinator is holding here — not running `make regen` until
+  the human reprompts after their compilation cycle.**
+
 ---
 
 > **For agentic workers:** This plan follows Forge's own pipeline (`CLAUDE.md`), NOT
