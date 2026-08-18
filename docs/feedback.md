@@ -1089,3 +1089,34 @@ client, compare the two clients' master data before reading any handler code —
 immediately. The corollary for tests: only integration tests that run against a **freshly onboarded**
 tenant can catch this class of bug, which is precisely why the `integration` Playwright project
 depends on `onboarding-setup`.
+
+---
+
+## E2E flake: `addProductLine` waits on an over-broad response matcher (2026-08-18, ETP-4920)
+
+**Status:** open, deferred. Not blocking — the test recovers on retry.
+
+`purchase-order-full-flow.integration.spec.js` › "PO → receipt → invoice → payment" fails its first
+attempt and passes on retry #1, in `addProductLine` (`e2e/tests/helpers/purchase-helpers.js:670`):
+
+```
+TimeoutError: page.waitForResponse: Timeout 15000ms exceeded while waiting for event "response"
+  const addLinesResponse = page.waitForResponse(
+    (r) => r.url().includes('/sws/neo/') && r.status() < 400, { timeout: 15_000 });
+```
+
+**Why the matcher is the suspect, not the timeout:** it accepts *any* `/sws/neo/` response under
+status 400. Every window issues background traffic on that prefix (selector option fetches, and the
+debounced `evaluate-display` call from `useDisplayLogic.js`), so the wait can be satisfied by an
+unrelated response that lands first — or miss the real one if the add-line request resolves outside
+the window. This is the same class of defect as the one fixed in the cost-center/service-project
+mocked spec in this same task: a substring URL match standing in for "the request I actually care
+about". Raising the timeout would paper over it.
+
+**Suggested fix:** match the add-line request specifically (method + the line entity's own URL,
+scoped the way the create-POST listener now is in
+`cost-center-service-project-master-crud.mocked.spec.js`), instead of any `/sws/neo/` response.
+
+**Context:** surfaced while closing the `ensureVendorSetup` regression. Pre-existing — it is not
+caused by the vendor-fixture or derived-field changes, both of which were verified green in the same
+run (2 passed, 1 flaky, 0 failed).
