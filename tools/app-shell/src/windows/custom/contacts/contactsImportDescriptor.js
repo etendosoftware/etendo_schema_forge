@@ -2,7 +2,7 @@ import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/imp
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 
-const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'oBTIKTaxIDKey', 'creditLimit', 'taxID'];
+const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'creditLimit', 'taxID'];
 const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
 const HAS_ADDRESS = (row) => Boolean(row.address || row.city || row.postal || row.country);
 const businessPartnerCategoriesCache = new Map();

@@ -16,6 +16,14 @@ const onboardingCredentials = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0'
   && Boolean(process.env.E2E_PASSWORD || onboardingCredentials);
 
+async function waitForDetailReady(page) {
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  const spinner = page.getByText(/cargando|loading/i);
+  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(spinner).toBeHidden({ timeout: 10_000 });
+  }
+}
+
 test.describe('ETP-4905 — Contacts import category resolution (Tomcat integration)', () => {
   test.skip(!RUN_INTEGRATION, 'Requires E2E_USE_MOCK=0 and E2E_PASSWORD for a real Etendo backend');
   test.setTimeout(120_000);
@@ -26,11 +34,11 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     const unique = Date.now();
     const newCategoryName = `E2E Contact Category ${unique}`;
     const rows = [
-      { name: `E2E Contact Code ${unique}`, first: 'Lucia', last: 'Code', categoryMode: 'code' },
-      { name: `E2E Contact Name ${unique}`, first: 'Andres', last: 'Name', categoryMode: 'name' },
-      { name: `E2E Contact New One ${unique}`, first: 'Paula', last: 'New', categoryMode: 'new' },
-      { name: `E2E Contact New Two ${unique}`, first: 'Martin', last: 'Shared', categoryMode: 'new' },
-      { name: `E2E Contact Legacy ${unique}`, first: 'Julia', last: 'Legacy', categoryMode: 'fallback' },
+      { name: `E2E Contact Code ${unique}`, first: `Lucia${unique}`, last: 'Code', categoryMode: 'code' },
+      { name: `E2E Contact Name ${unique}`, first: `Andres${unique}`, last: 'Name', categoryMode: 'name' },
+      { name: `E2E Contact New One ${unique}`, first: `Paula${unique}`, last: 'New', categoryMode: 'new' },
+      { name: `E2E Contact New Two ${unique}`, first: `Martin${unique}`, last: 'Shared', categoryMode: 'new' },
+      { name: `E2E Contact Legacy ${unique}`, first: `Julia${unique}`, last: 'Legacy', categoryMode: 'fallback' },
     ];
 
     await login(page, onboardingCredentials ? {
@@ -74,16 +82,16 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       name: 'contacts-etp-4905-tomcat.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from([
-        'nombre comercial,nombre,apellido,codigocategoria,nombrecategoria,categoria,email de contacto',
-        `${rows[0].name},${rows[0].first},${rows[0].last},${existingCategoryCode},,,e2e-contact-code-${unique}@example.com`,
-        `${rows[1].name},${rows[1].first},${rows[1].last},, ${String(existingCategoryName).toLowerCase()} ,,e2e-contact-name-${unique}@example.com`,
-        `${rows[2].name},${rows[2].first},${rows[2].last},,${newCategoryName},,e2e-contact-new-one-${unique}@example.com`,
-        `${rows[3].name},${rows[3].first},${rows[3].last},,${newCategoryName},,e2e-contact-new-two-${unique}@example.com`,
-        `${rows[4].name},${rows[4].first},${rows[4].last},,,${existingCategoryName},e2e-contact-legacy-${unique}@example.com`,
+        'nombre comercial,nombre,apellido,email,telefono,web,cif/nif,direccion,ciudad,codigo postal,pais,region,codigocategoria,nombrecategoria,categoria,email de contacto',
+        [rows[0].name, rows[0].first, rows[0].last, `e2e-company-${unique}@example.com`, '+34 910 000 001', `https://e2e-${unique}.example`, 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', existingCategoryCode, '', '', `e2e-contact-code-${unique}@example.com`].join(','),
+        [rows[1].name, rows[1].first, rows[1].last, `e2e-company-name-${unique}@example.com`, '+34 910 000 002', `https://name-${unique}.example`, 'B12345679', '', '', '', '', '', '', String(existingCategoryName).toLowerCase(), '', `e2e-contact-name-${unique}@example.com`].join(','),
+        [rows[2].name, rows[2].first, rows[2].last, `e2e-company-new-one-${unique}@example.com`, '+34 910 000 003', `https://new-one-${unique}.example`, 'B12345680', '', '', '', '', '', '', newCategoryName, '', `e2e-contact-new-one-${unique}@example.com`].join(','),
+        [rows[3].name, rows[3].first, rows[3].last, `e2e-company-new-two-${unique}@example.com`, '+34 910 000 004', `https://new-two-${unique}.example`, 'B12345681', '', '', '', '', '', '', newCategoryName, '', `e2e-contact-new-two-${unique}@example.com`].join(','),
+        [rows[4].name, rows[4].first, rows[4].last, `e2e-company-legacy-${unique}@example.com`, '+34 910 000 005', `https://legacy-${unique}.example`, 'B12345682', '', '', '', '', '', '', '', existingCategoryName, `e2e-contact-legacy-${unique}@example.com`].join(','),
       ].join('\n')),
     });
 
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('7/7');
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('16/16');
     await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Contact Category Code');
     await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Contact Category Name');
     await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
@@ -111,9 +119,24 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       expect(bpOperation.body.businessPartnerCategory).toBeTruthy();
       expect(batch.operations.some((operation) => operation.entity === 'contact' && operation.parentRef === bpOperation.id)).toBe(true);
     }
+    const firstBatch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.name === rows[0].name));
+    const firstLocation = firstBatch.operations.find((operation) => operation.entity === 'locationAddress');
+    expect(firstLocation.body.addressLine1).toBe('Calle Mayor 1');
+    expect(firstLocation.body.cityName).toBe('Madrid');
+    expect(firstLocation.body.postalCode).toBe('28013');
 
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
     for (const row of rows) await expect(page.getByText(row.name, { exact: true })).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-created.png'), fullPage: true });
+
+    await page.getByText(rows[0].name, { exact: true }).click();
+    await waitForDetailReady(page);
+    await expect(page.getByTestId('field-etgoEmail')).toHaveValue(`e2e-company-${unique}@example.com`);
+    await expect(page.getByTestId('field-etgoPhone')).toHaveValue('+34 910 000 001');
+    await expect(page.getByTestId('field-etgoWeb')).toHaveValue(`https://e2e-${unique}.example`);
+    await expect(page.getByTestId('field-taxID')).toHaveValue('B12345678');
+    await page.getByTestId('tab-locationAddress').click();
+    await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });
   });
 });

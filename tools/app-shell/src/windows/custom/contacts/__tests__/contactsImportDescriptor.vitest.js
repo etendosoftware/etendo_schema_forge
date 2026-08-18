@@ -107,6 +107,42 @@ describe('contacts import descriptor', () => {
     assert.equal(ops[0].body.oBTIKTaxIDKey, '3');
   });
 
+  it('carries typical company contact data into the businessPartner operation', async () => {
+    const row = {
+      name: 'Acme Iberia', etgoFirstname: 'Ana', etgoLastname: 'García',
+      etgoEmail: 'ana@acme.example', etgoPhone: '+34 910 000 001',
+      etgoWeb: 'https://acme.example', oBTIKTaxIDKey: '1', taxID: 'B12345678',
+    };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.deepEqual(ops[0].body, {
+      oBTIKTaxIDKey: '1',
+      name: 'Acme Iberia',
+      etgoFirstname: 'Ana',
+      etgoLastname: 'García',
+      etgoEmail: 'ana@acme.example',
+      etgoPhone: '+34 910 000 001',
+      etgoWeb: 'https://acme.example',
+      taxID: 'B12345678',
+      searchKey: 'Acme Iberia',
+    });
+  });
+
+  it('builds a location operation when an imported contact includes address data', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-ES', name: 'Spain' });
+    const resolveRegion = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'R-MAD', name: 'Madrid' });
+    const ops = await buildOperations({
+      name: 'Acme Iberia', etgoFirstname: 'Ana', etgoLastname: 'García',
+      address: 'Calle Mayor 1', city: 'Madrid', postal: '28013', country: 'Spain', region: 'Madrid',
+    }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry, resolveRegionFn: resolveRegion,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.deepEqual(location.body, {
+      name: 'Madrid, Calle Mayor 1', addressLine1: 'Calle Mayor 1', cityName: 'Madrid',
+      postalCode: '28013', country: 'C-ES', region: 'R-MAD',
+    });
+  });
+
   it('surfaces an unresolved country as a thrown, catchable error the caller can turn into a row-level failure', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'needs-review', candidates: [] });
     await assert.rejects(

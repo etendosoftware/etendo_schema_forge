@@ -72,6 +72,9 @@ flowchart TD
 | Contacts ambiguous category | Only the ambiguous row remains in `Errores`; no category is guessed | ✅ | [Contacts error cases](#scenario-8--contacts-category-errors) |
 | Contacts category creation failure | Failed creation remains a row-level error while valid rows continue | ✅ | [Contacts error cases](#scenario-8--contacts-category-errors) |
 | Contacts legacy file without category | Contact rows remain importable without category input | ✅ | [Contacts happy path](#scenario-7--contacts-category-import) |
+| Contacts company fields | Email, phone, website, CIF/NIF, and address are persisted in the composite import | ✅ | [Contacts happy path](#scenario-7--contacts-category-import) |
+| Contacts minimal file | A company can be imported with only legal name and optional email; first/last name and tax type use safe defaults | ✅ | [Contacts minimal import](#scenario-9--contacts-minimal-import) |
+| Contacts duplicate email in one file | The second row is marked skipped and is not sent to `/batch` | ✅ | [Contacts duplicate handling](#scenario-10--contacts-duplicate-handling) |
 
 ## Visual evidence
 
@@ -204,6 +207,11 @@ category name, and the legacy category column. The file contains existing
 category resolution by code and normalized name, a missing category shared by
 two rows, and a legacy row without category input.
 
+The same flow also carries company email, phone, website, CIF/NIF, contact
+email, and an optional address. The first imported row is opened in the
+Contacts detail view and its header fields plus the saved location are checked,
+not only the list response.
+
 <p align="center">
   <img src="./ETP-4905-contacts-import-category-review.png" alt="Contacts import review with category fields mapped" width="50%">
 </p>
@@ -241,6 +249,40 @@ legacy fallback in the real batch payloads.
 
 <p align="center">
   <img src="./ETP-4905-contacts-import-tomcat-created.png" alt="Contacts created against Tomcat with category links" width="50%">
+</p>
+
+</details>
+
+### Scenario 9 — Contacts minimal import
+
+<details>
+<summary>Expand partial-file evidence</summary>
+
+An import file may contain only the legal/company name and an optional email.
+The import contract keeps first name, last name, and tax-ID type optional for
+this use case. The descriptor supplies the technical tax-type default and the
+server can apply the normal category default; no fake person data is invented.
+
+<p align="center">
+  <img src="./ETP-4905-contacts-import-minimal-review.png" alt="Minimal Contacts import with legal name and optional email" width="50%">
+</p>
+
+</details>
+
+### Scenario 10 — Contacts duplicate handling
+
+<details>
+<summary>Expand duplicate-row evidence</summary>
+
+The dedupe policy is intentionally conservative: when the same company email
+appears twice in one file, the first row remains importable and the later row
+is marked `skipped`. It is not sent to `/batch`, so the importer does not
+silently merge or overwrite an existing contact. Backend unique-constraint
+rejections follow the same skipped-row treatment; automatic merge/update of a
+contact already persisted in the tenant is outside this import contract.
+
+<p align="center">
+  <img src="./ETP-4905-contacts-import-duplicate-skipped.png" alt="Duplicate Contacts row marked as skipped before sending" width="50%">
 </p>
 
 </details>
@@ -283,10 +325,11 @@ LOCAL_CORE=1 E2E_USE_MOCK=1 npx playwright test \
   --project=mocked --workers=1 --retries=0 --reporter=list
 ```
 
-Result: **2 passed**. The tests assert Contacts mapping, exact-code and
+Result: **4 passed**. The tests assert Contacts mapping, exact-code and
 normalized-name reuse, deterministic creation reused across rows, legacy
-compatibility, ambiguous-name rejection, category-creation failure, and valid
-row continuation.
+compatibility, ambiguous-name rejection, category-creation failure, valid-row
+continuation, company fields plus address/detail verification, minimal-file
+imports, and in-file duplicate skipping.
 
 ### Tomcat integration E2E
 
@@ -317,10 +360,11 @@ npx playwright test tests/flows/contacts-import-category-resolution.integration.
   --project=integration --workers=1 --retries=0 --reporter=list
 ```
 
-This test is ready for the local Tomcat deployment. It does not intercept
-`/sws/neo/*`; it creates a unique Contact Category through the real endpoint,
-commits five composite Contact imports, and verifies the real batch payloads
-and saved rows. It requires the same E2E credentials and disposable tenant as
+This test does not intercept `/sws/neo/*`; it creates a unique Contact
+Category through the real endpoint, commits five composite Contact imports,
+checks company email/phone/website/CIF-NIF and address payloads, opens the
+first saved contact in the real detail page, and verifies the persisted header
+and location. It requires the same E2E credentials and disposable tenant as
 the Product integration test.
 
 Result: **1 passed**. It exercised five real Contact imports, existing
