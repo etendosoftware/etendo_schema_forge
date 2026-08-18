@@ -107,6 +107,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import OrderPreview from '../OrderPreview.jsx';
+import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useOrderPdf } from '../useOrderPdf.js';
 import { usePurchaseOrderPdf } from '../usePurchaseOrderPdf.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
@@ -330,6 +331,92 @@ describe('OrderPreview', () => {
     it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {
       renderWithPdf({ ...defaultOrder, documentStatus: 'DR' }, 'purchase-order');
       expect(screen.getByTestId('download-btn')).toBeDisabled();
+    });
+  });
+
+  // ── ETP-4315: attachmentConfig wiring (real Attachment, C_Order table) ────
+  describe('attachmentConfig wiring (ETP-4315 — real Attachment, tableName C_Order)', () => {
+    function lastAttachmentConfig() {
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    it('includes tableName C_Order, useMainAttachment true and the order documentId', () => {
+      renderOrderPreview();
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('C_Order');
+      expect(cfg.useMainAttachment).toBe(true);
+      expect(cfg.documentId).toBe(defaultOrder.id);
+    });
+
+    it('sets storeCondition: false when order.documentStatus is DR (draft)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+
+    it('sets storeCondition: true and sourceBlob=pdfBlob when order.documentStatus is CO (non-draft)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob, loading: false, error: null });
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+      expect(cfg.autoFetch).toBe(true);
+    });
+
+    it('applies the same tableName and gating for purchase-order (shared C_Order table)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      usePurchaseOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob, loading: false, error: null });
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('C_Order');
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+    });
+
+    it('sets storeCondition: false for purchase-order when documentStatus is DR (draft)', () => {
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+  });
+
+  // ── ETP-4315 follow-up (2026-08-18): pdfCacheConfig wiring into useOrderPdf/
+  // usePurchaseOrderPdf — same tableName/storeCondition shape as attachmentConfig,
+  // lets usePdfGenerator skip the jsreport round-trip on a cache hit.
+  describe('pdfCacheConfig wiring into useOrderPdf/usePurchaseOrderPdf (ETP-4315 follow-up)', () => {
+    function lastOrderPdfCacheConfig() {
+      const calls = vi.mocked(useOrderPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][4];
+    }
+
+    function lastPurchaseOrderPdfCacheConfig() {
+      const calls = vi.mocked(usePurchaseOrderPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][4];
+    }
+
+    it('sales-order: passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {
+      renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastOrderPdfCacheConfig();
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: false });
+    });
+
+    it('sales-order: passes { tableName: "C_Order", storeCondition: true } when documentStatus is CO (non-draft)', () => {
+      renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastOrderPdfCacheConfig();
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: true });
+    });
+
+    it('purchase-order: passes the same { tableName: "C_Order", storeCondition } shape (shared C_Order table)', () => {
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false });
+
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
     });
   });
 });

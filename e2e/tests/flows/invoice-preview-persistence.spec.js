@@ -19,9 +19,13 @@ import { login, navigateTo } from '../helpers/auth.js';
  *   · Delete          → DELETE request sent, drop zone reappears
  *   · File upload     → POST request sent with correct tableName / recordId
  *
- * Sales invoice scenarios (untouched by ETP-4315 — still `usePreviewAttachment`
- * + ETGO_PREVIEW_FILE):
- *   · Completed (CO)  → GET /sws/neo/preview-file called with specName=sales-invoice
+ * Sales invoice scenarios — ETP-4315: sales-invoice's `GenericPreviewModal`
+ * attachment panel is fully migrated to `useMainAttachment` /
+ * `/sws/neo/attachments/**` too (same shared `InvoicePreview.jsx` /
+ * `useInvoicePreview.js`, `tableName: 'C_Invoice'`, as purchase-invoice
+ * above). The retired `/sws/neo/preview-file` endpoint no longer exists in
+ * the backend at all:
+ *   · Completed (CO)  → GET .../attachments/C_Invoice/{recordId}/main is called
  *   · Draft (DR)      → GET NOT called (storeCondition=false)
  *
  * All tests run in mock mode (no BASE_URL). Routes registered after login() take
@@ -272,34 +276,39 @@ test.describe('Purchase invoice — cached file', () => {
 // ── Sales invoice — storeCondition gating ────────────────────────────────────
 
 test.describe('Sales invoice — storeCondition gating', () => {
-  test('completed invoice: GET /sws/neo/preview-file is called with specName=sales-invoice', async ({ page }) => {
+  test('completed invoice: GET .../attachments/{tableName}/{recordId}/main is called for the record', async ({ page }) => {
     await login(page);
+    // No attachment marked as "main" yet — GET .../main resolves `{}`,
+    // which fetchMainAttachment treats as "none" (no `.id`).
+    await mockMainAttachment(page, 'C_Invoice', {});
     await seedSalesRows(page, [SALES_ROW_COMPLETED]);
     await navigateTo(page, 'sales-invoice');
 
     const getRequest = page.waitForRequest(
-      (req) => req.url().includes('/sws/neo/preview-file') && req.method() === 'GET',
+      (req) => req.url().includes('/sws/neo/attachments/') && req.url().endsWith('/main') && req.method() === 'GET',
     );
 
     await clickRow(page, SALES_ROW_COMPLETED.id);
 
     const req = await getRequest;
-    const url = new URL(req.url(), 'http://localhost');
-    expect(url.searchParams.get('specName')).toBe('sales-invoice');
-    expect(url.searchParams.get('recordId')).toBe(SALES_ROW_COMPLETED.id);
+    expect(req.url()).toContain(`/sws/neo/attachments/C_Invoice/${SALES_ROW_COMPLETED.id}/main`);
   });
 
-  test('draft invoice: GET /sws/neo/preview-file is NOT called (storeCondition=false)', async ({ page }) => {
+  test('draft invoice: GET .../attachments/{tableName}/{recordId}/main is NOT called (storeCondition=false)', async ({ page }) => {
     await login(page);
-    await seedSalesRows(page, [SALES_ROW_DRAFT]);
-    await navigateTo(page, 'sales-invoice');
 
-    // Track any preview-file GET calls
-    let previewFileGetFired = false;
-    await page.route('**/sws/neo/preview-file{/**,}**', (route) => {
-      if (route.request().method() === 'GET') previewFileGetFired = true;
+    // Track any GET .../attachments/**/main calls without seeding a real
+    // mainAttachment response — the assertion is that this route is never hit.
+    let mainGetFired = false;
+    await page.route('**/sws/neo/attachments/**', (route) => {
+      const req = route.request();
+      if (req.method() === 'GET' && /\/main(?:[/?]|$)/.test(req.url())) {
+        mainGetFired = true;
+      }
       route.fallback();
     });
+    await seedSalesRows(page, [SALES_ROW_DRAFT]);
+    await navigateTo(page, 'sales-invoice');
 
     await clickRow(page, SALES_ROW_DRAFT.id);
 
@@ -308,6 +317,6 @@ test.describe('Sales invoice — storeCondition gating', () => {
     // Small additional wait to let any deferred effects run
     await page.waitForTimeout(500);
 
-    expect(previewFileGetFired, 'GET preview-file must not be called for draft invoices').toBe(false);
+    expect(mainGetFired, 'GET .../attachments/{tableName}/{recordId}/main must not be called for draft invoices').toBe(false);
   });
 });

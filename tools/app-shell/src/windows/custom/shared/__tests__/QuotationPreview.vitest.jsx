@@ -101,6 +101,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import QuotationPreview from '../QuotationPreview.jsx';
+import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useQuotationPdf } from '../useQuotationPdf.js';
 import EmailsCard from '../preview-cards/EmailsCard.jsx';
 import {
@@ -241,6 +242,66 @@ describe('QuotationPreview', () => {
       renderHidden: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'DR' }),
       renderShown: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'UE' }),
       findElement: () => screen.getByTestId('download-btn'),
+    });
+  });
+
+  // ── ETP-4315: attachmentConfig wiring (real Attachment, C_Order table) ────
+  describe('attachmentConfig wiring (ETP-4315 — real Attachment, tableName C_Order)', () => {
+    function lastAttachmentConfig() {
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    it('includes tableName C_Order, useMainAttachment true and the quotation documentId', () => {
+      renderQuotationPreview();
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('C_Order');
+      expect(cfg.useMainAttachment).toBe(true);
+      expect(cfg.documentId).toBe(defaultQuotation.id);
+    });
+
+    it('sets storeCondition: false when quotation.documentStatus is DR (draft)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+
+    it('sets storeCondition: true and sourceBlob=pdfBlob when quotation.documentStatus is CO (non-draft)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob, loading: false, error: null });
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+      expect(cfg.autoFetch).toBe(true);
+    });
+  });
+
+  // ── ETP-4315 follow-up (2026-08-18): pdfCacheConfig wiring into useQuotationPdf
+  // — same tableName as attachmentConfig, storeCondition gated on documentStatus !== 'DR'
+  // (not the isDraft === status === 'DR' shorthand — quotations use the "under
+  // evaluation and beyond" rule, matching the Send/Download gates).
+  describe('pdfCacheConfig wiring into useQuotationPdf (ETP-4315 follow-up)', () => {
+    function lastQuotationPdfCacheConfig() {
+      const calls = vi.mocked(useQuotationPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][4];
+    }
+
+    it('passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false });
+    });
+
+    it('passes { tableName: "C_Order", storeCondition: true } when documentStatus is UE (under evaluation)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
+    });
+
+    it('passes { tableName: "C_Order", storeCondition: true } when documentStatus is CO (completed)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'CO' } });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
     });
   });
 });

@@ -126,7 +126,8 @@ describe('ReturnMaterialReceiptPreview', () => {
       renderPreview();
       expect(mockCapturedModalProps.current.attachmentConfig).toEqual({
         documentId: defaultReceipt.id,
-        specName: 'return-material-receipt',
+        tableName: 'M_InOut',
+        useMainAttachment: true,
         storeCondition: true,
         autoFetch: false,
         token: 'tok',

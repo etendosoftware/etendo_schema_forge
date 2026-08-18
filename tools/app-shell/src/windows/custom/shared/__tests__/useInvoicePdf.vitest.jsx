@@ -49,6 +49,7 @@ describe('useInvoicePdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 
@@ -83,6 +84,7 @@ describe('useInvoicePdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 });
