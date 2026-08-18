@@ -8,7 +8,56 @@
 
 ## Status (source of truth — update this table as work lands, before anything else)
 
-**❌ REVIEW REJECT — B7, a new blocker on round 7's ADD-path fix (Alex, 2026-08-17)** —
+**❌ QA REJECT — BUG-2, a new HIGH finding on the onUpdate/UPDATED_GRANT trigger, empirically
+reproduced (Sentinel, 2026-08-18)** — dispatched specifically to judge whether the backend test
+suite (`UserRoleCompositionServiceOverlapIntegrationTest`,
+`UserRoleCompositionServiceRealAccessControlIntegrationTest`) is not just passing but actually
+ENOUGH for a mechanism this security/data-integrity-sensitive. It is not: `onUpdate`/`UPDATED_GRANT`
+(the B7 fix's own trigger) was only ever tested with exactly ONE template in play — never combined
+with a SECOND, still-actively-inherited overlapping template. Reasoning from that gap to a live
+JUnit probe (added, run, then reverted — not committed) confirmed a real bug, first attempt, no
+flakiness: `repointIfAlreadySourcedFromTemplate` blindly copies the just-edited template's new
+value onto a dependent's row without checking whether another active template still justifies a
+higher level — a most-permissive-wins violation, reachable via an ordinary Classic admin action
+(downgrading one template's own access while a composed role also inherits from a second,
+still-full-granting template). Also flags 2 non-blocking MEDIUM coverage gaps (2+ windows affected
+simultaneously by one inheritance event; 2 guard-triggering mutations inside one flush — the same
+failure class as B7's own "second bug"). All suites re-confirmed green on a fresh, synchronous,
+blocking `--rerun-tasks` run (backend 7762/0/0/9, frontend Vitest 145/145, Playwright 7/7,
+`sf-validate-pipeline --scope=user` OK) and DB reference data re-verified with zero drift — this is
+a coverage/correctness finding layered on top of a clean "does it pass" check, not a suite
+regression. See "QA Findings — Final Coverage Pass (Sentinel, 2026-08-18)" below for the full
+repro steps and the exact fix shape recommended for DEV. Recommend routing back to DEV → REVIEW →
+QA, same reject-cycle pattern as B6/B7. Prior REVIEW/QA verdict history (all accurate as of their
+own time, now superseded by this new finding) follows.
+
+**✅ REVIEW APPROVE — independent final fresh pass confirms, 0 new blockers (Alex, 2026-08-18)** —
+a second reviewer session with no memory of prior rounds re-read `WindowAccessOverlapCorruptionGuard.java`
+and `UserRoleCompositionService.java` in full end to end (not diff-scoped), re-verified the diff
+base (`0ceb44bd^`, not `bc2b6c8c^1` — the latter pulls in unrelated ETP-4852/4878 commits), read
+the two new webhook classes and the full frontend diff fresh, and re-ran all three verification
+commands synchronously from scratch — backend **7762/7753/0/9** (exact match; caught and corrected
+its own false-green near-miss along the way, see below), frontend Vitest **145/145**,
+`sf-validate-pipeline --scope=user` **OK**. Found 2 new non-blocking items: **[W3]** `DetailView.jsx`'s
+new `onAfterExistingSave` prop isn't wired into the `renderDraftModeSaveActions` Confirm-button
+branch (silent no-op if a future draftMode window adopts it — the `user` window itself is
+unaffected, `draftMode: null`); **[S1]** the already-known data-testid codemod issue (W2) is
+broader than previously documented — 3 more inert instances found (`TierPill`, `RoleChip`,
+`RoleFilterControl`/`RoleChipsCell`), still purely cosmetic, no test currently depends on them.
+See "REVIEW Findings — Final Fresh Pass" below. Ticket remains APPROVE end to end. Prior verdict
+history (all still accurate) follows.
+
+**✅ REVIEW APPROVE — B7 fix verified, ticket approved end to end (Alex, 2026-08-17)** —
+commit `c06edc8f` closes the "[B7]" blocker below: `guardDependentsOf` now takes a
+`PropagationTrigger` param so the `onUpdate` trigger (a template's own row being edited, not
+granted) uses a non-deleting, in-place correction instead of round 7's unconditional delete.
+Independently re-verified (diff read in full, not just the developer's account trusted), new
+JUnit test read and run live (PASSED), full suite re-run myself (7762/7753/0/9, exact match), Sonar
+re-run myself (Quality Gate OK, 0 issues, coverage unchanged 76.70%). See "REVIEW Findings — B7
+Re-Check" below. Prior REJECT banner (kept for history) follows.
+
+**❌ REVIEW REJECT — B7, a new blocker on round 7's ADD-path fix (Alex, 2026-08-17, superseded by
+the APPROVE above)** —
 `clearConflictingAccessUnconditionally` (commit `dfb7b242`) can permanently delete a dependent's
 `AD_Window_Access` row with no recreation when `guardDependentsOf` fires from the `onUpdate` trigger
 (a template's own existing row being edited directly, e.g. toggling read-only/full in Classic): core's
@@ -149,8 +198,8 @@ ticket's own scope, (3) ticket looks ready for Clerk to prepare the PR(s) once (
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
 | B6 | Widen ETP-4852's overlap-corruption fix to protect ALL roles inheriting from a touched template, not just the one actively being composed | ✅ DONE — all 6 rounds live-confirmed by the human (2026-08-16/17), including a full manual-checklist re-run after round 6's redeploy. | `com.etendoerp.go` commit `d8dc97976a49a7da4d9e857420110556b9d55c55` fixed the ADD-side ownership corruption (adding a 2nd overlapping template) — JUnit 5/5 + 3/3 green, AND live-confirmed by the human in Classic. Commit `58f114ea` closed the REMOVE-side ownership gap — JUnit 6/6 + 3/3 green, human's real role verified untouched via `psql`, deployed and live-confirmed by the human. Commit `e8b6ffc6` closed a 4th gap (silently WRONG most-permissive-wins result outside `assignTemplateRoles`) — JUnit 7/7 + 3/3 green, deployed, live-confirmed by the human. **Commit `978e23e2` (this round) closes a 5th gap the human found immediately after, on the REMOVE direction of the SAME scenario: `widenInheritedAccessLevelIfNeeded` (round 4) corrected the visible access level but never corrected `InheritedFrom` on the same row, so removing the template that actually justified the widened value never re-triggered re-derivation (confirmed live via `psql`: `isreadwrite='Y'` but `inherited_from` still pointed at the OTHER, non-justifying template) — the row stayed stuck at full forever.** Fix: `widenInheritedAccessLevelIfNeeded` now also repoints `InheritedFrom` to whichever OTHER active template actually justifies the widened value, via the same `event.setCurrentState` mechanism already used for the level and for ownership; `anyOtherActiveTemplateGrantsFullAccess` (boolean) was changed into `findActiveTemplateGrantingFullAccess` (returns the justifying `Role`), and `findActiveTemplatesFor`'s underlying query now orders by `AD_Role_Inheritance.SeqNo` DESCENDING so the tie-break (2+ equally-responsible templates) deterministically picks the highest-sequence one — mirroring core's own `RoleInheritanceManager#propagateDeletedAccess` heuristic. **A second, same-flush race was found and fixed while verifying this empirically** (JUnit red before the fix): the freshly re-derived row's widen-check, nested inside the SAME flush that is still mid-way through deleting the just-removed template's own `RoleInheritance` row, could still see that row as `active=true` (Hibernate runs Deletions after Insertions in its default action-queue order) and immediately re-widen the row right back, undoing the removal within the same flush. Closed via a new `TEMPLATES_BEING_REMOVED` thread-local marker (populated by `guardRemovedInheritance`, consulted by `findActiveTemplatesFor`, cleared once per transaction via a new `onTransactionComplete(TransactionCompletedEvent)` observer — safe because a marker surviving until transaction end can only make the guard MORE conservative, never less correct). New JUnit test `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` (bystander role: full template added first, read-only second — the exact order that reproduces the bookkeeping bug — asserts `InheritedFrom` is repointed to the justifying template, THEN removes that template's inheritance and asserts the window downgrades to the remaining template's read-only level, not stuck at full). Also updated the pre-existing round-3 test's now-stale "last write wins" sanity assertion, which had been silently encoding the round-5 bug's own symptom as expected behavior (InheritedFrom==Sales) — now correctly expects InheritedFrom==Finance, consistent with round 5's immediate repoint. Full suite: **`UserRoleCompositionServiceOverlapIntegrationTest` 8/8 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 green**, fresh `--rerun-tasks` run from `etendo` root. Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reverified untouched via read-only `psql`. Also confirmed, via read-only `psql` against the human's own live `ClassicDebug` role (`77E57880608E49D9966BC7C87F37A786`), that the CURRENT (pre-fix-deploy) live state exhibits exactly the reported bug (`isreadwrite='Y'`, `inherited_from` = `ClassicTemplateTest1Read`, not `ClassicTemplateTest2Broad`, which had already been removed) — confirms the repro is real and matches this fix's target. `./gradlew smartbuild` + Tomcat restart completed (`Server startup` confirmed in logs), deployed live — **human's own Classic re-confirmation is the last acceptance step, not yet performed: re-add `ClassicTemplateTest2Broad`'s inheritance to `ClassicDebug` (full, confirms round 4 still works) → remove it again → Business Partner must now correctly downgrade to `ClassicTemplateTest1Read`'s read-only level, not stay stuck at full.** See "B6 Findings — InheritedFrom bookkeeping fix (developer, 2026-08-16)" below. **Commit `e81844c2` (6th round) closes a genuinely NEW, structural gap the human hit on the REAL `SFAssignUserRoles` webhook (not Classic): a 500 error (`ConstraintViolationException`, duplicate key on `ad_window_access_un_key`) removing Finance from a role composed from all 4 real templates (Finance/Sales/Purchasing/Inventory) — the first scenario with 3+ overlapping templates, which none of the prior 5 rounds' tests (always exactly 2 templates) could structurally reproduce.** Root cause: `guardRemovedInheritance` deleted the dependent's row once per remaining template that didn't already own it, forcing core's `RoleInheritanceManager#calculateAccesses` onto the CREATE path independently for EACH remaining template covering that window — with 2+ remaining templates overlapping the same window (only possible at 3+ templates total), core's own per-template passes (no flush between them, `FlushMode.COMMIT`) each found no row and issued a competing `copyRoleAccess` INSERT for the identical `(role, window)` key, crashing at flush. Fix: compute ONE winner per window across ALL remaining templates up front — `InheritedFrom` always set to the highest-`SeqNo` grantor (matching core's own `isPrecedent` ordering exactly, so core's recalculation never touches the row again), with the access level decided SEPARATELY via most-permissive-wins — then correct the row IN PLACE via a bulk HQL UPDATE (never delete+recreate) via a new `repointInPlace` method. A first implementation that picked the winner by preferring a full-access grantor (mirroring `findActiveTemplateGrantingFullAccess`'s ADD-side tie-break) was WRONG and reproduced the identical `OBSecurityException` client-corruption bug one step later, confirmed live in JUnit before correcting to the SeqNo-only winner + separately-decided level design described above — see "B6 Findings" below for the full empirical trail. New JUnit test `testRemovingOneOfFourTemplatesLeavesTwoRemainingOverlappingTemplatesUnbroken` reproduces the real 4-template shape and the exact removal that crashed. Full suite: **`UserRoleCompositionServiceOverlapIntegrationTest` 9/9 + `UserRoleCompositionServiceRealAccessControlIntegrationTest` 3/3 green**, fresh `--rerun-tasks` run from `etendo` root. Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` reverified untouched and consistent via read-only `psql` both before and after. `./gradlew smartbuild` + Tomcat restart completed, deployed live — **human's own re-confirmation via the real "Asignar roles" UI is the last acceptance step, not yet performed: remove Finance from `Personal – NewUsertest` again, confirm the save succeeds with no 500 error.** See "B6 Findings — 6th gap fix (developer, 2026-08-17)" below. **Commit `dfb7b2427137ae3ded6a906348b6781d4ec5382b` (7th round) closes the SAME duplicate-INSERT bug shape on the ADD path, found by an independent test (`UserRoleCompositionServiceOverlapReverificationTest`, arrived via a rebase onto a newer `epic/ETP-3504`, written by a different QA reverification pass on ETP-4852/4878's original fix) — 2 of its 3 tests crashed with `ConstraintViolationException` on `ad_window_access_un_key` at a plain `grantWindowAccess(template, window, ...)` call, BEFORE `assignTemplateRoles` was even called.** Root cause (traced via `org.hibernate.SQL`/`BasicBinder` TRACE logging, NOT the shape hypothesized at dispatch time): `guardDependentsOf`/`guardNewInheritance`'s OLD "skip if the dependent's existing row is already correctly sourced from the granting template" shortcut assumed core's own `RoleInheritanceManager#handleAccess`/`getAccess()` would independently reach the same "no change needed" conclusion — but `AccessTypeInjector#findAccess`'s generated query filters by `AD_Client_ID in (...)` using the CALLING context's OWN readable-clients list (confirmed via bound-parameter dump: the ambient test context's readable clients did not include the dependent roles' real tenant client), so core's lookup returns `null` for a row that genuinely exists whenever the dependent's client is outside that list — `handleAccess` then ALWAYS takes the CREATE branch regardless of whether a correctly-sourced row already exists, and a left-in-place "already correct" row collides with core's own blind `copyRoleAccess` INSERT. Fix: `guardDependentsOf`/`guardNewInheritance` now route through a new shared `clearConflictingAccessUnconditionally` helper that ALWAYS force-deletes a dependent's existing row via `deleteForcingCreatePath` (never skips, even when already correct) — `repointInPlace` (round 6's in-place-update pattern) was considered and REJECTED for this specific bug shape: since core's own CREATE fires regardless of what values a left-in-place row holds, only physically removing the row before returning control to core prevents the collision; `repointInPlace` remains correct and unchanged for `guardRemovedInheritance`'s own (different-shaped) race, where the fix is specifically about making core's query ABLE to find the row via SeqNo-precedence, not about making core blind to it. Two ALSO-flagged test-data bugs (independent of the guard, confirmed via `psql`: the test's own seed calls tried to `INSERT` a brand-new `AD_Window_Access` row for a template that already had a real, correctly-leveled row for that exact window, drifted into this environment by earlier manual verification of rounds 6/7 against the real webhook) were fixed by extending the test's existing "skip seeding a template that already has the exact grant" pattern (previously only applied to Sales in the Contactos test) into a shared `ensureReadOnlyWindowAccess` helper, applied to all 3 seed calls across both affected test methods. Also fixed, in the SAME pass per the coordinator's dispatch, all 7 bundled SonarQube findings in the 2 touched files: extracted `WindowGrantors`/`collectWindowGrantors`/`repointWindowIfNeeded` out of `guardRemovedInheritance` (cognitive complexity 19→ within budget, per-loop break/continue 2→0) and `confirmPersonalRoleForUser` out of `UserRoleCompositionService#getAppliedTemplateRoleIdsForClient` (complexity 16→ within budget, break/continue 3→0 in that loop); rephrased one prose comment (`correctInheritedOwnership`) that happened to end mid-sentence with a `;`, which Sonar's `S125` heuristic flagged as commented-out code. Verified via `./run-sonar.sh --all-issues --fail-on-gate --jacoco-xml ...` (the exact command `.githooks/pre-push` step 3 uses): **0 issues in either touched file** (previously 7); 55 pre-existing code-smells remain across 21 OTHER, unrelated files (untouched by this round); the 1 new-code issue Sonar's Quality Gate flagged is in an unrelated file (`OnboardingAccountingWiringService.java`, unrelated pre-existing debt) and the script itself confirmed "no new issues fall inside this PR's diff — CI's PR gate would PASS." `UserRoleCompositionServiceOverlapReverificationTest` **3/3 green** (was 1/3), full suite via the EXACT pre-push command `cd etendo && ./gradlew test --tests "com.etendoerp.go.*"`: **7761 tests, 7752 passed, 0 failed, 0 errors, 9 skipped** (same 9 as before, matches the DoD's expected count exactly). Human's real role `6AD5C0CC21F14050A65A3E62DC2FF9A2` AND the round-7 test's own bystander role `F238CDA054BE4D649B1BDD59F73019E1` both reverified BYTE-IDENTICAL via read-only `psql` before vs. after the entire fix+Sonar+full-suite pipeline. Committed locally only (`dfb7b242`), NOT pushed — the human will push themselves using the real pre-push gate as the final check. See "B6 Findings — 7th gap + Sonar cleanup (developer, 2026-08-17)" below. |
-| REVIEW | Alex | ❌ REJECT (2026-08-17), **B7 fix DELIVERED (developer, 2026-08-17) — awaiting Alex's re-review.** `com.etendoerp.go` commit `c06edc8f` makes `guardDependentsOf`'s onUpdate-triggered call use a non-deleting, in-place correction (`repointIfAlreadySourcedFromTemplate`/`repointInPlace`) instead of round 7's unconditional delete, closing the "[B7]" gap. Live-reproduced (unlike REVIEW's own 3 inconclusive attempts) — see "B6 Findings — B7 fix (developer, 2026-08-17)" below for the full detail, including a SECOND, previously-unknown bug the fix's own live repro surfaced (`session.evict()` mid-`onFlushDirty` colliding with Hibernate's collection-reachability walk) and how it was closed. New JUnit test green, full suite `com.etendoerp.go.*` **7762 tests, 7753 passed, 0 failed, 9 skipped** (was 7761/7752/0/9 — exactly +1 for the new test, no regressions), Sonar Quality Gate OK (0 issues, 0 new-code issues, coverage unchanged 76.70%→76.70%). W1/W2 (docs staleness, data-testid codemod) untouched, per the dispatch's own scope (DOCS phase / future frontend round respectively). | See "REVIEW Findings — Rounds 5-7" below for the ORIGINAL B7 finding (B7 blocker + 2 non-blocking warnings: stale `neo-headless.md` §8d, data-testid codemod stamped `<Fragment>`/`Context.Provider`) and "B6 Findings — B7 fix (developer, 2026-08-17)" below for the fix. Prior rows below (`✅ APPROVE`) covered everything through B6's 6th round only — B7 reopens REVIEW on `WindowAccessOverlapCorruptionGuard` again, same reject-cycle pattern as B6's own earlier rounds. See "REVIEW Findings — Final Verdict" below for the B4 close-out, and "REVIEW Findings — Scoped Check of B6 6th Round" below for the round-6 pass. Narrow re-check of the sole remaining blocker: `docs/generated-custom-windows/user.md:25`'s "Window shape" bullet, fixed by commit `3ed4bc7ea`. Verified lines 20-32 are now internally consistent with lines 46/75 (all three describe `emailConfiguration` as the mounted detail child, no contradiction left), and independently re-verified against the real `UserPage.jsx` (`detailEntity="emailConfiguration"` line 253, `DetailTable={EmailConfigurationTable}` line 255, `DetailForm={EmailConfigurationForm}` line 256). No new issues found. Prior full re-review (see "REVIEW Findings — Re-Review After Blocker Fixes" below) had already independently re-verified B1/B2/B5/B6 CLOSED and B3 mostly closed — this pass closes the last gap (B4). Ticket is APPROVE end to end: waves 6-12, B5, B6, and this final blocker-fix round. **Follow-up scoped pass (same day):** independently re-verified `com.etendoerp.go` commit `e81844c2` (B6's 6th round, the duplicate-INSERT crash fix) — winner/winnerLevel separation confirmed genuinely decoupled, bulk HQL UPDATE property names confirmed correct against the real `WindowAccess` model, `TEMPLATES_BEING_REMOVED` marker confirmed unaffected and still logically sound, JUnit re-run fresh (9/9 + 3/3 green). 0 blockers; 1 non-blocking suggestion (add a regression test for the documented residual "no existing row" gap in a future round). |
-| QA | Sentinel | ✅ APPROVE (2026-08-17, full pass against waves 6-12/B5/B6/B1-B4) | See "QA Findings — Full Pass (Sentinel, 2026-08-17)" below. Every automated suite re-confirmed green on a FRESH run (Vitest 646/12017/3 skipped/0 failed; Playwright 7/7; backend `OverlapIntegrationTest` 8/8 + `RealAccessControlIntegrationTest` 3/3 via freshly-timestamped JUnit XML, `--rerun-tasks` from `etendo` root; `sf-validate-pipeline --scope=user` OK). DB reference data re-verified — GOClient id, the 4 CURRENT system-level `SystemRoleTemplates` ids, and all B6 test-role ids all match live DB, zero drift. **The prior pass's #1 open item (backend redeploy) is now CLOSED** — confirmed via `docker inspect` the Tomcat container restarted `2026-08-16T23:17Z` and `SFUserRoleAssignments` now returns a normal 401 (not the old 404 "Spec not found"). Live browser E2E still blocked on the same standing credentials gap (checked for a stored password this pass, found none — not fabricated) — not a blocker, same precedent as before. Adapted verification: inspected the real, live `Personal – NewUsertest` account (role `6AD5C0CC21F14050A65A3E62DC2FF9A2`) DB state directly — all 4 templates composed, 33 `AD_Window_Access` rows, 0 ownership mismatches, `Default_Ad_Role_ID` correct — strong real-account evidence under maximal composition. Independently read-verified B6's `WindowAccessOverlapCorruptionGuard` for regression risk on unrelated role edits — confirmed narrowly gated, no misfire risk found. **One MEDIUM finding (BUG-1):** pre-existing, ETP-4906-unrelated `AD_Window_Access` ownership corruption on GOClient's `RoleFinanzas` role (27 rows, dated 2026-08-13/14, predates B6's guard entirely) — not retroactively healed by the guard (prevention-only by design), not a blocker, recommend a separate Remedy data-fix pass. No Critical/High bugs. **QA is done, APPROVE. Recommend proceeding to DOCS (Sage) — DOCS already ran once (commit `acf7e78cf`) but a freshness check against waves 6-12/B5/B6 is worth a quick look.** |
+| REVIEW | Alex | ✅ APPROVE (2026-08-18, independent final fresh pass) — a second reviewer session, no memory of prior rounds, re-read `WindowAccessOverlapCorruptionGuard.java`/`UserRoleCompositionService.java` in full (not diff-scoped), corrected the diff base note (`0ceb44bd^`, not `bc2b6c8c^1` — the latter drags in unrelated ETP-4852/4878 commits), re-read the 2 new webhook classes and the full frontend diff, and re-ran all 3 verification commands synchronously from scratch: backend **7762/7753/0/9** (exact match — also caught and corrected its own false-green near-miss, see "REVIEW Findings — Final Fresh Pass" below), frontend Vitest **145/145**, `sf-validate-pipeline --scope=user` **OK**. 0 new blockers. 2 new non-blocking items: **[W3]** `DetailView.jsx`'s `onAfterExistingSave` isn't wired into `renderDraftModeSaveActions`'s Confirm button (silent no-op for a future draftMode window adopting it; `user` itself unaffected — `draftMode: null`); **[S1]** W2's data-testid codemod issue is broader than previously documented (3 more inert instances: `TierPill`, `RoleChip`, `RoleFilterControl`/`RoleChipsCell`). See "REVIEW Findings — Final Fresh Pass" below. Ticket remains APPROVE end to end. Prior verdict history follows, unchanged. **Prior status (2026-08-17, kept for history):** ✅ APPROVE (2026-08-17, B7 re-check) — `com.etendoerp.go` commit `c06edc8f` independently verified: `guardDependentsOf` genuinely takes a `PropagationTrigger` param, `onSave`→`NEW_GRANT` is byte-for-byte the round-7 behavior (only the call site changed, still `clearConflictingAccessUnconditionally`), `onUpdate`→`UPDATED_GRANT` now calls `repointIfAlreadySourcedFromTemplate`→`repointInPlace` (in-place correction, never deletes). The `session.evict()`→`OBDal.refresh()` fix is real and structurally safe for BOTH callers (round 6's `onDelete` path at line 902 and the new `onUpdate` path at line 1060 share the exact same `repointInPlace` method body — not two implementations, one). New test `testUpdatingTemplatesOwnAccessLevelNeverDeletesAnAlreadyCorrectlySourcedDependentRow` read in full: genuinely drives `onUpdate`/`propagateUpdatedAccess` (mutates+saves+flushes an EXISTING `AD_Window_Access` row, not a new one) and asserts survival + client/org/`InheritedFrom` + corrected level — ran it live, PASSED (10/10 in that class). Full suite re-run myself, exact pre-push command, aggregated from the real JUnit XML (not console): **7762 total, 7753 passed, 0 failed, 0 errors, 9 skipped** — matches expected exactly. Sonar re-run myself, exact pre-push step-3 command (`gradlew jacocoRootReport` + `run-sonar.sh --base-ref origin/epic/ETP-3504 --fail-on-gate --compare-coverage`): **Quality Gate OK, 0 open issues, 0 new-code issues, 0 hotspots, coverage 76.70% vs base 76.70%**. Only the 2 files the developer claimed changed (`WindowAccessOverlapCorruptionGuard.java`, the test file) — confirmed via `git diff dfb7b242 c06edc8f --stat`. B7 is closed. Ticket is APPROVE end to end: waves 6-12, B1-B7 (previously B6 rounds 5-6), all confirmed. W1 (stale `neo-headless.md`) and W2 (data-testid codemod) remain open, non-blocking, unchanged from the prior pass — see "REVIEW Findings — B7 Re-Check" below. **Prior REJECT banner (2026-08-17, superseded by the APPROVE above — kept for history):** `com.etendoerp.go` commit `c06edc8f` makes `guardDependentsOf`'s onUpdate-triggered call use a non-deleting, in-place correction (`repointIfAlreadySourcedFromTemplate`/`repointInPlace`) instead of round 7's unconditional delete, closing the "[B7]" gap. Live-reproduced (unlike REVIEW's own 3 inconclusive attempts) — see "B6 Findings — B7 fix (developer, 2026-08-17)" below for the full detail, including a SECOND, previously-unknown bug the fix's own live repro surfaced (`session.evict()` mid-`onFlushDirty` colliding with Hibernate's collection-reachability walk) and how it was closed. New JUnit test green, full suite `com.etendoerp.go.*` **7762 tests, 7753 passed, 0 failed, 9 skipped** (was 7761/7752/0/9 — exactly +1 for the new test, no regressions), Sonar Quality Gate OK (0 issues, 0 new-code issues, coverage unchanged 76.70%→76.70%). W1/W2 (docs staleness, data-testid codemod) untouched, per the dispatch's own scope (DOCS phase / future frontend round respectively). | See "REVIEW Findings — Rounds 5-7" below for the ORIGINAL B7 finding (B7 blocker + 2 non-blocking warnings: stale `neo-headless.md` §8d, data-testid codemod stamped `<Fragment>`/`Context.Provider`) and "B6 Findings — B7 fix (developer, 2026-08-17)" below for the fix. Prior rows below (`✅ APPROVE`) covered everything through B6's 6th round only — B7 reopens REVIEW on `WindowAccessOverlapCorruptionGuard` again, same reject-cycle pattern as B6's own earlier rounds. See "REVIEW Findings — Final Verdict" below for the B4 close-out, and "REVIEW Findings — Scoped Check of B6 6th Round" below for the round-6 pass. Narrow re-check of the sole remaining blocker: `docs/generated-custom-windows/user.md:25`'s "Window shape" bullet, fixed by commit `3ed4bc7ea`. Verified lines 20-32 are now internally consistent with lines 46/75 (all three describe `emailConfiguration` as the mounted detail child, no contradiction left), and independently re-verified against the real `UserPage.jsx` (`detailEntity="emailConfiguration"` line 253, `DetailTable={EmailConfigurationTable}` line 255, `DetailForm={EmailConfigurationForm}` line 256). No new issues found. Prior full re-review (see "REVIEW Findings — Re-Review After Blocker Fixes" below) had already independently re-verified B1/B2/B5/B6 CLOSED and B3 mostly closed — this pass closes the last gap (B4). Ticket is APPROVE end to end: waves 6-12, B5, B6, and this final blocker-fix round. **Follow-up scoped pass (same day):** independently re-verified `com.etendoerp.go` commit `e81844c2` (B6's 6th round, the duplicate-INSERT crash fix) — winner/winnerLevel separation confirmed genuinely decoupled, bulk HQL UPDATE property names confirmed correct against the real `WindowAccess` model, `TEMPLATES_BEING_REMOVED` marker confirmed unaffected and still logically sound, JUnit re-run fresh (9/9 + 3/3 green). 0 blockers; 1 non-blocking suggestion (add a regression test for the documented residual "no existing row" gap in a future round). |
+| QA | Sentinel | ❌ REJECT (2026-08-18, final coverage pass) — **[HIGH] BUG-2 found and empirically reproduced**: `onUpdate`/`UPDATED_GRANT` (`repointIfAlreadySourcedFromTemplate`) never re-surveys OTHER actively-inherited overlapping templates before applying a downgrade, silently violating most-permissive-wins — a real, live-reproduced correctness gap (throwaway JUnit probe, reverted after capture), not a hypothetical. See "QA Findings — Final Coverage Pass (Sentinel, 2026-08-18)" below for the full repro + fix shape. Also flags 2 non-blocking MEDIUM coverage gaps (GAP-1: no test with 2+ windows simultaneously affected by one inheritance event; GAP-2: no test with 2 guard-triggering mutations inside one flush — the same failure class as B7's own "second bug"). All suites still green (backend 7762/0/0/9 fresh `--rerun-tasks`, frontend Vitest 145/145, Playwright 7/7, `sf-validate-pipeline` OK) and DB reference data still zero-drift — this is a coverage/correctness finding, not a suite regression. **Recommend: back to DEV for a fix + committed regression test, then REVIEW → QA again**, same reject-cycle pattern as B6/B7. **Prior status (2026-08-17, superseded, kept for history):** ✅ APPROVE, full pass against waves 6-12/B5/B6/B1-B4 — see "QA Findings — Full Pass (Sentinel, 2026-08-17)" below. Every automated suite re-confirmed green on a FRESH run (Vitest 646/12017/3 skipped/0 failed; Playwright 7/7; backend `OverlapIntegrationTest` 8/8 + `RealAccessControlIntegrationTest` 3/3 via freshly-timestamped JUnit XML, `--rerun-tasks` from `etendo` root; `sf-validate-pipeline --scope=user` OK). DB reference data re-verified — GOClient id, the 4 CURRENT system-level `SystemRoleTemplates` ids, and all B6 test-role ids all match live DB, zero drift. **The prior pass's #1 open item (backend redeploy) is now CLOSED** — confirmed via `docker inspect` the Tomcat container restarted `2026-08-16T23:17Z` and `SFUserRoleAssignments` now returns a normal 401 (not the old 404 "Spec not found"). Live browser E2E still blocked on the same standing credentials gap (checked for a stored password this pass, found none — not fabricated) — not a blocker, same precedent as before. Adapted verification: inspected the real, live `Personal – NewUsertest` account (role `6AD5C0CC21F14050A65A3E62DC2FF9A2`) DB state directly — all 4 templates composed, 33 `AD_Window_Access` rows, 0 ownership mismatches, `Default_Ad_Role_ID` correct — strong real-account evidence under maximal composition. Independently read-verified B6's `WindowAccessOverlapCorruptionGuard` for regression risk on unrelated role edits — confirmed narrowly gated, no misfire risk found. **One MEDIUM finding (BUG-1):** pre-existing, ETP-4906-unrelated `AD_Window_Access` ownership corruption on GOClient's `RoleFinanzas` role (27 rows, dated 2026-08-13/14, predates B6's guard entirely) — not retroactively healed by the guard (prevention-only by design), not a blocker, recommend a separate Remedy data-fix pass. No Critical/High bugs. |
 
 **If resuming this ticket cold (e.g. a fresh session after running out of tokens):**
 1. Read this table first, then only the task sections whose status isn't ✅/🚫 — each
@@ -2161,6 +2210,311 @@ genuinely excellent, novel forensic work — but the fix it produced is too broa
 core path (`propagateUpdatedAccess`) cannot recreate what was deleted. REJECT on B7 alone; W1/W2 are
 non-blocking but should be picked up (W1 by DOCS, W2 by a follow-up dev pass on the codemod).
 
+## REVIEW Findings — B7 Re-Check (Alex, 2026-08-17)
+
+**VERDICT: APPROVE**
+
+Scoped re-check of `com.etendoerp.go` commit `c06edc8f` ("Fix onUpdate trigger losing dependent
+access (B7)"), per the coordinator's dispatch. Not a full re-review — rounds 5/6, the Sonar
+refactors, and the frontend fixes from "REVIEW Findings — Rounds 5-7" above stand as already
+reviewed and were not re-litigated. W1 (stale `neo-headless.md`) and W2 (data-testid codemod)
+remain open, non-blocking, out of scope for this pass.
+
+```
+BLOCKERS (0)
+WARNINGS (0 new — W1/W2 from the prior pass remain open, non-blocking, out of scope here)
+SUGGESTIONS (0)
+```
+
+### 1. The diff itself — `guardDependentsOf` genuinely distinguishes the two triggers
+
+Read `git show c06edc8f` in full (not just the developer's summary). Confirmed directly from the
+diff, not inferred from the commit message:
+
+- `guardDependentsOf(WindowAccess)` → `guardDependentsOf(WindowAccess, PropagationTrigger)`, a new
+  private enum with two values (`NEW_GRANT`, `UPDATED_GRANT`), each carrying its own javadoc
+  explaining which core propagation method it feeds and why that determines safety.
+- `onSave` (line 511) now calls `guardDependentsOf(access, PropagationTrigger.NEW_GRANT)`. Inside
+  `guardDependentsOf`, `NEW_GRANT` routes to the SAME `clearConflictingAccessUnconditionally` call
+  round 7 already established as safe (core's `propagateNewAccess` always has a CREATE fallback via
+  `copyRoleAccess`) — this is my own prior "Rounds 5-7" analysis, not re-derived here, and the diff
+  confirms the `onSave` behavior is byte-for-byte unchanged; only the call site's extra parameter
+  changed.
+- `onUpdate` (line 540) now calls `guardDependentsOf((WindowAccess) target,
+  PropagationTrigger.UPDATED_GRANT)`. Inside `guardDependentsOf`, `UPDATED_GRANT` routes to the NEW
+  `repointIfAlreadySourcedFromTemplate(dependent, window, role, templateAccess)` instead of the
+  unconditional-delete method. That method: returns early (no-op) if the dependent has no existing
+  row, or if the existing row isn't sourced from the SAME template (both cases core's own
+  `propagateUpdatedAccess`/`findInheritedAccess` also wouldn't touch — confirmed matching scope, not
+  just claimed); otherwise it calls `repointInPlace` — round 6's own bulk-HQL-UPDATE, same-row/
+  same-PK mechanism — to correct the row's `editableField` in place. **No delete anywhere on this
+  path.** This closes exactly the gap my prior "[B7]" finding traced: `propagateUpdatedAccess` has
+  no create fallback, so a dependent's row must never be deleted on this trigger, and now it isn't.
+- `grep -n "guardDependentsOf("` confirms exactly 2 call sites (`onSave`, `onUpdate`) and no
+  leftover reference to the old 1-arg signature anywhere in the file.
+- `git diff dfb7b242 c06edc8f --stat` confirms only 2 files changed:
+  `WindowAccessOverlapCorruptionGuard.java` and the test file — no drive-by changes elsewhere.
+
+### 2. The second bug (`session.evict()` → `OBDal.refresh()`) — real, and structurally safe for both callers
+
+Verified, not just trusted. `repointInPlace` is a SINGLE shared private method with two callers:
+line 902 (round 6's own `guardRemovedInheritance`/`onDelete` path) and the new line 1060
+(`repointIfAlreadySourcedFromTemplate`/`onUpdate` path). Since both callers invoke the exact same
+method body, the `session.evict(existing)` → `OBDal.getInstance().refresh(existing)` swap
+(`WindowAccessOverlapCorruptionGuard.java:1357`) is not something that could be safe for one caller
+and unsafe for the other by construction — there is only one implementation. `OBDal.refresh(Object)`
+is a real, standard Openbravo DAL API (confirmed against a local Openbravo core source checkout:
+`public void refresh(Object obj)` in `org.openbravo.dal.service.OBDal`), not a fabricated method
+name. The javadoc's mechanism explanation (evicting mid-`onFlushDirty`'s
+`AbstractFlushingEventListener#flushEntities` loop corrupts collection-reachability bookkeeping for
+the SAME entity being walked, while `refresh()` keeps it attached and re-syncs scalar fields
+in-place) is internally consistent with the observed crash signature
+(`ADWindowAccess.aDTabAccessList` delete-orphan collection error) and with why round 6's own
+`onDelete`-triggered caller never hit it (`Interceptor#onSave`/`onDelete` fire outside that flush
+loop). I did not independently reproduce the crash myself (would require reverting to `evict()` and
+re-running, out of scope for a verification pass), but the live full-suite run below — which
+exercises BOTH `repointInPlace` callers (round 6's own `onDelete` tests plus the new `onUpdate`
+test) — passing 0 failures/0 errors is direct evidence the `refresh()` swap didn't break either
+path.
+
+### 3. New test — genuinely exercises `onUpdate`/`propagateUpdatedAccess`, not `onSave`
+
+Read `testUpdatingTemplatesOwnAccessLevelNeverDeletesAnAlreadyCorrectlySourcedDependentRow` in full.
+Confirmed it drives the right trigger: it creates a throwaway template, grants it window access via
+the ADD path (`grantWindowAccess`/`addInheritance` — a NEW row, correctly triggering `onSave`) and
+sanity-asserts the dependent inherited it — THEN, as a separate, later step, calls
+`updateWindowAccessLevel(templateAccess, false)`, which does `access.setEditableField(!readOnly);
+OBDal.getInstance().save(access); OBDal.getInstance().flush();` against the template's ALREADY-
+EXISTING `AD_Window_Access` row. Mutating and saving/flushing an existing managed entity (not a new
+one via `setNewOBObject(true)`) is exactly what fires Hibernate's `EntityUpdateEvent` →
+`Interceptor#onFlushDirty` → this class's `onUpdate` observer, not `onSave` — the test genuinely
+exercises the `UPDATED_GRANT` path, not the already-proven-safe `NEW_GRANT` one. Assertions cover
+more than "didn't vanish": the dependent's row must still exist, `client`/`organization` still match
+the DEPENDENT (not the template), `InheritedFrom` still names the template, and `editableField` was
+corrected to the template's NEW value — proving a real correction happened, not a stale no-op.
+
+Ran it live myself (not just trusted the developer's report): `TEST-com.etendoerp.go.roles.
+UserRoleCompositionServiceOverlapIntegrationTest.xml` shows 10/10 tests, 0 failures, 0 errors, and
+the new test's own `<testcase>` element (`time="0.058"`) has no `<failure>` child — PASSED.
+
+### 4. Verification — both commands re-run by me, synchronously, from scratch
+
+- **Backend, exact pre-push command, from `etendo` root, no `./gradlew clean`:** `./gradlew test
+  --tests "com.etendoerp.go.*"` → `BUILD SUCCESSFUL`. Independently aggregated every
+  `TEST-com.etendoerp.go*.xml` under `build/test-results/test/` (739 files, not just console
+  output) via a small Python script parsing each report's `tests`/`failures`/`errors`/`skipped`
+  attributes: **7762 total, 7753 passed, 0 failed, 0 errors, 9 skipped** — exactly the dispatch's
+  expected numbers, and exactly the developer's own reported numbers.
+- **Sonar, exact `.githooks/pre-push` step-3 command:** confirmed the script's own `BASE_REF`
+  resolution (`origin/epic/ETP-3504`, first branch in the fallback list that exists) before running
+  it, then ran `(cd <etendo-root> && ./gradlew jacocoRootReport) && ./run-sonar.sh --base-ref
+  "origin/epic/ETP-3504" --fail-on-gate --compare-coverage --jacoco-xml <jacocoRootReport.xml>`
+  myself, synchronously, blocking to completion. Result: **Quality Gate: OK**, 0 bugs, 0
+  vulnerabilities, 0 code smells, 0 security hotspots, **0 open issues, 0 new-code issues**,
+  coverage **76.70%** vs base **76.70%** (well within the 1.00pp tolerance) — matches the
+  developer's reported numbers exactly.
+
+### Bottom line
+
+The B7 fix is correct and independently verified at the diff level, not just the test level: the
+`PropagationTrigger` split genuinely separates the two core propagation paths' asymmetric CREATE-
+fallback behavior, the `onUpdate` path no longer deletes anything, the `onSave` path is provably
+unchanged, and the `session.evict()`→`refresh()` fix is safe by construction for both callers of a
+single shared method. New test genuinely exercises the right trigger and asserts a real correction,
+not a no-op. Full suite and Sonar both re-run by me from scratch, both clean. Ticket is APPROVE end
+to end — waves 6-12, B1-B7 all confirmed. W1/W2 remain open and non-blocking, to be picked up by
+DOCS and a future frontend round respectively, per the prior pass's own disposition.
+
+## REVIEW Findings — Final Fresh Pass (Alex, 2026-08-18)
+
+**VERDICT: APPROVE**
+
+Independent, fresh-eyes final sanity pass per the coordinator's dispatch — no memory of prior
+rounds, deliberately not re-litigating what's already settled (see "REVIEW Findings — Rounds 5-7"
+and "REVIEW Findings — B7 Re-Check" above for that history). Scope: full diff in both repos since
+the fork point (`etendo_schema_forge` vs `origin/epic/ETP-3504`; `com.etendoerp.go` vs commit
+`0ceb44bd^` — see below for why this, not `bc2b6c8c^1`, is the verified cut point),
+`WindowAccessOverlapCorruptionGuard.java` and `UserRoleCompositionService.java` read in full,
+end to end, plus a fresh read of the frontend diff and the two new webhook classes.
+
+```
+BLOCKERS (0)
+WARNINGS (1 new — non-blocking):
+- [W3] DetailView.jsx — onAfterExistingSave is not wired into all 3 save-action render paths;
+  a future draftMode window adopting it would get a silent no-op on Confirm.
+SUGGESTIONS (1):
+- [S1] Expands prior W2 — the data-testid codemod's inert-prop problem is broader than the
+  2 Fragment/Provider instances already documented; found 3 more custom-component instances
+  with the identical silent-drop issue.
+```
+
+### 0. Diff-base verification — `bc2b6c8c^1` is stale; use `0ceb44bd^` instead
+
+The dispatch's own note said "the ETP-4906 work starts after `bc2b6c8c^1` — verify this is still
+the right cut point." It is not, quite: `bc2b6c8c` ("Add SFUserRoleAssignments read webhook") and
+`0ceb44bd` (same title, same diff content, different `Hooks-Verified` trailer — a rebase-induced
+duplicate, confirmed via `diff <(git show bc2b6c8c) <(git show 0ceb44bd)`, identical except the
+commit hash and trailer) both exist in this branch's history, but `bc2b6c8c` sits much later in
+the log than `0ceb44bd` — `git log --oneline bc2b6c8c^1..HEAD` pulls in a large pile of unrelated
+ETP-4852/4878/4871/4886/4855 commits that happen to share this branch's history from earlier epic
+merges. `git log --oneline --grep="ETP-4906" --reverse` confirms `0ceb44bd` is genuinely the
+FIRST ETP-4906-titled commit. `git diff 0ceb44bd^..HEAD --stat` produces exactly the expected,
+clean 13-file backend diff (`WindowAccessOverlapCorruptionGuard.java` new at 1441 lines,
+`UserRoleCompositionService.java` +360, the 2 new webhooks, 2 new/extended integration test
+files, `docs/neo-headless.md`) — no ETP-4852/4878 files mixed in. Used this as the base for
+everything below. Not a blocker (the prior rounds' own file-scoped reviews were already correct
+regardless of which exact base commit they cited), but worth correcting for whoever reads this
+doc next.
+
+### 1. `WindowAccessOverlapCorruptionGuard.java` — read in full (1441 lines), no new issues
+
+Read end to end, not by section. The seven-trigger mechanism (`onSave`/`onUpdate`/`onDelete`,
+`NEW_GRANT`/`UPDATED_GRANT`) is internally consistent:
+
+- `onSave` branches cleanly on whether the saved `WindowAccess`'s owning role `isTemplate()`
+  (→ `guardDependentsOf(access, NEW_GRANT)`) or not (→ `correctInheritedOwnership` +
+  `widenInheritedAccessLevelIfNeeded`), plus a separate `RoleInheritance` branch
+  (→ `guardNewInheritance`). `onUpdate` only guards `WindowAccess` (→ `guardDependentsOf(target,
+  UPDATED_GRANT)`) — `RoleInheritance` has no update path to guard, matching core's own
+  `RoleInheritanceEventHandler#onUpdate` unconditionally rejecting inheritance edits (documented,
+  not just asserted). `onDelete` only guards `RoleInheritance` — a `WindowAccess` delete is
+  documented as "not a corruption vector" (a plain entity delete on the owning role's own row,
+  never a cross-role blind copy), which is consistent with everything else the class does.
+- `PropagationTrigger.NEW_GRANT`/`UPDATED_GRANT` is exhaustive and every call site is
+  correctly classified: `onSave`→`NEW_GRANT` (core's `propagateNewAccess`, has a CREATE
+  fallback), `onUpdate`→`UPDATED_GRANT` (core's `propagateUpdatedAccess`, no fallback) — grepped
+  `guardDependentsOf(` to confirm exactly 2 call sites, no stale 1-arg overload left anywhere.
+- No dead code or now-unreachable branches found from the 7 rounds of iterative fixes — every
+  private method (`repointInPlace`, `deleteForcingCreatePath`, `clearConflictingAccessUnconditionally`,
+  `repointIfAlreadySourcedFromTemplate`, `collectWindowGrantors`, `repointWindowIfNeeded`,
+  `findActiveTemplateGrantingFullAccess`, `findActiveTemplatesFor`) is reachable from exactly the
+  call site its own javadoc claims, and `TEMPLATES_BEING_REMOVED`'s lifecycle
+  (populated in `guardRemovedInheritance`, cleared in `onTransactionComplete`) has no leftover
+  reference to a since-removed mechanism.
+- Class javadoc vs. code: read the "seven triggers" narrative against the actual method bodies
+  line by line — it accurately describes what ships today, including the two most recent
+  additions (sixth trigger's `repointInPlace`/`collectWindowGrantors`, seventh trigger's
+  `PropagationTrigger` split and the `session.evict()`→`OBDal.refresh()` fix). No stale claim
+  found — unusually thorough self-documentation for 7 rounds of patches, but it held up.
+
+### 2. `UserRoleCompositionService.java` — read in full (1116 lines), no new issues
+
+Access-control surface (`enforceCallerClientBoundary`, `resolveAndValidateTemplates`,
+`isReusablePersonalRole`/`isInheritFromTargetOfAnyInheritance`/`isExclusivelyAssignedTo`) is
+consistent between the single-user path (`assignTemplateRoles`/`getAppliedTemplateRoleIds`) and
+the new ETP-4906 bulk-grid path (`getAppliedTemplateRoleIdsForClient`) — the bulk path's own
+`confirmPersonalRoleForUser` re-implements the same "is this actually a personal role" identity
+check as bulk `Restrictions.in(...)` queries (`findRoleIdsUsedAsInheritFromTarget`,
+`findActiveAssignedUserIdsByRoleId`) rather than looping the single-user check once per user —
+verified the two definitions are in lockstep field-by-field (active/non-template/non-client-admin/
+same-client/not-an-inherit-from-target/exclusively-assigned), matching what the method's own
+javadoc claims. `getAppliedTemplateRoleIds(String, Role)` deliberately never calls
+`resolveOrCreatePersonalRole` (read-only, no side-effect role creation) — confirmed by tracing
+the call graph, not just the docstring.
+
+### 3. `SFUserRoleAssignments.java` / `SFSystemRoleTemplates.java` — read in full, clean
+
+Both new webhooks (not explicitly named in the dispatch, but in scope as part of the full diff)
+gate on `NeoAccessHelper.isAdminOrClientAdmin`, deny silently (empty-shape 200, never a raw 403)
+on both "no role" and "denied" — consistent with the rest of this webhook family.
+`SFUserRoleAssignments`' single-user mode forwards `currentRole` into
+`UserRoleCompositionService#getAppliedTemplateRoleIds(String, Role)`, which enforces the exact
+same tenant-boundary check the write path (`SFAssignUserRoles`) already uses — correctly closes
+the same cross-tenant read gap the write path was reviewed for in ETP-4852. `OBException` from a
+domain rejection is folded into the same empty-result shape (not the bridge's generic
+error/500 path), avoiding a same-tenant-vs-other-tenant information leak. No issues.
+
+### 4. Frontend diff — one real, previously-unflagged gap in the new `DetailView.jsx` prop
+
+**[W3] `onAfterExistingSave` is only wired into 2 of 3 save-action render branches — WARNING,
+not blocking (does not affect the `user` window itself).** `DetailView.jsx`'s `renderSaveActions`
+dispatches to exactly one of three functions by record state (`DetailView.jsx:1100-1104`):
+`renderDraftModeSaveActions` (draftMode-enabled windows), `renderNewRecordSaveActions` (new
+records), `renderExistingRecordSaveAction` (existing records, non-draft). Only the last one goes
+through the new `handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave,
+... })` helper (`DetailView.jsx:1087`), which correctly ternary-selects `onAfterCreate` vs.
+`onAfterExistingSave` by `isNew`. `renderNewRecordSaveActions`'s own `handlePostSaveNavigation`
+call at line 1064 omits `onAfterExistingSave` too, but that's harmless — `isNew` is
+definitionally `true` in that branch, so the ternary would never pick it anyway.
+`renderDraftModeSaveActions`'s "Confirm" button (`DetailView.jsx:972-995`, the draftMode
+finalization action — the closest analogue to `renderExistingRecordSaveAction`'s single Save
+button) does NOT go through `handlePostSaveNavigation` at all; it has its own inline
+`if (isNew && onAfterCreate) await onAfterCreate(...)` (line 980) with no `else if
+(onAfterExistingSave)` counterpart. Confirmed via `grep -c "const draftMode = {" artifacts/*/generated/web/*/*.jsx`
+that 11 real windows (sales-order, purchase-order, sales-invoice, purchase-invoice,
+goods-receipt, goods-movements, internal-consumption, physical-inventory, amortization,
+simple-g-l-journal, sales-quotation) have `draftMode.enabled`, and confirmed `user`'s own
+`UserPage.jsx` has `const draftMode = null` (`artifacts/user/generated/web/user/UserPage.jsx:47`)
+— so this ticket's own feature is unaffected. But `onAfterExistingSave` is a new prop on a
+shared, generic component (`DetailView.jsx`), and per this repo's "Shared Component Changes"
+rule it must work uniformly for every window that might adopt it — today, any of those 11
+draftMode windows that later wires `onAfterExistingSave` (a realistic thing to do, since it's
+the documented general-purpose "run something after an existing record's real save" hook) would
+get a silent no-op on Confirm, with no error and no signal — the exact class of bug this whole
+ticket's backend half spent 7 rounds fixing, just relocated to the frontend's own new extension
+point. Recommend closing before another window adopts the prop: give
+`renderDraftModeSaveActions`'s Confirm button the same `isNew ? onAfterCreate :
+onAfterExistingSave` treatment (either via `handlePostSaveNavigation` or an equivalent inline
+ternary) in a follow-up dev round.
+
+**[S1] W2 (data-testid codemod) is broader than the Fragment/Provider pair already documented —
+suggestion, still non-blocking.** The prior "Rounds 5-7" pass's W2 named 2 instances. Reading the
+new `user` custom components fresh turned up 3 more locally-defined components stamped with a
+`data-testid` prop they don't forward at all (not even a Fragment-style dev console warning —
+these are plain function components that simply ignore the extra prop):
+`UserRolesTab.jsx`'s `TierPill` (`function TierPill({ tier, children })`, called with
+`data-testid="TierPill__71bdc9"` at lines 304 and 327), `RoleChipsCell.jsx`'s `RoleChip`
+(`function RoleChip({ children })`, called with `data-testid="RoleChip__8d5e33"` at lines 164 and
+185), and `RoleFilterControl.jsx` (`export function RoleFilterControl({ value, onChange, roles })`,
+called with `data-testid="RoleFilterControl__toolbar"` from `UserHeaderTable.jsx:119`) —
+`RoleChipsCell` itself has the same gap (`UserHeaderTable.jsx:88`'s
+`data-testid="RoleChipsCell__cell"` is not in `RoleChipsCell`'s own destructured prop list
+either). Confirmed via `grep` that none of these dead test-ids are referenced by any test file
+in `windows/custom/user/__tests__/` — purely inert, no current breakage, matching W2's own
+"latent, not yet load-bearing" characterization. Suggest the codemod fix already recommended for
+W2 (skip Fragment/Provider) be widened to skip any locally-defined component that doesn't
+explicitly forward/spread its rest props, or that the codemod's authors do a `{...rest}`-forwarding
+audit pass across custom components before relying on these ids in a future E2E spec.
+
+### 5. Verification — all three commands re-run by me, synchronously, from scratch
+
+- **Backend** — first attempt hit the known "Gradle NO-SOURCE in main checkout" false-green risk:
+  `./gradlew :modules:com.etendoerp.go:test`/`compileTestJava` report `NO-SOURCE` even with
+  `--rerun-tasks` (this module's `src-test/src` is merged into the ROOT project's `test`
+  sourceSet by the `com.etendoerp/testing.gradleplugin` Gradle plugin, not compiled/run as its own
+  module task — confirmed by decompiling the plugin's `TestConfigPlugin.class` strings table,
+  which shows `sourceSets.test.java.srcDirs` being appended per-module at the ROOT level). A
+  first plain `./gradlew test --tests "com.etendoerp.go.*"` run was ALSO a false green in a
+  different way: Gradle treated the root `:test` task as UP-TO-DATE and skipped re-execution
+  entirely, silently reusing `build/test-results/test/*.xml` files that were ~2.5 hours stale
+  (confirmed by comparing file mtimes against wall-clock time) — the 40-second total build time
+  was the tell. Forced a genuine run with `./gradlew test --tests "com.etendoerp.go.*"
+  --rerun-tasks`, blocking synchronously to completion (5m 31s, `55 actionable tasks: 55
+  executed` — none up-to-date). Re-aggregated fresh from `build/test-results/test/TEST-com.etendoerp.go*.xml`
+  (739 files) via a small Python script, confirmed mtimes were within the same minute as the
+  build finishing: **7762 total, 7753 passed, 0 failed, 0 errors, 9 skipped** — matches every
+  prior round's reported numbers exactly. Individually confirmed
+  `UserRoleCompositionServiceOverlapIntegrationTest` is 10/10 green, including
+  `testUpdatingTemplatesOwnAccessLevelNeverDeletesAnAlreadyCorrectlySourcedDependentRow` (the B7
+  regression test) by reading its own `<testcase>` element directly, not just the suite total.
+- **Frontend, Vitest:** `npx vitest run src/windows/custom/user/
+  src/components/contract-ui/__tests__/DetailView.saveActions.vitest.js
+  src/lib/__tests__/userRoleAssignmentsApi.vitest.js` → 9 files, **145/145 passed**.
+- **`npx sf-validate-pipeline --scope=user`** → `Pipeline validation: OK`.
+
+### Bottom line
+
+No blockers found in a genuinely fresh, whole-ticket pass. `WindowAccessOverlapCorruptionGuard`
+and `UserRoleCompositionService` both hold up end to end on a first-principles read, not just a
+diff-scoped one — the seven-trigger mechanism is internally consistent, the javadoc matches the
+code, and no asymmetry or dead branch survived the 7 rounds of iterative fixes. Found one new,
+real (if narrow-blast-radius) gap in the shared `DetailView.jsx` component ([W3]) and widened the
+scope of the already-known data-testid codemod issue ([S1]) — both non-blocking, both worth a
+follow-up dev round rather than blocking this ticket. Backend suite, frontend suite, and pipeline
+validator all independently re-run by me from scratch (catching and correcting my own false-green
+near-miss on the backend suite along the way) — all three clean. W1 (stale `neo-headless.md`)
+remains open for DOCS, unchanged. Ticket is APPROVE end to end.
+
 ## Self-Review Notes
 
 - **Architectural caveat found post-QA (2026-08-14), not a blocker for THIS ticket,
@@ -2614,6 +2968,232 @@ guard, and surfaces one pre-existing, unrelated data-integrity finding worth tra
 **QA phase is closed. Recommend proceeding to DOCS (Sage)** — note DOCS already ran once
 (commit `acf7e78cf`) against earlier code; worth a quick freshness check against waves 6-12/B5/B6
 given how much landed since, but that is DOCS's own call, not a QA blocker.
+
+## QA Findings — Final Coverage Pass (Sentinel, 2026-08-18)
+
+**VERDICT: REJECT**
+
+Scope, per the coordinator's specific dispatch: not "do the tests pass" (already re-confirmed
+below) but "are they ENOUGH" — a critical, coverage-oriented read of
+`UserRoleCompositionServiceOverlapIntegrationTest.java` and
+`UserRoleCompositionServiceRealAccessControlIntegrationTest.java` against the real scenario space
+`WindowAccessOverlapCorruptionGuard` (7 rounds of production-relevant bugs) needs to hold up
+against, not just the specific bugs already found. Found one **HIGH** bug, empirically reproduced
+live (not just statically argued) with a throwaway JUnit probe, reverted after capture — this is a
+real, currently-shipped correctness gap, not a hypothetical.
+
+**Suites re-confirmed fresh, synchronously, blocking to completion (no background watcher):**
+- Backend, exact pre-push command, `etendo` root, `--rerun-tasks` (no `./gradlew clean`):
+  `./gradlew test --tests "com.etendoerp.go.*" --rerun-tasks` → `BUILD SUCCESSFUL in 5m 42s, 54
+  actionable tasks: 54 executed` (zero UP-TO-DATE — a genuine run, not the false-green trap REVIEW's
+  Final Fresh Pass caught). Aggregated every `TEST-com.etendoerp.go*.xml` directly (Python,
+  `tests`/`failures`/`errors`/`skipped` attributes, not the console summary): **7762 total, 0
+  failed, 0 errors, 9 skipped** — exact match to every prior round's reported baseline.
+- Frontend, Vitest: `npx vitest run src/windows/custom/user/
+  src/components/contract-ui/__tests__/DetailView.saveActions.vitest.js
+  src/lib/__tests__/userRoleAssignmentsApi.vitest.js` → 9 files, **145/145 passed**.
+- Playwright: `npx playwright test tests/flows/user-role-assignment.mocked.spec.js` → **7/7
+  passed**.
+- `npx sf-validate-pipeline --scope=user` → `Pipeline validation: OK`.
+
+**DB reference data re-verified live (`etendogoclean`, port 5416) — zero drift again:**
+GOClient `802509E12436405C86BA1FD5B1DF508C`; the 4 system templates Finance
+`B88A34B5D1874F8685FA6F3C3A609412`/Sales `15ECC46CFBD74CF3A76D1F4DC8BA9F80`/Purchasing
+`5E279F5102F9410F9B8CCBA424741F46`/Inventory `73581A7B4F414A2C9059C83CE7BE97BF`, all still
+`istemplate='Y'`, `isactive='Y'`, `ad_client_id='0'`; `Personal – NewUsertest`
+(`6AD5C0CC21F14050A65A3E62DC2FF9A2`) still active. One harmless addition since the last pass: a 9th
+GOClient username, `comp@user.com`, role-less — not relevant to this pass's scope.
+
+### Scenario inventory — what the 13 backend tests (10 + 3) actually cover
+
+Read both integration test files in full, not by name. Enumerated every trigger/scenario
+combination actually exercised:
+
+| Scenario | Covered? | Test(s) |
+|---|---|---|
+| ADD via `assignTemplateRoles`, 2 templates, conflicting levels | ✅ | `testComposingTwoTemplatesThatShareAWindowSucceedsWithMostPermissiveAccess`, order-independence in `testMostPermissiveWinsRegardlessOfWhichTemplateIsAddedSecond` |
+| Re-run idempotency (no-op on identical re-composition) | ✅ | `testReRunningWithTheSameOverlappingTemplateSetIsANoOpAndStaysCorrect` |
+| Read path (`getAppliedTemplateRoleIds`) reflects a real write | ✅ | `testGetAppliedTemplateRoleIdsReflectsARealOverlappingComposition` |
+| Bystander (zero `UserRoleCompositionService` in call stack), ADD path, 2 templates | ✅ | `testBystanderRoleNotPassedToAssignTemplateRolesIsAlsoProtected` |
+| REMOVE path, 2 templates → 1 remaining | ✅ | `testRemovingOneOfTwoOverlappingTemplateInheritancesIsAlsoProtected`, `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` |
+| ADD path, gaining a 2nd (read-only) template must never downgrade existing full | ✅ | `testGainingReadOnlyTemplateInheritanceNeverDowngradesExistingFullAccess` |
+| `InheritedFrom` repoint bookkeeping (round 5) | ✅ | `testRemovingTheTemplateThatJustifiedAWidenedAccessLevelCorrectlyDowngrades` |
+| ADD with 3+ templates accumulating on one window | ⚠️ partial | `testRemovingOneOfFourTemplatesLeavesTwoRemainingOverlappingTemplatesUnbroken`'s own *setup* composes all 4 sequentially and sanity-checks the end state — real coverage, but incidental (no assertions at each intermediate step, and it exists to set up the REMOVE case, not to test ADD-with-3+ in its own right) |
+| REMOVE with 2 remaining overlapping templates (started at 3+) | ✅ | `testRemovingOneOfFourTemplatesLeavesTwoRemainingOverlappingTemplatesUnbroken` (4 templates → remove 1 → 2 of the remaining 3 still overlap) |
+| `onUpdate`/`UPDATED_GRANT` (a template's own row edited, not a new grant) | ⚠️ **incomplete — see [BUG-2] below** | `testUpdatingTemplatesOwnAccessLevelNeverDeletesAnAlreadyCorrectlySourcedDependentRow` — but with exactly **ONE** template in play throughout; never combined with a 2nd overlapping template |
+| Bystander with 2+ windows simultaneously affected by one inheritance event | ❌ not covered | none — every single test in the file uses exactly one shared window (`UNUSED_WINDOW_ID = "100"`), even the 4-template test |
+| Template deactivation while dependents still inherit | N/A — not a gap | see below, already closed at the DB level |
+| 2 simultaneous `onUpdate`/guard-triggering events inside one flush | ❌ not covered | structural: all 29 `flush()` calls across the file's 10 tests immediately follow a single mutation; none ever batches two guard-triggering saves before flushing |
+| Real seed-data 4-outcome matrix (no access ×2, read-only, full, most-permissive-wins) | ✅ | `RealAccessControlIntegrationTest`'s 3 tests, against the real `TemplateRoleWindowAccess` matrix, not a synthetic window |
+
+### [BUG-2] HIGH — `onUpdate`/`UPDATED_GRANT` path does not re-survey other active overlapping templates, silently violating most-permissive-wins (empirically reproduced, not hypothetical)
+
+**This is the exact class of gap the dispatch asked me to look for: a scenario nobody wrote a test
+for because no *specific* human-witnessed bug ever produced it — found by reasoning about what the
+existing fix *doesn't* do, then proven live.**
+
+`repointIfAlreadySourcedFromTemplate` (`WindowAccessOverlapCorruptionGuard.java:1023-1060`, the B7
+fix's `onUpdate`-triggered correction) only ever compares the dependent's existing row against the
+ONE template whose own `AD_Window_Access` row was just edited — `existingSource ==
+grantingTemplate` — then copies that template's new value onto the row directly
+(`repointInPlace`). It never calls `findActiveTemplateGrantingFullAccess` (the ADD path's own
+survey, `widenInheritedAccessLevelIfNeeded`, line 679) or `collectWindowGrantors` (the REMOVE
+path's own survey, `guardRemovedInheritance`, line 794) to check whether some OTHER
+still-actively-inherited template also grants the same window. Both of those other two triggers
+correctly re-derive the window's level from the FULL set of currently active grantors before
+writing anything; this third trigger does not.
+
+**Concrete scenario:** a role (bystander or personal) inherits from 2 templates, A and B, both of
+which grant the SAME window FULL access. The row is currently sourced from whichever one core's
+own tie-break picked (highest `SeqNo`, say B). An admin — via ordinary Etendo Classic maintenance,
+the exact "belt-and-braces" scenario this trigger's own javadoc calls a real case, not a
+hypothetical — downgrades template B's own access on that window to read-only. Because the
+dependent's row is sourced from B, `repointIfAlreadySourcedFromTemplate` fires and copies B's new
+value (read-only) onto the row — **even though template A is still actively inherited and still
+grants that exact window full access.** The row silently drops to read-only. No exception, no log
+line indicating anything is wrong — the guard's own log message
+(`"Prevented cross-template AD_Window_Access overlap corruption... repointed role ... in place
+from X to X (editableField=false) without deleting the row"`) actively asserts a
+"prevented-corruption" outcome for what is, in fact, a most-permissive-wins violation.
+
+**Live reproduction (throwaway JUnit test, added and run, then reverted — not committed, per this
+class's own established precedent for unconfirmed-but-real findings):**
+```
+Steps:
+1. Create 2 throwaway system-client ('0') templates, A and B (mirrors this file's own
+   createThrowawaySystemTemplateRole()).
+2. Grant both A and B FULL access to the same window (UNUSED_WINDOW_ID = "100").
+3. Create a bystander role, addInheritance(A, seq 10), addInheritance(B, seq 20) — zero
+   UserRoleCompositionService in the call stack, same as every other test in this file.
+4. Sanity: dependent's row is full, sourced from templateB (confirmed live: SeqNo-descending
+   tie-break picks the higher-seq template, matching round 5's own documented tie-break rule).
+5. Downgrade templateB's OWN AD_Window_Access row to read-only via a direct UPDATE+flush
+   (same updateWindowAccessLevel() helper the B7 test itself uses).
+Expected: the dependent's row stays FULL — templateA still actively grants it.
+Actual (observed, live, this environment): the dependent's row becomes editableField=false.
+Direct confirmation the other template was still active and full at the moment of the assertion:
+"otherTemplate 64C08AB71FC84E86B6D240B94C1A7B90 still grants full=true" (printed by the probe
+immediately before the failing assertion).
+```
+`AssertionError` at the `MOST-PERMISSIVE-WINS` assertion — first attempt, no flakiness, no
+environment friction (unlike REVIEW's own B7 repro attempts) — this is a clean, deterministic
+reproduction, not a maybe.
+
+**Why this matters for THIS ticket specifically, not just in the abstract:** most-permissive-wins
+is the ticket's own stated acceptance invariant (see every ADD/REMOVE test's own docstring above —
+"Most-permissive-wins: ... must never downgrade already-existing FULL access"). This bug breaks
+that invariant on the one trigger (`onUpdate`) nobody wrote a 2+-template test for, using the exact
+same throwaway-template/throwaway-bystander pattern this file's own author already established as
+the right way to test it. It is directly reachable by a realistic admin action (editing one
+template's own access level in Classic while a user's composed role also inherits from a SECOND,
+still-full-granting template) — not a contrived edge case.
+
+**What this needs, for a developer to act on directly (not "add more tests" — the exact fix
+shape):** `repointIfAlreadySourcedFromTemplate` needs the same kind of survey the REMOVE path
+already does — after confirming the dependent's row is sourced from the just-edited template,
+check whether any OTHER currently-active template inherited by `dependent` also grants `window`
+(reusing `findActiveTemplateGrantingFullAccess`/`findActiveTemplatesFor`, already private methods
+in this same class) and resolve the level as the MAX of the edited template's new value and every
+other active grantor's current value — repointing `InheritedFrom` to whichever template actually
+justifies the final value, mirroring what `widenInheritedAccessLevelIfNeeded` and
+`collectWindowGrantors` already do on the other two triggers. Then add a real (committed) version
+of the reproduction above as a permanent regression test in
+`UserRoleCompositionServiceOverlapIntegrationTest`, asserting the row stays full after the
+downgrade AND that `InheritedFrom` repoints to the still-justifying template (the same "prove a
+real correction happened, not a no-op" bar every other test in this file already holds itself to).
+
+### [GAP-1] MEDIUM — no test exercises 2+ windows simultaneously affected by one template-inheritance event
+
+Every one of the 13 tests across both files uses exactly ONE shared window per scenario, even the
+4-template `testRemovingOneOfFourTemplatesLeavesTwoRemainingOverlappingTemplatesUnbroken`. The real
+system templates are far broader — confirmed live: Finance currently grants 27 active windows,
+Sales 13 — and REVIEW's own B7 write-up documents hitting real friction from exactly this shape
+("dozens of `correctInheritedOwnership` log lines for at least 2 different real dependent roles"
+when repro'ing against a real template). A single `RoleInheritance` add/remove/update fans out into
+one `guardNewInheritance`/`guardRemovedInheritance`/`guardDependentsOf` call PER affected window in
+the same flush; nothing in the current suite proves that fan-out is consistent when several of
+those per-window corrections land on the SAME dependent role in the SAME flush (e.g., a role that
+overlaps 2 different templates across 3+ different windows at once, one inheritance edit touching
+all of them together). Recommend: extend `createBystanderRole`'s pattern to grant 2 templates
+access across 2-3 distinct real or throwaway windows (not just `UNUSED_WINDOW_ID`) before an
+add/remove, and assert every window resolves correctly, not just one.
+
+### [GAP-2] MEDIUM — no test exercises 2 guard-triggering mutations inside a single flush
+
+Structural, not incidental: `grep -c "flush()"` across
+`UserRoleCompositionServiceOverlapIntegrationTest.java` shows 29 calls, and every single one
+immediately follows exactly one guard-relevant save/update/delete — the file never batches two
+template-level mutations (e.g., editing templates A and B's own access in the same transaction
+before flushing, or two `RoleInheritance` deletes in one flush) before calling `flush()`. This
+matters specifically for this mechanism, not as a generic gap: the B7 fix's own "second bug" (the
+`session.evict()` → `OBDal.refresh()` swap, see "B6 Findings — B7 fix" above) was a Hibernate
+flush-loop reentrancy bug that ONLY manifested because `onUpdate` is reached from inside
+`AbstractFlushingEventListener#flushEntities`'s own entity-walking loop — i.e., this class has
+already been bitten once by an interaction that only exists when guard logic runs mid-flush
+alongside other entities being flushed. A scenario with 2 templates' own access rows edited (or one
+edited + one inheritance removed) inside the SAME flush is a direct, plausible next instance of
+that same failure class, and it has never been tried. Recommend a dedicated test: two throwaway
+templates, both already granting overlapping windows to a bystander, then mutate BOTH templates'
+own `AD_Window_Access` rows (or one template's access + a different template's inheritance removal)
+before a single shared `flush()`, and assert both corrections land correctly with no Hibernate
+collection-tracking exception.
+
+### Checked and found NOT a gap — template deactivation while depended-upon
+
+Investigated per the dispatch's specific question. `UserRoleCompositionService.java`'s own class
+javadoc (lines 101-113) documents this is closed at the DB level, not the application level: core's
+`AD_ROLE_CHECK_TRG` (`BEFORE UPDATE` trigger on `AD_ROLE`) refuses to set `IsActive='N'` or unset
+`IsTemplate` on any role a live `AD_Role_Inheritance.InheritFrom` still points at, for every writer
+(`OBDal` or raw SQL) unless triggers are explicitly disabled. This was itself a QA finding from
+ETP-4852, confirmed live against Postgres at the time. Re-confirmed the trigger is still real and
+still referenced correctly (not a stale doc claim) — `grep` for `AD_ROLE_CHECK_TRG` in
+`src-db/database/model/triggers/` in the Etendo core checkout. Not re-litigating further; this is
+legitimately closed, not an open scenario this pass needed a test for.
+
+### Frontend coverage — correctly does NOT simulate the B7/BUG-2 bug class, judged fine
+
+Checked `e2e/tests/flows/user-role-assignment.mocked.spec.js` (7 tests) and the 7
+`windows/custom/user/__tests__/*.vitest.jsx` files (145 tests combined with the 2 sibling suites).
+None simulates a template's own access level changing mid-session. **This is correct, not a gap:**
+every backend bug in this class (B6, B7, and this pass's BUG-2) is triggered by editing a
+TEMPLATE's own `AD_Window_Access` row directly — an Etendo Classic backoffice action on the
+`SystemRoleTemplates` roles themselves. The `user` window's own UI (`AssignTemplateRolesControl`,
+`UserRolesTab`) only ever lets an admin choose WHICH templates a personal role composes from; it
+has no surface for editing a template's own access level. There is therefore no user-facing flow in
+this window that could exercise the `onUpdate` trigger at all — a frontend test simulating it would
+be testing a scenario this window's UI structurally cannot produce. The correct verification
+surface for BUG-2 is exactly where I reproduced it: a backend JUnit test.
+
+### Bottom line
+
+```
+VERDICT: REJECT
+
+TEST RESULTS: 7762 backend (0 failed, 9 skipped) + 145 frontend Vitest + 7 Playwright — all green.
+Coverage-focused review, not a correctness re-review: found the suite covers ADD/REMOVE thoroughly
+across 2 and 3+ templates, but the onUpdate/UPDATED_GRANT trigger (added in round 7/B7) was only
+ever tested with exactly ONE template — never combined with a second overlapping one.
+
+BUGS:
+- [HIGH] BUG-2: onUpdate/UPDATED_GRANT path (repointIfAlreadySourcedFromTemplate) does not
+  re-survey other actively-inherited overlapping templates before applying a downgrade, silently
+  violating most-permissive-wins. Empirically reproduced live (throwaway JUnit probe, reverted
+  after capture — com.etendoerp.go working tree is clean, confirmed via `git status`). See
+  full repro steps and fix shape above.
+
+SUGGESTIONS (non-blocking, recommend a developer add before closing again):
+- [GAP-1] MEDIUM: no test covers 2+ windows simultaneously affected by one inheritance event on a
+  single dependent role (real templates grant 27/13 windows; only ever tested with 1).
+- [GAP-2] MEDIUM: no test covers 2 guard-triggering mutations inside a single flush — the exact
+  failure class (Hibernate flush-loop reentrancy) that already produced the B7 "second bug".
+```
+
+Recommend the coordinator route this back to DEV for a fix + a committed regression test covering
+BUG-2 (and, time permitting, GAP-1/GAP-2), then back through REVIEW → QA per the standard reject
+cycle — this is the same B6/B7-style iteration pattern this ticket has already been through
+several times, not a new process. Everything else this pass touched (suites, DB reference data,
+frontend-scope judgment) is clean and does not need re-doing next round, only the fix + its own new
+test do.
 
 ## DOCS Findings — Full Pass (Sage, 2026-08-17)
 
