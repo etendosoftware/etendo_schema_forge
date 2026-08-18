@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import {
   useCashClosePending,
   useConfirmCashClose,
@@ -92,13 +93,18 @@ export function CashCloseTab({ account, onCloseSuccess }) {
     movementIds: Array.from(marked),
   });
 
+  // The handler's rejections are hardcoded English literals with no AD_Message behind them, so
+  // they have to be mapped to the app's own i18n before reaching a toast.
+  const errorMessage = (err) =>
+    translateBackendError(err?.message, ui) || ui('financeAccountCashCloseError');
+
   const handleSaveDraft = async () => {
     try {
       await saveDraft(buildPayload());
       toast.success(ui('financeAccountCashCloseDraftSaved'));
       reload();
     } catch (err) {
-      toast.error(err?.message || ui('financeAccountCashCloseError'));
+      toast.error(errorMessage(err));
     }
   };
 
@@ -120,7 +126,7 @@ export function CashCloseTab({ account, onCloseSuccess }) {
       reload();
       onCloseSuccess?.();
     } catch (err) {
-      toast.error(err?.message || ui('financeAccountCashCloseError'));
+      toast.error(errorMessage(err));
     }
   };
 

@@ -201,6 +201,14 @@ export const api = {
     },
     {
       "entity": "transaction",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/transaction/selectors/product"
+    },
+    {
+      "entity": "transaction",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -254,6 +262,14 @@ export const api = {
       "reference": "User2",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+    },
+    {
+      "entity": "transaction",
+      "field": "eTGOFinaccTransDest",
+      "column": "EM_ETGO_Finacc_Trans_Dest",
+      "reference": "Finacc_Transaction",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
     },
     {
       "entity": "accountingConfiguration",

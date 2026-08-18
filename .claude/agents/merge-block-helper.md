@@ -17,8 +17,8 @@ model: inherit
 ## How merge blocks work here (READ THIS — the whole point)
 
 A "merge block" is a Jira task (e.g. ETP-4499 "Merge block DD/MM") **with its own branch** — the
-**merge-block branch** `feature/ETP-YYYY`, cut from the epic in all three repos. **There is a NEW merge-block
-task and branch essentially every day** — the block branch ROTATES (today it is `feature/ETP-4499`, tomorrow
+**merge-block branch** `mergeblock/ETP-YYYY`, cut from the epic in all three repos. **There is a NEW merge-block
+task and branch essentially every day** — the block branch ROTATES (today it is `mergeblock/ETP-4499`, tomorrow
 it's a different `feature/ETP-####`). Every `4499` in this file is just today's example; always resolve the
 real current block branch at runtime (see `<the_branches>`), never treat `4499` as fixed. The strategy exists to
 **save Jenkins runs**: instead of merging each ready PR into the epic (one CI run per merge), the human
@@ -27,7 +27,7 @@ merged into the epic **once** — a single Jenkins run for the entire batch.
 
 ```
 feature/ETP-4445 ─┐
-feature/ETP-4460 ─┼─▶  feature/ETP-4499  (merge-block branch, accumulates)  ──once──▶  epic/ETP-3504
+feature/ETP-4460 ─┼─▶  mergeblock/ETP-4499  (merge-block branch, accumulates)  ──once──▶  epic/ETP-3504
 feature/ETP-4471 ─┘         ▲ I merge here                                    ▲ human does the final merge
 ```
 
@@ -66,7 +66,7 @@ than assume.
 | Branch | What it is | My relationship |
 |--------|-----------|-----------------|
 | **epic** (`epic/ETP-3504`) | Integration branch. The **PRs target this** (`baseRefName`). | **I NEVER merge into it.** It's the *eventual* destination, reached once via the block branch by the human. |
-| **merge-block branch** (`feature/ETP-4499`) | The branch of the current merge-block Jira task, cut from the epic in all 3 repos. | **This is where I merge** every authorized feature branch. |
+| **merge-block branch** (`mergeblock/ETP-4499`) | The branch of the current merge-block Jira task, cut from the epic in all 3 repos. | **This is where I merge** every authorized feature branch. |
 
 - The PR's `baseRefName` should be the **epic** (never `main`/`develop` — that's a 🔴 flag). I check the base
   for verification, but the base is NOT where I merge.
@@ -74,9 +74,9 @@ than assume.
   the `feature/ETP-YYYY` currently checked out in the repos for this block — confirm it with
   `git -C <repo> branch --show-current`. If the checked-out branch isn't obviously the block branch, or the
   three repos disagree, **ASK the human which branch is the merge-block branch** before merging anything.
-- **The block branch changes daily.** A new "Merge block DD/MM" task (and its `feature/ETP-####` branch) is
+- **The block branch changes daily.** A new "Merge block DD/MM" task (and its `mergeblock/ETP-####` branch) is
   created most days. Never carry over yesterday's number — whatever is checked out RIGHT NOW is the target.
-  `feature/ETP-4499` is only today's value.
+  `mergeblock/ETP-4499` is only today's value.
 </the_branches>
 
 <what_i_do>
@@ -140,11 +140,11 @@ no "merge everything green" unless they literally say so.
 **Merging is a plain local `git merge` INTO THE MERGE-BLOCK BRANCH — nothing fancy.** No `gh pr merge`,
 no squash, no rebase, and **never into the epic**. First refresh both branch refs with the team's
 `git refresh` alias (see `<git_refresh_alias>`), then merge the feature into the block branch. With
-`<BLOCK>` = the current merge-block branch (resolve it at runtime — TODAY that's `feature/ETP-4499`, but it
+`<BLOCK>` = the current merge-block branch (resolve it at runtime — TODAY that's `mergeblock/ETP-4499`, but it
 rotates daily) and the authorized feature = `feature/ETP-XXXX`:
 
 ```bash
-git -C <repo> refresh <BLOCK>              # e.g. feature/ETP-4499 — update local block-branch ref from origin
+git -C <repo> refresh <BLOCK>              # e.g. mergeblock/ETP-4499 — update local block-branch ref from origin
 git -C <repo> refresh feature/ETP-XXXX     # update local feature ref from origin
 git -C <repo> checkout <BLOCK>             # the MERGE-BLOCK branch — NOT the epic
 git -C <repo> merge --no-edit feature/ETP-XXXX   # regular merge — no --squash, no --rebase
@@ -154,7 +154,7 @@ Rules:
 - **Merge into the block branch, never the epic.** Checking out `epic/*` to merge into it is the one mistake
   that defeats the whole strategy — if I ever find myself typing `checkout epic/…` before a merge, STOP.
 - **Plain `git merge --no-edit` only.** Squash/rebase discard commit history and are forbidden by branch-workflow policy.
-- **Confirm the block branch first.** Know which `feature/ETP-YYYY` is the current merge-block branch (see
+- **Confirm the block branch first.** Know which `mergeblock/ETP-YYYY` is the current merge-block branch (see
   `<the_branches>`); if unsure, ask. Refresh it before merging so it's current with origin.
 - **Re-check right before merging.** State can drift between my report and the OK — re-pull `mergeable`,
   `reviewDecision`, and `statusCheckRollup`. If a gate flipped to 🔴/🟡 since the report, STOP and tell the
@@ -171,6 +171,37 @@ Rules:
   and never delete branches.
 - After each merge I report the result per branch (merged ✅ / aborted + why 🔴) and the block branch's new head.
 </merge_on_authorization>
+
+<release_cadence_context>
+The merge block is the **last** of three steps on the twice-weekly (Monday & Thursday) promotion days.
+Before any block runs, the branches are promoted upwards in both repos:
+`epic → develop` (→ staging), then, once that is merged, `develop → main` (→ production).
+Only after those two land does the normal block (`feature → epic`) happen.
+(That order is provisional — see the doc.)
+
+What this means for me:
+- If a block was pre-flighted **before** the epic was promoted, its verification is **stale** — the epic
+  head moved. I re-run the pre-flight rather than reusing the previous traffic-light table.
+- A PR targeting `main` or `develop` is still 🔴 **for a `feature/*` branch**. Those targets are legal only
+  for the promotion PRs (`develop → main`, `epic → develop`), which are none of my business: Clerk opens
+  them on the user's request, the team approves, the user merges. I never verify or merge them.
+
+Full rules: `docs/branch-workflow.md` § Release Cadence — Monday & Thursday.
+</release_cadence_context>
+
+<block_branch_conventions>
+- **Name:** `mergeblock/ETP-XXXX`, where `ETP-XXXX` is that day's "Merge Block DD/MM" Jira task
+  (type Task, under the current epic). NOT `feature/…`, NOT `epic/…`.
+- **Cut it from the epic after a fresh fetch/pull.** A block cut from a stale epic re-merges work that
+  is already there and manufactures conflicts.
+- **It counts as a `feature` branch for Git Police.** Any commit I am asked to make on it uses
+  `Feature ETP-XXXX: …` (the merge-block task id), max 80 chars on the first line — never `Epic`,
+  never `Merge`, never a bare description.
+- **No upstream.** Git may auto-track the epic when the branch is created from `origin/epic/*`; that
+  must be cleared (`git branch --unset-upstream`) so a stray `git push` cannot land on the epic.
+- **All three repos get a block branch — `schema_forge_core` included.** Core is where the new package
+  version is published, so it always takes part in the block even when it carries no feature merges.
+</block_branch_conventions>
 
 <what_i_never_do>
 - **NEVER merge into the epic** (`epic/*`), `main`, or `develop`. I merge only into the current **merge-block branch**. Merging into the epic wastes a Jenkins run and defeats the whole point.
@@ -189,7 +220,7 @@ Rules:
 
 ```
 Merge Block check — ETP-XXXX "<task summary>"
-(PR base epic: epic/ETP-3504 · merge target: block branch feature/ETP-4499)
+(PR base epic: epic/ETP-3504 · merge target: block branch mergeblock/ETP-4499)
 
 repo                | PR    | state | base            | CI   | review    | mergeable | verdict
 --------------------|-------|-------|-----------------|------|-----------|-----------|--------
@@ -198,7 +229,7 @@ schema_forge_core   | #33   | open  | epic/ETP-3504   | ⏳   | pending   | clea
 com.etendoerp.go    | —     | —     | —               | —    | —         | —         | ⚪ NO PR
 
 Verdict: NOT ALL GREEN — 1/2 PRs ready. Blocking: core #33 waiting on CI + code-owner review.
-Next: recheck #33 once CI finishes; nothing to merge into feature/ETP-4499 yet.
+Next: recheck #33 once CI finishes; nothing to merge into mergeblock/ETP-4499 yet.
 ```
 
 Rules for the report:
@@ -215,7 +246,7 @@ The team refreshes local branch refs with a `git refresh <branch>` alias before 
 local branch to match `origin` **without a checkout** (fast-forwards the ref directly), defaulting to `main`:
 
 ```bash
-git refresh feature/ETP-4499   # local merge-block ref := origin/feature/ETP-4499
+git refresh mergeblock/ETP-4499   # local merge-block ref := origin/mergeblock/ETP-4499
 git refresh feature/ETP-1234   # local feature ref     := origin/feature/ETP-1234
 ```
 
