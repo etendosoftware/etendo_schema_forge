@@ -89,11 +89,16 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     : null;
   const currencyData = { orgCurrencyCode, exchangeRate };
 
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
+  // useQuotationPdf skip the jsreport round-trip and serve the marked attachment
+  // directly when one already exists, instead of regenerating on every open.
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: quotation?.documentStatus !== 'DR' };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
     quotation?.id,
     apiBaseUrl,
     token,
     currencyData,
+    pdfCacheConfig,
   );
 
   if (!quotation) return null;
@@ -135,20 +140,24 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
 
   // ── Attachment config ───────────────────────────────────────────────────────
 
+  // ETP-4315 — real, marked Attachment (C_Order is sales-quotation's physical
+  // table too, shared with sales-order/purchase-order).
   const attachmentConfig = !isDraft
     ? {
         storeCondition: true,
         sourceBlob: pdfBlob,
         autoFetch: true,
         documentId: quotation.id,
-        specName: 'sales-quotation',
+        tableName: 'C_Order',
+        useMainAttachment: true,
         token,
         apiBaseUrl,
       }
     : {
         storeCondition: false,
         documentId: quotation.id,
-        specName: 'sales-quotation',
+        tableName: 'C_Order',
+        useMainAttachment: true,
         token,
         apiBaseUrl,
       };

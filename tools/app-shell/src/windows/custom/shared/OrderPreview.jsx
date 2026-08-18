@@ -119,8 +119,12 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   });
   const currencyData = { orgCurrencyCode, exchangeRate };
 
-  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);
-  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
+  // useOrderPdf/usePurchaseOrderPdf skip the jsreport round-trip and serve the marked
+  // attachment directly when one already exists, instead of regenerating on every open.
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft };
+  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
+  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = isSalesOrder ? soResult : poResult;
 
   if (!order) return null;
@@ -142,9 +146,15 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
 
   // ── Attachment config ───────────────────────────────────────────────────────
 
+  // ETP-4315 — real, marked Attachment (C_Order is the physical table shared by
+  // sales-order/purchase-order/sales-quotation).
+  // Draft gate unchanged: cache is only checked/written once Confirmed.
   const attachmentConfig = !isDraft
-    ? { storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, documentId: order.id, specName, token, apiBaseUrl }
-    : { storeCondition: false, documentId: order.id, specName, token, apiBaseUrl };
+    ? {
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        documentId: order.id, tableName: 'C_Order', useMainAttachment: true, token, apiBaseUrl,
+      }
+    : { storeCondition: false, documentId: order.id, tableName: 'C_Order', useMainAttachment: true, token, apiBaseUrl };
 
   // ── Email modal helpers ─────────────────────────────────────────────────────
 

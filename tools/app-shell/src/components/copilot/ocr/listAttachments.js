@@ -45,13 +45,12 @@ export async function listAttachments({ token, tableName, recordId, apiBaseUrl }
 }
 
 /**
- * Download a single attachment as a Blob URL. Caller is responsible for
- * `URL.revokeObjectURL` when the document unmounts to avoid leaking memory.
- * Returns null on any failure so callers can short-circuit gracefully.
+ * Downloads a single attachment as a raw Blob. Returns null on any failure
+ * so callers can short-circuit gracefully.
  *
  * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
  */
-export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl } = {}) {
+export async function fetchAttachmentBlob({ token, attachmentId, apiBaseUrl } = {}) {
   if (!token || !attachmentId) return null;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}`;
@@ -62,11 +61,22 @@ export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl }
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
+    return await res.blob();
   } catch {
     return null;
   }
+}
+
+/**
+ * Download a single attachment as a Blob URL. Caller is responsible for
+ * `URL.revokeObjectURL` when the document unmounts to avoid leaking memory.
+ * Returns null on any failure so callers can short-circuit gracefully.
+ *
+ * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
+ */
+export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl } = {}) {
+  const blob = await fetchAttachmentBlob({ token, attachmentId, apiBaseUrl });
+  return blob ? URL.createObjectURL(blob) : null;
 }
 
 /**

@@ -10,10 +10,9 @@ import {
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
  * and write the same real `Attachment` row, marked via `EM_ETGO_ISPREVIEWMAIN`
- * (ETP-4315). Same public shape as `usePreviewAttachment` — a drop-in
- * replacement for `GenericPreviewModal`'s `ManagedLeftPanel` — but backed by
- * `/sws/neo/attachments/*` instead of the (retired for these windows)
- * `/sws/neo/preview-file` cache.
+ * (ETP-4315). Backs `GenericPreviewModal`'s `ManagedLeftPanel` against
+ * `/sws/neo/attachments/*` (the retired `/sws/neo/preview-file` cache and its
+ * `usePreviewAttachment` hook were removed once every window had migrated).
  *
  * When storeCondition is false (or required params are missing) the hook is a
  * no-op: storedFile stays null and writes are silently skipped.
@@ -131,8 +130,7 @@ export function useMainAttachment({
   /**
    * Marks an already-uploaded attachment (e.g. one created by an external
    * flow such as OCR ingestion) as this record's main document, then loads
-   * it into view. Not part of `usePreviewAttachment`'s shape — used by the
-   * OCR bridge, not by `GenericPreviewModal`.
+   * it into view. Used by the OCR bridge, not by `GenericPreviewModal`.
    */
   const markExisting = useCallback(async (attachmentId, fileName, mimeType) => {
     if (!active) return false;

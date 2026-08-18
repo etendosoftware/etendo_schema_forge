@@ -394,11 +394,11 @@ export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLi
 // Generic PDF hook — shared by all document-type hooks
 // labels are kept in a ref so they never re-trigger the effect on locale change
 // ---------------------------------------------------------------------------
-export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels) {
+export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels, cacheConfig) {
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
   return usePdfGenerator(recordId, apiBaseUrl, token, (id, base, tok) =>
     buildDataFn(id, base, tok).then((data) => renderDocumentPdf({ ...data, labels: labelsRef.current }))
-  );
+  , cacheConfig);
 }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
+import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
@@ -284,7 +285,17 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // ---------------------------------------------------------------------------
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
-export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn) {
+/**
+ * @param {Object} [cacheConfig] - ETP-4315 follow-up (2026-08-18): when a marked
+ *   Attachment already exists for (tableName, recordId), it is served directly
+ *   instead of re-rendering via jsreport on every open. Every window's own
+ *   `useXxxPdf` hook gets this for free by passing the same
+ *   `{ tableName, storeCondition }` shape it already builds for
+ *   `attachmentConfig` — no per-window gating logic needed.
+ *   - cacheConfig.tableName: AD_Table.name, e.g. 'C_Order' (must match attachmentConfig.tableName)
+ *   - cacheConfig.storeCondition: false (e.g. Draft) → always render live, same as omitting cacheConfig
+ */
+export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheConfig = null) {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfBlob, setPdfBlob] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -292,6 +303,9 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn) {
   const prevUrlRef = useRef(null);
   const buildRef = useRef(buildBlobFn);
   buildRef.current = buildBlobFn;
+
+  const cacheTableName = cacheConfig?.tableName ?? null;
+  const cacheStoreCondition = !!cacheConfig?.storeCondition;
 
   useEffect(() => {
     if (!recordId || !apiBaseUrl || !token) return;
@@ -304,8 +318,19 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn) {
 
     (async () => {
       try {
-        const blob = await buildRef.current(recordId, base, token);
-        if (cancelled) return;
+        let blob = null;
+        if (cacheStoreCondition && cacheTableName) {
+          const main = await fetchMainAttachment({ token, tableName: cacheTableName, recordId, apiBaseUrl });
+          if (cancelled) return;
+          if (main?.id) {
+            blob = await fetchAttachmentBlob({ token, attachmentId: main.id, apiBaseUrl });
+            if (cancelled) return;
+          }
+        }
+        if (!blob) {
+          blob = await buildRef.current(recordId, base, token);
+          if (cancelled) return;
+        }
         const url = URL.createObjectURL(blob);
         prevUrlRef.current = url;
         setPdfUrl(url);
@@ -325,7 +350,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn) {
         prevUrlRef.current = null;
       }
     };
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl, token, cacheTableName, cacheStoreCondition]);
 
   return { pdfUrl, pdfBlob, loading, error };
 }

@@ -36,7 +36,7 @@ function isCreditNote(invoice) {
  * File persistence (drop zone + PDF caching) is delegated to GenericPreviewModal
  * via attachmentConfig. The left panel is:
  *   - sales invoice, draft:     PDF viewer (regenerated on every open)
- *   - sales invoice, completed: managed by GenericPreviewModal (cached via ETGO_PREVIEW_FILE)
+ *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
 function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
@@ -249,18 +249,21 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // matching the Grid row quick-action and Form-view topbar gates. The
   // existing purchase-invoice exclusion stays: this window never sends email.
   const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  // ETP-4315 — real, marked Attachment (C_Invoice, shared with purchase-invoice
+  // below). Draft gate unchanged.
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
+    useMainAttachment: true,
     storeCondition: !isDraft,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
     token,
     apiBaseUrl,
   } : {
-    // ETP-4315 — real, marked Attachment shared with OcrSidePanel/"Adjuntos",
-    // not the ETGO_PREVIEW_FILE cache. C_Invoice is the physical table for
-    // both sales and purchase invoices; this branch only runs for purchase.
+    // ETP-4315 — real, marked Attachment shared with OcrSidePanel/"Adjuntos".
+    // C_Invoice is the physical table for both sales and purchase invoices;
+    // this branch only runs for purchase.
     documentId: invoice.id,
     tableName: 'C_Invoice',
     useMainAttachment: true,
