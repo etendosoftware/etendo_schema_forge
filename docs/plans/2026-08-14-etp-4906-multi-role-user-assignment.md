@@ -104,12 +104,27 @@ follow-up to finish the last piece and independently re-verify+commit everything
   new-code issues, Duplicated Lines Density 1.4%** — duplication confirmed gone, not
   just assumed. Vitest 652/652 files, 12149 tests, 0 failures.
 - **#2 (Organization flakiness)** — resolved above, needs a CI re-run only.
-- **#3 (Offline Regen Check)** — the only remaining item. Human wants to run a full
-  `update.database` + `smartbuild` + `make install` compilation cycle first to confirm
-  everything is clean, THEN have the coordinator run `make regen` scoped correctly, and
-  the human runs `export.database` themselves to produce the corrected
-  `sourcedata/*.xml`. **Coordinator is holding here — not running `make regen` until
-  the human reprompts after their compilation cycle.**
+- **#3 (Offline Regen Check) — RESOLVED, commit `c9ae4a36` in `com.etendoerp.go`.**
+  Human ran `update.database` + `smartbuild` + `make install` + relaunched `make dev`.
+  Coordinator then ran `make regen ONLY=user PUSH_TO_NEO=1` in `etendo_schema_forge`
+  (71 fields updated, 0 errors; `git status` in that repo was clean — decisions.json/
+  contract/generated were already fully in sync, only the live DB needed the push).
+  Human ran `./gradlew export.database` in the Etendo root. **The real files
+  (`ETGO_SF_ENTITY.xml`/`ETGO_SF_FIELD.xml`, in `com.etendoerp.go`, NOT
+  `etendo_schema_forge`) matched the original CI-reported drift EXACTLY** — same 1
+  entity (`ISDELETE`), same 6 field ids (`ISINCLUDED`/`ISREADONLY`) — verified
+  line-by-line, not assumed. `export.database` also touched 7 other files
+  (`ETGO_ACCOUNT.xml` model table, plus `AD_COLUMN`/`AD_ELEMENT`/`AD_FIELD`/
+  `AD_REFERENCE`/`AD_REF_LIST`/`AD_TABLE` sourcedata) — inspected every single diff
+  before including any of them: all zero-semantic-content (blank-line separator
+  noise from the export tool version, one harmless column reorder) — no unrelated
+  schema changes got swept in from other work on this shared local Etendo instance.
+  Committed locally, not pushed (`com.etendoerp.go` push rule, per Global Constraints).
+
+**All 5 CI items from this triage are now closed.** Remaining before PR-ready: push
+both branches' unpushed local commits (human's call), and the 2 standing human-only
+sign-off items from earlier in this ticket (Figma file access for the matrix's
+General-row convention; the pre-existing unrelated E2E flake noted above).
 
 ---
 
