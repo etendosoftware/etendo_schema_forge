@@ -145,12 +145,25 @@ function RoleChip({ children, 'data-testid': dataTestId = 'RoleChipsCell__chip' 
  * @param {Record<string, string[]>} props.assignments - from `useUserRoleGridData()`.
  * @param {boolean} [props.loading] - from `useUserRoleGridData()`; renders a skeleton
  *   while the bulk fetch is in flight instead of a premature empty/dash cell.
+ * @param {string} [props['data-testid']] - caller-supplied id for the whole-cell
+ *   wrapper, stable across every branch below (loading/admin/empty/chips). Distinct
+ *   from — and additional to — each branch's own internal, hardcoded testid
+ *   (`RoleChipsCell__skeleton`/`__admin`/`__empty`/`__chips`), which stays unchanged so
+ *   existing per-state assertions keep working. Defaults to `RoleChipsCell__cell` so any
+ *   un-audited call site still gets a stable selector even without passing the prop.
  */
-export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments, loading }) {
+export default function RoleChipsCell({
+  row, rolesById, adminRoleId, assignments, loading,
+  'data-testid': dataTestId = 'RoleChipsCell__cell',
+}) {
   const ui = useUI();
 
   if (loading) {
-    return <Skeleton className="h-6 w-20" data-testid="RoleChipsCell__skeleton" />;
+    return (
+      <span data-testid={dataTestId}>
+        <Skeleton className="h-6 w-20" data-testid="RoleChipsCell__skeleton" />
+      </span>
+    );
   }
 
   const defaultRoleId = resolveDefaultRoleId(row);
@@ -160,8 +173,10 @@ export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments
   // empty/dash cell (the bulk map has no entry for them at all).
   if (adminRoleId && defaultRoleId && defaultRoleId === adminRoleId) {
     return (
-      <span className="inline-flex items-center gap-1.5" data-testid="RoleChipsCell__admin">
-        <RoleChip data-testid="RoleChip__admin-badge">{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
+      <span data-testid={dataTestId}>
+        <span className="inline-flex items-center gap-1.5" data-testid="RoleChipsCell__admin">
+          <RoleChip data-testid="RoleChip__admin-badge">{ui(ADMIN_NAME_I18N_KEY)}</RoleChip>
+        </span>
       </span>
     );
   }
@@ -177,24 +192,30 @@ export default function RoleChipsCell({ row, rolesById, adminRoleId, assignments
     }));
 
   if (roleChips.length === 0) {
-    return <span className="text-muted-foreground" data-testid="RoleChipsCell__empty">—</span>;
+    return (
+      <span data-testid={dataTestId}>
+        <span className="text-muted-foreground" data-testid="RoleChipsCell__empty">—</span>
+      </span>
+    );
   }
 
   const shown = roleChips.slice(0, MAX_CHIPS);
   const extra = roleChips.length - shown.length;
 
   return (
-    <span className="inline-flex items-center gap-1.5 max-w-full" data-testid="RoleChipsCell__chips">
-      {shown.map(({ id, label }) => (
-        <RoleChip key={id} data-testid={`RoleChip__${id}`}>{label}</RoleChip>
-      ))}
-      {extra > 0 && (
-        <span
-          className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]"
-          data-testid="RoleChipsCell__overflow">
-          +{extra}
-        </span>
-      )}
+    <span data-testid={dataTestId}>
+      <span className="inline-flex items-center gap-1.5 max-w-full" data-testid="RoleChipsCell__chips">
+        {shown.map(({ id, label }) => (
+          <RoleChip key={id} data-testid={`RoleChip__${id}`}>{label}</RoleChip>
+        ))}
+        {extra > 0 && (
+          <span
+            className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]"
+            data-testid="RoleChipsCell__overflow">
+            +{extra}
+          </span>
+        )}
+      </span>
     </span>
   );
 }

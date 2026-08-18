@@ -29,8 +29,13 @@ import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.
  *   the combined template + client-admin roles array (already fetched once for the grid —
  *   see `RoleChipsCell.jsx`'s `useUserRoleGridData`, shared with the chips column so this
  *   filter never triggers its own fetch).
+ * @param {string} [props['data-testid']] - caller-supplied id for the whole-control
+ *   wrapper. Distinct from — and additional to — the internal, hardcoded
+ *   `RoleFilterControl__filter` on the underlying `DistinctValuesFilter`, which stays
+ *   unchanged. Defaults to `RoleFilterControl__toolbar` so any un-audited call site
+ *   still gets a stable selector even without passing the prop.
  */
-export function RoleFilterControl({ value, onChange, roles }) {
+export function RoleFilterControl({ value, onChange, roles, 'data-testid': dataTestId = 'RoleFilterControl__toolbar' }) {
   const ui = useUI();
 
   const codes = useMemo(
@@ -52,14 +57,16 @@ export function RoleFilterControl({ value, onChange, roles }) {
   if (codes.length === 0) return null;
 
   return (
-    <DistinctValuesFilter
-      value={value}
-      onChange={onChange}
-      codes={codes}
-      labelFor={labelFor}
-      allLabel={ui('roleFilterAllRoles')}
-      searchPlaceholder={ui('roleFilterSearchPlaceholder')}
-      data-testid="RoleFilterControl__filter" />
+    <span data-testid={dataTestId}>
+      <DistinctValuesFilter
+        value={value}
+        onChange={onChange}
+        codes={codes}
+        labelFor={labelFor}
+        allLabel={ui('roleFilterAllRoles')}
+        searchPlaceholder={ui('roleFilterSearchPlaceholder')}
+        data-testid="RoleFilterControl__filter" />
+    </span>
   );
 }
 

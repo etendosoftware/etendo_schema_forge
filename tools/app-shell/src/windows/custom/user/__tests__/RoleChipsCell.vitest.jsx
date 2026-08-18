@@ -253,4 +253,40 @@ describe('RoleChipsCell', () => {
     renderCell({ row: { defaultRole: 'role-fin' } });
     expect(screen.getByTestId('RoleChipsCell__empty')).toBeInTheDocument();
   });
+
+  // ETP-4906 — `data-testid` wrapper prop (was silently dropped: the component's
+  // signature never accepted it). Defaults to `RoleChipsCell__cell`, applied on the
+  // root of every branch, additional to (never replacing) that branch's own internal,
+  // hardcoded testid.
+  describe('data-testid wrapper prop', () => {
+    it('defaults to RoleChipsCell__cell and wraps the skeleton branch', () => {
+      renderCell({ loading: true });
+      const wrapper = screen.getByTestId('RoleChipsCell__cell');
+      expect(wrapper).toContainElement(screen.getByTestId('RoleChipsCell__skeleton'));
+    });
+
+    it('defaults to RoleChipsCell__cell and wraps the admin branch', () => {
+      renderCell({ row: { id: 'admin-user', defaultRole: 'role-admin' }, assignments: {} });
+      const wrapper = screen.getByTestId('RoleChipsCell__cell');
+      expect(wrapper).toContainElement(screen.getByTestId('RoleChipsCell__admin'));
+    });
+
+    it('defaults to RoleChipsCell__cell and wraps the empty branch', () => {
+      renderCell({ row: { id: 'user-2', defaultRole: 'role-fin' }, assignments: {} });
+      const wrapper = screen.getByTestId('RoleChipsCell__cell');
+      expect(wrapper).toContainElement(screen.getByTestId('RoleChipsCell__empty'));
+    });
+
+    it('defaults to RoleChipsCell__cell and wraps the chips branch', () => {
+      renderCell();
+      const wrapper = screen.getByTestId('RoleChipsCell__cell');
+      expect(wrapper).toContainElement(screen.getByTestId('RoleChipsCell__chips'));
+    });
+
+    it('honors a caller-supplied override instead of the default', () => {
+      renderCell({ 'data-testid': 'custom-role-cell' });
+      expect(screen.getByTestId('custom-role-cell')).toBeInTheDocument();
+      expect(screen.queryByTestId('RoleChipsCell__cell')).not.toBeInTheDocument();
+    });
+  });
 });

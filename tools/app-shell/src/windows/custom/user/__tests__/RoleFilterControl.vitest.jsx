@@ -94,4 +94,29 @@ describe('RoleFilterControl', () => {
     render(<RoleFilterControl value={null} onChange={vi.fn()} roles={[...ROLES, { id: null, name: 'Broken' }]} />);
     expect(screen.getByTestId('codes').textContent).not.toContain('Broken');
   });
+
+  // ETP-4906 — `data-testid` wrapper prop (was silently dropped: the component's
+  // signature never accepted it). Defaults to `RoleFilterControl__toolbar`, applied
+  // on the root wrapping element, additional to (never replacing) the internal,
+  // hardcoded `RoleFilterControl__filter` on the underlying `DistinctValuesFilter`.
+  describe('data-testid wrapper prop', () => {
+    it('defaults to RoleFilterControl__toolbar and wraps the underlying filter', () => {
+      render(<RoleFilterControl value={null} onChange={vi.fn()} roles={ROLES} />);
+      const wrapper = screen.getByTestId('RoleFilterControl__toolbar');
+      expect(wrapper).toContainElement(screen.getByTestId('stub-distinct'));
+    });
+
+    it('honors a caller-supplied override instead of the default', () => {
+      render(
+        <RoleFilterControl value={null} onChange={vi.fn()} roles={ROLES} data-testid="custom-role-filter" />,
+      );
+      expect(screen.getByTestId('custom-role-filter')).toBeInTheDocument();
+      expect(screen.queryByTestId('RoleFilterControl__toolbar')).not.toBeInTheDocument();
+    });
+
+    it('renders no wrapper when there are no roles (early-return path stays null)', () => {
+      const { container } = render(<RoleFilterControl value={null} onChange={vi.fn()} roles={[]} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
 });
