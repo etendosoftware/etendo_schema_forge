@@ -61,9 +61,13 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       await selectVendorBP(page);
 
       // [Plan 2.2] Verify BP callout populated dependent fields
-      const addressChip = page.getByTestId('field-partnerAddress-chip')
-        .or(page.locator('[data-testid*="partnerAddress"] .truncate, [data-testid*="partnerAddress"]'));
-      const addressValue = await addressChip.first().textContent().catch(() => '');
+      // The live dependent selector can render the selected country as a plain
+      // button rather than the chip test id, depending on the loaded
+      // contract/form variant. Prefer the user-visible selected value and keep
+      // the chip selector as a compatibility fallback.
+      const addressValue = await page.getByRole('button', { name: /Espa[nñ]a|Spain/ }).first().textContent().catch(async () => (
+        page.getByTestId('field-partnerAddress-chip').textContent().catch(() => '')
+      ));
       expect(addressValue,
         '[Plan 2.2] Address should be auto-filled after selecting the vendor (callout)',
       ).toBeTruthy();
