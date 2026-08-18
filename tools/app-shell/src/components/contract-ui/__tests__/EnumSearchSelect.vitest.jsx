@@ -38,6 +38,12 @@ async function openPanel() {
   return input;
 }
 
+// The empty-state <div> carries no testId, so locate it by its `noResultsFor` prefix and
+// then assert on the FULL rendered text. `noResultsFor` is a PREFIX key ("No results for"
+// / "Sin resultados para"), never a standalone sentence: asserting only the bare key would
+// still pass against the dangling-fragment regression this component shipped with.
+const emptyState = () => screen.getByText(/^noResultsFor/);
+
 describe('EnumSearchSelect — basic rendering', () => {
   it('renders the search icon and an input (no chip) when no value is selected', () => {
     render(<Harness onChange={vi.fn()} />);
@@ -97,7 +103,8 @@ describe('EnumSearchSelect — opening / closing the panel', () => {
     const input = await openPanel();
     fireEvent.change(input, { target: { value: 'zzz-no-match' } });
 
-    await waitFor(() => expect(screen.getByText('noResultsFor')).toBeInTheDocument());
+    // Prefix AND query must both be present — a bare `noResultsFor` is the regression.
+    await waitFor(() => expect(emptyState()).toHaveTextContent('zzz-no-match'));
     expect(screen.queryByTestId('enum-test-count')).not.toBeInTheDocument();
   });
 
@@ -145,7 +152,38 @@ describe('EnumSearchSelect — search / filter behavior', () => {
     const input = await openPanel();
     fireEvent.change(input, { target: { value: 'no-such-option' } });
 
-    await waitFor(() => expect(screen.getByText('noResultsFor')).toBeInTheDocument());
+    // Exact full text: the prefix, a space, and the query wrapped in typographic quotes —
+    // the same shape CreatableSearchSelect renders. The pre-fix source emitted only
+    // `noResultsFor`, which this assertion rejects.
+    await waitFor(() => expect(emptyState().textContent).toBe('noResultsFor \u201cno-such-option\u201d'));
+  });
+
+  it('appends the query even when the option list itself is empty (fallback is keyed on the query, not on the options)', async () => {
+    render(<Harness options={[]} onChange={vi.fn()} />);
+    const input = await openPanel();
+    fireEvent.change(input, { target: { value: 'anything' } });
+
+    await waitFor(() => expect(emptyState().textContent).toBe('noResultsFor \u201canything\u201d'));
+  });
+
+  it('renders the complete `noResults` sentence instead of the dangling prefix when the option list is empty and no query is typed', async () => {
+    render(<Harness options={[]} onChange={vi.fn()} />);
+    await openPanel();
+
+    // With no query there is nothing to append to the prefix, so the component must switch
+    // to the standalone `noResults` sentence rather than render a dangling `noResultsFor`.
+    expect(screen.getByText('noResults')).toBeInTheDocument();
+    expect(screen.queryByText(/noResultsFor/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('enum-test-count')).not.toBeInTheDocument();
+  });
+
+  it('treats a whitespace-only query as no query at all (still the complete `noResults` sentence)', async () => {
+    render(<Harness options={[]} onChange={vi.fn()} />);
+    const input = await openPanel();
+    fireEvent.change(input, { target: { value: '   ' } });
+
+    await waitFor(() => expect(screen.getByText('noResults')).toBeInTheDocument());
+    expect(screen.queryByText(/noResultsFor/)).not.toBeInTheDocument();
   });
 
   it('clearing the query back to empty restores the full option list', async () => {
