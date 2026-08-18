@@ -1,4 +1,4 @@
-import PreviewActionButtons, { makeStaticPreviewTabs } from '../PreviewActionButtons.jsx';
+import PreviewActionButtons from '../PreviewActionButtons.jsx';
 import ReturnDocStatsPanel from './ReturnDocStatsPanel.jsx';
 
 export function buildReturnPreviewContent({
@@ -40,7 +40,6 @@ export function buildReturnPreviewContent({
           data-testid="ReturnDocStatsPanel__634d79" />
       ),
     },
-    ...makeStaticPreviewTabs(ui),
   ];
 
   return { actionButtons, tabs };
