@@ -791,6 +791,46 @@ separate piece of work.
 
 ---
 
+## `onPageHelp` — Dead Prop Plumbing on the Generic TopBar Kebab (app-wide)
+
+**Component:** `components/layout/TopBar/TopBar.jsx`, `layout/AppLayout.jsx`, `components/layout/PageMetaContext.jsx`
+
+**Symptom:** Every window whose kebab menu goes through the generic `TopBar` (i.e. any window that
+calls `useSetPageMeta`, including AD-generated windows like Sales/Purchase Invoice via
+`DetailView.jsx`/`ListView.jsx`) shows a "Ayuda de esta página" (page help) item in its 3-dot menu.
+Clicking it does nothing.
+
+**Root cause:** `TopBar` accepts an `onPageHelp` prop with a default value of `() => {}` (a no-op).
+`AppLayout.jsx` forwards `onPageHelp={meta?.onPageHelp}` from `PageMetaContext`, but **no window in
+the codebase ever sets `meta.onPageHelp`** — `DetailView.jsx`/`ListView.jsx` only populate
+`onAddToFavorites`/`isFavorite` via `useSetPageMeta`, never `onPageHelp`. Because a React default
+parameter applies whenever the prop resolves to `undefined` (whether omitted or explicitly passed as
+`undefined`), `TopBar`'s `hasMenu` check (`onAddToFavorites || onPageHelp || menuAction`) always
+sees a truthy no-op function for `onPageHelp`, so the "Ayuda de esta página" item renders
+unconditionally but is permanently disconnected from any real help surface.
+
+**What functioning "help" actually looks like in this app:** `SideMenu.jsx`'s own help button
+(`onHelpClick`) already opens the real help surface correctly — `useSupportChat()`'s
+`actions.open()` + `actions.setTab('ayuda')`, landing on `SupportChatWidget`'s "Ayuda" tab (real,
+live-fetched Etendo Go docs via `components/support/helpDocs.js`). That is the one genuinely working
+help mechanism in the app; `onPageHelp` was evidently meant to wire into the same thing per-page but
+never got connected.
+
+**Fix (this pass):** Not fixed at the generic `TopBar`/`DetailView` level (out of scope for a
+window-scoped task — would touch every AD-generated window). `fiscal-models`' own kebab menus
+(`FmCommon.jsx`'s `MoreOptionsMenu`) were wired directly to the real mechanism
+(`useSupportChat().actions.open()` + `setTab('ayuda')`) instead of replicating the dead
+`onPageHelp` prop. Sales/Purchase Invoice and every other window still show the same dead item today.
+
+**Lesson:** before wiring a new window's kebab menu to "the same items window X already has," verify
+each item is actually functional in window X, not just visually present — a prop can render a
+correctly-styled, correctly-labelled menu entry while being permanently disconnected from any
+handler. Grep for where the prop is actually *set* (not just where it's read/defaulted) before
+treating it as a working pattern to copy. A real fix for `onPageHelp` app-wide belongs in
+`schema_forge_core`/Schema Forge Developer territory (`DetailView.jsx`/`ListView.jsx`/`TopBar.jsx`
+are shared generic components, not window-specific config) — file as a follow-up task rather than
+scope-creeping it into a single window's fix.
+
 ## ETP-4773: Missing "Required" Error on `inputMode: dependent` Fields
 
 **Component:** `EntityForm.jsx` — `DependentFkField`, `renderDependentField`

@@ -28,12 +28,23 @@ const API_BASE = '/sws/neo/sales-invoice';
 
 let fetchCalls;
 
-function installFetch({ lines = [], headerInvoices = [], years = [], postResponse = null, patchResponse = null } = {}) {
+// Defaults 349 to active so all pre-existing (pre-ETP-4755) tests that expect the
+// "Correctiva del 349" checkbox panel visible keep passing without having to know
+// about the catalog gate — tests that specifically exercise the gate override
+// `activeModels`.
+function installFetch({
+  lines = [], headerInvoices = [], years = [], postResponse = null, patchResponse = null,
+  activeModels = { '349': true }, catalogOk = true,
+} = {}) {
   fetchCalls = [];
   global.fetch = vi.fn(async (url, opts = {}) => {
     const method = opts.method ?? 'GET';
     fetchCalls.push({ url: String(url), method, body: opts.body ? JSON.parse(opts.body) : null });
     const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+    if (method === 'GET' && String(url).includes('/fiscal-models-catalog')) {
+      if (!catalogOk) return { ok: false, json: async () => ({}) };
+      return { ok: true, json: async () => activeModels };
+    }
     if (method === 'GET' && String(url).includes('/fiscal-calendar/year')) return ok(years);
     if (method === 'GET' && String(url).includes('/reversedInvoices')) return ok(lines);
     if (method === 'GET' && String(url).includes('/header')) return ok(headerInvoices);
@@ -213,6 +224,63 @@ describe('TC-05/TC-06 — 349 fields only visible when "Correctiva del 349" is c
     }
     // Checking alone must NOT fire a PATCH (year+period still missing)
     expect(patchCalls()).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Model 349 catalog gating (ETP-4755) — "Correctiva del 349" checkbox panel
+// is fail-closed: hidden while the /fiscal-models-catalog fetch is loading, on
+// failure, or unless the response confirms 349 === true. Mirrors NewDeclModal's
+// existing catalog-fail-closed convention (fiscal-models window).
+// ---------------------------------------------------------------------------
+
+describe('Model 349 catalog gating (ETP-4755) — "Correctiva del 349" checkbox panel', () => {
+  it('hides the checkbox panel for an existing row when the catalog reports 349 inactive', async () => {
+    renderPanel({ lines: [LINE()], activeModels: { '349': false } });
+    await expandFirstRow();
+
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+    expect(screen.queryByText('rectBaseProducts')).not.toBeInTheDocument();
+  });
+
+  it('hides the checkbox panel for a new-line draft row when the catalog reports 349 inactive', async () => {
+    renderPanel({ activeModels: { '349': false } });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+    // Draft row itself still renders (invoice picker, save/cancel) — only the
+    // 349-specific panel is gated.
+    expect(screen.getByTestId('btn__saveNewLine')).toBeInTheDocument();
+  });
+
+  it('hides the checkbox panel (fail-closed) when the catalog fetch fails, for both an existing row and a new-line draft', async () => {
+    renderPanel({ lines: [LINE()], catalogOk: false });
+    await expandFirstRow();
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('btn__addReversedInvoice'));
+    // Two ExpandedForm instances now render (existing row still expanded + new draft) —
+    // neither carries the checkbox panel.
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+  });
+
+  it('hides the checkbox panel when the catalog response is malformed (missing the 349 key)', async () => {
+    renderPanel({ lines: [LINE()], activeModels: {} });
+    await expandFirstRow();
+
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
+  });
+
+  it('leaves the read-only Modelo 349 grid-column badge unaffected by the catalog gate', async () => {
+    // Grid badge (CorrectivaBadge) reflects the row's own persisted aEAT349IsCorrective
+    // value — it is a display of past data, not the control that creates it, so the
+    // catalog gate (scoped to the checkbox inside ExpandedForm) must not hide it.
+    renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y' })], activeModels: { '349': false } });
+    await screen.findAllByText('10000067');
+
+    expect(screen.getByText('rectCorrective349Badge')).toBeInTheDocument();
+    await expandFirstRow();
+    expect(screen.queryByTestId('checkbox__isCorrective')).not.toBeInTheDocument();
   });
 });
 
