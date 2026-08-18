@@ -90,10 +90,8 @@ follow-up to finish the last piece and independently re-verify+commit everything
   repo's own local `sf-quality-gate` binary (`SF_ROOT=<repo> npx sf-quality-gate
   --window user --format json` — note `cli/sonar-check.sh` referenced elsewhere in this
   repo's docs no longer exists post-split) confirms `i18n: pass` for the `user` window.
-  **One pre-existing, unrelated E2E failure noted, not touched:** `user-role-assignment
-  .mocked.spec.js`'s "grid renders role chips per user" fails identically on a clean
-  `git stash` of this session's changes — confirmed pre-existing, not a regression from
-  this work, left for separate investigation.
+  **The "pre-existing E2E failure" noted below actually turned out to be 2 separate
+  things, both now resolved — see the dedicated section right after this list.**
 - **#5 (Sonar duplication) — commit `4500f5ba9`.** New
   `tools/app-shell/src/lib/neoWebhookClient.js` (`NEO_BASE` +
   `fetchNeoWebhookJson(url, webhookName, resolveFallback)`); both `rolesApi.js` and
@@ -121,10 +119,40 @@ follow-up to finish the last piece and independently re-verify+commit everything
   schema changes got swept in from other work on this shared local Etendo instance.
   Committed locally, not pushed (`com.etendoerp.go` push rule, per Global Constraints).
 
-**All 5 CI items from this triage are now closed.** Remaining before PR-ready: push
-both branches' unpushed local commits (human's call), and the 2 standing human-only
-sign-off items from earlier in this ticket (Figma file access for the matrix's
-General-row convention; the pre-existing unrelated E2E flake noted above).
+**All 5 CI items from this triage are now closed.**
+
+**Post-push follow-up (human, 2026-08-18): `com.etendoerp.go` pushed clean;
+`etendo_schema_forge`'s push failed pre-push on 1 E2E test.** Investigated properly
+rather than assuming it was the already-known pre-existing flake — turned out to be
+**2 separate, unrelated things**, both now resolved:
+
+1. **A genuinely stale test assertion, fixed — commit `43952136e`.**
+   `user-role-assignment.mocked.spec.js`'s "grid renders role chips per user..." test
+   asserted the OLD generic `RoleChipsCell__chip` testid — but the earlier `[W2]/[S1]`
+   data-testid round (see the very top banner) moved every chip to a per-role-unique
+   `RoleChip__<roleId>` id (confirmed directly in `RoleChipsCell.jsx`: every call site
+   passes an explicit id, `RoleChipsCell__chip` is dead default text no chip ever
+   actually carries). This assertion was never updated to match. Fixed to assert
+   `RoleChip__role-finance` instead.
+2. **A local infra artifact, NOT a code bug — resolved by restarting `make dev`.**
+   After the fix above, the SAME test (and, on a full-file run, ALL 7 tests in the
+   file, including previously-passing ones) still failed — but with a completely
+   different symptom: a blank page and `504 Outdated Optimize Dep` console errors on
+   `react-dom`/`sonner`/`next-themes`. Confirmed via a throwaway debug Playwright
+   script with `console`/`pageerror` listeners (deleted after use) that this was Vite's
+   dependency-optimization cache gone stale — almost certainly from the human's
+   `make install` step changing `node_modules` after the running Vite process had
+   already cached its optimized deps, and not self-healing across repeated requests.
+   Not a regression from any commit — fixed by the human restarting `make dev`.
+
+**Re-verified after both fixes, this time for real:** `user-role-assignment.mocked
+.spec.js` 7/7 passed; full Vitest suite 652/652 files, 12149/12152 tests passed (3
+skipped), 0 failures.
+
+**Remaining before PR-ready:** push `etendo_schema_forge`'s branch again (now that
+both issues above are resolved), and the 2 standing human-only sign-off items from
+earlier in this ticket (Figma file access for the matrix's General-row convention;
+nothing else outstanding).
 
 ---
 
