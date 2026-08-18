@@ -8,6 +8,86 @@
 
 ## Status (source of truth — update this table as work lands, before anything else)
 
+**✅ [W2] closed, [S1] partially closed on `feature/ETP-4906` (developer, 2026-08-18, commit
+`f3d50f7f5`, additional commit on top of the pushed branch/PR #1140 above — not yet pushed, human
+pushes it).** The coordinator independently verified this WARNING was worse than REVIEW's original
+[W2]/[S1] writeup described (see those findings below for the pre-fix detail) and dispatched a
+proper fix rather than leaving it deferred. Fixed the full original W2 (`Fragment`/`Provider`) plus
+the 3 dispatched instances of S1's broader finding, in `tools/app-shell/src/windows/custom/user/`:
+`UserRolesTab.jsx` (both `<Fragment>` no longer carry a `data-testid` — inert, `Fragment` can't
+accept one — moved an equivalent per-group-unique id onto the actual `<tr>` category-header row
+instead; `RoleIcon`/`TierPill` now get a per-row-unique id built from the row/role identifiers
+instead of one static hash reused across every row), `index.jsx` (removed the inert `data-testid`
+from `<RoleSelectionProvider>`, a bare `Context.Provider`), `RoleChipsCell.jsx` (mapped `<RoleChip>`
+instances now get a per-role-unique id from `role.id`; the single admin-badge instance keeps a
+static but now clearly-distinct id, `RoleChip__admin-badge`). Also found and fixed a second bug of
+the same shape while in there: `RoleChip` itself only destructured `{ children }`, so the
+`data-testid` prop passed at every call site was being silently dropped by the component
+definition too, independent of the Fragment/Provider issue. Root-caused and fixed the actual
+codemod (`scripts/add-data-testid.cjs`) rather than leaving REVIEW's suggestion open for "a future
+round" — it unconditionally stamps any uppercase-named JSX element, with no exception for
+`Fragment` or a `Context.Provider`/`Context.Consumer` re-export; added a name-based skip
+(`Fragment`, `*Provider`, `*Consumer`) so a manual fix on any window never gets silently re-broken
+by the next `check:data-testid`/`apply:data-testid` run. Regression tests added:
+`scripts/__tests__/add-data-testid.test.js` (5 new cases for the skip logic, 23/23 pass).
+Verification: `npm run check:data-testid` (both scoped to `tools/app-shell/src/windows/custom/user`
+and repo-wide) → **0 files needing modification**; `npx vitest run src/windows/custom/user/` →
+108/108 pass; full `npx vitest run` → **652 test files / 12141 tests pass, 0 failures**
+(the "unrelated AuthContext bug" line in the output is an intentional error-path test fixture, not
+a real failure). The "2 known non-blocking open items" bullet in the banner below is now stale —
+[W2] is fully closed; [W3] (`onAfterExistingSave` not wired into `renderDraftModeSaveActions`,
+future-window-only, not a gap in this ticket as shipped) remains open exactly as before. **[S1] is
+only partially closed** — 2 further inert instances outside this dispatch's scope
+(`RoleChipsCell`/`RoleFilterControl` not forwarding the `data-testid` *they themselves* receive
+from `UserHeaderTable.jsx`) are still open; see the updated "[S1]" finding below for the exact
+remainder and why it needs its own scoped pass rather than a copy-paste fix.
+
+---
+
+**✅ TICKET CLOSED — pushed, PRs open, awaiting human review/merge (coordinator, 2026-08-18).** This
+paragraph (and everything below it) is the state as of the original DEV→REVIEW→QA→DOCS close —
+superseded on the [W2]/[S1] point only by the banner above; read that one first.
+
+- Pipeline: DEV → REVIEW → QA → DOCS all APPROVE, zero open blockers. Multiple independent
+  verification passes throughout (not a single review cycle) — see the "REVIEW Findings"/"QA
+  Findings" sections dated 2026-08-17/18 near the end of this file for the full record.
+- Both repos pushed: `etendo_schema_forge` and `com.etendoerp.go`, branch `feature/ETP-4906` in
+  each. Sibling branches `feature/ETP-4852` and `feature/ETP-4878` (both repos where applicable)
+  were also rebased onto the latest `epic/ETP-3504` and pushed as part of this same session, since
+  ETP-4906 is stacked on top of them in `com.etendoerp.go` (created from `feature/ETP-4878`, which
+  was created from `feature/ETP-4852` — NOT created from epic directly in that repo; confirmed via
+  `git reflog`). In `etendo_schema_forge`, `feature/ETP-4906` was created directly from
+  `epic/ETP-3504` — no stacking there, despite ETP-4852 also having its own PR in that repo.
+- **Open PRs** (neither merged):
+  - `etendo_schema_forge`: https://github.com/etendosoftware/etendo_schema_forge/pull/1140
+    (`feature/ETP-4906` → `epic/ETP-3504`)
+  - `com.etendoerp.go`: https://github.com/etendosoftware/com.etendoerp.go/pull/875
+    (`feature/ETP-4906` → `feature/ETP-4878`, continuing the correct stack — do NOT re-target
+    this to `epic/ETP-3504` if re-touched, that would pull in ETP-4852/4878's entire diffs)
+- ~~**2 known, non-blocking open items**, both explicitly deferred by REVIEW to a future round, not
+  this ticket's own scope: `[W2]/[S1]` a `data-testid` codemod stamped invalid attributes on a
+  handful of `<Fragment>`/`Context.Provider`/other elements (cosmetic, no test depends on it);~~
+  **[W2] fixed, [S1] partially fixed, 2026-08-18, commit `f3d50f7f5` — see the banner at the very
+  top of this file for detail.** Open items now: `[W3]` `DetailView.jsx`'s `onAfterExistingSave`
+  prop isn't wired into `renderDraftModeSaveActions`'s Confirm button (only matters for a
+  hypothetical FUTURE draftMode window — the `user` window itself has no draftMode, unaffected as
+  shipped); a narrow remainder of `[S1]` (`RoleChipsCell`/`RoleFilterControl` not forwarding their
+  own received `data-testid` prop — genuinely out of the fix's dispatched scope, needs its own
+  scoped pass, see the "[S1]" finding below).
+- **Separate, unrelated finding escalated**: `ETP-4877` (Jira) got a comment during this session's
+  QA pass documenting a pre-existing, ETP-4906-unrelated `AD_Window_Access` ownership-corruption bug
+  on a DIFFERENT tenant's `RoleFinanzas` role (predates this ticket's own guard entirely) — relevant
+  to that ticket's own "verify access parity" migration step, tracked there, not here.
+- **Also produced this session** (informational, not blocking): a discussion doc proposing a
+  core-level fix for the underlying Etendo role-inheritance overlap bug this whole ticket's
+  `WindowAccessOverlapCorruptionGuard` works around at the module level — `docs/etendo-ad/role-inheritance-window-access-overlap-core-proposal.md`
+  in `etendo_schema_forge`, for future team discussion, not a dependency for this ticket.
+- **Nothing further expected from an agent on this ticket** unless a human reviewer requests changes
+  on either PR — if resuming cold and a PR has review comments, treat that as a fresh reject-cycle
+  entry point (same DEV → REVIEW → QA → DOCS discipline applies to any requested change).
+
+---
+
 **✅ DOCS DONE — pipeline complete, ticket ready for Clerk (Sage, 2026-08-18)** — the final pipeline
 phase. Closed REVIEW's `[W1]` finding: `com.etendoerp.go/docs/neo-headless.md` §8d's
 `WindowAccessOverlapCorruptionGuard` section was stale ("4 triggers"/"8 tests", written before B6
@@ -2151,6 +2231,13 @@ should not ship un-refreshed past DOCS.
 
 ### [W2] data-testid codemod stamped Fragment/Provider (WARNING, cosmetic — not caught by current tests)
 
+**FIXED 2026-08-18, commit `f3d50f7f5`** (see the banner at the very top of this file for full
+detail) — this was NOT just cosmetic on closer look: `S1` below found the gap was broader than
+this section originally described (`TierPill`/`RoleIcon`/`RoleChip` all reused one static id
+across every list row, and `RoleChip` itself was silently dropping the prop regardless), and the
+codemod itself was fixed so it can't re-stamp the invalid attributes on a future run. Original
+(now-resolved) finding kept below for history.
+
 `1824ef4c9` added `data-testid="Fragment__71bdc9"` to two `<Fragment key=... >` elements in
 `UserRolesTab.jsx:290,311` (`Fragment` is `React.Fragment`, imported directly — confirmed via the
 file's own import line) and `data-testid="RoleSelectionProvider__853799"` to
@@ -2472,7 +2559,24 @@ onAfterExistingSave` treatment (either via `handlePostSaveNavigation` or an equi
 ternary) in a follow-up dev round.
 
 **[S1] W2 (data-testid codemod) is broader than the Fragment/Provider pair already documented —
-suggestion, still non-blocking.** The prior "Rounds 5-7" pass's W2 named 2 instances. Reading the
+suggestion, still non-blocking.**
+
+> **PARTIALLY FIXED 2026-08-18, commit `f3d50f7f5`** (dispatched after the coordinator independently
+> re-verified this was worse than the note below suggests). Fixed: the `Fragment`/`RoleSelectionProvider`
+> pair (the original W2), `TierPill`/`RoleIcon` (were reusing one static id across every row —
+> now per-row-unique), and `RoleChipsCell.jsx`'s inner `RoleChip` (was silently dropping any
+> `data-testid` prop entirely, on top of the id-reuse problem — both fixed, mapped instances now
+> get a per-role-unique id via `role.id`). **NOT covered by this fix — still open, same root cause,
+> genuinely out of that dispatch's scope:** the two instances flagged below where `RoleChipsCell`
+> and `RoleFilterControl` don't forward the `data-testid` prop *they themselves* receive from
+> `UserHeaderTable.jsx` (lines 88/119) — fixing this cleanly means deciding whether `RoleChipsCell`/
+> `RoleFilterControl` should destructure-and-apply `data-testid` on their own root element, and
+> whether `DistinctValuesFilter` (`@/components/ui/distinct-values-filter`, a shared component
+> outside this window) actually forwards it through to a DOM node in the first place — that needs
+> its own scoped check before being touched, not a same-shape copy-paste fix. Left open for a
+> follow-up round.
+
+The prior "Rounds 5-7" pass's W2 named 2 instances. Reading the
 new `user` custom components fresh turned up 3 more locally-defined components stamped with a
 `data-testid` prop they don't forward at all (not even a Fragment-style dev console warning —
 these are plain function components that simply ignore the extra prop):
