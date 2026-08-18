@@ -102,14 +102,18 @@ export default function RolesOverviewPage() {
               data-testid="RolesOverviewPage__cards"
             >
               {cards.map((role) => (
-                <RoleSummaryCard key={role.id} role={role} Icon={ROLE_ICONS[resolveRoleKind(role)]} />
+                <RoleSummaryCard
+                  key={role.id}
+                  role={role}
+                  Icon={ROLE_ICONS[resolveRoleKind(role)]}
+                  data-testid={`RoleSummaryCard__wrapper-${role.id}`} />
               ))}
             </div>
             <RolesAccessMatrix
               cards={cards}
               matrix={matrix}
               iconFor={(role) => ROLE_ICONS[resolveRoleKind(role)]}
-            />
+              data-testid="RolesAccessMatrix__67e3bc" />
           </div>
         );
       })()}
