@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, GripVertical, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -196,7 +197,6 @@ export function ListModalWindow({
   // `__Host-` cookie. It is still threaded to the child below, which has not been
   // migrated yet, but it never reaches a request header from here.
   const token = tokenProp ?? auth?.token;
-  const csrfToken = auth?.csrfToken;
 
   const apiBaseUrl = useMemo(
     () => apiBaseUrlProp || (api?.baseUrl ? `${getApiBase()}${api.baseUrl}` : getApiBase()),
@@ -273,12 +273,11 @@ export function ListModalWindow({
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
 
-  // Every caller of this is an unsafe method (POST/PUT/PATCH/DELETE), so the CSRF
-  // proof is always required here; it is omitted only when no session provides one.
-  const authHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
-  }), [csrfToken]);
+  // Every caller of this is an unsafe method (POST/PUT/PATCH/DELETE), so the write
+  // builder is always the right one. It is referenced, not wrapped: the builder
+  // reads the active scheme when the request is issued, so there is nothing to
+  // memoize and nothing that can go stale between renders.
+  const authHeaders = writeHeaders;
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {

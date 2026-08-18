@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
+import { buildHeaders, buildWriteHeaders, detectBaseUrl } from '@/auth/api.js';
 
 /**
  * Per-user, per-window named filter presets backed by
@@ -15,7 +15,7 @@ import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
  * Callers decide what to put in (e.g., { columnFilters, advancedFilter }).
  */
 export function useWindowFilterPresets(windowName) {
-  const { isAuthenticated, csrfToken } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [presets, setPresets] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -47,13 +47,13 @@ export function useWindowFilterPresets(windowName) {
       await fetch(url, {
         method: 'PUT',
         // ETP-4576 — unsafe method: the backend requires the CSRF proof.
-        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
+        headers: buildWriteHeaders(),
         body: JSON.stringify(payload ?? {}),
         credentials: 'include',
       });
       setPresets((prev) => ({ ...prev, [presetName]: payload ?? {} }));
     },
-    [windowName, isAuthenticated, csrfToken, baseUrl],
+    [windowName, isAuthenticated, baseUrl],
   );
 
   const deletePreset = useCallback(
@@ -63,7 +63,7 @@ export function useWindowFilterPresets(windowName) {
       await fetch(url, {
         method: 'DELETE',
         // ETP-4576 — unsafe method: the backend requires the CSRF proof.
-        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
+        headers: buildWriteHeaders(),
         credentials: 'include',
       });
       setPresets((prev) => {
@@ -72,7 +72,7 @@ export function useWindowFilterPresets(windowName) {
         return next;
       });
     },
-    [windowName, isAuthenticated, csrfToken, baseUrl],
+    [windowName, isAuthenticated, baseUrl],
   );
 
   return { presets, loading, refresh, savePreset, deletePreset };

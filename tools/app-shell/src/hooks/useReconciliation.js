@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { useNeoResource, getApiBase } from './useNeoResource';
 
 const BASE_PATH = '/sws/neo/bank-reconciliation';
@@ -25,7 +25,6 @@ function buildQuery(params) {
  * @returns {{ post: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */
 function useNeoPost(action) {
-  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -37,8 +36,7 @@ function useNeoPost(action) {
       // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
       // bearer token. This is an unsafe method, so the backend also requires the
       // CSRF proof.
-      const headers = { 'Content-Type': 'application/json' };
-      if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
+      const headers = writeHeaders();
       const res = await fetch(url, {
         method: 'POST',
         headers,
@@ -62,7 +60,7 @@ function useNeoPost(action) {
     } finally {
       setLoading(false);
     }
-  }, [csrfToken, action]);
+  }, [action]);
 
   return { post, loading, error };
 }

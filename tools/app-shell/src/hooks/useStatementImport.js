@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { getApiBase } from './useNeoResource';
 
@@ -16,7 +15,6 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementImport() {
-  const { csrfToken } = useAuth();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -51,7 +49,7 @@ export function useStatementImport() {
     } finally {
       setImporting(false);
     }
-  }, [csrfToken]);
+  }, []);
 
   return { importStatement, importing, error };
 }

@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
+import { buildHeaders, buildWriteHeaders, detectBaseUrl } from '@/auth/api.js';
 
 const FavoritesContext = createContext(null);
 
@@ -41,7 +41,7 @@ function writeFavorites(username, list) {
 }
 
 export function FavoritesProvider({ children }) {
-  const { username, isAuthenticated, csrfToken } = useAuth();
+  const { username, isAuthenticated } = useAuth();
   const [favorites, setFavorites] = useState(() => readFavorites(username));
   const fetchedRef = useRef(false);
 
@@ -78,12 +78,12 @@ export function FavoritesProvider({ children }) {
       fetch(FAVORITES_ENDPOINT, {
         method: 'PUT',
         // ETP-4576 — unsafe method: the backend requires the CSRF proof.
-        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
+        headers: buildWriteHeaders(),
         body: JSON.stringify(list),
         credentials: 'include',
       }).catch(() => {});
     },
-    [isAuthenticated, csrfToken]
+    [isAuthenticated]
   );
 
   const addFavorite = useCallback(

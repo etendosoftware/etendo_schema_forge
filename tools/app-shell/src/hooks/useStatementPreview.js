@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { getApiBase } from './useNeoResource';
 
@@ -30,7 +29,6 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementPreview() {
-  const { csrfToken } = useAuth();
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState(null);
 
@@ -66,7 +64,7 @@ export function useStatementPreview() {
     } finally {
       setPreviewing(false);
     }
-  }, [csrfToken]);
+  }, []);
 
   return { previewStatement, previewing, error };
 }

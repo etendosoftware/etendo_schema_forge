@@ -183,9 +183,10 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
   const contextKey = JSON.stringify(selectorContext ?? {});
 
   React.useEffect(() => {
-    // ETP-4576 — no gate on a client-held token: the `__Host-` session cookie is
-    // the credential. buildHeaders() carries no credential either; it exists for
-    // Content-Type and Accept-Language.
+    // ETP-4576 — no gate on a client-held token: whether a credential exists on
+    // the client is the active scheme's business, and buildHeaders() resolves it.
+    // Gating here on a token that the cookie session never provides is what made
+    // migrated call sites go silent instead of failing.
     if (!parentValue || !selectorUrl) {
       setDynamicOptions([]);
       return;

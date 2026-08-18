@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { buildHeaders } from '@/auth/api';
+import { buildWriteHeaders } from '@/auth/api';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
@@ -56,7 +56,11 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
       const { succeeded, failed } = await runBatchDelete(pendingRows, (row) =>
         fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
           method: 'DELETE',
-          headers: buildHeaders(token),
+          // ETP-4576 — DELETE is unsafe, so it needs the write builder, and the
+          // session cookie only travels with `credentials: 'include'`. This call
+          // had neither: it passed a token to a builder that ignores it.
+          headers: buildWriteHeaders(),
+          credentials: 'include',
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return row;

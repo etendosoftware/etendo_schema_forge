@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import { jsonHeaders, writeHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
@@ -61,7 +60,6 @@ function parseSelectorItems(json) {
 }
 
 export function useAccountMutations() {
-  const { csrfToken } = useAuth();
 
   const createAccount = useCallback(async (payload) => {
     const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
@@ -73,7 +71,7 @@ export function useAccountMutations() {
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [csrfToken]);
+  }, []);
 
   const updateAccount = useCallback(async (accountId, payload) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
@@ -86,7 +84,7 @@ export function useAccountMutations() {
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [csrfToken]);
+  }, []);
 
   const archiveAccount = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
@@ -97,7 +95,7 @@ export function useAccountMutations() {
     });
     if (!res.ok) await throwHttpError(res);
     return true;
-  }, [csrfToken]);
+  }, []);
 
   /**
    * Currency list + session default for the New/Edit account forms, served by
@@ -134,7 +132,7 @@ export function useAccountMutations() {
     }
 
     return { currencies, defaultCurrencyId };
-  }, [csrfToken]);
+  }, []);
 
   return { createAccount, updateAccount, archiveAccount, fetchDefaults };
 }

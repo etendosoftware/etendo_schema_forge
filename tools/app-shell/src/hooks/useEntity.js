@@ -16,24 +16,24 @@ import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
 export { isEmailField };
 
-// ETP-4576 — the `__Host-` session cookie is the credential, so no header carries
-// one. Kept local rather than delegating to lib/sessionHeaders.js because these
-// requests also need `Accept-Language`, which is specific to this hook.
+// Propagate the UI locale so backend AD_Message translations match the language
+// the user selected in the frontend. Specific to this hook, which is why the
+// builders below wrap the shared ones instead of being replaced by them.
+function acceptLanguage() {
+    try { return localStorage.getItem('schema-forge-locale') || 'es_ES'; } catch { return 'es_ES'; }
+}
+
+// ETP-4576 — which credential authenticates the request is not decided here: the
+// shared builders read the active scheme, so these two only add the locale.
 function buildHeaders() {
-    let locale = 'es_ES';
-    try { locale = localStorage.getItem('schema-forge-locale') || 'es_ES'; } catch { /* SSR/test */ }
-    return {
-        'Content-Type': 'application/json',
-        // Propagate the UI locale so backend AD_Message translations match the
-        // language the user selected in the frontend.
-        'Accept-Language': locale,
-    };
+    return { ...jsonHeaders(), 'Accept-Language': acceptLanguage() };
 }
 
 export function pickMessageFromObject(node) {
@@ -302,13 +302,11 @@ function resolveSortKey(sortColumn, sampleRow) {
 
 /**
  * Headers for the unsafe methods this hook issues (save, delete, add-child,
- * process actions). Same as the read headers plus the CSRF proof, which the
- * backend requires on POST/PATCH/DELETE and ignores on GET.
+ * process actions). Same as the read headers plus whatever proof the active
+ * scheme requires on POST/PATCH/DELETE — the shared builder decides.
  */
 function buildMutationHeaders() {
-    const headers = buildHeaders();
-    if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
-    return headers;
+    return { ...writeHeaders(), 'Accept-Language': acceptLanguage() };
 }
 
 function deriveRecordId(record, entityName) {
@@ -748,7 +746,6 @@ function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
 }
 
 export function useEntity(entity, childEntity, {
-    csrfToken,
     apiBaseUrl,
     childSortBy,
     baseFilter,
@@ -856,7 +853,7 @@ export function useEntity(entity, childEntity, {
                 setHasMore(false);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, csrfToken, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [apiBaseUrl, entity, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
 
     const loadMore = useCallback(() => {
         if (!hasMore || loadingMore || loading) return;
@@ -898,7 +895,7 @@ export function useEntity(entity, childEntity, {
                 setLoadingMore(false);
                 setHasMore(false);
             });
-    }, [apiBaseUrl, entity, csrfToken, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [apiBaseUrl, entity, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
 
     // List fetch is a mount-time decision. Flipping skipListFetch after mount
     // (e.g. a detail view whose recordId goes 'new' → ':id') must NOT retroactively
@@ -942,7 +939,7 @@ export function useEntity(entity, childEntity, {
             // at just because one background request failed transiently.
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, csrfToken, childSortBy]);
+    }, [apiBaseUrl, childEntity, childSortBy]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -975,7 +972,7 @@ export function useEntity(entity, childEntity, {
         // unstable and re-fire DetailView's fetch effect every render (infinite
         // loop / network never idles).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiBaseUrl, childEntity, csrfToken]);
+    }, [apiBaseUrl, childEntity]);
 
     const fetchById = useCallback((id) => {
         if (!id) return;
@@ -993,7 +990,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, csrfToken, fetchChildren]);
+    }, [apiBaseUrl, entity, fetchChildren]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1096,7 +1093,7 @@ export function useEntity(entity, childEntity, {
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
         }
-    }, [apiBaseUrl, entity, csrfToken, headers]);
+    }, [apiBaseUrl, entity, headers]);
 
     const handleChange = useCallback((field, value) => {
         userChangedKeysRef.current.add(field);
@@ -1236,7 +1233,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, csrfToken, ui, fetchChildren]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1261,7 +1258,7 @@ export function useEntity(entity, childEntity, {
             toast.error(err?.message || 'Network error');
             return false;
         }
-    }, [selected, apiBaseUrl, entity, csrfToken, refresh, ui]);
+    }, [selected, apiBaseUrl, entity, refresh, ui]);
 
     const handleAddChild = useCallback(async (childData) => {
         if (!childEntity || !apiBaseUrl || !selected?.id) return;
@@ -1309,7 +1306,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, csrfToken, selected, headers, fetchChildren, ui]);
+    }, [childEntity, apiBaseUrl, selected, headers, fetchChildren, ui]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
         setChildren(prev => prev.map(c => {
@@ -1374,7 +1371,7 @@ export function useEntity(entity, childEntity, {
         } catch { /* ignore, fall back to saved */
         }
         return saved;
-    }, [handleSave, apiBaseUrl, entity, specName, csrfToken, refresh, ui]);
+    }, [handleSave, apiBaseUrl, entity, specName, refresh, ui]);
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
@@ -1429,7 +1426,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, apiBaseUrl, csrfToken, refresh, fetchById, ui]);
+    }, [selected, entity, specName, apiBaseUrl, refresh, fetchById, ui]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST

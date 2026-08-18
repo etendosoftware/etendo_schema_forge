@@ -4,7 +4,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { buildHeaders } from '@/auth/api';
+import { buildWriteHeaders } from '@/auth/api';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 
@@ -47,7 +47,11 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, 
       } else {
         const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
           method: 'DELETE',
-          headers: buildHeaders(token),
+          // ETP-4576 — DELETE is unsafe, so it needs the write builder, and the
+          // session cookie only travels with `credentials: 'include'`. This call
+          // had neither: it passed a token to a builder that ignores it.
+          headers: buildWriteHeaders(),
+          credentials: 'include',
         });
         if (!res.ok) {
           const msg = await extractErrorMessage(res, ui);

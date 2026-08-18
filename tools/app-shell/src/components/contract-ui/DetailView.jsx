@@ -52,7 +52,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { useEntity } from '@/hooks/useEntity';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import { useCallout } from '@/hooks/useCallout';
@@ -219,7 +218,7 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, csrfToken, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  const { api, apiBaseUrl, secondaryHooks, stIdx, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
   return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
@@ -295,7 +294,6 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {number} deps.stIdx - current secondary tab index
  * @param {object} deps.api - resolved API config (for crud detail URLs)
  * @param {string} deps.apiBaseUrl - base URL for NEO Headless requests
- * @param {string} [deps.csrfToken] - CSRF proof for unsafe methods (ETP-4576)
  * @param {object} deps.secondaryHooks - per-tab child entity hooks
  * @param {Function} deps.ui - i18n label resolver
  * @param {Function} deps.extractErrorMessage - response error extractor
@@ -315,7 +313,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  */
 export function buildSecondaryLineHandlers(deps) {
   const {
-    st, stIdx, api, apiBaseUrl, csrfToken, secondaryHooks, ui,
+    st, stIdx, api, apiBaseUrl, secondaryHooks, ui,
     extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
     selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
     setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -620,7 +618,6 @@ export function SecondaryTableTab(props) {
                 apiBaseUrl: props.apiBaseUrl,
                 secondaryHooks: props.secondaryHooks,
                 stIdx: props.stIdx,
-                csrfToken: props.csrfToken,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
                 isDocumentReadOnly: tabReadOnly,
@@ -697,7 +694,7 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, csrfToken, extractErrorMessage, ui }) {
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, extractErrorMessage, ui }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys
     // (camelCase), an unwrapped body, and numeric strings coerced for
@@ -800,7 +797,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
   } : undefined;
 }
 
-export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, csrfToken, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
+export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
   return (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
     if (!(await confirmDelete())) return;
     try {
@@ -1155,7 +1152,7 @@ function renderSaveActions(params) {
 }
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
-  selectedChildRows, api, detailEntity, apiBaseUrl, csrfToken, hook, ui,
+  selectedChildRows, api, detailEntity, apiBaseUrl, hook, ui,
   setSelectedChildRows, setExecutingDetailProcess,
 }) {
   const rows = explicitRows || selectedChildRows;
@@ -1354,19 +1351,17 @@ export function DetailView({
   // above for why the global allowlist itself must never include 'product'.
   dimensionsPanelFieldKeys = [],
 }) {
-  // ETP-4576 — the session is the `__Host-` cookie, so requests carry no
-  // credential; only unsafe methods need the CSRF proof. Read once here, in the
-  // component body: the exported helpers above (buildSecondaryLineHandlers,
-  // buildDeleteRowHandler, …) take it as a `csrfToken` dep instead of calling
-  // useAuth themselves, because 15 test files import them and invoke them without
-  // mounting the component — a hook in there would break every one of them.
-  const { csrfToken } = useAuth();
+  // ETP-4576 — nothing in this component decides how a request authenticates, so
+  // no credential is read here and none is threaded into the exported helpers
+  // below. They build their headers through the shared builders, which are plain
+  // functions over the active scheme — not hooks — so the 15 test files that
+  // import and invoke them without mounting the component still work.
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
   // the effect falls through to fetchById. Skipping the list fetch unconditionally drops one
   // wasted GET per direct-URL navigation.
-  const hook = useEntity(entity, detailEntity, { csrfToken, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName });
+  const hook = useEntity(entity, detailEntity, { apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1399,11 +1394,11 @@ export function DetailView({
   // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
   // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
   // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
-  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { csrfToken, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { csrfToken, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { csrfToken, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { csrfToken, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { csrfToken, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
@@ -1561,7 +1556,7 @@ export function DetailView({
       .map(([key]) => key),
     [lineDisplayLogic?.visibility, trustedDimensionKeys]
   );
-  const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { csrfToken, apiBaseUrl });
+  const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl });
   // ETP-4479 — fall back to the per-window default when the caller didn't
@@ -2738,7 +2733,7 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, csrfToken, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
 
   const othersRef = useRef(null);
 
@@ -3673,8 +3668,8 @@ export function DetailView({
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, csrfToken, extractErrorMessage, ui })}
-                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, csrfToken, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, extractErrorMessage, ui })}
+                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
                                     active: addingLine,
@@ -4119,7 +4114,7 @@ export function DetailView({
                           // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
                           if (!isActiveTab && !st.Panel) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
-                            st, stIdx, api, apiBaseUrl, csrfToken, secondaryHooks, ui,
+                            st, stIdx, api, apiBaseUrl, secondaryHooks, ui,
                             extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
                             selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
                             setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -4151,7 +4146,6 @@ export function DetailView({
                                 secondaryInlineLinesRef={getSecondaryInlineLinesRef}
                                 secondaryHooks={secondaryHooks}
                                 token={token}
-                                csrfToken={csrfToken}
                                 apiBaseUrl={apiBaseUrl}
                                 selectorContextByEntity={selectorContextByEntity}
                                 catalogs={catalogs}

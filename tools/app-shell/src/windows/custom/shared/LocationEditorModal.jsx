@@ -1,7 +1,7 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
 import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
-import {useAuth} from '@/auth/AuthContext.jsx';
+import {jsonHeaders, writeHeaders} from '@/lib/sessionHeaders.js';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 
@@ -183,7 +183,6 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
-    const { csrfToken } = useAuth();
     const [form, setForm] = useState(EMPTY_FORM);
     const [countries, setCountries] = useState([]);
     const [countrySelectorBase, setCountrySelectorBase] = useState('');
@@ -212,9 +211,12 @@ export default function LocationEditorModal({
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
 
-    // ETP-4576 — reads carry no auth header: the `__Host-` session cookie does it.
-    // Only the unsafe methods below add the CSRF proof.
-    const authHeader = {};
+    // ETP-4576 — the read headers for this modal's selector calls. Whether they
+    // carry a credential is the active scheme's decision, not this file's: under
+    // the `__Host-` session cookie they carry none, under the bearer token they
+    // carry it. It was an empty object while only the cookie existed, which left
+    // every selector here unauthenticated the moment the token came back.
+    const authHeader = jsonHeaders();
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -568,7 +570,6 @@ export default function LocationEditorModal({
         countryHasMore,
         countryOffset,
         countriesLoading,
-        csrfToken,
     ]);
 
     useEffect(() => {
@@ -626,7 +627,6 @@ export default function LocationEditorModal({
         regionOffset,
         regionsLoading,
         form.country,
-        csrfToken,
     ]);
 
     function setField(key, value) {
@@ -703,12 +703,9 @@ export default function LocationEditorModal({
                 payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
                 payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
             }
-            // ETP-4576 — unsafe methods: the backend requires the CSRF proof.
-            const postHeaders = {
-                ...authHeader,
-                'Content-Type': 'application/json',
-                ...(csrfToken ? {'X-Go-CSRF': csrfToken} : {}),
-            };
+            // ETP-4576 — unsafe methods: the write builder adds whatever proof the
+            // active scheme requires on top of the read headers.
+            const postHeaders = writeHeaders();
 
             if (bplLinkId) {
                 // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 import { getApiBase } from './useNeoResource';
 
 const BASE_PATH = '/sws/neo/financial-account-bank-connection';
@@ -109,7 +109,6 @@ function waitForConnection(popup) {
  * }}
  */
 export function useBankConnectionActions() {
-  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -120,13 +119,10 @@ export function useBankConnectionActions() {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const url = `${getApiBase()}${BASE_PATH}${buildQuery({ action, ...query })}`;
-      // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
-      // bearer token. `method` is a parameter here, so the CSRF proof is added
-      // only for the unsafe methods that the backend demands it on.
-      const headers = { 'Content-Type': 'application/json' };
-      if (csrfToken && UNSAFE_METHODS.has(method.toUpperCase())) {
-        headers['X-Go-CSRF'] = csrfToken;
-      }
+      // ETP-4576 — `method` is a parameter here, so the builder is picked by its
+      // safety: only unsafe methods carry the write proof. Which credential that
+      // proof is, and whether one is needed at all, is the builders' decision.
+      const headers = UNSAFE_METHODS.has(method.toUpperCase()) ? writeHeaders() : jsonHeaders();
       const res = await fetch(url, {
         method,
         headers,
@@ -152,7 +148,7 @@ export function useBankConnectionActions() {
       clearTimeout(timer);
       setLoading(false);
     }
-  }, [csrfToken]);
+  }, []);
 
   const connect = useCallback(
     // financialAccountId is optional: when connecting an existing account the bridge uses it to

@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import { jsonHeaders, writeHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
@@ -31,7 +30,6 @@ function firstRecord(json) {
 }
 
 export function useFinancialAccountAccounting() {
-  const { csrfToken } = useAuth();
 
   const fetchAccountingConfiguration = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}?financialAccountId=${encodeURIComponent(accountId)}`;
@@ -55,7 +53,7 @@ export function useFinancialAccountAccounting() {
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [csrfToken]);
+  }, []);
 
   return { fetchAccountingConfiguration, saveAccountingConfiguration };
 }

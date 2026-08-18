@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useCallback, useState } from 'react';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
@@ -28,15 +28,9 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
   // ETP-4576 — no credential is threaded in any more: the session is the
   // `__Host-` cookie. This hook only needs the CSRF proof, which it reads from
   // the auth context itself, so callers stop passing a token.
-  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const headers = useMemo(() => ({
-    'Content-Type': 'application/json',
-    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
-  }), [csrfToken]);
-
-  const execute = useCallback(async (recordId, actionName) => {
+    const execute = useCallback(async (recordId, actionName) => {
     if (!apiBaseUrl || !recordId || !actionName) {
       return { success: false, message: `Missing required params: apiBaseUrl=${apiBaseUrl}, recordId=${recordId}, actionName=${actionName}` };
     }
@@ -44,7 +38,7 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     try {
       const res = await fetch(
         `${apiBaseUrl}/${entityName}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(actionName)}`,
-        { method: 'POST', headers, credentials: 'include', body: '{}' },
+        { method: 'POST', headers: writeHeaders(), credentials: 'include', body: '{}' },
       );
       const body = await res.json().catch(() => null);
       const nested = body?.response?.data?.[0];
@@ -63,7 +57,7 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, entityName, headers]);
+  }, [apiBaseUrl, entityName]);
 
   return { execute, loading };
 }

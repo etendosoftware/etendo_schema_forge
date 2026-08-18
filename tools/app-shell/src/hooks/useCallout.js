@@ -21,7 +21,7 @@ function sanitizeCalloutMessage(raw) {
  * calloutResult: { updates, combos, messages } from the last callout response.
  * executeCallout(field, value, formState): triggers the callout (debounced 300ms).
  */
-export function useCallout(entity, { csrfToken, apiBaseUrl }) {
+export function useCallout(entity, { apiBaseUrl }) {
   const [calloutResult, setCalloutResult] = useState(null);
   const [calloutLoading, setCalloutLoading] = useState(false);
   // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each other
@@ -92,7 +92,7 @@ export function useCallout(entity, { csrfToken, apiBaseUrl }) {
         setCalloutLoading(false);
       }
     }, 300);
-  }, [entity, csrfToken, apiBaseUrl]);
+  }, [entity, apiBaseUrl]);
 
   return { calloutResult, calloutLoading, executeCallout };
 }
