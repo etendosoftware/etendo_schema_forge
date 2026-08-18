@@ -107,6 +107,54 @@ alone would produce a fix that looks complete and still lets the original probe 
 `sales-order/header` — the two must land together, or IMP-30's test must explicitly cover an entity
 with a qualifier.
 
+## 6.1 §4.1's proposed signal column is already occupied — the plan does not work as written
+
+**Added 2026-08-14. This refutes §4.1 above; the superseded proposal is deliberately left in place
+per this directory's no-rewriting rule.**
+
+§4.1 nominates `ETGO_SF_FIELD.java_qualifier` as the per-field signal, on the grounds that "the column
+is present — verified in `information_schema.columns`". That verified the column **exists**. It did not
+verify the column is **free**, and it is not:
+
+```sql
+SELECT count(*) AS total_fields,
+       count(java_qualifier) AS with_qual,
+       count(*) FILTER (WHERE java_qualifier ILIKE '%handler%') AS naming_a_handler
+  FROM etgo_sf_field;
+
+ total_fields | with_qual | naming_a_handler
+ 6468         | 5203      | 0
+```
+
+The column carries the **DAL property name**, not a handler name — `invoiceAddress`, `documentStatus`,
+`bookQuantity`, `quantityOrderBook`. **Zero of 6,468 rows name a handler.**
+
+So the rule as specified ("a field whose own qualifier names the handler is handler-supplied and must
+stay exempt") discriminates nothing: no field would ever match, and clause 2 would re-arm everywhere —
+precisely the unsafe outcome §3 says must be avoided.
+
+The likelier failure is worse, because it looks like success. Anyone simplifying the predicate to
+"qualifier is non-blank ⇒ exempt" exempts 5,203 of 6,468 fields, **including the three this item was
+opened on** (`invoiceAddress`, `documentStatus`, `grandTotalAmount` all carry a populated qualifier).
+The rejection would then reject nothing while the diff looks complete — the same failure mode as
+[IMP-30](IMP-30.md) §4, where a green unit test covered a method the router never calls.
+
+**Consequence for the fix:** step 1 of §4 needs a genuinely new per-field column (with its own AD
+records and `make uuid` ids), or a different signal entirely. It cannot reuse `java_qualifier`.
+
+Related correction to §4.3's backfill list: it names `bookQuantity` and the invoice handlers' injected
+fields, but **omits `sales-order/header.invoiceAddress`**, which is `isincluded=Y, isreadonly=Y,
+visibility=system, defaultvalue=NULL` and AD-mandatory, and which `SalesOrderHeaderHandler` does *not*
+write (§2). Re-arming clause 2 without backfilling it makes `sales-order` creation unsatisfiable:
+the field cannot be omitted (AD-mandatory, no default) and cannot be sent (rejected), and the callout
+that fills it in the UI does not run on the MCP path.
+
+By contrast `product/price.product` — read-only and system-curated, so a natural second candidate for
+this list — **does not need backfilling**: `ProductPriceHandler` genuinely injects it along with
+`priceLimit` and `priceListVersion` ([IMP-28](IMP-28.md) §7.5a), so it is handler-supplied in fact and
+not only by entity association. It is recorded here because it looks like a victim and is not; the
+distinction between those two cases is exactly what the per-field signal has to encode.
+
 ## 7. Done when
 
 - [ ] Clause 2 rejects a read-only field on an entity that **has** a `Java_Qualifier`, when the

@@ -253,6 +253,87 @@ derived read-only fields would use, distinct from this item's one-line serialize
 human; **not registered by this pass.** Item (b) is downgraded into this item's clause 2 per the note
 above and needs no number.
 
+---
+
+## 8. Scope decision, 2026-08-14 — clause 2 deferred, `writableVia` kept
+
+**Human decision. Tracked as Jira ETP-4918.**
+
+The item ships in two parts, and only the first is in ETP-4918:
+
+| Clause | In ETP-4918 | Why |
+|---|---|---|
+| 1 — `visibility:"readOnly"` ⇒ `readOnly:true` | ✅ yes | The serializer fix (§7.4 step 1) |
+| 3 — hint documents `visibility` | ✅ yes | §7.4 step 3 |
+| invariant test (`readOnly` never disagrees with `visibility`) | ✅ yes | §6 |
+| `writableVia` pointer (§7.5a) | ✅ yes | See below |
+| 2 — **reject** the read-only write instead of dropping it | ❌ **deferred** | See below |
+
+**Why clause 2 is deferred.** It is the same mechanism as [IMP-30](IMP-30.md) and
+[IMP-31](IMP-31.md) — turning on the read-only rejection — and that mechanism cannot be turned on
+safely until the per-field exemption signal exists and its exempt fields are backfilled
+([IMP-31](IMP-31.md) §6.1). Shipping it inside this item would break `sales-order` creation, which
+today succeeds only because IMP-31's blanket exemption lets `invoiceAddress` through.
+
+Crucially, **clause 2 is not what unblocks frozen task 3.** The task fails because the contract lies
+about where the value lives, not because the write is silently dropped. Clause 1 + `writableVia` are
+sufficient for an agent to set a price by following the contract alone. Clause 2 improves the
+*diagnostic* for an agent that writes the computed field anyway — worth having, wrong place to have it.
+
+Clause 2 therefore moves to the hardening block (IMP-30 + IMP-31 + this clause), and it absorbs
+§7.5b's remaining half (the entity advertising write methods with zero writable fields) exactly as
+that note specified.
+
+**Scoring consequence, stated so it is not read as a surprise later:** this item can score at most
+**⚠️ 2.5 / 5** until clause 2 lands, even if ETP-4918 fully succeeds. That is accepted. The reason to
+do this work is M2 — frozen task 3 is the only failing task on the executable suite, and it carries
+30 % of MARI against Delivery's 25 % — not the 2.5 Delivery points.
+
+**Why `writableVia` is kept here despite §7.5's proposal to split it.** §7.5 proposed it as a separate
+item on the argument that it is a reusable mechanism. It is kept in ETP-4918 because without it clause
+1 closes the contradiction and leaves the task still failing — the exact trap §5 names. Splitting it
+would produce a shipped item that moves no metric. If the pointer later proves general enough to
+deserve its own row, it can be registered then, on evidence of a second consumer.
+
+**Prerequisite confirmed the same day:** the human authorized processing physical inventories on
+`etendo-go-local` for the next benchmark run, which is what makes the stock third of task 3 measurable
+at all (processing is a completion action, otherwise forbidden by the skill's Step 0.1). That
+authorization is **per-run** and must be re-confirmed at measurement time, not inherited from this note.
+
+### 8.1 Correction, same day — "deferred" was the wrong word for clause 2
+
+**The table above is wrong on one row and is kept visible rather than edited, per the no-rewriting
+rule.** Clause 2 is not un-implemented and was not deferred by ETP-4918. It is **already implemented
+and committed on `feature/ETP-4793`**, verified by reading the branch base (`5d5d8865`) before any
+ETP-4918 work landed on it:
+
+```
+NeoFieldFilter.java:81   private final Set<String> rejectableOnCreateFields;
+NeoFieldFilter.java:157  boolean entityHasHandler = sfEntity.getJavaQualifier() != null …
+NeoFieldFilter.java:223  } else if (!entityHasHandler && !hasConfiguredDefault(…)) {
+NeoFieldFilter.java:228      rejectableOnCreate.add(propName);
+```
+
+Clause 1 was likewise **already shipped** on the same base — `readOnlyByColumnId` populated at
+`McpSchemaFieldBuilder.java:161-193` and OR-ed in as `curatedReadOnly` at `:470`. The `readOnly:false`
+next to `visibility:"readOnly"` recorded in §2 was measured against an **earlier build**
+(`8f0d1cce` / `0cb67084`), before that fix existed.
+
+So the accurate statement is: **clause 2 is written and inert.** It is unreachable from the MCP path
+([IMP-30](IMP-30.md) — the router never calls `filterCreateRequest`) and neutralized on the REST path
+for any entity carrying a handler ([IMP-31](IMP-31.md) — the blanket `entityHasHandler` exemption).
+What is deferred is not *implementing* clause 2 but *making it effective*, and that is exactly what
+IMP-30 and IMP-31 are. The sequencing warning in §8 stands unchanged and is if anything sharper: the
+mechanism is already in the tree, so the day IMP-30/IMP-31 land it starts firing — with
+`sales-order/header.invoiceAddress` still unbackfilled.
+
+**What this leaves ETP-4918 actually delivering:** the `writableVia` pointer, the hint changes, the
+belt-and-suspenders third OR term, and the tests — including a test for `readOnlyByColumnId` at the
+`loadFieldMetadata` level, which shipped on the base **untested**. That is a smaller diff than the
+ticket implies and it is the *right* smaller diff: §5's trap is that clause 1 alone closes the
+contradiction and leaves task 3 failing, which is precisely the state `feature/ETP-4793` was in.
+`writableVia` is the part that moves the metric.
+
 ### 7.6 The trap, restated sharper than §5
 
 Clause 1 alone makes `readOnly:true` agree with `visibility:"readOnly"` and stops there. Task 3 still
