@@ -125,7 +125,7 @@ const ROLE_IDS = {
 // object literals so the 5 roles below read as data, not 5 near-identical object shapes —
 // keeps this file's mock fixture from tripping SonarQube's copy-paste detector on structurally
 // repeated `{ id, name, tier }` / `{ id, name, rawDescription, ... }` blocks.
-function mockRole(id, name, rawDescription, isClientAdmin, roleSource, windowCount, userCount, windows) {
+function mockRole({ id, name, rawDescription, isClientAdmin, roleSource, windowCount, userCount, windows }) {
   return {
     id,
     name,
@@ -166,31 +166,51 @@ function mockCategory(name, windows) {
 function handleRolesOverviewRequest() {
   return makeResponse(200, {
     roles: [
-      mockRole(ROLE_IDS.admin, 'GOClient Admin', 'GOClient Admin', true, 'tenant', 48, 2, [
-        ['108', 'User', 'full'],
-        ['146', 'Price List', 'full'],
-        ['137', 'Tax', 'full'],
-      ]),
-      mockRole(ROLE_IDS.finance, 'Finance', ROLE_BOILERPLATE_DESCRIPTION, false, 'tenant', 27, 2, [
-        ['mock-financial-account', 'Financial Account', 'full'],
-        ['mock-payment-in', 'Payment In', 'full'],
-        ['mock-payment-out', 'Payment Out', 'full'],
-        ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
-      ]),
-      mockRole(ROLE_IDS.sales, 'Sales', ROLE_BOILERPLATE_DESCRIPTION, false, 'tenant', 13, 3, [
-        ['mock-business-partner', 'Business Partner', 'full'],
-        ['mock-sales-order', 'Sales Order', 'full'],
-        ['mock-sales-quotation', 'Sales Quotation', 'full'],
-      ]),
-      mockRole(ROLE_IDS.purchasing, 'Purchasing', ROLE_BOILERPLATE_DESCRIPTION, false, 'systemTemplate', 11, 1, [
-        ['mock-purchase-order', 'Purchase Order', 'full'],
-        ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
-      ]),
-      mockRole(ROLE_IDS.inventory, 'Inventory', ROLE_BOILERPLATE_DESCRIPTION, false, 'tenant', 13, 1, [
-        ['mock-goods-receipt', 'Goods Receipt', 'full'],
-        ['mock-goods-shipment', 'Goods Shipment', 'full'],
-        ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
-      ]),
+      mockRole({
+        id: ROLE_IDS.admin, name: 'GOClient Admin', rawDescription: 'GOClient Admin',
+        isClientAdmin: true, roleSource: 'tenant', windowCount: 48, userCount: 2,
+        windows: [
+          ['108', 'User', 'full'],
+          ['146', 'Price List', 'full'],
+          ['137', 'Tax', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.finance, name: 'Finance', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 27, userCount: 2,
+        windows: [
+          ['mock-financial-account', 'Financial Account', 'full'],
+          ['mock-payment-in', 'Payment In', 'full'],
+          ['mock-payment-out', 'Payment Out', 'full'],
+          ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.sales, name: 'Sales', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 13, userCount: 3,
+        windows: [
+          ['mock-business-partner', 'Business Partner', 'full'],
+          ['mock-sales-order', 'Sales Order', 'full'],
+          ['mock-sales-quotation', 'Sales Quotation', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.purchasing, name: 'Purchasing', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'systemTemplate', windowCount: 11, userCount: 1,
+        windows: [
+          ['mock-purchase-order', 'Purchase Order', 'full'],
+          ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.inventory, name: 'Inventory', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 13, userCount: 1,
+        windows: [
+          ['mock-goods-receipt', 'Goods Receipt', 'full'],
+          ['mock-goods-shipment', 'Goods Shipment', 'full'],
+          ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
+        ],
+      }),
     ],
     // ETP-4907 follow-up: illustrative only — a small representative slice, NOT verified
     // against the live category/window breakdown (this session has no DB access). In
