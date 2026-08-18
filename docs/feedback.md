@@ -988,3 +988,104 @@ into ETP-4841.
 **Lesson:** a passing test suite proves nothing about files the runner never collects. When
 adding tests under a directory that is not the runner's root, confirm they actually execute
 (`--reporter=verbose` and look for the filename) before treating them as coverage.
+
+---
+
+## [2026-08-14] ETP-4795 — First cash close read its cleared movements off a collection that is never populated
+
+**Component:** `CashCloseSupport.java` / `CashCloseHandler.java` (com.etendoerp.go) — cash close
+confirm flow
+
+**Symptom:** Confirming the FIRST close of a cash account was rejected with
+`There is a difference of <full counted amount> and this account has no accounting concept
+configured for it.` — even though the panel showed *La caja cuadra* and *Diferencia 0,00 €*.
+Pressing "Confirmar cierre de caja" a second time succeeded. On an account that DOES have a GL
+Item Difference configured the first attempt did not error at all: it silently posted an
+adjustment transaction for the entire counted amount and completed the reconciliation.
+
+**Root cause:** `clearedNet()` summed `draft.getFINFinaccTransactionList()`. When the draft was
+created earlier in the same request, it comes from `OBProvider.getInstance().get(...)` (inside
+`AdvPaymentMngtDao.getNewReconciliation`), so that one-to-many list is a plain in-memory
+collection that is **never** loaded from the database — while linking a movement sets the FK on the
+owning side (`trx.setReconciliation(draft)`), which never appears in it. The cleared net therefore
+read as 0 and the whole declared balance looked like a discrepancy. The second attempt worked
+because `findDraft()` then returned a draft loaded from the DB, whose collection is a real lazy
+proxy. `rewriteDatesAndSettleInvoices()` iterated the same list, so on a first close it also
+skipped pushing post-dated movements forward and settling the invoices of linked payments.
+
+**Why the test suites missed it:** the unit tests stubbed `getFINFinaccTransactionList()` directly,
+so they asserted the buggy read as if it were the contract; and QA's manual pass exercised
+"Guardar borrador" before confirming, which is exactly the path that reloads the draft from the DB.
+
+**Fix:** new `CashCloseHandler.linkedTransactions(rec)` seam that queries
+`FIN_FinaccTransaction where reconciliation.id = :id`. `clearedNet`,
+`rewriteDatesAndSettleInvoices` and `syncMarkedMovements` all read through it, so a freshly created
+and a reloaded draft behave identically. Covered by
+`CashCloseHandlerTest#testClearedNetIsReadFromTheLinkedTransactionsNotTheEntityList` (plus a
+counter-test that a genuine difference without a concept is still rejected) and end-to-end by
+`e2e/tests/flows/financial-account-cash-close.integration.spec.js`, which closes a freshly onboarded
+drawer and would have caught this on its first run.
+
+**Lesson:** never read an inverse (one-to-many) collection to make a decision about entities linked
+during the SAME request. Hibernate only populates it when the parent came from the database; an
+entity built by `OBProvider` carries an empty list that stays empty no matter how many owning-side
+FKs point at it. Query the owning side instead. The tell-tale symptom is "it works the second
+time".
+
+**Companion fix (same ticket):** the handler's rejections are hardcoded English literals with no
+`AD_Message` behind them, so they reached the toast untranslated. They are now mapped through
+`translateBackendError` (`backendError.cashClose*` keys in both locales). The difference amount is
+deliberately dropped rather than interpolated — the backend sends a raw
+`BigDecimal.toPlainString()`, and rendering that as money would break the repo's currency-format
+policy; the formatted figure is already on screen in the close summary.
+
+**Second companion fix (same ticket):** the Reconciliations tab did not refresh after a confirmed
+close — the user had to reload the page to see it, and its count badge stayed stale. That list is
+fetched by `windows/custom/financial-account/index.jsx` (lifted out of the tab so the badge can show
+a count without the tab being mounted), so `onCloseSuccess` has to call its `reload` alongside
+`reloadAccount`/`reloadMovements`. Guarded by
+`index.vitest.jsx` → "reloads the reconciliations list after a confirmed cash close", and asserted
+before any navigation in the E2E spec's step 8.
+**Lesson:** when a hook is lifted out of the
+component that owns the action, every mutation path has to reload it explicitly — the component
+that triggers the change no longer owns the query.
+
+---
+
+## [2026-08-14] ETP-4795 — No freshly onboarded tenant could reconcile: the dataset shipped no 'REC' document type
+
+**Component:** `modules/com.etendoerp.go/referencedata/sampledata/GOClient/` (onboarding dataset)
+
+**Symptom:** On a brand-new tenant, confirming a cash close returned HTTP 400 `No 'REC' document
+type configured for organization …`. The same flow worked on the GOClient sample tenant, which made
+it look like a cash-close bug. It is not: `CashCloseHandler.createDraft` resolves
+`FIN_Utility.getDocumentType(org, "REC")` before creating the draft, and there was no such document
+type for the new client.
+
+**Root cause:** the onboarding dataset shipped 48 document types covering 32 base types, and `REC`
+(Reconciliation) was not one of them — nor was its document-number sequence. The source GOClient
+client does have both records; they were simply never added to the exported XML. Document types are
+provisioned ONLY by this dataset since ETP-4428 removed the programmatic `CreateDocTypesStep`, so
+nothing else could compensate.
+
+**Blast radius, bigger than the cash close:** Core's `APRM_MatchingUtility
+.addNewDraftReconciliation` — the BANK reconciliation path — resolves the same document type through
+`AD_GET_DOCTYPE(..., 'REC')` and throws `APRM_NoDocTypeRec` when it is missing. So *no* reconciliation
+of any kind was possible on a new tenant, cash or bank.
+
+**Fix:** added the `REC` document type, its `Reconciliation` auto-sequence (starting at 1000000, not
+carrying the source instance's counter) and both translation rows to `C_DOCTYPE.xml` /
+`AD_SEQUENCE.xml` / `C_DOCTYPE_TRL.xml`, mirroring the ETP-4121 precedent that seeded `BSF` the same
+way. Guarded by `ReconciliationDocTypeSampleDataTest` (4 cases: the document type exists exactly
+once and is doc-no controlled; its sequence is shipped, auto, and starts from STARTNO; both tables
+are in `OnboardingDatasetDefinition.getIncludedTables()`; the type is translated in both languages).
+Verified end to end: a tenant onboarded after the change gets the document type, and the cash-close
+integration spec closes a drawer on it, producing reconciliation `1000000` in state `CO`.
+
+**Lesson:** a provisioning gap reads exactly like a feature bug, and the tell is that it reproduces
+on a NEW tenant but not on the sample one. When a flow works on GOClient and fails on a fresh
+client, compare the two clients' master data before reading any handler code — here, one
+`select docbasetype from c_doctype where ad_client_id = …` on both clients would have pointed at it
+immediately. The corollary for tests: only integration tests that run against a **freshly onboarded**
+tenant can catch this class of bug, which is precisely why the `integration` Playwright project
+depends on `onboarding-setup`.
