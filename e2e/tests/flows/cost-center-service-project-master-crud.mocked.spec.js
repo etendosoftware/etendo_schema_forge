@@ -222,11 +222,25 @@ for (const { spec, entity } of WINDOWS) {
       await page.getByTestId('field-searchKey').fill('MW-NEW-002');
       // Name intentionally left empty.
 
-      // No POST should ever be sent — this is a pure client-side gate
+      // No SAVE POST should ever be sent — this is a pure client-side gate
       // (useEntity.js getMissingRequiredFields runs before any fetch on isNew).
+      //
+      // The matcher below is scoped to the bare create URL (`/sws/neo/{spec}/{entity}`,
+      // optionally followed by a query string) rather than a loose `.includes()` on that
+      // prefix. A loose prefix match also catches `POST /sws/neo/{spec}/{entity}/evaluate-display`
+      // — the unconditional, debounced (300ms) display-logic re-evaluation call fired by
+      // useDisplayLogic.js on every field-value change, header AND lines, regardless of
+      // window or isNew (see DetailView.jsx's `cacheableKeys: DIMENSION_MACRO_KEYS` — the
+      // dimension-macro fields are always considered "cacheable" so the `!values.id` skip
+      // never applies). That call has nothing to do with the required-field save gate, but
+      // it lands within the debounce window of this test's searchKey fill + save click, so
+      // a loose matcher flakes on exactly the same race for ANY window in this suite —
+      // reproduced locally for both `cost-center` and `service-project` by widening the
+      // window between the click and the assertion.
+      const savePostUrlRe = new RegExp(`/sws/neo/${spec}/${entity}(\\?|$)`);
       let postSent = false;
       page.on('request', (r) => {
-        if (r.url().includes(`/sws/neo/${spec}/${entity}`) && r.method() === 'POST') postSent = true;
+        if (savePostUrlRe.test(r.url()) && r.method() === 'POST') postSent = true;
       });
 
       const saveBtn = page.getByTestId('action-save');
