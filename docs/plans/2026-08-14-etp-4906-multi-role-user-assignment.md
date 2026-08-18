@@ -8,6 +8,21 @@
 
 ## Status (source of truth — update this table as work lands, before anything else)
 
+**✅ DOCS DONE — pipeline complete, ticket ready for Clerk (Sage, 2026-08-18)** — the final pipeline
+phase. Closed REVIEW's `[W1]` finding: `com.etendoerp.go/docs/neo-headless.md` §8d's
+`WindowAccessOverlapCorruptionGuard` section was stale ("4 triggers"/"8 tests", written before B6
+rounds 6-8 landed) — rewritten from the class's own javadoc (primary source of truth per REVIEW's
+own confirmation it stayed internally accurate through 8 rounds) to the current 7 triggers + the
+BUG-2 refinement, and §9's testing table corrected to the real 13/3 test counts. See "DOCS Findings
+— Final Pass (Sage, 2026-08-18)" below for full detail. `docs/generated-custom-windows/user.md`
+freshness-checked, confirmed not drifted — no changes needed there (rounds 5-8 were
+`com.etendoerp.go`-only). **DEV → REVIEW → QA → DOCS are now all closed, zero open blockers.** The
+two open REVIEW warnings (W2/S1 data-testid codemod, W3 `onAfterExistingSave` draftMode wiring) are
+both explicitly non-blocking and code-side, correctly left open for a future dev pass rather than
+gating this ticket. From a pipeline-phase standpoint, ETP-4906 is ready for Clerk to prepare the
+PR(s) across both repos. Prior QA/REVIEW verdict history (all accurate as of their own time)
+follows.
+
 **✅ QA APPROVE — BUG-2 fix independently re-verified, ticket fully approved end to end (Sentinel,
 2026-08-18)** — the developer's fix for BUG-2 (the HIGH `onUpdate`/`UPDATED_GRANT`
 most-permissive-wins gap QA's Final Coverage Pass found and live-reproduced) plus GAP-1/GAP-2 (the
@@ -192,7 +207,7 @@ ticket's own scope, (3) ticket looks ready for Clerk to prepare the PR(s) once (
 | F7 | Invite snackbar | 🚫 DESCOPED, moved to ETP-4830 | Human decision 2026-08-14, same pattern as B4/F4 → ETP-4889: no invite-email mechanism exists for admin-created users today (see F7 Findings), so no snackbar ships in ETP-4906. `InviteRolesSnackbar.jsx` will land together with the real email flow when ETP-4830 (already assigned to the human, status TBD) is picked up. |
 | F8 | i18n keys | ⏳ PENDING | Rolls into F3/F5/F6 as they land — no standalone dispatch. F7 is descoped, so it contributes no i18n keys. |
 | F9 | Tests (Tester) | ✅ DONE (Vitest + Playwright done, both known bugs FIXED, stale tests updated, i18n gap closed — see F9 Findings, DEV wave 4 + Tester wave 5) | Vitest coverage landed for F2/F3/F5/F6 + the `DetailView.jsx` `onAfterExistingSave` prop (F1/F3) — 9 files, 135 new tests, full suite green. Playwright landed: `e2e/tests/flows/user-role-assignment.mocked.spec.js`, multi-role assign flow on an existing user (chip toggle/removal, live matrix, save wiring, reload persistence) + grid role filter (template role + Admin). F7's invite snackbar stayed out of scope (descoped to ETP-4830, no component exists). A real, severe bug was found while writing the Save-flow scenario: role-only chip changes could never enable the "Guardar" button — **FIXED (DEV wave 4):** `additionalDirtyState` wired through `windows/custom/user/index.jsx`. A second, smaller i18n gap (4 missing locale keys in `AssignTemplateRolesControl.jsx`) was also found and **FIXED same session.** **Tester wave 5 (2026-08-14, this session) — DONE:** folded the stale `KNOWN BUG` Playwright test into `once Guardar is clickable…`, renamed to `a role-only chip change enables Guardar and, once clicked, calls SFAssignUserRoles exactly once with the full desired role-id set`, now asserting the fixed behavior end to end (role-only toggle enables Guardar, toggling back disables it, save fires the webhook once, post-save Guardar disables again, an unrelated second save doesn't re-fire) — spec now 7 tests, all green. Added 4 new Vitest tests in `index.vitest.jsx` directly covering the `additionalDirtyState` prop (initial `false`, becomes `true` on toggle, returns to `false` on toggle-back, and the critical post-save regression case). Also closed the adjacent `roleAssignmentSaveFailed` i18n gap (both locale files) noticed but left unfixed by DEV wave 4. See "F9 Findings" and "Tester Wave 5 Verification" below for full detail. |
-| F10 | Docs (Sage) | ✅ DONE (2026-08-17, full freshness pass against waves 6-12/B5/B6) | See "DOCS Findings — Full Pass (Sage, 2026-08-17)" below. Fixed real staleness the earlier pass (commit `acf7e78cf`) and REVIEW's narrower re-checks both missed: `user.md`'s field list/reactive-behavior/gap-assessment text still described the discarded First Name/Last Name callout (wave 12) as live; wave 11's matrix visual polish (pills, category-header casing, per-role icons) had zero doc coverage; the pipeline-regeneration section didn't cover wave 12's independent `decisions.json` diff; `02-capacidades-y-flujos.md`'s CAP-ROL-02 "Huecos abiertos" bullet still claimed the excluded `userRoles` tab "still reflects" its legacy row post-wave-6, when it no longer renders at all. Also added `user` as a "Real example" in `ui-customization.md`'s `headerExtra`/`customComponents.headerTable` sections and refreshed `INDEX.md`'s stale ETP-4512-era one-liner for `user.md`. Verified `docs/neo-headless.md` §8d's `WindowAccessOverlapCorruptionGuard` subsection (REVIEW's own addition) is complete and well-integrated — no changes needed there. Checked `onAfterExistingSave`/B6's `EntityPersistenceEventObserver` pattern for cross-cutting indexing gaps — both intentionally out of scope for existing doc structures (consistent with their own precedents, `onAfterCreate`/`ContactNameSyncHandler`, also undocumented there) — flagged as non-blocking suggestions, not fixed. All i18n keys the doc relies on independently re-verified present in both locale files. |
+| F10 | Docs (Sage) | ✅ DONE (2026-08-18, final pass — §8d rewritten against rounds 6-8/BUG-2, closing REVIEW's [W1]) | See "DOCS Findings — Final Pass (Sage, 2026-08-18)" below, on top of "DOCS Findings — Full Pass (Sage, 2026-08-17)" (waves 6-12/B5/B6 rounds 1-4, `user.md`/`docs/functionalidad/`/`ui-customization.md`/`INDEX.md`, unchanged, not redone). This pass closes REVIEW's `[W1]` finding: rewrote `com.etendoerp.go/docs/neo-headless.md` §8d's `WindowAccessOverlapCorruptionGuard` section from "4 triggers"/"8 tests" to the current **7 triggers + the BUG-2 refinement** (added triggers 6/7, split old trigger 4 into 4+5, added the BUG-2 paragraph), read directly off the class's own javadoc (1520 lines, `com.etendoerp.go` commit `2d74f91a`) per the dispatch's instruction, not reconstructed from the plan doc's own per-round "B6 Findings" trail. Also corrected §9's `UserRoleCompositionServiceOverlapIntegrationTest` row (718→1181 lines, 8→13 tests, named the 5 new round-6/7/8 tests) and `UserRoleCompositionServiceOverlapReverificationTest` row (275→308 lines; it was already in the table, contrary to the dispatch's framing — corrected the record on that, not just the doc). `user.md` freshness check: no changes needed, confirmed no drift (read in full, zero references to guard internals). W2/S1 (data-testid codemod) and W3 (`onAfterExistingSave` draftMode wiring) confirmed not contradicted anywhere in `user.md` — correctly left as open code-side items, not doc issues. |
 | DEV wave 6 | 5 manual-QA fixes (spacing, blank-trigger, toast sequencing, duplicate tab, unfiltered matrix) | ✅ DONE + tested | Frontend only. Commits `66c0df38b` (fix) + `7f75e37f7` (Tester follow-up). See "Manual QA Feedback... DEV wave 6" section. |
 | DEV wave 7 | Padding correction + new `SFSystemRoleTemplates` backend endpoint + 4-file frontend repoint | ✅ CODE DONE, ⚠️ tests RED | Both repos. `etendo_schema_forge` commit `6b40bc7dd`, `com.etendoerp.go` commit `90f08997`. 46 Vitest tests failing (mock gap only, see Findings). **Tester NOT dispatched yet — paused by human.** Human is currently rebuilding/redeploying `com.etendoerp.go` to test this live. See "Manual QA Feedback Round 2... DEV wave 7" section. |
 | B5 | Backend test gap: real access-control scenarios (no-access x2, read-only, full, most-permissive-wins) against real seed data | ✅ DONE | `com.etendoerp.go` commit `8dbc1805` — "Feature ETP-4906: Add real-seed-data access-control JUnit tests". New sibling file `UserRoleCompositionServiceRealAccessControlIntegrationTest.java`, 3 test methods, all 4 outcomes, real DB, 3/3 green. **Also found (NOT fixed, escalated to B6):** the pre-existing `UserRoleCompositionServiceOverlapIntegrationTest` (4/4 tests) fails against a REAL, legitimate composed user account — a genuine scoping gap in ETP-4852's fix, not test pollution — see "B5 Findings" below. |
@@ -3516,6 +3531,118 @@ manual-eyeball-test checklist — is a human-facing step, not a pipeline-phase g
 pre-existing, ETP-4906-unrelated `AD_Window_Access` corruption on `RoleFinanzas`) is already
 correctly scoped to a separate Remedy follow-up by QA. From a pipeline-phase standpoint this ticket
 looks ready for Clerk to prepare the PR(s).
+
+## DOCS Findings — Final Pass (Sage, 2026-08-18)
+
+**Scope of this pass:** the coordinator's dispatch, after REVIEW's independent final fresh pass
+(2026-08-18) and QA's BUG-2 re-check APPROVE, was narrow — refresh `com.etendoerp.go/docs/
+neo-headless.md` §8d, the one item REVIEW flagged as stale (finding "[W1]", written against
+`1676f716`, before B6 rounds 6-8 landed) and confirm `docs/generated-custom-windows/user.md` had
+not drifted. The prior "DOCS Findings — Full Pass (Sage, 2026-08-17)" section above already covers
+waves 6-12/B5/B6 rounds 1-4 for `user.md`, `docs/functionalidad/`, `docs/ui-customization.md`, and
+`INDEX.md` — none of that work is redone or re-litigated here.
+
+**§8d rewritten against the class javadoc, not the plan doc's own "B6 Findings" trail.** Per the
+dispatch's own instruction, `WindowAccessOverlapCorruptionGuard.java`'s class javadoc (lines
+50-448, `com.etendoerp.go` `feature/ETP-4906`, commits through `2d74f91a`) was read directly and
+used as the primary source of truth — REVIEW's own "Final Fresh Pass" had already confirmed this
+javadoc is internally accurate after 8 rounds of iteration, and the per-round "B6 Findings" sections
+scattered across this plan doc are historical trail (what was tried, including 2 designs later
+proven wrong and replaced), not a current-state spec. Read the full javadoc (7 numbered
+trigger sections plus the `[BUG-2]` addendum, the `PropagationTrigger` enum's own javadoc at line
+1017, and `guardDependentsOf`'s dispatch logic at line 1044) rather than reconstructing history
+purely from the plan doc's 8 separate "B6 Findings"/REVIEW-round sections.
+
+**What changed in `docs/neo-headless.md` §8d:**
+- The "System-wide guard" numbered list went from 4 triggers to the current **7 triggers + the
+  BUG-2 refinement of trigger 7**: added trigger 6 (REMOVE-path duplicate-INSERT crash with 3+
+  overlapping templates — `repointInPlace`/`collectWindowGrantors`/`repointWindowIfNeeded`, plus
+  the "why `InheritedFrom` must track `SeqNo` precedence, not most-permissive-wins" note about the
+  rejected intermediate design that reproduced the identical crash one hop later); split the old
+  "trigger 4" into triggers 4 (widen) and 5 (`InheritedFrom` bookkeeping, matching the javadoc's own
+  split); added trigger 7 (core's blind lookup across a caller-scoped readable-clients list, the
+  `PropagationTrigger` `NEW_GRANT`/`UPDATED_GRANT` split between `onSave` and `onUpdate`, and why an
+  unconditional delete is safe on one path and data-losing on the other); added the `[BUG-2]`
+  paragraph (the `onUpdate` branch's own most-permissive-wins gap QA's Final Coverage Pass found,
+  fixed by surveying every other actively-inherited template before writing).
+- Updated the closing paragraph: "all four triggers" → "all seven triggers plus BUG-2", and named
+  `UserRoleCompositionServiceOverlapReverificationTest` alongside
+  `UserRoleCompositionServiceOverlapIntegrationTest`/`UserRoleCompositionServiceRealAccessControlIntegrationTest`
+  as one of the three test classes exercising the guard (it already existed as a class and was
+  already listed in the §9 table — see the correction below — but the §8d prose summary had never
+  named it).
+- Added an explicit note that the javadoc is canonical for current-state mechanics and the plan
+  doc's per-round sections are historical trail, so a future reader doesn't repeat this pass's own
+  reconstruction work from the wrong source.
+- **§9 testing table:** `UserRoleCompositionServiceOverlapIntegrationTest` row — line count 718 →
+  1181, test count "8 tests" → "13 tests", description expanded to cover triggers 6-7 (rounds 6-7)
+  and the 3 round-8 tests (`testDowngradingOneOfTwoOverlappingTemplatesNeverDowngradesDependentWhenTheOtherStillGrantsFullAccess`
+  for BUG-2, `testSingleInheritanceEventAffectingMultipleWindowsResolvesEachWindowIndependently` for
+  GAP-1, `testTwoGuardTriggeringTemplateUpdatesInsideASingleFlushDoNotCauseHibernateReentrancy` for
+  GAP-2), by name, matching the actual `@Test` methods in the file (verified via `grep -n "void
+  test"`, not assumed from the plan doc's own prose). `UserRoleCompositionServiceOverlapReverificationTest`
+  row — line count 275 → 308 (grew slightly across rounds, still 3 tests, description otherwise
+  unchanged and still accurate). The closing "test locations" paragraph naming which classes exercise
+  the guard directly was also updated to include the Reverification test.
+
+**Correction to the dispatch's own framing, noted for the record:** the dispatch described
+`UserRoleCompositionServiceOverlapReverificationTest` as "the doc has never mentioned at all" —
+that was not accurate; it was already present as its own §9 table row (added in an earlier DOCS/
+REVIEW pass, before this pass started) with a correct 3-test description. What WAS actually stale
+was its line count (275, now 308) and its absence from §8d's own prose summary of which test
+classes exercise the guard — both fixed above. Verified directly (`grep -n "^| .UserRoleComposition"
+docs/neo-headless.md` before editing, `wc -l` against the real file) rather than trusting the
+dispatch's claim at face value.
+
+**Verification performed:**
+- Read `WindowAccessOverlapCorruptionGuard.java` in full (1520 lines) from the `com.etendoerp.go`
+  worktree at `modules/com.etendoerp.go`, confirmed on `feature/ETP-4906` with commits through
+  `2d74f91a` (`git log --oneline -15`) — i.e. the actual round-6/7/8 + BUG-2 code, not an assumption.
+- `grep -c '@Test'` against both `UserRoleCompositionServiceOverlapIntegrationTest.java` (13) and
+  `UserRoleCompositionServiceOverlapReverificationTest.java` (3) — matches the dispatch's "13+"
+  claim exactly (13, not more).
+- `wc -l` against both test files and the guard class itself for the §9 table's line-count column.
+- Re-read `guardDependentsOf`'s dispatch logic and the `PropagationTrigger` enum's own two-value
+  javadoc directly (lines 1017-1061) to describe the `NEW_GRANT`/`UPDATED_GRANT` split accurately
+  rather than paraphrasing the plan doc's own B7 writeup.
+- `grep -n "four triggers\|4 triggers\|8 tests"` across the full `neo-headless.md` after editing —
+  the only remaining "8 tests" hit is `SFAssignUserRolesTest`'s own unrelated row (a different test
+  class, genuinely 8 tests, not a stale reference to the guard) — confirmed by reading that row's
+  own text, not just the grep match count.
+
+**`docs/generated-custom-windows/user.md` — freshness check, no changes needed.** Read the full
+file (94 lines). Confirmed it makes no claims about `WindowAccessOverlapCorruptionGuard`'s internal
+trigger count, test count, or B6/B7/BUG-2 mechanics at all (`grep -n "trigger\|
+WindowAccessOverlapCorruptionGuard\|8 tests\|4 triggers\|onUpdate"` — zero matches) — consistent
+with the dispatch's own framing that rounds 5-8 were `com.etendoerp.go`-only with no further
+frontend `user`-window changes. Nothing here drifted; no edit made.
+
+**W2/W3 — confirmed not contradicted, not fixed (correctly out of scope for DOCS).** Neither the
+`data-testid` codemod issue (W2/S1, cosmetic, `Fragment`/`Context.Provider`/`TierPill`/`RoleChip`/
+`RoleFilterControl`/`RoleChipsCell`) nor `onAfterExistingSave`'s non-wiring into
+`renderDraftModeSaveActions` (W3, only matters for a hypothetical future draftMode window) is
+described anywhere in `user.md` in a way that would misrepresent current behavior — `user.md` line
+31 documents `onAfterExistingSave` accurately as a generic extension point without claiming it is
+wired into any draftMode Confirm-button flow (`user` itself has `draftMode: null`, so the gap is
+inert here), and nothing in `user.md` references `data-testid` internals at all. Both remain open,
+non-blocking, code-side items for a future dev pass — not re-flagged as doc issues.
+
+**Commits (`com.etendoerp.go`, `feature/ETP-4906`, not pushed):**
+- `docs/neo-headless.md` — §8d rewritten (4 triggers → 7 triggers + BUG-2), §9 testing table rows
+  for `UserRoleCompositionServiceOverlapIntegrationTest`/`UserRoleCompositionServiceOverlapReverificationTest`
+  corrected, closing test-location paragraph updated.
+
+**No commits needed in `etendo_schema_forge`** — `user.md` required no changes this pass (see
+freshness check above); the prior Full Pass's commits to `user.md`/`docs/functionalidad/`/
+`docs/ui-customization.md`/`INDEX.md` already stand from 2026-08-17.
+
+**DOCS phase is closed — this was the last item on the plan.** REVIEW's own W1 finding is now
+resolved at its source. No other open documentation staleness was found. **Ticket read (not this
+agent's decision, but the coordinator asked for one): DEV (waves 6-12, B1-B7, BUG-2), REVIEW, QA,
+and now DOCS are all APPROVE/DONE with zero open blockers.** The two open REVIEW items (W2 codemod,
+W3 `onAfterExistingSave` wiring) are both explicitly non-blocking, code-side, and out of DOCS's
+remit — they do not gate a push. From a pipeline-phase standpoint, ETP-4906 looks genuinely ready
+for Clerk to prepare the PR(s) across both repos — nothing pipeline-side remains pending.
 
 ## Manual QA Feedback (Human, 2026-08-14) — DEV wave 6, 5 findings
 
