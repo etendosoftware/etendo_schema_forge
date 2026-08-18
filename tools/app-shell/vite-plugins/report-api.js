@@ -106,7 +106,7 @@ function pickLabel(labelObj, locale, fallback = '') {
  * When there's no dimension (flat report), every breakdown row for the account is
  * summed — equivalent to Classic's ungrouped path, which has no per-dimension scope.
  */
-function foldOpeningBalance(openingRows, accountValue, dimensionField, dimensionValue) {
+export function foldOpeningBalance(openingRows, accountValue, dimensionField, dimensionValue) {
   const opening = { amtacctdr: 0, amtacctcr: 0, total: 0 };
   if (!Array.isArray(openingRows)) return opening;
   for (const r of openingRows) {
@@ -135,7 +135,7 @@ function foldOpeningBalance(openingRows, accountValue, dimensionField, dimension
  * each row's `runningBalance` accumulates from `opening.total`, so the LAST row's
  * runningBalance always equals `total.total` — same invariant Classic's PDF holds.
  */
-function buildNestedGroups(rows, dimensionField, openingRows) {
+export function buildNestedGroups(rows, dimensionField, openingRows) {
   const groups = [];
   let group = null;
   let account = null;
@@ -173,6 +173,88 @@ function buildNestedGroups(rows, dimensionField, openingRows) {
         total: a.opening.total + a.subtotal.total,
       };
     }
+  }
+  return groups;
+}
+
+const TRIAL_BALANCE_AMOUNT_FIELDS = ['opening_balance', 'activity_debit', 'activity_credit', 'closing_balance'];
+
+/**
+ * Folds `report-trial-balance`'s rows — always fetched at the fine grain
+ * (account × contact × product × project, ETP-4898) so a dimension CAN be
+ * selected — down to the grain the sidebar actually asked for: one row per
+ * account when no dimension is chosen, or one row per (dimension value,
+ * account) when one is. Sums the 4 pre-aggregated amount columns per fold key.
+ *
+ * This also replaces the SQL-level `HAVING` the query used to have (only
+ * accounts/combos with period activity). Moving that filter here — evaluated
+ * AFTER folding, at whichever grain was requested — is what keeps "no
+ * dimension chosen" numerically identical to the report's original
+ * per-account output: a single (contact, product, project) slice can net to
+ * zero even when the account as a whole didn't (e.g. an invoice and its
+ * matching credit note for the same contact), and a `HAVING` still living at
+ * the fine grain in SQL would silently drop that slice before it's ever
+ * summed back up to the account. Filtering post-fold, at the actual display
+ * grain, is what makes the "has activity" check correct at every grain a
+ * user can request — not just the finest one.
+ */
+export function foldAggregateRows(rows, dimensionField) {
+  const folded = new Map();
+  for (const r of rows) {
+    const dimValue = dimensionField ? (r[dimensionField] || '') : null;
+    const key = JSON.stringify([dimValue ?? '', r.account_no || '']);
+    let acc = folded.get(key);
+    if (!acc) {
+      acc = {
+        account_no: r.account_no, account_id: r.account_id, account_name: r.account_name,
+        dimensionValue: dimValue,
+        opening_balance: 0, activity_debit: 0, activity_credit: 0, closing_balance: 0,
+      };
+      folded.set(key, acc);
+    }
+    for (const f of TRIAL_BALANCE_AMOUNT_FIELDS) acc[f] += Number(r[f]) || 0;
+  }
+  return [...folded.values()]
+    // Matches Classic's real "has activity" criterion (ReportTrialBalance_data.xsql:
+    // "a.initialamt <>0 or a.amtacctcr <>0 or a.amtacctdr<>0") — an account with a
+    // nonzero OPENING balance but zero period movement (e.g. a cash/bank account
+    // untouched this period) still belongs in the report. Filtering on period
+    // activity alone silently drops it, and since a Trial Balance must always net
+    // to zero across all accounts, dropping it also broke the opening/closing
+    // column totals (they stopped summing to 0).
+    .filter(a => Math.abs(a.opening_balance) > 1e-9
+      || Math.abs(a.activity_debit) > 1e-9 || Math.abs(a.activity_credit) > 1e-9)
+    .sort((a, b) => {
+      if (dimensionField) {
+        const dv = (a.dimensionValue || '').toLowerCase();
+        const dw = (b.dimensionValue || '').toLowerCase();
+        if (dv !== dw) return dv < dw ? -1 : 1;
+      }
+      const av = (a.account_no || '').toLowerCase();
+      const bv = (b.account_no || '').toLowerCase();
+      return av < bv ? -1 : av > bv ? 1 : 0;
+    });
+}
+
+/**
+ * Nests already-folded, already-sorted `foldAggregateRows` output into
+ * `{dimensionValue, accounts}` containers (ETP-4898) — the bordered "dim-group"
+ * visual container Libro Mayor uses when grouping by a dimension. Unlike
+ * `buildNestedGroups`, each "account" here is just the row itself: Sumas y
+ * Saldos rows are already fully aggregated per account (no per-movement list
+ * to nest inside), so no further folding is needed, just bucketing by the
+ * dimension value each consecutive run of rows already shares.
+ */
+function groupAggregateRowsByDimension(rows) {
+  const groups = [];
+  let current = null;
+  for (const r of rows) {
+    const dimValue = r.dimensionValue ?? '';
+    if (!current || current.dimensionValue !== dimValue) {
+      current = { dimensionValue: dimValue, accounts: [] };
+      groups.push(current);
+    }
+    current.accounts.push(r);
   }
   return groups;
 }
@@ -719,6 +801,18 @@ export default function reportApiPlugin() {
                 });
               }
             }
+            // report-trial-balance (ETP-4898): its SQL always returns the fine
+            // account×contact×product×project grain (needed so ANY dimension can be
+            // chosen), so it must always be folded back down — to one row per account
+            // when no dimension is picked, or one row per (dimension, account) when one
+            // is. Gated on `type !== 'grouped-listing'` so this never runs for Libro
+            // Mayor, which already has its own per-movement `buildNestedGroups` path.
+            let tbGroups = null;
+            if (contract.type !== 'grouped-listing' && rows
+                && (contract.parameters || []).some(p => p.name === 'groupBy')) {
+              rows = foldAggregateRows(rows, dimensionField);
+              if (dimensionField) tbGroups = groupAggregateRowsByDimension(rows);
+            }
             const activeFilters = Object.entries(params)
               .filter(([k, v]) => v && v !== '' && !k.startsWith('_display_'))
               .map(([k, v]) => {
@@ -769,12 +863,6 @@ export default function reportApiPlugin() {
             // Document type: structured data (header + lines + taxes)
             // Listing type: flat rows
             const amountCols = (contract.columns || []).filter(c => c.type === 'amount');
-            const totals = {};
-            if (!documentData && amountCols.length && Array.isArray(rows)) {
-              for (const col of amountCols) {
-                totals[col.field] = rows.reduce((sum, r) => sum + (Number(r[col.field]) || 0), 0);
-              }
-            }
             const recordCount = Array.isArray(rows) ? rows.length : undefined;
             // Always built (ETP-4898): every account — grouped by a dimension or not — needs
             // its opening balance / running balance / subtotal / total, so both the flat and
@@ -784,9 +872,15 @@ export default function reportApiPlugin() {
             const groups = (!documentData && Array.isArray(rows))
               ? buildNestedGroups(rows, dimensionField, openingRows)
               : null;
+            const totals = {};
+            if (!documentData && amountCols.length && Array.isArray(rows)) {
+              for (const col of amountCols) {
+                totals[col.field] = rows.reduce((sum, r) => sum + (Number(r[col.field]) || 0), 0);
+              }
+            }
             const templateData = documentData
               ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, ...neoMeta }, rows };
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, ...neoMeta }, rows };
 
             // Direct HTML render — no jsreport needed for preview
             if (format === 'html') {

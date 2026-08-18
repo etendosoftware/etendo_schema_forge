@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, FileDown, FileSpreadsheet, Eye, Loader2, X, ChevronDown, Info } from 'lucide-react';
+import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1032,6 +1032,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { locale } = useLocaleSwitch();
+  const ui = useUI();
 
   const reportId = targetReportId || report.id;
   const drillParams = { ...baseParams, ...(bpId ? { bPartnerId: bpId, showDetails: 'true' } : {}), ...extraParams };
@@ -1078,7 +1079,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center gap-2 px-1">
-        {[{ id: 'preview', labelKey: 'preview', icon: Eye }, { id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }].map(f => (
+        {[{ id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }, { id: 'csv', labelKey: 'CSV', icon: FileText }].map(f => (
           <button key={f.id} onClick={() => fetchFormat(f.id)} disabled={loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
             <f.icon className="h-3.5 w-3.5" />{ui(f.labelKey)}
@@ -1105,6 +1106,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const previewHtmlRef = useRef('');
+  // Tracks "a render has actually completed", independent of previewHtmlRef
+  // (which only ever holds HTML — 'preview' format). Clicking PDF/Excel/CSV
+  // directly, before ever generating the HTML preview, used to leave this
+  // condition permanently false, so the "ready to go" skeleton stayed stuck
+  // ON TOP of the iframe (an absolutely-positioned overlay always paints
+  // above the statically-positioned iframe) even after the PDF/file rendered
+  // successfully behind it.
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
@@ -1208,10 +1217,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         const html = await res.text();
         previewHtmlRef.current = html;
         writeToIframe(html);
+        setHasGenerated(true);
       } else if (format === 'pdf') {
         const blob = await res.blob();
         iframeRef.current.src = URL.createObjectURL(blob);
+        setHasGenerated(true);
       } else {
+        // Excel/CSV are pure downloads — they never touch the iframe, so the
+        // "ready to go" hint stays exactly as informative as before.
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1326,7 +1339,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               {error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>
               )}
-              {!loading && !error && !previewHtmlRef.current && (
+              {!loading && !error && !hasGenerated && (
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Skeleton table background */}
                   <div className="p-6 opacity-30 pointer-events-none select-none blur-[2px]">

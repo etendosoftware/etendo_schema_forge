@@ -60,7 +60,15 @@ export function createReportHelpers({ numberFormat } = {}) {
     if (value == null) return '';
     var num = Number(value);
     if (isNaN(num)) return String(value);
-    return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }).format(num);
+    var fmt = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    var formatted = fmt.format(num);
+    // Guard against "-0,00" (ETP-4898): summing floats (e.g. a report-wide
+    // Total row) routinely leaves a residual like -2.9e-11 instead of exactly
+    // 0 — genuinely negative, but rounds to zero at 2 decimals. Intl.NumberFormat
+    // keeps the sign of the pre-rounding value, so it renders "-0,00" for what
+    // is, and must display as, zero.
+    var zero = fmt.format(0);
+    return formatted === '-' + zero ? zero : formatted;
   }
 
   function formatBoolean(value) {
@@ -355,6 +363,12 @@ export function buildJsreportHelpersString(helpersCode, numberFormatOverride, se
   var sign = num < 0 ? '-' : '';
   var abs = Math.abs(num);
   var fixed = abs.toFixed(maxFrac);
+  // Guard against "-0,00" (ETP-4898): summing floats (e.g. a report-wide
+  // Total row) routinely leaves a residual like -2.9e-11 instead of exactly
+  // 0 — genuinely negative, but rounds to zero at this precision. Dropping the
+  // sign here (once we know the DISPLAYED digits are all zero) matches
+  // formatCurrency's Intl.NumberFormat-based twin in createReportHelpers().
+  if (/^0(\\.0+)?$/.test(fixed)) sign = '';
   var parts = fixed.split('.');
   var intPart = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ${JSON.stringify(thousandsSeparator)});
   var decPart = parts[1] || '';

@@ -1295,6 +1295,95 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
+  // --- ETP-4898 regression: PDF/download clicked directly, without a prior
+  // "Run Report" (HTML preview), must not leave the "ready to go" overlay
+  // stuck floating on top of the rendered content forever. Root cause: the
+  // overlay's visibility used to depend on previewHtmlRef.current, which is
+  // only ever set for format 'html'/'preview' — never for 'pdf'. Fixed via
+  // the independent hasGenerated state (see ReportViewerPage.jsx).
+
+  it('hides the "report ready" overlay after a direct PDF click, without generating a preview first', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-pdf');
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+
+      await user.click(screen.getByText('PDF'));
+
+      // Before the fix, these two nodes would remain in the document forever,
+      // floating on top of the (successfully loaded) PDF iframe.
+      await waitFor(() => {
+        expect(screen.queryByText('reportReadyTitle')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('reportReadyHint')).not.toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+    }
+  });
+
+  it('keeps the "report ready" overlay visible after a direct Excel click (pure download, no iframe content)', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-xlsx');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Excel'));
+
+      // Excel/CSV are pure downloads — they never touch the iframe, so the
+      // overlay must stay exactly as informative as before (unchanged behavior).
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+      globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  });
+
+  it('keeps the "report ready" overlay visible after a direct CSV click (pure download, no iframe content)', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-csv');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('CSV'));
+
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+      globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  });
+
   it('renders running state on submit button when loading', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (typeof url === 'string' && url === '/api/reports') {
