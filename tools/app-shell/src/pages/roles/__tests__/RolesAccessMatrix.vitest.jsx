@@ -69,11 +69,14 @@ describe('RolesAccessMatrix', () => {
   });
 
   it('defaults a missing per-role access entry to "none" (dash)', () => {
+    // Uses a category other than "General" — that name is reserved for the
+    // hardcoded GENERAL_ROWS overlay below and would collide on
+    // data-testid="RolesAccessMatrix__category-General" otherwise.
     const matrixWithGap = [
-      { category: 'General', rows: [{ windowId: 'w-dash', windowName: 'Dashboard', access: { admin: 'full' } }] },
+      { category: 'Finance', rows: [{ windowId: 'w-dash', windowName: 'Dashboard', access: { admin: 'full' } }] },
     ];
     render(<RolesAccessMatrix cards={CARDS} matrix={matrixWithGap} />);
-    const key = buildRowKey('General', 'w-dash');
+    const key = buildRowKey('Finance', 'w-dash');
     expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-inventory`).textContent).toBe('—');
   });
 
@@ -84,5 +87,42 @@ describe('RolesAccessMatrix', () => {
     expect(screen.getByTestId('RolesAccessMatrix__headerIcon-admin')).toBeTruthy();
     expect(screen.getByTestId('RolesAccessMatrix__headerIcon-inventory')).toBeTruthy();
     expect(iconFor).toHaveBeenCalledWith(CARDS[0]);
+  });
+
+  describe('hardcoded General overlay (Inicio/Favoritos/Copilot)', () => {
+    // These 3 rows are NOT real AD windows (confirmed against the sibling
+    // feature/ETP-4906 branch's UserRolesTab.jsx GENERAL_ROWS precedent) and
+    // will never arrive from the backend's matrix.categories — they are
+    // always overlaid client-side, unconditionally, ahead of the real groups.
+    it('always renders the General category, even with an empty real matrix', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
+      expect(screen.getByTestId('RolesAccessMatrix__category-General')).toBeTruthy();
+    });
+
+    it('renders all 3 hardcoded rows using the shared ETP-4906 i18n keys', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
+      expect(document.body.textContent).toContain('userRolesTabDashboardRow');
+      expect(document.body.textContent).toContain('userRolesTabFavoritesRow');
+      expect(document.body.textContent).toContain('userRolesTabCopilotRow');
+    });
+
+    it('gives every role column full ("✓") access on every General row, unconditionally', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
+      for (const rowId of ['dashboard', 'favorites', 'copilot']) {
+        const key = buildRowKey('General', rowId);
+        expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-admin`).textContent).toBe('✓');
+        expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-inventory`).textContent).toBe('✓');
+      }
+    });
+
+    it('renders the General overlay before the real matrix.categories groups in document order', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} />);
+      const rows = Array.from(document.querySelectorAll('[data-testid^="RolesAccessMatrix__category-"]'));
+      expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([
+        'RolesAccessMatrix__category-General',
+        'RolesAccessMatrix__category-Commercial',
+        'RolesAccessMatrix__category-Inventory',
+      ]);
+    });
   });
 });
