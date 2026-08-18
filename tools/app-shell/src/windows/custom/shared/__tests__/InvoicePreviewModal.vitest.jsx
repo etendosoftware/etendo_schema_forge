@@ -226,11 +226,13 @@ describe('InvoicePreviewModal', () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders tab switcher with General, Messages, History', () => {
+  // ETP-4855 — the Messages / History tabs were permanent placeholders and were
+  // removed from every preview modal. General is the only tab left here.
+  it('renders only the General tab', () => {
     renderPreview();
     expect(screen.getByText('invoicePreviewGeneral')).toBeInTheDocument();
-    expect(screen.getByText('invoicePreviewMessages')).toBeInTheDocument();
-    expect(screen.getByText('invoicePreviewHistory')).toBeInTheDocument();
+    expect(screen.queryByText('invoicePreviewMessages')).toBeNull();
+    expect(screen.queryByText('invoicePreviewHistory')).toBeNull();
   });
 
   it('shows the total section', () => {
@@ -327,18 +329,6 @@ describe('InvoicePreviewModal', () => {
 
     expect(screen.getByText(/Sales Invoice INV-001/i)).toBeInTheDocument();
     expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'sales-invoice:invoice-updated' }));
-  });
-
-  it('shows empty messages panel when messages tab is clicked', () => {
-    renderPreview();
-    fireEvent.click(screen.getByText('invoicePreviewMessages'));
-    expect(screen.getByText('invoicePreviewNoMessagesYet')).toBeInTheDocument();
-  });
-
-  it('shows empty history panel when history tab is clicked', () => {
-    renderPreview();
-    fireEvent.click(screen.getByText('invoicePreviewHistory'));
-    expect(screen.getByText('invoicePreviewNoActivityRecorded')).toBeInTheDocument();
   });
 
   it('renders drop zone for purchase invoice', () => {

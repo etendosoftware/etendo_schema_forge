@@ -2005,4 +2005,254 @@ describe('InlineLinesPanel', () => {
       expect(buttons[1]).toHaveAttribute('data-testid', 'line-action-second');
     });
   });
+
+  // ---------- ETP-4886: Enter exits inline-edit mode (but not for combos/switches/ ----------
+  // ---------- lookups/checkboxes/dimensions-sub-row inputs, nor with a pending error) -------
+  //
+  // Before this fix, Enter saved the value (via the Input's own onKeyDown → blur() →
+  // commitField chain) but never closed the row — only Escape and click-outside did.
+  // isEnterExitTarget/makeRowKeyHandler/handleConfirmEdit are internal (not exported);
+  // source-shape coverage lives in InlineLinesPanel.enterExit.test.js. These tests drive
+  // the real behavior end to end through fireEvent.keyDown, which bubbles natively.
+
+  describe('Enter-to-exit edit mode (ETP-4886)', () => {
+    async function enterEditModeFor(row) {
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+    }
+
+    async function pressEnterAndFlush(target) {
+      await act(async () => {
+        fireEvent.keyDown(target, { key: 'Enter', code: 'Enter', bubbles: true });
+        // Flush handleConfirmEdit's deferred setTimeout(0).
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    it('Enter on a plain text input exits edit mode', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await enterEditModeFor(row);
+      const productInput = within(row).getByTestId('field-product');
+      await pressEnterAndFlush(productInput);
+      const rowAfter = screen.getByTestId('line-row-L1');
+      expect(within(rowAfter).queryByTestId('field-product')).toBeNull();
+    });
+
+    it('Enter on a numeric input exits edit mode', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L2');
+      await enterEditModeFor(row);
+      const qtyInput = within(row).getByTestId('field-quantity');
+      await pressEnterAndFlush(qtyInput);
+      const rowAfter = screen.getByTestId('line-row-L2');
+      expect(within(rowAfter).queryByTestId('field-quantity')).toBeNull();
+    });
+
+    it('Enter with a pending min-value validation error keeps the row in edit mode', async () => {
+      const columns = [
+        { key: 'quantity', label: 'Qty', type: 'number', column: 'QtyOrdered', min: 1 },
+      ];
+      const rows = [{ id: 'MV1', quantity: 5 }];
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      render(
+        <InlineLinesPanel
+          columns={columns}
+          data={rows}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-MV1');
+      await enterEditModeFor(row);
+      const qtyInput = within(row).getByTestId('field-quantity');
+      await act(async () => {
+        await userEvent.clear(qtyInput);
+        await userEvent.type(qtyInput, '0');
+      });
+      // The Input's own onKeyDown blurs on Enter → commitField runs synchronously up to
+      // the isValueBelowMin early-return, setting hasValidationErrorRef.current BEFORE
+      // handleConfirmEdit's setTimeout(0) checks it.
+      await pressEnterAndFlush(qtyInput);
+      expect(within(screen.getByTestId('line-row-MV1')).getByTestId('field-quantity')).toBeInTheDocument();
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('Enter on a Select trigger (combobox) does not exit edit mode', async () => {
+      const columns = [
+        {
+          key: 'taxCategory',
+          label: 'Tax',
+          type: 'enum',
+          column: 'C_TaxCategory_ID',
+          enumLabels: { VAT21: '21% VAT', VAT10: '10% VAT' },
+        },
+      ];
+      const rows = [{ id: 'CB1', taxCategory: 'VAT21' }];
+      render(
+        <InlineLinesPanel
+          columns={columns}
+          data={rows}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-CB1');
+      await enterEditModeFor(row);
+      const trigger = within(row).getByTestId('field-taxCategory');
+      expect(trigger.tagName).toBe('BUTTON');
+      await pressEnterAndFlush(trigger);
+      expect(within(screen.getByTestId('line-row-CB1')).getByTestId('field-taxCategory')).toBeInTheDocument();
+    });
+
+    it('Enter on a PillToggle (switch) does not exit edit mode', async () => {
+      const columns = [
+        { key: 'active', label: 'Active', type: 'checkbox', column: 'IsActive' },
+      ];
+      const rows = [{ id: 'SW1', active: true }];
+      render(
+        <InlineLinesPanel
+          columns={columns}
+          data={rows}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-SW1');
+      await enterEditModeFor(row);
+      const toggle = within(row).getByTestId('field-active');
+      expect(toggle).toHaveAttribute('role', 'switch');
+      await pressEnterAndFlush(toggle);
+      expect(within(screen.getByTestId('line-row-SW1')).getByTestId('field-active')).toBeInTheDocument();
+    });
+
+    it('Enter on a LookupTrigger button does not exit edit mode', async () => {
+      const columns = [
+        { key: 'product', label: 'Product', type: 'search', column: 'M_Product_ID', lookup: true },
+      ];
+      const rows = [{ id: 'LT2', product: 'P1', 'product$_identifier': 'Widget' }];
+      render(
+        <InlineLinesPanel
+          columns={columns}
+          data={rows}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-LT2');
+      await enterEditModeFor(row);
+      const lookupBtn = within(row).getByTestId('field-product');
+      expect(lookupBtn.tagName).toBe('BUTTON');
+      await pressEnterAndFlush(lookupBtn);
+      expect(within(screen.getByTestId('line-row-LT2')).getByTestId('field-product')).toBeInTheDocument();
+    });
+
+    it('Enter on the row selection checkbox (input[type="checkbox"]) does not exit edit mode', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await enterEditModeFor(row);
+      const rowCheckbox = within(row).getAllByRole('checkbox')[0];
+      expect(rowCheckbox.tagName).toBe('INPUT');
+      expect(rowCheckbox).toHaveAttribute('type', 'checkbox');
+      await pressEnterAndFlush(rowCheckbox);
+      expect(within(screen.getByTestId('line-row-L1')).getByTestId('field-product')).toBeInTheDocument();
+    });
+
+    it('Enter originating inside the dimensions sub-row does not exit the parent row edit mode', async () => {
+      const columns = [
+        {
+          key: 'dimensions',
+          type: 'dimensionsPanel',
+          label: 'Dimensions',
+          dimensionFields: [{ key: 'project', column: 'C_Project_ID' }],
+        },
+        { key: 'product', label: 'Product', type: 'string', column: 'Name' },
+      ];
+      const rows = [{ id: 'DP1', product: 'P1' }];
+      render(
+        <InlineLinesPanel
+          columns={columns}
+          data={rows}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-DP1');
+      // Don't use enterEditModeFor's getAllByRole('button')[0] here — with a
+      // dimensionsPanel column, the "Add dimensions" hover action renders BEFORE
+      // Pencil in the strip, so index [0] would toggle the panel open instead of
+      // entering edit mode. Click the pencil explicitly via its icon testid.
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getByTestId('Pencil__3b7ec2').closest('button');
+      await act(async () => { await userEvent.click(editBtn); });
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+      });
+      const panel = screen.getByTestId('dimensions-panel-DP1');
+      // Simulate a text input living inside the expanded dimensions sub-row (the
+      // mocked DimensionGrid only renders buttons) whose Enter keydown bubbles up
+      // through the same row-level handler as every other cell control.
+      const fakeInput = document.createElement('input');
+      fakeInput.type = 'text';
+      panel.appendChild(fakeInput);
+      await pressEnterAndFlush(fakeInput);
+      expect(within(screen.getByTestId('line-row-DP1')).getByTestId('field-product')).toBeInTheDocument();
+      panel.removeChild(fakeInput);
+    });
+
+    it('Escape still cancels the edit (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      renderPanel({ onUpdateRow });
+      const row = screen.getByTestId('line-row-L1');
+      await enterEditModeFor(row);
+      const productInput = within(row).getByTestId('field-product');
+      await act(async () => {
+        fireEvent.change(productInput, { target: { value: 'Changed' } });
+        fireEvent.keyDown(productInput, { key: 'Escape', code: 'Escape', bubbles: true });
+      });
+      const rowAfter = screen.getByTestId('line-row-L1');
+      expect(within(rowAfter).queryByTestId('field-product')).toBeNull();
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('Tab does not close the row (native focus-move behavior is untouched)', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await enterEditModeFor(row);
+      const productInput = within(row).getByTestId('field-product');
+      await act(async () => {
+        fireEvent.keyDown(productInput, { key: 'Tab', code: 'Tab', bubbles: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(within(screen.getByTestId('line-row-L1')).getByTestId('field-product')).toBeInTheDocument();
+    });
+  });
 });

@@ -6,16 +6,31 @@ import {
   markAttachmentAsMain,
   deleteAttachment,
 } from '@/components/copilot/ocr/listAttachments';
+import {
+  newAttachmentsSource,
+  notifyAttachmentsChanged,
+  useAttachmentsChanged,
+} from '@/components/attachments/attachmentsBus';
 
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
  * and write the same real `Attachment` row, marked via `EM_ETGO_ISPREVIEWMAIN`
- * (ETP-4315). Backs `GenericPreviewModal`'s `ManagedLeftPanel` against
- * `/sws/neo/attachments/*` (the retired `/sws/neo/preview-file` cache and its
- * `usePreviewAttachment` hook were removed once every window had migrated).
+ * (ETP-4315). Backs `GenericPreviewModal`'s `ManagedLeftPanel` and the OCR side
+ * panel (`OcrSidePanel`'s `DocumentView`) against `/sws/neo/attachments/*` (the
+ * retired `/sws/neo/preview-file` cache and its `usePreviewAttachment` hook
+ * were removed once every window had migrated).
  *
  * When storeCondition is false (or required params are missing) the hook is a
  * no-op: storedFile stays null and writes are silently skipped.
+ *
+ * ── Cross-view sync (ETP-4855) ──────────────────────────────────────────────
+ * This hook and the Attachments tab (`useAttachments`) each own independent
+ * client state over the same server record, and both can be mounted at once
+ * (form view keeps inactive tabs mounted). A write through one leaves the
+ * other stale until it remounts. `attachmentsBus` closes that gap: this hook
+ * announces its own writes/deletes and reloads whenever another view
+ * announces a change to the same (tableName, recordId) — ignoring its own
+ * announcements via a stable per-instance `source` id.
  *
  * @param {Object} params
  * @param {string|null}  params.documentId     - PK of the record the attachment belongs to
@@ -35,6 +50,8 @@ export function useMainAttachment({
   const [isBusy, setIsBusy] = useState(false);
   const [storeFailed, setStoreFailed] = useState(false);
   const objectUrlRef = useRef(null);
+  const sourceRef = useRef(null);
+  if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
 
   const active = !!(storeCondition && documentId && tableName && token);
 
@@ -51,24 +68,42 @@ export function useMainAttachment({
     setStoredFile({ attachmentId, fileName, mimeType, objectUrl });
   }, [revokeUrl]);
 
-  // Restore from server on mount: look up the marked attachment, then fetch its blob.
-  useEffect(() => {
+  // Look up the marked attachment, then fetch its blob. Used both on mount and
+  // whenever another view announces a change to this same record's attachments.
+  const refresh = useCallback(async () => {
     if (!active) return;
-    let cancelled = false;
+    let objectUrl = null;
     setIsBusy(true);
-    fetchMainAttachment({ token, tableName, recordId: documentId, apiBaseUrl })
-      .then(async (main) => {
-        if (cancelled || !main) return;
-        const objectUrl = await fetchAttachmentBlobUrl({
-          token, attachmentId: main.id, apiBaseUrl,
-        });
-        if (cancelled || !objectUrl) return;
-        applyAttachment(main.id, main.name, main.dataType, objectUrl);
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setIsBusy(false); });
+    try {
+      const main = await fetchMainAttachment({ token, tableName, recordId: documentId, apiBaseUrl });
+      if (!main) {
+        revokeUrl();
+        setStoredFile(null);
+        return;
+      }
+      objectUrl = await fetchAttachmentBlobUrl({ token, attachmentId: main.id, apiBaseUrl });
+      if (objectUrl) applyAttachment(main.id, main.name, main.dataType, objectUrl);
+    } catch {
+      // keep whatever was already shown; a transient refresh failure isn't fatal
+    } finally {
+      setIsBusy(false);
+    }
+  }, [active, token, tableName, documentId, apiBaseUrl, applyAttachment, revokeUrl]);
+
+  // Restore from server on mount / whenever the record identity changes.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => { if (!cancelled) await refresh(); })();
     return () => { cancelled = true; };
-  }, [active, token, tableName, documentId, apiBaseUrl, applyAttachment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, token, tableName, documentId, apiBaseUrl]);
+
+  // Another view (Attachments tab, another mounted OcrSidePanel/preview) wrote
+  // to this same record — reload so this instance stops showing stale data.
+  useAttachmentsChanged(
+    { tableName: active ? tableName : null, recordId: documentId, source: sourceRef.current },
+    refresh,
+  );
 
   // Revoke Blob URL on unmount
   useEffect(() => () => revokeUrl(), [revokeUrl]);
@@ -83,6 +118,7 @@ export function useMainAttachment({
     }
     const objectUrl = URL.createObjectURL(blob);
     applyAttachment(created.id, fileName, mimeType, objectUrl);
+    notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
   }, [active, token, tableName, documentId, apiBaseUrl, applyAttachment]);
 
   const storeFile = useCallback(async (file) => {
@@ -140,15 +176,18 @@ export function useMainAttachment({
     if (objectUrl) {
       applyAttachment(attachmentId, fileName, mimeType, objectUrl);
     }
+    notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
     return true;
-  }, [active, token, apiBaseUrl, applyAttachment]);
+  }, [active, token, apiBaseUrl, applyAttachment, tableName, documentId]);
 
   const deleteFile = useCallback(async () => {
     if (!active || !storedFile?.attachmentId) return;
-    await deleteAttachment({ token, attachmentId: storedFile.attachmentId, apiBaseUrl });
+    const result = await deleteAttachment({ token, attachmentId: storedFile.attachmentId, apiBaseUrl });
+    if (!result?.ok) return;
     revokeUrl();
     setStoredFile(null);
-  }, [active, storedFile, token, apiBaseUrl, revokeUrl]);
+    notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
+  }, [active, storedFile, token, apiBaseUrl, revokeUrl, tableName, documentId]);
 
   return { storedFile, isBusy, storeFailed, storeFile, storeBlob, storeUrl, markExisting, deleteFile };
 }

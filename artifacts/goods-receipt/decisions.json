@@ -220,6 +220,7 @@
       "fields": {
         "product": {
           "grid": true,
+          "lookup": true,
           "required": true,
           "section": "principal",
           "seq": 10,
@@ -242,9 +243,7 @@
           "readOnlyLogic": null
         },
         "attributeSetValue": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "discarded"
         },
         "uOM": {
           "form": false,

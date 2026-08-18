@@ -73,12 +73,12 @@ vi.mock('../useReturnToVendorPdf.js', () => ({
   useReturnToVendorPdf: (...args) => mockUseReturnToVendorPdf(...args),
 }));
 
+// Mirrors what the real builder returns since ETP-4855: a single general tab.
+// The messages/history placeholders were removed from every preview.
 const mockBuildReturnPreviewContent = vi.fn(() => ({
   actionButtons: <div data-testid="action-buttons" />,
   tabs: [
     { key: 'general', label: 'general', content: <div data-testid="general-tab" /> },
-    { key: 'messages', label: 'messages', content: <div data-testid="messages-tab" /> },
-    { key: 'history', label: 'history', content: <div data-testid="history-tab" /> },
   ],
 }));
 vi.mock('../../shared/preview-cards/buildReturnPreviewContent.jsx', () => ({
@@ -138,11 +138,11 @@ describe('ReturnToVendorShipmentPreview', () => {
     expect(screen.getByTestId('generic-preview-modal')).toBeInTheDocument();
   });
 
-  it('renders 3 tabs coming from buildReturnPreviewContent: general, messages, history', () => {
+  it('renders the tabs coming from buildReturnPreviewContent — general alone', () => {
     renderPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('title contains windowLabel and shipment documentNo', () => {

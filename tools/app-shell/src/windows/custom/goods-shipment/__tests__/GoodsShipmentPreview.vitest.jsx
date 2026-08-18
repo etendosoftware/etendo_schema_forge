@@ -155,11 +155,13 @@ describe('GoodsShipmentPreview', () => {
     expect(title).toContain('ALB-001');
   });
 
-  it('renders 3 tabs: general, messages, history (no standalone documents tab)', () => {
+  // ETP-4855 — Messages and History were empty placeholders and were removed
+  // from every preview. Only the general tab is left.
+  it('renders the general tab alone: no messages, history or documents tab', () => {
     renderGSPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tab-documents')).not.toBeInTheDocument();
   });
 

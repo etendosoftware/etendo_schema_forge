@@ -185,15 +185,6 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
   );
 }
 
-function EmptyPanel({ icon, text }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
-      <span className="text-3xl">{icon}</span>
-      <p className="text-sm">{text}</p>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null }) {
@@ -269,6 +260,12 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     useMainAttachment: true,
     storeCondition: true,
     autoFetch: false,
+    // ETP-4855 — a purchase invoice has no generated report, so its document slot
+    // holds the supplier's own document (the OCR source). Declaring the table
+    // mirrors that file into the record's attachments as well, so it shows up in
+    // the Attachments tab. The sales branch above deliberately omits it: that PDF
+    // is a cache of something we generated and nobody attached it.
+    tableName: 'C_Invoice',
     token,
     apiBaseUrl,
   };
@@ -306,22 +303,6 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           ratePrecision={ratePrecision}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
-    },
-    {
-      key: 'messages',
-      label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel
-        icon="💬"
-        text={ui('invoicePreviewNoMessagesYet')}
-        data-testid="EmptyPanel__cf88e6" />,
-    },
-    {
-      key: 'history',
-      label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel
-        icon="🕐"
-        text={ui('invoicePreviewNoActivityRecorded')}
-        data-testid="EmptyPanel__cf88e6" />,
     },
   ];
 

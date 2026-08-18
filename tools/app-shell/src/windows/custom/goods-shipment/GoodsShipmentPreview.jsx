@@ -13,15 +13,6 @@ import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryC
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
-function EmptyPanel({ icon, text }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
-      <span className="text-3xl">{icon}</span>
-      <p className="text-sm">{text}</p>
-    </div>
-  );
-}
-
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -227,22 +218,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
             data-testid="RelatedDocumentsCard__5d626b" />
         </div>
       ),
-    },
-    {
-      key: 'messages',
-      label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel
-        icon="💬"
-        text={ui('invoicePreviewNoMessagesYet')}
-        data-testid="EmptyPanel__5d626b" />,
-    },
-    {
-      key: 'history',
-      label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel
-        icon="🕐"
-        text={ui('invoicePreviewNoActivityRecorded')}
-        data-testid="EmptyPanel__5d626b" />,
     },
   ];
 

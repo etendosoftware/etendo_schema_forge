@@ -41,6 +41,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     storeCondition: cfg.storeCondition ?? false,
     token: cfg.token ?? null,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
+    tableName: cfg.tableName ?? null,
   });
 
   useEffect(() => {
@@ -216,6 +217,12 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  *     sourceBlob?: Blob,        - Blob to cache on first open (preferred over sourceUrl)
  *     sourceUrl?: string,       - URL to fetch and cache (fallback when sourceBlob absent)
  *     autoFetch?: boolean,      - true = caller provides leftPanel as fallback while caching
+ *     tableName?: string,       - AD table (e.g. 'C_Invoice'). Set it when the file is the
+ *                                 USER's document rather than a cache of a generated PDF:
+ *                                 what the user stores is then also mirrored into the
+ *                                 record's attachments, so it appears in the Attachments
+ *                                 tab (ETP-4855). Omit it for generated-PDF caches —
+ *                                 nobody attached those. See usePreviewAttachment.
  *     token: string,
  *     apiBaseUrl: string,
  *   }
