@@ -12,9 +12,14 @@ import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
  * default matching algorithm, name uniqueness, archive guard):
  *   - createAccount(payload)     → POST   /sws/neo/financial-account/account
  *   - updateAccount(id, payload) → PUT    /sws/neo/financial-account/account/{id}
- *   - archiveAccount(id)         → DELETE /sws/neo/financial-account/account/{id}
- *                                  (the hook soft-archives: IsActive='N')
+ *   - archiveAccount(id)         → PATCH  /sws/neo/financial-account/account/{id} {active:false}
  *   - unarchiveAccount(id)       → PATCH  /sws/neo/financial-account/account/{id} {active:true}
+ *   - deleteAccount(id)          → DELETE /sws/neo/financial-account/account/{id}
+ *                                  (ETP-4871: a REAL delete, gated server-side by `deletable` —
+ *                                  every account row now carries `deletable`/
+ *                                  `deleteBlockedReason`; the backend still answers 409 in case a
+ *                                  dependency appeared after the row was loaded, a defense against
+ *                                  the list-load/click race)
  *   - fetchDefaults()            → GET selectors/C_Currency_ID + GET defaults
  *
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode }`;
@@ -99,7 +104,30 @@ export function useAccountMutations() {
     return firstRecord(json);
   }, [token]);
 
+  /**
+   * Soft-archives an account (`IsActive` to 'N'). ETP-4871: this used to be the DELETE verb
+   * (the backend short-circuited every delete into an archive), which meant a real delete could
+   * never be offered — "Eliminar" only ever archived. Archiving is now its own PATCH, the exact
+   * mirror of {@link unarchiveAccount} below, and DELETE is reserved for {@link deleteAccount}.
+   */
   const archiveAccount = useCallback(async (accountId) => {
+    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: authHeaders(token),
+      body: JSON.stringify({ active: false }),
+    });
+    if (!res.ok) await throwHttpError(res);
+    return true;
+  }, [token]);
+
+  /**
+   * Permanently deletes an account (ETP-4871). Only ever reachable from the UI when the row's
+   * `deletable` flag is true — every FK into `FIN_Financial_Account` is RESTRICT, so the backend
+   * still re-validates and 409s (with a human-readable `message`) if a dependent record appeared
+   * between the list load and this call.
+   */
+  const deleteAccount = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
     if (!res.ok) await throwHttpError(res);
@@ -163,5 +191,7 @@ export function useAccountMutations() {
     return { currencies, defaultCurrencyId };
   }, [token]);
 
-  return { createAccount, updateAccount, archiveAccount, unarchiveAccount, fetchDefaults };
+  return {
+    createAccount, updateAccount, archiveAccount, unarchiveAccount, deleteAccount, fetchDefaults,
+  };
 }

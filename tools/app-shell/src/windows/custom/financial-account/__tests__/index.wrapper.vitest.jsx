@@ -73,6 +73,11 @@ vi.mock('../DetailTabs', async (importOriginal) => ({
 }));
 vi.mock('../EditAccountModal.jsx', () => ({ EditAccountModal: () => <div data-testid="edit-modal" /> }));
 vi.mock('../ArchiveAccountDialog.jsx', () => ({ ArchiveAccountDialog: () => <div data-testid="archive-dialog" /> }));
+// ETP-4871 — a sibling of ArchiveAccountDialog, not a mode of it: index.jsx mounts it the same
+// unconditional way. Without this stub the REAL component renders and its own
+// `useAccountMutations()` call reaches the real (unmocked) `useAuth()`, throwing "useAuth must
+// be used within AuthProvider" for every test in this file.
+vi.mock('../DeleteAccountDialog.jsx', () => ({ DeleteAccountDialog: () => <div data-testid="delete-dialog" /> }));
 vi.mock('../BankConnectionFlowUI.jsx', () => ({ BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" /> }));
 vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
   AutoMatchSuggestionModal: () => <div data-testid="automatch-modal" />,
