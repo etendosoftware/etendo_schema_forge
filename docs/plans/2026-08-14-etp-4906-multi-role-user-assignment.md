@@ -1,5 +1,51 @@
 # ETP-4906 — Multi-Role User Assignment UI with Live Permission Preview — Implementation Plan
 
+**🔄 PR #1140 CI triage (coordinator, 2026-08-18).** The other session that was driving
+this ticket has finished and been terminated (human-confirmed) — coordinator resuming
+solo. Human reported 4 live CI/review items on the open PR; pulled the real data for
+each via `gh` rather than guessing:
+
+1. **`sfqg` (Schema Forge Quality Gate) — FAILING, i18n blocker, fully understood.**
+   `UserHeaderTable.jsx:39/40/41/42/75` — 5 hardcoded `label:` string literals that
+   `DataTable`'s `t(col.column) ?? col.label ?? col.key` resolution never actually
+   renders (native dictionary/the existing `labelOverrides` mechanism always wins) —
+   dead fallback text, but the gate flags any hardcoded literal regardless. Fix:
+   delete the 5 literals.
+2. **`test` (GitHub Actions) — FAILING, 1 test, NOT in the `user` window.**
+   `src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx:209` — expects
+   the "unsaved changes" banner gone after an interaction, but it's still present.
+   "Base branch is green" passed, so this is very likely a real regression from this
+   PR's shared `DetailView.jsx` dirty-state changes (`additionalDirtyState`), not
+   flakiness — needs investigation, not dismissal.
+3. **`Offline Regen Check` — FAILING, real XML drift, not previously reported by the
+   human.** `sourcedata/ETGO_SF_ENTITY.xml`/`ETGO_SF_FIELD.xml` don't match what the
+   pipeline would regenerate (`ISDELETE`/`ISREADONLY`/`ISINCLUDED` drift) — matches this
+   repo's own documented gotcha (CLAUDE.md "NEO Headless" section): a `push-to-neo.js`
+   run without a follow-up `./gradlew export.database` in the Etendo root. Needs that
+   command run and the resulting XML diff committed — an Etendo-root Gradle operation,
+   flagging for the human same as prior redeploy steps in this ticket.
+4. **3 Copilot PR review comments — 2 already fixed by unpushed local commits, 1 still
+   open.** Verified each against the ACTUAL current file content, not assumed:
+   - `RoleChipsCell.jsx:136` (RoleChip drops `data-testid`) — **already fixed**, commit
+     `f3d50f7f5`/`bbf912d6a` (per the banner below) — confirmed live in the file, `RoleChip`
+     now destructures and forwards `'data-testid'`. Copilot reviewed the OLD pushed code
+     (local HEAD is 3 commits ahead of the PR branch).
+   - `UserRolesTab.jsx:290/302` (`data-testid` on `<Fragment>`) — **already fixed**, same
+     commits — confirmed live, the id moved onto the real `<tr>` rows instead.
+   - `AssignTemplateRolesControl.jsx:131` (nested `<span role="button">` inside the outer
+     `<button>`) — **still genuinely open**, confirmed live in the file. Real
+     invalid-HTML/accessibility bug, not yet addressed by any prior round.
+5. **Sonar duplication (3.11% > 3.00% threshold on new code)** — not yet investigated,
+   need to pull the actual duplicated lines before proposing a fix.
+
+**Plan:** dispatch a developer for #1 (i18n) and #4's remaining item (nested button) —
+both small, precisely scoped, zero ambiguity. Coordinator investigates #2 (regression
+or not) and #5 (which lines) directly. #3 flagged to the human (Gradle/Etendo-root
+operation, matches the established pattern in this ticket of the human running
+redeploy-class commands themselves).
+
+---
+
 > **For agentic workers:** This plan follows Forge's own pipeline (`CLAUDE.md`), NOT
 > `superpowers:subagent-driven-development`/`executing-plans`. Each task below is
 > assigned to a named pipeline agent and passes through **DEV → REVIEW → QA → DOCS**
