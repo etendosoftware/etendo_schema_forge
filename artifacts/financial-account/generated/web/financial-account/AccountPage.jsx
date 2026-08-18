@@ -63,7 +63,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:account
 
 // @sf-generated-start requiredHeaderFields:account
-const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance'];
+const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance', 'country'];
 // @sf-generated-end requiredHeaderFields:account
 
 
@@ -166,6 +166,14 @@ export const api = {
       "reference": "Glitem",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
+    },
+    {
+      "entity": "account",
+      "field": "country",
+      "column": "C_Country_ID",
+      "reference": "Country",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/account/selectors/country"
     },
     {
       "entity": "account",

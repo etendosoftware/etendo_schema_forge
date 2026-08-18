@@ -56,7 +56,8 @@ describe('getContractGridColumns', () => {
   // what lets AccountsHeaderTable stop hand-appending it as a column literal.
   it('returns the account (Cuentas list) grid columns in order', () => {
     const cols = getContractGridColumns('account').map((c) => c.name);
-    expect(cols).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
+    // ETP-4896 follow-up: Country inserted right after Type (gridOrder 3).
+    expect(cols).toEqual(['name', 'type', 'country', 'currentBalance', 'pendingCount']);
   });
 
   it('places the virtual pendingCount column last, per its declared gridOrder', () => {
