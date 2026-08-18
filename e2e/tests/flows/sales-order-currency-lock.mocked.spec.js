@@ -81,7 +81,7 @@ async function installDetailMock(page, lines) {
   });
 
   // Lines endpoint
-  await page.route(`**/sws/neo/sales-order/lines**`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/lines{/**,}**`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,

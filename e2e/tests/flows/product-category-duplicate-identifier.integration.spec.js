@@ -60,10 +60,9 @@ const FRIENDLY_MESSAGE_PATTERN = /ya existe un registro con este identificador|a
 /** Wait for detail view fully loaded (spinner gone, data fetched). */
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 10_000 });
-  }
+  // Wait for any loading indicator to disappear (covers late-appearing spinners)
+  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if spinner never appeared
 }
 
 /**
@@ -72,9 +71,9 @@ async function waitForDetailReady(page) {
  */
 function expectSaveResponse(page) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) && resp.status() < 400,
     { timeout: 15_000 },
-  ).catch(() => {});
+  );
 }
 
 /**
@@ -88,7 +87,7 @@ function expectWriteAttemptResponse(page) {
   return page.waitForResponse(
     (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()),
     { timeout: 15_000 },
-  ).catch(() => {});
+  );
 }
 
 /**
@@ -97,9 +96,9 @@ function expectWriteAttemptResponse(page) {
  */
 function expectDeleteResponse(page) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'DELETE' && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'DELETE' && resp.status() < 400,
     { timeout: 15_000 },
-  ).catch(() => {});
+  );
 }
 
 async function createCategory(page, { searchKey, name }) {
@@ -113,7 +112,7 @@ async function createCategory(page, { searchKey, name }) {
   await page.getByTestId('field-name').fill(name);
 
   const saveBtn = page.getByTestId('action-save')
-    .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    .or(page.getByRole('button', { name: /guardar|save/i }));
   await expect(saveBtn.first()).toBeEnabled({ timeout: 10_000 });
   await saveBtn.first().click();
 }
@@ -126,75 +125,62 @@ test.describe('Product Category — Duplicate identifier error message (integrat
     const ts = Date.now();
     const searchKey = `E2E-CAT-${ts}`;
 
-    // Use onboarding-created credentials if available, otherwise env vars
-    const loginOpts = onboardingCreds
-      ? { user: onboardingCreds.email, password: onboardingCreds.password }
-      : {};
-    await login(page, loginOpts);
+    await test.step('Login', async () => {
+      // Use onboarding-created credentials if available, otherwise env vars
+      const loginOpts = onboardingCreds
+        ? { user: onboardingCreds.email, password: onboardingCreds.password }
+        : {};
+      await login(page, loginOpts);
+    });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // PART 1: Create the first category — establishes the Search Key we will
-    // then try to duplicate. Waits for the successful save response and the
-    // resulting navigation to the new record's detail URL.
-    // ═══════════════════════════════════════════════════════════════════════
+    let firstCategoryUrl;
+    await test.step('Create the first category with a unique Search Key', async () => {
+      await navigateTo(page, 'product-category');
+      const listView = page.getByTestId('list-view');
+      await expect(listView).toBeVisible({ timeout: 15_000 });
 
-    await navigateTo(page, 'product-category');
-    const listView = page.getByTestId('list-view');
-    await expect(listView).toBeVisible({ timeout: 15_000 });
+      const firstSaveP = expectSaveResponse(page);
+      await createCategory(page, { searchKey, name: `E2E Category ${ts}` });
+      await firstSaveP;
 
-    const firstSaveP = expectSaveResponse(page);
-    await createCategory(page, { searchKey, name: `E2E Category ${ts}` });
-    await firstSaveP;
+      await expect(page).toHaveURL(/\/product-category\/(?!new)/, { timeout: 15_000 });
+      firstCategoryUrl = page.url();
+    });
 
-    await expect(page).toHaveURL(/\/product-category\/(?!new)/, { timeout: 15_000 });
-    const firstCategoryUrl = page.url();
+    await test.step('Attempt duplicate category with the same Search Key', async () => {
+      await navigateTo(page, 'product-category');
+      const listView = page.getByTestId('list-view');
+      await expect(listView).toBeVisible({ timeout: 15_000 });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // PART 2: Attempt to create a SECOND category with the same Search Key.
-    // The backend must reject it as a duplicate on (Client, Organization,
-    // Search Key); the frontend must surface the friendly message.
-    // ═══════════════════════════════════════════════════════════════════════
+      const dupSaveP = expectWriteAttemptResponse(page);
+      await createCategory(page, { searchKey, name: `E2E Category Duplicate ${ts}` });
+      await dupSaveP;
+    });
 
-    await navigateTo(page, 'product-category');
-    await expect(listView).toBeVisible({ timeout: 15_000 });
+    await test.step('Assert friendly duplicate-identifier error message', async () => {
+      const errorToast = page.locator('[data-type="error"]').first();
+      await expect(errorToast).toBeVisible({ timeout: 15_000 });
 
-    const dupSaveP = expectWriteAttemptResponse(page);
-    await createCategory(page, { searchKey, name: `E2E Category Duplicate ${ts}` });
-    await dupSaveP;
+      const toastText = await errorToast.innerText();
+      expect(toastText).toMatch(FRIENDLY_MESSAGE_PATTERN);
+      expect(toastText).not.toMatch(AD_TECHNICAL_FINGERPRINT);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // PART 3: Assert the error toast shows the friendly copy and never the
-    // technical AD field-group fingerprint. Two-sided assertion, mirroring
-    // useEntity-helpers.test.js's assert.equal + assert.doesNotMatch pair.
-    // ═══════════════════════════════════════════════════════════════════════
+      // The save must have been rejected — still on the "new" form, confirming
+      // no accidental navigation/creation happened.
+      expect(page.url()).toMatch(/\/product-category\/new/);
+    });
 
-    const errorToast = page.locator('[data-type="error"]').first();
-    await expect(errorToast).toBeVisible({ timeout: 15_000 });
+    await test.step('Cleanup — delete the first category', async () => {
+      await page.goto(firstCategoryUrl);
+      await waitForDetailReady(page);
 
-    const toastText = await errorToast.innerText();
-    expect(toastText).toMatch(FRIENDLY_MESSAGE_PATTERN);
-    expect(toastText).not.toMatch(AD_TECHNICAL_FINGERPRINT);
+      const deleteP = expectDeleteResponse(page);
+      await page.getByTestId('action-delete').click();
+      await page.getByTestId('action-delete-confirm').click();
+      await deleteP;
 
-    // The save must have been rejected — still on the "new" form, confirming
-    // no accidental navigation/creation happened.
-    expect(page.url()).toMatch(/\/product-category\/new/);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // PART 4: Cleanup — delete the first category created in PART 1 so this
-    // spec doesn't leave real backend garbage behind on every run.
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await page.goto(firstCategoryUrl);
-    await waitForDetailReady(page);
-
-    const deleteP = expectDeleteResponse(page);
-    await page.getByTestId('action-delete').click();
-    await page.getByTestId('action-delete-confirm').click();
-    await deleteP;
-
-    // Spanish-only precedent match ("Registro eliminado"), plus the English
-    // equivalent ("Record deleted") — this backend is primarily Spanish.
-    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-      .toContainText(/Registro eliminado|Record deleted/i, { timeout: 10_000 });
+      await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+        .toContainText(/Registro eliminado|Record deleted/i, { timeout: 10_000 });
+    });
   });
 });

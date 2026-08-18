@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { buildEnvironmentSessionStorage } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { getApiBase } from './useNeoResource.js';
+import { sortEnvironments } from '../lib/environmentPresentation.js';
 
 /**
  * Lists the environments the signed-in account owns and switches between them.
@@ -25,13 +26,15 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       setEnvironments([]);
       return;
     }
-    const token = localStorage.getItem('sf_platform_token');
+    // Environment discovery is account-scoped. Prefer the platform session because the active
+    // tenant JWT may be expired while the account session remains valid after a credential change.
+    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
     if (!token) return;
     let cancelled = false;
     (async () => {
       try {
         const envs = await fetchEnvironments(fetch, getApiBase(), token);
-        if (!cancelled) setEnvironments(Array.isArray(envs) ? envs : []);
+        if (!cancelled) setEnvironments(sortEnvironments(envs));
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
       }
@@ -40,7 +43,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
   }, [enabled]);
 
   const switchTo = useCallback(async (env) => {
-    const token = localStorage.getItem('sf_platform_token');
+    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
     if (!token || !env?.adminUserId) return;
     setSwitching(env.clientId);
     try {
@@ -69,13 +72,13 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
    * so the caller can keep offering its own fallback rather than appear to hang.
    */
   const enterByClientName = useCallback(async (clientName) => {
-    const token = localStorage.getItem('sf_platform_token');
+    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
     const wanted = String(clientName ?? '').trim().toLowerCase();
     if (!token || !wanted) return false;
     setSwitching(wanted);
     try {
       const envs = await fetchEnvironments(fetch, getApiBase(), token);
-      const match = (Array.isArray(envs) ? envs : []).find(
+      const match = sortEnvironments(envs).find(
         (env) => String(env?.clientName ?? '').trim().toLowerCase() === wanted
       );
       if (!match) {

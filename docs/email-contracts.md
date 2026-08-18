@@ -134,6 +134,27 @@ Allowed recipient sources:
 
 Reject any command that tries to override recipient, sender, Reply-To, template, or provider metadata outside the contract schema. `recipientEdits` is part of the document-send command schema; every other recipient override remains forbidden.
 
+### `messageEdits` — operator-authored copy (ETP-4717)
+
+`messageEdits` is the second — and only other — allowlisted command field of the document-send family. It is the sole channel through which a browser may influence email copy.
+
+```json
+"messageEdits": { "subject": "Su factura corregida", "message": "Texto libre del operador" }
+```
+
+| Rule | Behavior |
+|------|----------|
+| Presence | Posted only when the operator changed the subject or typed a message; an untouched send omits the key entirely |
+| Shape | Unknown keys are rejected with 400 `VALIDATION_FAILED` |
+| Length | `subject` and `message` are length-capped server-side |
+| Subject | CR/LF stripped — a raw newline in a subject is a header-injection vector |
+| Message | HTML-escaped, newlines converted to `<br>`, because the content template renders `body` as HTML |
+| Template | Forces the content template for that send (see the per-send table above) |
+| Idempotency | Appends a content hash to the send key, so an edited re-send is not answered `DUPLICATE` |
+| Other contracts | Auth and notice contracts reject the field outright |
+
+The browser never sends `template`, `to`, `data`, sender, Reply-To or provider metadata. `subject` and `body` reaching the provider are always produced by the contract — either composed from the trusted document record, or derived from this validated and escaped field.
+
 ## Reply-To Policy
 
 Reply-To is disabled unless the contract explicitly enables it.
@@ -166,8 +187,21 @@ Document notification contracts should use the default document payload unless a
 | `document_type` | Contract-defined document label |
 | `document_number` | Document number from the trusted record |
 | `download_link` | Server-generated document URL |
+| `subject` | Contract-composed subject, only on the `custom` template |
+| `body` | Contract-composed body, only on the `custom` template |
 
-Amounts and document-specific aliases are compatibility exceptions, not the default. For example, `sales-invoice-send` still emits `amount` and `invoice_number` because the existing invoice provider template expects them. `sales-order-send` and `sales-quotation-send` use only the default document variables.
+Amounts and document-specific aliases are compatibility exceptions, not the default. For example, `sales-invoice-send` still emits `amount` and `invoice_number` because the existing invoice provider template expects them. Every other document-send contract uses only the default document variables.
+
+The provider gateway exposes exactly four templates — `reset-password`, `login-alert`, `invoice`, `custom` — and answers anything else with HTTP 400 (ETP-4786). Only `custom` can render copy that did not come from the template itself, so the document-send family resolves its template **per send**:
+
+| | `messageEdits` absent | `messageEdits` present |
+|----------|----------------------|------------------------|
+| `sales-invoice-send` | `invoice` — branded, no `subject`/`body` | `custom` + operator copy |
+| every other document contract | `custom` + contract-composed default | `custom` + operator copy |
+
+`messageEdits` is the allowlisted `{ subject, message }` field described below; it is the only way a browser may influence email copy, and the backend still owns the template, the recipient and all provider metadata. The operator's message is HTML-escaped server-side (the content template renders `body` as HTML) and the subject has CR/LF stripped. An edited send also appends a content hash to the idempotency key, so correcting the text and re-sending is not swallowed as a duplicate.
+
+See `com.etendoerp.go/docs/transactional-email-contracts.md` for the allowlist, the per-send selection table and the `etendo.go.email.provider.documentTemplate` override that collapses both branches once the gateway publishes a `document` template.
 
 ## Initial Contracts
 
@@ -330,7 +364,7 @@ Descriptor sketch:
 {
   "name": "sales-order-send",
   "version": "v1",
-  "template": "document",
+  "template": "custom",
   "caller": ["frontend"],
   "authorization": {
     "windowAccess": "sales-order",
@@ -365,7 +399,7 @@ Descriptor sketch:
 {
   "name": "sales-quotation-send",
   "version": "v1",
-  "template": "document",
+  "template": "custom",
   "caller": ["frontend"],
   "authorization": {
     "windowAccess": "sales-quotation",

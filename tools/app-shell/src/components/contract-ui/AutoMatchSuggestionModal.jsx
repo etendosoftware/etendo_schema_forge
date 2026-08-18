@@ -7,6 +7,7 @@ import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
 import { cn } from '@/lib/utils';
+import { formatCalendarDate } from '@/lib/dateOnly';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,13 +15,7 @@ import { cn } from '@/lib/utils';
 
 function formatLineDate(isoDate) {
   if (!isoDate) return '';
-  try {
-    return new Date(isoDate).toLocaleDateString('es-ES', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-    });
-  } catch {
-    return isoDate;
-  }
+  return formatCalendarDate(isoDate, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function RuleTypeBadge({ label, tone = 'default' }) {

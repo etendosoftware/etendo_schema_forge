@@ -17,6 +17,26 @@ vi.mock('@/components/contract-ui/ConfirmDocumentModal', async (importOriginal) 
   return actual;
 });
 
+// Radix Select cannot run in JSDOM — replace with a native <select> that
+// honours value/onValueChange and renders options via SelectItem.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children, value, onValueChange }) => (
+    <div>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+        data-testid="select-control"
+      >
+        {children}
+      </select>
+    </div>
+  ),
+  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
+  SelectValue: () => null,
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
@@ -395,7 +415,7 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        const select = screen.getByTestId('invoice-confirm-price-list-select');
+        const select = screen.getByTestId('select-control');
         expect(select.value).toBe('pl-b');
       });
     });
@@ -407,7 +427,7 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        const select = screen.getByTestId('invoice-confirm-price-list-select');
+        const select = screen.getByTestId('select-control');
         expect(select.value).toBe('pl-a');
       });
     });
@@ -450,7 +470,7 @@ describe('CreateInvoiceConfirmModal', () => {
       await waitFor(() => {
         expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
-      fireEvent.change(screen.getByTestId('invoice-confirm-price-list-select'), { target: { value: 'pl-b' } });
+      fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-b' } });
       fireEvent.click(screen.getByText('soCreateDocsBtn'));
       expect(onConfirm).toHaveBeenCalledWith('pl-b');
     });

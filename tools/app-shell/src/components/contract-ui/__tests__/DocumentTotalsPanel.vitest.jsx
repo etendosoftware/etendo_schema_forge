@@ -131,4 +131,143 @@ describe('DocumentTotalsPanel', () => {
     render(<DocumentTotalsPanel lines={LINES} lineConfig={config} formatAmount={(v) => `${v}`} />);
     expect(screen.queryByText(/addTotalDiscount/)).not.toBeInTheDocument();
   });
+
+  // ETP-4777 — the Form summary panel must never show a client-recomputed
+  // total that differs from the persisted backend value (the one the Grid
+  // and the printed document show). Whenever nothing is actively being
+  // edited, the panel must display the authoritative `persistedTotals`
+  // as-is instead of recomputing from `lines` via computeDocumentTotals.
+  describe('ETP-4777 — persisted backend total takes precedence over client recompute', () => {
+    it('shows the persisted total instead of recomputing from lines when nothing is pending (Case 1: Draft)', () => {
+      // Mocked computeDocumentTotals (see top of file) would sum LINES'
+      // lineGrossAmount and return grandTotal=121 — a different number than
+      // the backend-persisted total, reproducing the reported Form-vs-Grid
+      // mismatch (e.g. Form showed 89.19 while Grid's Imp. Total was 89.21).
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('89.21');
+    });
+
+    it('keeps showing the persisted total after the document is completed, not the stale pre-Complete number (Case 3)', () => {
+      // Simulates the Grid/print already updated to the post-Complete value
+      // (e.g. 89.20) while the old buggy panel kept showing the pre-Complete
+      // recompute (89.19) forever, because it never read the persisted total.
+      const persistedTotals = { grandTotal: 76.43, netSubtotal: 60, taxAmt: 16.43 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          readOnly={true}
+          persistedTotals={persistedTotals}
+        />
+      );
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('76.43');
+    });
+
+    it('falls back to the live recompute while the user is actively typing an unsaved total-discount %, even with no pending line', async () => {
+      // Reproduces a real regression found during manual verification: typing
+      // into the "Descuento total" % input doesn't touch pendingLine/
+      // editingLine at all, so without this guard the panel would freeze on
+      // the stale persistedTotals baseline and ignore every keystroke until
+      // the onBlur PATCH round-trips back with a fresh header.
+      const user = userEvent.setup();
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Baseline shown initially (no pending edit yet).
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('89.21');
+
+      await user.click(screen.getByText(/addTotalDiscount/));
+      const pctInput = screen.getByDisplayValue('0');
+      await user.clear(pctInput);
+      await user.type(pctInput, '25');
+
+      // Mocked computeDocumentTotals always returns grandTotal=121 (sum of
+      // LINES' lineGrossAmount) regardless of discPct — the point here is
+      // only that it's no longer showing the frozen persisted baseline.
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('121');
+    });
+
+    it('reconciles a NOT-yet-materialised discount (persisted net ≈ raw from lines) using the totalDiscountPct factor', () => {
+      // Mirrors an Order pre-Complete: the GET-time compensation has only
+      // scaled grandTotalAmount — summedLineAmount is still the raw net, so
+      // it matches what a fresh recompute from the lines gives (100, via the
+      // mock's lineNetAmount sum below) within rounding noise.
+      const linesRaw = [{ id: 'L1', lineNetAmount: 100, lineGrossAmount: 121 }];
+      const persistedTotals = { grandTotal: 97, netSubtotal: 100 };
+      render(
+        <DocumentTotalsPanel
+          lines={linesRaw}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          totalDiscountPct={25}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Subtotal row = netSubtotal(raw, 100) - totalDiscountAmt(mock: 100*25%=25) = 75.
+      expect(screen.getByTestId('totals-row-subtotal-value').textContent).toBe('75');
+      expect(screen.getByTestId('totals-row-tax-value').textContent).toBe('22');
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('97');
+    });
+
+    it('reconciles an ALREADY-materialised discount (persisted net well below raw from lines) using the same factor, inverted', () => {
+      // Mirrors an invoice created from an already-discounted order: the
+      // ETGO_DTO discount line is materialised immediately, so
+      // summedLineAmount (75) is already net-of-discount — far below what a
+      // fresh recompute from the (undiscounted) lines gives (100) — yet
+      // documentStatus can still be Draft here, so isReadOnly must NOT be
+      // the signal used to tell these two cases apart (ETP-4777 regression).
+      const linesRaw = [{ id: 'L1', lineNetAmount: 100, lineGrossAmount: 121 }];
+      const persistedTotals = { grandTotal: 97, netSubtotal: 75 };
+      render(
+        <DocumentTotalsPanel
+          lines={linesRaw}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          totalDiscountPct={25}
+          readOnly={false}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Same displayed numbers as the not-yet-materialised case above —
+      // proving both starting states converge to the one correct answer.
+      // Subtotal row = netSubtotal(raw, 100) - totalDiscountAmt(mock: 100*25%=25) = 75.
+      expect(screen.getByTestId('totals-row-subtotal-value').textContent).toBe('75');
+      expect(screen.getByTestId('totals-row-tax-value').textContent).toBe('22');
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('97');
+    });
+
+    it('falls back to the live recompute while a line is actively pending/unsaved (no persisted number exists yet for it)', () => {
+      // While the user is mid-edit on a new row, there is nothing wrong to
+      // fix — this is the one state where computeDocumentTotals is still the
+      // right source, per the fix's design (see docs/plans/2026-08-12-etp4777-total-rounding-fix-plan.md §2).
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      const pending = { lineGrossAmount: 50, lineNetAmount: 40 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          pendingLine={pending}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Mocked computeDocumentTotals sums LINES (121) + pending (50) = 171.
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('171');
+    });
+  });
 });

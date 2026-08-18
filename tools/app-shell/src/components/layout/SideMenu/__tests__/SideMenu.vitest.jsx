@@ -1,8 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const { mockUseFeatureFlag } = vi.hoisted(() => ({
   mockUseFeatureFlag: vi.fn(() => false),
+}));
+const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
+  mockUseEnvironmentSwitch: vi.fn(() => ({
+    environments: [],
+    switchTo: vi.fn(),
+    switching: null,
+    currentClientId: undefined,
+  })),
 }));
 
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
@@ -43,6 +51,10 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
   TENANT_UPGRADE: 'tenant-upgrade',
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+}));
+
+vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  useEnvironmentSwitch: (...args) => mockUseEnvironmentSwitch(...args),
 }));
 
 // Mock menu.json — includes a couple of extra entries (a "Favorites" group and
@@ -216,6 +228,34 @@ describe('SideMenu', () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('shows the current environment plan in the selector when tenant upgrade is enabled', () => {
+    mockUseFeatureFlag.mockImplementation(key => key === 'tenant-upgrade');
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).getByText('environmentDemo')).toBeInTheDocument();
+  });
+
+  it('does not show a plan label in the selector when tenant upgrade is disabled', () => {
+    mockUseFeatureFlag.mockReturnValue(false);
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).queryByText('environmentDemo')).not.toBeInTheDocument();
+  });
+
   it('renders the user avatar button', () => {
     render(<SideMenu {...defaultProps} />);
     expect(screen.getByTestId('user-avatar')).toBeInTheDocument();
@@ -275,6 +315,13 @@ describe('SideMenu', () => {
       delete import.meta.env.VITE_SHOW_ARTIFACTS;
       mockUseFeatureFlag.mockReset();
       mockUseFeatureFlag.mockReturnValue(false);
+      mockUseEnvironmentSwitch.mockReset();
+      mockUseEnvironmentSwitch.mockReturnValue({
+        environments: [],
+        switchTo: vi.fn(),
+        switching: null,
+        currentClientId: undefined,
+      });
     });
 
     // A group whose currentPath ('dashboard') matches one of two items, so the

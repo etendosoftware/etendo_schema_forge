@@ -12,7 +12,8 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: vi.fn(() => mockApiFetch),
 }));
 
-vi.mock('../fiscalConfig.utils.js', () => ({
+vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
+  ...(await importActual()),
   detectProfile: vi.fn(() => 'sii'),
 }));
 

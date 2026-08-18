@@ -1,14 +1,17 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-05-04T17:05:55.224Z",
-  "updatedAt": "2026-07-21T12:35:24.705Z",
-  "checksum": "412ce87e943e851e",
+  "updatedAt": "2026-08-04T14:03:25.704Z",
+  "checksum": "351c5d78b41384f2",
   "frontendContract": {
     "window": {
       "id": "71F24BF89DE748B483BE87594747D6FB",
       "name": "TBAI Facturas Enviadas",
       "primaryEntity": "sincronización",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false,
       "layoutType": "default"
     },
@@ -180,6 +183,9 @@
       "name": "TBAI Facturas Enviadas",
       "primaryEntity": "sincronización",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false
     },
     "entities": {
@@ -445,10 +451,10 @@
       "sincronización": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
         "supportedFilters": []
@@ -456,10 +462,10 @@
       "resultadoValidación": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
         "supportedFilters": []
@@ -490,7 +496,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "testManifest": {

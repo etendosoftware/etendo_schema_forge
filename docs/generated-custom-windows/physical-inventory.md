@@ -170,3 +170,8 @@ Manual check: open the list, filter by **Almacén** and confirm typing part of a
 warehouse name narrows the rows; filter by the difference column and confirm the
 numeric operators are offered. Full reference:
 [`list-filters.md`](../list-filters.md).
+
+## Semantic visual states
+
+The inventory-list dialog and top-bar controls use structural surface, border, and
+foreground roles. The Generate action remains the standard high-contrast action.

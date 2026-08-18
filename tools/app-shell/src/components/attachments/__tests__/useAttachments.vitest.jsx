@@ -17,6 +17,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { useAttachments } from '../useAttachments';
+import { ATTACHMENTS_CHANGED_EVENT, notifyAttachmentsChanged } from '../attachmentsBus';
 import { toast } from 'sonner';
 
 const baseOpts = {
@@ -241,5 +242,133 @@ describe('useAttachments', () => {
     unmount();
 
     expect(capturedSignal.aborted).toBe(true);
+  });
+});
+
+/**
+ * ETP-4855 — this tab and the OCR side panel each keep their own copy of the
+ * list and are mounted together in form view. Reported symptom: a file attached
+ * from the panel did not appear here until leaving form view and coming back.
+ */
+describe('useAttachments — cross-view sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake');
+    globalThis.URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reloads when another view attaches a file to this record', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    // The side panel uploaded one: the next listing returns both.
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }, { id: 'b' }] }));
+    act(() => {
+      notifyAttachmentsChanged({
+        tableName: baseOpts.tableName,
+        recordId: baseOpts.recordId,
+        source: 'the-side-panel',
+      });
+    });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+  });
+
+  it('ignores a change to a different record', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    const callsAfterLoad = globalThis.fetch.mock.calls.length;
+
+    act(() => {
+      notifyAttachmentsChanged({
+        tableName: baseOpts.tableName,
+        recordId: 'SOME-OTHER-RECORD',
+        source: 'the-side-panel',
+      });
+    });
+
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(globalThis.fetch.mock.calls.length).toBe(callsAfterLoad);
+  });
+
+  it('announces its own upload so the side panel reloads', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ id: 'new-1' }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+
+    const seen = [];
+    const listener = (event) => seen.push(event.detail);
+    window.addEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    try {
+      await act(async () => {
+        await result.current.upload(new File(['x'], 'a.pdf', { type: 'application/pdf' }));
+      });
+      await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    } finally {
+      window.removeEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    }
+
+    expect(seen[0]).toMatchObject({
+      tableName: baseOpts.tableName,
+      recordId: baseOpts.recordId,
+    });
+  });
+
+  it('announces a delete so the side panel stops showing the file', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    const seen = [];
+    const listener = (event) => seen.push(event.detail);
+    window.addEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    try {
+      await act(async () => { await result.current.remove('a'); });
+      await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    } finally {
+      window.removeEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    }
+
+    expect(seen[0]).toMatchObject({ recordId: baseOpts.recordId });
+  });
+
+  it('stays quiet when a delete fails', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    globalThis.fetch.mockResolvedValue(jsonResponse({ message: 'nope' }, { ok: false, status: 500 }));
+    const listener = vi.fn();
+    window.addEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    try {
+      await act(async () => { await result.current.remove('a'); });
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    }
+    // Optimistic removal rolled back.
+    expect(result.current.items).toHaveLength(1);
+  });
+
+  it('does not reload in response to its own announcement', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'a' }] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    globalThis.fetch.mockResolvedValue(jsonResponse({ id: 'new-1' }));
+    await act(async () => {
+      await result.current.upload(new File(['x'], 'a.pdf', { type: 'application/pdf' }));
+    });
+    const callsAfterUpload = globalThis.fetch.mock.calls.length;
+
+    // Settle any listener-triggered reload that should not exist.
+    await act(async () => { await Promise.resolve(); });
+    expect(globalThis.fetch.mock.calls.length).toBe(callsAfterUpload);
   });
 });

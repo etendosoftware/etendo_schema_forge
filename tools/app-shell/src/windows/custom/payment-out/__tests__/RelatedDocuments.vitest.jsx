@@ -173,4 +173,31 @@ describe('RelatedDocuments — document linking', () => {
     // Effect returns early before clearing loading.
     expect(screen.getByTestId('rel-docs-shell')).toHaveAttribute('data-loading', 'true');
   });
+
+  // ETP-4779: generating a derived document (e.g. a Payment) from this
+  // window's menu actions must refresh this component the same way the
+  // manual refresh button does — via a `docsRefreshSignal` prop threaded
+  // down from DetailView through LinesBottomSection. Currently
+  // `docsRefreshSignal` is not part of the fetch effect's dependency array,
+  // so incrementing it does NOT trigger a refetch. This test is expected to
+  // FAIL until that fix lands.
+  it('8. refetches lines when docsRefreshSignal prop increments (regression, ETP-4779)', async () => {
+    mockFetchLines([]);
+
+    const { rerender } = renderComp({ docsRefreshSignal: 0 });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rel-docs-shell')).toHaveAttribute('data-loading', 'false');
+    });
+
+    const callsBefore = global.fetch.mock.calls.length;
+
+    rerender(
+      <RelatedDocuments recordId="rec-1" data={{}} token={TOKEN} apiBaseUrl={API} docsRefreshSignal={1} />
+    );
+
+    await waitFor(() => {
+      expect(global.fetch.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
 });

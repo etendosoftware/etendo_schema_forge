@@ -17,8 +17,12 @@ function sanitizeCalloutMessage(raw) {
  *
  * Returns { calloutResult, calloutLoading, executeCallout }.
  *
- * calloutResult: { updates, combos, messages } from the last callout response.
- * executeCallout(field, value, formState): triggers the callout (debounced 300ms).
+ * calloutResult: { updates, combos, messages, triggerField, meta } from the last
+ * callout response. `meta` is an opaque passthrough of whatever the caller
+ * passed to executeCallout (e.g. a per-field generation snapshot used by
+ * DetailView to detect and discard stale responses — ETP-4772); this hook
+ * does not interpret it.
+ * executeCallout(field, value, formState, meta): triggers the callout (debounced 300ms).
  */
 export function useCallout(entity, { token, apiBaseUrl }) {
   const [calloutResult, setCalloutResult] = useState(null);
@@ -27,7 +31,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
   const debounceMapRef = useRef({});
   const abortMapRef = useRef({});
 
-  const executeCallout = useCallback((field, value, formState) => {
+  const executeCallout = useCallback((field, value, formState, meta) => {
     if (!field || !token || !apiBaseUrl || !entity) return;
 
     // Cancel any pending debounced call for THIS field only
@@ -80,7 +84,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
           else toast.info(text);
         }
 
-        setCalloutResult({ updates, combos, triggerField: field });
+        setCalloutResult({ updates, combos, triggerField: field, meta });
       } catch (err) {
         if (err.name !== 'AbortError') {
           // Callout is best-effort — do not block the user on failure

@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-07-14T00:53:56.456Z",
-  "contractChecksum": "c748718ce94ec866",
+  "updatedAt": "2026-08-03T18:55:28.096Z",
+  "contractChecksum": "68ca7a8c50c51372",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",
@@ -89,26 +89,47 @@
       "tax": {
         "fields": {
           "name": {
+            "readOnly": true,
+            "required": true
+          },
+          "validFrom": {
+            "readOnly": true,
             "required": true
           },
           "rate": {
+            "readOnly": true,
             "required": true
           },
+          "applicableTo": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "B"
+          },
           "docTaxAmount": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "D"
           },
           "baseAmount": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "LNA"
           },
-          "applicableTo": {
-            "required": true,
-            "defaultValue": "B"
+          "notTaxable": {
+            "readOnly": true
           },
-          "validFrom": {
+          "taxExempt": {
+            "readOnly": true,
             "required": true
-          }
+          },
+          "tbaiClaveregimeniva": {},
+          "tbaiNonsubjectcause": {},
+          "etvfacIGICRegime": {},
+          "etvfacVatRegime": {},
+          "etvfacExemptionCause": {},
+          "etvfacCauseNotTaxable": {},
+          "tBAICausaDeExencion": {},
+          "etvfacIPSIRegime": {}
         }
       },
       "accounting": {
@@ -131,20 +152,11 @@
       "Use for tax rate management."
     ],
     "minimumCreate": {
-      "headerFields": [
-        "name",
-        "rate",
-        "docTaxAmount",
-        "baseAmount",
-        "applicableTo",
-        "validFrom"
-      ],
       "lineFields": [
         "taxDue",
         "taxCredit"
       ],
       "recommendedOrder": [
-        "createHeader",
         "createLines"
       ]
     },
@@ -152,23 +164,10 @@
     "actions": [],
     "workflow": [],
     "edgeCases": [],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "name",
-          "rate",
-          "docTaxAmount",
-          "baseAmount",
-          "applicableTo",
-          "validFrom"
-        ]
-      }
-    ],
+    "examples": [],
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "2aa4d1749daa72b8"
+  "checksum": "2b06b6b67fe2cb0e"
 }

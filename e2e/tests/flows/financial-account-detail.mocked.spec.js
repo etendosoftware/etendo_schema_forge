@@ -152,7 +152,7 @@ async function installFinancialAccountMocks(page) {
   });
 
   // Transactions endpoint — useAccountMovements
-  await page.route('**/sws/neo/financial-account-transactions**', async (route) => {
+  await page.route('**/sws/neo/financial-account-transactions{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

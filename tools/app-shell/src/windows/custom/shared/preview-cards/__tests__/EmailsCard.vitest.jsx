@@ -32,14 +32,22 @@ describe('EmailsCard', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('renders without crashing when onSend is undefined', () => {
-    // Should not throw even with no handler
+  // ── ETP-4717 fail-closed contract: no onSend → no send link at all ─────────
+  // Previously these two asserted the button was present but inert (onClick
+  // undefined) when no handler was given. Once EmailsCard.jsx is fixed to
+  // {onSend && (...)}, the button must not render at all in that case — so
+  // both are rewritten to match the corrected contract. They currently FAIL
+  // against the unfixed source (the button is still found today).
+  it('renders without crashing and omits the send link when onSend is undefined (ETP-4717 fail-closed)', () => {
     expect(() => render(<EmailsCard />)).not.toThrow();
+    expect(screen.queryByText('previewCardSendEmail')).not.toBeInTheDocument();
   });
 
-  it('clicking send button with no onSend does not throw', () => {
+  it('exposes no clickable send trigger when onSend is undefined — no dead link (ETP-4717 fail-closed)', () => {
     render(<EmailsCard />);
-    expect(() => fireEvent.click(screen.getByText('previewCardSendEmail'))).not.toThrow();
+    // Previously: clicking the inert button didn't throw. Now: there must be
+    // no button/link element to click in the first place.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   // ── ETP-4372 regression: EMAILS-section Send link must be wired ─────────────
@@ -50,5 +58,23 @@ describe('EmailsCard', () => {
     render(<EmailsCard onSend={onSend} />);
     fireEvent.click(screen.getByText('previewCardSendEmail'));
     expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  // ── ETP-4717 Pair 3 regression: hide (not just disable) the Send link ───────
+  // EmailsCard currently renders the "Send email" button unconditionally even
+  // when a caller intentionally passes onSend={undefined} (e.g. because the
+  // document's status makes sending unavailable) — it's just visually present
+  // with an inert onClick. The fix wraps the button in {onSend && (...)},
+  // matching the sibling PreviewActionButtons.jsx pattern. This case must FAIL
+  // against the current (unfixed) source: the button is still found.
+  //
+  // NOTE for whoever implements the fix: this directly conflicts with the two
+  // existing tests above ("renders without crashing when onSend is undefined"
+  // and "clicking send button with no onSend does not throw"), which assert
+  // the button IS present (just inert) when onSend is undefined. Those two
+  // tests will need to be updated in the same change that applies the fix.
+  it('ETP-4717: does NOT render the "send email" link at all when onSend is not passed (undefined)', () => {
+    render(<EmailsCard />);
+    expect(screen.queryByText('previewCardSendEmail')).not.toBeInTheDocument();
   });
 });

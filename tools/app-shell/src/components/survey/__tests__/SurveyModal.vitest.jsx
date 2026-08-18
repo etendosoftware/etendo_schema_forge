@@ -2,15 +2,25 @@
 // (NPS 0-10 flow, CSAT star flow, close/skip handlers, and the thanks->onClose timer).
 vi.mock('@/i18n/index.js', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
+
+const surveyConfigMocks = vi.hoisted(() => ({
+  getRemoteCannedResponses: vi.fn(() => null),
+}));
+
+vi.mock('@/lib/surveys/survey-config.js', () => surveyConfigMocks);
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SurveyModal } from '../SurveyModal.jsx';
 
+const { getRemoteCannedResponses } = surveyConfigMocks;
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  getRemoteCannedResponses.mockReturnValue(null);
 });
 
 const npsSurvey = {
@@ -26,9 +36,18 @@ const csatSurvey = {
   q2TitleKey: 'surveyInvoicingQ2',
   q2PlaceholderKey: 'surveyInvoicingQ2Placeholder',
   thanksKey: 'surveyInvoicingThanks',
+  canned: [
+    { icon: '🐢', key: 'surveyInvoicingCanned1' },
+    { icon: '🤔', key: 'surveyInvoicingCanned2' },
+    { icon: '📄', key: 'surveyInvoicingCanned3' },
+    { icon: '🧾', key: 'surveyInvoicingCanned4' },
+    { icon: '📤', key: 'surveyInvoicingCanned5' },
+    { icon: '🐛', key: 'surveyInvoicingCanned6' },
+  ],
 };
 
 function setup(props = {}) {
+  const onScoreSelected = vi.fn();
   const onRespond = vi.fn();
   const onDismiss = vi.fn();
   const onClose = vi.fn();
@@ -36,13 +55,14 @@ function setup(props = {}) {
     <SurveyModal
       survey={npsSurvey}
       open
+      onScoreSelected={onScoreSelected}
       onRespond={onRespond}
       onDismiss={onDismiss}
       onClose={onClose}
       {...props}
     />
   );
-  return { ...utils, onRespond, onDismiss, onClose };
+  return { ...utils, onScoreSelected, onRespond, onDismiss, onClose };
 }
 
 describe('SurveyModal — visibility', () => {
@@ -113,6 +133,49 @@ describe('SurveyModal — NPS flow', () => {
     expect(screen.getByText('surveyNpsQ2Detractor')).toBeInTheDocument();
   });
 
+  it('Back on the followup phase returns to score selection with the score preserved', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByTestId('SurveyModal__nps-7'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+    expect(screen.getByText('surveyNpsQ2Passive')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('SurveyModal__back'));
+
+    expect(screen.getByTestId('SurveyModal__nps-scale')).toBeInTheDocument();
+    expect(screen.getByTestId('SurveyModal__nps-7')).toHaveStyle({ background: 'var(--status-warning-fg)' });
+  });
+
+  it('Back clears stale tags: resubmitting under a different score/segment does not carry the previously-selected tag (regression)', async () => {
+    const user = userEvent.setup();
+    const { onRespond } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+    expect(screen.getByText('surveyNpsQ2Promoter')).toBeInTheDocument();
+
+    // Select a chip tag while in the promoter followup.
+    await user.click(screen.getByText('surveyChipSpeed'));
+
+    await user.click(screen.getByTestId('SurveyModal__back'));
+
+    // Score selection UI is back, with the previously-selected score preserved.
+    expect(screen.getByTestId('SurveyModal__nps-scale')).toBeInTheDocument();
+    expect(screen.getByTestId('SurveyModal__nps-9')).toHaveStyle({ background: 'var(--status-success-fg)' });
+
+    // Pick a different score (detractor segment) and advance to followup again,
+    // WITHOUT re-selecting any tag.
+    await user.click(screen.getByTestId('SurveyModal__nps-2'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+    expect(screen.getByText('surveyNpsQ2Detractor')).toBeInTheDocument();
+
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(onRespond).toHaveBeenCalledWith(2, '', []);
+    const [, , tagsArg] = onRespond.mock.calls[0];
+    expect(tagsArg).not.toContain('surveyChipSpeed');
+  });
+
   it('shows the promoter-only AI chip option for promoters', async () => {
     const user = userEvent.setup();
     setup();
@@ -168,6 +231,76 @@ describe('SurveyModal — NPS flow', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onRespond).not.toHaveBeenCalled();
   });
+
+  it('does NOT call onScoreSelected immediately when a score is picked', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+
+    expect(onScoreSelected).not.toHaveBeenCalled();
+  });
+
+  it('calls onScoreSelected with the last picked score, exactly once, when Skip is clicked after selecting', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onDismiss } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-3'));
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+    await user.click(screen.getByText('surveySkip').closest('button'));
+
+    expect(onScoreSelected).toHaveBeenCalledTimes(1);
+    expect(onScoreSelected).toHaveBeenCalledWith(9);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT call onScoreSelected when Skip is clicked without ever picking a score', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onDismiss } = setup();
+
+    await user.click(screen.getByText('surveySkip').closest('button'));
+
+    expect(onScoreSelected).not.toHaveBeenCalled();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT call onScoreSelected when the user submits (survey_responded already carries the score)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { onScoreSelected, onRespond } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(onRespond).toHaveBeenCalledWith(9, '', []);
+    expect(onScoreSelected).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+  });
+
+  it('calls onScoreSelected once when the close (X) button is clicked after picking a score', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected } = setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-6'));
+    await user.click(screen.getByTestId('SurveyModal__close'));
+
+    expect(onScoreSelected).toHaveBeenCalledTimes(1);
+    expect(onScoreSelected).toHaveBeenCalledWith(6);
+  });
+
+  it('calls onScoreSelected once when the backdrop is clicked after picking a score', () => {
+    const { onScoreSelected } = setup();
+
+    fireEvent.click(screen.getByTestId('SurveyModal__nps-4'));
+    fireEvent.click(screen.getByTestId('SurveyModal__backdrop'));
+
+    expect(onScoreSelected).toHaveBeenCalledTimes(1);
+    expect(onScoreSelected).toHaveBeenCalledWith(4);
+  });
 });
 
 describe('SurveyModal — CSAT flow', () => {
@@ -212,6 +345,53 @@ describe('SurveyModal — CSAT flow', () => {
     expect(screen.getByTestId('SurveyModal__thank-you')).toBeInTheDocument();
   });
 
+  it('Back on the followup phase returns to star selection with the score preserved', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+    expect(screen.getByText('surveyInvoicingQ2')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('SurveyModal__back'));
+
+    expect(screen.getByTestId('SurveyModal__star-scale')).toBeInTheDocument();
+    expect(screen.getByTestId('SurveyModal__star-2')).toHaveAttribute('aria-label', '2');
+    // The star scale re-renders with the preserved score: stars 1-2 render filled.
+    const star2Svg = screen.getByTestId('SurveyModal__star-2').querySelector('svg');
+    expect(star2Svg).toHaveAttribute('fill', 'var(--status-warning-fg)');
+  });
+
+  it('Back clears stale feedback: switching to a high score after Back does not resubmit the old low-score feedback (regression)', async () => {
+    const user = userEvent.setup();
+    const { onRespond } = setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+    expect(screen.getByText('surveyInvoicingQ2')).toBeInTheDocument();
+
+    const textarea = screen.getByPlaceholderText('surveyInvoicingQ2Placeholder');
+    await user.type(textarea, 'Stale feedback for score 2');
+    expect(textarea).toHaveValue('Stale feedback for score 2');
+
+    await user.click(screen.getByTestId('SurveyModal__back'));
+
+    // Score selection UI is back, with the previously-selected score preserved.
+    expect(screen.getByTestId('SurveyModal__star-scale')).toBeInTheDocument();
+    expect(screen.getByTestId('SurveyModal__star-2')).toHaveAttribute('aria-label', '2');
+
+    // Pick a high score (>3) — this routes straight to thanks, skipping followup entirely.
+    await user.click(screen.getByTestId('SurveyModal__star-5'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(onRespond).toHaveBeenCalledWith(5, '', []);
+    const [, feedbackArg] = onRespond.mock.calls[0];
+    // Explicit, readable regression guard: the feedback argument must be empty/falsy,
+    // not merely "not equal to the stale string" (which would also pass on any other leak).
+    expect(feedbackArg).toBeFalsy();
+    expect(feedbackArg).not.toBe('Stale feedback for score 2');
+  });
+
   it('disables Submit until a star is picked', () => {
     setup({ survey: csatSurvey });
     const submit = screen.getByText('surveySubmit').closest('button');
@@ -243,6 +423,162 @@ describe('SurveyModal — CSAT flow', () => {
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call onScoreSelected immediately when a star is picked', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected } = setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+
+    expect(onScoreSelected).not.toHaveBeenCalled();
+  });
+
+  it('calls onScoreSelected once with the picked star when Skip is clicked after selecting', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onDismiss } = setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySkip').closest('button'));
+
+    expect(onScoreSelected).toHaveBeenCalledTimes(1);
+    expect(onScoreSelected).toHaveBeenCalledWith(2);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT call onScoreSelected when the user submits a low score and completes the followup', async () => {
+    const user = userEvent.setup();
+    const { onScoreSelected, onRespond } = setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(onRespond).toHaveBeenCalledWith(2, '', []);
+    expect(onScoreSelected).not.toHaveBeenCalled();
+  });
+
+  it('shows all 6 canned-response options in the followup phase and clicking one prefills the editable textarea', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    for (let n = 1; n <= 6; n++) {
+      expect(screen.getByText(`surveyInvoicingCanned${n}`)).toBeInTheDocument();
+    }
+
+    const textarea = screen.getByPlaceholderText('surveyInvoicingQ2Placeholder');
+    expect(textarea).toHaveValue('');
+
+    await user.click(screen.getByText('surveyInvoicingCanned1'));
+    expect(textarea).toHaveValue('surveyInvoicingCanned1');
+
+    // Still editable after picking a canned response.
+    await user.type(textarea, ' but faster');
+    expect(textarea).toHaveValue('surveyInvoicingCanned1 but faster');
+  });
+
+  it('prefers backoffice-configured canned responses over the hardcoded locale-key fallback', async () => {
+    getRemoteCannedResponses.mockReturnValue([
+      { icon: '🐢', text: 'Muy lento (config remota)', minScore: 1, maxScore: 3 },
+      { icon: '🤔', text: 'Difícil (config remota)', minScore: 1, maxScore: 3 },
+    ]);
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(getRemoteCannedResponses).toHaveBeenCalledWith('csat_invoicing', 'es_ES');
+    expect(screen.getByText('Muy lento (config remota)')).toBeInTheDocument();
+    // Falls back away from the hardcoded locale-key list entirely when remote data exists.
+    expect(screen.queryByText('surveyInvoicingCanned1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Muy lento (config remota)'));
+    const textarea = screen.getByPlaceholderText('surveyInvoicingQ2Placeholder');
+    expect(textarea).toHaveValue('Muy lento (config remota)');
+  });
+
+  it('filters remote canned responses by the score range the user picked', async () => {
+    getRemoteCannedResponses.mockReturnValue([
+      { icon: '😡', text: 'Muy insatisfecho', minScore: 1, maxScore: 1 },
+      { icon: '😐', text: 'Podría mejorar', minScore: 2, maxScore: 3 },
+    ]);
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-1'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(screen.getByText('Muy insatisfecho')).toBeInTheDocument();
+    expect(screen.queryByText('Podría mejorar')).not.toBeInTheDocument();
+  });
+
+  it('shows a different score band range when the user picks a higher (still low) score', async () => {
+    getRemoteCannedResponses.mockReturnValue([
+      { icon: '😡', text: 'Muy insatisfecho', minScore: 1, maxScore: 1 },
+      { icon: '😐', text: 'Podría mejorar', minScore: 2, maxScore: 3 },
+    ]);
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-3'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(screen.getByText('Podría mejorar')).toBeInTheDocument();
+    expect(screen.queryByText('Muy insatisfecho')).not.toBeInTheDocument();
+  });
+
+  it('clicking one of the last canned options (5 or 6) prefills the textarea with plain text only (no icon)', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-1'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    await user.click(screen.getByText('surveyInvoicingCanned6'));
+
+    const textarea = screen.getByPlaceholderText('surveyInvoicingQ2Placeholder');
+    expect(textarea).toHaveValue('surveyInvoicingCanned6');
+  });
+
+  it('shows the order-specific canned options (not the invoicing ones) for csat_order', async () => {
+    const user = userEvent.setup();
+    const orderSurvey = {
+      id: 'csat_order',
+      type: 'csat',
+      titleKey: 'surveyOrderTitle',
+      q2TitleKey: 'surveyOrderQ2',
+      q2PlaceholderKey: 'surveyOrderQ2Placeholder',
+      thanksKey: 'surveyOrderThanks',
+      canned: [
+        { icon: '🐢', key: 'surveyOrderCanned1' },
+        { icon: '🤔', key: 'surveyOrderCanned2' },
+        { icon: '🔍', key: 'surveyOrderCanned3' },
+        { icon: '📋', key: 'surveyOrderCanned4' },
+        { icon: '✅', key: 'surveyOrderCanned5' },
+        { icon: '🐛', key: 'surveyOrderCanned6' },
+      ],
+    };
+    setup({ survey: orderSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-2'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(screen.getByText('surveyOrderCanned3')).toBeInTheDocument();
+    expect(screen.queryByText('surveyInvoicingCanned3')).not.toBeInTheDocument();
+  });
+
+  it('does not show canned-response buttons for a score > 3 (straight to thanks)', async () => {
+    const user = userEvent.setup();
+    setup({ survey: csatSurvey });
+
+    await user.click(screen.getByTestId('SurveyModal__star-5'));
+    await user.click(screen.getByText('surveySubmit').closest('button'));
+
+    expect(screen.queryByText('surveyInvoicingCanned1')).not.toBeInTheDocument();
   });
 });
 

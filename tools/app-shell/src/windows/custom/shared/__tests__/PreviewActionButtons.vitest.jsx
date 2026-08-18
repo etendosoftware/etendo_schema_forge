@@ -79,6 +79,31 @@ describe('PreviewActionButtons', () => {
     fireEvent.click(screen.getByText('Download'));
     expect(defaults.onDownloadPdf).not.toHaveBeenCalled();
   });
+
+  // ── ETP-4789: Download PDF must also be gated when onDownloadPdf is absent ──
+  // Before this fix, the download button was only gated by hasPdf. Callers
+  // (window components) gate visibility by documentStatus via a status-aware
+  // onSendable-style prop passed as onDownloadPdf itself: `undefined` means
+  // "not allowed to download right now", mirroring the existing `onEmail &&
+  // (...)` gate above. These tests must FAIL against the current
+  // `disabled={!hasPdf}` / `onClick={hasPdf ? onDownloadPdf : undefined}` source.
+
+  it('disables the download button when onDownloadPdf is undefined, even if hasPdf=true (ETP-4789)', () => {
+    render(<PreviewActionButtons {...defaults} hasPdf={true} onDownloadPdf={undefined} />);
+    const downloadBtn = screen.getByText('Download').closest('button');
+    expect(downloadBtn).toBeDisabled();
+  });
+
+  it('keeps the download button enabled when hasPdf=true and onDownloadPdf is provided (no regression)', () => {
+    render(<PreviewActionButtons {...defaults} hasPdf={true} />);
+    const downloadBtn = screen.getByText('Download').closest('button');
+    expect(downloadBtn).not.toBeDisabled();
+  });
+
+  it('does not throw when the download button is clicked while onDownloadPdf is undefined (ETP-4789)', () => {
+    render(<PreviewActionButtons {...defaults} hasPdf={true} onDownloadPdf={undefined} />);
+    expect(() => fireEvent.click(screen.getByText('Download'))).not.toThrow();
+  });
 });
 
 // ── PreviewEmptyPanel ─────────────────────────────────────────────────────────

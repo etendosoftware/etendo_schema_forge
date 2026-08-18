@@ -11467,6 +11467,262 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "9b811fcb59a5562e35476994020db5dc72ad39edc4fd408cbe7986d0cd34fce6",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "columnname": "AD_Businessunit_Org_ID",
+          "displaylogic": "@IsReady@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Business Unit Organization",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Calendarowner_Org_ID",
+          "displaylogic": "@IsReady@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Calendar Owner Organization",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Inheritedcalendar_ID",
+          "displaylogic": "@IsReady@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Inherited Calendar",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Legalentity_Org_ID",
+          "displaylogic": "@IsReady@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Legal Entity Organization",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Orgtype_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Organization Type",
+          "readonlylogic": "@IsReady@='Y'"
+        },
+        {
+          "columnname": "AD_Periodcontrolallowed_Org_ID",
+          "displaylogic": "@IsReady@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Period Control Allowed Organization",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Sequence_Bp_ID",
+          "displaylogic": "@IsBpNewAccount@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Sequence for Business Partner",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "AD_Sequence_Pr_ID",
+          "displaylogic": "@IsPrNewAccount@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Sequence for Product",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Acct_Length",
+          "displaylogic": "@IsBpNewAccount@='Y' | @IsPrNewAccount@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Account Length",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "C_Acctschema_ID",
+          "displaylogic": "@ShowGeneralLedger@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "General Ledger",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "C_Calendar_ID",
+          "displaylogic": "@ISPERIODCONTROLALLOWED_AUX@='Y' & @ISPERIODCONTROLALLOWED@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Calendar",
+          "readonlylogic": "@IsReady@='Y'"
+        },
+        {
+          "columnname": "C_Tax_ID",
+          "displaylogic": "@Istaxundeductable@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Sales Tax Exempt Rate",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat303_Person_Name",
+          "displaylogic": "@EM_Aeat303_Is_Nat_Per@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Nombre",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat303_Person_Surnames",
+          "displaylogic": "@EM_Aeat303_Is_Nat_Per@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Apellidos",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat390_Firstname",
+          "displaylogic": "@EM_Aeat390_Isperson@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Nombre",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat390_Rep_Name",
+          "displaylogic": "@EM_Aeat390_Isperson@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Nombre del Representante Legal",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat390_Rep_Nif",
+          "displaylogic": "@EM_Aeat390_Isperson@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "NIF del Representante Legal",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat390_Surname1",
+          "displaylogic": "@EM_Aeat390_Isperson@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Primer Apellido",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Aeat390_Surname2",
+          "displaylogic": "@EM_Aeat390_Isperson@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Segundo Apellido",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Etsg_Add_Certificate",
+          "displaylogic": "@ETSG_CheckLegalOrg@='1'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Añadir Certificado Digital",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Intr_C_Calendar_ID",
+          "displaylogic": "@INTR_ISLEGALENTITY@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Intrastat Calendar",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EndDate",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Ending Date",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "IsDoubleCash",
+          "displaylogic": "@Iscashvat@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Double Cash Criteria",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IsPeriodControlAllowed",
+          "displaylogic": "@ISPERIODCONTROLALLOWED_AUX@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Allow Period Control",
+          "readonlylogic": "@IsReady@='Y'"
+        },
+        {
+          "columnname": "IsReady",
+          "displaylogic": "@IsReady@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Set as Ready",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Iscashvat",
+          "displaylogic": "@Istaxundeductable@='N' & @IsLegalEntity_AUX@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cash VAT",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PeriodNo",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Period No.",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "PeriodType",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Period Type",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "Port",
+          "displaylogic": "@Transportation_Type@='1' | @Transportation_Type@='4'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Port/Airport",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "StartDate",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Starting Date",
+          "readonlylogic": "@C_Period_Not_Editable@='Y'"
+        },
+        {
+          "columnname": "SubAcct_Length",
+          "displaylogic": "@IsBpNewAccount@='Y' | @IsPrNewAccount@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Sub Account Length",
+          "readonlylogic": null
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "d67625cf096de5c6b7548e471726ed0f3ccd15ec11ae2591ea080c1ac576bc62",
       "params": [
@@ -12892,7 +13148,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "a57c043bfd2735c62c984e24d1a0a1ab04ddc48e389e9b69a9c37dd94b93360a",
+      "checksum": "88c22d2b291a05a1860851bf685afa4df2448339e543c6e03c1a56eb42fd52e0",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -13587,10 +13843,10 @@
         },
         {
           "columnname": "EM_Psd2_Refresh_Connections",
-          "displaylogic": "@PSD2_HasConecctions@>0 & @Type@!'C'",
+          "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
-          "name": "Refresh Connections",
+          "name": "Search Recent Transactions",
           "readonlylogic": null
         },
         {

@@ -27,12 +27,14 @@ export default function EmailsCard({ onSend }) {
     <SectionCard
       title={ui('previewCardEmails')}
       titleRight={
-        <button
-          onClick={onSend}
-          className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
-        >
-          {ui('previewCardSendEmail')}
-        </button>
+        onSend && (
+          <button
+            onClick={onSend}
+            className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
+          >
+            {ui('previewCardSendEmail')}
+          </button>
+        )
       }
       data-testid="SectionCard__d50c04">
       <p className="text-xs text-muted-foreground py-2 text-center">{ui('previewCardNoEmailHistory')}</p>

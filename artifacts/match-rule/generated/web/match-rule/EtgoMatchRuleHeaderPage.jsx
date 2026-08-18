@@ -6,7 +6,7 @@ import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 const columns = [
   { key: 'priority', column: 'Priority', type: 'number', label: 'Priority', labelKey: 'matchRuleColPriority', inlineEdit: true, cellType: 'priorityPill' },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', labelKey: 'matchRuleColName', cellType: 'nameWithSubline', subField: 'financialAccount', subEmptyKey: 'matchRuleAllAccounts' },
-  { key: 'textCondition', column: 'TextCondition', type: 'enum', label: 'Text Condition', labelKey: 'matchRuleColCondition', enumLabels: { 'C': 'Contains', 'R': 'Regex', 'S': 'Starts with' }, cellType: 'conditionChip', kindField: 'textCondition', patternField: 'textPattern', kindLabels: {"C":"matchRuleConditionContains","S":"matchRuleConditionStartsWith","R":"matchRuleConditionRegex"} },
+  { key: 'textCondition', column: 'TextCondition', type: 'enum', label: 'Text Condition', labelKey: 'matchRuleColCondition', enumLabels: { 'C': 'textConditionC', 'R': 'textConditionR', 'S': 'textConditionS' }, cellType: 'conditionChip', kindField: 'textCondition', patternField: 'textPattern', kindLabels: {"C":"matchRuleConditionContains","S":"matchRuleConditionStartsWith","R":"matchRuleConditionRegex"} },
   { key: 'transactionType', column: 'ETGO_Transaction_Type_ID', type: 'selector', label: 'Transaction Type', labelKey: 'matchRuleColType' },
   { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting concept', labelKey: 'matchRuleColConcept' },
   { key: 'matchCount', column: 'MatchCount', type: 'number', label: 'Match Count', labelKey: 'matchRuleColReconciliations', cellType: 'boldText' },

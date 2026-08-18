@@ -95,6 +95,12 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
+  // Draft autosave/restore — handleNext() awaits this before advancing steps,
+  // so leaving it unmocked hangs every "Continuar" click forever.
+  await page.route('**/sws/go/onboarding/draft', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
+  });
+
   await page.route('**/sws/go/login?userId=USER_1', async route => {
     await route.fulfill({
       status: 200,
@@ -126,7 +132,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID**', async route => {
+  await page.route('**/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID{/**,}**', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -134,7 +140,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/header/selectors/C_BPartner_ID**', async route => {
+  await page.route('**/sws/neo/sales-invoice/header/selectors/C_BPartner_ID{/**,}**', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

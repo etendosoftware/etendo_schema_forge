@@ -29,7 +29,7 @@ vi.mock('../../shared/pdfUtils.js', async (importOriginal) => {
 });
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { useShipmentPdf, getShipmentPdfLabels, generateShipmentPdf } from '../useShipmentPdf.js';
+import { useShipmentPdf, getShipmentPdfLabels } from '../useShipmentPdf.js';
 
 // ── getShipmentPdfLabels ──────────────────────────────────────────────────────
 
@@ -112,32 +112,5 @@ describe('useShipmentPdf', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.pdfUrl).toBe('blob:http://localhost/test');
-  });
-});
-
-// ── generateShipmentPdf ───────────────────────────────────────────────────────
-
-describe('generateShipmentPdf', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetchJson.mockResolvedValue({
-      documentNo: 'ALB-001',
-      movementDate: '2024-01-01',
-      'businessPartner$_identifier': 'Client A',
-      issuerOrg: { name: 'My Company' },
-    });
-    mockFetchAll.mockResolvedValue([]);
-    mockFetchOptionalJson.mockResolvedValue(null);
-    mockFetchLocationAddress.mockResolvedValue(null);
-    mockFetchImageDataUrl.mockResolvedValue(null);
-    mockBuildLocationAddressLines.mockReturnValue([]);
-    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
-  });
-
-  it('calls renderPdf and returns a Blob', async () => {
-    const labels = { title: 'Delivery Note', taxId: 'NIF' };
-    const blob = await generateShipmentPdf('ship-1', '/api/goods-shipment', 'tok', labels);
-    expect(mockRenderPdf).toHaveBeenCalled();
-    expect(blob).toBeInstanceOf(Blob);
   });
 });

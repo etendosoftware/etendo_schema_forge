@@ -197,6 +197,7 @@ export const api = {
       "DateAcct": "Fecha contable",
       "StartDate": "Fecha de inicio",
       "Totalamortization": "Amortización total",
+      "Processed": "Estado",
       "C_Currency_ID": "Moneda",
       "A_Asset_ID": "Activo",
       "Amortization_Percentage": "% Amortización",
@@ -217,6 +218,7 @@ export const api = {
       "DateAcct": "Accounting Date",
       "StartDate": "Starting Date",
       "Totalamortization": "Total Amortization",
+      "Processed": "Status",
       "C_Currency_ID": "Currency",
       "A_Asset_ID": "Asset",
       "Amortization_Percentage": "Amortization %",
@@ -281,7 +283,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         titleField="name"
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
 
@@ -308,7 +309,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      hiddenColumns={["processed"]}
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint

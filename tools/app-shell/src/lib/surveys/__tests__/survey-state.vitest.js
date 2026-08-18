@@ -251,4 +251,58 @@ describe('survey-state', () => {
       expect(readSurveyState().respondedCounts['nps']).toBe(1);
     });
   });
+
+  // Storage can be missing entirely (SSR / non-browser) or throw on access
+  // (Safari private mode, blocked third-party storage). Neither may break the
+  // app: reads fall back to the defaults and writes are dropped silently.
+  describe('unavailable storage', () => {
+    it('returns the defaults when there is no window at all', () => {
+      vi.stubGlobal('window', undefined);
+      const state = readSurveyState();
+      expect(state.counters).toEqual({ invoicing: 0, order: 0 });
+      expect(state.firstLoginAt).toBeNull();
+      expect(state.dismissals).toEqual({});
+    });
+
+    it('drops writes when there is no window at all', () => {
+      vi.stubGlobal('window', undefined);
+      expect(() => markFirstLogin(NOW)).not.toThrow();
+      expect(readSurveyState().firstLoginAt).toBeNull();
+    });
+
+    it('returns the defaults when reading localStorage throws', () => {
+      vi.stubGlobal('window', Object.defineProperty({}, 'localStorage', {
+        get() { throw new Error('storage blocked'); },
+      }));
+      const state = readSurveyState();
+      expect(state.counters).toEqual({ invoicing: 0, order: 0 });
+      expect(state.onboardingCompleted).toBe(false);
+      expect(state.shownThisMonth).toEqual({});
+    });
+
+    it('keeps every mutator silent when localStorage access throws', () => {
+      vi.stubGlobal('window', Object.defineProperty({}, 'localStorage', {
+        get() { throw new Error('storage blocked'); },
+      }));
+      expect(() => markFirstLogin(NOW)).not.toThrow();
+      expect(() => markOnboardingCompleted()).not.toThrow();
+      expect(() => markSurveyShown('csat_onboarding', NOW)).not.toThrow();
+      expect(() => markSurveyResponded('csat_invoicing', NOW)).not.toThrow();
+      expect(() => markSurveyDismissed('nps', NOW)).not.toThrow();
+      // The counter still reports the incremented value even though it is not persisted.
+      expect(incrementSurveyCounter('invoicing', NOW)).toBe(1);
+      expect(incrementSurveyCounter('invoicing', NOW)).toBe(1);
+    });
+
+    it('drops writes when setItem itself throws (quota exceeded)', () => {
+      vi.stubGlobal('window', {
+        localStorage: {
+          getItem: () => null,
+          setItem: () => { throw new Error('QuotaExceededError'); },
+        },
+      });
+      expect(() => markSurveyShown('csat_onboarding', NOW)).not.toThrow();
+      expect(readSurveyState().onboardingShown).toBe(false);
+    });
+  });
 });

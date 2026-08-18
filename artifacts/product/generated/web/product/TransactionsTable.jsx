@@ -7,7 +7,7 @@ const columns = [
   { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Storage Bin', required: true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true },
-  { key: 'movementType', column: 'MovementType', type: 'enum', label: 'Movement Type', enumLabels: { 'V+': 'Vendor Receipts', 'I+': 'Inventory In', 'M-': 'Movement From', 'M+': 'Movement To', 'I-': 'Inventory Out', 'P-': 'Production -', 'P+': 'Production +', 'C-': 'Customer Shipment', 'D-': 'Internal Consumption -', 'D+': 'Internal Consumption +' }, required: true },
+  { key: 'movementType', column: 'MovementType', type: 'enum', label: 'Movement Type', enumLabels: { 'V+': 'movementTypeVPlus', 'I+': 'movementTypeIPlus', 'M-': 'movementTypeMMinus', 'M+': 'movementTypeMPlus', 'I-': 'movementTypeIMinus', 'P-': 'movementTypePMinus', 'P+': 'movementTypePPlus', 'C-': 'movementTypeCMinus', 'D-': 'movementTypeDMinus', 'D+': 'movementTypeDPlus' }, required: true },
   { key: 'totalCost', column: 'TotalCost', type: 'amount', label: 'Total Cost' },
 ];
 // @sf-generated-end columns:transactions

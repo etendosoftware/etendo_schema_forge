@@ -62,7 +62,7 @@ const ACCOUNTS = [LEAF_ACCOUNT, SUMMARY_ACCOUNT];
  *   POST .../elementValue            → saved record
  */
 async function installMocks(page) {
-  await page.route('**/sws/neo/chart-of-accounts/elementValue**', async (route) => {
+  await page.route('**/sws/neo/chart-of-accounts/elementValue{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();

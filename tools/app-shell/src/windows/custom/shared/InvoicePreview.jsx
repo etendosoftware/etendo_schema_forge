@@ -1,5 +1,5 @@
 import { useRef, useMemo } from 'react';
-import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVertical } from 'lucide-react';
+import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
@@ -8,6 +8,7 @@ import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useInvoicePreview } from './useInvoicePreview.js';
+import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
@@ -17,14 +18,16 @@ import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
-import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
+// ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
+// document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737
+// values 'NC'/'DEV', which no longer exist — the check was silently always false and
+// fell through to keyword matching on the document-type name.
 function isCreditNote(invoice) {
   if (!invoice) return false;
-  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
-  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
-  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+  return resolveInvoicePaymentBadge(invoice).isCredit;
 }
 
 /**
@@ -75,9 +78,9 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground [&_svg]:size-5"
-          onClick={onDownloadPdf}
-          disabled={!hasPdf}
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+          onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
+          disabled={!hasPdf || !onDownloadPdf}
           data-testid="Button__cf88e6">
           <Download className="text-muted-foreground" data-testid="Download__cf88e6" />
           {ui('invoicePreviewDownloadPdf')}
@@ -92,12 +95,6 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Edit2 className="text-muted-foreground" data-testid="Edit2__cf88e6" />
         {ui('invoicePreviewEdit')}
       </Button>
-      <button
-        type="button"
-        className="w-8 h-8 flex items-center justify-center bg-card border border-border shadow-sm rounded-lg hover:bg-muted transition-colors"
-      >
-        <MoreVertical size={20} className="text-muted-foreground" data-testid="MoreVertical__cf88e6" />
-      </button>
     </>
   );
 }
@@ -188,15 +185,6 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
   );
 }
 
-function EmptyPanel({ icon, text }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
-      <span className="text-3xl">{icon}</span>
-      <p className="text-sm">{text}</p>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null }) {
@@ -216,18 +204,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     apiBaseUrl,
     token,
   });
-  const etgoRate = (!isSameCurrency && p.displayInvoice?.eTGOCurrencyRate)
-    ? parseFloat(p.displayInvoice.eTGOCurrencyRate)
-    : null;
-  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
-  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
-  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
-  const orgGrandTotal = (!isSameCurrency && exchangeRate && p.displayInvoice?.grandTotalAmount != null)
-    ? Number(p.displayInvoice.grandTotalAmount) / exchangeRate
-    : null;
+  const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
+    record: p.displayInvoice,
+    isSameCurrency,
+    systemExchangeRate,
+  });
 
   if (!invoice) return null;
 
@@ -255,6 +236,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ── Attachment config ──────────────────────────────────────────────────────
 
   const isDraft = invoice?.documentStatus === 'DR';
+  // ETP-4717 — Send is only available once the invoice is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates. The
+  // existing purchase-invoice exclusion stays: this window never sends email.
+  const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
     specName,
@@ -268,6 +253,12 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     specName,
     storeCondition: true,
     autoFetch: false,
+    // ETP-4855 — a purchase invoice has no generated report, so its document slot
+    // holds the supplier's own document (the OCR source). Declaring the table
+    // mirrors that file into the record's attachments as well, so it shows up in
+    // the Attachments tab. The sales branch above deliberately omits it: that PDF
+    // is a cache of something we generated and nobody attached it.
+    tableName: 'C_Invoice',
     token,
     apiBaseUrl,
   };
@@ -298,29 +289,13 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           orgId={p.orgId}
           profile={p.profile}
           onAddPayment={() => p.setShowPaymentModal(true)}
-          onSend={p.openEmailModal}
+          onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
           ratePrecision={ratePrecision}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
-    },
-    {
-      key: 'messages',
-      label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel
-        icon="💬"
-        text={ui('invoicePreviewNoMessagesYet')}
-        data-testid="EmptyPanel__cf88e6" />,
-    },
-    {
-      key: 'history',
-      label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel
-        icon="🕐"
-        text={ui('invoicePreviewNoActivityRecorded')}
-        data-testid="EmptyPanel__cf88e6" />,
     },
   ];
 
@@ -331,13 +306,13 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const actionButtons = (
     <InvoiceActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={specName !== 'purchase-invoice' ? p.openEmailModal : undefined}
+      onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={p.canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={p.canAddPayment}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={p.handleDownloadPdf}
+      onDownloadPdf={isSendable ? p.handleDownloadPdf : undefined}
       hasPdf={!!p.pdfUrl}
       data-testid="InvoiceActionButtons__cf88e6" />
   );

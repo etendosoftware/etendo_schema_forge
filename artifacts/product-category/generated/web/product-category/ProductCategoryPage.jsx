@@ -192,7 +192,6 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product_Category", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

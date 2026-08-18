@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
@@ -68,6 +69,10 @@ function PurchaseOrderBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__b7ace5" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__b7ace5" />
     </>
   );
 }
@@ -145,6 +150,8 @@ export default function PurchaseOrderWindow(props) {
         labelOverrides={LABEL_OVERRIDES}
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
+        hideLink
+        listViewOptions={{ hidePrint: true }}
         bulkActions={PurchaseOrderBulkActions}
         dateFilterKey="orderDate"
         refreshTrigger={refreshKey}

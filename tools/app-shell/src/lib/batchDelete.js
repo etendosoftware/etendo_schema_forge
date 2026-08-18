@@ -38,6 +38,24 @@ export async function runBatchDelete(items, deleteOneFn) {
 }
 
 /**
+ * Deletes selected child rows using the detail entity's configured endpoint.
+ * Selection state and outcome handling remain with the calling component.
+ */
+export function deleteSelectedChildRows({ selectedChildRows, api, detailEntity, apiBaseUrl, token }) {
+  return runBatchDelete(selectedChildRows, (row) => {
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+      || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    return fetch(childUrl, {
+      method: 'DELETE',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    }).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return row;
+    });
+  });
+}
+
+/**
  * Fires exactly ONE toast for a batch-delete outcome, per the ETP-4656
  * Confluence design doc's 3-outcome table (not two stacked success+error
  * toasts — that was the older pattern every consumer, including

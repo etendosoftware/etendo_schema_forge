@@ -16,7 +16,7 @@ describe('statusBadge', () => {
     it.each([
       ['CO', 'default', 'status-success'], ['CA', 'default', 'status-success'],
       ['CL', 'default', 'status-info'], ['PA', 'default', 'status-info'],
-      ['IP', 'outline', 'status-warning'], ['UE', 'outline', 'status-info'],
+      ['IP', 'outline', 'status-warning'], ['UE', 'outline', 'status-warning'],
       ['RPAE', 'outline', 'status-warning'], ['RPAP', 'outline', 'muted'],
     ])('maps %s to semantic badge roles', (status, variant, role) => {
       const props = getStatusBadgeProps(status);

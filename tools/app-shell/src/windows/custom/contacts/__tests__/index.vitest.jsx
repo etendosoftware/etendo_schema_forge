@@ -11,8 +11,8 @@
  *      toolbar action for this window (ListView.bulkDelete.vitest.jsx proves
  *      the mechanism works generically, but nothing previously asserted that
  *      *this* window actually sets the flag). Also asserts it must REPLACE,
- *      not lose, BusinessPartnerPage's own default `hidePrint`/`hideEye`/
- *      `hideCounter`/`hideLink` flags (JSX last-prop-wins — see the comment
+ *      not lose, BusinessPartnerPage's own default `hidePrint`/`hideCounter`/
+ *      `hideLink` flags (JSX last-prop-wins — see the comment
  *      above the prop in the source).
  *   2. `selectionBarRightActions` — the window's own bespoke delete
  *      affordance (trash + X buttons) that this window relies on INSTEAD of
@@ -86,7 +86,6 @@ describe('ContactsWindow — listViewOptions.hideBulkDelete opt-out (ETP-4656)',
 
     expect(capturedProps.listViewOptions).toEqual({
       hidePrint: true,
-      hideEye: true,
       hideCounter: true,
       hideLink: true,
       hideBulkDelete: true,

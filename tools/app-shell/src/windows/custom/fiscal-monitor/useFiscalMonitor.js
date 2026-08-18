@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { detectProfile } from '../fiscal-config/fiscalConfig.utils.js';
+import { detectProfile, activeOrNull, isActiveRecord } from '../fiscal-config/fiscalConfig.utils.js';
 import { computeKpis } from './fiscalMonitor.utils.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -42,8 +42,12 @@ async function get(apiFetch, spec, entity, params) {
 
 async function fetchConfigRecord(apiFetch, spec, entity, orgId) {
   try {
-    const resp = await get(apiFetch, spec, entity, { organization: orgId, _limit: '1' });
-    return resp.data?.[0] ?? null;
+    // NEO reads with NO_ACTIVE_FILTER=true; prefer the active row so a
+    // deactivated ("Change SIF") trace row never masks a live config.
+    const resp = await get(apiFetch, spec, entity, { organization: orgId, _limit: '10' });
+    const rows = resp.data ?? [];
+    if (rows.length === 0) return null;
+    return rows.find(isActiveRecord) ?? rows[0];
   } catch {
     // 404 = spec/module not installed for this org → treat as not configured
     return null;
@@ -147,7 +151,9 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
         fetchConfigRecord(apiFetch, TBAI_CFG_SPEC, TBAI_CFG_ENTITY, orgId),
         fetchConfigRecord(apiFetch, VF_CFG_SPEC,   VF_CFG_ENTITY,   orgId),
       ]);
-      const profile = detectProfile(siiCfg, tbaiCfg, vfCfg);
+      // Gate on active before profile resolution (see useFiscalConfig): an
+      // inactive trace row must never resolve the monitor to a configured state.
+      const profile = detectProfile(activeOrNull(siiCfg), activeOrNull(tbaiCfg), activeOrNull(vfCfg));
 
       let monitorData = {};
       let siiParentId = null;

@@ -100,6 +100,13 @@ import {
   applyCalloutComboUpdates,
   runAddLineAction,
 } from '../DetailView.jsx';
+// applyOneComboEntry (the per-combo worker behind applyCalloutComboUpdates) is
+// not re-exported from DetailView.jsx — it's only importable from its
+// definition site. This is the function ETP-4772's stale-response guard
+// actually runs for combos; applyCalloutComboUpdates unconditionally skips
+// the trigger field before ever reaching it, so the trigger-field staleness
+// path can only be exercised by calling applyOneComboEntry directly.
+import { applyOneComboEntry } from '../detailViewHelpers.jsx';
 
 describe('normalizePatchFieldValues', () => {
   it('skips keys ending in $_identifier', () => {
@@ -303,6 +310,104 @@ describe('applyCalloutFieldUpdates', () => {
   });
 });
 
+// ETP-4772: opening a new Purchase/Sales Order auto-fires a callout for the
+// default warehouse. If the user changes warehouse before that default
+// callout's response arrives, the OLD (stale) response used to win
+// unconditionally via the "trigger field always wins" rule — reverting the
+// user's choice back to the default. These tests exercise the generation
+// guard (dispatchSnapshot vs fieldGenerationRef) that fixes it.
+describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'trigger',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  it('discards a stale response for the trigger field itself when a newer edit happened since dispatch', () => {
+    const fieldGenerationRef = { current: {} };
+    // Simulate the race: the default auto-callout dispatched at generation 1,
+    // then the user edits warehouse again before its response comes back,
+    // bumping the field to generation 2.
+    fieldGenerationRef.current.warehouse = 2;
+    const staleDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      triggerField: 'warehouse',
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'DEFAULT_WH' } },
+      a,
+    );
+
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+    // The stale response must not have bumped generation further.
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies a fresh (non-stale) response for the trigger field and bumps its generation', () => {
+    const fieldGenerationRef = { current: { warehouse: 1 } };
+    const freshDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      triggerField: 'warehouse',
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: freshDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'DEFAULT_WH' } },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('discards a stale collateral update the same way as a stale trigger-field update', () => {
+    const fieldGenerationRef = { current: { priceList: 3 } };
+    const staleDispatchSnapshot = { priceList: 1 };
+
+    const a = makeArgs({
+      triggerField: 'businessPartner',
+      data: { priceList: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set() },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { priceList: { value: 'DEFAULT_PL' } },
+      a,
+    );
+
+    expect(a.appliedFields.has('priceList')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('still applies when no generation tracking is wired (backwards compatible with hand-built ctx)', () => {
+    const a = makeArgs({ triggerField: 'warehouse' });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+});
+
 describe('applyCalloutComboUpdates', () => {
   function makeArgs(overrides = {}) {
     return {
@@ -396,6 +501,108 @@ describe('applyCalloutComboUpdates', () => {
     );
     expect(a.appliedFields.has('address')).toBe(false);
     expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4772 (combo path): the actual bug that motivated the guard was the
+// warehouse selector arriving through `combos.warehouse: { selected, entries }`
+// on a fresh-record callout, not through the plain `updates` map exercised by
+// the `applyCalloutFieldUpdates` suite above. Every combo update funnels
+// through `applyOneComboEntry`, which carries the same isStaleCalloutResponse
+// check — these tests exercise that path directly.
+describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      ...overrides,
+    };
+  }
+
+  it('discards a stale combo response when a newer edit happened since dispatch', () => {
+    const fieldGenerationRef = { current: { warehouse: 2 } };
+    const staleDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'DEFAULT_WH', _identifier: 'Default Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+    // The stale response must not have bumped generation further.
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies a fresh (non-stale) combo response and bumps its generation', () => {
+    const fieldGenerationRef = { current: { warehouse: 1 } };
+    const freshDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      data: { warehouse: '' },
+      dispatchSnapshot: freshDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'DEFAULT_WH', _identifier: 'Default Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Default Warehouse');
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies an up-to-date collateral combo normally (legitimate case not broken by the guard)', () => {
+    // Collateral field (e.g. address) whose combo response is not stale —
+    // dispatch generation matches current generation, so it must still apply
+    // like it always did before ETP-4772.
+    const fieldGenerationRef = { current: { address: 1 } };
+    const currentDispatchSnapshot = { address: 1 };
+
+    const a = makeArgs({
+      data: { address: '' },
+      dispatchSnapshot: currentDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'address',
+      { selected: 'A1', _identifier: 'Street 1' },
+      a,
+    );
+
+    expect(a.appliedFields.get('address')).toBe('A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1');
+    expect(fieldGenerationRef.current.address).toBe(2);
+  });
+
+  it('still applies when no generation tracking is wired (backwards compatible with hand-built ctx)', () => {
+    const a = makeArgs();
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'WH1', _identifier: 'Main Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
   });
 });
 

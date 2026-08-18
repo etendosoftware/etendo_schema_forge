@@ -44,7 +44,7 @@
     ],
     "secondaryTabs": {
       "accounting": {
-        "tabOrder": 1,
+        "tabOrder": 1000,
         "label": "Accounting",
         "addLineFields": [
           "fixedAsset",

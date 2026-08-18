@@ -94,7 +94,7 @@ async function installJournalMock(page, lines) {
   });
 
   // Children lines fetch: GET /gLJournalLine?parentId=<id>
-  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     if (req.method() === 'GET') {
       await route.fulfill({
@@ -116,7 +116,7 @@ async function installJournalMock(page, lines) {
   // line defaults. Registered AFTER the generic line route so it wins (Playwright
   // matches routes in reverse registration order). The line description default
   // (@DESCRIPTION1@) resolves to the parent journal's description on the backend.
-  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}/defaults**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}/defaults{/**,}**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

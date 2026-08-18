@@ -550,7 +550,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "98175cf9e7876968e1a4efaad3ceb9effb353f892e2cbeb39eb28cee6c8c0f34",
+      "checksum": "45617064489227bda8749b85385732da7c0efce2aa3863580071903ed7151715",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -563,15 +563,15 @@
         },
         {
           "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
-          "name": "FinancialAccountCurrencyId",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
-        },
-        {
-          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
           "name": "FIN_ISRECEIPT",
           "tab_name": "Header",
           "validation_code": "N"
+        },
+        {
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "FinancialAccountCurrencyId",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
         },
         {
           "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
@@ -1072,7 +1072,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
-      "checksum": "153420abdefeacfed2690951c3893775cb34d09239b750b015c5615c9ff44410",
+      "checksum": "cae15afc3009c7db0ac4eff442011dcc63248f69a94a27adcd54190e0097bdf4",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -1085,15 +1085,15 @@
         },
         {
           "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
-          "name": "FinancialAccountCurrencyId",
-          "tab_name": "Header",
-          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
-        },
-        {
-          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
           "name": "FIN_ISRECEIPT",
           "tab_name": "Header",
           "validation_code": "Y"
+        },
+        {
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "FinancialAccountCurrencyId",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
         },
         {
           "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
@@ -1421,6 +1421,44 @@
           "name": "ATTRSETVALUETYPE",
           "tab_name": "Bin Contents",
           "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        }
+      ]
+    },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "0f68c9f9fa1dd24f679e489c89349ebad328dd1689e0c3281a42142ff21ffe26",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "143",
+          "name": "ETSG_CheckLegalOrg",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 1 FROM ad_orgType WHERE ad_orgType_id=@ad_orgType_id@ AND isLegalEntity='Y'"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "INTR_ISLEGALENTITY",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT islegalentity FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "ISPERIODCONTROLALLOWED_AUX",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 'Y' FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@ AND (ISBUSINESSUNIT='Y' OR (ISLEGALENTITY='Y' AND ISACCTLEGALENTITY='Y'))"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "ShowGeneralLedger",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 'Y' FROM AD_ORGTYPE OT join ad_org o on (ot.ad_orgtype_id = o.ad_orgtype_id)\nWHERE ((IsAcctLegalEntity<>'N' or IsLegalEntity<>'Y') or (o.C_ACCTSCHEMA_ID is not null)) and o.ad_org_id=@AD_ORG_ID@"
+        },
+        {
+          "ad_tab_id": "170",
+          "name": "IsLegalEntity_AUX",
+          "tab_name": "Information",
+          "validation_code": "@SQL=SELECT 'Y' FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@ and ad_orgtype.ISLEGALENTITY='Y'"
         }
       ]
     },

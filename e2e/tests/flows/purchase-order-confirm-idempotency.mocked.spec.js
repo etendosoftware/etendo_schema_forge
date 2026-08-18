@@ -53,7 +53,7 @@ async function installConfirmMocks(page, state) {
   });
 
   // Lines GET
-  await page.route('**/sws/neo/purchase-order/lines**', async (route) => {
+  await page.route('**/sws/neo/purchase-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,

@@ -153,6 +153,10 @@ function renderView(props = {}) {
         token="test-token"
         apiBaseUrl="/api/sales-order"
         breadcrumb="Sales / Orders"
+        // linesLayout now defaults to 'inlineEditable' (ETP-4763), which gates
+        // the detail-process buttons' bulk bar off — pin the classic layout
+        // this suite was written against.
+        linesLayout="classic"
         {...props}
       />
     </MemoryRouter>,

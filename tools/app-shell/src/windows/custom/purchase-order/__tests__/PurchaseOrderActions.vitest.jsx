@@ -80,10 +80,9 @@ describe('PurchaseOrderActions', () => {
     expect(screen.getByText('poConfirmBtn')).toBeInTheDocument();
   });
 
-  it('renders delete and print icons in draft state', () => {
+  it('renders delete icon in draft state', () => {
     renderActions();
     expect(screen.getByLabelText('delete')).toBeInTheDocument();
-    expect(screen.getByLabelText('print')).toBeInTheDocument();
   });
 
   it('calls api.save when save button is clicked', () => {
@@ -98,10 +97,13 @@ describe('PurchaseOrderActions', () => {
     expect(props.onProcess).toHaveBeenCalledWith('delete');
   });
 
-  it('calls onProcess(print) when print icon is clicked', () => {
-    const { props } = renderActions();
-    fireEvent.click(screen.getByLabelText('print'));
-    expect(props.onProcess).toHaveBeenCalledWith('print');
+  // ETP-4728 (Hallazgo 2) — the decorative Print icon (which called
+  // onProcess('print') → a broken handleProcess POST to .../action/undefined)
+  // was removed; the generic DetailView Printer button + DocumentPrintDrawer
+  // now own printing for this window (see DocumentPrintDrawer.vitest.jsx).
+  it('does not render a print icon (removed — see DocumentPrintDrawer)', () => {
+    renderActions();
+    expect(screen.queryByLabelText('print')).not.toBeInTheDocument();
   });
 
   it('shows confirm modal when confirm button is clicked', () => {

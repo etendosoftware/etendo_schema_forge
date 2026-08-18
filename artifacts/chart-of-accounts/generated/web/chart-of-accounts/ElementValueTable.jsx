@@ -5,7 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'accountType', column: 'AccountType', type: 'enum', label: 'Account Type', enumLabels: { 'A': 'Asset', 'E': 'Expense', 'L': 'Liability', 'M': 'Memo', 'O': 'Owner\'s Equity', 'R': 'Revenue' }, required: true },
+  { key: 'accountType', column: 'AccountType', type: 'enum', label: 'Account Type', enumLabels: { 'A': 'accountTypeA', 'E': 'accountTypeE', 'L': 'accountTypeL', 'M': 'accountTypeM', 'O': 'accountTypeO', 'R': 'accountTypeR' }, required: true },
   { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', required: true },
 ];
 // @sf-generated-end columns:elementValue

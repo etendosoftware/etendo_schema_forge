@@ -215,6 +215,49 @@ export const DEFAULTS_GROUPS = buildDefaultsGroups(
   contract.frontendContract.entities['Valores por defecto'].fields,
 );
 
+// Maps C_AcctSchema_Element.ElementType (AD_Ref_List 181) codes to i18n keys.
+// The real aggregate GET (GeneralLedgerConfigurationHandler.buildDimensions)
+// returns a locale-independent `type` per row but no `labelKey` — the row's
+// `label` is the raw (English) name column, which is why untranslated names
+// leaked into the UI (ETP-4845 bug 1). User 1/User 2 (`U1`/`U2`) are
+// intentionally absent: no window curates USER1_ID/USER2_ID as an editable
+// (`form: true`) field anywhere, so Etendo GO does not support them as an
+// accounting dimension and `mapDimensionRows` below drops them regardless of
+// their active state (ETP-4845 bug 4) — filtered by this stable AD code, not
+// by matching the (translatable) display name.
+export const DIMENSION_TYPE_LABEL_KEYS = {
+  OO: 'glc.dim.organization',
+  AC: 'glc.dim.account',
+  PR: 'glc.dim.product',
+  BP: 'glc.dim.businessPartner',
+  PJ: 'glc.dim.project',
+  CC: 'glc.dim.costCenter',
+  MC: 'glc.dim.campaign',
+  AY: 'glc.dim.activity',
+  AS: 'glc.dim.fixedAsset',
+  SR: 'glc.dim.salesRegion',
+  OT: 'glc.dim.trxOrg',
+  LF: 'glc.dim.locationFrom',
+  LT: 'glc.dim.locationTo',
+};
+
+/**
+ * Resolves each real (backend-sourced) dimension row's `labelKey` from its
+ * stable `type` code and drops types Etendo GO does not support (see
+ * `DIMENSION_TYPE_LABEL_KEYS` above). Rows with no `type` are the hand-authored
+ * mock seed below (already carries its own `labelKey`) and pass through
+ * unchanged, so the offline fallback keeps working.
+ *
+ * @param {Array<{type?: string, labelKey?: string}>} rows
+ * @returns {Array<{type?: string, labelKey?: string}>}
+ */
+export function mapDimensionRows(rows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows
+    .filter((row) => !row.type || Object.prototype.hasOwnProperty.call(DIMENSION_TYPE_LABEL_KEYS, row.type))
+    .map((row) => (row.type ? { ...row, labelKey: DIMENSION_TYPE_LABEL_KEYS[row.type] } : row));
+}
+
 // ── Seed records: Dimensiones (C_AcctSchema_Element, one row per dimension) ───
 // `active` = IsActive toggle; `mandatory` = IsMandatory; `scope` = i18n key for
 // the sub-caption.

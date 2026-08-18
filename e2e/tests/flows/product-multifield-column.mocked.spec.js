@@ -47,7 +47,7 @@ const ROWS = [
 
 /** Install the Product list-endpoint mock. Must run AFTER login(). */
 async function installProductListMock(page) {
-  await page.route('**/sws/neo/product/product**', async (route) => {
+  await page.route('**/sws/neo/product/product{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/product\/[^/?]+/.test(url)) {

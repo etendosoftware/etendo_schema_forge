@@ -194,6 +194,83 @@ describe('renderBooleanCell', () => {
     expect(screen.getByText('yes')).toBeInTheDocument();
     expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
+
+  // ETP-4707 — return-material-receipt / return-to-vendor-shipment's `posted`
+  // field is the 3rd window to use `badge: true` + `badgeLabels` +
+  // `badgeVariants` (after purchase-invoice/sales-invoice), and the first to
+  // get renderer-level coverage. col.badgeLabels here mirrors the real
+  // decisions.json shape: a per-locale object, not a plain string.
+  describe('with col.badge: true (Tag-based badge)', () => {
+    const badgeCol = {
+      key: 'posted',
+      type: 'boolean',
+      badge: true,
+      badgeLabels: {
+        true: { en_US: 'Posted', es_ES: 'Contabilizado' },
+        false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' },
+      },
+      badgeVariants: { true: 'green', false: 'orange' },
+    };
+
+    it('renders the true-variant Tag with the locale-resolved true label', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'es_ES',
+        col: badgeCol,
+        rawValue: 'Y',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'green');
+      expect(tag).toHaveTextContent('Contabilizado');
+    });
+
+    it('renders the false-variant Tag with the locale-resolved false label', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'es_ES',
+        col: badgeCol,
+        rawValue: 'N',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'orange');
+      expect(tag).toHaveTextContent('Sin contabilizar');
+    });
+
+    it('falls back to en_US when the current locale is missing from the label map', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'fr_FR',
+        col: badgeCol,
+        rawValue: true,
+      }));
+
+      expect(screen.getByTestId('tag')).toHaveTextContent('Posted');
+    });
+
+    it('does not crash and falls back to the em-dash when the value is undefined', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        col: badgeCol,
+        rawValue: undefined,
+      }));
+
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+
+    it('does not crash and falls back to the em-dash when the value is null', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        col: badgeCol,
+        rawValue: null,
+      }));
+
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+  });
 });
 
 describe('renderDateCell', () => {

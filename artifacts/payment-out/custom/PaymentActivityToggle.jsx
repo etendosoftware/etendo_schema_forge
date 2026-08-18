@@ -18,7 +18,7 @@ function ActivityPanel({ data }) {
   const items = [
     { label: ui('pagoCreado'), date: data?.creationDate || data?.created || data?.paymentDate, dot: isDraft ? 'var(--status-warning-fg)' : 'var(--status-success-fg)' },
     ...(!isDraft ? [{ label: ui('pagoConfirmado'), date: data?.paymentDate, dot: 'var(--status-success-fg)' }] : []),
-    ...(!isDraft && data?.posted === 'Y' ? [{ label: ui('asientoContabilizado'), date: data?.updated, dot: 'hsl(var(--card))' }] : []),
+    ...(!isDraft && data?.posted === 'Y' ? [{ label: ui('asientoContabilizado'), date: data?.updated, dot: 'hsl(var(--muted-foreground))' }] : []),
   ];
 
   return (
@@ -28,7 +28,7 @@ function ActivityPanel({ data }) {
         <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 14 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.dot, marginTop: 5, flexShrink: 0 }} />
           <div>
-            <div style={{ font: '500 13px/17px Inter', color: 'var(--status-info-bg)' }}>{item.label}</div>
+            <div style={{ font: '500 13px/17px Inter', color: 'hsl(var(--foreground))' }}>{item.label}</div>
             {item.date && <div style={{ font: '400 11px/15px Inter', color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{fmtDate(item.date)}</div>}
           </div>
         </div>
@@ -69,7 +69,7 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
         <div onClick={close} style={{ position: 'fixed', inset: 0, backgroundColor: 'hsl(var(--foreground) / 0.15)', zIndex: 50 }} />
       )}
 
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 360, maxWidth: '90vw', backgroundColor: 'hsl(var(--card))', borderLeft: '1px solid hsl(var(--card))', boxShadow: open ? '-4px 0 24px hsl(var(--foreground) / 0.08)' : 'none', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 250ms ease', zIndex: 51, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 360, maxWidth: '90vw', backgroundColor: 'hsl(var(--card))', borderLeft: '1px solid hsl(var(--border-subtle))', boxShadow: open ? '-4px 0 24px hsl(var(--foreground) / 0.08)' : 'none', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 250ms ease', zIndex: 51, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '12px 16px 0', flexShrink: 0 }}>
           <button type="button" onClick={close} style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: 'none', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer', fontSize: 16 }}>&#x2715;</button>
         </div>

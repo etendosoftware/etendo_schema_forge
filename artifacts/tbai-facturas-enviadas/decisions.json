@@ -3,7 +3,8 @@
   "window": {
     "category": "monitor",
     "name": "TBAI Facturas Enviadas",
-    "attachments": false
+    "attachments": false,
+    "readOnly": true
   },
   "entities": {
     "sincronización": {

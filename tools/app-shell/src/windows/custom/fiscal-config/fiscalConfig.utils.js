@@ -39,6 +39,39 @@ export function detectProfile(sii, tbai, verifactu) {
   return 'unconfigured';
 }
 
+/**
+ * True unless the record is explicitly inactive.
+ *
+ * NEO Headless reads fiscal-config records with NO_ACTIVE_FILTER=true (see
+ * NeoCrudHelper#buildBaseParams), so a "Change SIF" deactivation leaves an
+ * inactive trace row that would otherwise still be returned by the API. The
+ * DAL→JSON converter always serializes the `active` boolean, so callers must
+ * drop inactive rows BEFORE detectProfile() to resolve only the ACTIVE config.
+ *
+ * A missing `active` property is treated as active (never hide a record on the
+ * basis of an absent flag).
+ *
+ * @param {object|null} record - a fiscal-config API record
+ * @returns {boolean}
+ */
+export function isActiveRecord(record) {
+  if (!record) return false;
+  if (record.active === undefined || record.active === null) return true;
+  return isEtendoTrue(record.active);
+}
+
+/**
+ * Returns the record only if it is active, else null — used to feed
+ * detectProfile() so an inactive trace row (left behind by "Change SIF") never
+ * resolves as configured.
+ *
+ * @param {object|null} record
+ * @returns {object|null}
+ */
+export function activeOrNull(record) {
+  return isActiveRecord(record) ? record : null;
+}
+
 export function isEtendoTrue(value) {
   return value === true || value === 'Y' || value === 'true';
 }
@@ -116,6 +149,53 @@ export function getAllowedSystemsForTerritory(territory) {
     case 'canarias':
     case 'ceuta':
       return ['SII', 'VERIFACTU'];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Maps the resolved fiscal profile to the i18n key of the permanence notice
+ * shown in the "Change SIF" confirm dialog. Purely informational — never blocks.
+ *
+ * @param {'sii'|'sii-navarra'|'sii+tbai'|'tbai'|'verifactu'} profile
+ * @returns {string|null} i18n key, or null if the profile has no notice
+ */
+export function getChangeSifNoticeKey(profile) {
+  switch (profile) {
+    case 'sii':
+    case 'sii-navarra':
+      return 'fiscal.changeSif.notice.sii';
+    case 'verifactu':
+      return 'fiscal.changeSif.notice.verifactu';
+    case 'tbai':
+      return 'fiscal.changeSif.notice.tbai';
+    case 'sii+tbai':
+      return 'fiscal.changeSif.notice.siiTbai';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Returns which config records must be deactivated to change the SIF, given the
+ * active profile. A profile can span more than one system (sii+tbai), so this
+ * returns an array of system keys the caller must deactivate.
+ *
+ * @param {'sii'|'sii-navarra'|'sii+tbai'|'tbai'|'verifactu'} profile
+ * @returns {Array<'sii'|'tbai'|'verifactu'>}
+ */
+export function getSystemsToDeactivate(profile) {
+  switch (profile) {
+    case 'sii':
+    case 'sii-navarra':
+      return ['sii'];
+    case 'tbai':
+      return ['tbai'];
+    case 'verifactu':
+      return ['verifactu'];
+    case 'sii+tbai':
+      return ['sii', 'tbai'];
     default:
       return [];
   }

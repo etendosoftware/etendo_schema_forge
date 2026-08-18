@@ -113,15 +113,39 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /const isForeign = !!\(accountCurrency && currency && accountCurrency !== currency\);/);
     });
 
-    it('computes amountInAccount = round2(amount × rate) live', () => {
-      assert.match(src, /const amountInAccount = \(isForeign && rate != null\) \? round2\(balance\.amount \* rate\) : null;/);
+    // The converted amount is independently editable (mirroring Classic's Add Payment):
+    // typing a rate recomputes the amount, and typing an amount recomputes the rate.
+    // `skipAmountRecomputeRef` breaks the feedback loop that would otherwise re-trigger
+    // the amount-recompute effect (and clobber what the user just typed) the instant the
+    // amount-driven rate update lands.
+    it('recomputes the amount from the rate, and derives the rate from a typed amount, via a shared skip-guard', () => {
+      assert.match(
+        src,
+        /function deriveRateFromAmount\(accountAmount, invoiceAmount\) \{\s*\n\s*return String\(parseFloat\(\(accountAmount \/ invoiceAmount\)\.toFixed\(6\)\)\);\s*\n\s*\}/,
+      );
+      assert.match(src, /const skipAmountRecomputeRef = useRef\(false\);/);
+      assert.match(
+        src,
+        /if \(skipAmountRecomputeRef\.current\) \{\s*\n\s*skipAmountRecomputeRef\.current = false;\s*\n\s*return;\s*\n\s*\}/,
+      );
+      assert.match(
+        src,
+        /setAmountStr\(formatPlain\(round2\(balance\.amount \* rate\)\)\);/,
+      );
+      // Typing in the amount field sets the skip guard BEFORE deriving the rate, so the
+      // recompute effect's next run (triggered by the rate change) skips itself once
+      // instead of reformatting the amount the user is mid-keystroke on.
+      assert.match(
+        src,
+        /if \(Number\.isFinite\(n\) && n > 0 && balance\.amount > 0\) \{\s*\n\s*skipAmountRecomputeRef\.current = true;\s*\n\s*setRateStr\(deriveRateFromAmount\(n, balance\.amount\)\);/,
+      );
     });
 
     it('renders the conversion fields only in the foreign case', () => {
       assert.match(src, /\{isForeign && \(/);
       assert.match(src, /data-testid="cp-conversion-fields"/);
       assert.match(src, /data-testid="cp-conversion-rate-input"/);
-      assert.match(src, /data-testid="cp-amount-in-account"/);
+      assert.match(src, /data-testid="cp-amount-in-account-input"/);
     });
 
     it('sends conversionRate in the register body only when foreign (else undefined)', () => {

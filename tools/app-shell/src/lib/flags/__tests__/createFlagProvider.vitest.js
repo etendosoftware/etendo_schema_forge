@@ -20,7 +20,12 @@ vi.mock('@openfeature/config-cat-web-provider', () => ({
 }));
 
 import { OpenFeature } from '@openfeature/web-sdk';
-import { createFlagProvider, resolvePollSeconds, initFeatureFlags } from '../bootstrap.js';
+import {
+  createFlagProvider,
+  resolvePollSeconds,
+  initFeatureFlags,
+  CONFIGCAT_PROVIDER_NAME,
+} from '../bootstrap.js';
 import { TENANT_UPGRADE } from '../flag-keys.js';
 import { resetExposureCache } from '../flag-exposure.js';
 
@@ -33,7 +38,14 @@ const DEFAULT_POLL_SECONDS = 60;
 
 const silentLogger = () => ({ warn: vi.fn(), error: vi.fn() });
 
-/** A provider shaped enough for OpenFeature to register and evaluate against. */
+/**
+ * A provider shaped enough for OpenFeature to register and evaluate against.
+ *
+ * `name` stands in for whatever the upstream SDK reports about itself. It is
+ * deliberately NOT what the ConfigCat branch ends up reporting: that branch pins
+ * `CONFIGCAT_PROVIDER_NAME` over it, so this value should never be observable
+ * downstream. See the provider-name stability tests below.
+ */
 function fakeProvider({ name = 'configcat-web', initialize } = {}) {
   const resolved = reason => () => ({ value: false, reason });
   return {
@@ -90,7 +102,7 @@ describe('createFlagProvider — branch 2: ConfigCat', () => {
     });
 
     expect(configCatCreate).toHaveBeenCalledTimes(1);
-    expect(provider.metadata.name).toBe('configcat-web');
+    expect(provider.metadata.name).toBe(CONFIGCAT_PROVIDER_NAME);
   });
 
   it('passes the configured key through to the SDK', async () => {
@@ -143,6 +155,77 @@ describe('createFlagProvider — branch 2: ConfigCat', () => {
     });
     expect(configCatCreate).not.toHaveBeenCalled();
     expect(provider.metadata.name).toBe('in-memory');
+  });
+});
+
+/**
+ * Provider-name stability.
+ *
+ * `ConfigCatWebProvider` derives its own `metadata.name` from
+ * `ConfigCatWebProvider.name` — the JS class name, which a production minifier
+ * renames per build. A Mixpanel board showed the same real provider arriving as
+ * both "_ConfigCatWebProvider" and "ut" across deploys, fragmenting every
+ * exposure metric grouped by provider. The branch therefore pins a label of its
+ * own, and these tests hold that pin unconditional: whatever the SDK calls
+ * itself, the reported name is stable across builds.
+ */
+describe('createFlagProvider — the ConfigCat branch reports a build-independent name', () => {
+  const envWithKey = { VITE_CONFIGCAT_SDK_KEY: PLACEHOLDER_SDK_KEY };
+
+  /** The unminified class name, plus two real minified renames seen in production. */
+  it.each(['ConfigCatWebProvider', '_ConfigCatWebProvider', 'ut'])(
+    'reports the pinned name even when the SDK calls itself "%s"',
+    async upstreamName => {
+      configCatCreate.mockReturnValue(fakeProvider({ name: upstreamName }));
+
+      const provider = await createFlagProvider({ env: envWithKey, logger: silentLogger() });
+
+      expect(provider.metadata.name).toBe(CONFIGCAT_PROVIDER_NAME);
+      expect(provider.metadata.name).not.toBe(upstreamName);
+    }
+  );
+
+  it('pins the name even when the SDK reports none at all', async () => {
+    configCatCreate.mockReturnValue({ ...fakeProvider(), metadata: {} });
+
+    const provider = await createFlagProvider({ env: envWithKey, logger: silentLogger() });
+
+    expect(provider.metadata.name).toBe(CONFIGCAT_PROVIDER_NAME);
+  });
+
+  it('replaces only the name, leaving the rest of the metadata intact', async () => {
+    configCatCreate.mockReturnValue({
+      ...fakeProvider({ name: 'ut' }),
+      metadata: { name: 'ut', domain: 'configcat-eu' },
+    });
+
+    const provider = await createFlagProvider({ env: envWithKey, logger: silentLogger() });
+
+    expect(provider.metadata).toEqual({ name: CONFIGCAT_PROVIDER_NAME, domain: 'configcat-eu' });
+  });
+
+  it('reports the same name across two builds that minified the class differently', async () => {
+    configCatCreate.mockReturnValue(fakeProvider({ name: '_ConfigCatWebProvider' }));
+    const buildA = await createFlagProvider({ env: envWithKey, logger: silentLogger() });
+
+    configCatCreate.mockReturnValue(fakeProvider({ name: 'ut' }));
+    const buildB = await createFlagProvider({ env: envWithKey, logger: silentLogger() });
+
+    // The property the Mixpanel board actually needs: one provider, one label.
+    expect(buildA.metadata.name).toBe(buildB.metadata.name);
+  });
+
+  it('leaves the two in-memory branches reporting their own name', async () => {
+    // The pin is scoped to the ConfigCat branch; nothing else may inherit it.
+    const declaredDefaults = await createFlagProvider({ env: {}, logger: silentLogger() });
+    const localOverride = await createFlagProvider({
+      env: { VITE_FEATURE_FLAGS: JSON.stringify({ [TENANT_UPGRADE]: true }) },
+      logger: silentLogger(),
+    });
+
+    expect(declaredDefaults.metadata.name).toBe('in-memory');
+    expect(localOverride.metadata.name).toBe('in-memory');
+    expect(localOverride.metadata.name).not.toBe(CONFIGCAT_PROVIDER_NAME);
   });
 });
 
@@ -270,22 +353,43 @@ describe('a healthy ConfigCat provider', () => {
       env: { VITE_CONFIGCAT_SDK_KEY: PLACEHOLDER_SDK_KEY },
       logger: silentLogger(),
     });
-    expect(name).toBe('configcat-web');
+    expect(name).toBe(CONFIGCAT_PROVIDER_NAME);
     expect(configCatCreate).toHaveBeenCalledTimes(1);
   });
 
-  it('reports "unknown" for a nameless provider, which is not a failure', async () => {
+  it('reports the pinned name for a nameless provider, rather than "unknown"', async () => {
     // `metadata` itself must stay — OpenFeature refuses to register a provider
     // without it, which is a registration failure ('none'), a different case.
+    //
+    // This used to report 'unknown' (registered but unidentified). The branch now
+    // pins its own name before registering, so a nameless upstream provider is no
+    // longer reachable here: the whole point of the pin is that this branch has
+    // exactly one identity regardless of what the SDK says about itself. What
+    // still matters is the distinction this test was written to protect — a
+    // registered provider must never be mistaken for a failed one.
     configCatCreate.mockReturnValue({ ...fakeProvider(), metadata: {} });
 
     const name = await initFeatureFlags({
       env: { VITE_CONFIGCAT_SDK_KEY: PLACEHOLDER_SDK_KEY },
       logger: silentLogger(),
     });
-    // 'unknown' means registered but unidentified; 'none' means registration
-    // failed. Collapsing the two would hide a working control plane.
-    expect(name).toBe('unknown');
+    expect(name).toBe(CONFIGCAT_PROVIDER_NAME);
+    // 'none' means registration failed. Reporting it for a provider that
+    // registered fine would hide a working control plane.
     expect(name).not.toBe('none');
+    expect(name).not.toBe('unknown');
+  });
+
+  it('resolves flags through the registered provider', async () => {
+    // Proves the pinned metadata did not cost registration: a provider whose
+    // `metadata` object was replaced still serves evaluations.
+    await initFeatureFlags({
+      env: { VITE_CONFIGCAT_SDK_KEY: PLACEHOLDER_SDK_KEY },
+      logger: silentLogger(),
+    });
+    // `fakeProvider` resolves every boolean to false with reason STATIC.
+    const details = OpenFeature.getClient().getBooleanDetails(TENANT_UPGRADE, true);
+    expect(details.value).toBe(false);
+    expect(details.reason).toBe('STATIC');
   });
 });

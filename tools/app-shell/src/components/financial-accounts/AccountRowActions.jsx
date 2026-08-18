@@ -19,6 +19,7 @@ export function AccountRowActions({
   onOpen,
   onEdit,
   onArchive,
+  onDelete,
   onBankConnectionAction,
   onTransfer,
   onNewMovement,
@@ -70,6 +71,7 @@ export function AccountRowActions({
           onOpen={onOpen}
           onEdit={onEdit}
           onArchive={onArchive}
+          onDelete={onDelete}
           onBankConnectionAction={onBankConnectionAction}
           onTransfer={onTransfer}
           onNewMovement={onNewMovement}

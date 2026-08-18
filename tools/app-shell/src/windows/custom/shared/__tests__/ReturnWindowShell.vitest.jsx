@@ -12,6 +12,11 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
 }));
 
+const useBulkActionToast = vi.fn();
+vi.mock('@/hooks/useBulkActionToast', () => ({
+  useBulkActionToast: () => useBulkActionToast(),
+}));
+
 let rowDeleteConfig;
 const requestDelete = vi.fn();
 vi.mock('@/hooks/useRowDelete', () => ({
@@ -20,6 +25,18 @@ vi.mock('@/hooks/useRowDelete', () => ({
     return {
       requestDelete,
       deleteDialog: <div data-testid="delete-dialog" />,
+    };
+  }),
+}));
+
+let rowEmailModalConfig;
+const onRowEmailMock = vi.fn();
+vi.mock('../useRowEmailModal.jsx', () => ({
+  useRowEmailModal: vi.fn((config) => {
+    rowEmailModalConfig = config;
+    return {
+      onEmail: onRowEmailMock,
+      emailModalPortal: <div data-testid="email-modal-portal" />,
     };
   }),
 }));
@@ -52,6 +69,7 @@ describe('ReturnWindowShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rowDeleteConfig = null;
+    rowEmailModalConfig = null;
     lastPageProps = null;
   });
 
@@ -70,13 +88,19 @@ describe('ReturnWindowShell', () => {
       />,
     );
 
+    // ETP-4857 — the shell must call useBulkActionToast() on mount so the
+    // toast left behind by BulkDocumentAction's window.location.reload() is
+    // read and shown; without this it silently fails to display.
+    expect(useBulkActionToast).toHaveBeenCalled();
     expect(screen.getByTestId('page-component')).toHaveAttribute('data-record-id', 'ret-1');
     expect(lastPageProps).toMatchObject({
       recordId: 'ret-1',
-      hidePrint: true,
       autoSaveOnBlur: true,
       customProp: 'kept',
     });
+    // ETP-4729: hidePrint must no longer be hardcoded — the generic print
+    // icon in DetailView.jsx should render for return-* detail views.
+    expect(lastPageProps.hidePrint).toBeUndefined();
     expect(lastPageProps.rowQuickActions).toBeUndefined();
   });
 
@@ -125,5 +149,69 @@ describe('ReturnWindowShell', () => {
     expect(lastPageProps.refreshTrigger).toBe(2);
     fireEvent.click(screen.getByText('close clone'));
     expect(screen.queryByTestId('clone-modal')).not.toBeInTheDocument();
+  });
+
+  // ETP-4718 — optional per-window row-hover "Enviar" (send-email) wiring.
+  describe('emailAction wiring (ETP-4718)', () => {
+    it('wires emailAction into useRowEmailModal, exposes the email row-action, and renders the modal portal', () => {
+      const usePdf = vi.fn(() => ({ pdfUrl: null, loading: false }));
+      const emailAction = {
+        usePdf,
+        documentType: 'Return to Vendor Shipment',
+        visibleWhen: "@documentStatus@='CO'",
+      };
+
+      render(
+        <ReturnWindowShell
+          windowName="return-to-vendor"
+          apiBaseUrl="/api"
+          token="tkn"
+          PageComponent={PageComponent}
+          entity="returnToVendor"
+          headerEntity="returnToVendor"
+          routePrefix="/return-to-vendor/"
+          emailAction={emailAction}
+        />,
+      );
+
+      expect(rowEmailModalConfig).toMatchObject({
+        usePdf,
+        apiBaseUrl: '/api',
+        token: 'tkn',
+        windowName: 'return-to-vendor',
+        documentType: 'Return to Vendor Shipment',
+      });
+
+      expect(lastPageProps.rowQuickActions.actions.email).toEqual({
+        show: true,
+        visibleWhen: "@documentStatus@='CO'",
+      });
+      expect(lastPageProps.rowQuickActions.onEmail).toBe(onRowEmailMock);
+      expect(screen.getByTestId('email-modal-portal')).toBeInTheDocument();
+    });
+
+    it('without emailAction, leaves the email row-action absent and onEmail undefined (return-material-receipt baseline unchanged)', () => {
+      render(
+        <ReturnWindowShell
+          windowName="return-to-vendor"
+          apiBaseUrl="/api"
+          token="tkn"
+          PageComponent={PageComponent}
+          entity="returnToVendor"
+          headerEntity="returnToVendor"
+          routePrefix="/return-to-vendor/"
+        />,
+      );
+
+      expect(rowEmailModalConfig).toMatchObject({
+        usePdf: undefined,
+        documentType: undefined,
+      });
+      expect(lastPageProps.rowQuickActions.actions.email).toEqual({
+        show: false,
+        visibleWhen: undefined,
+      });
+      expect(lastPageProps.rowQuickActions.onEmail).toBeUndefined();
+    });
   });
 });

@@ -54,9 +54,12 @@ export function isDeleteVisibleForRecord({ record, statusField, hideDeleteWhenCo
  * `!=` supported) that DetailView already uses via `evalDisplayLogicRaw`. Boolean API values
  * are normalized to Etendo string equivalents (`true` → 'Y', `false` → 'N').
  *
- * - Missing expression  → true  (no gate, visible by default)
- * - Unparseable clauses → true  (fail-open; same policy as DetailView)
- * - Field absent in row → true  (matches DetailView behavior)
+ * - Missing expression  → true   (no gate, visible by default)
+ * - Unparseable clauses → true   (fail-open; same policy as DetailView — nothing to gate on)
+ * - Field absent in row → false  (ETP-4717 — fail-CLOSED: a gate that references a field the
+ *   row doesn't carry can't be evaluated, so the safe default is to hide the action rather than
+ *   show it unconditionally. Applies to both `=` and `!=` clauses equally — an unevaluable
+ *   clause never counts as satisfied.)
  *
  * Kept here (not duplicated from DetailView) so generic surfaces can share a single
  * evaluator without pulling in the heavy DetailView module.
@@ -71,7 +74,7 @@ export function evalRowVisibleWhen(expr, row) {
   if (clauses.length === 0) return true;
   return clauses.every(([, fieldRef, op, expected]) => {
     const key = fieldRef[0].toLowerCase() + fieldRef.slice(1);
-    if (!(key in (row || {}))) return true;
+    if (!(key in (row || {}))) return false;
     const rawVal = row[key];
     let actual;
     if (typeof rawVal === 'boolean') actual = rawVal ? 'Y' : 'N';

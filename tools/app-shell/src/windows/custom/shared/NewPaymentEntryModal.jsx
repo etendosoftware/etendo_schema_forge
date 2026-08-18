@@ -4,6 +4,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { WriteoffToggleRow, writeoffState } from '@/components/contract-ui/WriteoffAdjustment.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
@@ -128,6 +129,13 @@ function fmtCur(n, currency) {
   return formatCurrency(currency, n);
 }
 
+/** Rate implied by a typed account-currency amount, given the (fixed) invoice-currency amount —
+ *  the inverse of `amount × rate`. Rounded to 6 decimals (typical FX-rate precision) and
+ *  re-parsed to strip trailing zeros / float noise before being handed back as the rate string. */
+function deriveRateFromAmount(accountAmount, invoiceAmount) {
+  return String(parseFloat((accountAmount / invoiceAmount).toFixed(6)));
+}
+
 /** Label for the balance delta (excess / missing / exact). */
 function deltaLabelFor(balance, ui) {
   if (balance.isExcess) return ui('cpExcess');
@@ -169,6 +177,8 @@ function mapAccounts(json) {
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
     bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
+    // ETP-4797 write-off cap. Absent when unconfigured → null, read as "no limit".
+    writeoffLimit: a.writeoffLimit ?? null,
   }));
 }
 
@@ -869,6 +879,23 @@ export default function NewPaymentEntryModal({
   // transfer-like method, in a currency Salt Edge supports. Imperfect by design
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
+  // ETP-4797: opt-in write-off of the shortfall, so the invoice is settled in full instead of
+  // keeping a residual balance. Off by default — today's behaviour is the default.
+  const [writeoff, setWriteoff] = useState(false);
+  // `balance.diff` is funds − invoice total, so a shortfall is negative; the write-off amount is
+  // its magnitude. Hidden while editing a draft: that path reconciles the already-linked PSD
+  // through a Core call with no write-off input (see applyInvoiceInstallment), so offering it here
+  // would promise something the backend cannot honour.
+  const writeoffInfo = useMemo(() => writeoffState({
+    difference: -balance.diff,
+    limit: selectedAccount?.writeoffLimit,
+    eligible: balance.isPartial && !isEdit,
+  }), [balance.diff, balance.isPartial, isEdit, selectedAccount]);
+
+  // A write-off that is no longer on offer must not linger checked and reach the payload.
+  useEffect(() => {
+    if (!writeoffInfo.visible || writeoffInfo.blocked) setWriteoff(false);
+  }, [writeoffInfo.visible, writeoffInfo.blocked]);
   const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
 
   // ── multi-currency conversion (ETP-4504) ────────────────────────────────────
@@ -881,21 +908,113 @@ export default function NewPaymentEntryModal({
     fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
   });
   const [rateStr, setRateStr] = useState('');
-  // Seed the rate field from the freshly-fetched prefill, re-running when the currency pair
-  // (accountCurrency) or the fetched rate changes. Crucially this also CLEARS the field when
-  // moving to a pair that has no DB rate, so a stale rate from a previously-selected account
-  // never silently carries across currency pairs (ETP-4504 W1). Manual edits persist until one
-  // of these inputs changes; when not foreign the field is kept empty.
+  // Edit mode: the rate stored on the draft (ETP-4841). Kept as the raw string from the response
+  // so a value like "0.680272" is shown back exactly, without float re-formatting.
+  const persistedRate = isEdit && Number(payment?.conversionRate) > 0
+    ? String(payment.conversionRate)
+    : null;
+  // It only applies while the modal is showing the currency PAIR it was saved for: the rate is a
+  // property of the pair, not of the account, so switching between two accounts in the same
+  // currency keeps it, while another foreign pair must reseed from the DB (showing a USD→EUR rate
+  // in a USD→GBP field would be a silent accounting error — ETP-4504 W1).
+  const persistedRateApplies = persistedRate != null
+    && !!accountCurrency && accountCurrency === payment?.accountCurrency;
+  const persistedRateSeededRef = useRef(false);
+  // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
+  // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
+  // converted amount recomputes the rate — whichever the user touches drives the other.
+  const [amountStr, setAmountStr] = useState('');
+  // Set right before an amount-driven rate/amount update so the recompute effect below skips its
+  // own echo: without this, typing in the amount field (or seeding the rate, see below) would
+  // trigger a SECOND, separate render+effect pass that recomputes the other field from a stale
+  // snapshot, producing a one-frame "wrong" value — see the seed effect's comment for how that
+  // exact window let a real user edit get silently swallowed (ETP-4876).
+  const skipAmountRecomputeRef = useRef(false);
+  // Seed the rate field, re-running when the currency pair (accountCurrency) or the fetched rate
+  // changes. Crucially this also CLEARS the field when moving to a pair that has no DB rate, so a
+  // stale rate from a previously-selected account never silently carries across currency pairs
+  // (ETP-4504 W1). Manual edits persist until one of these inputs changes; when not foreign the
+  // field is kept empty. A persisted rate wins over the system one and is seeded exactly once per
+  // visit to its pair, so neither a late validate-exchange-rate response nor a date change nor a
+  // subsequent manual edit can overwrite what the user saved on the draft (ETP-4841).
+  //
+  // Seeds amountStr in THIS SAME effect pass (instead of leaving it to the recompute effect
+  // below) and flags skipAmountRecomputeRef so that effect sits out its own pass for this commit.
+  // Without this, rateStr and amountStr settled over TWO separate render/effect passes: the
+  // recompute effect's FIRST pass still closes over the pre-seed `rate` (null, since rateStr
+  // hasn't propagated to a re-render yet) and clears amountStr to '', with the correct value only
+  // landing on a SECOND pass once `rate` catches up. That one-frame "rate seeded, amount blank"
+  // state is normally invisible, but if a real amount-field edit (e.g. blanking it) lands inside
+  // that window, React's input value-tracker sees the DOM already showing '' and skips firing
+  // onChange for the no-op edit — so the still-pending stale pass then overwrites the user's blank
+  // input with the seeded amount instead (ETP-4876).
   useEffect(() => {
-    setRateStr(isForeign && conversion.rate != null ? String(conversion.rate) : '');
-  }, [isForeign, accountCurrency, conversion.rate]);
+    const seedAmountFrom = (rawRate) => {
+      const n = parseFloat(String(rawRate).replace(',', '.'));
+      setAmountStr(Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '');
+    };
+    if (!isForeign) {
+      persistedRateSeededRef.current = false;
+      setRateStr('');
+      setAmountStr('');
+      return;
+    }
+    if (persistedRateApplies) {
+      if (!persistedRateSeededRef.current) {
+        persistedRateSeededRef.current = true;
+        skipAmountRecomputeRef.current = true;
+        setRateStr(persistedRate);
+        seedAmountFrom(persistedRate);
+      }
+      return;
+    }
+    persistedRateSeededRef.current = false;
+    const seeded = conversion.rate != null ? String(conversion.rate) : '';
+    skipAmountRecomputeRef.current = true;
+    setRateStr(seeded);
+    seedAmountFrom(seeded);
+    // balance.amount is read here only to seed amountStr at the moment the rate is (re)seeded —
+    // it doesn't need to retrigger this effect; ongoing balance.amount changes (e.g. "Igualar")
+    // are handled by the recompute effect below, which does list it as a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
   const rate = useMemo(() => {
     const n = parseFloat(String(rateStr).replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
-  // Amount expressed in the account currency = payment amount × rate (recomputes live on both).
-  const amountInAccount = (isForeign && rate != null) ? round2(balance.amount * rate) : null;
+  // Recompute the converted amount from the rate whenever the rate changes (typed directly, or
+  // re-seeded from the system/persisted value) or the invoice-currency amount changes (e.g. via
+  // "Igualar" or the Importe field) — in both cases the rate is the value to keep fixed, matching
+  // Classic. Skipped once when the change originated from the amount field itself, or from the
+  // seed effect above (see the ref there), and cleared entirely when the fields aren't shown.
+  useEffect(() => {
+    if (skipAmountRecomputeRef.current) {
+      skipAmountRecomputeRef.current = false;
+      return;
+    }
+    if (isForeign && rate != null) {
+      setAmountStr(formatPlain(round2(balance.amount * rate)));
+    } else {
+      setAmountStr('');
+    }
+  }, [isForeign, rate, balance.amount]);
+  const onRateChange = useCallback((e) => {
+    setRateStr(e.target.value);
+  }, []);
+  const onAmountChange = useCallback((e) => {
+    const raw = e.target.value;
+    setAmountStr(raw);
+    const n = parseFloat(String(raw).replace(',', '.'));
+    if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
+      skipAmountRecomputeRef.current = true;
+      setRateStr(deriveRateFromAmount(n, balance.amount));
+    } else {
+      // Blank/invalid amount ⇒ the implied rate is unknown too, so fall back to the same
+      // rateMissing gating a blank rate field already triggers.
+      setRateStr('');
+    }
+  }, [balance.amount]);
 
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
@@ -1024,6 +1143,11 @@ export default function NewPaymentEntryModal({
         conversionRate: (isForeign && rate != null) ? String(rate) : undefined,
         // Edit mode: update this existing draft instead of creating a new one.
         paymentId: payment?.id || undefined,
+        // ETP-4797. Only when the toggle was offered AND accepted; the backend re-checks the limit
+        // anyway, since a disabled switch is a convenience rather than a boundary.
+        writeoffDifference: (writeoff && writeoffInfo.visible && !writeoffInfo.blocked)
+          ? true
+          : undefined,
       };
       // PIS only ever accompanies the primary "confirm" action — Guardar
       // borrador keeps recording a plain manual payment, byte-for-byte
@@ -1202,7 +1326,7 @@ export default function NewPaymentEntryModal({
                 <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                   <input
                     type="text" inputMode="decimal" value={rateStr}
-                    onChange={e => setRateStr(e.target.value)}
+                    onChange={onRateChange}
                     data-testid="cp-conversion-rate-input"
                     style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
                   />
@@ -1213,12 +1337,22 @@ export default function NewPaymentEntryModal({
                   </p>
                 )}
               </Field>
-              <Field label={ui('cpAmountInAccount')} data-testid="Field__amount-in-account">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 40, border: `1px solid ${BORDER1}`, borderRadius: 8, background: WIDGET_BG, minWidth: 0, padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }} data-testid="cp-amount-in-account">
-                  {amountInAccount == null
-                    ? '—'
-                    : <MoneyAmount value={amountInAccount} currency={accountCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-amount-in-account" />}
+              {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
+              <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                  <input
+                    type="text" inputMode="decimal" value={amountStr}
+                    onChange={onAmountChange}
+                    data-testid="cp-amount-in-account-input"
+                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  />
+                  <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
                 </div>
+                {(rateMissing || rateIsOne) && (
+                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
+                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
+                  </p>
+                )}
               </Field>
             </div>
           )}
@@ -1248,9 +1382,24 @@ export default function NewPaymentEntryModal({
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
+              <div style={{ textAlign: 'right' }} data-testid="cp-delta-cell"><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
               <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
+            {/* ETP-4797 — sits directly under the amount strip, which already spells out the
+                difference, so no separate breakdown is repeated here. */}
+            {writeoffInfo.visible && (
+              <div style={{ marginTop: 10 }}>
+                <WriteoffToggleRow
+                  checked={writeoff}
+                  onCheckedChange={setWriteoff}
+                  amount={writeoffInfo.amount}
+                  currency={currency}
+                  isReceipt={isReceipt}
+                  blocked={writeoffInfo.blocked}
+                  limit={writeoffInfo.limit}
+                  data-testid="cp-writeoff-toggle" />
+              </div>
+            )}
           </div>
 
           {pisEligible && (

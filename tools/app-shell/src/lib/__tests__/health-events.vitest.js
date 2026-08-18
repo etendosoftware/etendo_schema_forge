@@ -273,13 +273,14 @@ describe('trackSessionStarted', () => {
     expect(group).toHaveBeenCalledWith('account_id', 'client-123');
   });
 
-  it('calls track("session_started") with username and account_id', async () => {
+  it('calls track("session_started") with account_id only (no username — GDPR remediation)', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
     expect(track).toHaveBeenCalledWith('session_started', {
-      username: 'alice',
       account_id: 'client-123',
     });
+    const [, props] = track.mock.calls[0];
+    expect(props).not.toHaveProperty('username');
   });
 
   it('calls flush() after tracking', async () => {
@@ -317,7 +318,6 @@ describe('trackSessionStarted', () => {
   it('resolves without error when called with no arguments', async () => {
     await expect(trackSessionStarted()).resolves.toBeUndefined();
     expect(track).toHaveBeenCalledWith('session_started', {
-      username: undefined,
       account_id: undefined,
     });
   });
@@ -329,11 +329,13 @@ describe('trackSessionStarted', () => {
     expect(flush).toHaveBeenCalledOnce();
   });
 
-  it('calls identify(username) when username is provided', async () => {
+  // identify() used to be called on every login (session_started) — removed entirely as part
+  // of the ETP-4352 GDPR remediation. Regression guard: it must stay gone regardless of whether
+  // a username is provided.
+  it('does NOT call identify() even when username is provided', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
-    expect(identify).toHaveBeenCalledOnce();
-    expect(identify).toHaveBeenCalledWith('alice');
+    expect(identify).not.toHaveBeenCalled();
   });
 
   it('does NOT call identify() when username is absent', async () => {
@@ -346,16 +348,6 @@ describe('trackSessionStarted', () => {
     await trackSessionStarted({ username: undefined, clientId: 'client-123' });
 
     expect(identify).not.toHaveBeenCalled();
-  });
-
-  it('calls identify() before track() to attribute the session event to the identified user', async () => {
-    const callOrder = [];
-    identify.mockImplementation(() => { callOrder.push('identify'); return Promise.resolve(undefined); });
-    track.mockImplementation(() => { callOrder.push('track'); return Promise.resolve(undefined); });
-
-    await trackSessionStarted({ username: 'bob', clientId: 'c-1' });
-
-    expect(callOrder.indexOf('identify')).toBeLessThan(callOrder.indexOf('track'));
   });
 
   it('calls groupSet with $name when clientName is provided', async () => {

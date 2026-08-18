@@ -21,8 +21,8 @@ describe('ConfirmWithCreditButtonBase', () => {
     assert.match(src, /import.*useConfirmWithCredit.*from '\.\/useConfirmWithCredit'/);
   });
 
-  it('imports PrintButton from local file', () => {
-    assert.match(src, /import PrintButton from '\.\/PrintButton'/);
+  it('does NOT import PrintButton (printing is unified in DocumentPrintDrawer)', () => {
+    assert.doesNotMatch(src, /PrintButton/);
   });
 
   it('imports ConfirmInOutModal from @/components/contract-ui', () => {
@@ -79,12 +79,6 @@ describe('ConfirmWithCreditButtonBase', () => {
 
   it('renders extraPortals slot', () => {
     assert.match(src, /\{extraPortals\}/);
-  });
-
-  // ── PrintButton integration ────────────────────────────────────────────────
-
-  it('renders PrintButton with onClick and loading props', () => {
-    assert.match(src, /<PrintButton[\s\S]*?onClick=\{handlePrint\}[\s\S]*?loading=\{pdfLoading\}/);
   });
 
   // ── Portals ────────────────────────────────────────────────────────────────

@@ -79,7 +79,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
           <div className="flex w-[364px] shrink-0 items-center gap-2">
             <AccountLogoAvatar
               account={account}
-              className="h-8 w-8 shrink-0"
+              className="shrink-0"
               data-testid="AccountLogoAvatar__748dd1" />
             <div className="flex min-w-0 flex-col">
               <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">

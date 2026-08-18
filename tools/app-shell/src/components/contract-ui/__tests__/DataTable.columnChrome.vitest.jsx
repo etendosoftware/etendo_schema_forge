@@ -42,6 +42,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('../ProductStockSearchDrawer.jsx', () => ({ default: () => null }));

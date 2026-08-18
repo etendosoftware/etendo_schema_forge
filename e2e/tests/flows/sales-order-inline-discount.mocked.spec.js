@@ -63,7 +63,7 @@ async function installMocks(page, { onPatch = null, patchStatus = 200 } = {}) {
     });
   });
 
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     const method = route.request().method();
     if (method !== 'GET') return route.continue();
     await route.fulfill({
@@ -184,7 +184,7 @@ test.describe('Sales Order — inline discount regression', () => {
         body: JSON.stringify({ response: { data: [DRAFT_HEADER] } }),
       });
     });
-    await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+    await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
       await route.fulfill({
         status: 200,

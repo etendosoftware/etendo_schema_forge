@@ -79,13 +79,13 @@ describe('SendDocumentModal', () => {
     assert.doesNotMatch(src, /sendModalNoEmail/);
   });
 
-  it('renders email preview fields as read-only', () => {
-    const emailPanelStart = src.indexOf('function EmailFormPanel');
-    const emailPanelEnd = src.indexOf('async function fetchAndDownloadPdf');
-    const emailPanelSrc = src.slice(emailPanelStart, emailPanelEnd);
-    assert.match(emailPanelSrc, /readOnly/);
-    assert.doesNotMatch(emailPanelSrc, /onChange=/);
-  });
+  // NOTE: the subject/message fields used to be hard-coded read-only here.
+  // ETP-4717 made them operator-editable — that behavior (not read-only,
+  // onChange wires typed edits into state, edits flow into the send payload
+  // as `messageEdits`) is now covered with real DOM assertions in the
+  // `SendDocumentModal — subject and message editing (ETP-4717)` describe
+  // block of the sibling `SendDocumentModal.vitest.jsx`, which is a stronger
+  // guarantee than a source-regex check and supersedes the old assertion.
 
   it('does not send caller-provided provider payload fields', () => {
     const commandStart = sendSrc.indexOf('export function buildEmailContractCommand');

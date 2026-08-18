@@ -104,6 +104,22 @@ export function applyQtyZeroGuard(result, rowValues) {
 }
 
 /**
+ * Resets the manually-entered line description when the product changes.
+ *
+ * Classic product callouts (SL_Order_Product / SL_Invoice_Product) recompute
+ * price, discount and tax on product change but never touch description, so
+ * without this guard the grid keeps showing the previous product's
+ * description instead of clearing it for re-entry (ETP-4723).
+ *
+ * Mutates result in place.
+ */
+export function resetDescriptionOnProductChange(result, field) {
+  if (field === 'product' && result.description == null) {
+    result.description = '';
+  }
+}
+
+/**
  * Rounds amount fields to 2 decimal places.
  * Classic callouts sometimes return values with many decimals.
  * Mutates result in place.

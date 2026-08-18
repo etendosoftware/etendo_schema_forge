@@ -63,7 +63,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
     width: '100%',
     fontSize: 13,
     padding: '7px 10px',
-    border: '0.5px solid hsl(var(--card))',
+    border: '0.5px solid hsl(var(--border-subtle))',
     borderRadius: 6,
     outline: 'none',
     color: 'hsl(var(--foreground))',
@@ -74,7 +74,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
   const labelStyle = {
     fontSize: 13,
     fontWeight: 500,
-    color: 'var(--status-info-bg)',
+    color: 'hsl(var(--foreground))',
     marginBottom: 6,
     display: 'block',
   };
@@ -99,12 +99,12 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
           borderRadius: 12,
           backgroundColor: 'hsl(var(--card))',
           boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)',
-          border: '0.5px solid hsl(var(--card))',
+          border: '0.5px solid hsl(var(--border-subtle))',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid hsl(var(--card))', background: 'hsl(var(--card))' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
               {ui('createInventoryCountList')}
@@ -171,7 +171,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))', padding: '10px 16px',
+            background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px',
           }}
         >
           <button
@@ -179,8 +179,8 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
             onClick={onClose}
             style={{
               fontSize: 13, padding: '6px 14px', borderRadius: 6,
-              border: '1px solid hsl(var(--card))', background: 'transparent',
-              color: 'hsl(var(--muted))', cursor: 'pointer',
+              border: '1px solid hsl(var(--border-subtle))', background: 'transparent',
+              color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
             }}
           >
             {ui('cancel')}

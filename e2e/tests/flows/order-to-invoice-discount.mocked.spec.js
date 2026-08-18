@@ -178,7 +178,7 @@ async function installOrderToInvoiceMocks(page, invoiceCompletedRef) {
     });
   });
 
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -187,7 +187,7 @@ async function installOrderToInvoiceMocks(page, invoiceCompletedRef) {
     });
   });
 
-  await page.route('**/sws/neo/sales-order/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/sales-order/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -244,7 +244,7 @@ async function installOrderToInvoiceMocks(page, invoiceCompletedRef) {
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -255,7 +255,7 @@ async function installOrderToInvoiceMocks(page, invoiceCompletedRef) {
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

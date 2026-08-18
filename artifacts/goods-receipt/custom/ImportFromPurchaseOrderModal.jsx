@@ -73,7 +73,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => 
   return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
+export const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const res = await fetch(
     `${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`,
     { headers },
@@ -87,11 +87,14 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
       const draftEntry = sharedContext.draftInfo?.[l.id];
       const inOtherDrafts = draftEntry?.qty || 0;
       const pending = Math.max(0, ordered - delivered - inOtherDrafts);
+      const unitPrice = Number(l.unitPrice) || 0;
       return {
         ...l,
         _productName: l['product$_identifier'] || l.id,
         _maxQty: pending,
         _orderedQty: ordered,
+        _unitPrice: unitPrice,
+        _lineNetAmount: unitPrice * pending,
         _alreadyImported: pending <= 0,
         _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
       };

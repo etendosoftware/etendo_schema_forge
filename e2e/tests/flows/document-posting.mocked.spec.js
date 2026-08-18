@@ -51,7 +51,7 @@ const ROW = {
  * Must run AFTER login() so it takes precedence over the generic /sws/** stub.
  */
 async function installMocks(page) {
-  await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
 

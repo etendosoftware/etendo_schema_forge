@@ -63,7 +63,7 @@ async function fetchLinkedDocuments(recordId, token, apiBaseUrl) {
   return result;
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -77,7 +77,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       .then(setDocs)
       .catch(() => setDocs([]))
       .finally(() => setLoading(false));
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 

@@ -203,8 +203,12 @@ podría dejar de necesitar el algoritmo manual — usaría `Intl` igual que `for
 terceros corriendo en su propio contenedor Docker, aislado por HTTP, sin ningún mecanismo de
 `import`/`require` hacia este repo (ver sección 2.2). Aunque ambos lados usaran `Intl.NumberFormat`
 de la misma forma, **seguirían siendo dos implementaciones separadas** (una importada directo, otra
-serializada como string vía `fn.toString()`) — no se llegaría a "una sola función `formatCurrency()`
-para toda la app". La actualización de imagen resolvería el bug de agrupamiento y permitiría que
+emitida como source text hardcodeado vía `JSREPORT_HELPER_SOURCES`) — no se llegaría a "una sola
+función `formatCurrency()` para toda la app". Nota: `fn.toString()` está prohibido para esta
+serialización — los identificadores de función/closure son locales al bundle y un build de
+producción minificado los renombra, rompiendo el helper emitido en runtime (ver el fix de
+minification-safety en `report-html-helpers.js`). La actualización de imagen resolvería el bug de
+agrupamiento y permitiría que
 ambos lados usen el mismo *método* (`Intl`), pero no elimina la necesidad de mantener dos fuentes
 canónicas — el problema de fondo que motiva esta propuesta (el *estándar* hardcodeado en dos lugares)
 seguiría existiendo igual.

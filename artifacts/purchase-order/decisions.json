@@ -38,7 +38,8 @@
     },
     "secondaryTabs": {},
     "noHeaderBorder": true,
-    "hidePrint": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
+    "listViewOptions": { "hidePrint": true },
     "hideSaveStatuses": [
       "CO",
       "CL",
@@ -51,6 +52,13 @@
       "hasPdf": false,
       "cacheOnComplete": true,
       "dropZone": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
     }
   },
   "entities": {

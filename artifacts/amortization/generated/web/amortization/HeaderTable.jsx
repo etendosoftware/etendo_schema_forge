@@ -7,7 +7,7 @@ const columns = [
   { key: 'accountingDate', column: 'DateAcct', type: 'date', label: 'Accounting Date', required: true, dot: false },
   { key: 'startingDate', column: 'StartDate', type: 'date', label: 'Starting Date', dot: false },
   { key: 'totalAmortization', column: 'Totalamortization', type: 'amount', label: 'Total Amortization', summable: true },
-  { key: 'processed', column: 'Processed', type: 'status', label: 'Post Amortization', enumLabels: { 'N': 'statusDraft', 'Y': 'statusProcessed' }, required: true, filterable: false },
+  { key: 'processed', column: 'Processed', type: 'status', label: 'Post Amortization', enumLabels: { 'N': 'statusDraft', 'Y': 'statusProcessed' }, required: true },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
 ];
 // @sf-generated-end columns:header

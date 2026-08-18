@@ -99,7 +99,7 @@ async function installMocks(page, invoice) {
   });
 
   // Lines endpoint — return empty so the form renders cleanly
-  await page.route('**/sws/neo/purchase-invoice/lines**', async (route) => {
+  await page.route('**/sws/neo/purchase-invoice/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -109,7 +109,7 @@ async function installMocks(page, invoice) {
   });
 
   // evaluate-display — return {} so client-side readOnlyLogic drives the UI
-  await page.route('**/sws/neo/purchase-invoice/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/purchase-invoice/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

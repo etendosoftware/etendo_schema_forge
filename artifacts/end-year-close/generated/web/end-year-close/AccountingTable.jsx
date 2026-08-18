@@ -6,7 +6,7 @@ const columns = [
   { key: 'account', column: 'Account_ID', type: 'string', label: 'Account' },
   { key: 'debit', column: 'Debit', type: 'amount', label: 'Debit' },
   { key: 'credit', column: 'Credit', type: 'amount', label: 'Credit' },
-  { key: 'type', column: 'Factaccttype', type: 'enum', label: 'Type', enumLabels: { 'C': 'Closing Entry', 'D': 'Divide Up', 'R': 'Income Statement', 'O': 'Opening Entry', 'N': 'Regular Entry' } },
+  { key: 'type', column: 'Factaccttype', type: 'enum', label: 'Type', enumLabels: { 'C': 'factaccttypeC', 'D': 'factaccttypeD', 'R': 'factaccttypeR', 'O': 'factaccttypeO', 'N': 'factaccttypeN' } },
   { key: 'description', column: 'description', type: 'string', label: 'Description' },
 ];
 // @sf-generated-end columns:accounting

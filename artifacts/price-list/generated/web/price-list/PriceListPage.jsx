@@ -15,7 +15,7 @@ const breadcrumb = 'Settings / Price List';
 
 // @sf-generated-start summary:priceList
 const summary = [
-  { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
+
 ];
 
 const statusField = null;

@@ -116,7 +116,7 @@ async function installMocks(page, {
     });
   });
 
-  await page.route('**/sws/neo/sales-quotation/quotationLine**', async (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,
@@ -222,6 +222,11 @@ test.describe('Tanda 1 — core behaviors', () => {
 
     await expect.poll(() => patches.length, { timeout: 3_000 }).toBeGreaterThan(0);
     expect(String(patches.at(-1).body.orderedQuantity)).toBe('7');
+
+    // ETP-4886 — before this fix, Enter saved the value but left the row stuck
+    // in edit mode (only Escape / click-outside used to close it). The row must
+    // now also exit edit mode: no more `field-*` inputs inside it.
+    await expect(rowA.locator('[data-testid^="field-"]')).toHaveCount(0, { timeout: 3_000 });
   });
 
   test('keyboard Escape: cancels the edit without firing PATCH', async ({ page }) => {
@@ -340,7 +345,7 @@ test.describe('Tanda 3 — cell renderers', () => {
     await installMocks(page, { onPatch: (info) => patches.push(info) });
 
     // Mock the tax selector endpoint with two items so we can pick a different one
-    await page.route('**/selectors/C_Tax_ID**', async (route) => {
+    await page.route('**/selectors/C_Tax_ID{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -388,7 +393,7 @@ test.describe('Tanda 3 — cell renderers', () => {
     // Mock the product search selector endpoint.
     // The selector URL is built as: <apiBaseUrl>/quotationLine/selectors/M_Product_ID
     // The ProductSearchDrawer reads `items` from the response.
-    await page.route('**/selectors/M_Product_ID**', async (route) => {
+    await page.route('**/selectors/M_Product_ID{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -408,7 +413,7 @@ test.describe('Tanda 3 — cell renderers', () => {
     });
 
     // Also mock the image entity endpoint the drawer tries to fetch on open.
-    await page.route('**/product/product**', async (route) => {
+    await page.route('**/product/product{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

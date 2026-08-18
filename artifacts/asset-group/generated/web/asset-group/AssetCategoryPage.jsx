@@ -143,13 +143,12 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, maxDetailLines: 1 },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, maxDetailLines: 1, tabOrder: 1 },
         ]}
         hidePrint
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset_Group", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

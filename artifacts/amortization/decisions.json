@@ -54,6 +54,7 @@
         "DateAcct": "Fecha contable",
         "StartDate": "Fecha de inicio",
         "Totalamortization": "Amortización total",
+        "Processed": "Estado",
         "C_Currency_ID": "Moneda",
         "A_Asset_ID": "Activo",
         "Amortization_Percentage": "% Amortización",
@@ -74,6 +75,7 @@
         "DateAcct": "Accounting Date",
         "StartDate": "Starting Date",
         "Totalamortization": "Total Amortization",
+        "Processed": "Status",
         "C_Currency_ID": "Currency",
         "A_Asset_ID": "Asset",
         "Amortization_Percentage": "Amortization %",
@@ -160,7 +162,6 @@
           "visibility": "editable",
           "grid": true,
           "form": false,
-          "filterOnly": true,
           "searchable": false,
           "columnType": "status",
           "enumValues": [

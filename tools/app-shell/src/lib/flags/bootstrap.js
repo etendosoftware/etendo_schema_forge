@@ -153,6 +153,12 @@ export function resolvePollSeconds(raw, logger = console) {
  * The ConfigCat SDK is imported lazily so its bundle cost lands only on builds
  * that actually configure it.
  */
+/**
+ * Analytics label for the ConfigCat branch — see the comment above `metadata`
+ * below for why this cannot just be the provider's own default name.
+ */
+export const CONFIGCAT_PROVIDER_NAME = 'configcat';
+
 export async function createFlagProvider({ env = import.meta.env, logger = console } = {}) {
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {
@@ -163,9 +169,17 @@ export async function createFlagProvider({ env = import.meta.env, logger = conso
   const sdkKey = env.VITE_CONFIGCAT_SDK_KEY;
   if (sdkKey) {
     const { ConfigCatWebProvider } = await import('@openfeature/config-cat-web-provider');
-    return ConfigCatWebProvider.create(sdkKey, {
+    const provider = ConfigCatWebProvider.create(sdkKey, {
       pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
     });
+    // `ConfigCatWebProvider` builds its own `metadata.name` from
+    // `ConfigCatWebProvider.name` — the JS class name, which a production
+    // minifier is free to rename per build. Seen in the wild as both
+    // "_ConfigCatWebProvider" and "ut" across different deploys, which
+    // fragments analytics that group exposure events by provider. Pin a
+    // build-independent label instead of trusting the class name.
+    provider.metadata = { ...provider.metadata, name: CONFIGCAT_PROVIDER_NAME };
+    return provider;
   }
 
   return new TypedInMemoryProvider(buildInMemoryConfiguration());

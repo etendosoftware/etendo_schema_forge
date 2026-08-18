@@ -488,7 +488,7 @@ export default function AmortizationLinesTable({
                               disabled={deleting === line.id}
                               aria-label={ui('deleteRowTooltip')}
                               title={ui('deleteRowTooltip')}
-                              className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors disabled:opacity-50"
+                              className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors disabled:opacity-50"
                             >
                               {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
                             </button>

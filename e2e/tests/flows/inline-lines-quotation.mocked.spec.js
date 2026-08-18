@@ -84,7 +84,7 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
   });
 
   // Lines (quotationLine child entity)
-  await page.route('**/sws/neo/sales-quotation/quotationLine**', async (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,

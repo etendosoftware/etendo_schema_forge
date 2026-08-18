@@ -2247,6 +2247,63 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "88b8b9896ff119c353e3f6926a3510d8aff56324f0d54cd2d29d433eef79f9fc",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_callout_id": "1000100000",
+          "ad_table_id": "F468CC15B7B44F17AA68DA4D42E754CF",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_IsDefault",
+          "columnname": "Isdefault",
+          "name": "SL_IsDefault"
+        },
+        {
+          "ad_callout_id": "16E14A45CD654B78B2C22C1EF5B84A74",
+          "ad_table_id": "228",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SE_Organization_NotTaxDeductable",
+          "columnname": "Istaxundeductable",
+          "name": "SE_Organization_NotTaxDeductable"
+        },
+        {
+          "ad_callout_id": "20FE1F365075451E95AE901650183CC7",
+          "ad_table_id": "155",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SE_Period_Control",
+          "columnname": "AD_Orgtype_ID",
+          "name": "SE_Period_Control"
+        },
+        {
+          "ad_callout_id": "3E7999A44EEA40FEBC71EACA93A51198",
+          "ad_table_id": "1000500000",
+          "classname": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port",
+          "columnname": "Smtpconnectionsecurity",
+          "name": "EmailConfiguration_Port"
+        },
+        {
+          "ad_callout_id": "76EB5EC472534C0C897FBD25089EA351",
+          "ad_table_id": "088ED0B6930847508865BCB06E75228A",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_RefreshSequenceAndLength",
+          "columnname": "IsBpNewAccount",
+          "name": "SL_RefreshSequenceAndLength"
+        },
+        {
+          "ad_callout_id": "76EB5EC472534C0C897FBD25089EA351",
+          "ad_table_id": "088ED0B6930847508865BCB06E75228A",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_RefreshSequenceAndLength",
+          "columnname": "IsPrNewAccount",
+          "name": "SL_RefreshSequenceAndLength"
+        },
+        {
+          "ad_callout_id": "E533C48595374A57885EF3761173F235",
+          "ad_table_id": "155",
+          "classname": "org.openbravo.erpCommon.ad_callouts.SL_Organization_Info",
+          "columnname": "Value",
+          "name": "SL_Organization_Info"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "1b07d90490aaeecdb0deb0ca9eb7afc9ab5bb3f59a46ae6125dcdc80f8493f20",
       "params": [

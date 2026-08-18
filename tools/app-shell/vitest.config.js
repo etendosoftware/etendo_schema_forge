@@ -23,6 +23,10 @@ const CORE_ETENDO_GO_SRC = resolve(CORE_REPO, 'packages/etendo-go-core/src');
 
 export default defineConfig({
   plugins: [react()],
+  // The cloud pre-push runner places this on its per-developer PVC. Keeping
+  // Vite's transformed-module cache outside the ephemeral checkout reduces
+  // cold imports without sharing cache state between developers.
+  cacheDir: process.env.VITE_CACHE_DIR || undefined,
   ssr: {
     noExternal: LOCAL_CORE ? true : [],
   },

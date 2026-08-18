@@ -62,8 +62,8 @@ describe('SalesOrderWindow custom wrapper', () => {
     assert.match(src, /Sales \/ Sales Order/);
   });
 
-  it('passes hidePrint to ListView', () => {
-    assert.match(src, /hidePrint/);
+  it('does not hardcode hidePrint on ListView (ETP-4729 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/);
   });
 
   it('imports HeaderTable from the generated sales-order artifact', () => {

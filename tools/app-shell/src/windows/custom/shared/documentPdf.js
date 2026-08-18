@@ -293,17 +293,22 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
   }));
 
   const etgoTotalDiscount = Number(header.etgoTotalDiscount ?? 0);
+  // grossSubtotal/discountAmt/totalDiscountAmt are still needed for the
+  // "descuento por producto"/"descuento total" breakdown rows, which have no
+  // backend-persisted equivalent field. But the grand total and tax amount
+  // MUST come from the persisted header (same as buildInvoiceData/
+  // buildQuotationData already do below) — never recomputed client-side via
+  // computeDocumentTotals, which can diverge from the trigger-computed
+  // C_Order.GrandTotal by the rounding drift reported in ETP-4777.
   const {
     grossSubtotal,
-    netSubtotal,
-    grandTotal,
     discountAmt,
-    taxAmt,
     totalDiscountAmt,
   } = computeDocumentTotals(linesRaw, null, null, ORDER_LINE_CONFIG, etgoTotalDiscount);
 
-  const netAmount = (netSubtotal ?? 0) - (totalDiscountAmt ?? 0);
-  const taxAmount = taxAmt ?? 0;
+  const grandTotal = Number(header.grandTotalAmount ?? 0);
+  const netAmount = Number(header.summedLineAmount ?? header.totalLines ?? 0);
+  const taxAmount = grandTotal - netAmount;
 
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation, header.bpAddress),

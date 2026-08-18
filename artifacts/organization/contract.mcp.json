@@ -1,0 +1,195 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-08-01T00:36:50.964Z",
+  "updatedAt": "2026-08-03T16:25:15.395Z",
+  "contractChecksum": "261839b234d57627",
+  "apiPrediction": {
+    "specName": "organizaci-n",
+    "baseUrl": "/sws/neo/organizaci-n",
+    "crud": {
+      "organization": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/organization",
+        "detailUrl": "/sws/neo/organizaci-n/organization/{id}",
+        "supportedFilters": []
+      },
+      "information": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/information",
+        "detailUrl": "/sws/neo/organizaci-n/information/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "organization",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/organizaci-n/organization/selectors/currency"
+      },
+      {
+        "entity": "information",
+        "field": "locationAddress",
+        "column": "C_Location_ID",
+        "reference": "Location",
+        "inputMode": "search",
+        "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+      }
+    ],
+    "actions": [
+      {
+        "name": "ready",
+        "actionType": "utilityAction",
+        "entity": "organization",
+        "column": "IsReady",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/organizaci-n/organization/{id}/action/ready",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "53863D4359114ADE92133F772135AEEB",
+        "processType": "classic"
+      },
+      {
+        "name": "etsgAddCertificate",
+        "actionType": "utilityAction",
+        "entity": "organization",
+        "column": "EM_Etsg_Add_Certificate",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/organizaci-n/organization/{id}/action/etsgAddCertificate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "77AAF82CC5344022AAD6ECBC9925E574",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "formState": {
+    "entities": {
+      "organization": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "socialName": {
+            "required": true
+          },
+          "currency": {
+            "readOnly": true
+          },
+          "etgoBusinessType": {
+            "required": true,
+            "defaultValue": "CO"
+          }
+        }
+      },
+      "information": {
+        "fields": {
+          "locationAddress": {
+            "required": true
+          },
+          "taxID": {
+            "required": true
+          },
+          "yourCompanyDocumentImage": {},
+          "etgoEmail": {},
+          "etgoPhone": {},
+          "etgoWeb": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage organización records.",
+    "whenToUse": [
+      "Use for organización management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "socialName",
+        "etgoBusinessType"
+      ],
+      "lineFields": [
+        "locationAddress",
+        "taxID"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "socialName",
+          "etgoBusinessType"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "565109da3c8ab0f6"
+}

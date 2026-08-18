@@ -206,7 +206,6 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         customMenuContent={InternalConsumptionActions}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

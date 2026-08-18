@@ -115,6 +115,29 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
   });
 });
 
+// ETP-4728 — print unification. PrintButton no longer exists: printing is
+// served exclusively by the generic icon-only print flow in DetailView.jsx /
+// DocumentPrintDrawer.jsx. This component must never regrow it.
+describe('ConfirmWithCreditButtonBase — no private PrintButton (ETP-4728)', () => {
+  it('does not render a print button in any status', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+      />
+    );
+    expect(screen.queryByText('print')).not.toBeInTheDocument();
+
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+      />
+    );
+    expect(screen.queryAllByText('print').length).toBe(0);
+  });
+});
+
 // ETP-4737 round 3 — modal open/close/confirm callback wiring. These lines
 // were previously untouched because no existing test ever clicked the action
 // buttons or drove the mocked modals' own callback props.

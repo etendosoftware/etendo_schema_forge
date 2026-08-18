@@ -62,6 +62,7 @@ async function sendDocumentFromModal({
   setSendFeedback,
   onClose,
   recipientEdits,
+  messageEdits,
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
@@ -72,6 +73,7 @@ async function sendDocumentFromModal({
     pdfBlob: cachePreviewBeforeSend ? pdfBlob : null,
     pdfBlobUrl: cachePreviewBeforeSend ? pdfBlobUrl : null,
     recipientEdits,
+    messageEdits,
   });
 
   if (data.status === 'SENT' || data.status === 'DUPLICATE') {
@@ -173,7 +175,7 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
   );
 }
 
-function EmailFormPanel({ recipientFieldsProps, subject, message, ui }) {
+function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChange, onMessageChange, ui }) {
   return (
     <div style={{ width: '40%', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
       <RecipientFields {...recipientFieldsProps} ui={ui} data-testid="RecipientFields__afec0a" />
@@ -182,17 +184,17 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, ui }) {
         <input
           type="text"
           value={subject}
-          readOnly
-          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', boxSizing: 'border-box' }}
+          onChange={e => onSubjectChange(e.target.value)}
+          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))', boxSizing: 'border-box' }}
         />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalMessage')}</label>
         <textarea
           value={message}
-          readOnly
+          onChange={e => onMessageChange(e.target.value)}
           placeholder={ui('sendModalMessagePlaceholder')}
-          style={{ width: '100%', flex: 1, minHeight: 80, fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--muted))', resize: 'none', boxSizing: 'border-box' }}
+          style={{ width: '100%', flex: 1, minHeight: 80, fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))', resize: 'none', boxSizing: 'border-box' }}
         />
       </div>
     </div>
@@ -396,8 +398,13 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     setInvalidDrafts(prev => ({ ...prev, cc: !isValid }));
   }, []);
 
-  const subject = `${documentType} #${documentNo} — ${bpName}`;
-  const message = '';
+  // ETP-4717 — subject/message are editable. The auto-derived defaults are
+  // kept around so handleSend can tell whether the operator actually changed
+  // either one; an untouched send must stay byte-identical to the legacy
+  // payload (no `messageEdits` key at all).
+  const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
+  const [subject, setSubject] = useState(defaultSubject);
+  const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(!pdfBlobUrl);
@@ -451,6 +458,11 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       const recipientEdits = editableRecipients
         ? buildRecipientEdits(baseRecipientsRef.current, { to: toRecipients, cc: ccRecipients })
         : null;
+      // Untouched subject/message yield null here, keeping the command
+      // byte-identical to the legacy one (mirrors recipientEdits above).
+      const messageEdits = (subject !== defaultSubject || message !== '')
+        ? { subject, message }
+        : null;
       await sendDocumentFromModal({
         apiBaseUrl,
         token,
@@ -465,6 +477,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         setSendFeedback,
         onClose,
         recipientEdits,
+        messageEdits,
       });
     } catch {
       const errorMessage = resolveEmailSendExceptionMessage(ui, documentType);
@@ -534,6 +547,8 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
               }}
               subject={subject}
               message={message}
+              onSubjectChange={setSubject}
+              onMessageChange={setMessage}
               ui={ui}
               data-testid="EmailFormPanel__afec0a" />
           )}

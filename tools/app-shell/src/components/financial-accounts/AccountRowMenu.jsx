@@ -8,6 +8,8 @@ import {
   Plug,
   ArrowLeftRight,
   Plus,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,18 +31,30 @@ import { ACCOUNT_TYPE } from './tokens';
  *                                connection panel when connected, ETP-4097 / T3)
  *   3. Sincronizar ahora        (connected only — runs the bank statement fetch)
  *   ───
- *   4. Desconectar banco         (connected only)
- *   4'. Conectar banco           (not connected)
+ *   4. Desconectar banco         (connected only — deactivates, stays reconnectable)
+ *   4'. Reconectar               (soft-disconnected only — revives the surviving link)
+ *   4''. Conectar banco          (no bank link at all)
+ *   5. Borrar conexión           (any bank link — irreversible, ETP-4764)
+ *   ───
+ *   6. Eliminar cuenta            (only when `account.deletable === true`, ETP-4871 — a real,
+ *                                  irreversible delete; independent of Archivar/Desarchivar, so
+ *                                  both can be offered on the same deletable-but-active account)
  *
  * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
  * Cash accounts (type=C) never expose the bank connection group because the connection
  * does not apply to manual cash drawers.
  */
-export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
+export function AccountRowMenu({
+  account, onOpen, onEdit, onArchive, onDelete, onBankConnectionAction, onTransfer, onNewMovement,
+}) {
   const ui = useUI();
   const isCash = account.type === ACCOUNT_TYPE.CASH;
   const bankConnected = account.bankConnected === true;
+  const isArchived = account.active === false;
+  const isDeletable = account.deletable === true;
+  // Soft-disconnected: not connected, but the bank link survives and can be revived.
+  const bankReconnectable = account.bankReconnectable === true;
 
   return (
     <DropdownMenu data-testid="DropdownMenu__ffaf9f">
@@ -122,7 +136,26 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
                   </span>
                 </DropdownMenuItem>
               </>
-            ) : (
+            ) : null}
+
+            {/* Soft-disconnected: the link survives, so offer to revive it rather than a
+                from-scratch connect, which would orphan the existing connection. */}
+            {!bankConnected && bankReconnectable ? (
+              <>
+                <DropdownMenuItem
+                  onClick={() => onBankConnectionAction?.('reconnect', account)}
+                  data-testid={`account-row-menu-reconnect-${account.id}`}
+                >
+                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                    {ui('financeAccountsBankConnectionReconnect')}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+              </>
+            ) : null}
+
+            {!bankConnected && !bankReconnectable ? (
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
@@ -132,20 +165,66 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
                   {ui('financeAccountsMenuConnect')}
                 </span>
               </DropdownMenuItem>
-            )}
+            ) : null}
+
+            {/* Permanent deletion is offered wherever a bank link exists — live or deactivated. */}
+            {bankConnected || bankReconnectable ? (
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('deleteConnection', account)}
+                data-testid={`account-row-menu-delete-connection-${account.id}`}
+              >
+                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+                  {ui('financeAccountsBankConnectionDeleteAction')}
+                </span>
+              </DropdownMenuItem>
+            ) : null}
           </>
         ) : null}
 
         <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-        <DropdownMenuItem
-          onClick={() => onArchive?.(account)}
-          data-testid={`account-row-menu-archive-${account.id}`}
-        >
-          <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-            {ui('financeAccountsMenuArchive')}
-          </span>
-        </DropdownMenuItem>
+        {/* Archived accounts (the "Inactivas" view) get the inverse action instead — otherwise the
+            only thing on offer is archiving something that is already archived, with no way back.
+            Restoring is not destructive, so it drops the red treatment. */}
+        {isArchived ? (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-unarchive-${account.id}`}
+          >
+            <RotateCcw
+              className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
+              data-testid="RotateCcw__ffaf9f" />
+            <span className="text-sm font-normal leading-6">
+              {ui('financeAccountsMenuUnarchive')}
+            </span>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-archive-${account.id}`}
+          >
+            <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountsMenuArchive')}
+            </span>
+          </DropdownMenuItem>
+        )}
+
+        {/* ETP-4871 — independent of Archivar/Desarchivar above: a deletable, still-active
+            account can be archived OR deleted, whichever the user prefers, so this never
+            replaces the item above it. Only offered once the row confirms zero dependent
+            records anywhere (every FK into FIN_Financial_Account is RESTRICT). */}
+        {isDeletable ? (
+          <DropdownMenuItem
+            onClick={() => onDelete?.(account)}
+            data-testid={`account-row-menu-delete-${account.id}`}
+          >
+            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountsMenuDelete')}
+            </span>
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

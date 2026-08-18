@@ -18,8 +18,13 @@ describe('generic contract UI semantic boundaries (ETP-4554)', () => {
       assert.doesNotMatch(source, /disabled:opacity/);
     }
     assert.match(sources[0], /border-border-control/);
-    assert.match(sources[0], /border-border-structural/);
-    assert.match(sources[1], /border-border-structural/);
-    assert.match(sources[2], /border-border-structural/);
+    // ETP-4767: decorative dividers use the plain border-border token, not
+    // the WCAG-gated border-border-structural one (same fix as ETP-4659's
+    // Documents/Notes divider). The negative lookahead keeps this assertion
+    // from accidentally passing via the unrelated border-border-control /
+    // border-border-subtle tokens that also appear in these files.
+    assert.match(sources[0], /border-border(?!-)/);
+    assert.match(sources[1], /border-border(?!-)/);
+    assert.match(sources[2], /border-border(?!-)/);
   });
 });

@@ -4,7 +4,6 @@ export const user = [
   {
     "id": "mock-user-001",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -26,7 +25,6 @@ export const user = [
   {
     "id": "mock-user-002",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -48,7 +46,6 @@ export const user = [
   {
     "id": "mock-user-003",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -70,7 +67,6 @@ export const user = [
   {
     "id": "mock-user-004",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -92,7 +88,6 @@ export const user = [
   {
     "id": "mock-user-005",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -114,7 +109,6 @@ export const user = [
   {
     "id": "mock-user-006",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -136,7 +130,6 @@ export const user = [
   {
     "id": "mock-user-007",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -158,7 +151,6 @@ export const user = [
   {
     "id": "mock-user-008",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -180,7 +172,6 @@ export const user = [
   {
     "id": "mock-user-009",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -202,7 +193,6 @@ export const user = [
   {
     "id": "mock-user-010",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -224,7 +214,6 @@ export const user = [
   {
     "id": "mock-user-011",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",
@@ -246,7 +235,6 @@ export const user = [
   {
     "id": "mock-user-012",
     "name": "Sample name",
-    "username": "Sample username",
     "firstName": "Sample firstName",
     "lastName": "Sample lastName",
     "password": "Sample password",

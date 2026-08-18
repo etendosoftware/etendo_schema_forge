@@ -42,6 +42,11 @@ const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true
 const reactivateSelectedState = {
   reactivateSelected: vi.fn().mockResolvedValue({ reactivated: true }), loading: false,
 };
+// "Posting the remainder to a G/L item" — closes a PARTIALLY reconciled line by writing its
+// leftover amount off against an accounting concept.
+const reconcileDifferenceState = {
+  reconcileDifference: vi.fn().mockResolvedValue({ transactionId: 'TRX-DIFF' }), loading: false,
+};
 // Records the last (accountId, lineId, docType, kind) the component passed to
 // useCandidateOperations, so tests can assert the kind toggle flows through.
 const candidateCallArgs = { accountId: null, lineId: null, docType: null, kind: null };
@@ -64,6 +69,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
   useReconcileGroup: () => reconcileState,
   useRemoveOperation: () => removeState,
   useReactivateSelected: () => reactivateSelectedState,
+  useReconcileDifference: () => reconcileDifferenceState,
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';

@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:costing
 const columns = [
-  { key: 'costType', column: 'Costtype', type: 'enum', label: 'Cost Type', enumLabels: { 'AVA': 'Average', 'STA': 'Standard' }, required: true },
+  { key: 'costType', column: 'Costtype', type: 'enum', label: 'Cost Type', enumLabels: { 'AVA': 'costtypeAva', 'STA': 'costtypeSta' }, required: true },
   { key: 'cost', column: 'Cost', type: 'number', label: 'Cost' },
   { key: 'startingDate', column: 'DateFrom', type: 'date', label: 'Starting Date', required: true },
   { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date', required: true },

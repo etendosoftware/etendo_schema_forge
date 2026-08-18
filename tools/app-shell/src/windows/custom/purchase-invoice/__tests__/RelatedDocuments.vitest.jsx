@@ -182,6 +182,30 @@ describe('RelatedDocuments (purchase-invoice)', () => {
     );
   });
 
+  // ETP-4779: generating a derived document (e.g. Purchase Invoice from a
+  // Purchase Order, or a Payment) from this window's menu actions must
+  // refresh this component the same way the manual refresh button does —
+  // via a `docsRefreshSignal` prop threaded down from DetailView through
+  // LinesBottomSection. Currently `docsRefreshSignal` is not part of the
+  // fetch effect's dependency array, so incrementing it does NOT trigger a
+  // refetch. This test is expected to FAIL until that fix lands.
+  it('refetches when docsRefreshSignal prop increments (regression, ETP-4779)', async () => {
+    const { rerender } = render(
+      <RelatedDocuments {...DEFAULT_PROPS} docsRefreshSignal={0} />
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+
+    const callCountBefore = mockFetchChild.mock.calls.length;
+
+    rerender(<RelatedDocuments {...DEFAULT_PROPS} docsRefreshSignal={1} />);
+
+    await waitFor(() =>
+      expect(mockFetchChild.mock.calls.length).toBeGreaterThan(callCountBefore)
+    );
+  });
+
   it('renders purchase order chip when salesOrder resolves from fetchById', async () => {
     mockFetchById.mockResolvedValueOnce({ id: 'po-1', documentNo: 'PO-001' });
 

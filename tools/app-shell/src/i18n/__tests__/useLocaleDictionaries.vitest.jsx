@@ -1,6 +1,11 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useLocaleDictionaries } from '../useLocaleDictionaries.js';
 
+// NOTE: never `waitFor` on `renderedLocale` reaching the locale the hook STARTED with —
+// `useState(locale)` seeds it, so the condition holds on render 0 and the wait is a no-op that
+// resolves before the dictionary promise does. Wait on `dictionaries[locale]`, the thing that
+// actually settles asynchronously. That no-op wait is what made this file flaky under load.
+//
 // Deferred promise helper: lets a test control exactly when a "loadCore()"
 // import resolves, so we can assert on the state DURING the async gap —
 // that's the window where ETP-4663's flash used to be visible.
@@ -17,8 +22,8 @@ describe('useLocaleDictionaries', () => {
     };
     const { result } = renderHook(() => useLocaleDictionaries('es_ES', loaders));
 
-    await waitFor(() => expect(result.current.renderedLocale).toBe('es_ES'));
-    expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' });
+    await waitFor(() => expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' }));
+    expect(result.current.renderedLocale).toBe('es_ES');
   });
 
   it('ETP-4663: keeps rendering the previous locale/dictionary while the new one is still loading (no flash)', async () => {
@@ -35,7 +40,7 @@ describe('useLocaleDictionaries', () => {
     );
 
     es.resolve({ default: { hello: 'Hola' } });
-    await waitFor(() => expect(result.current.renderedLocale).toBe('es_ES'));
+    await waitFor(() => expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' }));
 
     // Switch to en_US, but its dictionary has NOT resolved yet.
     rerender({ locale: 'en_US' });
@@ -66,7 +71,7 @@ describe('useLocaleDictionaries', () => {
       ({ locale }) => useLocaleDictionaries(locale, loaders),
       { initialProps: { locale: 'es_ES' } },
     );
-    await waitFor(() => expect(result.current.renderedLocale).toBe('es_ES'));
+    await waitFor(() => expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' }));
     expect(callCount).toBe(1);
 
     rerender({ locale: 'en_US' });
@@ -79,8 +84,8 @@ describe('useLocaleDictionaries', () => {
   it('falls back to an empty dictionary and still advances renderedLocale when no loader exists for the locale', async () => {
     const { result } = renderHook(() => useLocaleDictionaries('fr_FR', {}));
 
-    await waitFor(() => expect(result.current.renderedLocale).toBe('fr_FR'));
-    expect(result.current.dictionaries.fr_FR).toEqual({});
+    await waitFor(() => expect(result.current.dictionaries.fr_FR).toEqual({}));
+    expect(result.current.renderedLocale).toBe('fr_FR');
   });
 
   it('ignores a stale locale load when the locale changes again before it resolves (race condition)', async () => {

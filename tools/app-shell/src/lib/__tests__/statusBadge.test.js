@@ -23,7 +23,9 @@ describe('statusBadge — ETGO_CI (Closed - Invoice Created) classification', ()
     it('renders ETGO_CI with the semantic success style', () => {
       const props = getStatusBadgeProps('ETGO_CI');
       assert.equal(props.variant, 'default');
-      assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground');
+      // hover:bg-status-success overrides Badge's built-in variant="default"
+      // hover:bg-primary/80, which otherwise wins on :hover (ETP-4856).
+      assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success');
     });
   });
 
@@ -58,7 +60,7 @@ describe('statusBadge — CA (Closed - Order Created) recoloured to success', ()
   it('getStatusBadgeProps renders CA with the semantic success style', () => {
     const props = getStatusBadgeProps('CA');
     assert.equal(props.variant, 'default');
-    assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground');
+    assert.equal(props.className, 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success');
     assert.notEqual(props.variant, 'destructive');
   });
 

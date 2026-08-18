@@ -241,7 +241,13 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
     <Popover open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} data-testid="Popover__chip">
       <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
         <div
-          className="relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[hsl(var(--text-primary))] focus-within:ring-[3px] focus-within:ring-[hsl(var(--focus-ring))]/[0.08]"
+          // `group` is load-bearing, not decoration: SelectorChip's clear (X) is
+          // `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100`, so without a `.group`
+          // ancestor it stays permanently invisible â€” the X was in the DOM but never shown in ANY
+          // ChipSelect (this modal, GL Item Difference in Editar cuenta, the reconciliation payment
+          // method, ManualStatementModal, PaymentForm, FundsTransferModal). CreatableSearchSelect,
+          // which renders the same chip for the FK pickers in sales-invoice, has always had it.
+          className="group relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[hsl(var(--text-primary))] focus-within:ring-[3px] focus-within:ring-[hsl(var(--focus-ring))]/[0.08]"
           onClick={showChip ? startEditing : undefined}
         >
           {showChip ? (

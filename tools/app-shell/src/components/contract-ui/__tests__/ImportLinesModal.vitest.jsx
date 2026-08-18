@@ -264,7 +264,17 @@ describe('ImportLinesModal', () => {
 
     // Collapsed docTotal (sum of line net amounts) shown next to each row — both
     // docs share the same mocked lines, so it's expected to appear more than once.
-    expect(screen.getAllByText('2.500,00').length).toBeGreaterThan(0);
+    //
+    // This MUST be inside waitFor: the guard above does not prove the eager load
+    // committed. `fetchLines` is called synchronously in the eager-load effect body,
+    // one render BEFORE `eagerLoadingLines: true` reaches the DOM, so there is a
+    // window where fetchLines has been called, 'loading' is absent and INV-001 is
+    // present while docLines is still empty and no total is rendered. A waitFor poll
+    // landing in that window (routine under a saturated CI run) satisfies the guard
+    // and a synchronous assertion here then reads a total-less DOM.
+    await waitFor(() => {
+      expect(screen.getAllByText('2.500,00').length).toBeGreaterThan(0);
+    }, { timeout: 10000 });
     expect(screen.queryByText('2500.00')).toBeNull();
 
     fireEvent.click(screen.getByText('INV-001').closest('div[style]'));

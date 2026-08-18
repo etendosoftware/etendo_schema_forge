@@ -38,6 +38,19 @@ The `TbaiMonitorSection` component drives filter switching and row rendering.
 See [fiscal-monitor.md](fiscal-monitor.md) for the full functional specification,
 debug mode, test plan, and known issues.
 
+## API access — read-only (ETP-4254)
+
+`decisions.json` declares `window.readOnly: true`, so both entities (`sincronización`,
+`resultadoValidación`) are restricted to `GET` + `GETBYID` on `ETGO_SF_ENTITY`
+(`ISPOST`/`ISPUT`/`ISPATCH`/`ISDELETE` = `N`). These are TBAI submission records produced by
+the integration, not user- or agent-authored data. NEO Headless answers
+`405 "<METHOD> not enabled for <entity>"` to the React app *and* to the MCP agent, and
+`neo_discover` reports `readOnly: true`.
+
+CRUD only — action/process, callout, selector, defaults and evaluate-display endpoints are
+unaffected. Criteria and the full mechanism:
+[`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md).
+
 ## Automated evidence
 
 The `decisions.json` declares `attachments: false`, so the Attachments tab is explicitly disabled for this window.

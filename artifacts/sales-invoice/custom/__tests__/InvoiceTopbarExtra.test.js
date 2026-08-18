@@ -114,6 +114,48 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /fallbackLabel/);
   });
 
+  // ── Credit instrument detection (ETP-4841) ─────────────────────────────────
+  // The topbar used to enter its credit branch when getArSubtype(data) resolved
+  // to 'RECTIFICATIVA'. It now asks the shared helper, which reads the SIGN of
+  // the total — so a POSITIVE Factura Rectificativa falls through to the normal
+  // payable branches and a NEGATIVE ordinary Factura enters the credit branch.
+
+  describe('credit branch keyed on the sign of the total (ETP-4841)', () => {
+    it('imports the shared resolveInvoicePaymentBadge helper', () => {
+      assert.match(
+        src,
+        /import \{ resolveInvoicePaymentBadge \} from '@\/windows\/custom\/shared\/invoicePaymentBadge\.js'/,
+      );
+    });
+
+    it('derives isCreditInstrument from badge.isCredit, not from the document subtype', () => {
+      assert.match(src, /const isCreditInstrument = resolveInvoicePaymentBadge\(data\)\.isCredit/);
+    });
+
+    it('no longer compares getArSubtype against RECTIFICATIVA to pick the credit branch', () => {
+      assert.doesNotMatch(
+        src,
+        /getArSubtype\(data\)/,
+        'the document type must not decide the payment badge any more (ETP-4841)',
+      );
+      assert.doesNotMatch(src, /const arSubtype =/);
+    });
+
+    it('gates the credit branch on the completed status as well', () => {
+      assert.match(src, /if \(isCompleted && isCreditInstrument\)/);
+    });
+
+    it('renders the credit labels through i18n, not hardcoded Spanish literals', () => {
+      assert.match(src, /ui\('cpFavorBadge'\)/);
+      assert.match(src, /ui\('cpCreditFullyApplied'\)/);
+      // Strip `//` comments: the source still *describes* the badge as
+      // "Saldo a favor" in prose, which must not fail this assertion.
+      const code = src.replace(/^\s*\/\/.*$/gm, '');
+      assert.doesNotMatch(code, /Saldo a favor/);
+      assert.doesNotMatch(code, />Aplicada/);
+    });
+  });
+
   // ── Send modal ─────────────────────────────────────────────────────────────
 
   it('integrates a SendDocumentModal for email delivery', () => {
@@ -137,5 +179,27 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /recordId=\{recordId\}/);
     assert.match(src, /token=\{token\}/);
     assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
+  });
+
+  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
+  // invoice is still Draft (DR) — only once it is Completed (CO). The current
+  // early-return `if (isDraft) { ... }` block renders a SendDocumentButton,
+  // which is the bug.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('does NOT render the Send button in the Draft (isDraft) early-return block', () => {
+      const draftBlockMatch = src.match(/if\s*\(isDraft\)\s*\{\s*return\s*\(([\s\S]*?)\);\s*\}/);
+      assert.ok(draftBlockMatch, 'expected an `if (isDraft) { return (...); }` block in the source');
+      assert.doesNotMatch(
+        draftBlockMatch[1],
+        /<SendDocumentButton/,
+        'the Draft early-return block must not render SendDocumentButton — Send must only be ' +
+          'available once the invoice is Completed (CO)',
+      );
+    });
+
+    it('still renders a SendDocumentButton once the invoice is Completed (existing behavior, must not regress)', () => {
+      const afterDraftBlock = src.slice(src.indexOf('if (isCompleted && isCreditInstrument)'));
+      assert.match(afterDraftBlock, /<SendDocumentButton/);
+    });
   });
 });

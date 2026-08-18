@@ -1,16 +1,15 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button.jsx';
+import React, {useEffect, useRef, useState} from 'react';
+import {Button} from '@/components/ui/button.jsx';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
-import { computeBalance } from '@/lib/balanceTotals';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import { roundAmounts } from '@/lib/lineFieldChange.js';
-import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import {computeBalance} from '@/lib/balanceTotals';
+import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
+import {roundAmounts} from '@/lib/lineFieldChange.js';
+import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
@@ -110,25 +109,66 @@ export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
   return null;
 }
 
-export function normalizePatchFieldValues(patchEdits, fieldValues) {
+/**
+ * `fields` (addLineFields entry list, `{ key, column, ... }`) is optional so
+ * existing callers/tests that don't have field metadata handy keep the prior
+ * blanket numeric-string coercion. When provided, `_ID`-backed columns are
+ * left as strings — see buildRowValueCoercer for the full rationale (ETP-4886).
+ */
+export function normalizePatchFieldValues(patchEdits, fieldValues, fields) {
+  const coerce = buildRowValueCoercer(fields);
   for (const [k, v] of Object.entries(patchEdits)) {
     if (k.endsWith('$_identifier')) continue;
     // NEO Headless PATCH expects camelCase API keys, not DB column names.
     // Always use k (the API key) as the field name.
-    // Convert numeric strings to numbers for BigDecimal compatibility.
-    // Only strip when the value is already in standard format (no commas).
-    // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-    if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-      fieldValues[k] = parseFloat(v);
-    } else {
-      fieldValues[k] = v;
-    }
+    fieldValues[k] = coerce(v, k);
   }
 }
 
+/**
+ * ETP-4772 race-condition guard: returns true when a callout response for
+ * `key` is stale — i.e. the field's generation (bumped on every genuine
+ * write, whether a user edit or a previously-applied callout) has moved on
+ * since THIS specific callout request was dispatched. This means a newer
+ * edit/dispatch for `key` happened in the meantime and this older response
+ * must not clobber it.
+ *
+ * Applies uniformly regardless of whether `key` is the trigger field or a
+ * collateral update — staleness is about the field's own timeline, not
+ * about which field caused the callout.
+ *
+ * `dispatchSnapshot`/`fieldGenerationRef` are optional: callers that don't
+ * wire generation tracking (e.g. existing unit tests constructing ctx by
+ * hand) get a no-op here, preserving prior behavior.
+ */
+export function isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef) {
+  if (!dispatchSnapshot || !fieldGenerationRef) return false;
+  const dispatchGen = dispatchSnapshot[key] ?? 0;
+  const currentGen = fieldGenerationRef.current?.[key] ?? 0;
+  return dispatchGen !== currentGen;
+}
+
+/**
+ * Marks `key` as having just received a genuine new value (user edit or
+ * applied callout write), advancing its generation counter so any
+ * still-in-flight OLDER callout response targeting this field can be
+ * recognized as stale when it eventually arrives.
+ */
+export function bumpFieldGeneration(key, fieldGenerationRef) {
+  if (!fieldGenerationRef) return;
+  fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
-  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs } = ctx;
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
+    // Discard responses that arrived after a newer edit/dispatch already
+    // moved this field on — see isStaleCalloutResponse. Checked BEFORE the
+    // trigger-field-always-wins rule below: staleness is a property of the
+    // response itself, not of who triggered it.
+    if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
@@ -138,18 +178,21 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     }
     // Protect user-touched fields from being overwritten by collateral updates
     // coming from a callout triggered by a different field. The trigger field
-    // itself always wins (it was just changed by the user).
+    // itself always wins (it was just changed by the user) — as long as the
+    // response is not stale per the check above.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
       continue;
     }
     appliedFields.set(key, entry.value);
     hook.handleChange(key, entry.value);
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
+    bumpFieldGeneration(key, fieldGenerationRef);
   }
 }
 
 export function applyOneComboEntry(key, combo, ctx) {
-  const { data, userTouchedRef, appliedFields, hook } = ctx;
+  const { data, userTouchedRef, appliedFields, hook, dispatchSnapshot, fieldGenerationRef } = ctx;
+  if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) return;
   let selectedVal = combo.selected;
   let selectedLabel = combo._identifier;
   // Auto-select first entry if no explicit selection (e.g., BP address combo)
@@ -167,6 +210,7 @@ export function applyOneComboEntry(key, combo, ctx) {
   if (selectedLabel) {
     hook.handleChange(key + '$_identifier', selectedLabel);
   }
+  bumpFieldGeneration(key, fieldGenerationRef);
 }
 
 /**
@@ -233,8 +277,36 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
     if (k.endsWith('$_identifier')) continue;
     // Skip internal markers and metadata that aren't valid fields.
     if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
-    fieldValues[k] = coerce(v);
+    fieldValues[k] = coerce(v, k);
   }
+}
+
+/**
+ * ETP-4886 — builds a `coerce(value, key)` function for the inline-line PATCH
+ * flow (DetailView's `buildInlineRowUpdateHandler`). NEO Headless expects
+ * numeric-looking strings coerced to Number for BigDecimal/Integer columns,
+ * but every `_ID` column is ALWAYS a string by repo convention (see
+ * CLAUDE.md "Etendo AD Database Conventions") even when its value looks
+ * numeric — e.g. `attributeSetValue` (backed by `M_AttributeSetInstance_ID`)
+ * uses the sentinel `"0"` for "no attribute set". Blindly regex-coercing that
+ * to `Number 0` makes NEO reject the PATCH with 400 (it expects a
+ * JSONObject/string there, not a number).
+ *
+ * `fields` is the addLineFields entry list (`{ key, column, ... }`); each
+ * field's `column` is the real AD DB column backing it, which is the most
+ * reliable signal already available on the field object — `type` there is
+ * the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or
+ * `discount` render as `type: 'text'`), so it can't be used to distinguish
+ * IDs from amounts. A key with no matching field (not in `fields`) falls
+ * back to the original numeric-looking heuristic to avoid regressing any
+ * coercion path this fix doesn't have field metadata for.
+ */
+export function buildRowValueCoercer(fields) {
+  const fieldsByKey = new Map((fields || []).map(f => [f.key, f]));
+  const isIdColumn = (key) => /_ID$/i.test(fieldsByKey.get(key)?.column || '');
+  return (v, key) => (
+      typeof v === 'string' && !isIdColumn(key) && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v
+  );
 }
 
 /**
@@ -457,6 +529,96 @@ export function customTabKey(ct) {
   return `custom:${ct.key}`;
 }
 
+const SECONDARY_DEFAULT_WEIGHT = 99;
+const CUSTOM_DEFAULT_WEIGHT = 999;
+const LINES_DEFAULT_WEIGHT = -1;
+
+/**
+ * Computes the lines tab's (weight, insertionIndex) sort key (ETP-4415).
+ * `detailTabOrder` (new, preferred) is used directly as the weight when set,
+ * with no special insertionIndex handling needed. Otherwise `detailTabIndex`
+ * (legacy) is converted to an equivalent key that reproduces its old
+ * splice-position semantics EXACTLY, including when neighboring secondaryTabs
+ * share the same (default) weight — which they usually do, since untouched
+ * secondaryTabs all default to SECONDARY_DEFAULT_WEIGHT. Matching a neighbor's
+ * weight and using a fractional insertionIndex strictly between the two
+ * neighbors' positions (idx - 0.5) places lines at the exact splice point
+ * regardless of whether the neighbors' weights tie or differ. Any invalid
+ * value (unset, negative, out of range) falls back to LINES_DEFAULT_WEIGHT,
+ * matching the old `insertLinesTab`'s unshift fallback.
+ */
+function computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries) {
+  if (typeof detailTabOrder === 'number') return { weight: detailTabOrder, insertionIndex: -0.5 };
+  const isValidSpliceIndex = typeof detailTabIndex === 'number'
+    && detailTabIndex >= 0
+    && detailTabIndex <= secondaryEntries.length;
+  if (!isValidSpliceIndex) return { weight: LINES_DEFAULT_WEIGHT, insertionIndex: -0.5 };
+  const after = secondaryEntries[detailTabIndex];
+  const before = secondaryEntries[detailTabIndex - 1];
+  const weight = after?.weight ?? before?.weight ?? LINES_DEFAULT_WEIGHT;
+  return { weight, insertionIndex: detailTabIndex - 0.5 };
+}
+
+/**
+ * Builds the initial tab list (secondary tabs + lines/customLines + inline custom
+ * tabs) as a single weighted sort (ETP-4415) instead of the old fixed group
+ * concatenation. Every entry gets a numeric weight (secondaryTabs/customTabs
+ * default to their pre-ETP-4415 group position; a window opts into cross-group
+ * reordering via `tabOrder` on any entry, or `detailTabOrder`/`detailTabIndex`
+ * for the lines tab). Ties keep insertion order (stable sort). Visibility is
+ * filtered BEFORE sorting so a hidden custom tab never affects tiebreaks.
+ * `Others` is appended later via pushOthers.
+ */
+export function buildInitialTabs(p) {
+  const secondaryEntries = p.secondaryTabs.map((st, i) => {
+    const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
+    const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
+    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+    return {
+      tab: { key: st.key, label, count: childCount },
+      weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
+      insertionIndex: i,
+    };
+  });
+
+  const entries = [...secondaryEntries];
+
+  if (p.DetailTable) {
+    const linesTab = { key: 'lines', label: p.detailLabel || p.detailEntity || 'Lines', count: p.hook.children?.length || 0 };
+    entries.push({ tab: linesTab, ...computeLinesEntryKey(p.detailTabOrder, p.detailTabIndex, secondaryEntries) });
+  } else if (p.CustomLines) {
+    entries.push({
+      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null },
+      weight: LINES_DEFAULT_WEIGHT,
+      insertionIndex: -0.5,
+    });
+  }
+
+  // Append 'tab' placement custom items — a tab-placement custom component may opt
+  // out of being shown entirely by calling `onVisibilityChange(false)` (see
+  // customTabVisibility state in DetailView); until it does, it defaults to visible.
+  // customTabsAfterBottom suppresses this group from the sorted list entirely — those
+  // tabs render in a separate strip below bottomSection instead (see F21 in
+  // schema_forge_core's validate-pipeline.js, which flags a tabOrder set in that mode).
+  // Custom entries get an insertionIndex well past any secondaryTabs/lines index so a
+  // weight tie against them (e.g. an explicit custom tabOrder matching a secondary's
+  // default) resolves after secondaryTabs/lines, matching customs' default position.
+  if (!p.customTabsAfterBottom) {
+    p.tabCustomTabs.forEach((ct, i) => {
+      if (p.customTabVisibility[ct.key] === false) return;
+      const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
+      entries.push({
+        tab: { key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null },
+        weight: ct.tabOrder ?? CUSTOM_DEFAULT_WEIGHT,
+        insertionIndex: 10000 + i,
+      });
+    });
+  }
+
+  entries.sort((a, b) => a.weight - b.weight || a.insertionIndex - b.insertionIndex);
+  return entries.map(e => e.tab);
+}
+
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
@@ -532,6 +694,39 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
+/**
+ * Tailwind classes for a header process button, keyed by `p.style` (+ `salesTheme`/`isPrimary`).
+ *
+ * `ghost-danger` (the Reactivar/Undo button): full-opacity `--destructive` border and an explicit
+ * `hover:text` pin were restored here after ETP-4554 ("Migrate shared theme styles") diluted the
+ * border to `--destructive/0.3` — the pre-token version was a solid light pink-red, not an
+ * alpha-reduced one — and never pinned a hover text color, leaving the base `Button` outline variant's own
+ * `hover:text-accent-foreground` free to win on hover and turn the label gray instead of staying
+ * red like Figma shows (found while verifying ETP-4797).
+ */
+export function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-card border-[hsl(var(--destructive))] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]';
+  }
+  if (salesTheme) {
+    if (p.style === 'destructive') {
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
+    } else {
+      if (isPrimary) {
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
+      } else {
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
+      }
+    }
+  } else {
+    if (p.style === 'destructive') {
+      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
+    } else {
+      return '';
+    }
+  }
+}
+
 export // ETP-4479 — windows where a plain header DELETE fails once the record has
 // ever been referenced (FK constraints); the NEO action reactivates and
 // removes it server-side instead. Hardcoded here (not decisions.json-driven)
@@ -549,6 +744,18 @@ export // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACT
 const WINDOW_DELETE_CONFIRM_MODALS = {
   'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
   'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
+};
+
+export // ETP-4797 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: no
+// decisions.json field exists yet for "suppress the primary status pill for a given enum value",
+// so this stays a hardcoded windowName lookup instead. RPPC ("Payment Cleared") already gets its
+// own badge — PaymentConciliadoBadge, wired as this window's topbarExtra — which shows "Conciliado"
+// with a link to the matched bank transaction. Showing the generic status pill (e.g. "Cobro
+// depositado") next to it duplicated the same fact under two different labels; this set hides the
+// generic pill for exactly that one status so "Conciliado" is the only status indicator on screen.
+const WINDOW_HIDE_STATUS_PILL_FOR = {
+  'payment-in': new Set(['RPPC']),
+  'payment-out': new Set(['RPPC']),
 };
 
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {
@@ -753,5 +960,96 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
         hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
       }
     }
+  }
+}
+
+export function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
+  if (field !== 'product') return;
+  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
+    result.listPrice = result.standardPrice;
+  }
+  if (lineConfig.discountField) {
+    result[lineConfig.discountField] = 0;
+  }
+}
+
+export function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
+  if (field !== 'product' || !activeCurrencyConversion) return;
+  const {rate, toCurrency} = activeCurrencyConversion;
+  result.currency = toCurrency;
+  if (currencyIdentifier) {
+    result['currency$_identifier'] = currencyIdentifier;
+  }
+  const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
+  if (rawPrice > 0 && rate !== 1) {
+    const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
+    result[lineConfig.priceField] = convertedPrice;
+    if (result.standardPrice != null) result.standardPrice = convertedPrice;
+    if (result.unitPrice != null) result.unitPrice = convertedPrice;
+    if (result.listPrice != null) result.listPrice = convertedPrice;
+    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
+    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
+    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
+    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
+    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
+    // correctly forced to the converted value — an inconsistent line that the backend
+    // persists using the stale net, producing a wrong (sometimes negative) tax total.
+    result.lineNetAmount = null;
+    computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
+      ...rowValues,
+      ...result,
+      [lineConfig.priceField]: convertedPrice,
+    });
+  }
+}
+
+export function resolveTaxIdentifier(result, rowValues, hook) {
+  if (!result['tax$_identifier']) {
+    const effectiveTaxId = result.tax ?? rowValues.tax;
+    if (effectiveTaxId) {
+      const ref = (hook.children || []).find(l => l.tax === effectiveTaxId && l['tax$_identifier']);
+      if (ref) result['tax$_identifier'] = ref['tax$_identifier'];
+    }
+  }
+}
+
+export function calculateLineNetAmount(result, field, lineConfig, value, rowValues) {
+  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
+    const qty = field === lineConfig.qtyField ? (parseFloat(value) || 0)
+        : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
+    const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
+        : (parseFloat(String(result[lineConfig.priceField] ?? rowValues[lineConfig.priceField] ?? '')) || 0);
+    if (qty > 0 && price > 0) result.lineNetAmount = String(qty * price);
+  }
+}
+
+export function canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef) {
+  return taxFactor === null && taxId && taxRateCacheRef.current[taxId] != null;
+}
+
+export function isPositiveNumeric(calloutRate) {
+  return !isNaN(calloutRate) && calloutRate > 0;
+}
+
+export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
+  if (result.grossUnitPrice != null && result.netUnitPrice == null) {
+    const taxId = result.tax;
+    let taxFactor = null;
+    const calloutRate = parseFloat(String(result.taxRate ?? ''));
+    if (isPositiveNumeric(calloutRate)) taxFactor = 1 + calloutRate / 100;
+    if (canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef)) {
+      taxFactor = 1 + taxRateCacheRef.current[taxId] / 100;
+    }
+    if (taxFactor === null && taxId) {
+      const ref = (hook.children || []).find(l => l.tax === taxId &&
+          parseFloat(String(l.grossAmount ?? '')) > 0 &&
+          parseFloat(String(l.lineNetAmount ?? '')) > 0
+      );
+      if (ref) taxFactor = parseFloat(String(ref.grossAmount)) / parseFloat(String(ref.lineNetAmount));
+    }
+    const gross = Number(result.grossUnitPrice);
+    result.netUnitPrice = taxFactor != null && taxFactor > 1
+        ? parseFloat((gross / taxFactor).toFixed(6))
+        : gross;
   }
 }

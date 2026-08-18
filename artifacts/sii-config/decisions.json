@@ -7,6 +7,7 @@
   },
   "entities": {
     "siiConfiguration": {
+      "javaQualifier": "sii-config-deactivate-handler",
       "fields": {
         "organization": {
           "visibility": "system",

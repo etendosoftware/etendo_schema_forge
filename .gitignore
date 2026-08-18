@@ -8,6 +8,9 @@ tools/decision-panel/dist/
 !.claude/skills/**
 !.claude/agents/
 !.claude/agents/**
+!.claude/hooks/
+!.claude/hooks/**
+!.claude/settings.json
 artifacts/test-report.xml
 artifacts/test-report.html
 .DS_Store
@@ -18,9 +21,11 @@ artifacts/test-report.html
 window-locks.json
 .active-locale
 tools/app-shell/dist/
+tools/app-shell/dist-e2e/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 tools/app-shell/.env.development.local
+tools/app-shell/.env.production.local
 tools/app-shell/.env.es
 tools/etendo-go-ar/.env.local
 artifacts/e2e-report/

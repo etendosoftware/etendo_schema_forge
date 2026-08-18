@@ -66,11 +66,22 @@ export default function LifecycleConfirmModal({
     if (posted && itemAsiento) items.push(itemAsiento);
   }
 
-  // Portal to <body> so the fixed overlay covers the whole viewport (incl. the left sidebar),
-  // escaping any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
+  // Portal to <body> so the overlay covers the whole viewport (incl. the left sidebar), escaping
+  // any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
+  //
+  // The scrim deliberately sits ABOVE any dialog already on screen (z-index 500 vs the shadcn
+  // dialog layer's 50), so a parent modal is dimmed behind this cartel — matching what a nested
+  // shadcn dialog does. It uses `--scrim`, the same neutral black the shadcn `DialogOverlay` uses,
+  // at the same 30% opacity: the app's other overlay token (`--foreground`) is navy, and against a
+  // plain confirm dialog opened from the same flow that difference reads as a colour shift.
+  //
+  // `pointerEvents: 'auto'` is required when this cartel is opened from inside a Radix dialog
+  // (e.g. the financial-account edit modal): Radix locks the page by setting
+  // `pointer-events: none` on <body> while its own dialog is open, which this portal would
+  // otherwise inherit — leaving the cartel visible but unclickable. It is a no-op everywhere else.
   return createPortal((
     <div
-      style={{ position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24 }}
+      style={{ position: 'fixed', inset: 0, background: 'hsl(var(--scrim) / 0.30)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24, pointerEvents: 'auto' }}
       data-testid={`${testIdPrefix}-modal`}
     >
       <div style={{ width: 520, maxWidth: '100%', background: 'hsl(var(--card))', borderRadius: 14, boxShadow: '0 24px 60px hsl(var(--foreground) / 0.28)', overflow: 'hidden' }}>
@@ -116,8 +127,11 @@ export default function LifecycleConfirmModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--muted))' }}>
+        {/* Footer. Kept on the card surface rather than `--muted`: that token is blue-tinted
+            (hue 210), which read as an unintended colour shift next to the plain ConfirmDialog
+            used for the lighter half of the same flows. The top border already separates the
+            action bar from the body. */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))' }}>
           <button
             onClick={onClose}
             data-testid={`${testIdPrefix}-cancel`}

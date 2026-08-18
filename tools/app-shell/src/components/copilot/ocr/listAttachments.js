@@ -45,6 +45,70 @@ export async function listAttachments({ token, tableName, recordId, apiBaseUrl }
 }
 
 /**
+ * Attach a file to (tableName, recordId).
+ *
+ * Writes to the very same endpoint `listAttachments` reads and that backs the
+ * document's Attachments tab (`useAttachments`), so a file attached from the
+ * side panel shows up there with no synchronisation step at all — ETP-4855
+ * Error 3. Never throws: returns `{ ok }` plus a message the caller can render.
+ *
+ * @param {{ token: string, tableName: string, recordId: string, file: File|Blob,
+ *           fileName?: string, apiBaseUrl?: string }} params
+ *   `fileName` is required when `file` is a bare Blob — a Blob carries no name and
+ *   the server would store it as "blob".
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
+export async function uploadAttachment({ token, tableName, recordId, file, fileName, apiBaseUrl } = {}) {
+  if (!token || !tableName || !recordId || !file) return { ok: false, error: 'missing_params' };
+  const base = detectAttachmentsBase(apiBaseUrl);
+  const form = new FormData();
+  const name = fileName || file.name;
+  if (name) form.append('file', file, name);
+  else form.append('file', file);
+  try {
+    const res = await fetch(`${base}/sws/neo/attachments/${tableName}/${recordId}`, {
+      method: 'POST',
+      credentials: 'include',
+      // No Content-Type header — the browser must set the multipart boundary.
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { ok: false, error: text || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'upload_failed' };
+  }
+}
+
+/**
+ * Delete a single attachment. Never throws — returns `{ ok }` like its siblings.
+ *
+ * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
+export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {}) {
+  if (!token || !attachmentId) return { ok: false, error: 'missing_params' };
+  const base = detectAttachmentsBase(apiBaseUrl);
+  try {
+    const res = await fetch(`${base}/sws/neo/attachments/file/${attachmentId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { ok: false, error: text || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'delete_failed' };
+  }
+}
+
+/**
  * Download a single attachment as a Blob URL. Caller is responsible for
  * `URL.revokeObjectURL` when the document unmounts to avoid leaking memory.
  * Returns null on any failure so callers can short-circuit gracefully.

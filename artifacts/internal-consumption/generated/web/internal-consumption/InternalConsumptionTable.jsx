@@ -5,7 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, dot: false },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'DR': 'Draft', 'CO': 'Completed', 'VO': 'Voided' }, required: true },
+  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'DR': 'statusDr', 'CO': 'statusCo', 'VO': 'statusVo' }, required: true },
 ];
 // @sf-generated-end columns:internalConsumption
 

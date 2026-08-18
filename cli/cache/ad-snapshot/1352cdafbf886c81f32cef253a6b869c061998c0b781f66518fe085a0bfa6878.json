@@ -2179,6 +2179,128 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "1e41d8c65c9ff5197f168f5ea3fb6c09a946f5e8e5b93537f1f6ed486ecab540",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "77F85D5BBEEB48F48FEBD08BEE4E5AF7",
+          "code": "C_Calendar_ID IN (SELECT EM_INTR_C_Calendar_ID FROM AD_ORG WHERE AD_ORG_ID=@AD_ORG_ID@)",
+          "columnname": "C_Year_ID",
+          "name": "Years of the Intrastat Calendar"
+        },
+        {
+          "ad_val_rule_id": "A010900931E241E9AF9126EE0754BD24",
+          "code": "(C_TAX.SOPOTYPE = 'S' OR C_TAX.SOPOTYPE = 'B') AND C_TAX.ISTAXEXEMPT = 'Y' AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0')",
+          "columnname": "C_Tax_ID",
+          "name": "SalesTaxExemptRate"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "4fd3136dfc1f9742c1fb0edf511ad761b7c64741715b1baf8ee52f167ff0a9b0",
       "params": [
