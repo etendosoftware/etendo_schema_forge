@@ -28,7 +28,10 @@ const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0'
   && Boolean(process.env.E2E_PASSWORD || onboardingCredentials);
 const RUN_CROSS_CLIENT = RUN_INTEGRATION && Boolean(secondAdminCredentials);
 const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025';
-const PASSWORD = 'E2E.Invitation.Password1!';
+const PASSWORD = process.env.E2E_INVITATION_PASSWORD
+  || onboardingCredentials?.password
+  || secondAdminCredentials?.password
+  || process.env.E2E_PASSWORD;
 
 function uniqueEmail(label) {
   return `e2e-${label}-${Date.now()}@example.com`;
