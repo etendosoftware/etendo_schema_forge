@@ -113,7 +113,7 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getLatestInstallmentDueDate: () => null,
 }));
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import InvoicePreview from '../InvoicePreview.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
@@ -504,8 +504,8 @@ describe('InvoicePreview', () => {
   // which is what tells the hosting list view to refresh the grid row. Mirrors
   // the already-correct SifSendingModal.onAfterSend pattern in this same file.
   describe('payment modal onSaved refetches the invoice (ETP-4832)', () => {
-    it('calls refetchInvoice (not just fetchPayments) when a payment/collection is saved', () => {
-      const refetchInvoice = vi.fn();
+    it('calls refetchInvoice (not just fetchPayments) when a payment/collection is saved', async () => {
+      const refetchInvoice = vi.fn().mockResolvedValue(undefined);
       const fetchPayments = vi.fn();
       useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
         showPaymentModal: true,
@@ -515,7 +515,9 @@ describe('InvoicePreview', () => {
       }));
 
       renderInvoicePreview();
-      fireEvent.click(screen.getByText('save payment'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('save payment'));
+      });
 
       expect(refetchInvoice).toHaveBeenCalled();
       expect(fetchPayments).toHaveBeenCalled();
