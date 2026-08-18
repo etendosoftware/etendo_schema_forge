@@ -129,6 +129,7 @@ function build(args) {
     token: args.token,
     extractErrorMessage: args.extractErrorMessage,
     ui: args.ui,
+    fields: args.fields,
   });
 }
 
@@ -304,6 +305,65 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     const body = lastFetchBody();
     expect('notes' in body).toBe(false);
     expect('kept' in body).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4886 — `fields` (addLineFields.entry) tells the coercer which keys are
+// backed by an `_ID` column, so a numeric-looking sentinel (e.g. the
+// attributeSetValue "0") is PATCHed as a string, not silently turned into a
+// Number that NEO Headless rejects with 400.
+// ---------------------------------------------------------------------------
+describe('buildInlineRowUpdateHandler — _ID column coercion (ETP-4886)', () => {
+  const ATTRIBUTE_SET_FIELDS = [
+    { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+    { key: 'unitPrice', column: 'PriceActual' },
+  ];
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue(okResponse());
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete global.fetch;
+  });
+
+  it('PATCHes the changed _ID-backed field as a string, not a Number, when fields metadata is provided', async () => {
+    const args = makeArgs({ fields: ATTRIBUTE_SET_FIELDS });
+    const handler = build(args);
+    await handler({ id: 'L1' }, 'attributeSetValue', '0', {});
+
+    const body = lastFetchBody();
+    expect(body.attributeSetValue).toBe('0');
+    expect(typeof body.attributeSetValue).toBe('string');
+  });
+
+  it('still coerces a genuinely numeric, non-_ID field to a Number alongside the untouched _ID field', async () => {
+    const args = makeArgs({ fields: ATTRIBUTE_SET_FIELDS });
+    const handler = build(args);
+    await handler(
+      { id: 'L1', attributeSetValue: '0' },
+      'unitPrice',
+      '12.5',
+      {},
+    );
+
+    const body = lastFetchBody();
+    expect(body.unitPrice).toBe(12.5);
+    expect(typeof body.unitPrice).toBe('number');
+    expect(body.attributeSetValue).toBe('0');
+    expect(typeof body.attributeSetValue).toBe('string');
+  });
+
+  it('without fields metadata (legacy call), the same _ID-like value is coerced to a Number — the pre-fix (buggy) behavior', async () => {
+    const args = makeArgs(); // no `fields` override -> undefined
+    const handler = build(args);
+    await handler({ id: 'L1' }, 'attributeSetValue', '0', {});
+
+    const body = lastFetchBody();
+    expect(body.attributeSetValue).toBe(0);
+    expect(typeof body.attributeSetValue).toBe('number');
   });
 });
 

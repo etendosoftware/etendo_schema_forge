@@ -109,19 +109,19 @@ export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
   return null;
 }
 
-export function normalizePatchFieldValues(patchEdits, fieldValues) {
+/**
+ * `fields` (addLineFields entry list, `{ key, column, ... }`) is optional so
+ * existing callers/tests that don't have field metadata handy keep the prior
+ * blanket numeric-string coercion. When provided, `_ID`-backed columns are
+ * left as strings — see buildRowValueCoercer for the full rationale (ETP-4886).
+ */
+export function normalizePatchFieldValues(patchEdits, fieldValues, fields) {
+  const coerce = buildRowValueCoercer(fields);
   for (const [k, v] of Object.entries(patchEdits)) {
     if (k.endsWith('$_identifier')) continue;
     // NEO Headless PATCH expects camelCase API keys, not DB column names.
     // Always use k (the API key) as the field name.
-    // Convert numeric strings to numbers for BigDecimal compatibility.
-    // Only strip when the value is already in standard format (no commas).
-    // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-    if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-      fieldValues[k] = parseFloat(v);
-    } else {
-      fieldValues[k] = v;
-    }
+    fieldValues[k] = coerce(v, k);
   }
 }
 
@@ -277,8 +277,36 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
     if (k.endsWith('$_identifier')) continue;
     // Skip internal markers and metadata that aren't valid fields.
     if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
-    fieldValues[k] = coerce(v);
+    fieldValues[k] = coerce(v, k);
   }
+}
+
+/**
+ * ETP-4886 — builds a `coerce(value, key)` function for the inline-line PATCH
+ * flow (DetailView's `buildInlineRowUpdateHandler`). NEO Headless expects
+ * numeric-looking strings coerced to Number for BigDecimal/Integer columns,
+ * but every `_ID` column is ALWAYS a string by repo convention (see
+ * CLAUDE.md "Etendo AD Database Conventions") even when its value looks
+ * numeric — e.g. `attributeSetValue` (backed by `M_AttributeSetInstance_ID`)
+ * uses the sentinel `"0"` for "no attribute set". Blindly regex-coercing that
+ * to `Number 0` makes NEO reject the PATCH with 400 (it expects a
+ * JSONObject/string there, not a number).
+ *
+ * `fields` is the addLineFields entry list (`{ key, column, ... }`); each
+ * field's `column` is the real AD DB column backing it, which is the most
+ * reliable signal already available on the field object — `type` there is
+ * the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or
+ * `discount` render as `type: 'text'`), so it can't be used to distinguish
+ * IDs from amounts. A key with no matching field (not in `fields`) falls
+ * back to the original numeric-looking heuristic to avoid regressing any
+ * coercion path this fix doesn't have field metadata for.
+ */
+export function buildRowValueCoercer(fields) {
+  const fieldsByKey = new Map((fields || []).map(f => [f.key, f]));
+  const isIdColumn = (key) => /_ID$/i.test(fieldsByKey.get(key)?.column || '');
+  return (v, key) => (
+      typeof v === 'string' && !isIdColumn(key) && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v
+  );
 }
 
 /**
