@@ -41,16 +41,6 @@ test.describe('Onboarding — Register new user (integration)', () => {
   );
 
   test('registers a new user, selects Autónomo, and verifies greeting', async ({ page }) => {
-    // Known pre-existing backend bug, inherited from epic/ETP-3504 (not introduced by this
-    // branch — schema_forge's diff against the epic is frontend-only and touches nothing here).
-    // Organization creation during onboarding throws IndexOutOfBoundsException in Etendo core:
-    //   org.openbravo.erpCommon.businessUtility.InitialSetupUtility.getTreeNode (line ~2121)
-    //   calls obcTreeNode.list().get(0) on an empty result — no AD_TreeNode exists yet for the
-    //   new client's star organization in its Org tree.
-    // Likely root cause: OnboardingRoleProvisioningService (the epic's replacement for the
-    // deleted CreateClientStep/CreateOrgStep) no longer inserts that root tree node during
-    // client/org bootstrap. Tracked for a fix in com.etendoerp.go; re-enable once resolved.
-    test.fixme(true, 'Epic/ETP-3504 bug: missing root AD_TreeNode for new org — see comment above.');
     const suffix = uniqueSuffix();
     const userName = `E2E User ${suffix}`;
     const userEmail = `e2e-${suffix}@test-onboarding.com`;

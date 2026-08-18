@@ -66,12 +66,6 @@ test.describe('Sales Order — Happy path (integration)', () => {
   );
 
   test('creates an order, confirms with invoice, then confirms the invoice', async ({ page }) => {
-    // Known pre-existing backend issue, inherited from epic/ETP-3504 (unrelated to this branch —
-    // schema_forge's diff against the epic is frontend-only support-chat work). The product
-    // search selector (data-testid^="product-search-option-") never returns results when adding
-    // a line. Reproduced consistently across repeated runs (not load-related flakiness).
-    // Re-enable once fixed upstream.
-    test.fixme(true, 'Epic/ETP-3504 bug: product search selector returns no options — see comment above.');
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 

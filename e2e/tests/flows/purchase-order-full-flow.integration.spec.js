@@ -42,12 +42,6 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
   );
 
   test('PO → receipt → invoice → payment (full purchasing cycle)', async ({ page }) => {
-    // Known pre-existing backend issue, inherited from epic/ETP-3504 (unrelated to this branch —
-    // schema_forge's diff against the epic is frontend-only support-chat work). The "Guardar"
-    // button (data-testid=action-save-draft) never becomes enabled when submitting an empty PO
-    // with no BP/warehouse, so the click times out. Reproduced consistently across repeated runs
-    // (not load-related flakiness). Re-enable once fixed upstream.
-    test.fixme(true, 'Epic/ETP-3504 bug: action-save-draft stays disabled on empty PO submit — see comment above.');
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
