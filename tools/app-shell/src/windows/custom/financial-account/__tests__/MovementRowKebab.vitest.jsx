@@ -58,7 +58,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 import { render, screen, waitFor } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
 
@@ -74,6 +74,10 @@ function renderKebab(movement, overrides = {}) {
 
 describe('MovementRowKebab — Post action', () => {
   beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on: the builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();
@@ -224,6 +228,10 @@ describe('MovementRowKebab — Post action', () => {
 
 describe('MovementRowKebab — Unpost action', () => {
   beforeEach(() => {
+    // Declared here too: this is a sibling describe, so the declaration in the
+    // Post-action block does not reach it, and src/test/setup.js resets the scheme
+    // to the bearer default before every single test.
+    declareCookieSession();
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();

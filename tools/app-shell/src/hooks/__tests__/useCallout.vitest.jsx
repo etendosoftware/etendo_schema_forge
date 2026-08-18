@@ -20,7 +20,7 @@ beforeEach(() => {
 
 
 describe('useCallout', () => {
-  const opts = { csrfToken: 'test-csrf', apiBaseUrl: 'http://localhost/api' };
+  const opts = { apiBaseUrl: 'http://localhost/api' };
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -236,8 +236,14 @@ describe('useCallout', () => {
       json: async () => ({ updates: {}, combos: {}, messages: [] }),
     });
 
+    // The absence of a proof is a property of the SESSION now, not of a hook
+    // option: the hook never sees the credential, it only asks the builders for
+    // headers. Declaring a cookie session with an empty proof is what the real
+    // "authenticated, proof has not landed yet" window looks like.
+    declareCookieSession('');
+
     const { result } = renderHook(() =>
-      useCallout('header', { csrfToken: '', apiBaseUrl: 'http://localhost' })
+      useCallout('header', { apiBaseUrl: 'http://localhost' })
     );
 
     act(() => {
@@ -354,7 +360,7 @@ describe('useCallout', () => {
 
   it('does not call fetch when entity is missing', () => {
     const { result } = renderHook(() =>
-      useCallout('', { csrfToken: 'tok', apiBaseUrl: 'http://localhost' })
+      useCallout('', { apiBaseUrl: 'http://localhost' })
     );
 
     act(() => {
@@ -370,7 +376,7 @@ describe('useCallout', () => {
 
   it('does not call fetch when apiBaseUrl is missing', () => {
     const { result } = renderHook(() =>
-      useCallout('header', { csrfToken: 'tok', apiBaseUrl: '' })
+      useCallout('header', { apiBaseUrl: '' })
     );
 
     act(() => {

@@ -9,7 +9,7 @@
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // react-router-dom: capture the navigate mock so we can assert the back button.
@@ -157,6 +157,10 @@ function rowCount() {
 }
 
 beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on: the builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
   neoState.data = [];
   neoState.loading = false;
   neoState.reload = vi.fn();

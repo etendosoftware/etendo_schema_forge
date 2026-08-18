@@ -5,10 +5,14 @@ vi.mock('@/auth/AuthContext.jsx', async () =>
 
 configureAuthMock({ username: 'testuser', isAuthenticated: true, csrfToken: 'csrf-abc' });
 
-// Mirrors the post-ETP-4576 core signature: buildHeaders() takes no argument and
-// never emits an Authorization header.
-vi.mock('@/auth/api.js', () => ({
-  buildHeaders: () => ({ 'Content-Type': 'application/json' }),
+// Only the base URL is stubbed. The header builders are deliberately left REAL:
+// a mock that hardcodes them pins whatever the credential scheme happened to be
+// when it was written, so the suite could never catch a builder that ignores the
+// active scheme — which is the bug this whole task exists to prevent. That is
+// exactly what the previous mock did: it hardcoded a credential-less
+// buildHeaders, so it kept passing while the real one went unauthenticated.
+vi.mock('@/auth/api.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   detectBaseUrl: () => 'http://localhost',
 }));
 
@@ -16,7 +20,7 @@ vi.mock('@/auth/api.js', () => ({
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { FavoritesProvider, useFavorites } from '../FavoritesContext.jsx';
 
 // --- Helpers ---
@@ -33,6 +37,13 @@ function putCalls() {
 
 describe('FavoritesContext', () => {
   beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on. The builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    // This suite's fixture uses its own proof value, so the declared scheme must
+    // carry the same one — setup.js publishes the mock baseline first, and the
+    // declaration below is what wins.
+    declareCookieSession('csrf-abc');
     localStorage.clear();
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

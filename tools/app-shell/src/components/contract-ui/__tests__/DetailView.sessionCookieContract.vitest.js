@@ -124,14 +124,19 @@ describe('DetailView.jsx — every request carries the session cookie', () => {
 
 // The header literals are NOT built at the call sites: `lib/sessionHeaders.js`
 // owns the single definition of both builders, so what each site must prove is
-// that it reaches for the RIGHT one. `writeHeaders(csrfToken)` emits the guarded
-// proof, `jsonHeaders()` never does — the omit-when-falsy behaviour itself is
-// covered where it lives, in `hooks/__tests__/financialAccountHttp.vitest.js`,
-// which exercises the same re-exported functions.
-const WRITE_BUILDER = /headers:\s*writeHeaders\(\s*csrfToken\s*\)/;
+// that it reaches for the RIGHT one. `writeHeaders()` emits whatever proof the
+// active scheme requires on an unsafe method, `jsonHeaders()` never does.
+//
+// ETP-4576 — neither builder takes the credential as an ARGUMENT any more. They
+// read the scheme the preference selected, which is what lets one DB switch flip
+// the whole app between the bearer token and the `__Host-` session cookie. That
+// is why the assertions below are about which builder is called, and never about
+// what is passed to it: a call site that names a credential is, by construction,
+// a call site that can disagree with the active scheme.
+const WRITE_BUILDER = /headers:\s*writeHeaders\(\s*\)/;
 const READ_BUILDER = /headers:\s*jsonHeaders\(\s*\)/;
 
-describe('DetailView.jsx — CSRF proof only on unsafe methods', () => {
+describe('DetailView.jsx — the write proof only on unsafe methods', () => {
   for (const call of unsafeCalls) {
     it(`is handed the write builder — ${at(call)}`, () => {
       expect(call.text).toMatch(WRITE_BUILDER);
@@ -149,8 +154,8 @@ describe('DetailView.jsx — CSRF proof only on unsafe methods', () => {
   }
 
   it('asserts the asymmetry in one place: an unsafe site takes the write builder, a GET site does not', () => {
-    // Requirement (3): the two halves of the branch, side by side, so neither a
-    // blanket "always send it" nor a blanket "never send it" implementation can pass.
+    // The two halves of the branch, side by side, so neither a blanket "always
+    // send it" nor a blanket "never send it" implementation can pass.
     const oneUnsafe = unsafeCalls[0];
     const oneSafe = safeCalls[0];
     expect(oneUnsafe.text).toMatch(WRITE_BUILDER);
@@ -161,6 +166,14 @@ describe('DetailView.jsx — CSRF proof only on unsafe methods', () => {
     expect(oneSafe.text).toMatch(/credentials:\s*['"]include['"]/);
     expect(oneUnsafe.text).not.toMatch(/Authorization/);
     expect(oneSafe.text).not.toMatch(/Authorization/);
+  });
+
+  it('passes no argument to either builder, at any site', () => {
+    // The whole point of the preference. A site that hands the builder a
+    // credential has pinned a scheme, and flipping the preference would leave it
+    // sending the wrong one — or nothing at all.
+    expect(codeOnly).not.toMatch(/writeHeaders\(\s*[^)\s]/);
+    expect(codeOnly).not.toMatch(/jsonHeaders\(\s*[^)\s]/);
   });
 
   it('imports both builders from the shared module', () => {
@@ -178,23 +191,45 @@ describe('DetailView.jsx — CSRF proof only on unsafe methods', () => {
   });
 });
 
-describe('DetailView.jsx — the credential source', () => {
-  it('reads the auth context exactly once', () => {
-    // useAuth() belongs in the DetailView component body only. A second read
-    // means it leaked into one of the exported helper factories, which 15 test
-    // files call WITHOUT mounting the component — that would break all of them.
-    const reads = codeOnly.match(/useAuth\s*\(/g) ?? [];
-    expect(reads.length).toBe(1);
+// This describe used to pin the OPPOSITE invariant: that DetailView read the
+// proof from context and threaded it into all five exported helpers, with one
+// test per hand-off. That design existed for a real reason — the helpers are
+// called by 15 test files without mounting the component, so they could not call
+// a hook — and the threading was the only way to get the proof to them.
+//
+// The shared builders removed that constraint: they are plain functions over
+// module state, not hooks, so a helper can call one directly. Which makes the
+// threading not just unnecessary but harmful — five hand-offs are five places a
+// credential can go missing, and the old suite needed five tests to watch them.
+// The invariant below replaces all of it, and is strictly stronger: if nothing in
+// the file names a credential, there is no hand-off left to break.
+describe('DetailView.jsx — nothing here decides how a request authenticates', () => {
+  it('never reads the auth context', () => {
+    expect(codeOnly).not.toMatch(/useAuth\s*\(/);
   });
 
-  it('imports useAuth from the auth context module', () => {
-    expect(codeOnly).toMatch(/import\s*\{[^}]*\buseAuth\b[^}]*\}\s*from\s*['"]@\/auth\/AuthContext(\.jsx)?['"]/);
+  it('does not import useAuth at all', () => {
+    // Not just unused — absent. A live import is an invitation to reintroduce the
+    // read, and an unused one is a Sonar S1128 violation besides.
+    expect(codeOnly).not.toMatch(/\buseAuth\b/);
   });
 
-  it('threads the proof into the helper factories as csrfToken', () => {
-    // The five exported helpers must receive the proof as a plain option, NOT
-    // read it from context themselves.
-    expect(codeOnly).toMatch(/csrfToken/);
+  it('names no CSRF proof anywhere in the module', () => {
+    // The single assertion that replaces the five hand-off tests. Verified with an
+    // AST reference count, not this regex alone: 38 references across 3
+    // declarations in this file went to zero.
+    //
+    // Deliberately scoped to csrfToken. A bare `token` IS still threaded through
+    // this file (a `token={token}` prop on SecondaryTableTab and its readers) —
+    // dead plumbing of the same kind, left over from the bearer scheme, which the
+    // builders no longer consult. Removing it is a separate sweep with its own
+    // call-site fan-out, so this test does not claim it is done: widen the
+    // assertion to /\btoken\b/ as the last step of that sweep and it should pass
+    // unchanged.
+    expect(codeOnly).not.toMatch(/\bcsrfToken\b/);
+  });
+
+  it('passes no credential into any of the five exported helper factories', () => {
     for (const helper of [
       'getSecondaryRowUpdateHandler',
       'buildSecondaryLineHandlers',
@@ -206,46 +241,8 @@ describe('DetailView.jsx — the credential source', () => {
         new RegExp(`(export\\s+)?(async\\s+)?function\\s+${helper}\\s*\\(([\\s\\S]*?)\\)\\s*\\{`),
       );
       expect(decl, `expected a declaration for ${helper}`).toBeTruthy();
-      expect(decl[3], `${helper} must not destructure a bare token`).not.toMatch(/\btoken\b/);
+      expect(decl[3], `${helper} must not take a credential`).not.toMatch(/\btoken\b/);
+      expect(decl[3], `${helper} must not take a credential`).not.toMatch(/\bcsrfToken\b/);
     }
-  });
-});
-
-// Everything above proves each fetch site *spells* writeHeaders(csrfToken), and
-// that the helpers honour the proof when handed one. None of it proves the proof
-// ARRIVES: the helper suites call the helpers directly with their own deps, so
-// deleting a hand-off in DetailView leaves 5 of the 6 helper sites sending no
-// X-Go-CSRF — a 403 on every one — with the whole suite green. That is the exact
-// failure mode ETP-4576 exists to remove, so each hand-off is pinned here.
-//
-// Only `detailProcessDeps` was already covered, by DetailView.detailProcesses'
-// mounted flow. A behavioural test for the other four would have to drive inline
-// JSX arrow props through long interaction flows that do not exist today; those
-// stay in the named-gap bucket. This is the textual complement.
-describe('DetailView.jsx — the proof reaches every consumer', () => {
-  const HANDOFFS = [
-    ['SecondaryTableTab render', /<SecondaryTableTab\b[\s\S]*?\/>/],
-    ['buildSecondaryLineHandlers call', /buildSecondaryLineHandlers\(\{[\s\S]*?\}\)/],
-    ['buildInlineRowUpdateHandler call', /buildInlineRowUpdateHandler\(\{[^}]*\}\)/],
-    ['buildDeleteRowHandler call', /buildDeleteRowHandler\(\{[^}]*\}\)/],
-    ['detailProcessDeps object', /detailProcessDeps\s*=\s*\{[^}]*\}/],
-  ];
-
-  for (const [label, pattern] of HANDOFFS) {
-    it(`passes csrfToken at the ${label}`, () => {
-      const match = codeOnly.match(pattern);
-      expect(match, `expected to find the ${label}`).toBeTruthy();
-      expect(match[0], `the ${label} must forward csrfToken`).toMatch(/\bcsrfToken\b/);
-    });
-  }
-
-  it('hands the proof to getSecondaryRowUpdateHandler through the tab ctx', () => {
-    // SecondaryTableTab is the one exported sub-component that needs the proof.
-    // It cannot call useAuth (15 test files render it unprovided), so it takes a
-    // prop and forwards it into the ctx this handler destructures.
-    // Anchored on `props.` so this matches the call site, not the declaration.
-    const ctx = codeOnly.match(/getSecondaryRowUpdateHandler\(\s*props\.[\s\S]*?\}\)/);
-    expect(ctx, 'expected the getSecondaryRowUpdateHandler call site').toBeTruthy();
-    expect(ctx[0]).toMatch(/csrfToken:\s*props\.csrfToken/);
   });
 });

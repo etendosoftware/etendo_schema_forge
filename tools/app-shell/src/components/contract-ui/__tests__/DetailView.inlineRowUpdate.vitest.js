@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { CREDENTIAL_MODES, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
 import { declareCookieSession } from '@/test/sessionContract.js';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
@@ -215,10 +216,15 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
   });
 
   for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
-    it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+    it(`omits X-Go-CSRF entirely when the session's proof is ${label}`, async () => {
       // A session can be authenticated before the CSRF proof lands. The header
       // must be absent, never present with an empty/undefined value.
-      const handler = build(makeArgs({ csrfToken: value }));
+      // Published directly rather than through declareCookieSession: that helper
+      // defaults its argument, so `undefined` would silently become the real test
+      // proof and this case would assert nothing. The credential no longer travels
+      // through the deps bag — it is a property of the declared session.
+      setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken: value });
+      const handler = build(makeArgs());
       await handler({ id: 'L1' }, 'description', 'Hello', {});
 
       const [, opts] = global.fetch.mock.calls[0];

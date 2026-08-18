@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { CREDENTIAL_MODES, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
 import { declareCookieSession } from '@/test/sessionContract.js';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { createElement as h } from 'react';
@@ -210,8 +211,13 @@ describe('getSecondaryRowUpdateHandler', () => {
     });
 
     for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
-      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
-        const init = await runPatch({ csrfToken: value });
+      it(`omits X-Go-CSRF entirely when the session's proof is ${label}`, async () => {
+        // Published directly rather than through declareCookieSession: that helper
+        // defaults its argument, so `undefined` would silently become the real test
+        // proof and this case would assert nothing. The credential no longer travels
+        // through the deps bag — it is a property of the declared session.
+        setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken: value });
+        const init = await runPatch({});
         expect('X-Go-CSRF' in init.headers).toBe(false);
         expect(init.credentials).toBe('include');
         expect('Authorization' in init.headers).toBe(false);

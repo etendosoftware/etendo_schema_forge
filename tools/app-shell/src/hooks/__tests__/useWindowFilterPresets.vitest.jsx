@@ -18,16 +18,18 @@ vi.mock('@/auth/AuthContext.jsx', async () =>
 
 configureAuthMock({ isAuthenticated: true, csrfToken: 'csrf-abc' });
 
-// Mirrors the post-ETP-4576 core signature: buildHeaders() takes no argument and
-// never emits an Authorization header.
-vi.mock('@/auth/api.js', () => ({
-  buildHeaders: () => ({ 'Content-Type': 'application/json' }),
+// Only the base URL is stubbed — the header builders stay REAL, so this suite
+// actually exercises the active credential scheme. See the same note in
+// FavoritesContext.vitest.jsx: a mock that hardcodes the builders cannot detect a
+// builder that ignores the scheme.
+vi.mock('@/auth/api.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   detectBaseUrl: () => 'https://base',
 }));
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { useWindowFilterPresets } from '../useWindowFilterPresets.js';
 
 function callByMethod(method) {
@@ -35,6 +37,12 @@ function callByMethod(method) {
 }
 
 beforeEach(() => {
+  // ETP-4576 — declare the scheme this suite asserts on. The builders read the
+  // active scheme, and src/test/setup.js resets it to the bearer default before
+  // every test, so a suite expecting the CSRF proof has to say so. The proof value
+  // matches this suite's own fixture: setup.js publishes the mock baseline first,
+  // and this declaration is what wins.
+  declareCookieSession('csrf-abc');
   globalThis.fetch = vi.fn();
 });
 

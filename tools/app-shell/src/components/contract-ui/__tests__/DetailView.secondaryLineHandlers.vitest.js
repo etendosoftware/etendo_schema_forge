@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { CREDENTIAL_MODES, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
 import { declareCookieSession } from '@/test/sessionContract.js';
 
 // ---------------------------------------------------------------------------
@@ -419,8 +420,13 @@ describe('buildSecondaryLineHandlers — session-cookie contract', () => {
     });
 
     for (const [label, value] of MISSING_PROOFS) {
-      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
-        await runSave({ csrfToken: value });
+      it(`omits X-Go-CSRF entirely when the session's proof is ${label}`, async () => {
+        // Published directly rather than through declareCookieSession: that helper
+        // defaults its argument, so `undefined` would silently become the real test
+        // proof and this case would assert nothing. The credential no longer travels
+        // through the deps bag — it is a property of the declared session.
+        setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken: value });
+        await runSave({});
         const init = lastInit();
         expect('X-Go-CSRF' in init.headers).toBe(false);
         expect(init.credentials).toBe('include');
@@ -457,8 +463,13 @@ describe('buildSecondaryLineHandlers — session-cookie contract', () => {
     });
 
     for (const [label, value] of MISSING_PROOFS) {
-      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
-        await runDelete({ csrfToken: value });
+      it(`omits X-Go-CSRF entirely when the session's proof is ${label}`, async () => {
+        // Published directly rather than through declareCookieSession: that helper
+        // defaults its argument, so `undefined` would silently become the real test
+        // proof and this case would assert nothing. The credential no longer travels
+        // through the deps bag — it is a property of the declared session.
+        setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken: value });
+        await runDelete({});
         const init = lastInit();
         expect('X-Go-CSRF' in init.headers).toBe(false);
         expect(init.credentials).toBe('include');

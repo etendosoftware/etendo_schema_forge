@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 // --- Global stubs for browser APIs not available in jsdom -----------------
 
@@ -61,6 +61,10 @@ function renderModal(overrides = {}) {
 
 describe('LocationEditorModal', () => {
   beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on: the builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
     setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} });
     global.fetch = vi.fn(() =>
       Promise.resolve({

@@ -13,6 +13,7 @@
  * vi.fn() with mockReturnValueOnce, which would decay mid-render.
  */
 import { render, screen, within, act, waitFor } from '@testing-library/react';
+import { declareCookieSession } from '@/test/sessionContract.js';
 import { setAuthMock } from '@/test/authContextMock.js';
 import userEvent from '@testing-library/user-event';
 
@@ -81,6 +82,10 @@ function setup(props = {}) {
 
 describe('RowQuickActions', () => {
   beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on: the builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
     docActionExecuteMock.mockClear();
     docActionOptions.length = 0;
     docActionLoadingFlag = false;

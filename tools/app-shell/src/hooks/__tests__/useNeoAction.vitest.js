@@ -23,7 +23,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderHook, act } from '@testing-library/react';
@@ -56,6 +56,10 @@ describe('useNeoAction', () => {
   };
 
   beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on. The builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
     globalThis.fetch = vi.fn();
   });
 
@@ -361,9 +365,14 @@ describe('useNeoAction — source contract', () => {
     expect(codeOnly).toMatch(/credentials:\s*['"]include['"]/);
   });
 
-  it('reads the CSRF proof from the auth context', () => {
-    expect(codeOnly).toMatch(/useAuth/);
-    expect(codeOnly).toMatch(/csrfToken/);
+  it('reads no credential at all — the shared builders own that decision', () => {
+    // Inverted in ETP-4576. The hook used to read `useAuth().csrfToken` and paste
+    // it into a header, which pinned it to the cookie scheme: with the preference
+    // off it would have sent a meaningless CSRF header and no bearer token. Now it
+    // asks writeHeaders() for headers and never learns what authenticates them.
+    expect(codeOnly).not.toMatch(/useAuth/);
+    expect(codeOnly).not.toMatch(/csrfToken/);
+    expect(codeOnly).toMatch(/writeHeaders\(\s*\)/);
   });
 
   it('no longer names a bare `token` identifier — the option is gone', () => {

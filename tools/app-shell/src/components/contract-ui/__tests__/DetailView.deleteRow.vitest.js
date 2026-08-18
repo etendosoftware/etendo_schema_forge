@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { declareCookieSession } from '@/test/sessionContract.js';
+import { CREDENTIAL_MODES, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
 // hooks, sub-components, lib helpers). Mirror the mocks used by the sibling
@@ -115,9 +116,6 @@ function makeArgs(overrides = {}) {
     isDocumentReadOnly: false,
     confirmDelete: vi.fn().mockResolvedValue(true),
     apiBaseUrl: 'https://x/api',
-    // ETP-4576 — the credential is gone: DetailView reads the CSRF proof from
-    // the auth context and threads only that down into this factory.
-    csrfToken: 'test-csrf',
     hook: { handleDeleteChild: vi.fn() },
     selectedLine: null,
     setSelectedLine: vi.fn(),
@@ -134,7 +132,6 @@ function build(args) {
     isDocumentReadOnly: args.isDocumentReadOnly,
     confirmDelete: args.confirmDelete,
     apiBaseUrl: args.apiBaseUrl,
-    csrfToken: args.csrfToken,
     // Hostile input: a caller that still threads the dead credential. Passed
     // through verbatim so a leftover `token` can never reach the wire.
     token: args.token,
@@ -220,10 +217,15 @@ describe('buildDeleteRowHandler — DELETE behavior', () => {
   });
 
   for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
-    it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+    it(`omits X-Go-CSRF entirely when the session's proof is ${label}`, async () => {
       // A session can be authenticated before the CSRF proof lands. The header
       // must be absent, never present with an empty/undefined value.
-      const handler = build(makeArgs({ csrfToken: value }));
+      //
+      // Published directly rather than through declareCookieSession: that helper
+      // defaults its argument, so `undefined` would silently become the real test
+      // proof and this case would assert nothing.
+      setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken: value });
+      const handler = build(makeArgs());
       await handler({ id: 'L1' });
 
       const [, opts] = global.fetch.mock.calls[0];

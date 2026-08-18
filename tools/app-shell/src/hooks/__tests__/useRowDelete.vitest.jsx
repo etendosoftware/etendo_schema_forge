@@ -24,8 +24,11 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
-vi.mock('@/auth/api', () => ({
-  buildHeaders: (token) => ({ Authorization: `Bearer ${token}` }),
+// The header builders are left REAL. The previous mock hardcoded the pre-ETP-4576
+// bearer shape, which meant this suite asserted a credential scheme the code no
+// longer used — and would have kept passing no matter what the real builders did.
+vi.mock('@/auth/api', async (importOriginal) => ({
+  ...(await importOriginal()),
 }));
 
 vi.mock('@/hooks/useEntity', () => ({

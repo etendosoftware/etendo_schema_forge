@@ -14,7 +14,7 @@
  */
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 vi.mock('@/auth/AuthContext.jsx', async () =>
   (await import('@/test/authContextMock.js')).authContextMock);
@@ -47,6 +47,10 @@ function setPathname(pathname) {
 }
 
 beforeEach(() => {
+    // ETP-4576 — declare the scheme this suite asserts on. The builders read the
+    // active scheme, and src/test/setup.js resets it to the bearer default before
+    // every test, so a suite expecting the CSRF proof has to say so.
+    declareCookieSession();
   setPathname('/etendo/web/app');
   setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf' });
   globalThis.fetch = vi.fn();
