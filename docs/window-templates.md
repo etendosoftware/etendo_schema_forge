@@ -2,6 +2,12 @@
 
 Windows can opt into alternative layouts by setting `layoutType` in `schema-curated.json` (`window` object).
 
+> **Not every screen is a window.** Everything below (including `layoutType: "custom"`) assumes
+> the screen has a real AD Window backing it — a `decisions.json`, an `artifacts/{name}/`
+> directory, and (usually) an `ETGO_SF_SPEC` row, resolved through `windows/registry.js`. If the
+> screen has none of that, see **Standalone Pages (No AD Window)** below instead — it is a
+> different mechanism, not a `layoutType`.
+
 ## Layout Types
 
 | `layoutType` | Behavior |
@@ -158,3 +164,46 @@ Generated <Window>LineTable.jsx switches at runtime:
 `InlineLinesPanel` lives in `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx`.
 Validator F11 enforces the enum. Default is `"classic"`, so windows that don't opt in are
 unaffected by the new component.
+
+## Standalone Pages (No AD Window)
+
+Not every screen in `tools/app-shell` corresponds to an AD Window. A handful of screens are
+**hand-built standalone pages** that bypass the AD-extraction pipeline entirely:
+
+- No `decisions.json`, no `artifacts/{name}/` directory, no `ETGO_SF_SPEC` row.
+- Not registered in `tools/app-shell/src/windows/registry.js` (neither `windowLoaders` nor
+  `customLoaders`) and never resolved through `WindowLoader.jsx`'s `:windowName` route.
+- Routed instead via `tools/app-shell/src/runtime-routes.jsx`'s `lazyRoute(path, Component)`
+  helper, alongside the shell's other fixed routes (`/dashboard`, `/oauth2-clients`, etc.).
+
+**This is a different mechanism from `layoutType: "custom"`.** A `"custom"`-layout window (e.g.
+`fiscal-monitor`, `fiscal-models` — see `docs/generated-custom-windows/INDEX.md` → Settings) is
+still a real AD-backed window: it has its own `decisions.json` and `artifacts/{name}/` directory,
+and the pipeline still generates its scaffold under `windows/custom/{name}/` — only the
+list/detail rendering is hand-written on top. A standalone page has none of that; it is not a
+"window" in the pipeline's sense at all, so `sf-validate-pipeline` and `make regen` never touch
+it.
+
+**Established by ETP-4513** ("Configuración > Roles", `RolesOverviewPage.jsx`) and reused since by
+`OAuth2ClientsPage`, `SmartScanPage`, `AppStorePage`, `UpgradePage`,
+`QuickSalesOrderPage`/`QuickPurchaseOrderPage` — see `runtime-routes.jsx` for the current list.
+Reach for this pattern when a screen has **no corresponding AD Window/Process at all** — a pure
+app-shell feature (a settings screen, an onboarding wizard, a dashboard that aggregates several
+unrelated specs) that doesn't map to one AD entity, so forcing it through `decisions.json`/the
+generator would add ceremony with no real contract behind it.
+
+**Data access:** a standalone page typically calls a purpose-built webhook (e.g.
+`SFRolesOverview`, `SFListMenu` — see `../modules/com.etendoerp.go/docs/neo-headless.md` §8) via
+the NEO pseudo-spec bridge, rather than the generic NEO CRUD **W**-spec convention real windows
+use.
+
+**Access gating is UX-only, never the source of truth.** The route itself carries no access
+check; visibility is controlled client-side by the page's `menu.json` entry — either a
+`"capability"` flag resolved against `SFWindowAccessMap` (e.g. `isAdminOrClientAdmin` for
+`/roles`, checked by `registry.js`'s `filterMenuGroupsByAccess`) or a feature flag (e.g.
+`/upgrade`, always registered but only linked from the menu when its flag is on). The real
+enforcement point is always inside the backend webhook itself (e.g. `SFRolesOverview`'s own
+admin/client-admin gate) — direct/deep-link navigation around the menu must degrade gracefully
+(empty state, no-access card), never assume the menu gate was the only line of defense. See
+`docs/generated-custom-windows/app-shell-functional-flows.md` §6b for the Roles-overview page's
+full implementation of this convention.
