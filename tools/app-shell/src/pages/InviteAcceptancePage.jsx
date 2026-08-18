@@ -222,8 +222,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         ]}
       >
         <div className="flex flex-col items-center justify-center py-12 text-center" data-testid="invite-loading">
-          <Loader2 className="h-8 w-8 animate-spin text-[#121217]" />
-          <p className="mt-4 text-base text-slate-600">{ui('invitePageLoading')}</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="mt-4 text-base text-muted-foreground">{ui('invitePageLoading')}</p>
         </div>
       </AuthShell>
     );
@@ -282,13 +282,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         ]}
       >
         <div className="text-center" data-testid="invite-error-state">
-          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#FDE8EE] text-[#F53D6B]">
+          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertCircle className="h-8 w-8" data-testid="invite-error-icon" />
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('invitePageInvalidTitle')}
           </h1>
-          <p className="mt-3 text-base text-slate-600 sm:text-xl">
+          <p className="mt-3 text-base text-muted-foreground sm:text-xl">
             {ui('invitePageInvalidDescription')}
           </p>
           <Button
@@ -317,21 +317,21 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         ]}
       >
         <div className="text-center">
-          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#26A95F]">
-            <CheckCircle2 className="h-8 w-8 text-white" data-testid="invite-success-icon" strokeWidth={3} />
+          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-status-success">
+            <CheckCircle2 className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" strokeWidth={3} />
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
             {successData.alreadyAccepted
               ? ui('invitePageAlreadyAcceptedTitle')
               : ui('invitePageSuccessTitle').replace('{companyName}', companyName)}
           </h1>
-          <p className="mt-3 text-base text-slate-600 sm:text-xl">
+          <p className="mt-3 text-base text-muted-foreground sm:text-xl">
             {successData.alreadyAccepted
               ? ui('invitePageAlreadyAcceptedDescription').replace('{companyName}', companyName)
               : ui('invitePageSuccessDescription')}
           </p>
           <Button
-            className="mt-6 h-12 w-full gap-2 rounded-lg bg-[#121217] text-base font-medium text-white hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+            className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             onClick={() => navigate('/')}
             data-testid="action-go-to-app"
           >
@@ -357,15 +357,15 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       >
         <div className="text-center" data-testid="invite-authenticated-step">
           {actionError && (
-            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600" data-testid="invite-action-error">
+            <div className="mb-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" data-testid="invite-action-error">
               {actionError}
             </div>
           )}
-          <p className="mb-3 text-base text-slate-600 sm:text-xl">
+          <p className="mb-3 text-base text-muted-foreground sm:text-xl">
             {ui('invitePageAuthenticatedNotice')}
           </p>
           <Button
-            className="h-12 w-full gap-2 rounded-lg bg-[#121217] text-base font-medium text-white hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+            className="h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             onClick={handleAcceptExisting}
             disabled={submitting}
             data-testid="action-accept-invitation"
@@ -446,21 +446,21 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             ]}
           >
             <div className="text-center">
-              <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#26A95F]">
-                <CheckCircle2 className="h-8 w-8 text-white" data-testid="invite-success-icon" strokeWidth={3} />
+              <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-status-success">
+                <CheckCircle2 className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" strokeWidth={3} />
               </div>
-              <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
+              <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
                 {successData.alreadyAccepted
                   ? ui('invitePageAlreadyAcceptedTitle')
                   : ui('invitePageSuccessTitle').replace('{companyName}', companyName)}
               </h1>
-              <p className="mt-3 text-base text-slate-600 sm:text-xl">
+              <p className="mt-3 text-base text-muted-foreground sm:text-xl">
                 {successData.alreadyAccepted
                   ? ui('invitePageAlreadyAcceptedDescription').replace('{companyName}', companyName)
                   : ui('invitePageSuccessDescription')}
               </p>
               <Button
-                className="mt-6 h-12 w-full gap-2 rounded-lg bg-[#121217] text-base font-medium text-white hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+                className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
                 onClick={() => navigate('/')}
                 data-testid="action-go-to-app"
               >
@@ -499,9 +499,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               </p>
             </div>
 
-            {actionError && (
-              <div
-                className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          {actionError && (
+            <div
+              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                 data-testid="invite-action-error"
               >
                 <AlertCircle className="h-4 w-4 shrink-0" />

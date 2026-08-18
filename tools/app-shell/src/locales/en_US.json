@@ -20624,6 +20624,7 @@
     "inviteUserSuccessTitle": "Invitation sent",
     "inviteUserSuccessMessage": "An invitation was sent to {email}. Status is now pending.",
     "inviteUserPendingBadge": "Pending",
+    "inviteUserStatusLabel": "Status",
     "inviteUserAlreadyMember": "This user is already a member of this company.",
     "inviteUserNotFound": "Create this user in the organization before sending the invitation.",
     "inviteUserNoRole": "Assign at least one active role in the organization before sending the invitation.",

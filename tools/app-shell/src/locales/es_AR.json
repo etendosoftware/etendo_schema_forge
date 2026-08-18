@@ -20113,6 +20113,7 @@
     "inviteUserSuccessTitle": "Invitación enviada",
     "inviteUserSuccessMessage": "Se envió una invitación a {email}. El estado ahora es pendiente.",
     "inviteUserPendingBadge": "Pendiente",
+    "inviteUserStatusLabel": "Estado",
     "inviteUserAlreadyMember": "Este usuario ya es miembro de esta empresa.",
     "inviteUserNotFound": "Creá este usuario en la organización antes de enviar la invitación.",
     "inviteUserNoRole": "Asignale al menos un rol activo en la organización antes de enviar la invitación.",

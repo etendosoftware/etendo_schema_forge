@@ -14,6 +14,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 
+function invitationErrorMessage(ui, code, message) {
+  const messages = {
+    USER_ALREADY_MEMBER: 'inviteUserAlreadyMember',
+    INVITED_USER_NOT_FOUND: 'inviteUserNotFound',
+    INVITED_USER_NO_ROLE: 'inviteUserNoRole',
+    INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
+  };
+  return messages[code] ? ui(messages[code]) : message || ui('invitePageInvalidDescription');
+}
+
 /**
  * Dedicated email-only modal for inviting users to the company (ETP-4894).
  */
@@ -67,17 +77,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.error) {
-        const errorMsg =
-          data.code === 'USER_ALREADY_MEMBER'
-            ? ui('inviteUserAlreadyMember')
-            : data.code === 'INVITED_USER_NOT_FOUND'
-            ? ui('inviteUserNotFound')
-            : data.code === 'INVITED_USER_NO_ROLE'
-            ? ui('inviteUserNoRole')
-            : data.code === 'INVALID_EMAIL_FORMAT'
-            ? ui('onboardingInvalidEmailFormat')
-            : data.message || ui('invitePageInvalidDescription');
-        setError(errorMsg);
+        setError(invitationErrorMessage(ui, data.code, data.message));
         setLoading(false);
         return;
       }
@@ -89,7 +89,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
       setLoading(false);
       onSuccess?.(data);
     } catch (err) {
-      setError(err.message || 'Error sending invitation');
+      setError(err.message || ui('invitePageInvalidDescription'));
       setLoading(false);
     }
   };
@@ -101,7 +101,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
           <div className="space-y-4 py-2" data-testid="invite-user-success-view">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-primary">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-status-success-foreground" />
                 {ui('inviteUserSuccessTitle')}
               </DialogTitle>
               <DialogDescription>
@@ -115,8 +115,8 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
                 <span className="font-medium text-foreground">{successData.email}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Status:</span>
-                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30" data-testid="invite-user-pending-status">
+                <span className="text-muted-foreground">{ui('inviteUserStatusLabel')}:</span>
+                <Badge variant="outline" className="border-status-warning-border bg-status-warning/10 text-status-warning-foreground" data-testid="invite-user-pending-status">
                   {ui('inviteUserPendingBadge')}
                 </Badge>
               </div>
