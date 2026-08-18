@@ -232,6 +232,39 @@ describe('useAccountMutations', () => {
     expect(updated).toEqual({ id: 'acc-1', name: 'Renamed' });
   });
 
+  // ETP-4764 follow-up: a stray "eM" prefix (`eMETGODateTolerance`) used to PUT successfully
+  // — the generic W spec ignores unrecognized body keys instead of 400ing — while silently
+  // dropping both tolerances. The DAL property drops the "EM_" module prefix from the custom
+  // column name (`EM_ETGO_Date_Tolerance` → `eTGODateTolerance`), it does not fold it in.
+  it('updateAccount maps dateTolerance/amountTolerance to their real DAL property names', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { dateTolerance: 3, amountTolerance: 0 });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      eTGODateTolerance: 3,
+      eTGOAmountTolerance: 0,
+    });
+  });
+
+  it('updateAccount omits both tolerance keys when neither is in the payload', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { name: 'Renamed' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('eTGODateTolerance');
+    expect(body).not.toHaveProperty('eTGOAmountTolerance');
+  });
+
   it('updateAccount URL-encodes the account id', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'x', name: 'x' }]));
 
@@ -257,7 +290,10 @@ describe('useAccountMutations', () => {
 
   // ── archiveAccount ──────────────────────────────────────────────────────────
 
-  it('archiveAccount DELETEs /account/{id} with the cookie session and CSRF proof, and returns true', async () => {
+  // ETP-4871: archiving used to be the DELETE verb (the backend short-circuited every delete
+  // into an archive). It is now its own PATCH, the mirror of unarchiveAccount, and DELETE is
+  // reserved for the new deleteAccount below.
+  it('archiveAccount PATCHes /account/{id} with { active: false }, on the session, and returns true', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
 
     const { result } = renderHook(() => useAccountMutations());
@@ -269,7 +305,10 @@ describe('useAccountMutations', () => {
 
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
-    expect(init.method).toBe('DELETE');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ active: false });
+    // The verb changed (ETP-4871) but the credential contract did not: an unsafe
+    // method carries the proof of the active scheme and never a bearer token.
     expectSendsSessionCookie(init);
     expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
     expectNoAuthorizationHeader();
@@ -284,6 +323,82 @@ describe('useAccountMutations', () => {
       await expect(result.current.archiveAccount('acc-1')).rejects.toMatchObject({
         message: 'open reconciliations',
         status: 409,
+      });
+    });
+  });
+
+  // ── deleteAccount ───────────────────────────────────────────────────────────
+
+  // ETP-4871: a REAL delete, reachable from the UI only when the row's `deletable` flag is
+  // true. The backend still re-validates on DELETE and answers 409 (with a human-readable
+  // message) if a dependency appeared between the list load and this call.
+  it('deleteAccount DELETEs /account/{id} and returns true', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
+
+    const { result } = renderHook(() => useAccountMutations());
+
+    let res;
+    await act(async () => {
+      res = await result.current.deleteAccount('acc-1');
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`${ENTITY_URL}/acc-1`);
+    expect(init.method).toBe('DELETE');
+    // ETP-4576 — written on the epic side, where the bearer token was still the
+    // credential. The verb and the endpoint are unchanged; only what authenticates
+    // them is, and that is now the active scheme's business.
+    expectSendsSessionCookie(init);
+    expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
+    expectNoAuthorizationHeader();
+    expect(res).toBe(true);
+  });
+
+  it('deleteAccount throws with .status on a 409 (a dependency appeared since the row was loaded)', async () => {
+    globalThis.fetch.mockResolvedValue(errorResponse(409, 'account has dependent records'));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await expect(result.current.deleteAccount('acc-1')).rejects.toMatchObject({
+        message: 'account has dependent records',
+        status: 409,
+      });
+    });
+  });
+
+  // ── unarchiveAccount ────────────────────────────────────────────────────────
+
+  it('unarchiveAccount PATCHes /account/{id} with { active: true }', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    const { result } = renderHook(() => useAccountMutations());
+
+    let res;
+    await act(async () => {
+      res = await result.current.unarchiveAccount('acc-1');
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`${ENTITY_URL}/acc-1`);
+    // PATCH rather than a dedicated endpoint: `active` is hardcoded writable in NeoFieldFilter,
+    // so the generic CRUD persists it with no backend change.
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ active: true });
+    // Same as deleteAccount above: epic-side test, migrated credential contract.
+    expectSendsSessionCookie(init);
+    expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
+    expectNoAuthorizationHeader();
+    expect(res).toBe(true);
+  });
+
+  it('unarchiveAccount throws with .status when the backend rejects', async () => {
+    globalThis.fetch.mockResolvedValue(errorResponse(400, 'nope'));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await expect(result.current.unarchiveAccount('acc-1')).rejects.toMatchObject({
+        message: 'nope',
+        status: 400,
       });
     });
   });
@@ -457,10 +572,16 @@ describe('useAccountMutations', () => {
 
   // ── cookie session / CSRF proof across every operation ──────────────────────
 
+  // ETP-4871 added two verbs to this hook (archive became PATCH, deleteAccount is
+  // the real DELETE) and unarchiveAccount was already here. All four are unsafe
+  // methods, so all four are covered — a new mutation that skips the proof is a
+  // 403 the moment the cookie scheme is on.
   const WRITE_OPERATIONS = [
     { label: 'createAccount', method: 'POST', invoke: (api) => api.createAccount({ name: 'X' }) },
     { label: 'updateAccount', method: 'PUT', invoke: (api) => api.updateAccount('acc-1', { name: 'X' }) },
-    { label: 'archiveAccount', method: 'DELETE', invoke: (api) => api.archiveAccount('acc-1') },
+    { label: 'archiveAccount', method: 'PATCH', invoke: (api) => api.archiveAccount('acc-1') },
+    { label: 'unarchiveAccount', method: 'PATCH', invoke: (api) => api.unarchiveAccount('acc-1') },
+    { label: 'deleteAccount', method: 'DELETE', invoke: (api) => api.deleteAccount('acc-1') },
   ];
 
   for (const { label, method, invoke } of WRITE_OPERATIONS) {
@@ -495,13 +616,28 @@ describe('useAccountMutations', () => {
       await result.current.createAccount({ name: 'X' });
       await result.current.updateAccount('acc-1', { name: 'X' });
       await result.current.archiveAccount('acc-1');
+      await result.current.unarchiveAccount('acc-1');
+      await result.current.deleteAccount('acc-1');
       await result.current.fetchDefaults();
     });
 
-    expect(globalThis.fetch.mock.calls.length).toBeGreaterThanOrEqual(5);
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThanOrEqual(7);
     for (const [, init] of globalThis.fetch.mock.calls) {
       expectSendsSessionCookie(init);
     }
     expectNoAuthorizationHeader();
+  });
+
+  // ── returned shape ──────────────────────────────────────────────────────────
+
+  // ETP-4871: deleteAccount is a new, distinct mutation alongside archiveAccount — a caller
+  // must be able to reach both rather than deleteAccount silently missing from the hook.
+  it('exposes deleteAccount alongside the other mutations', () => {
+    const { result } = renderHook(() => useAccountMutations());
+    expect(typeof result.current.deleteAccount).toBe('function');
+    expect(Object.keys(result.current)).toEqual(expect.arrayContaining([
+      'createAccount', 'updateAccount', 'archiveAccount', 'unarchiveAccount',
+      'deleteAccount', 'fetchDefaults',
+    ]));
   });
 });

@@ -470,7 +470,11 @@ export function ListModalWindow({
   const hasSearch = filters.length > 0;
 
   return (
-    <div className="flex flex-col gap-2">
+    // Fills the shell's content area (which is `overflow-hidden`, so each window owns its own
+    // scrolling) and keeps the toolbar and banner pinned while only the grid scrolls. Without the
+    // height chain the list simply grew past the viewport and the overflowing rows were
+    // unreachable.
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       {/* Toolbar — left: back + dropdown filters; right: search + New */}
       <div className="flex items-center justify-between gap-2 px-2 pt-2">
         <div className="flex items-center gap-2">
@@ -551,7 +555,9 @@ export function ListModalWindow({
           <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
         </div>
       ) : (
-        <div className="px-2">
+        // `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
+        // base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid).
+        (<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           <ListModalGrid
             columns={columns}
             data={data}
@@ -564,7 +570,7 @@ export function ListModalWindow({
             onToggle={handleToggle}
             savingToggles={savingToggles}
             data-testid="ListModalGrid__19eda5" />
-        </div>
+        </div>)
       )}
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
@@ -623,7 +629,7 @@ export function ListModalWindow({
             })}
 
             {formError && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive bg-destructive px-3 py-2 text-sm text-destructive">
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__19eda5" />
                 <span>{formError}</span>
               </div>

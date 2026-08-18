@@ -194,6 +194,9 @@ const BASE_PROPS = {
   recordId: '123',
   token: 'test-token',
   apiBaseUrl: 'http://localhost:8080/etendo/neo',
+  // linesLayout now defaults to 'inlineEditable' (ETP-4763), which suppresses
+  // buildLineRowClickHandler — this suite tests the classic sidebar flow.
+  linesLayout: 'classic',
 };
 
 describe('DetailView — line sidebar DetailForm displayLogic (ETP-4529 review fix)', () => {

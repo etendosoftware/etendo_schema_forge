@@ -160,7 +160,7 @@ async function installContactMocks(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     }
   });
-  await page.route('**/sws/contacts/locationAddress**', async route => {
+  await page.route('**/sws/contacts/locationAddress{/**,}**', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
   });
   // Use a regex (not a glob) so this intercepts before the login() catch-all

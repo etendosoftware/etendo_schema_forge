@@ -11,8 +11,14 @@ import { jsonHeaders, writeHeaders, throwHttpError } from '@/hooks/financialAcco
  * default matching algorithm, name uniqueness, archive guard):
  *   - createAccount(payload)     → POST   /sws/neo/financial-account/account
  *   - updateAccount(id, payload) → PUT    /sws/neo/financial-account/account/{id}
- *   - archiveAccount(id)         → DELETE /sws/neo/financial-account/account/{id}
- *                                  (the hook soft-archives: IsActive='N')
+ *   - archiveAccount(id)         → PATCH  /sws/neo/financial-account/account/{id} {active:false}
+ *   - unarchiveAccount(id)       → PATCH  /sws/neo/financial-account/account/{id} {active:true}
+ *   - deleteAccount(id)          → DELETE /sws/neo/financial-account/account/{id}
+ *                                  (ETP-4871: a REAL delete, gated server-side by `deletable` —
+ *                                  every account row now carries `deletable`/
+ *                                  `deleteBlockedReason`; the backend still answers 409 in case a
+ *                                  dependency appeared after the row was loaded, a defense against
+ *                                  the list-load/click race)
  *   - fetchDefaults()            → GET selectors/C_Currency_ID + GET defaults
  *
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode }`;
@@ -43,8 +49,20 @@ function toDalBody(payload) {
   if (payload.providerCode) body.providerCode = payload.providerCode;
   if (payload.providerName) body.providerName = payload.providerName;
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
-  if ('dateTolerance' in payload) body.eMETGODateTolerance = payload.dateTolerance;
-  if ('amountTolerance' in payload) body.eMETGOAmountTolerance = payload.amountTolerance;
+  // DAL property names per contract.json: the custom columns are `EM_ETGO_Date_Tolerance` /
+  // `EM_ETGO_Amount_Tolerance`, but Etendo derives the bean property by dropping the "EM_"
+  // module prefix — `eTGODateTolerance` / `eTGOAmountTolerance`, NOT `eMETGO...`. The W CRUD
+  // spec silently ignores unrecognized body keys (no 400), so the stray "eM" prefix used to
+  // PUT successfully while quietly dropping both tolerances — ETP-4764 follow-up.
+  if ('dateTolerance' in payload) body.eTGODateTolerance = payload.dateTolerance;
+  if ('amountTolerance' in payload) body.eTGOAmountTolerance = payload.amountTolerance;
+  // Write-off limit (ETP-4797). A physical AD column, so no EM_ prefix. An empty box is sent as
+  // null, not 0: null means "no limit", while 0 would forbid every write-off.
+  if ('writeoffLimit' in payload) {
+    const raw = payload.writeoffLimit;
+    body.writeofflimit = (raw === '' || raw == null) ? null : Number(raw);
+  }
+  if ('glItemDifferenceId' in payload) body.aprmGlitemDiff = payload.glItemDifferenceId || null;
   return body;
 }
 
@@ -86,12 +104,58 @@ export function useAccountMutations() {
     return firstRecord(json);
   }, []);
 
+  /**
+   * Soft-archives an account (`IsActive` to 'N'). ETP-4871: this used to be the DELETE verb
+   * (the backend short-circuited every delete into an archive), which meant a real delete could
+   * never be offered — "Eliminar" only ever archived. Archiving is now its own PATCH, the exact
+   * mirror of {@link unarchiveAccount} below, and DELETE is reserved for {@link deleteAccount}.
+   */
   const archiveAccount = useCallback(async (accountId) => {
+    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: writeHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ active: false }),
+    });
+    if (!res.ok) await throwHttpError(res);
+    return true;
+  }, []);
+
+  /**
+   * Permanently deletes an account (ETP-4871). Only ever reachable from the UI when the row's
+   * `deletable` flag is true — every FK into `FIN_Financial_Account` is RESTRICT, so the backend
+   * still re-validates and 409s (with a human-readable `message`) if a dependent record appeared
+   * between the list load and this call.
+   */
+  const deleteAccount = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, {
       method: 'DELETE',
       headers: writeHeaders(),
       credentials: 'include',
+    });
+    if (!res.ok) await throwHttpError(res);
+    return true;
+  }, []);
+
+  /**
+   * Restores an archived account (`IsActive` back to 'Y').
+   *
+   * A plain PATCH rather than a dedicated endpoint: `active` is a base AD column with no
+   * ETGO_SF_FIELD row, and `NeoFieldFilter` deliberately hardcodes it as included AND writable
+   * precisely so inline activate/deactivate works — the same route match-rule's "Activa" toggle
+   * already uses. `FinancialAccountHandler.validateAndEnrichUpdate` only validates the keys the
+   * body actually carries, so a body of just `{ active }` passes straight through to the generic
+   * CRUD. No backend change was needed for this.
+   */
+  const unarchiveAccount = useCallback(async (accountId) => {
+    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: writeHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ active: true }),
     });
     if (!res.ok) await throwHttpError(res);
     return true;
@@ -134,5 +198,7 @@ export function useAccountMutations() {
     return { currencies, defaultCurrencyId };
   }, []);
 
-  return { createAccount, updateAccount, archiveAccount, fetchDefaults };
+  return {
+    createAccount, updateAccount, archiveAccount, unarchiveAccount, deleteAccount, fetchDefaults,
+  };
 }

@@ -180,7 +180,7 @@ export default function RowQuickActions({
   // - Delete: hsl(var(--destructive))
   // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
   const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors';
+  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors';
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -315,7 +315,7 @@ export default function RowQuickActions({
                     onClick={(e) => { stop(e); handleMenuActionClick(action); }}
                     className={[
                       'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
-                      action.destructive ? 'text-destructive hover:bg-destructive' : 'text-foreground hover:bg-secondary',
+                      action.destructive ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground' : 'text-foreground hover:bg-secondary',
                       (pending || docAction.loading) ? 'opacity-50 cursor-not-allowed' : '',
                     ].filter(Boolean).join(' ')}
                   >

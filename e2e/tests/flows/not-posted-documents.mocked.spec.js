@@ -55,7 +55,16 @@ const FILTER_OPTIONS = {
  * Must run AFTER login() to take precedence over the generic stub.
  */
 async function installMocks(page, { rows = ROWS } = {}) {
-  await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, async (route) => {
+  // NOTE: two separate page.route() registrations, not the `{/**,}**` brace
+  // pattern — Playwright's glob→regex compiler only treats `**` as
+  // "crosses path separators" when it sits right before a `/` (or the glob's
+  // end); inside a brace group the `**` right before the `,` is followed by
+  // `,`, so it silently degrades to a single-segment `[^/]*`. That matched
+  // `/header/0` but NOT the two-segments-deep `/header/0/action/bulk-post`,
+  // so the bulk-post POST fell through to the generic `/sws/**` stub and its
+  // response never carried `ok`/`total`, leaving the success toast unfired.
+  // See docs/e2e-testing-guide.md for the full write-up.
+  const headerHandler = async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -100,7 +109,9 @@ async function installMocks(page, { rows = ROWS } = {}) {
     }
 
     route.fallback();
-  });
+  };
+  await page.route(`**/sws/neo/${SPEC}/${ENTITY}/**`, headerHandler);
+  await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, headerHandler);
 }
 
 test.describe('Not Posted Documents — filter options load', () => {

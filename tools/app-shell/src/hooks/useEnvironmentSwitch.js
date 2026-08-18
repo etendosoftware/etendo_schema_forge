@@ -3,6 +3,7 @@ import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-c
 import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
+import { sortEnvironments } from '../lib/environmentPresentation.js';
 
 /**
  * Lists the environments the signed-in account owns and switches between them.
@@ -29,11 +30,16 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       setEnvironments([]);
       return;
     }
+    // ETP-4576 — environment discovery is account-scoped, and the account session
+    // is the `__Host-` cookie: there is no client-held token to read or to gate on.
+    // The epic's version read sf_platform_token/sf_auth_token from localStorage,
+    // keys the cookie migration stopped writing, so that gate would never pass.
+    // `sortEnvironments` is the epic's own presentation change and is kept.
     let cancelled = false;
     (async () => {
       try {
         const envs = await fetchEnvironments(fetch, getApiBase());
-        if (!cancelled) setEnvironments(Array.isArray(envs) ? envs : []);
+        if (!cancelled) setEnvironments(sortEnvironments(envs));
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
       }
@@ -77,7 +83,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
     setSwitching(wanted);
     try {
       const envs = await fetchEnvironments(fetch, getApiBase());
-      const match = (Array.isArray(envs) ? envs : []).find(
+      const match = sortEnvironments(envs).find(
         (env) => String(env?.clientName ?? '').trim().toLowerCase() === wanted
       );
       if (!match) {

@@ -6962,7 +6962,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "a76d4ee1a226e614b955a98258e0b90e1e655c611f50790697c4c56b4d2c3a8f",
+      "checksum": "eabdef031d6ff8fa8ba35a3fe984cfa75824555c1803d96f360ae1deb863b236",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -6989,25 +6989,25 @@
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "New statement each run",
-          "name_es": "One per run",
+          "name_es": "New statement each run",
           "value": "1BE"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 1 day",
-          "name_es": "One per day",
+          "name_es": "Within 1 day",
           "value": "1BD"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 7 days",
-          "name_es": "One per week",
+          "name_es": "Within 7 days",
           "value": "1BW"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 30 days",
-          "name_es": "One per month",
+          "name_es": "Within 30 days",
           "value": "1BM"
         },
         {
@@ -8073,6 +8073,1000 @@
           "name": "Standard",
           "name_es": "Estándar",
           "value": "S"
+        }
+      ]
+    },
+    "910d24c5e04bd0653472a12dc47eccd73e36338057fe0dd184d4e20cf35a31f5": {
+      "checksum": "7dfea4db99ad49a61dd83a01c2cc37d5695850cbc14dbda5256245b82953d8d2",
+      "params": [
+        [
+          "CBC18A0BBD564AB5916A9D9D14D02B7A",
+          "FF808181312414380131241C5A41001F",
+          "F6A9745024274BD48686CAC8A063AA3E",
+          "115",
+          "177",
+          "183",
+          "176",
+          "0C2A90CA09A344408F866670A0B591EB",
+          "50B2316F6940472CA3BE95DE1E64B3A9",
+          "DC555AA9FAC54BBCB02486F7D628690B",
+          "8CF7102AA0944DF9938A84EB20452018",
+          "B68BC73DBFA34485AD6236A31BC34BCE",
+          "D6C4E62C3EB040989001DA16B3925DC8"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "D6C4E62C3EB040989001DA16B3925DC8",
+          "name": "None",
+          "name_es": "Ninguna",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "D6C4E62C3EB040989001DA16B3925DC8",
+          "name": "STARTTLS",
+          "name_es": "STARTTLS",
+          "value": "STARTTLS"
+        },
+        {
+          "ad_reference_id": "D6C4E62C3EB040989001DA16B3925DC8",
+          "name": "SSL",
+          "name_es": "SSL",
+          "value": "SSL"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "** New **",
+          "name_es": "** Nuevo **",
+          "value": "---"
+        },
+        {
+          "ad_reference_id": "176",
+          "name": "<No Action>",
+          "name_es": "<No acción>",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALAVA AEROPUERTO",
+          "name_es": "ALAVA AEROPUERTO",
+          "value": "INTRES_0101"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALCUDIA MARITIMA",
+          "name_es": "ALCUDIA MARITIMA",
+          "value": "INTRES_0717"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALGECIRAS MARITIMA",
+          "name_es": "ALGECIRAS MARITIMA",
+          "value": "INTRES_1131"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALICANTE AEROPUERTO",
+          "name_es": "ALICANTE AEROPUERTO",
+          "value": "INTRES_0301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALICANTE MARITIMA",
+          "name_es": "ALICANTE MARITIMA",
+          "value": "INTRES_0311"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALMERIA AEROPUERTO",
+          "name_es": "ALMERIA AEROPUERTO",
+          "value": "INTRES_0401"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ALMERIA MARITIMA",
+          "name_es": "ALMERIA MARITIMA",
+          "value": "INTRES_0411"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Credit Memo",
+          "name_es": "AP Nota de crédito",
+          "value": "APC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Invoice",
+          "name_es": "AP factura",
+          "value": "API"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Payment",
+          "name_es": "AP pago",
+          "value": "APP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AP Payment Proposal",
+          "name_es": "AP Propuesta de pago",
+          "value": "APPP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Credit Memo",
+          "name_es": "AR Nota de crédito",
+          "value": "ARC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Invoice",
+          "name_es": "AR factura",
+          "value": "ARI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Pro Forma Invoice",
+          "name_es": "AR Pro forma factura",
+          "value": "ARF"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Receipt",
+          "name_es": "AR Recibo",
+          "value": "ARR"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Receivable Proposal",
+          "name_es": "AR Propuesta de Cobro",
+          "value": "ARRP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "AR Return Material Invoice",
+          "name_es": "AR factura de devolución de material",
+          "value": "ARI_RM"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ASTURIAS AEROPUERTO",
+          "name_es": "ASTURIAS AEROPUERTO",
+          "value": "INTRES_3301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "AVILES MARITIMA",
+          "name_es": "AVILES MARITIMA",
+          "value": "INTRES_3331"
+        },
+        {
+          "ad_reference_id": "0C2A90CA09A344408F866670A0B591EB",
+          "name": "Acquisitions",
+          "name_es": "Adquisiciones",
+          "value": "ACQ"
+        },
+        {
+          "ad_reference_id": "115",
+          "name": "Adjustment Period",
+          "name_es": "Cambio periodo",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
+          "name": "Advisory",
+          "name_es": null,
+          "value": "AD"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Air transport",
+          "name_es": "Transporte Aéreo",
+          "value": "4"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Closed",
+          "name_es": "Todos cerrados",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Never Opened",
+          "name_es": "Ningún periodo abierto.",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Opened",
+          "name_es": "Todos abiertos",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "All Permanently Closed",
+          "name_es": "Todos permanentemente cerrados",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Amortization",
+          "name_es": "Amortización",
+          "value": "AMZ"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Arrendamiento financiero (alquiler­compra)",
+          "name_es": "Arrendamiento financiero (alquiler­compra)",
+          "value": "INTRES_15"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA AEROPUERTO",
+          "name_es": "BARCELONA AEROPUERTO",
+          "value": "INTRES_0801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA MARITIMA EXP",
+          "name_es": "BARCELONA MARITIMA EXP",
+          "value": "INTRES_812"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BARCELONA MARITIMA IMP",
+          "name_es": "BARCELONA MARITIMA IMP",
+          "value": "INTRES_0811"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BILBAO AEROPUERTO",
+          "name_es": "BILBAO AEROPUERTO",
+          "value": "INTRES_4801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "BILBAO MARITIMA",
+          "name_es": "BILBAO MARITIMA",
+          "value": "INTRES_4811"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Bank Statement",
+          "name_es": "Extracto bancario",
+          "value": "CMB"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Bank Statement File",
+          "name_es": "Fichero de extracto bancario",
+          "value": "BSF"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CADIZ MARITIMA",
+          "name_es": "CADIZ MARITIMA",
+          "value": "INTRES_1111"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CARTAGENA MARITIMA",
+          "name_es": "CARTAGENA MARITIMA",
+          "value": "INTRES_3011"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "CASTELLON MARIMA",
+          "name_es": "CASTELLON MARIMA",
+          "value": "INTRES_1211"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Cash Journal",
+          "name_es": "Diario de caja",
+          "value": "CMC"
+        },
+        {
+          "ad_reference_id": "176",
+          "name": "Close Period",
+          "name_es": "Periodo cerrado",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "177",
+          "name": "Closed",
+          "name_es": "Cerrado",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
+          "name": "Company",
+          "name_es": null,
+          "value": "CO"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Compra/venta en firme",
+          "name_es": "Compra/venta en firme",
+          "value": "INTRES_11"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Compras por particulares",
+          "name_es": "Compras por particulares",
+          "value": "INTRES_14"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias destino final Estado miembro introducción",
+          "name_es": "Comunitarias destino final Estado miembro introducción",
+          "value": "INTRES_Acq_1"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias devueltas al mismo estado expedidas",
+          "name_es": "Comunitarias devueltas al mismo estado expedidas",
+          "value": "INTRES_Acq_4"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Comunitarias devueltas transformadas",
+          "name_es": "Comunitarias devueltas transformadas",
+          "value": "INTRES_Acq_5"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Cost Adjustment",
+          "name_es": "Ajuste de Costes",
+          "value": "CAD"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Debt Payment Management",
+          "name_es": "Gestión de efectos",
+          "value": "DPM"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Devolución de mercancías,",
+          "name_es": "Devolución de mercancías,",
+          "value": "INTRES_21"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Doubtful Debt",
+          "name_es": "Dudoso cobro",
+          "value": "DDB"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "EL FERROL MARITIMA",
+          "name_es": "EL FERROL MARITIMA",
+          "value": "INTRES_1521"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Entrega para venta a la vista o de prueba",
+          "name_es": "Entrega para venta a la vista o de prueba",
+          "value": "INTRES_12"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Financial Account Transaction",
+          "name_es": "Transacciones de la cuenta financiera",
+          "value": "FAT"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Fixed transport installations",
+          "name_es": "Instalaciones fijas de transporte",
+          "value": "7"
+        },
+        {
+          "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
+          "name": "Freelancer",
+          "name_es": null,
+          "value": "FL"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GANDIA MARITIMA",
+          "name_es": "GANDIA MARITIMA",
+          "value": "INTRES_4631"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GERONA AEROPUERTO",
+          "name_es": "GERONA AEROPUERTO",
+          "value": "INTRES_1701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GIJON MARITIMA",
+          "name_es": "GIJON MARITIMA",
+          "value": "INTRES_3311"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "GL Document",
+          "name_es": "Documento libro mayor",
+          "value": "GLD"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "GL Journal",
+          "name_es": "Diario",
+          "value": "GLJ"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GRANDA AEROPUERTO",
+          "name_es": "GRANDA AEROPUERTO",
+          "value": "INTRES_1801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "GUIPUZCOA AEROPUERTO",
+          "name_es": "GUIPUZCOA AEROPUERTO",
+          "value": "INTRES_2001"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "HUELVA MARITIMA",
+          "name_es": "HUELVA MARITIMA",
+          "value": "INTRES_2111"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "IBIZA AEROPUERTO",
+          "name_es": "IBIZA AEROPUERTO",
+          "value": "INTRES_0707"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "IBIZA MARITIMA",
+          "name_es": "IBIZA MARITIMA",
+          "value": "INTRES_0721"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Inland waterway transport",
+          "name_es": "Transporte de navegación interior",
+          "value": "8"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Inventory Amount Update",
+          "name_es": "Actualización Valor Inventario",
+          "value": "IAU"
+        },
+        {
+          "ad_reference_id": "FF808181312414380131241C5A41001F",
+          "name": "Invoice Document Number",
+          "name_es": "Número de Documento de Factura",
+          "value": "Invoice Document Number"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "JEREZ AEROPUERTO",
+          "name_es": "JEREZ AEROPUERTO",
+          "value": "INTRES_1101"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "LA CORUNA AEROPUERTO",
+          "name_es": "LA CORUNA AEROPUERTO",
+          "value": "INTRES_1501"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "LA CORUNA MARITIMA",
+          "name_es": "LA CORUNA MARITIMA",
+          "value": "INTRES_1511"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Landed Cost",
+          "name_es": "Landed Cost",
+          "value": "LDC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Landed Cost Cost",
+          "name_es": "Coste Landed Cost",
+          "value": "LCC"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MADRID AEROPUERTO",
+          "name_es": "MADRID AEROPUERTO",
+          "value": "INTRES_2801"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MALAGA AEROPUERTO",
+          "name_es": "MALAGA AEROPUERTO",
+          "value": "INTRES_2901"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MALAGA MARITIMA",
+          "name_es": "MALAGA MARITIMA",
+          "value": "INTRES_2911"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MARTIN MARITIMA",
+          "name_es": "MARTIN MARITIMA",
+          "value": "INTRES_3621"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MOHAN AEROPUERTO",
+          "name_es": "MOHAN AEROPUERTO",
+          "value": "INTRES_0708"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MOHAN MARITIMA",
+          "name_es": "MOHAN MARITIMA",
+          "value": "INTRES_0731"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MORIL MARIMA",
+          "name_es": "MORIL MARIMA",
+          "value": "INTRES_1811"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "MURCIA AEROPUERTO",
+          "name_es": "MURCIA AEROPUERTO",
+          "value": "INTRES_3001"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Manual Cash VAT Settlement",
+          "name_es": "Manual Cash VAT Settlement",
+          "value": "OBCVAT_MS"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Match Invoice",
+          "name_es": "Factura comprobada",
+          "value": "MXI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Match PO",
+          "name_es": "Pedido de compra comprobado",
+          "value": "MXP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Delivery",
+          "name_es": "Entrega material",
+          "value": "MMS"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Internal Consumption",
+          "name_es": "Consumo Interno de Material",
+          "value": "MIC"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Movement",
+          "name_es": "Movimiento de almacén",
+          "value": "MMM"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Physical Inventory",
+          "name_es": "Inventario físico",
+          "value": "MMI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Production",
+          "name_es": "Producción",
+          "value": "MMP"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Material Receipt",
+          "name_es": "Recibo material",
+          "value": "MMR"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Mercancías suministradas financiados CE",
+          "name_es": "Mercancías suministradas financiados CE",
+          "value": "INTRES_31"
+        },
+        {
+          "ad_reference_id": "F6A9745024274BD48686CAC8A063AA3E",
+          "name": "Mixed",
+          "name_es": "Mixto",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "177",
+          "name": "Never opened",
+          "name_es": "Nunca abierto",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "177",
+          "name": "Open",
+          "name_es": "Abierto",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "176",
+          "name": "Open Period",
+          "name_es": "Periodo abierto",
+          "value": "O"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones con miras al trabajo por encargo",
+          "name_es": "Operaciones con miras al trabajo por encargo",
+          "value": "INTRES_40"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones en programas comunes de defensa/intergubernament",
+          "name_es": "Operaciones en programas comunes de defensa/intergubernament",
+          "value": "INTRES_70"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Operaciones tras el trabajo por encargo",
+          "name_es": "Operaciones tras el trabajo por encargo",
+          "value": "INTRES_50"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+          "name_es": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+          "value": "INTRES_33"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras entregas de ayuda gubernamental",
+          "name_es": "Otras entregas de ayuda gubernamental",
+          "value": "INTRES_32"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otras transacciones",
+          "name_es": "Otras transacciones",
+          "value": "INTRES_90"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Otros",
+          "name_es": "Otros",
+          "value": "INTRES_34"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Own propulsion",
+          "name_es": "Autopropulsión",
+          "value": "9"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "P . MALLORCA MARITIMA",
+          "name_es": "P . MALLORCA MARITIMA",
+          "value": "INTRES_0711"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "P. MALLORCA AEROPUERTO",
+          "name_es": "P. MALLORCA AEROPUERTO",
+          "value": "INTRES_0701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PALAMOS MARITIMA",
+          "name_es": "PALAMOS MARITIMA",
+          "value": "INTRES_1711"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PASAJES MARITIMA",
+          "name_es": "PASAJES MARITIMA",
+          "value": "INTRES_2011"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "PUERTO DE SANTA MARIA",
+          "name_es": "PUERTO DE SANTA MARIA",
+          "value": "INTRES_1121"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Payment Allocation",
+          "name_es": "Asignación de pagos",
+          "value": "CMA"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Payment proposal",
+          "name_es": "Propuesta de pago",
+          "value": "PPR"
+        },
+        {
+          "ad_reference_id": "176",
+          "name": "Permanently Close Period",
+          "name_es": "Periodo cerrado permanente",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "177",
+          "name": "Permanently closed",
+          "name_es": "Cerrado permanente",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Postal consignment",
+          "name_es": "Envíos postales",
+          "value": "5"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Project Issue",
+          "name_es": "Asunto de proyecto",
+          "value": "PJI"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Purchase Order",
+          "name_es": "Pedido de compra",
+          "value": "POO"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Purchase Requisition",
+          "name_es": "Pre-pedido compra",
+          "value": "POR"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "RIBADEO MARITIMA",
+          "name_es": "RIBADEO MARITIMA",
+          "value": "INTRES_2711"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Rail transport",
+          "name_es": "Transporte por ferrocaril",
+          "value": "2"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Reconciliation",
+          "name_es": "Conciliación",
+          "value": "REC"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Road transport",
+          "name_es": "Transporte por Carretera",
+          "value": "3"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SAGUNTO MARITIMA",
+          "name_es": "SAGUNTO MARITIMA",
+          "value": "INTRES_4621"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SAN CARLOS MARITIMA",
+          "name_es": "SAN CARLOS MARITIMA",
+          "value": "INTRES_4321"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTANDER AUEROPUERTO",
+          "name_es": "SANTANDER AUEROPUERTO",
+          "value": "INTRES_3901"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTANDER MARITIMA",
+          "name_es": "SANTANDER MARITIMA",
+          "value": "INTRES_3911"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SANTIAGO AEROPUERTO",
+          "name_es": "SANTIAGO AEROPUERTO",
+          "value": "INTRES_1507"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SEVILLA AEROPUERTO",
+          "name_es": "SEVILLA AEROPUERTO",
+          "value": "INTRES_4101"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "SEVILLA MARITIMA",
+          "name_es": "SEVILLA MARITIMA",
+          "value": "INTRES_4111"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Sales Order",
+          "name_es": "Pedido venta",
+          "value": "SOO"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida de mercancías tras transformación",
+          "name_es": "Salida de mercancías tras transformación",
+          "value": "INTRES_Del_5"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida mercancías a estado miembro",
+          "name_es": "Salida mercancías a estado miembro",
+          "value": "INTRES_Del_1"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida para devolución de mercancías",
+          "name_es": "Salida para devolución de mercancías",
+          "value": "INTRES_Del_4"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida temporal para reintroducir en el mismo estado",
+          "name_es": "Salida temporal para reintroducir en el mismo estado",
+          "value": "INTRES_Del_2"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Salida temporal para reintroducir tras transformación",
+          "name_es": "Salida temporal para reintroducir tras transformación",
+          "value": "INTRES_Del_3"
+        },
+        {
+          "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",
+          "name": "Sea transport",
+          "name_es": "Transporte marítimo",
+          "value": "1"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Settlement",
+          "name_es": "Liquidación",
+          "value": "STT"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Settlement manual",
+          "name_es": "Liquidación manual",
+          "value": "STM"
+        },
+        {
+          "ad_reference_id": "0C2A90CA09A344408F866670A0B591EB",
+          "name": "Shipments",
+          "name_es": "Entregas",
+          "value": "DEL"
+        },
+        {
+          "ad_reference_id": "115",
+          "name": "Standard Calendar Period",
+          "name_es": "Calendario Periodo estándar",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Suministro de materiales de construcción y maquinaria",
+          "name_es": "Suministro de materiales de construcción y maquinaria",
+          "value": "INTRES_80"
+        },
+        {
+          "ad_reference_id": "FF808181312414380131241C5A41001F",
+          "name": "Supplier Reference",
+          "name_es": "Referencia del Proveedor",
+          "value": "Supplier Reference"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Sustitución de mercancías devueltas",
+          "name_es": "Sustitución de mercancías devueltas",
+          "value": "INTRES_22"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Sustitución de mercancías no devueltas,",
+          "name_es": "Sustitución de mercancías no devueltas,",
+          "value": "INTRES_23"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "TARRAGONA AEROPUERTO",
+          "name_es": "TARRAGONA AEROPUERTO",
+          "value": "INTRES_4301"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "TARRAGONA MARITIMA",
+          "name_es": "TARRAGONA MARITIMA",
+          "value": "INTRES_4311"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Temporales a otro Estado miembro con transformación",
+          "name_es": "Temporales a otro Estado miembro con transformación",
+          "value": "INTRES_Acq_3"
+        },
+        {
+          "ad_reference_id": "B68BC73DBFA34485AD6236A31BC34BCE",
+          "name": "Temporales para ser reexpedidas a un Estado miembro",
+          "name_es": "Temporales para ser reexpedidas a un Estado miembro",
+          "value": "INTRES_Acq_2"
+        },
+        {
+          "ad_reference_id": "50B2316F6940472CA3BE95DE1E64B3A9",
+          "name": "Trueque (compensación en especie)",
+          "name_es": "Trueque (compensación en especie)",
+          "value": "INTRES_13"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALENCIA AEROPUERTO",
+          "name_es": "VALENCIA AEROPUERTO",
+          "value": "INTRES_4601"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALENCIA MARITIMA",
+          "name_es": "VALENCIA MARITIMA",
+          "value": "INTRES_4611"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VALLADOLID AEROPUERTO",
+          "name_es": "VALLADOLID AEROPUERTO",
+          "value": "INTRES_4701"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VIGO AEROPUERTO",
+          "name_es": "VIGO AEROPUERTO",
+          "value": "INTRES_3601"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VIGO MARITIMA",
+          "name_es": "VIGO MARITIMA",
+          "value": "INTRES_3611"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "VILLAGARCIA MARITIMA",
+          "name_es": "VILLAGARCIA MARITIMA",
+          "value": "INTRES_3631"
+        },
+        {
+          "ad_reference_id": "183",
+          "name": "Work Requirement",
+          "name_es": "Orden de fabricación",
+          "value": "WRE"
+        },
+        {
+          "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
+          "name": "ZARAGOZA AEROPUERTO",
+          "name_es": "ZARAGOZA AEROPUERTO",
+          "value": "INTRES_5001"
         }
       ]
     },

@@ -24,8 +24,8 @@ describe('buildReturnPreviewContent', () => {
 
   // ── Imports ────────────────────────────────────────────────────────────────
 
-  it('imports PreviewActionButtons and makeStaticPreviewTabs from PreviewActionButtons.jsx', () => {
-    assert.match(src, /import PreviewActionButtons.*makeStaticPreviewTabs.*from '\.\.\/PreviewActionButtons\.jsx'/);
+  it('imports PreviewActionButtons as the default export of PreviewActionButtons.jsx', () => {
+    assert.match(src, /import PreviewActionButtons from '\.\.\/PreviewActionButtons\.jsx'/);
   });
 
   it('imports ReturnDocStatsPanel from local preview-cards', () => {
@@ -43,6 +43,17 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /specs, partnerName, movementDate, token, apiBaseUrl, ui/);
   });
 
+  // ETP-4789: optional canDownload gate, defaulting to true so the existing
+  // caller (ReturnMaterialReceiptPreview, out of scope for this ticket) keeps
+  // its current always-downloadable behavior.
+  it('accepts an optional canDownload param defaulting to true (ETP-4789)', () => {
+    assert.match(src, /canDownload = true/);
+  });
+
+  it('accepts an optional onEmail param (ETP-4718 — send-email wiring)', () => {
+    assert.match(src, /\bonEmail,/);
+  });
+
   // ── Return value ───────────────────────────────────────────────────────────
 
   it('returns an object with actionButtons and tabs keys', () => {
@@ -55,16 +66,16 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /<PreviewActionButtons/);
   });
 
-  it('does NOT pass onEmail to PreviewActionButtons (email removed)', () => {
-    assert.doesNotMatch(src, /onEmail=/);
+  it('forwards the onEmail param to PreviewActionButtons (ETP-4718 — send-email wiring)', () => {
+    assert.match(src, /<PreviewActionButtons[\s\S]{0,40}onEmail=\{onEmail\}/);
   });
 
   it('passes hasPdf={!!pdfBlob} to PreviewActionButtons', () => {
     assert.match(src, /hasPdf=\{!!pdfBlob\}/);
   });
 
-  it('passes onDownloadPdf={handleDownload} to PreviewActionButtons', () => {
-    assert.match(src, /onDownloadPdf=\{handleDownload\}/);
+  it('passes onDownloadPdf={canDownload ? handleDownload : undefined} to PreviewActionButtons (ETP-4789)', () => {
+    assert.match(src, /onDownloadPdf=\{canDownload \? handleDownload : undefined\}/);
   });
 
   // ── tabs[0] — general tab ─────────────────────────────────────────────────
@@ -91,10 +102,13 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /specs=\{specs\}/);
   });
 
-  // ── makeStaticPreviewTabs spread ──────────────────────────────────────────
+  // ── tabs — general only ───────────────────────────────────────────────────
 
-  it('spreads makeStaticPreviewTabs(ui) into the tabs array', () => {
-    assert.match(src, /\.\.\.makeStaticPreviewTabs\(ui\)/);
+  // ETP-4855 — the Messages/History placeholders were removed everywhere, and
+  // with them makeStaticPreviewTabs, the helper that injected them into the
+  // three windows built through here.
+  it('injects no static placeholder tabs', () => {
+    assert.doesNotMatch(src, /makeStaticPreviewTabs/);
   });
 
   // ── i18n — no hardcoded user-visible strings ──────────────────────────────

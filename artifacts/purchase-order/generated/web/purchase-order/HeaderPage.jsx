@@ -770,7 +770,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         hideSaveStatuses={["CO","CL","VO"]}
         noHeaderBorder
         notesField="description"
@@ -782,7 +782,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         documentDateField="orderDate"
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
         {...props} window={effectiveWindow}
@@ -799,10 +798,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hidePrint":true}}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

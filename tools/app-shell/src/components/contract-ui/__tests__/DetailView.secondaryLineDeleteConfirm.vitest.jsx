@@ -212,7 +212,7 @@ const MockTable = ({ data }) => (
 );
 
 // Secondary tab's own Table — exposes onRowClick (= openSecondaryLine, since
-// st.Form is set and linesLayout stays the default 'classic').
+// st.Form is set and linesLayout is explicitly 'classic' below).
 const StubSecondaryTable = ({ data, onRowClick }) => (
   <div data-testid="stub-secondary-table">
     {(data || []).map(r => (
@@ -249,6 +249,10 @@ function renderDetailView(props = {}) {
         token="test-token"
         apiBaseUrl="/api/sales-order"
         breadcrumb="Sales / Orders"
+        // linesLayout now defaults to 'inlineEditable' (ETP-4763), which also
+        // gates resolveSecondaryRowClickHandler off — pin 'classic' so the
+        // secondary sidebar row-click flow under test stays reachable.
+        linesLayout="classic"
         secondaryTabs={[{ key: 'addresses', label: 'Addresses', Table: StubSecondaryTable, Form: StubSecondaryForm }]}
         {...props}
       />

@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-04T16:33:35.489Z",
-  "checksum": "481e8e095cb76bb2",
+  "updatedAt": "2026-08-13T15:20:51.826Z",
+  "checksum": "075b9fa1753ce067",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -12,12 +12,27 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "Process Receipt": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
           "exclude": true
         }
       },
@@ -40,7 +55,15 @@
       },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
-      "maxDetailLines": 0
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -321,6 +344,52 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "trackingNo",
             "apiKey": "trackingNo",
             "column": "TrackingNo",
@@ -429,6 +498,13 @@
             }
           },
           {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          },
+          {
             "name": "etblkpBulkposting",
             "derivation": {
               "type": "computed",
@@ -487,6 +563,7 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },
@@ -600,6 +677,7 @@
             "form": true,
             "section": "principal",
             "gridOrder": 3,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             },
@@ -649,12 +727,27 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "Process Receipt": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
           "exclude": true
         }
       },
@@ -676,7 +769,15 @@
         "enabled": false
       },
       "linesLayout": "inlineEditable",
-      "maxDetailLines": 0
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -848,8 +949,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "discarded",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1752,12 +1853,6 @@
       },
       {
         "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/posted"
-      },
-      {
-        "entity": "returnMaterialReceipt",
         "field": "calculateFreight",
         "column": "Calculate_Freight",
         "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/calculateFreight",
@@ -1909,14 +2004,6 @@
         "description": "Action endpoint for 'invoicefromshipment' in returnMaterialReceipt should exist"
       },
       {
-        "id": "t-action-endpoint-returnMaterialReceipt-posted",
-        "category": "action-endpoint",
-        "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in returnMaterialReceipt should exist"
-      },
-      {
         "id": "t-action-endpoint-returnMaterialReceipt-processGoodsJava",
         "category": "action-endpoint",
         "entity": "returnMaterialReceipt",
@@ -2003,6 +2090,14 @@
         "description": "Default value for 'movementDate' in returnMaterialReceipt should be a string"
       },
       {
+        "id": "t-default-value-type-returnMaterialReceipt-posted",
+        "category": "default-value-type",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in returnMaterialReceipt should be a string"
+      },
+      {
         "id": "t-default-value-type-returnMaterialReceiptLine-lineNo",
         "category": "default-value-type",
         "entity": "returnMaterialReceiptLine",
@@ -2027,6 +2122,14 @@
         "description": "Display logic for 'etblkpBulkposting' in returnMaterialReceipt should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-returnMaterialReceipt-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnMaterialReceipt should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-returnMaterialReceipt-trackingNo",
         "category": "displaylogic-evaluable",
         "entity": "returnMaterialReceipt",
@@ -2049,6 +2152,14 @@
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Display logic for 'etblkpBulkposting' in returnMaterialReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-returnMaterialReceipt-posted",
+        "category": "displaylogic-valid",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnMaterialReceipt should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-returnMaterialReceipt-trackingNo",
@@ -2129,6 +2240,14 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should be present in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-presence-returnMaterialReceipt-posted",
+        "category": "field-presence",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-field-presence-returnMaterialReceipt-sourceShipmentDocNo",
@@ -2273,6 +2392,14 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should have type 'string' in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-type-returnMaterialReceipt-posted",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in returnMaterialReceipt"
       },
       {
         "id": "t-field-type-returnMaterialReceipt-sourceShipmentDocNo",
@@ -2967,14 +3094,6 @@
         "description": "System field 'pickDate' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
-        "id": "t-system-field-returnMaterialReceipt-posted",
-        "category": "system-field",
-        "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for returnMaterialReceipt"
-      },
-      {
         "id": "t-system-field-returnMaterialReceipt-print",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -3374,15 +3493,15 @@
       }
     ],
     "summary": {
-      "total": 190,
+      "total": 193,
       "byCategory": {
-        "action-endpoint": 13,
+        "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 5,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 18,
-        "field-type": 18,
+        "default-value-type": 6,
+        "displaylogic-evaluable": 4,
+        "displaylogic-valid": 4,
+        "field-presence": 19,
+        "field-type": 19,
         "process-failure": 1,
         "process-happy": 1,
         "readonlylogic-evaluable": 10,
@@ -3390,11 +3509,11 @@
         "rule-declared": 4,
         "searchable-filters": 5,
         "selector-endpoint": 6,
-        "system-field": 89,
+        "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 188,
+        "node": 191,
         "junit": 2
       }
     }

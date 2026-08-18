@@ -280,6 +280,10 @@ const BASE_PROPS = {
   token: 'test-token',
   apiBaseUrl: '/api/sales-order',
   breadcrumb: 'Sales / Orders',
+  // linesLayout now defaults to 'inlineEditable' (ETP-4763), which gates
+  // buildLineRowClickHandler/isDetailBulkBarVisible off — pin the classic
+  // layout this suite was written against.
+  linesLayout: 'classic',
 };
 
 function renderDetailView(props = {}) {

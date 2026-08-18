@@ -272,8 +272,16 @@ export async function login(page, {
 
   await page.goto('/onboarding');
 
-  const dashboardReady = await page.waitForURL('**/dashboard', { timeout: 2_000 }).then(() => true).catch(() => false);
-  if (dashboardReady) return;
+  // If already logged in, the page redirects away from /onboarding (to dashboard,
+  // environment list, or the last visited window). Detect this and go to dashboard.
+  const stayedOnOnboarding = await page.waitForURL('**/onboarding**', { timeout: 2_000 }).then(() => true).catch(() => false);
+  if (!stayedOnOnboarding) {
+    // Already logged in — navigate to dashboard and return
+    if (!page.url().includes('/dashboard')) {
+      await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
+    }
+    return;
+  }
 
   const switchToLogin = page.getByTestId('action-switch-to-login');
   if (await switchToLogin.isVisible({ timeout: 3_000 }).catch(() => false)) {

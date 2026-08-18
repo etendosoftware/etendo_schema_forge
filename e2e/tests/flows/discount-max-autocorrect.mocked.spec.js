@@ -46,7 +46,7 @@ const DRAFT_ORDER = {
 
 async function installSalesOrderMocks(page) {
   // Header list
-  await page.route('**/sws/neo/sales-order/header**', async (route) => {
+  await page.route('**/sws/neo/sales-order/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() !== 'GET') return route.fallback();
@@ -79,7 +79,7 @@ async function installSalesOrderMocks(page) {
   });
 
   // Lines — return empty so no existing rows compete with the inline-add row
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
       status: 200,

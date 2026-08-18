@@ -1,6 +1,11 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useLocaleDictionaries } from '../useLocaleDictionaries.js';
 
+// NOTE: never `waitFor` on `renderedLocale` reaching the locale the hook STARTED with —
+// `useState(locale)` seeds it, so the condition holds on render 0 and the wait is a no-op that
+// resolves before the dictionary promise does. Wait on `dictionaries[locale]`, the thing that
+// actually settles asynchronously. That no-op wait is what made this file flaky under load.
+//
 // Deferred promise helper: lets a test control exactly when a "loadCore()"
 // import resolves, so we can assert on the state DURING the async gap —
 // that's the window where ETP-4663's flash used to be visible.

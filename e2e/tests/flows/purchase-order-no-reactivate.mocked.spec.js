@@ -55,7 +55,7 @@ const DR_ROW = {
  * Must be called AFTER login() so this route takes priority (LIFO).
  */
 async function installMock(page, rows) {
-  await page.route('**/sws/neo/purchase-order/header**', async (route) => {
+  await page.route('**/sws/neo/purchase-order/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

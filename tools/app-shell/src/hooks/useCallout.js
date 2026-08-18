@@ -18,8 +18,12 @@ function sanitizeCalloutMessage(raw) {
  *
  * Returns { calloutResult, calloutLoading, executeCallout }.
  *
- * calloutResult: { updates, combos, messages } from the last callout response.
- * executeCallout(field, value, formState): triggers the callout (debounced 300ms).
+ * calloutResult: { updates, combos, messages, triggerField, meta } from the last
+ * callout response. `meta` is an opaque passthrough of whatever the caller
+ * passed to executeCallout (e.g. a per-field generation snapshot used by
+ * DetailView to detect and discard stale responses — ETP-4772); this hook
+ * does not interpret it.
+ * executeCallout(field, value, formState, meta): triggers the callout (debounced 300ms).
  */
 export function useCallout(entity, { apiBaseUrl }) {
   const [calloutResult, setCalloutResult] = useState(null);
@@ -28,10 +32,12 @@ export function useCallout(entity, { apiBaseUrl }) {
   const debounceMapRef = useRef({});
   const abortMapRef = useRef({});
 
-  const executeCallout = useCallback((field, value, formState) => {
-    // ETP-4576 — no gate on a client-held credential: the `__Host-` session
-    // cookie is the credential and the page cannot read it. Gating on the old
-    // token here stopped every callout from firing at all once it was gone.
+  const executeCallout = useCallback((field, value, formState, meta) => {
+    // ETP-4576 — no gate on a client-held credential: under the cookie scheme the
+    // `__Host-` session IS the credential and the page cannot read it, so a
+    // `!token` gate here is permanently false and stops every callout from firing
+    // at all — silently, with no request and no error. `meta` is the epic's
+    // (ETP-4749) fourth argument and is unrelated to this.
     if (!field || !apiBaseUrl || !entity) return;
 
     // Cancel any pending debounced call for THIS field only
@@ -83,7 +89,7 @@ export function useCallout(entity, { apiBaseUrl }) {
           else toast.info(text);
         }
 
-        setCalloutResult({ updates, combos, triggerField: field });
+        setCalloutResult({ updates, combos, triggerField: field, meta });
       } catch (err) {
         if (err.name !== 'AbortError') {
           // Callout is best-effort — do not block the user on failure

@@ -200,6 +200,24 @@ export function useReactivateSelected() {
 }
 
 /**
+ * Posts the unreconciled remainder of a PARTIALLY reconciled statement line to an accounting
+ * concept, closing the line (POST).
+ *
+ * Payload shape: { financialAccountId, statementLineId, glItemId?, description? }. `statementLineId`
+ * must be the remainder sub-line (`line.remainderLineId`), not the merged group head — the backend
+ * answers 409 with the right id when the head is sent.
+ *
+ * Deliberately NO amount: the server recomputes the remainder from the line itself and ignores any
+ * amount in the body, so the client cannot widen what gets written off.
+ *
+ * @returns {{ reconcileDifference: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
+ */
+export function useReconcileDifference() {
+  const { post, loading, error } = useNeoPost('reconcileDifference');
+  return { reconcileDifference: post, loading, error };
+}
+
+/**
  * Fetches an automatch preview for a financial account (GET, no mutations).
  *
  * @param {string|null} accountId

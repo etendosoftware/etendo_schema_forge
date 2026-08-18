@@ -13,8 +13,18 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
  * PurchaseOrderActions — topbarRight component for the Purchase Order window.
  *
  * Renders action buttons depending on document status:
- *   DR (Draft)   → Save Draft, Confirm (opens modal), Delete icon, Print icon
- *   CO (Confirmed) → Receive Goods, Create Invoice, Email icon, Print icon
+ *   DR (Draft)   → Save Draft, Confirm (opens modal), Delete icon
+ *   CO (Confirmed) → Receive Goods, Create Invoice, Email icon
+ *
+ * ETP-4728 (Hallazgo 2) — the decorative "Print" icon this component used to
+ * render in both states called `onProcess?.('print')`, i.e. `handleProcess`
+ * (useEntity.js) with a bare string instead of a `{name, columnName, params}`
+ * descriptor. `process.columnName ?? process.name` resolved to `undefined`,
+ * POSTing to `.../action/undefined` — a broken no-op, not a real print action.
+ * Removed rather than "fixed" with a fake process descriptor: DetailView's
+ * generic Printer button (now unhidden for this window, see decisions.json)
+ * already opens DocumentPrintDrawer, which has a working Imprimir action.
+ * Keeping a second, redundant print affordance here would just duplicate it.
  */
 export default function PurchaseOrderActions({
   data,
@@ -211,20 +221,6 @@ export default function PurchaseOrderActions({
             </svg>
           </button>
 
-          {/* Print icon */}
-          <button
-            type="button"
-            aria-label={ui('print')}
-            style={iconBtnStyle}
-            onClick={() => onProcess?.('print')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
-            </svg>
-          </button>
-
           {/* Email icon */}
           <button
             type="button"
@@ -290,20 +286,6 @@ export default function PurchaseOrderActions({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
               <polyline points="22,6 12,13 2,6" />
-            </svg>
-          </button>
-
-          {/* Print icon */}
-          <button
-            type="button"
-            aria-label={ui('print')}
-            style={iconBtnStyle}
-            onClick={() => onProcess?.('print')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
             </svg>
           </button>
         </>

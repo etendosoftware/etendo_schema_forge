@@ -100,7 +100,8 @@ function waitForConnection(popup) {
  *   link: (payload: object) => Promise<object>,
  *   createAndLink: (payload: object) => Promise<object>,
  *   reconnect: (financialAccountId: string) => Promise<string>,
- *   disconnect: (financialAccountId: string) => Promise<object>,
+ *   finishReconnect: (financialAccountId: string, connectionId: string) => Promise<object>,
+ *   disconnect: (financialAccountId: string, opts?: {permanentDeletion?: boolean}) => Promise<object>,
  *   sync: (financialAccountId: string) => Promise<object>,
  *   saveImportSettings: (payload: object) => Promise<object>,
  *   fetchStatus: (financialAccountId: string) => Promise<object>,
@@ -189,14 +190,38 @@ export function useBankConnectionActions() {
     [call],
   );
 
+  /**
+   * Finalizes a reconnect after the Salt Edge popup returns its connection id.
+   *
+   * Required because the popup's `return_to` is an app route that only relays the id — unlike
+   * Classic, where Salt Edge redirects into a servlet that reactivates the connection itself.
+   * Without this call the connection stays inactive and the account keeps showing as deactivated.
+   */
+  const finishReconnect = useCallback(
+    (financialAccountId, connectionId) =>
+      call('POST', 'reconnect-callback', { body: { financialAccountId, connectionId } }),
+    [call],
+  );
+
   const reconnect = useCallback(
     async (financialAccountId) =>
       (await call('POST', 'reconnect', { body: { financialAccountId } })).reconnectUrl,
     [call],
   );
 
+  /**
+   * Disconnects a bank connection in one of two modes:
+   * - `permanentDeletion: false` (default) — soft disconnect: the connection is deactivated but
+   *   the Salt Edge link is kept, so the account can be reconnected later without losing history.
+   * - `permanentDeletion: true` — irreversibly deletes the connection on the Salt Edge side.
+   *
+   * The bridge reports what actually happened (`permanent` / `reconnectable`) rather than echoing
+   * the request, because a connection shared with other accounts is always unlinked, never
+   * deactivated.
+   */
   const disconnect = useCallback(
-    (financialAccountId) => call('POST', 'disconnect', { body: { financialAccountId } }),
+    (financialAccountId, { permanentDeletion = false } = {}) =>
+      call('POST', 'disconnect', { body: { financialAccountId, permanentDeletion } }),
     [call],
   );
 
@@ -222,6 +247,7 @@ export function useBankConnectionActions() {
     link,
     createAndLink,
     reconnect,
+    finishReconnect,
     disconnect,
     sync,
     saveImportSettings,

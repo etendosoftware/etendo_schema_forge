@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
@@ -144,7 +145,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -192,9 +193,12 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
       {cloneButton}
-      {(isDraft || isCompleted) && <SendDocumentButton
+      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
+          matching the grid row quick-action's status gate. */}
+      {isCompleted && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__8b5323" />}
+      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -221,7 +225,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           data-testid="CreateDocsModal__8b5323" />,
         document.body,
       )}
-      {(isDraft || isCompleted) && showSend && createPortal(
+      {isCompleted && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Purchase Order')}
           documentNo={data?.documentNo}
@@ -758,7 +762,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
     DR: { label: ui('orderStatusDraft'),     bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
     CO: { label: ui('orderStatusCompleted'), bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
     CL: { label: ui('orderStatusClosed'),    bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' },
-    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))' },
+    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' },
   };
   const badge = statusMap[status] || { label: status, bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' };
 

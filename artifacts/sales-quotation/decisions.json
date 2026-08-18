@@ -9,7 +9,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
+    "hidePrintWhen": { "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } },
     "customComponents": {
       "topbarRight": "QuotationTopbarActions",
       "bottomSection": "QuotationBottomPanel"
@@ -70,6 +70,13 @@
       "specName": "sales-quotation",
       "hasPdf": true,
       "cacheOnComplete": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@!='DR'"
+        }
+      }
     }
   },
   "entities": {

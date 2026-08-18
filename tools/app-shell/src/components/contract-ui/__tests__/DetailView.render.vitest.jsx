@@ -51,6 +51,7 @@ import {
   getLinesTabsSectionClassName,
   getSecondaryTabEntityKey,
   getSecondaryRowUpdateHandler,
+  buildHeaderFooter,
 } from '../DetailView.jsx';
 
 // --- Mock every hook/dep DetailView imports ---
@@ -233,9 +234,13 @@ vi.mock('@/components/attachments/AttachmentIcon', () => ({
 }));
 
 // Simple Form mock
-const MockForm = ({ data, onChange }) => (
+// Mirrors the real EntityForm contract: `trailing` is rendered as an additional grid
+// item INSIDE the form's grid container, so an inlineInHeaderCard footer flows into the
+// header grid rather than into its own block below the form.
+const MockForm = ({ data, onChange, trailing }) => (
   <div data-testid="mock-form">
     <span>{data?.documentNo}</span>
+    {trailing}
   </div>
 );
 
@@ -454,6 +459,34 @@ describe('DetailView render integration', () => {
     const Footer = ({ data }) => <div data-testid="form-footer">Footer for {data?.documentNo}</div>;
     renderDetailView({ formFooter: Footer });
     expect(screen.getByTestId('form-footer')).toBeInTheDocument();
+  });
+
+  it('renders a default formFooter OUTSIDE the header form card (detached below)', () => {
+    const Footer = () => <div data-testid="form-footer">below</div>;
+    renderDetailView({ formFooter: Footer });
+    const footer = screen.getByTestId('form-footer');
+    const principalForm = screen.getAllByTestId("mock-form")[0];
+    // The header card is the nearest common ancestor of the principal form; a
+    // default (non-inline) footer must NOT live inside that card.
+    const card = principalForm.closest('.rounded-2xl');
+    expect(card).toBeTruthy();
+    expect(card.contains(footer)).toBe(false);
+  });
+
+  it('renders an inlineInHeaderCard formFooter INSIDE the header form grid (trailing), aligned with header fields', () => {
+    const Footer = () => <div data-testid="form-footer">inline</div>;
+    Footer.inlineInHeaderCard = true;
+    renderDetailView({ formFooter: Footer });
+    const footer = screen.getByTestId('form-footer');
+    const principalForm = screen.getAllByTestId("mock-form")[0];
+    const card = principalForm.closest('.rounded-2xl');
+    expect(card).toBeTruthy();
+    // The inline footer shares the header card with the principal form...
+    expect(card.contains(footer)).toBe(true);
+    // ...and is spliced INSIDE the principal form itself (the `trailing` grid slot),
+    // so the SIF field flows into the next free cell of the native header grid rather
+    // than starting its own block below the form.
+    expect(principalForm.contains(footer)).toBe(true);
   });
 
   it('renders with afterTotals component', () => {
@@ -2646,6 +2679,36 @@ describe('getLinesContainerClassName', () => {
 
   it('includes pointer-events-none when embedded', () => {
     expect(getLinesContainerClassName('table', true)).toContain('pointer-events-none');
+  });
+});
+
+describe('buildHeaderFooter', () => {
+  const baseProps = {
+    embedded: false, data: {}, entity: 'tax', handleChangeWithCallout: () => {},
+    hook: { handleChange: () => {}, editing: true, registerFields: () => {}, fieldErrors: {} },
+    catalogs: {}, api: {}, token: 't', apiBaseUrl: '/api',
+  };
+
+  it('returns empty pieces when there is no formFooter', () => {
+    const r = buildHeaderFooter({ ...baseProps, formFooter: null });
+    expect(r).toEqual({ footerInline: false, footerElement: null, inlineTrailing: undefined });
+  });
+
+  it('a plain (non-inline) footer yields a detached footerElement and no inline trailing', () => {
+    const Plain = () => null;
+    const r = buildHeaderFooter({ ...baseProps, formFooter: Plain });
+    expect(r.footerInline).toBe(false);
+    expect(r.inlineTrailing).toBeUndefined();
+    expect(r.footerElement).not.toBeNull();
+  });
+
+  it('an inlineInHeaderCard footer yields inline trailing (the bare grid cell) + footerInline true', () => {
+    const Inline = () => null;
+    Inline.inlineInHeaderCard = true;
+    const r = buildHeaderFooter({ ...baseProps, formFooter: Inline });
+    expect(r.footerInline).toBe(true);
+    expect(r.inlineTrailing).not.toBeUndefined();
+    expect(r.footerElement).not.toBeNull();
   });
 });
 

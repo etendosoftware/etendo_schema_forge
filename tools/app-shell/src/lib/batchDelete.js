@@ -1,3 +1,4 @@
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { toast } from 'sonner';
 
 /**
@@ -35,6 +36,29 @@ export async function runBatchDelete(items, deleteOneFn) {
     else failed.push(items[idx]);
   });
   return { succeeded, failed };
+}
+
+/**
+ * Deletes selected child rows using the detail entity's configured endpoint.
+ * Selection state and outcome handling remain with the calling component.
+ */
+export function deleteSelectedChildRows({ selectedChildRows, api, detailEntity, apiBaseUrl }) {
+  return runBatchDelete(selectedChildRows, (row) => {
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+      || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    return fetch(childUrl, {
+      // ETP-4576 — DELETE is unsafe, so it takes the write builder, and the session
+      // cookie only travels with `credentials: 'include'`. This helper was extracted
+      // from DetailView on the epic side, so it never saw the migration: it built a
+      // bearer header by hand and sent no credentials at all.
+      method: 'DELETE',
+      headers: writeHeaders(),
+      credentials: 'include',
+    }).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return row;
+    });
+  });
 }
 
 /**

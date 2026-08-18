@@ -84,14 +84,26 @@ const safeCalls = fetchCalls.filter((c) => !UNSAFE_METHODS.has(methodOf(c)));
 const at = (call) => `${methodOf(call)} at DetailView.jsx line ~${call.line}`;
 
 describe('DetailView.jsx — fetch site inventory', () => {
-  it('finds all 21 fetch sites', () => {
+  // Was 21/16/5 before the epic merge. Two unsafe sites left this module rather
+  // than disappearing: the epic extracted the lines bulk-action bar into
+  // LinesBulkActionBar.jsx and its batch delete into
+  // lib/batchDelete.js#deleteSelectedChildRows. Both were re-migrated to the
+  // shared builders when they were adopted here — they were written on the epic
+  // side, so they had never seen this task and hand-built a bearer header with no
+  // credentials at all.
+  //
+  // Known gap: neither extracted file has a source-reading guard of its own yet,
+  // so this suite no longer watches those two sites. Their behaviour IS covered
+  // (useBulkRowDelete/DetailView.bulkLineDelete exercise them), but the textual
+  // "no bearer header survives" invariant now stops at this module's boundary.
+  it('finds all 19 fetch sites', () => {
     // Guards the parser itself: if this count drifts, the partitioning below is
     // no longer covering the whole module and every other test here is suspect.
-    expect(fetchCalls.length).toBe(21);
+    expect(fetchCalls.length).toBe(19);
   });
 
-  it('splits into 16 unsafe requests and 5 safe GETs', () => {
-    expect(unsafeCalls.length).toBe(16);
+  it('splits into 14 unsafe requests and 5 safe GETs', () => {
+    expect(unsafeCalls.length).toBe(14);
     expect(safeCalls.length).toBe(5);
     expect(safeCalls.every((c) => methodOf(c) === 'GET')).toBe(true);
   });

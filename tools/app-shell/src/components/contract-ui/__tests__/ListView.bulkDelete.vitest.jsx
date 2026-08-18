@@ -197,7 +197,7 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
   });
 
   it('regression: the button IS shown when only some unrelated listViewOptions are set', () => {
-    render(<ListView {...defaultProps} listViewOptions={{ hideEye: true }} />);
+    render(<ListView {...defaultProps} listViewOptions={{ hideLink: true }} />);
     selectRows();
     expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
   });

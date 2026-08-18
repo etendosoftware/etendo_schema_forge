@@ -9,7 +9,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
     "menuActions": [
       {
         "key": "reactivate",
@@ -49,6 +49,13 @@
       "specName": "sales-order",
       "hasPdf": true,
       "cacheOnComplete": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
     }
   },
   "entities": {

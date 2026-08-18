@@ -69,7 +69,7 @@ async function installInvoiceDetailMocks(page, specName, invoice, installments =
     });
   });
 
-  await page.route(`**/sws/neo/${specName}/lines?parentId=${invoice.id}**`, async (route) => {
+  await page.route(`**/sws/neo/${specName}/lines?parentId=${invoice.id}{/**,}**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -77,7 +77,7 @@ async function installInvoiceDetailMocks(page, specName, invoice, installments =
     });
   });
 
-  await page.route(`**/sws/neo/${specName}/paymentPlan?parentId=${invoice.id}**`, async (route) => {
+  await page.route(`**/sws/neo/${specName}/paymentPlan?parentId=${invoice.id}{/**,}**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -97,7 +97,7 @@ function installMutableInvoiceDetailMocks(page, specName, invoice, installments 
     });
   });
 
-  page.route(`**/sws/neo/${specName}/lines?parentId=${invoice.id}**`, async (route) => {
+  page.route(`**/sws/neo/${specName}/lines?parentId=${invoice.id}{/**,}**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -105,7 +105,7 @@ function installMutableInvoiceDetailMocks(page, specName, invoice, installments 
     });
   });
 
-  page.route(`**/sws/neo/${specName}/paymentPlan?parentId=${invoice.id}**`, async (route) => {
+  page.route(`**/sws/neo/${specName}/paymentPlan?parentId=${invoice.id}{/**,}**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -210,7 +210,7 @@ test.describe('SIF buttons follow fiscal config in invoice detail views', () => 
       });
     });
 
-    await page.route('**/sws/neo/purchase-invoice/paymentPlan?parentId=PI_PREVIEW_1**', async (route) => {
+    await page.route('**/sws/neo/purchase-invoice/paymentPlan?parentId=PI_PREVIEW_1{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
