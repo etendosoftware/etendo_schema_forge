@@ -523,9 +523,10 @@ network/CPU waste is judged worth optimizing.
    addition: `GoodsShipmentPreview.jsx` and `ReturnToVendorShipmentPreview.jsx` get
    `attachmentConfig` added (mirroring sales-invoice's draft-gated cache pattern) as part of this
    ticket.
-7. ~~**unconditional PDF regeneration on every open**~~ — resolved as a natural side effect of the
-   2026-08-14 design decision: checking "does a marked attachment exist" gates the jsreport call
-   itself, not just the write.
+7. **unconditional PDF regeneration on every open** — ~~previously marked resolved~~, **reopened
+   2026-08-18: that assumption was wrong, verified never implemented.** See the dedicated section
+   below for the corrected root cause, live evidence, and the actual (still unimplemented)
+   design.
 8. **NEW — uniqueness enforcement is app-level, not DB-level** (no partial unique index found to
    be supported by Etendo's table-model tooling — see design decision above). Column ended up a
    plain boolean (`EM_ETGO_ISPREVIEWMAIN`) rather than a spec-name string after stakeholder review
@@ -547,6 +548,131 @@ network/CPU waste is judged worth optimizing.
     already tracked separately (same epic ETP-3504, status Defined). **Out of scope for this
     migration** — leave the behavior as-is (matches today's pre-existing gap exactly), fix under
     ETP-4787 instead.
+
+## Follow-up 2026-08-18 — Open question #7 reopened: jsreport regeneration was never actually gated
+
+**Status:** Designed, implemented, and verified — live (Chrome MCP, local + `go.experimental.etendo.cloud` comparison) and via automated tests (Vitest + Node test runner). Closed 2026-08-18.
+
+### The mistaken assumption
+
+Open question #7 above (originally from the 2026-08-03 investigation) predicted that once the
+migration checked "does a marked attachment already exist" (the `EM_ETGO_ISPREVIEWMAIN` mark),
+that check would *naturally* also gate the jsreport call — not just the cache write. That
+prediction was never verified after the 6-window generated-PDF migration (Phase 4) landed, and
+turned out to be **wrong**.
+
+### Live evidence (both old and new mechanism confirm the same gap)
+
+1. **Local dev, new mechanism** (`localhost:3100`, this repo's `useMainAttachment`): reopening an
+   already-cached, non-Draft `purchase-order` (#1000010) fires only `GET .../main` +
+   `GET .../file` — correctly zero `POST .../markAsMain` (the *write* is deduped, confirming
+   question #7's write-side claim). But the *live* mechanism was never checked against jsreport
+   traffic directly until this follow-up.
+2. **`go.experimental.etendo.cloud`, old mechanism** (`/preview-file`, pre-migration code, at the
+   user's request): opened **sales-order #1000198** (Completado) twice.
+   ```
+   GET  /sws/neo/preview-file?specName=sales-order&recordId=1EA04F04...  → 200  (×3, all GET, zero POST)
+   POST /jsreport/api/report                                              → 200  (×3 — one per open)
+   ```
+   Zero `POST /preview-file` across both opens (the cached file was found every time — a genuine
+   cache hit, not an empty result), yet jsreport fired once per open regardless. A same-session
+   **Borrador** order (#1000204) fired zero cache calls (correct — drafts never cache) plus one
+   more jsreport call (needed, nothing to compare against). **1:1 correlation between "opened the
+   preview" and "called jsreport," independent of cache state, on both the old and new backing
+   store.**
+
+Conclusion: the caching system's real, verified benefit is **perceived speed** — the cheap
+`GET main` + `GET file` round-trip resolves faster than the header+lines+render pipeline, and
+`ManagedLeftPanel` shows the cached blob unconditionally once `storedFile` is set (no comparison
+against jsreport's result). But jsreport itself still renders a PDF, in the background, every
+single time — pure wasted compute, not a correctness bug (nothing wrong is shown to the user).
+
+### Root cause (why the prediction failed)
+
+The cache-check (`useMainAttachment`) lives **inside** `GenericPreviewModal`'s
+`ManagedLeftPanel` — a child several layers below the component that actually decides whether to
+call the PDF-generation hook (`useOrderPdf`, `useQuotationPdf`, `useInvoicePdf`,
+`useShipmentPdf`, `useReturnToVendorPdf`, each a thin wrapper over the shared
+`useDocumentPdf`/`usePdfGenerator` in `documentPdf.js`/`pdfUtils.js`). The parent Preview
+component (`OrderPreview.jsx`, etc.) calls its PDF hook unconditionally on mount — it has no
+visibility into what the child discovers. Checking "does a marked attachment exist" only ever
+gated the *write* (`GenericPreviewModal`'s own auto-store effect: `if (attachment.storedFile ||
+attachment.isBusy) return;`), never the *read-and-decide-whether-to-render* step.
+
+### Corrected design — generic fix, not a per-window patch
+
+**Rejected approach:** gate each of the 5 target Preview components individually (add a second,
+independent `useMainAttachment` check in each). Rejected because it does not preserve the
+original component design intent (a new window should only need to declare its template + its
+cache condition, and get correct generate-vs-cache behavior for free) — this would instead
+require every future window to hand-roll the same gating logic.
+
+**Chosen approach:** move the gate into the **single shared low-level hook**,
+`usePdfGenerator` (`pdfUtils.js:287`), which every one of the 6 generated-PDF windows' `useXxxPdf`
+hooks already funnels through via `useDocumentPdf` (`documentPdf.js:397`). Accept an additional
+cache-check config (`tableName`, `storeCondition`, mirroring what already exists in
+`attachmentConfig`); when `storeCondition` is true, check `fetchMainAttachment` first — on a hit,
+fetch the blob via `fetchAttachmentBlobUrl` and populate `pdfUrl`/`pdfBlob` from it, **skipping
+the `buildBlobFn`/jsreport call entirely**; on a miss (or `storeCondition` false, e.g. Draft),
+fall back to today's unconditional generate. `pdfUrl`/`pdfBlob` stay the single uniform output
+either way, so the preview panel, the "Descargar PDF" button, and the email-attach flow
+(`SendDocumentModal`'s `pdfBlobUrl` prop) all keep working unchanged — none of them care which
+path produced the value.
+
+```
+useXxxPdf (unchanged per window) → useDocumentPdf → usePdfGenerator (ONE shared place, gets the gate)
+                                                            │
+                                              storeCondition (non-Draft)?
+                                                 │                    │
+                                                No                   Yes
+                                                 │                    │
+                                          POST jsreport      GET main (cache check)
+                                          (as today)              │         │
+                                                                  miss      hit
+                                                                   │         │
+                                                            POST jsreport  GET file
+                                                            + POST markAsMain
+                                                                   │         │
+                                                                   └────┬────┘
+                                                                        ▼
+                                                            pdfUrl / pdfBlob (uniform)
+                                                                        │
+                                                    ┌───────────────────┼───────────────────┐
+                                                    ▼                   ▼                   ▼
+                                                Preview           Descargar PDF           Email
+```
+
+`GenericPreviewModal.jsx` is **not touched** by this fix — confirmed it has 8 total consumers
+(the 6 in scope here + `goods-receipt` + `return-material-receipt`, with `InvoicePreviewModal.jsx`
+being a re-export shim of `InvoicePreview.jsx`, not a distinct 9th). Leaving it unchanged keeps
+zero blast radius on the 2 out-of-scope consumers.
+
+### Scope
+
+**In scope** (all 6 already funnel through `usePdfGenerator`): sales-order, purchase-order,
+sales-quotation, sales-invoice, goods-shipment, return-to-vendor-shipment.
+
+**Explicitly out of scope, confirmed by code reading (2026-08-18):**
+- **goods-receipt** and **purchase-invoice** — call **zero** PDF-generation hooks anywhere in
+  their preview flow (their document is the supplier/receipt's real external file, never
+  rendered by jsreport). Nothing to gate; the "problem" this fix solves does not exist for them.
+- **return-material-receipt** — a distinct, deferred case. It calls `useReturnReceiptPdf`
+  (jsreport) for a *second*, separate document — an internal receipt used only by its own
+  "Enviar"/"Descargar PDF" actions — which is never cached today (by design: only one "main"
+  attachment slot exists per record, already occupied by the customer-supplied document shown in
+  the preview panel). Applying the same gate here would need a new multi-attachment-slot
+  mechanism (caching a *second*, differently-roled file per record), which is a materially bigger
+  design than this fix and explicitly out of scope for it. Left as a known, accepted gap —
+  revisit as its own follow-up if the waste is judged worth fixing.
+
+### Implemented
+
+Done 2026-08-18. `usePdfGenerator` (`pdfUtils.js`) now accepts the `cacheConfig` gate described
+above; all 6 in-scope windows' `useXxxPdf` hooks (and `useDocumentPdf`) forward it, and each
+Preview component builds the matching `pdfCacheConfig` (`{ tableName, storeCondition }`). Verified
+live (Chrome MCP) across all 6 windows and via new automated coverage: `pdfUtils.vitest.jsx`
+(cache hit/miss/disabled branches), `listAttachments.test.js` (`fetchAttachmentBlob`), and
+per-window Preview tests asserting the correct `pdfCacheConfig` is passed through.
 
 ## Next steps
 

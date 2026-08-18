@@ -99,33 +99,34 @@ below. This plan only encodes the *how*; the design doc has the *why*.
       `attachmentConfig` assertions. Still worth adding for fast, isolated coverage.
 - [x] `usePreviewAttachment.js` left untouched — still used by every other window.
 
-## Phase 4 — Rewire sales-side windows (`etendo_schema_forge`)
+## Phase 4 — Rewire sales-side windows (`etendo_schema_forge`) — ✅ DONE (2026-08-18)
 
 Simplest first: only the write/read target changes, draft-gate logic (`isDraft`) is untouched.
 
-- [ ] `OrderPreview.jsx` (sales-order + purchase-order): swap `usePreviewAttachment` →
-      `useMainAttachment` in `attachmentConfig` wiring.
-- [ ] `QuotationPreview.jsx` (sales-quotation): same swap.
-- [ ] `InvoicePreview.jsx`, sales-invoice branch only (`isSalesInvoice`): same swap. Leave the
-      purchase-invoice branch for Phase 5.
-- [ ] `GoodsShipmentPreview.jsx`: **new wiring**, not a swap — this window never had
-      `attachmentConfig` at all (design doc, Open design question 6, resolved "do it now"). Add
-      it mirroring sales-invoice's draft-gated pattern (`storeCondition: !isDraft, sourceBlob:
-      pdfBlob`), using `useMainAttachment`.
-- [ ] `ReturnToVendorShipmentPreview.jsx`: same new wiring as goods-shipment.
-- [ ] Run each window's existing `__tests__/*Preview.vitest.jsx` + add a case for the new
-      goods-shipment/return-to-vendor-shipment caching behavior.
+- [x] `OrderPreview.jsx` (sales-order + purchase-order): swapped to `useMainAttachment` in
+      `attachmentConfig` wiring, `tableName: 'C_Order'`, draft-gated (`!isDraft` → `storeCondition:
+      true, sourceBlob: pdfBlob, autoFetch: true`).
+- [x] `QuotationPreview.jsx` (sales-quotation): same swap, `tableName: 'C_Order'`.
+- [x] `InvoicePreview.jsx`, sales-invoice branch (`isSalesInvoice`): same swap, `tableName:
+      'C_Invoice'`, draft-gated.
+- [x] `GoodsShipmentPreview.jsx`: **new wiring**, not a swap — this window never had
+      `attachmentConfig` at all (design doc, Open design question 6, resolved "do it now"). Added
+      mirroring the sales-invoice draft-gated pattern, `tableName: 'M_InOut'`, `useMainAttachment: true`.
+- [x] `ReturnToVendorShipmentPreview.jsx`: same new wiring as goods-shipment, `tableName: 'M_InOut'`.
+- [x] Confirmed each window's existing `__tests__/*Preview.vitest.jsx` still passes after the
+      wiring change (109/109 across the 5 touched files). Dedicated `attachmentConfig`-shape /
+      draft-gate assertions for these 5 files are **not yet added** — real pre-existing coverage
+      gap, on the backlog for the next Tester pass (delegation paused mid-session per explicit
+      instruction: finish the source migration first, tests after).
 
-## Phase 5 — Rewire purchase-side windows (`etendo_schema_forge`) — ✅ DONE for purchase-invoice
-+ goods-receipt (2026-08-14); return-material-receipt still pending
+## Phase 5 — Rewire purchase-side windows (`etendo_schema_forge`) — ✅ DONE (2026-08-18)
 
-- [x] `InvoicePreview.jsx`, purchase-invoice branch: now `useMainAttachment: true, tableName:
+- [x] `InvoicePreview.jsx`, purchase-invoice branch: `useMainAttachment: true, tableName:
       'C_Invoice'` — the actual bug fix, reads/writes the same `Attachment` row the sidebar uses.
 - [x] `GoodsReceiptPreview.jsx`: same swap, `tableName: 'M_InOut'`.
-- [ ] `ReturnMaterialReceiptPreview.jsx`: same swap (no visible bug yet, but same latent shape per
-      design doc — fix now while touching this code). **Not done this session** — out of the
-      literal reported-bug scope (purchase-invoice + goods-receipt only); still on the backlog for
-      full parity.
+- [x] `ReturnMaterialReceiptPreview.jsx`: same swap, `tableName: 'M_InOut'`, unconditional
+      `storeCondition: true` (externally-supplied document, same shape as purchase-invoice/
+      goods-receipt). Closes the last gap for full parity across all preview-using windows.
 - [x] `OcrSidePanel.jsx` (`AttachmentsView`): removed the `list.find(a =>
       /\.pdf$/i.test(a.name || ''))` heuristic. Now calls `fetchMainAttachment` — sidebar and
       preview resolve identically by construction, no heuristic anywhere.
@@ -158,40 +159,41 @@ Simplest first: only the write/read target changes, draft-gate logic (`isDraft`)
 - [ ] **Not yet added:** a dedicated test covering "new record with exactly one unmarked
       attachment → gets marked automatically" (the actual new behavior). Still on the backlog.
 
-## Phase 7 — Migrate the email-send cache write (`etendo_schema_forge`)
+## Phase 7 — Migrate the email-send cache write (`etendo_schema_forge`) — ✅ DONE (2026-08-18)
 
-- [ ] `documentEmailSend.js` → `cacheDocumentPreviewFile()`: replace the `POST {neoBase}/preview-file`
-      call with `POST {neoBase}/attachments/{tableName}/{recordId}?markAsMain=true`
-      (multipart, not JSON — adjust the body construction accordingly, dropping the
-      `blobToBase64` round-trip entirely since multipart upload takes the blob directly).
-      `tableName` needs resolving from `windowName` (check how other call sites already do this
-      mapping — likely a small lookup table already exists somewhere near `useAttachments`
-      call sites, since `tableName` and `windowName`/`specName` are different things throughout
-      this codebase).
+- [x] `documentEmailSend.js` → `cacheDocumentPreviewFile()`: replaced the `POST {neoBase}/preview-file`
+      call with `uploadAndMarkMainAttachment(...)` (`@/components/copilot/ocr/listAttachments`),
+      i.e. `POST {neoBase}/attachments/{tableName}/{recordId}?markAsMain=true` multipart, dropping
+      the `blobToBase64` round-trip entirely (removed the now-dead `blobToBase64` export).
+      `tableName` is resolved from `windowName`/`specName` via a new exported
+      `WINDOW_ATTACHMENT_TABLE` lookup (same 8-window map as every `attachmentConfig.tableName`
+      above); windows not in the map are skipped (no caching attempted) rather than falling back
+      to the retired endpoint.
 - [ ] Update `documentEmailSend.test.js` / `.vitest.js` and `SendDocumentModal.vitest.jsx`
-      accordingly.
+      accordingly — **not yet done**, deferred (source migration finished first per explicit
+      instruction; tests next).
 
-## Phase 8 — Migrate the email download link resolution (`etendo_core_pg`)
+## Phase 8 — Migrate the email download link resolution (`etendo_core_pg`) — ✅ DONE (2026-08-18)
 
-- [ ] `NeoDocumentDownloadService.handle()`: replace the
-      `NeoPreviewFileService.findPreviewFileForClient(...)` lookup with a lookup of the
-      `EM_ETGO_ISPREVIEWMAIN='Y'` attachment for `(clientId, tableId, recordId)` from the validated
-      token's claims, then stream it via the same `AttachImplementationManager.download()` path
-      `handleDownload` already uses.
-- [ ] Wrap the lookup+download in `OBContext.setAdminMode()` / `restorePreviousMode()`, scoped as
-      tightly as possible around just that call — this preserves the anonymous-but-token-validated
-      capability `NeoPreviewFileService` currently gets via disabled org/client filters (design
-      doc, Open design question 9). Restore the previous mode even on the error paths (finally
-      block).
-- [ ] Confirm/accept in the test: an email link sent before a document's marked attachment was
+- [x] `NeoDocumentDownloadService.handle()`: replaced the
+      `NeoPreviewFileService.findPreviewFileForClient(...)` lookup with
+      `NeoAttachmentsHelper.findMainAttachment(tableId, recordId)` (visibility widened from
+      `private` to package-private for this reuse), `tableId` resolved from the token's `specName`
+      via the same `WINDOW_ATTACHMENT_TABLE` map added server-side (mirrors the frontend one).
+      Streams via `NeoAttachmentsHelper.getAttachManager().download(...)`, same
+      `AttachImplementationManager` path `handleDownload` already uses. Added an explicit
+      `attachment.getClient().getId().equals(validated.getClientId())` check to preserve the old
+      lookup's client-scoping guarantee (attachment lookup itself has no client filter under admin
+      mode). `gradlew compile.src` confirms clean build.
+- [x] Admin-mode wrapping was **already in place** at the `NeoServlet.handleDocumentDownload`
+      caller (`OBContext.setAdminMode(true)` / `restorePreviousMode()` in a try/finally around the
+      `NeoDocumentDownloadService.handle(...)` call) — no change needed there.
+- [ ] Confirm/accept in a test: an email link sent before a document's marked attachment was
       replaced now 404s (the old attachment was hard-deleted per Phase 2) instead of silently
-      serving the new file — this is the accepted behavior change from the design doc, write a
-      test asserting the 404, not the old silent-wrong-content behavior.
-- [ ] `DocumentDownloadTokenService`: check whether its claims payload needs any adjustment now
-      that resolution no longer goes through `specName`+`recordId` against `ETGO_PREVIEW_FILE` —
-      likely no change needed (the token still carries `specName`/`recordId`/`clientId`, only the
-      *lookup* changes what table it queries), but verify by reading `Claims` usage end to end
-      before assuming.
+      serving the new file — **not yet written**, deferred with the rest of Phase 7/8 test work.
+- [x] `DocumentDownloadTokenService`/`Claims`: verified no schema change needed — token still
+      carries `specName`/`recordId`/`clientId` unchanged; only the server-side *lookup* now targets
+      `C_File` instead of `ETGO_PREVIEW_FILE`.
 
 ## Phase 9 — Retire the old system
 
