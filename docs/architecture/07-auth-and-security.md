@@ -63,6 +63,29 @@ When deployed under Etendo (e.g., `/etendo_sf/web/app-shell/`), the base URL is 
 
 On mount, `AuthContext` reads the Etendo auth token from localStorage to restore the protected session. On logout, it clears both the Etendo session keys and the onboarding platform token (`sf_platform_token`) so the user returns to a fully signed-out state.
 
+### Technical debt: dual account/environment credentials (TD-AUTH-001)
+
+The application currently persists two bearer credentials: the tenant-scoped `sf_auth_token` used
+by NEO and the account-scoped `sf_platform_token` used by onboarding and cross-tenant operations.
+This creates avoidable session drift: a platform login can rotate the account token while the
+browser remains visibly authenticated in an environment. The result is a misleading `401` during
+Checkout or environment discovery.
+
+The short-term compatibility layer accepts either credential server-side and resolves it to the
+owning account; Checkout prefers the active environment JWT and uses the platform token only as a
+fallback. The remaining debt is to define one account identity/session contract, migrate account-
+level operations to it, remove the duplicate frontend token storage, and preserve a bootstrap path
+for accounts that do not yet own an environment.
+
+Closure criteria:
+
+1. A single browser credential is sufficient for NEO, Checkout, environment listing, switching,
+   and paid onboarding.
+2. Login, refresh, logout, and 401 handling cannot leave a second stale credential behind.
+3. The no-environment bootstrap flow remains available without weakening tenant ownership checks.
+4. Multi-tenant authorization, token rotation, expiry, and cross-account isolation have regression
+   coverage.
+
 ### Session-Scoped UI State
 
 Not all persisted client state lives in `localStorage`. UI preferences that should reset when the browser session ends are stored in `sessionStorage` instead, so they survive in-app navigation but not a browser close or a fresh login.

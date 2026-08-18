@@ -44,7 +44,7 @@ const ROLE_OPTIONS = [
  * win.
  */
 async function installUserRolesChildMock(page) {
-  await page.route('**/sws/neo/user/userRoles**', async (route) => {
+  await page.route('**/sws/neo/user/userRoles{/**,}**', async (route) => {
     const req = route.request();
     if (req.url().includes('/selectors/')) return route.fallback();
     if (req.method() !== 'GET') return route.fallback();
@@ -58,7 +58,7 @@ async function installUserRolesChildMock(page) {
 
 /** Header entity mock — list, detail GET, and PATCH (save) for the user record. */
 async function installUserRecordMock(page) {
-  await page.route('**/sws/neo/user/user**', async (route) => {
+  await page.route('**/sws/neo/user/user{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();
@@ -100,7 +100,7 @@ async function installUserRecordMock(page) {
  * selector than defaultRole's own, per the component's doc comment.
  */
 async function installRoleSelectorsMock(page) {
-  await page.route('**/sws/neo/user/userRoles/selectors/role**', async (route) => {
+  await page.route('**/sws/neo/user/userRoles/selectors/role{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

@@ -55,7 +55,7 @@ const ACCOUNTING_ROW = {
 };
 
 async function installMocks(page, { accountingRows = [ACCOUNTING_ROW] } = {}) {
-  await page.route('**/sws/neo/tax/tax**', async (route) => {
+  await page.route('**/sws/neo/tax/tax{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -80,7 +80,7 @@ async function installMocks(page, { accountingRows = [ACCOUNTING_ROW] } = {}) {
     route.fallback();
   });
 
-  await page.route('**/sws/neo/tax/accounting**', async (route) => {
+  await page.route('**/sws/neo/tax/accounting{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

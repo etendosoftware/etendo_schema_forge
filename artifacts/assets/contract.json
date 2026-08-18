@@ -1,8 +1,8 @@
 {
   "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-28T13:29:08.917Z",
-  "checksum": "cdaecf249e05d686",
+  "updatedAt": "2026-08-13T10:27:12.246Z",
+  "checksum": "0a9b37b0def7dd37",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -15,7 +15,6 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
@@ -41,7 +40,7 @@
       },
       "secondaryTabs": {
         "assetAcct": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "accountingSchema",
@@ -243,9 +242,21 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -599,7 +610,7 @@
             "form": false,
             "summable": true,
             "businessCritical": true,
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "maxLength": 12
             },
@@ -1050,7 +1061,6 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
@@ -1076,7 +1086,7 @@
       },
       "secondaryTabs": {
         "assetAcct": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "accountingSchema",

@@ -477,7 +477,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Order", config: {} } }]}
@@ -492,7 +492,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
         {...props} window={effectiveWindow}
@@ -511,9 +510,8 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="orderDate"
       bulkActions={(ctx) => <OrderReactivateBulkAction {...ctx} />}
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

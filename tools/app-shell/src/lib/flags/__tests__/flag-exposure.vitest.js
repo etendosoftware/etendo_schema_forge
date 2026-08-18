@@ -2,9 +2,20 @@
  * Flag exposure reporting (ETP-4686).
  *
  * Two properties make this hook safe to run inside flag resolution, and both
- * are load-bearing: it deduplicates (the hook runs on every render, so without
- * it the event is uncountable) and it never disturbs evaluation (a reporting
- * failure must not change what a flag resolves to).
+ * are load-bearing:
+ *
+ * - **It never disturbs evaluation.** A reporting failure must not change what a
+ *   flag resolves to.
+ * - **It deduplicates per flag/value/provider.** The hook runs on every render,
+ *   so without dedupe the event is uncountable — but the provider belongs in the
+ *   key. The hook is registered before the real provider is ready, so the first
+ *   evaluation of every page load resolves through OpenFeature's built-in no-op
+ *   default. Keying on flag/value alone let that transient result claim the
+ *   session and silently swallow every later evaluation from the real provider;
+ *   a Mixpanel board showed 74% of exposures attributed to "No-op Provider" as a
+ *   result. Both the "report each provider once" and "collapse repeats from one
+ *   provider" halves are asserted below — they trade off directly against each
+ *   other, so neither may regress in the name of the other.
  */
 
 import {
@@ -115,6 +126,119 @@ describe('createFlagExposureHook — deduplication', () => {
     hook.after(hookContext(), details(true));
 
     expect(trackImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('collapses every repeat evaluation from one provider, however many renders', () => {
+    // The volume guarantee, named explicitly: adding the provider to the dedupe
+    // key must not turn a re-render into an event. `useFeatureFlag` evaluates on
+    // every render, so a regression here multiplies the event count by the render
+    // count rather than by the (small, bounded) number of providers.
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    for (let render = 0; render < 50; render += 1) {
+      hook.after(hookContext({ provider: 'configcat' }), details(false));
+    }
+
+    expect(trackImpl).toHaveBeenCalledTimes(1);
+    expect(trackImpl).toHaveBeenCalledWith(
+      'feature_flag_evaluated',
+      expect.objectContaining({ enabled: false, provider: 'configcat' })
+    );
+  });
+});
+
+/**
+ * The provider dimension of the dedupe key.
+ *
+ * `initFeatureFlags` registers this hook before awaiting `createFlagProvider`, so
+ * the first evaluation of every page load resolves through OpenFeature's built-in
+ * no-op provider — which can only ever return the flag's declared default. These
+ * are the literal names the SDK and the branch report, so the scenario below is
+ * the one that actually reaches Mixpanel.
+ */
+describe('createFlagExposureHook — the provider is part of the dedupe key', () => {
+  const NO_OP = 'No-op Provider';
+
+  it('reports the same flag and value once per provider', () => {
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    hook.after(hookContext({ provider: 'in-memory' }), details(false));
+    hook.after(hookContext({ provider: 'configcat' }), details(false));
+
+    expect(trackImpl).toHaveBeenCalledTimes(2);
+    expect(trackImpl.mock.calls.map(([, properties]) => properties.provider))
+      .toEqual(['in-memory', 'configcat']);
+    // Same flag, same resolved value — only the provider differs.
+    for (const [, properties] of trackImpl.mock.calls) {
+      expect(properties).toMatchObject({ flagKey: 'tenant-upgrade', enabled: false });
+    }
+  });
+
+  it('does not let the startup no-op swallow the real provider that follows it', () => {
+    // The regression this key exists to prevent: the no-op resolves `false`
+    // because it has no data, the real provider later resolves `false` because
+    // that is genuinely the value, and both must be visible. Under the old
+    // flag/value key the second call was silently dropped, so a working control
+    // plane was invisible in the board.
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    hook.after(hookContext({ provider: NO_OP }), details(false));
+    hook.after(hookContext({ provider: 'configcat' }), details(false));
+
+    expect(trackImpl).toHaveBeenCalledTimes(2);
+    expect(trackImpl.mock.calls.at(-1)?.[1]).toMatchObject({
+      provider: 'configcat',
+      enabled: false,
+    });
+  });
+
+  it('still reports the real provider once when it disagrees with the no-op', () => {
+    // The no-op can only answer with the declared default (`false`); a control
+    // plane that has the flag on resolves `true`. Both differ in value AND
+    // provider, so both are reported — and the enabled one is attributed to the
+    // provider that actually decided it.
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    hook.after(hookContext({ provider: NO_OP }), details(false));
+    hook.after(hookContext({ provider: 'configcat' }), details(true));
+
+    expect(trackImpl).toHaveBeenCalledTimes(2);
+    expect(trackImpl.mock.calls.map(([, p]) => [p.provider, p.enabled]))
+      .toEqual([[NO_OP, false], ['configcat', true]]);
+  });
+
+  it('reports each provider exactly once, not once per render', () => {
+    // Both halves of the contract at the same time: three providers interleaved
+    // across many renders yield three events, not nine.
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    for (let render = 0; render < 3; render += 1) {
+      for (const provider of [NO_OP, 'in-memory', 'configcat']) {
+        hook.after(hookContext({ provider }), details(false));
+      }
+    }
+
+    expect(trackImpl).toHaveBeenCalledTimes(3);
+    expect(trackImpl.mock.calls.map(([, p]) => p.provider))
+      .toEqual([NO_OP, 'in-memory', 'configcat']);
+  });
+
+  it('treats an unidentified provider as its own bucket rather than throwing', () => {
+    // `providerMetadata` is supplied by OpenFeature, but the hook must not depend
+    // on it being populated to keep reporting.
+    const trackImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl });
+
+    hook.after({ flagKey: 'tenant-upgrade', context: {} }, details(false));
+    hook.after(hookContext({ provider: 'configcat' }), details(false));
+
+    expect(trackImpl).toHaveBeenCalledTimes(2);
+    expect(trackImpl.mock.calls[0][1].provider).toBeUndefined();
   });
 });
 

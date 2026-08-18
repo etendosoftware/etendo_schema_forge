@@ -104,7 +104,7 @@ const CONTACT_RECORD = {
 };
 
 async function installContactsMock(page) {
-  await page.route('**/sws/neo/contacts/businessPartner**', (route) => {
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && /\/businessPartner\/[^/?]+/.test(url)) {
@@ -169,7 +169,7 @@ const QUOTATION_ROW = {
 };
 
 async function installQuotationMock(page) {
-  await page.route('**/sws/neo/sales-quotation/quotation**', (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotation{/**,}**', (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && /\/quotation\/[^/?]+/.test(url)) {

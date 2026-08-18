@@ -120,10 +120,28 @@ describe('computeLineGrossAmount', () => {
     expect(calloutResult.grossAmount).toBe(500);
   });
 
-  it('does nothing when net is non-positive', () => {
+  it('does nothing when discount drives net to 0 but qty/price are indeterminate (missing)', () => {
+    // discount changed, not qty/price — qty/price are genuinely absent here,
+    // so the zero can't be distinguished from "not set yet".
     const calloutResult = {};
-    computeLineGrossAmount('orderedQuantity', '0', calloutResult, { listPrice: 0 }, {}, [], ORDER_LINE_CONFIG);
+    computeLineGrossAmount('discount', '100', calloutResult, {}, {}, [], ORDER_LINE_CONFIG);
     expect(calloutResult.grossAmount).toBeUndefined();
+  });
+
+  // ETP-4727: editing qty/price directly to 0 is always deterministic — it
+  // must zero the gross, regardless of the other factor's value.
+  it('zeroes the gross when orderedQuantity itself is edited to 0', () => {
+    const calloutResult = { grossAmount: 24.5, lineGrossAmount: 24.5 }; // stale: 7 × 3.50 × 1 before the edit
+    computeLineGrossAmount('orderedQuantity', '0', calloutResult, { orderedQuantity: '0', listPrice: 3.50, discount: 0 }, {}, [], ORDER_LINE_CONFIG);
+    expect(calloutResult.grossAmount).toBe(0);
+    expect(calloutResult.lineGrossAmount).toBe(0);
+  });
+
+  it('zeroes the gross when listPrice itself is edited to 0', () => {
+    const calloutResult = { grossAmount: 24.5, lineGrossAmount: 24.5 };
+    computeLineGrossAmount('listPrice', '0', calloutResult, { orderedQuantity: 7, listPrice: '0', discount: 0 }, {}, [], ORDER_LINE_CONFIG);
+    expect(calloutResult.grossAmount).toBe(0);
+    expect(calloutResult.lineGrossAmount).toBe(0);
   });
 });
 

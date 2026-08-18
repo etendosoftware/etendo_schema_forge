@@ -6,12 +6,12 @@ import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
-import DocumentPrintDrawer, { printDocuments } from './DocumentPrintDrawer.jsx';
+import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
@@ -82,6 +82,7 @@ function expandMultiFieldColumns(columns, locale) {
           key: part.key,
           type: part.type,
           label: part.labels?.[locale] ?? part.labels?.en_US ?? part.label ?? part.key,
+          required: part.required,
         });
       }
       continue;
@@ -308,7 +309,6 @@ export function ListView({
   // Also settable through `listViewOptions.tableOwnsScroll`.
   tableOwnsScroll = false,
   hideLink = false,
-  hideEyeCount = false,
   headerContent = null,
   api = null,
   // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
@@ -319,6 +319,12 @@ export function ListView({
   window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
+  // ETP-4871 — optional `(row) => boolean` gating ListView's own bulk-delete button (the
+  // selection-bar "Delete selected", not to be confused with a window's own per-row delete
+  // affordance). Absent means "every row is deletable" — unchanged default behavior for every
+  // window that does not pass it. When present, the button disables the moment the CURRENT
+  // selection includes a row that fails the predicate, with a tooltip explaining how many.
+  isRowDeletable = null,
   listViewOptions = {},
   baseFilter = null,
   quickFilters = null,
@@ -792,7 +798,6 @@ export function ListView({
   useRegisterWindowContext(windowContextInfo);
   const [showSortPopover, setShowSortPopover] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [showDocPrint, setShowDocPrint] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(`viewMode:${entity}`) || 'list'
   );
@@ -903,6 +908,13 @@ export function ListView({
     hiddenColumns,
   };
 
+  // ETP-4871 — how many of the CURRENT selection fail `isRowDeletable`, if the host passed one.
+  // 0 (the default, `isRowDeletable` absent) means the bulk-delete button behaves exactly as
+  // before for every other window — this must never regress an existing window's bulk delete.
+  const blockedDeleteCount = isRowDeletable
+    ? selectedRows.filter((row) => !isRowDeletable(row)).length
+    : 0;
+
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
@@ -931,22 +943,11 @@ export function ListView({
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
-                {!(listViewOptions?.hideEye ?? hideEyeCount) && (
-                  <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
-                    onClick={() => setShowDocPrint(true)}
-                    data-testid="Button__620cbc">
-                    <Eye className={iconSizeClass(selectionBarSize)} data-testid="Eye__620cbc" />
-                    {ui('preview')}
-                  </Button>
-                )}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     size={selectionBarSize}
                     className="gap-1.5"
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                     {ui('print')} ({selectedRows.length})
@@ -969,14 +970,20 @@ export function ListView({
                     selectionBarRightActions for an unrelated reason must opt out
                     explicitly — inferring it from that prop's mere presence was fragile,
                     since selectionBarRightActions can be used for things other than
-                    delete). */}
+                    delete).
+                    ETP-4871 — additionally disabled (with an explanatory tooltip) once the
+                    selection includes a row the host's `isRowDeletable` rejects; absent, this
+                    never differs from the pre-existing behavior. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
                     variant="outline"
                     size={selectionBarSize}
                     className="gap-1.5"
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
+                    title={blockedDeleteCount > 0
+                      ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
+                      : undefined}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                     {ui('bulkDeleteSelected')} ({selectedRows.length})
@@ -1239,13 +1246,6 @@ export function ListView({
           sortColumn={hook.sortColumn}
           sortDirection={hook.sortDirection}
           data-testid="ReportDrawer__620cbc" />
-        <DocumentPrintDrawer
-          open={showDocPrint}
-          onClose={() => setShowDocPrint(false)}
-          windowName={windowName}
-          documentIds={selectedRows.map(r => r.id || r)}
-          token={token}
-          data-testid="DocumentPrintDrawer__620cbc" />
         {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
         {bulkDeleteDialog}
         {/* ETP-3914 — Generic Send/Download modal mount for any documental window

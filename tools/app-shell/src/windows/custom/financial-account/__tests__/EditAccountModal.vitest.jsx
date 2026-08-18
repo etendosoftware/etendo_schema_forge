@@ -38,10 +38,13 @@ const fetchStatus = vi.fn();
 const sync = vi.fn();
 const disconnect = vi.fn();
 const reconnect = vi.fn();
+const finishReconnect = vi.fn();
 const saveImportSettings = vi.fn();
 const launchSaltEdgePopup = vi.fn();
 vi.mock('@/hooks/useBankConnectionActions', () => ({
-  useBankConnectionActions: () => ({ fetchStatus, sync, disconnect, reconnect, saveImportSettings }),
+  useBankConnectionActions: () => ({
+    fetchStatus, sync, disconnect, reconnect, finishReconnect, saveImportSettings,
+  }),
   launchSaltEdgePopup: (...a) => launchSaltEdgePopup(...a),
 }));
 
@@ -67,7 +70,14 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useHasCapability: (key) => hasCapability(key),
 }));
 
-import { EditAccountModal, initialEditTab } from '../EditAccountModal.jsx';
+// ETP-4795: the GL Item Difference selector (General tab, every account type) is a ChipSelect
+// backed by useGLItemLookup, which itself needs an AuthContext token — mocked out here so this
+// suite doesn't need a real AuthProvider just to mount the modal.
+vi.mock('@/hooks/useMovementLookups.js', () => ({
+  useGLItemLookup: () => ({ results: [], loading: false }),
+}));
+
+import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {
   id: 'acc-1',
@@ -124,8 +134,13 @@ describe('EditAccountModal', () => {
     sync.mockReset();
     disconnect.mockReset();
     reconnect.mockReset();
+    finishReconnect.mockReset();
+    finishReconnect.mockResolvedValue({ connected: true });
     saveImportSettings.mockReset();
     launchSaltEdgePopup.mockReset();
+    // The popup resolves to the Salt Edge connection id it relayed back; the reconnect flow needs
+    // that id to ask the bridge to reactivate the connection.
+    launchSaltEdgePopup.mockResolvedValue('SE-CONN-1');
     fetchDefaults.mockResolvedValue({ currencies: [{ id: '102', iso: 'EUR' }] });
     updateAccount.mockResolvedValue({ id: 'acc-1', name: 'BBVA Renamed' });
     fetchStatus.mockResolvedValue({
@@ -365,10 +380,119 @@ describe('EditAccountModal', () => {
       // Footer button opens the styled confirm dialog; its action button performs the disconnect.
       await user.click(screen.getByText('financeAccountsMenuDisconnect'));
       await user.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
-      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9'));
+      // The plain action is the SOFT disconnect: it deactivates the connection but keeps the link.
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: false }));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
       expect(onClose).toHaveBeenCalled();
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone');
+    });
+
+    it('deletes the connection permanently from the split button menu', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      const onClose = vi.fn();
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: CONNECTED_ACCOUNT, onSaved, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      // The permanent action gets the richer warning cartel, not the plain confirm dialog.
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: true }));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(onClose).toHaveBeenCalled();
+      expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone');
+    });
+
+    it('does not delete until the warning cartel is accepted', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await screen.findByTestId('bank-connection-delete-confirm-modal');
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
+    // The cartel portals to <body>, i.e. outside the Radix dialog content. Without explicit
+    // guards Radix treats clicks on it as outside-interactions and closes the edit modal, so
+    // Cancel/X would dismiss the wrong thing and leave the cartel stuck open underneath.
+    it('cancels the warning cartel without closing the edit modal', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderModal({ account: CONNECTED_ACCOUNT, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-cancel'));
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByTestId('edit-account-modal')).toBeTruthy();
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
+    it('closes the warning cartel from its X without closing the edit modal', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderModal({ account: CONNECTED_ACCOUNT, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-close'));
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The modal stays mounted while closed, so a cartel left open would still be showing on the
+    // next open.
+    it('does not reopen with the warning cartel still showing', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await screen.findByTestId('bank-connection-delete-confirm-modal');
+
+      rerender(<EditAccountModal open={false} account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+      rerender(<EditAccountModal open account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+    });
+
+    // The modal stays mounted while closed, so the status fetched for the connected account would
+    // otherwise still be in state when it reopens on the now-unlinked one — and nothing refetches
+    // for an account with no bank link, so the deleted connection would look live again.
+    it('does not show a stale connection after the link is deleted', async () => {
+      const { rerender } = renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      rerender(<EditAccountModal open={false} account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+      // Reopens on the same account as the list now reports it: no connection, no reconnectable link.
+      const unlinked = { ...CONNECTED_ACCOUNT, bankConnected: false, bankReconnectable: false };
+      rerender(<EditAccountModal open account={unlinked} onClose={() => {}} />);
+
+      await screen.findByTestId('edit-account-connect-bank');
+      expect(screen.queryByTestId('bank-connection-edit-sync')).toBeNull();
+      expect(screen.queryByText('financeAccountsBankConnectionStatusConnected')).toBeNull();
+    });
+
+    it('reports a permanent deletion when the bridge overrides a soft request', async () => {
+      const user = userEvent.setup();
+      // A connection shared with other accounts is always unlinked, whatever was requested.
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+      await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone'));
     });
 
     it('does not disconnect until the confirm dialog action is clicked', async () => {
@@ -391,6 +515,99 @@ describe('EditAccountModal', () => {
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('disc-fail'));
     });
 
+  });
+
+  // A soft-disconnected account: no live connection, but the Salt Edge link survives so the
+  // existing connection can be revived instead of starting a new one from scratch (ETP-4764).
+  describe('deactivated (soft-disconnected) account', () => {
+    const DEACTIVATED_ACCOUNT = { ...CONNECTED_ACCOUNT, bankConnected: false, bankReconnectable: true };
+
+    beforeEach(() => {
+      fetchStatus.mockResolvedValue({ connected: false, reconnectable: true, providerName: 'BBVA' });
+    });
+
+    it('offers Reconectar instead of a from-scratch connect', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await screen.findByTestId('edit-account-reconnect-bank');
+      // Connecting from scratch would create a second connection and orphan the existing one.
+      expect(screen.queryByTestId('edit-account-connect-bank')).toBeNull();
+    });
+
+    it('marks the connection as deactivated and explains how to resume syncing', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      expect(await screen.findByText('financeAccountsBankConnectionStatusDeactivated')).toBeTruthy();
+      expect(await screen.findByTestId('edit-account-deactivated-hint')).toBeTruthy();
+    });
+
+    it('launches the reconnect flow from the Reconectar button', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+    });
+
+    // Salt Edge redirects to an app route that only relays the connection id, so the SPA has to
+    // finalize the reconnect itself. Skipping this leaves the connection inactive and the account
+    // stuck on "deactivated" no matter how many times the user reconnects.
+    it('finalizes the reconnect with the id the popup relayed back', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(finishReconnect).toHaveBeenCalledWith('acc-9', 'SE-CONN-1'));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionReauthDone'));
+    });
+
+    // The modal must reflect the reconnect without being closed and reopened: it renders from the
+    // connection hook's live view, not from the account record it was opened with, which still
+    // says "deactivated" at this point.
+    it('switches to the connected panel without reopening', async () => {
+      const user = userEvent.setup();
+      fetchStatus
+        .mockResolvedValueOnce({ connected: false, reconnectable: true, providerName: 'BBVA' })
+        .mockResolvedValueOnce({ connected: true, reconnectable: false, providerName: 'BBVA' });
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+
+      await screen.findByTestId('bank-connection-edit-sync');
+      expect(screen.queryByTestId('edit-account-reconnect-bank')).toBeNull();
+      expect(screen.queryByTestId('edit-account-deactivated-hint')).toBeNull();
+      // Least obvious regression: reading a stale record made it fall through to the
+      // never-connected branch and offer a from-scratch connect.
+      expect(screen.queryByTestId('edit-account-connect-bank')).toBeNull();
+    });
+
+    it('does not finalize when the popup is closed without reconnecting', async () => {
+      const user = userEvent.setup();
+      launchSaltEdgePopup.mockResolvedValue(null);
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+      expect(finishReconnect).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalledWith('financeAccountsBankConnectionReauthDone');
+    });
+
+    // The account is still bound to one Salt Edge account, so the fields the bank owns must stay
+    // locked. Editing the currency here and then reconnecting would silently desync the account
+    // from the bank account it re-binds to (the link filters the bank's accounts by currency).
+    it('keeps the bank-owned fields locked while deactivated', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await screen.findByTestId('edit-account-reconnect-bank');
+
+      expect(screen.queryByTestId('edit-account-iban')).toBeNull();
+      expect(screen.queryByTestId('edit-account-type')).toBeNull();
+      expect(screen.queryByTestId('edit-account-currency')).toBeNull();
+    });
+
+    it('still allows releasing the surviving link without reconnecting first', async () => {
+      const user = userEvent.setup();
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      // The soft disconnect no longer applies here, so only the permanent action is offered.
+      await user.click(await screen.findByTestId('bank-connection-delete-only'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: true }));
+    });
   });
 
   describe('non-connected editing', () => {
@@ -428,6 +645,233 @@ describe('EditAccountModal', () => {
       expect(payload).toMatchObject({ dateTolerance: 7 });
     });
 
+    // ETP-4764 follow-up. The modal is fed by two endpoints that name these fields
+    // differently: the Cuentas LIST row comes from the generic W spec (contract keys
+    // `eTGODateTolerance` / `eTGOAmountTolerance`), the DETAIL record from the legacy
+    // `financial-accounts-page` R spec (flat `dateTolerance` / `amountTolerance`).
+    // Reading only the flat names left the list-opened modal permanently showing the
+    // 3/0 defaults — which also silently swallowed a save back to the stored value,
+    // since the dirty check compared against that wrong snapshot.
+    it('seeds the tolerances from the W spec contract keys (list-opened modal)', () => {
+      renderModal({
+        account: { ...BANK_ACCOUNT, eTGODateTolerance: 9, eTGOAmountTolerance: 2.5 },
+      });
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(9);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(2.5);
+    });
+
+    it('seeds the tolerances from the R spec flat keys (detail-opened modal)', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, dateTolerance: 5, amountTolerance: 1.5 } });
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(5);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(1.5);
+    });
+
+    it('falls back to the 3/0 defaults when the record carries neither spelling', () => {
+      renderModal();
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(3);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(0);
+    });
+
+    // The regression this guards: with a wrong snapshot, typing the ALREADY-STORED value
+    // reads as "not dirty" and never reaches updateAccount at all.
+    it('sends a tolerance edited away from a W-spec-seeded value', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 9 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      await user.clear(dateTol);
+      await user.type(dateTol, '4');
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [, payload] = updateAccount.mock.calls[0];
+      expect(payload).toMatchObject({ dateTolerance: 4 });
+    });
+
+    // The tolerance inputs hold the raw typed string, not a number. Holding a number made the
+    // box impossible to clear — Number('') is 0, so deleting the last character re-rendered a
+    // "0" the caret sat behind and every entry came out as "0123".
+    it('lets the tolerance boxes be emptied while editing', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 3, eTGOAmountTolerance: 2 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+      await user.clear(dateTol);
+      await user.clear(amountTol);
+      expect(dateTol).toHaveValue(null);
+      expect(amountTol).toHaveValue(null);
+    });
+
+    it('types cleanly over a cleared box instead of appending behind a forced 0', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 0 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      await user.clear(dateTol);
+      await user.type(dateTol, '123');
+      expect(dateTol).toHaveValue(123);
+    });
+
+    it('persists an emptied tolerance as 0', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 5 } });
+      await user.clear(screen.getByTestId('recon-date-tolerance-input'));
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [, payload] = updateAccount.mock.calls[0];
+      expect(payload).toMatchObject({ dateTolerance: 0 });
+    });
+
+    // The amount tolerance is a PERCENTAGE of the statement line it is measured against, so
+    // anything above 100 stops meaning anything (and the column is numeric(10,2), which a wild
+    // value would overflow). `min`/`max` on an <input type="number"> only bound the spinner arrows
+    // and native form validation — this modal saves through its own handler.
+    //
+    // The field REJECTS an out-of-range value visibly instead of correcting it: an earlier version
+    // silently clamped 446446678787 down to 100 on blur, so the user saved without any warning and
+    // found a number they never typed when they reopened the modal. Looking like the system invented
+    // a value is worse than refusing the input, so the text now stands as typed, an inline error
+    // appears, and Save is blocked until it is fixed.
+    describe('amount tolerance out of range is rejected, not silently corrected', () => {
+      const errorId = 'recon-amount-tolerance-error';
+
+      it('keeps an over-max value as typed, shows the error and blocks Save', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '500');
+
+        // Not rewritten — this is the whole point of the change.
+        expect(amountTol).toHaveValue(500);
+        await user.tab();
+        expect(amountTol).toHaveValue(500);
+
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      it('keeps a negative value as typed, shows the error and blocks Save', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 2 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '-5');
+
+        expect(amountTol).toHaveValue(-5);
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      it('rejects the real-world overflow value that prompted the change', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '446446678787');
+
+        expect(amountTol).toHaveValue(446446678787);
+        expect(screen.getByTestId(errorId)).toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+
+      // The form must not be a dead end: correcting the value clears the error and lets the save
+      // through. Without this, a rejection that never releases Save is indistinguishable from a
+      // permanently broken modal.
+      it('clears the error and re-enables Save once the value is corrected', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '500');
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+        await user.clear(amountTol);
+        await user.type(amountTol, '50');
+
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 50 });
+      });
+
+      it('shows no error for an in-range value, both bounds included', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        for (const value of ['0', '1', '2.5', '100']) {
+          await user.clear(amountTol);
+          await user.type(amountTol, value);
+          expect(amountTol).toHaveValue(Number(value));
+          expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        }
+      });
+
+      it('persists an in-range decimal exactly as typed', async () => {
+        const user = userEvent.setup();
+        renderModal();
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+        await user.type(amountTol, '2.5');
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 2.5 });
+      });
+
+      // An empty box means "no tolerance", NOT an invalid entry — so clearing the field must never
+      // raise the error or block the save. It also must stay empty (the raw-string design), rather
+      // than snapping to a 0 the caret would then sit behind.
+      it('treats an emptied box as valid: no error, Save stays available', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 5 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        await user.clear(amountTol);
+
+        expect(amountTol).toHaveValue(null);
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        await user.tab();
+        expect(amountTol).toHaveValue(null);
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      });
+
+      it('still persists an emptied amount tolerance as 0', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 5 } });
+        await user.clear(screen.getByTestId('recon-amount-tolerance-input'));
+        await user.click(screen.getByTestId('edit-account-save'));
+        await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+        const [, payload] = updateAccount.mock.calls[0];
+        expect(payload).toMatchObject({ amountTolerance: 0 });
+      });
+
+      // The dirty check compares NUMBERS, so re-typing the stored value in another shape is not a
+      // change. Distinct from the rejection above: here Save is disabled because nothing changed,
+      // and no error is shown.
+      it('is not dirty when the stored value is re-typed in a different shape', async () => {
+        const user = userEvent.setup();
+        renderModal({ account: { ...BANK_ACCOUNT, eTGOAmountTolerance: 100 } });
+        const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+        expect(amountTol).toHaveValue(100);
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+        await user.clear(amountTol);
+        await user.type(amountTol, '100.0');
+
+        expect(screen.queryByTestId(errorId)).not.toBeInTheDocument();
+        expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+        await user.click(screen.getByTestId('edit-account-save'));
+        expect(updateAccount).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not render the reconciliation section for a cash account', () => {
       renderModal({ account: { id: 'acc-c', name: 'Caja', type: 'C', bankConnected: false } });
       expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();
@@ -447,6 +891,107 @@ describe('EditAccountModal', () => {
       renderModal({ onClose });
       await user.click(screen.getByTestId('edit-account-cancel'));
       expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  // ── ETP-4871: the destructive footer slot is a 3-way choice ─────────────────
+  // (isDeleteMode in EditAccountModal.jsx). `archived` and `!archived+!deletable` still render
+  // exactly one plain button each (Desarchivar / Archivar respectively) — see EditFooter's
+  // if/else-if chain, which checks `archived` before `deleteMode` so an archived-and-deletable
+  // account still reads as "archived" (there is no reachable state where all three single-button
+  // labels could apply at once). The `!archived+deletable` state is different: both actions are
+  // genuinely available, so the footer now renders them TOGETHER via `FooterSplitButton` — Archivar
+  // as the always-visible primary action, Eliminar reachable through the chevron dropdown — rather
+  // than swapping one label out for the other.
+  describe('destructive footer action — 3-way selection (ETP-4871)', () => {
+    it.each([
+      {
+        description: 'plain active account (neither archived nor deletable) → Archivar',
+        account: { ...BANK_ACCOUNT, active: true, deletable: false },
+        expectedLabel: 'financeAccountsBankConnectionEditArchive',
+        expectedCallback: 'onArchive',
+      },
+      {
+        description: 'archived account → Desarchivar, regardless of deletable',
+        account: { ...BANK_ACCOUNT, active: false, deletable: true },
+        expectedLabel: 'financeAccountsMenuUnarchive',
+        expectedCallback: 'onArchive',
+      },
+      {
+        description: 'archived, non-deletable account → Desarchivar',
+        account: { ...BANK_ACCOUNT, active: false, deletable: false },
+        expectedLabel: 'financeAccountsMenuUnarchive',
+        expectedCallback: 'onArchive',
+      },
+    ])('$description', async ({ account, expectedLabel, expectedCallback }) => {
+      const user = userEvent.setup();
+      const onArchive = vi.fn();
+      const onDelete = vi.fn();
+      renderModal({ account, onArchive, onDelete });
+
+      const otherLabels = [
+        'financeAccountsBankConnectionEditArchive',
+        'financeAccountsMenuDelete',
+        'financeAccountsMenuUnarchive',
+      ].filter((label) => label !== expectedLabel);
+      for (const label of otherLabels) {
+        expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+
+      await user.click(screen.getByText(expectedLabel));
+
+      const callbacks = { onArchive, onDelete };
+      expect(callbacks[expectedCallback]).toHaveBeenCalledWith(account);
+      const other = expectedCallback === 'onArchive' ? onDelete : onArchive;
+      expect(other).not.toHaveBeenCalled();
+    });
+
+    it('deletable, still-active account → split button: Archivar primary + Eliminar in dropdown, independently wired', async () => {
+      const user = userEvent.setup();
+      const onArchive = vi.fn();
+      const onDelete = vi.fn();
+      const account = { ...BANK_ACCOUNT, active: true, deletable: true };
+      renderModal({ account, onArchive, onDelete });
+
+      // Archivar is the always-visible primary action; Eliminar is not in the DOM yet — the
+      // dropdown starts closed.
+      const primary = screen.getByTestId('archive-account-split');
+      expect(primary).toHaveTextContent('financeAccountsBankConnectionEditArchive');
+      expect(screen.queryByText('financeAccountsMenuDelete')).not.toBeInTheDocument();
+
+      // Clicking the primary action fires onArchive only — not aliased to onDelete.
+      await user.click(primary);
+      expect(onArchive).toHaveBeenCalledWith(account);
+      expect(onDelete).not.toHaveBeenCalled();
+      onArchive.mockClear();
+
+      // Opening the chevron reveals Eliminar in the dropdown.
+      await user.click(screen.getByTestId('archive-account-split-split'));
+      const menuItem = screen.getByTestId('archive-account-split-menu-item');
+      expect(menuItem).toHaveTextContent('financeAccountsMenuDelete');
+
+      // Clicking the dropdown item fires onDelete only — not aliased to onArchive.
+      await user.click(menuItem);
+      expect(onDelete).toHaveBeenCalledWith(account);
+      expect(onArchive).not.toHaveBeenCalled();
+    });
+
+    it('an archived-and-deletable account is not reachable as delete mode (archived always wins)', () => {
+      // isDeleteMode returns false whenever account.active === false, so this combination
+      // can never render "Eliminar" — documented here as a regression guard in case that
+      // precedence is ever inverted.
+      renderModal({ account: { ...BANK_ACCOUNT, active: false, deletable: true } });
+      expect(screen.queryByText('financeAccountsMenuDelete')).not.toBeInTheDocument();
+      expect(screen.getByText('financeAccountsMenuUnarchive')).toBeInTheDocument();
+    });
+
+    it('isDeleteMode — pure predicate truth table', () => {
+      expect(isDeleteMode({ active: true, deletable: true })).toBe(true);
+      expect(isDeleteMode({ deletable: true })).toBe(true); // active absent = active
+      expect(isDeleteMode({ active: false, deletable: true })).toBe(false);
+      expect(isDeleteMode({ active: true, deletable: false })).toBe(false);
+      expect(isDeleteMode({ active: true })).toBe(false); // deletable absent
+      expect(isDeleteMode(null)).toBe(false);
     });
   });
 
@@ -589,16 +1134,28 @@ describe('EditAccountModal', () => {
     });
   });
 
-  // ── Manual-QA regression: General tab must not render for cash accounts ───
-  // The General tab (bank connection + reconciliation config) has nothing to show for a Caja
-  // account — before this fix the tab trigger still rendered (with blank content once selected).
-  describe('General tab hidden for cash accounts (manual QA regression)', () => {
+  // ── General tab: bank connection + tolerances are non-cash-only, GL Item Difference is not ──
+  // (ETP-4795). Before ETP-4795 the General tab was hidden entirely for cash accounts because it
+  // had nothing to show them; it now always renders because the GL Item Difference selector
+  // (used by the cash-close flow) applies to every account type.
+  describe('General tab: cash accounts see only the GL Item Difference section (ETP-4795)', () => {
     const CASH_ACCOUNT = { id: 'acc-cash', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false };
 
-    it('does not render the General tab trigger for a cash account', () => {
+    it('still renders the General tab trigger for a cash account, defaulting to Accounting', () => {
       renderModal({ account: CASH_ACCOUNT });
-      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
       expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('shows the GL Item Difference section but not bank connection/tolerances for cash', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: CASH_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+
+      expect(screen.getByTestId('gl-item-difference-section')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsEditConnectionSection')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();
     });
 
     it('still renders the General tab trigger for a bank account', () => {
@@ -633,7 +1190,9 @@ describe('EditAccountModal', () => {
         />,
       );
 
-      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      // ETP-4795: General still renders for cash (it carries the GL Item Difference selector),
+      // but Accounting remains the tab a cash account lands on.
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'false');
       expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
     });
   });
@@ -910,19 +1469,20 @@ describe('EditAccountModal', () => {
       expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
     });
 
-    it('does not crash for a cash account when the capability is denied (both tabs unavailable)', () => {
-      // Edge case: a cash account has no General tab (no bank connection/reconciliation) and,
-      // here, no Accounting tab either (capability denied) — there is genuinely nothing to
-      // show, but the modal itself must still render cleanly and editTab must settle on
-      // General internally rather than staying stuck pointing at the hidden Accounting tab.
+    it('falls back to General for a cash account when the Accounting capability is denied', () => {
+      // Edge case: a cash account defaults to Accounting, but here the capability is denied so
+      // that tab does not render. Since ETP-4795 the General tab always exists (it carries the
+      // GL Item Difference selector), so editTab must settle there and its content must show —
+      // before ETP-4795 this combination left the modal with no tab at all.
       hasCapability.mockReturnValue(false);
       renderModal({
         account: { id: 'acc-cash-nocap', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
       });
 
       expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();
-      expect(screen.queryByTestId('edit-account-tab-general')).not.toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-tab-accounting')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('gl-item-difference-section')).toBeInTheDocument();
     });
   });
 });

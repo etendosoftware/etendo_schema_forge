@@ -118,9 +118,17 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
 
   // DataTable appends `text-right tabular-nums` itself for numeric column types
   // (DataTable.jsx:1423), so restating it in the chrome only duplicated the class.
+  // The one exception is `GRID_TYPE_OVERRIDE`: `pendingCount` is contractually
+  // "integer" (it IS a count) but always renders through `reconcilePill`, never as a
+  // right-aligned number, so its DataTable-facing `type` is overridden to keep the
+  // pill left-aligned like every other status cell — see the constant's own comment.
   it('leaves numeric alignment to DataTable rather than pinning it in the chrome', () => {
     assert.doesNotMatch(src, /text-right/);
-    assert.match(src, /type: col\.type/);
+    assert.match(src, /type: GRID_TYPE_OVERRIDE\[col\.name\] \?\? col\.type/);
+  });
+
+  it('only overrides the grid type for pendingCount, not any other column', () => {
+    assert.match(src, /const GRID_TYPE_OVERRIDE = \{\s*pendingCount: 'string',\s*\}/);
   });
 
   it('binds the cell bodies through the cellType registry, not a local map', () => {
@@ -245,5 +253,39 @@ describe('AccountsHeaderTable — i18n', () => {
   it('falls back to the contract label and AD column when no gridLabelKey is declared', () => {
     assert.match(src, /label: col\.label/);
     assert.match(src, /column: col\.column/);
+  });
+});
+
+// ETP-4871 — the same deleteTarget/onDelete/DeleteAccountDialog wiring index.jsx (the detail
+// view) got, mirrored here for the list view. Behavioural coverage:
+// tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.handlers.vitest.jsx
+describe('AccountsHeaderTable — delete wiring (ETP-4871)', () => {
+  it('imports DeleteAccountDialog as a sibling of ArchiveAccountDialog', () => {
+    assert.match(
+      src,
+      /import \{ DeleteAccountDialog \} from '@\/windows\/custom\/financial-account\/DeleteAccountDialog\.jsx'/,
+    );
+  });
+
+  it('holds its own deleteTarget state, the same shape as archiveTarget', () => {
+    assert.match(src, /const \[deleteTarget, setDeleteTarget\] = useState\(null\)/);
+  });
+
+  it('routes the row kebab\'s delete action to setDeleteTarget', () => {
+    assert.match(src, /onDelete:\s*setDeleteTarget,/);
+  });
+
+  it('threads onDelete through the _rowActions column into AccountRowActions', () => {
+    assert.match(src, /<AccountRowActions[\s\S]*?onDelete=\{handlers\.onDelete\}[\s\S]*?\/>/);
+  });
+
+  it('mounts DeleteAccountDialog gated by deleteTarget and refreshes the list on delete', () => {
+    assert.match(src, /<DeleteAccountDialog\b/);
+    assert.match(src, /open=\{!!deleteTarget\}/);
+    assert.match(src, /account=\{deleteTarget\}/);
+    assert.match(src, /onClose=\{\(\) => setDeleteTarget\(null\)\}/);
+    // Both ArchiveAccountDialog and DeleteAccountDialog reuse the same `reload` (a thin
+    // `onDataMutated?.()` wrapper) as their success callback.
+    assert.match(src, /<DeleteAccountDialog[\s\S]*?onDeleted=\{reload\}/);
   });
 });

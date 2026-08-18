@@ -85,6 +85,14 @@ vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
     return <div data-testid="archive-dialog" data-open={String(props.open)} />;
   },
 }));
+// ETP-4871 — a sibling of ArchiveAccountDialog, not a mode of it.
+let deleteDialogProps = null;
+vi.mock('@/windows/custom/financial-account/DeleteAccountDialog.jsx', () => ({
+  DeleteAccountDialog: (props) => {
+    deleteDialogProps = props;
+    return <div data-testid="delete-dialog" data-open={String(props.open)} />;
+  },
+}));
 vi.mock('@/windows/custom/financial-account/BankConnectionFlowUI.jsx', () => ({
   BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
@@ -130,6 +138,11 @@ const OFFLINE = {
   id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0,
   currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true,
 };
+/** ETP-4871 — zero dependent records anywhere: the row kebab offers a real delete. */
+const DELETABLE = {
+  id: 'acc-3', name: 'Empty Account', type: 'B', currentBalance: 0,
+  currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true, deletable: true,
+};
 
 const onDataMutated = vi.fn();
 
@@ -150,6 +163,7 @@ beforeEach(() => {
   wizardProps = null;
   editModalProps = null;
   archiveDialogProps = null;
+  deleteDialogProps = null;
   transferModalProps = null;
   bankConnectionFlowOnDone = null;
 });
@@ -300,8 +314,26 @@ describe('AccountsHeaderTable — bank connection disconnect action', () => {
 
     fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
 
-    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1'));
+    // The kebab's "Desconectar" is the SOFT path: it deactivates but keeps the link.
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1', { permanentDeletion: false }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone'));
+    expect(onDataMutated).toHaveBeenCalled();
+  });
+
+  it('deletes the connection permanently after accepting the warning cartel', async () => {
+    mockDisconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+    renderTable();
+    openRowMenu('acc-1');
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-connection-acc-1'));
+
+    // The irreversible path is gated by the warning cartel, not the plain confirm dialog.
+    await screen.findByTestId('bank-connection-delete-confirm-modal');
+    expect(mockDisconnect).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1', { permanentDeletion: true }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone'));
     expect(onDataMutated).toHaveBeenCalled();
   });
 
@@ -348,6 +380,19 @@ describe('AccountsHeaderTable — edit modal', () => {
     expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
   });
 
+  // ETP-4871 — same "close the edit modal, open the sibling dialog" shape as onArchive above.
+  it('closes the edit modal and opens the delete dialog from its onDelete', async () => {
+    renderTable([DELETABLE, OFFLINE]);
+    fireEvent.click(screen.getByTestId('account-row-edit-acc-3'));
+    await waitFor(() => expect(editModalProps.account).toEqual(DELETABLE));
+
+    editModalProps.onDelete(DELETABLE);
+
+    await waitFor(() => expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'true'));
+    expect(deleteDialogProps.account).toEqual(DELETABLE);
+    expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
+  });
+
   it('refreshes the list after a save', () => {
     renderTable();
 
@@ -383,6 +428,35 @@ describe('AccountsHeaderTable — archive & transfer', () => {
     fireEvent.click(await screen.findByTestId('account-row-menu-transfer-acc-1'));
 
     await waitFor(() => expect(screen.getByTestId('transfer-modal')).toHaveAttribute('data-source', 'acc-1'));
+  });
+});
+
+// ETP-4871 — the row kebab's "Eliminar cuenta" only appears once `deletable === true`.
+describe('AccountsHeaderTable — delete', () => {
+  it('opens the delete dialog directly from the row kebab when the row is deletable', async () => {
+    renderTable([DELETABLE, OFFLINE]);
+    openRowMenu('acc-3');
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-3'));
+
+    await waitFor(() => expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'true'));
+    expect(deleteDialogProps.account).toEqual(DELETABLE);
+  });
+
+  it('does not offer the delete menu item for a non-deletable row', async () => {
+    renderTable();
+    openRowMenu('acc-1');
+
+    await screen.findByTestId('account-row-menu-open-acc-1');
+    expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('refreshes the list after a delete', () => {
+    renderTable();
+
+    deleteDialogProps.onDeleted();
+
+    expect(onDataMutated).toHaveBeenCalled();
   });
 });
 

@@ -45,6 +45,7 @@ export default function LinesBottomSection({
   totalDiscountPct,
   onTotalDiscountChange,
   onNotesSave,
+  docsRefreshSignal,
   relatedDocuments: RelatedDocumentsComponent,
   totalsField = 'etgoTotalDiscount',
   // Inventory / shipment-style windows (albaranes, recepciones, movimientos)
@@ -61,6 +62,23 @@ export default function LinesBottomSection({
   const ui = useUI();
   const currency = data?.['currency$_identifier'] || '';
   const isReadOnly = data?.documentStatus !== 'DR';
+
+  // ETP-4777 — the backend-persisted header total (maintained by the
+  // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's
+  // "Imp. Total" column and the printed document read) is the authoritative
+  // source. DocumentTotalsPanel prefers this over its own recompute whenever
+  // no line is actively pending/being edited. Only the two raw header fields
+  // are passed down — DocumentTotalsPanel itself works out whether
+  // summedLineAmount is already net-of-discount (it compares against a
+  // fresh recompute from the current lines; documentStatus is NOT a
+  // reliable signal here — verified live that an invoice created from an
+  // already-discounted order has its discount line materialised immediately,
+  // while still Draft). See DocumentTotalsPanel.jsx for the full rationale.
+  const resolvedTotalDiscountPct = resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField);
+  const persistedNetSubtotal = data?.summedLineAmount ?? data?.totalLines ?? null;
+  const persistedTotals = data?.grandTotalAmount != null
+    ? { grandTotal: data.grandTotalAmount, netSubtotal: persistedNetSubtotal }
+    : null;
 
   return (
     <div className="flex flex-col">
@@ -81,6 +99,7 @@ export default function LinesBottomSection({
                   apiBaseUrl={apiBaseUrl}
                   api={api}
                   layout="chips"
+                  docsRefreshSignal={docsRefreshSignal}
                   data-testid="RelatedDocumentsComponent__751847" />
               </div>
             </div>
@@ -123,7 +142,7 @@ export default function LinesBottomSection({
               SifDataTabs. Rendered as a React component with standard
               data/recordId/token props. */}
           {NotesExtraComponent && (
-            <div className="mt-3 border-t border-border-structural px-3 pt-3">
+            <div className="mt-3 border-t border-border px-3 pt-3">
               <NotesExtraComponent
                 data={data}
                 recordId={recordId}
@@ -137,7 +156,7 @@ export default function LinesBottomSection({
 
         {showTotals && (
           <>
-            <div className="border-l border-border-structural" />
+            <div className="border-l border-border" />
 
             {/* Right column: Totals — fixed 520px wide, with a soft
                 minHeight: 200 floor so the panel keeps a stable visual rhythm
@@ -154,8 +173,9 @@ export default function LinesBottomSection({
                 formatAmount={fmt}
                 currency={currency}
                 readOnly={isReadOnly}
-                totalDiscountPct={resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField)}
+                totalDiscountPct={resolvedTotalDiscountPct}
                 onTotalDiscountChange={onTotalDiscountChange}
+                persistedTotals={persistedTotals}
                 data-testid="DocumentTotalsPanel__751847" />
             </div>
           </>

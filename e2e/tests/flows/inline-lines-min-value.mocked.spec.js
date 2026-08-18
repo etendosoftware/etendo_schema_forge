@@ -74,7 +74,7 @@ async function installQuotationMocks(page, { onPatch } = {}) {
       body: JSON.stringify({ response: { data: [DRAFT_QUOTATION] } }),
     });
   });
-  await page.route('**/sws/neo/sales-quotation/quotationLine**', async (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200, contentType: 'application/json',
@@ -134,6 +134,29 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     // commitField returned early on min violation → no PATCH for discount.
     const discountPatches = patchCalls.filter((c) => c.body.discount !== undefined);
     expect(discountPatches).toHaveLength(0);
+  });
+
+  // ETP-4886 — Enter must not exit edit mode when the just-typed value fails the
+  // min-value validation: the row would otherwise close with the invalid value
+  // still shown as saved, hiding the fact that the PATCH never fired.
+  test('pressing Enter on a value below min blocks the PATCH and keeps the row open', async ({ page }) => {
+    const row = page.locator(`[data-testid="line-row-${LINE_ID}"]`);
+    await row.dispatchEvent('mouseover');
+    await row.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
+
+    const discountField = row.locator('[data-testid="field-discount"]');
+    await expect(discountField).toBeVisible({ timeout: 3_000 });
+    await discountField.fill('-1');
+    await discountField.press('Enter');
+
+    // commitField's min-check short-circuits before onUpdateRow → no PATCH for discount.
+    await page.waitForTimeout(500);
+    const discountPatches = patchCalls.filter((c) => c.body.discount !== undefined);
+    expect(discountPatches).toHaveLength(0);
+
+    // The row stays in edit mode: the field is still visible with the destructive border.
+    await expect(discountField).toBeVisible();
+    await expect(discountField).toHaveClass(/border-destructive/);
   });
 
   test('correcting the invalid value clears the destructive border and fires the PATCH', async ({ page }) => {

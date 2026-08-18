@@ -12,6 +12,19 @@
   background-color: hsl(var(--muted));
 }
 
+/* ETP-4749: inputs wrapped by PrefixedInput (e.g. "Página web") intentionally drop
+   `rounded-lg` so they stop drawing their own (mismatched-radius) border/focus ring —
+   the wrapper owns that now. Mirror just the background states above (not the
+   focus/disabled border rules, which the wrapper already handles) so the input still
+   looks identical to every other field otherwise. */
+.contacts-rows input.prefixed-input-control {
+  background-color: hsl(var(--card));
+}
+
+.contacts-rows input.prefixed-input-control:not(:disabled):not(:focus-visible):hover {
+  background-color: hsl(var(--muted));
+}
+
 /* Focus: black double-border (1px border + 1px box-shadow inset = 2px visual weight) */
 .contacts-rows input.rounded-lg:focus-visible {
   background-color: hsl(var(--card));

@@ -43,7 +43,7 @@ const DOCUMENT_ROW = { id: 'doc-001', documentCategory: 'API', periodStatus: 'O'
 const ACCOUNTING_ROW = { id: 'fact-001', account: '20000000', debit: '100.00', credit: '0.00', description: 'Year close' };
 
 async function installYearMock(page) {
-  await page.route('**/sws/neo/fiscal-calendar/year**', async (route) => {
+  await page.route('**/sws/neo/fiscal-calendar/year{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/year\/[^/?]+/.test(url)) {
@@ -66,7 +66,7 @@ async function installYearMock(page) {
 
 /** Mocks periodControl list + the openClose action endpoint. */
 async function installPeriodControlMock(page, periods) {
-  await page.route('**/sws/neo/open-close-period-control/periodControl**', async (route) => {
+  await page.route('**/sws/neo/open-close-period-control/periodControl{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET') {
@@ -88,7 +88,7 @@ async function installPeriodControlMock(page, periods) {
 }
 
 async function installDocumentsMock(page) {
-  await page.route('**/sws/neo/open-close-period-control/documents**', async (route) => {
+  await page.route('**/sws/neo/open-close-period-control/documents{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET') {
       await route.fulfill({
@@ -107,7 +107,7 @@ async function installDocumentsMock(page) {
  * otherwise index.jsx's menuActions swaps to "Deshacer Cierre de Año" and closeYear never renders.
  */
 async function installAccountingMock(page, rows = [ACCOUNTING_ROW]) {
-  await page.route('**/sws/neo/end-year-close/accounting**', async (route) => {
+  await page.route('**/sws/neo/end-year-close/accounting{/**,}**', async (route) => {
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ data: rows }),

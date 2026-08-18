@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+// The kebab menu's onClick/handler block moved verbatim to DetailMoreActionsMenu.jsx.
+// Assertions targeting that block read from there; no regex was relaxed.
+const menuSrc = readFileSync(join(__dirname, '..', 'DetailMoreActionsMenu.jsx'), 'utf8');
 
 /**
  * Regression guard for ETP-4298:
@@ -28,11 +31,11 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
   });
 
   it('handles the action.neoAction branch in the menu onClick', () => {
-    assert.match(src, /if\s*\(action\.neoAction\)/);
+    assert.match(menuSrc, /if\s*\(action\.neoAction\)/);
   });
 
   it('calls neoAction.execute with the current id and action.neoAction', () => {
-    assert.match(src, /neoAction\.execute\(currentId,\s*action\.neoAction\)/);
+    assert.match(menuSrc, /neoAction\.execute\(currentId,\s*action\.neoAction\)/);
   });
 
   it('checks result.success (hook returns a result object, does not throw)', () => {
@@ -41,7 +44,7 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
 
   it('refreshes the record via hook.fetchById on success', () => {
     // ETP-4563 cache fix: the post-neoAction refresh forces a fresh network read.
-    assert.match(src, /result\.success[\s\S]{0,350}hook\.fetchById\?\.\(currentId, \{ force: true \}\)/);
+    assert.match(menuSrc, /result\.success[\s\S]{0,350}hook\.fetchById\?\.\(currentId, \{ force: true \}\)/);
   });
 
   it('shows toast.error with the (translated) result.message or ui(actionFailed) on failure (ETP-4706)', () => {
@@ -59,14 +62,14 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
   });
 
   it('disables the menu button while either docAction or neoAction is loading', () => {
-    assert.match(src, /disabled=\{docAction\.loading\s*\|\|\s*neoAction\.loading\}/);
+    assert.match(menuSrc, /disabled=\{docAction\.loading\s*\|\|\s*neoAction\.loading\}/);
   });
 
   it('OR-s neoAction.loading into the loading className guard', () => {
-    assert.match(src, /docAction\.loading\s*\|\|\s*neoAction\.loading\s*\?\s*'opacity-50 cursor-not-allowed'/);
+    assert.match(menuSrc, /docAction\.loading\s*\|\|\s*neoAction\.loading\s*\?\s*'opacity-50 cursor-not-allowed'/);
   });
 
   it('emits a stable menu-action-<key> data-testid consistent with RowQuickActions', () => {
-    assert.match(src, /data-testid=\{`menu-action-\$\{action\.key\s*\|\|\s*i\}`\}/);
+    assert.match(menuSrc, /data-testid=\{`menu-action-\$\{action\.key\s*\|\|\s*i\}`\}/);
   });
 });
