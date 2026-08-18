@@ -424,7 +424,11 @@ test.describe('User role assignment — Users grid role filter', () => {
     const linusRow = page.locator('tbody tr').filter({ hasText: 'Linus Torvalds' });
 
     await expect(adaRow.getByTestId('RoleChipsCell__chips')).toBeVisible();
-    await expect(adaRow.getByTestId('RoleChipsCell__chip')).toHaveText('Finanzas');
+    // Each chip carries a per-role-unique testid (`RoleChip__<roleId>`), not the
+    // generic `RoleChipsCell__chip` — see RoleChipsCell.jsx's `RoleChip` call sites
+    // (the [W2]/[S1] data-testid fix moved every chip to a unique id per row/role;
+    // this assertion was never updated to match).
+    await expect(adaRow.getByTestId('RoleChip__role-finance')).toHaveText('Finanzas');
 
     // Classic-Admin branch: zero entries in `assignments`, resolved via defaultRole
     // comparison instead of falling through to an empty/dash cell.
