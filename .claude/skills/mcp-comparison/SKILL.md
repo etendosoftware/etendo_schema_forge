@@ -207,6 +207,31 @@ Two structural conventions the report relies on — do not break them:
    - **A failed write is a first-class result.** The point is to measure whether the first call
      succeeds. Do not retry until it works and then report success — record the *first* attempt
      verbatim, then the corrections it took, and count them. That count **is** M1/M2.
+   - **The database is not part of the agent's world — never use it to complete a measured task.**
+     A `SELECT` may *explain* a result; it may never *produce* one. The moment a run reads an id, a
+     default, or a valid FK value out of the DB and feeds it back into an MCP call, the task stops
+     measuring the product and starts measuring the operator. Agents in production have no database
+     access, so a task completed with DB help is a task that **fails in the field** — and this is the
+     single easiest way to turn a broken contract into a green run without noticing.
+
+     Concretely, every task runs in two separate passes:
+
+     - **Measured pass — this is M1/M2.** MCP tools only: `neo_discover`, `neo_schema`,
+       `neo_defaults` (including its `parentId`), `neo_selectors`, `docs`, and the write verbs.
+       Nothing else. If the contract does not surface a value the task needs, **the task fails, and
+       that failure is the finding.** Record the exact dead-end verbatim and stop there.
+     - **Diagnostic pass — scores nothing.** Allowed only *after* the measured pass is recorded as
+       failed. Here SQL is fair game, to answer the one question the measured pass cannot: *is the
+       value absent from the tenant, or present and unreachable through the contract?* That
+       distinction decides whether the fix is data or code, and it is worth having — but the run
+       report must state in words that this pass is outside the metric.
+     - **Never merge the two passes into one narrative.** A report showing a completed task without
+       saying which pass completed it is unauditable, and reads as a pass when it was a failure.
+
+     When the diagnostic pass does run, **verify which database the deployment actually serves**
+     before trusting a single query: read `bbdd.sid` from the deployed
+     `webapps/<context>/WEB-INF/Openbravo.properties`, not from `gradle.properties` — the two drift,
+     and a whole investigation has already been run against the wrong database on that assumption.
 2. **No claim without a call.** If you cannot produce the response, the finding does not go in.
    Mark it `⏳ unverified` rather than asserting it.
 3. **Do not rewrite history.** A `BEFORE` block is a historical record of the old behavior. When an
