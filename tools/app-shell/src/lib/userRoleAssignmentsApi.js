@@ -1,73 +1,12 @@
-function detectBase() {
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-  return webIdx !== -1 ? path.substring(0, webIdx) : (import.meta.env.VITE_API_BASE || '');
-}
+import { NEO_BASE, fetchNeoWebhookJson } from './neoWebhookClient.js';
 
-const BASE = detectBase();
-const NEO_BASE = `${BASE}/sws/neo`;
-
-function getToken() {
-  return localStorage.getItem('sf_auth_token');
-}
-
-/**
- * Shared GET + `{result: "<json-string>"}`-unwrap mechanics for the two webhooks below.
- * Same fetch conventions as `rolesApi.js`'s `fetchRolesOverview` / `menuTree.js`'s
- * `callMenuWebhook`: no `Content-Type` header (a GET with no body — `application/json`
- * isn't a CORS-safelisted value, so setting it unnecessarily triggers a preflight OPTIONS
- * request, and risks it failing, whenever `VITE_API_BASE` points at a different origin
- * than the SPA), `sf_auth_token` read fresh from `localStorage` on every call (not cached
- * at module scope — the token can change after login/logout without a page reload).
- *
- * @param {string} url - full NEO endpoint URL (query string already appended by the caller).
- * @param {string} webhookName - used only for error messages (e.g. "SFUserRoleAssignments").
- * @returns {Promise<object>} the unwrapped JSON payload (the parsed `result` string, or the
- *   raw body when the bridge already returned a plain object with no `result` wrapper).
- */
-async function fetchNeoJson(url, webhookName) {
-  const token = getToken();
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(url, { headers });
-  const text = await res.text();
-  let data;
-  let parsed = true;
-  try { data = JSON.parse(text); } catch { data = text; parsed = false; }
-
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || `${webhookName} error: ${res.status}`);
-  }
-  // A 200 with a non-JSON body (e.g. a SPA-fallback index.html served when this endpoint
-  // isn't actually backed — no dev proxy, no backend, as in most E2E test environments)
-  // must be treated as a failure rather than silently resolving to an empty-but-valid shape.
-  if (!parsed || typeof data !== 'object' || data === null) {
-    throw new Error(`${webhookName} returned a non-JSON response`);
-  }
-  // NeoGoWebhookBridge maps a genuinely unexpected RuntimeException to responseVars["error"]
-  // (HTTP 500 — !res.ok already caught it above in that case, but a same-request "error" key
-  // can also arrive on a 200 in edge cases, so check it defensively either way).
-  if (data.error) {
-    throw new Error(data.error);
-  }
-  if (typeof data.result === 'string') {
-    try {
-      return JSON.parse(data.result);
-    } catch {
-      throw new Error(`${webhookName} returned an invalid result payload`);
-    }
-  }
-  if (data.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
-    return data.result;
-  }
-  // Fallback: the bridge already handed back the unwrapped shape directly (mirrors
-  // rolesApi.js's `Array.isArray(data.roles)` fallback for its own response shape).
-  if ('assignments' in data || 'templateRoleIds' in data || 'success' in data) {
-    return data;
-  }
-  throw new Error(`${webhookName} returned an unexpected shape`);
-}
+// Fallback: the bridge already handed back the unwrapped shape directly (mirrors
+// rolesApi.js's `Array.isArray(data.roles)` fallback for its own response shape).
+// Shared fetch/parse/unwrap mechanics (base URL, token, `{result: "<json-string>"}`
+// envelope) live in `neoWebhookClient.js`'s `fetchNeoWebhookJson` — see that module
+// for the full rationale (no `Content-Type` header, fresh token per call, etc.).
+const assignmentsFallback = (data) =>
+  ('assignments' in data || 'templateRoleIds' in data || 'success' in data) ? data : null;
 
 /**
  * Fetches applied template-role assignments from `GET /sws/neo/userroleassignments`
@@ -104,7 +43,7 @@ export async function fetchUserRoleAssignments(userId) {
   const query = params.toString();
   const queryPart = query ? `?${query}` : '';
   const url = `${NEO_BASE}/userroleassignments${queryPart}`;
-  return fetchNeoJson(url, 'SFUserRoleAssignments');
+  return fetchNeoWebhookJson(url, 'SFUserRoleAssignments', assignmentsFallback);
 }
 
 /**
@@ -130,7 +69,7 @@ export async function fetchUserRoleAssignments(userId) {
  *   message is that `message` field, so callers can surface it directly (e.g. in a toast).
  *
  * A genuine transport/parse failure (network error, non-2xx HTTP, non-JSON body) also
- * throws, via the same `fetchNeoJson` mechanics `fetchUserRoleAssignments` uses.
+ * throws, via the same `fetchNeoWebhookJson` mechanics `fetchUserRoleAssignments` uses.
  *
  * @param {string} userId - AD_User id whose composed roles are being set.
  * @param {string[]} templateRoleIds - the complete desired set of template role ids.
@@ -142,7 +81,7 @@ export async function saveUserRoleAssignments(userId, templateRoleIds) {
   params.set('UserId', userId);
   params.set('TemplateRoleIds', (templateRoleIds ?? []).join(','));
   const url = `${NEO_BASE}/assignuserroles?${params.toString()}`;
-  const result = await fetchNeoJson(url, 'SFAssignUserRoles');
+  const result = await fetchNeoWebhookJson(url, 'SFAssignUserRoles', assignmentsFallback);
   if (result.success === false) {
     throw new Error(result.message || 'SFAssignUserRoles rejected the request');
   }
