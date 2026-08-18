@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
  * Contacts import category resolution — deterministic local UX coverage.
@@ -149,12 +150,12 @@ test('imports contacts with existing, normalized, new, and legacy category input
   await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Contact Category Code');
   await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Contact Category Name');
   await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-review.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-review.png'), fullPage: true });
 
   await page.getByTestId('ImportDialog__importButton').click();
   await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
   await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('5');
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-confirm.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-confirm.png'), fullPage: true });
   await page.getByTestId('ImportConfirmStep__confirm').click();
 
   await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 10_000 });
@@ -180,7 +181,7 @@ test('imports contacts with existing, normalized, new, and legacy category input
   await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible();
   const codeContact = state.contacts.find((contact) => contact.name === 'Contacto por código');
   expect(state.locations.find((location) => location.businessPartner === codeContact?.id)?.postalCode).toBe('28013');
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-created.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-created.png'), fullPage: true });
 });
 
 test('keeps valid contact rows and surfaces ambiguous or failed category rows', async ({ page }) => {
@@ -244,7 +245,7 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
   await errorFilter.click();
   await expect(page.getByTestId('ImportReviewQueue__rowError-0')).toContainText(/múltiple|multiple|match|coincid/i);
   await expect(page.getByTestId('ImportReviewQueue__rowError-1')).toContainText(/category|categoría|creation|creación/i);
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-errors.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-errors.png'), fullPage: true });
 
   expect(state.batchBodies).toHaveLength(1);
   expect(state.batchBodies[0].operations[0].body.businessPartnerCategory).toBe('bpg-valid');
@@ -288,7 +289,7 @@ test('skips an in-file duplicate company email before sending the batch', async 
   await expect(page.getByTestId('ImportReviewQueue__statusFilter-error')).toContainText('1');
   await page.getByTestId('ImportReviewQueue__statusFilter-error').click();
   await expect(page.getByTestId('ImportReviewQueue__skippedLabel-1')).toBeVisible();
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-duplicate-skipped.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-duplicate-skipped.png'), fullPage: true });
 
   await page.getByTestId('ImportReviewQueue__statusFilter-ok').click();
   await page.getByTestId('ImportDialog__importButton').click();
@@ -332,7 +333,7 @@ test('imports a minimal company row with only legal name and optional email', as
   });
 
   await expect(page.getByTestId('ImportDialog__importButton')).toContainText('Importar 1');
-  await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-minimal-review.png'), fullPage: true });
+  await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-minimal-review.png'), fullPage: true });
   await page.getByTestId('ImportDialog__importButton').click();
   await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
   await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('1');

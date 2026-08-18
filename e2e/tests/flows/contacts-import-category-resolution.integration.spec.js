@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 function loadCredentials() {
   try {
@@ -95,12 +96,12 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Contact Category Code');
     await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Contact Category Name');
     await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
-    await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-review.png'), fullPage: true });
+    await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-review.png'), fullPage: true });
 
     await page.getByTestId('ImportDialog__importButton').click();
     await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
     await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('5');
-    await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-confirm.png'), fullPage: true });
+    await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-confirm.png'), fullPage: true });
     const categoryResponsePromise = page.waitForResponse(
       (response) => response.request().method() === 'POST'
         && response.url().includes('/sws/neo/business-partner-category/businessPartnerCategory'),
@@ -127,7 +128,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
 
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
     for (const row of rows) await expect(page.getByText(row.name, { exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-created.png'), fullPage: true });
+    await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-created.png'), fullPage: true });
 
     await page.getByText(rows[0].name, { exact: true }).click();
     await waitForDetailReady(page);
@@ -137,6 +138,6 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await expect(page.getByTestId('field-taxID')).toHaveValue('B12345678');
     await page.getByTestId('tab-locationAddress').click();
     await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
-    await page.screenshot({ path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });
+    await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });
   });
 });

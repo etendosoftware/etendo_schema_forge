@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
  * ETP-4905 — Product import creates and links a missing category.
@@ -93,14 +94,14 @@ test('imports a product and creates its missing category', async ({ page }) => {
   });
 
   await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Category Name');
-  await page.screenshot({
+  await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-review.png'),
     fullPage: true,
   });
 
   await page.getByTestId('ImportDialog__importButton').click();
   await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await page.screenshot({
+  await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-confirm.png'),
     fullPage: true,
   });
@@ -132,7 +133,7 @@ test('imports a product and creates its missing category', async ({ page }) => {
     },
   }, null, 2)}\n`);
 
-  await page.screenshot({
+  await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-created.png'),
     fullPage: true,
   });
@@ -206,7 +207,7 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
   await errorFilter.click();
   await expect(page.getByTestId('ImportReviewQueue__rowError-0')).toContainText(/precio|price|number|número/i);
   await expect(page.getByTestId('ImportReviewQueue__rowError-1')).toContainText(/múltiple|multiple|match|coincid/i);
-  await page.screenshot({
+  await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-corner-errors.png'),
     fullPage: true,
   });
@@ -234,7 +235,7 @@ test('rejects a malformed CSV before mapping and offers retry', async ({ page })
 
   await expect(page.getByTestId('ImportFileErrorDialog__title')).toBeVisible();
   await expect(page.getByTestId('ImportFileErrorDialog__message')).toContainText(/duplic|duplicate/i);
-  await page.screenshot({
+  await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-malformed-file.png'),
     fullPage: true,
   });

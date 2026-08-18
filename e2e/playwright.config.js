@@ -29,6 +29,9 @@ const hasAuthCredentials = existsSync(authCredentialsPath);
 const E2E_WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined;
 const MOCKED_WORKERS = E2E_WORKERS ?? 4;
 const INTEGRATION_WORKERS = E2E_WORKERS ?? 1;
+const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
+  String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
+);
 
 export default defineConfig({
   testDir: './tests',
@@ -45,7 +48,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3100',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: CAPTURE_SCREENSHOTS ? 'only-on-failure' : 'off',
     video: process.env.E2E_VIDEO ? 'on' : 'on-first-retry',
     headless: !!process.env.CI,
     viewport: { width: 1440, height: 900 },

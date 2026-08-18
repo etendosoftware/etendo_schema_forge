@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
  * ETP-4905 — Product import against a real Etendo/Tomcat backend.
@@ -115,7 +116,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Category Code');
     await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Category Name');
     await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-review.png'),
       fullPage: true,
     });
@@ -123,7 +124,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     await page.getByTestId('ImportDialog__importButton').click();
     await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
     await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('6');
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-confirm.png'),
       fullPage: true,
     });
@@ -178,7 +179,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
       await expect(productTableRow.getByText(newCategoryName, { exact: true })).toBeVisible();
     }
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-created.png'),
       fullPage: true,
     });

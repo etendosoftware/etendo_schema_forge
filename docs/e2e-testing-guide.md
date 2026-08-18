@@ -26,6 +26,20 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 | `make test-e2e-record` | Open recorder — you click, it generates code |
 | `make test-e2e-onboarding-integration` | Run the live onboarding integration spec only (requires a live backend, see below) |
 
+### Screenshot capture
+
+Playwright runs do not write functional screenshots by default. This keeps normal
+test runs from modifying delivery evidence or producing PNG artifacts. To capture
+screenshots explicitly, opt in for that invocation:
+
+```bash
+E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
+```
+
+`E2E_CAPTURE_SCREENSHOTS` accepts `1`, `true`, or `yes`. When enabled, both the
+explicit evidence screenshots and Playwright's automatic failure screenshots are
+available. The default is disabled; `0` and any other value also leave capture off.
+
 ---
 
 ## Etendo GO Contextual Selector Smoke
