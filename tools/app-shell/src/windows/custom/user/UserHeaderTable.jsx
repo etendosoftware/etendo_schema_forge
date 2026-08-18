@@ -31,15 +31,20 @@ import { RoleFilterControl } from './RoleFilterControl.jsx';
  * **Column list mirrors the generated `UserTable.jsx` verbatim** (see
  * `artifacts/user/generated/web/user/UserTable.jsx`'s `@sf-generated-start
  * columns:user` block) for every column except `defaultRole` — same `key`/`column`/
- * `type`/`label`/`required`, so headers, AD-dictionary label resolution and the
- * advanced-filter builder behave identically. Re-verify this list against that file
- * whenever `artifacts/user/decisions.json`'s `user` entity's grid fields change.
+ * `type`/`required`, so headers, AD-dictionary label resolution and the
+ * advanced-filter builder behave identically. No `label:` literal is declared here —
+ * `DataTable`'s own header resolution (`t(col.column) ?? col.label ?? col.key`) always
+ * resolves these 4 columns through the native AD dictionary lookup (`t(col.column)`)
+ * before ever falling back to `col.label`, so a hardcoded literal here would be dead
+ * fallback text that the `sfqg` i18n check flags regardless of whether it renders.
+ * Re-verify this list against that file whenever `artifacts/user/decisions.json`'s
+ * `user` entity's grid fields change.
  */
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'email', column: 'Email', type: 'string', label: 'Email', required: true },
-  { key: 'locked', column: 'IsLocked', type: 'boolean', label: 'Locked', required: true },
+  { key: 'name', column: 'Name', type: 'string', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
+  { key: 'email', column: 'Email', type: 'string', required: true },
+  { key: 'locked', column: 'IsLocked', type: 'boolean', required: true },
 ];
 
 const filters = ['name', 'email'];
@@ -72,7 +77,6 @@ export default function UserHeaderTable(props) {
     key: 'defaultRole',
     column: 'Default_Ad_Role_ID',
     type: 'custom',
-    label: 'Default Role',
     // `type: 'custom'` drives the chip render, but the underlying column is still a
     // plain FK (`_ID` suffix) — `filterMode` restores the identifier picker in the
     // advanced filter without touching the grid cell (same rationale as

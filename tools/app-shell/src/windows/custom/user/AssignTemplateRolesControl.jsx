@@ -75,6 +75,26 @@ export default function AssignTemplateRolesControl(props) {
     return () => document.removeEventListener('mousedown', handleClickAway);
   }, [isEditing]);
 
+  const toggleExpanded = useCallback(() => {
+    if (loading) return;
+    setIsEditing((v) => !v);
+  }, [loading]);
+
+  const handleToggleKeyDown = useCallback((e) => {
+    // Guard against bubbled keydowns from nested focusable elements (the chip
+    // "remove" buttons, and the options-panel checkboxes once expanded) — this
+    // handler lives on the OUTER `role="button"` container, and React's
+    // onKeyDown follows normal DOM bubbling, so without this check pressing
+    // Enter/Space to activate a nested control (e.g. removing a chip) would
+    // also toggle THIS control's expand state and preventDefault() the nested
+    // button's own native click synthesis, silently breaking keyboard removal.
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleExpanded();
+    }
+  }, [toggleExpanded]);
+
   const toggleRole = useCallback((roleId) => {
     setSelectedRoleIds((current) => (
       current.includes(roleId) ? current.filter((id) => id !== roleId) : [...current, roleId]
@@ -102,11 +122,13 @@ export default function AssignTemplateRolesControl(props) {
   return (
     <div className="flex flex-col gap-2 w-full" ref={containerRef} data-testid="AssignTemplateRolesControl">
       <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
-      <button
-        type="button"
-        className="flex flex-wrap items-center gap-1.5 min-h-10 w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm disabled:cursor-not-allowed"
-        onClick={() => setIsEditing((v) => !v)}
-        disabled={loading}
+      <div
+        role="button"
+        tabIndex={0}
+        className="flex flex-wrap items-center gap-1.5 min-h-10 w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm cursor-pointer aria-disabled:cursor-not-allowed"
+        onClick={toggleExpanded}
+        onKeyDown={handleToggleKeyDown}
+        aria-disabled={loading}
         data-testid="AssignTemplateRolesControl__toggle-expand"
       >
         {selectedRoles.length === 0 && (
@@ -121,17 +143,15 @@ export default function AssignTemplateRolesControl(props) {
             data-testid={`AssignTemplateRolesControl__chip-${role.id}`}
           >
             {resolveRoleDisplayName(ui, role.name)}
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               aria-label={`${resolveRoleDisplayName(ui, role.name)} — ${ui('removeRoleAria')}`}
               onClick={(e) => removeRole(role.id, e)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') removeRole(role.id, e); }}
               className="hover:text-destructive"
               data-testid={`AssignTemplateRolesControl__chip-remove-${role.id}`}
             >
               <X className="h-3 w-3" data-testid="X__16443b" />
-            </span>
+            </button>
           </span>
         ))}
         {overflowCount > 0 && (
@@ -145,7 +165,7 @@ export default function AssignTemplateRolesControl(props) {
         <ChevronDown
           className="h-3.5 w-3.5 ml-auto text-muted-foreground"
           data-testid="ChevronDown__16443b" />
-      </button>
+      </div>
       {isEditing && (
         <div className="flex flex-col gap-1 rounded-lg border border-input bg-card p-2 pl-4" data-testid="AssignTemplateRolesControl__options">
           {roles.map((role) => {
