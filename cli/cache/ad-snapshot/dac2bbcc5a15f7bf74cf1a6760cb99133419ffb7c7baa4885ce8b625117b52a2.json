@@ -19576,7 +19576,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "7519fe302ff9d241889fd69df0063b209c04e2afe7eb45feed700cdac6c20fd9",
+      "checksum": "42d8254d665f7adc1c94f9a297454c55ca3716599918e8a9e6d22137d624838e",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -20367,6 +20367,18 @@
           "displaylogic": "@processed@='Y'",
           "field_id": "B124FAF9B10E492092ED90F986E4761F",
           "name": "Remove Transaction",
+          "readonlylogic": null,
+          "tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
+          "tab_name": "Transaction",
+          "table_id": "4D8C3B3C31D1410DA046140C9F024D17",
+          "table_name": "FIN_Finacc_Transaction"
+        },
+        {
+          "column_id": "4687B9CF9BB74115AAA3B408BF0DFE01",
+          "columnname": "EM_ETGO_Finacc_Trans_Dest",
+          "displaylogic": "@EM_ETGO_Finacc_Trans_Dest@!''",
+          "field_id": "E616B452BFE54D9D8CDE62D3CDC5667F",
+          "name": "Destination Financial Account",
           "readonlylogic": null,
           "tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
           "tab_name": "Transaction",

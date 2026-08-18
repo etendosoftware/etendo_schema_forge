@@ -13148,7 +13148,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "88c22d2b291a05a1860851bf685afa4df2448339e543c6e03c1a56eb42fd52e0",
+      "checksum": "bcbae15c1c01b511ce900e164d14226cb75b51be8fd90dbf1b47ed3e0808044c",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -13695,6 +13695,14 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Transaction Process",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_ETGO_Finacc_Trans_Dest",
+          "displaylogic": "@EM_ETGO_Finacc_Trans_Dest@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Destination Financial Account",
           "readonlylogic": null
         },
         {

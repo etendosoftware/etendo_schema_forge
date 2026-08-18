@@ -18631,6 +18631,8 @@
     "financeAccountMovementsDimSalesregion": "Sales region",
     "financeAccountMovementsDimUser1": "First dimension",
     "financeAccountMovementsDimUser2": "Second dimension",
+    "financeAccountMovementsTransferTo": "Destination account",
+    "financeAccountMovementsTransferFrom": "Origin account",
     "financeAccountMovementsPosted": "Posted",
     "financeAccountMovementsNotPosted": "Not posted",
     "financeAccountMovementsStatusVoided": "Voided",
