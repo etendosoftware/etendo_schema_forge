@@ -113,7 +113,13 @@ export function EnumSearchSelect({ options, value, onChange, placeholder, ui, id
         >
           <div className="max-h-56 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground">{ui('noResultsFor')}</div>
+              // `noResultsFor` is a PREFIX ("No results for" / "Sin resultados para"), never a
+              // standalone sentence — rendered alone it reads as a dangling fragment. Append the
+              // query the same way CreatableSearchSelect does, and fall back to the complete
+              // `noResults` sentence when the panel is empty with no query typed (empty option list).
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                {query.trim() ? <>{ui('noResultsFor')} &ldquo;{query}&rdquo;</> : ui('noResults')}
+              </div>
             ) : (
               filtered.map((opt) => (
                 <button
