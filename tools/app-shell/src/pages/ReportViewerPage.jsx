@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, FileDown, FileSpreadsheet, Eye, Loader2, X, ChevronDown } from 'lucide-react';
+import { FileText, Printer, FileDown, FileSpreadsheet, Eye, Loader2, X, ChevronDown, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
@@ -446,6 +447,10 @@ function PopupMultiSelector({ selector, label, onChange }) {
   const [options, setOptions] = useState([]);
   const [pending, setPending] = useState([]); // selection inside modal (not yet confirmed)
   const [confirmed, setConfirmed] = useState([]); // [{id, name}] committed to the report
+  // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
+  // this snapshot float to the top of the list. Deliberately NOT derived from `pending`, so
+  // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
+  const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -461,10 +466,17 @@ function PopupMultiSelector({ selector, label, onChange }) {
 
   const openModal = () => {
     setPending([...confirmed]);
+    setOpenSnapshotIds(new Set(confirmed.map(s => s.id)));
     setQuery('');
     setOpen(true);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
+
+  const orderedOptions = useMemo(() => (
+    [...options].sort((a, b) =>
+      (openSnapshotIds.has(b.id) ? 1 : 0) - (openSnapshotIds.has(a.id) ? 1 : 0)
+    )
+  ), [options, openSnapshotIds]);
 
   const toggleItem = (item) => {
     const exists = pending.some(s => s.id === item.id);
@@ -549,7 +561,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
                   {query.length > 0 ? ui('noResults') : ui('loading')}
                 </p>
               ) : (
-                options.map(o => {
+                orderedOptions.map(o => {
                   const isSelected = pending.some(s => s.id === o.id);
                   return (
                     <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
@@ -681,12 +693,24 @@ const SIDEBAR_SECTIONS = [
   { key: 'options', labelKey: 'displayOptions' },
 ];
 
+// Reports whose contract declares its own `sections` (id + label) use the
+// collapsible accordion below. Reports without one keep the legacy flat
+// primary/dimensions/options layout untouched — migrate them one at a time
+// by adding a `sections` array to their report-contract.json (ETP-4898).
 function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [displayValues, setDisplayValues] = useState({});
   const [errors, setErrors] = useState({});
   const [popup, setPopup] = useState(null); // { name, selector, label } for popup-single
+  const useAccordion = Array.isArray(report.sections) && report.sections.length > 0;
+  // Independent open/closed state per section — several can be expanded at once,
+  // unlike a classic single-open accordion.
+  const [openSections, setOpenSections] = useState(() => ({ [report.sections?.[0]?.id]: true }));
+
+  useEffect(() => {
+    setOpenSections({ [report.sections?.[0]?.id]: true });
+  }, [report.id]);
 
   useEffect(() => {
     setDisplayValues({});
@@ -806,25 +830,53 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
     if (p.type === 'select') {
       const resolvedOptions = p.options ?? (() => {
-        const base = { value: '', label: report.groups?.[0]?.label?.en_US || 'Account' };
+        // groupByValue is the deliberate opt-in marker for "usable as a Group By
+        // option" — filtering on it alone is robust across section-naming schemes
+        // (legacy 'dimensions', or a report's own 'sections' ids like 'dimensiones').
+        const base = { value: '', label: ui('none') };
         const fromDimensions = (report.parameters || [])
-          .filter(d => d.section === 'dimensions' && d.groupByValue)
-          .map(d => ({ value: d.groupByValue, label: d.label?.en_US || d.name }));
+          .filter(d => d.groupByValue)
+          .map(d => ({ value: d.groupByValue, label: d.label?.[locale] || d.label?.en_US || d.name }));
         return [base, ...fromDimensions];
       })();
+      const resolveOptLabel = (o) => (o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label);
+      // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
+      // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
+      // behavior), not via a pinned empty option.
+      const staticOpts = resolvedOptions
+        .filter(o => o.value !== '')
+        .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
+      const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
       return (
         <div key={p.name}>
           {labelEl}
-          <select
+          <CreatableSearchSelect
+            field={{ key: p.name, required: p.required }}
             value={params[p.name] || ''}
-            onChange={e => handleChange(p.name, e.target.value)}
-            className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
+            displayValue={selectedOpt ? selectedOpt.name : ''}
+            onChange={(id) => handleChange(p.name, id)}
+            resolvedLabel={label}
+            staticOptions={staticOpts}
+            placeholderOverride={ui('selectPlaceholder')}
+            data-testid="CreatableSearchSelect__3c998a" />
+        </div>
+      );
+    }
+
+    if (p.type === 'toggle') {
+      const isOn = params[p.name] === 'true';
+      return (
+        <div key={p.name} className="flex items-center justify-between gap-3">
+          <div className="text-sm font-medium text-foreground">{label}</div>
+          <button
+            type="button"
+            onClick={() => handleChange(p.name, isOn ? 'false' : 'true')}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOn ? 'bg-foreground' : 'bg-muted'}`}
+            role="switch"
+            aria-checked={isOn}
           >
-            {resolvedOptions.map(o => {
-              const optLabel = o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label;
-              return <option key={o.value} value={o.value}>{optLabel}</option>;
-            })}
-          </select>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+          </button>
         </div>
       );
     }
@@ -910,37 +962,65 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           }}
           data-testid="SelectorPopup__3c998a" />
       )}
-      <div className="px-4 pt-4 pb-3 border-b border-border/30 shrink-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{ui('reportBuilder')}</p>
+      <div className="p-2 border-b border-border/30 shrink-0">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {ui('customizeReport')}
+          <Info className="h-3.5 w-3.5 text-muted-foreground" data-testid="Info__3c998a" />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{ui('customizeReportHint')}</p>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 space-y-6">
-          {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
-            const sectionParams = grouped[key];
+        {useAccordion ? (
+          report.sections.map(({ id, label }) => {
+            const sectionParams = grouped[id];
             if (!sectionParams?.length) return null;
+            const isOpen = !!openSections[id];
+            const sectionLabel = label?.[locale] || label?.en_US || id;
             return (
-              <div key={key}>
-                <h4 className="text-xs font-semibold text-foreground mb-3">{ui(labelKey)}</h4>
-                {renderSection(key, sectionParams)}
+              <div key={id} className="border-b border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))}
+                  className={`w-full flex items-center justify-between px-2 py-3 text-left text-xs font-semibold transition-colors ${
+                    isOpen ? 'bg-accent-highlight text-accent-highlight-foreground' : 'bg-card text-foreground hover:bg-muted/40'
+                  }`}
+                >
+                  {sectionLabel}
+                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} data-testid="ReportSectionChevron__3c998a" />
+                </button>
+                {isOpen && <div className="px-2 py-2">{renderSection(id, sectionParams)}</div>}
               </div>
             );
-          })}
-        </div>
+          })
+        ) : (
+          <div className="px-4 py-4 space-y-6">
+            {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
+              const sectionParams = grouped[key];
+              if (!sectionParams?.length) return null;
+              return (
+                <div key={key}>
+                  <h4 className="text-xs font-semibold text-foreground mb-3">{ui(labelKey)}</h4>
+                  {renderSection(key, sectionParams)}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-      <div className="px-4 pb-5 pt-3 border-t border-border/30 space-y-2 shrink-0">
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="w-full h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loading ? ui('running') : ui('runReport')}
-        </button>
+      <div className="p-2 border-t border-border/30 flex gap-2 shrink-0">
         <button
           onClick={onReset}
           disabled={loading}
-          className="w-full h-9 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
+          className="flex-1 h-10 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
         >
           {ui('resetFilters')}
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="flex-1 h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {loading ? ui('running') : ui('runReport')}
         </button>
       </div>
     </div>
@@ -951,6 +1031,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { locale } = useLocaleSwitch();
 
   const reportId = targetReportId || report.id;
   const drillParams = { ...baseParams, ...(bpId ? { bPartnerId: bpId, showDetails: 'true' } : {}), ...extraParams };
@@ -972,7 +1053,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ format, params: drillParams }),
+        body: JSON.stringify({ format, params: drillParams, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -990,7 +1071,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
     } catch (err) { setError(err.message); }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report.id, token, bpId]);
+  }, [report.id, token, bpId, locale]);
 
   useEffect(() => { fetchFormat('preview'); }, [fetchFormat]);
 
@@ -1023,14 +1104,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [recordCount, setRecordCount] = useState(null);
   const previewHtmlRef = useRef('');
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
   const [invoicePopup, setInvoicePopup] = useState(null);
   const { locale } = useLocaleSwitch();
-  const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const tMenu = useMenuLabel();
   const ui = useUI();
 
@@ -1119,7 +1198,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       const res = await fetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ format, params }),
+        body: JSON.stringify({ format, params, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1128,8 +1207,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       if (format === 'html' || format === 'preview') {
         const html = await res.text();
         previewHtmlRef.current = html;
-        const rowMatch = html.match(/(\d+) records/);
-        if (rowMatch) setRecordCount(parseInt(rowMatch[1], 10));
         writeToIframe(html);
       } else if (format === 'pdf') {
         const blob = await res.blob();
@@ -1147,7 +1224,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, token, params]);
+  }, [report.id, token, params, locale]);
 
   // No auto-render on mount — wait for user to click Run Report
 
@@ -1182,7 +1259,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
   const DOWNLOAD_FORMATS = [
-    { id: 'html', labelKey: 'preview', icon: Eye },
     { id: 'pdf', labelKey: 'PDF', icon: FileDown },
     { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet },
     { id: 'csv', labelKey: 'CSV', icon: FileText },
@@ -1191,10 +1267,38 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col">
+        {/* ===== Top bar: Cancel + format actions — spans sidebar + content ===== */}
+        <div className="flex items-center justify-between px-2 py-2 bg-card border-b border-border/30 shrink-0">
+          <Button
+            variant="outline"
+            className="h-9 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+            data-testid="action-cancel"
+            onClick={onBack}
+          >
+            {ui('cancel')}
+          </Button>
+          <div className="flex items-center gap-1">
+            {DOWNLOAD_FORMATS.map(fmt => {
+              const Icon = fmt.icon;
+              return (
+                <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
+                  <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
+                </button>
+              );
+            })}
+            <div className="w-px h-6 bg-border/50 mx-1" />
+            <button onClick={handlePrint} disabled={loading}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
+            </button>
+          </div>
+        </div>
+
         {/* ===== Content: sidebar + right panel ===== */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left sidebar */}
-          <div className="w-72 shrink-0 flex flex-col border-r border-border/30 bg-card overflow-hidden">
+          <div className="w-[300px] shrink-0 flex flex-col border-r border-border/30 bg-card overflow-hidden">
             <ReportSidebar
               report={report}
               params={params}
@@ -1211,32 +1315,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
 
           {/* Right panel */}
           <div className="flex-1 flex flex-col overflow-hidden bg-muted">
-            {/* Format actions bar */}
-            <div className="flex items-center justify-between px-5 py-2 bg-card border-b border-border/30 shrink-0">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3c998a" />}
-                {recordCount != null && !loading && <span>{ui('recordsFound').replace('{count}', recordCount)}</span>}
-              </div>
-              <div className="flex items-center gap-1">
-                {DOWNLOAD_FORMATS.map(fmt => {
-                  const Icon = fmt.icon;
-                  return (
-                    <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
-                      <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
-                    </button>
-                  );
-                })}
-                <div className="w-px h-6 bg-border/50 mx-1" />
-                <button onClick={handlePrint} disabled={loading}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                  <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
-                </button>
-              </div>
-            </div>
-
           {/* Report iframe */}
-          <div className="flex-1 overflow-hidden p-4">
+          <div className="flex-1 overflow-hidden pt-4 pr-0 pb-0 pl-4">
             <div className="bg-card rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">

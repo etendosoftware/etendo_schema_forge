@@ -365,7 +365,16 @@ describe('ReportViewerPage — popup multi-select (PopupMultiSelector)', () => {
     await user.click(openButton);
 
     await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument());
-    await user.click(screen.getByText('cancel'));
+
+    // The sidebar now also has a top "cancel" action (data-testid="action-cancel")
+    // that reads the same 'cancel' i18n key — disambiguate by picking the
+    // modal's own cancel button (a plain <button> with no data-testid).
+    const cancelButtons = screen.getAllByText('cancel');
+    const modalCancelButton = cancelButtons
+      .map((el) => el.closest('button'))
+      .find((btn) => btn && !btn.hasAttribute('data-testid'));
+    expect(modalCancelButton).toBeTruthy();
+    await user.click(modalCancelButton);
 
     await waitFor(() => {
       expect(screen.queryByText('Acme')).not.toBeInTheDocument();

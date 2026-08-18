@@ -4,79 +4,185 @@
 <style>
 {{{css}}}
 .group-header td { border: none !important; }
-.group-subheader td { border-bottom: 1px solid #e2e8f0 !important; }
 .report-totals { display: flex; gap: 8px; margin-top: 8mm; }
 .total-card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4mm 5mm; background: #ffffff; }
 .total-label { font-size: 7.5pt; font-weight: 700; color: #64748b; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 1.5mm; }
 .total-value { font-size: 18pt; font-weight: 700; color: #0f172a; }
+/* Nested Producto/Contacto/Proyecto → Cuenta cards (ETP-4898 "Propuesta B") — only used
+   when grouping by a dimension; the flat single-level table below is untouched otherwise. */
+.dim-group { border: 1px solid #cbd5e1; border-radius: 2mm; margin-bottom: 4mm; overflow: hidden; }
+.dim-group-head { display: flex; align-items: center; gap: 3mm; background: #000000; color: #ffffff; padding: 2.5mm 4mm; }
+.dim-group-head .chip { font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.6); border-radius: 3mm; padding: 0.5mm 2mm; }
+.dim-group-head .value { font-weight: 700; font-size: 10.5pt; }
+.dim-group-body { padding: 3mm; display: flex; flex-direction: column; gap: 3mm; }
+.acct-card { border: 1px solid #e2e8f0; border-radius: 1.5mm; overflow: hidden; }
+.acct-card-head { display: flex; align-items: center; gap: 3mm; background: #1a1a2e; color: #f3f5f8; padding: 2mm 4mm; font-size: 9pt; }
+.acct-card-head .code { font-family: var(--font-mono); font-size: 7.5pt; opacity: 0.75; }
+.acct-card-head .name { font-weight: 600; }
+.acct-open td { font-style: italic; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0 !important; }
+.acct-total td { font-weight: 700; background: #f1f5f9; border-top: 1px solid #cbd5e1 !important; }
+.acct-grand-total td { border-top: 1px solid #1a1a2e !important; }
 </style>
 </head>
 <body><div class="report-container">
   <div class="report-header">
     <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} records</div></div>
+    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} {{meta.ui.records}}</div></div>
   </div>
 
-  {{#if meta.filters.length}}
-  <div class="report-filters"><strong>Filters:</strong>
-    {{#each meta.filters}}<span>{{this.label}}: {{this.value}} &nbsp;</span>{{/each}}
-  </div>
-  {{/if}}
 
+  {{#ifCond meta.params.groupBy '!==' ''}}
+  <div class="dim-groups">
+    {{#each meta.groups}}
+    <div class="dim-group">
+      <div class="dim-group-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{this.dimensionValue}}</span></div>
+      <div class="dim-group-body">
+        {{#each this.accounts}}
+        <div class="acct-card">
+          <div class="acct-card-head">
+            {{#if this.value}}<span class="code">{{this.value}}</span>{{/if}}
+            <span class="name">{{this.name}}</span>
+          </div>
+          <table class="report-table">
+            <thead><tr>
+              <th style="width: 10%">{{@root.meta.labels.dateacct}}</th>
+              <th class="cell-amount" style="width: 14%">{{@root.meta.labels.amtacctdr}}</th>
+              <th class="cell-amount" style="width: 14%">{{@root.meta.labels.amtacctcr}}</th>
+              <th class="cell-amount" style="width: 14%">{{@root.meta.labels.total}}</th>
+              <th style="width: 22%">{{@root.meta.descriptionLabel}}</th>
+              {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+              <th style="width: 9%">{{@root.meta.labels.bPartnerId}}</th>
+              <th style="width: 9%">{{@root.meta.labels.productId}}</th>
+              <th style="width: 8%">{{@root.meta.labels.projectId}}</th>
+              {{/ifCond}}
+            </tr></thead>
+            <tbody>
+              <tr class="acct-open">
+                <td>{{@root.meta.ui.initialBalance}}</td>
+                <td class="cell-amount">{{formatCurrency this.opening.amtacctdr}}</td>
+                <td class="cell-amount">{{formatCurrency this.opening.amtacctcr}}</td>
+                <td class="cell-amount">{{formatCurrency this.opening.total}}</td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+              </tr>
+              {{#each this.rows}}
+              <tr>
+                <td>{{formatDate (lookup this 'dateacct')}}</td>
+                <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
+                <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
+                <td class="cell-amount">{{formatCurrency (lookup this 'runningBalance')}}</td>
+                <td>{{lookup this 'groupbyname'}}</td>
+                {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+                <td>{{lookup this 'bpname'}}</td>
+                <td>{{lookup this 'productname'}}</td>
+                <td>{{lookup this 'projectname'}}</td>
+                {{/ifCond}}
+              </tr>
+              {{/each}}
+              <tr class="acct-total">
+                <td>{{@root.meta.ui.subtotal}}</td>
+                <td class="cell-amount">{{formatCurrency this.subtotal.amtacctdr}}</td>
+                <td class="cell-amount">{{formatCurrency this.subtotal.amtacctcr}}</td>
+                <td class="cell-amount">{{formatCurrency this.subtotal.total}}</td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+              </tr>
+              <tr class="acct-total acct-grand-total">
+                <td>{{@root.meta.ui.total}}</td>
+                <td class="cell-amount">{{formatCurrency this.total.amtacctdr}}</td>
+                <td class="cell-amount">{{formatCurrency this.total.amtacctcr}}</td>
+                <td class="cell-amount">{{formatCurrency this.total.total}}</td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  {{else}}
   <table class="report-table">
     <thead><tr>
-      <th style="width: 10%">Date</th>
-      <th style="width: 25%">{{meta.descriptionLabel}}</th>
-      <th style="width: 15%">Debit</th>
-      <th style="width: 15%">Credit</th>
-      <th style="width: 15%">Balance</th>
+      <th style="width: 10%">{{meta.labels.dateacct}}</th>
+      <th class="cell-amount" style="width: 14%">{{meta.labels.amtacctdr}}</th>
+      <th class="cell-amount" style="width: 14%">{{meta.labels.amtacctcr}}</th>
+      <th class="cell-amount" style="width: 14%">{{meta.labels.total}}</th>
+      <th style="width: 22%">{{meta.descriptionLabel}}</th>
+      {{#ifCond meta.params.showDimensions '===' 'true'}}
+      <th style="width: 9%">{{meta.labels.bPartnerId}}</th>
+      <th style="width: 9%">{{meta.labels.productId}}</th>
+      <th style="width: 8%">{{meta.labels.projectId}}</th>
+      {{/ifCond}}
     </tr></thead>
-    <tbody>
-      {{#each rows}}
-        {{#if (isGroupBreak 'name' (lookup this 'name'))}}
+    {{#each meta.groups}}
+      {{#each this.accounts}}
+      <tbody>
         <tr class="group-header group-level-0">
-          <td colspan="5" style="background: #1a1a2e; color: #ffffff; font-weight: 600; padding: 2mm 4mm; font-size: 11pt;">
-            {{@root.meta.groupLabel}}: {{lookup this 'name'}}
+          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}8{{else}}5{{/ifCond}}" style="background: #1a1a2e; color: #f3f5f8; padding: 2mm 4mm; font-size: 9pt;">
+            {{#if this.value}}<span style="font-family: var(--font-mono); font-size: 7.5pt; opacity: 0.75; margin-right: 3mm;">{{this.value}}</span>{{/if}}
+            <strong>{{this.name}}</strong>
           </td>
         </tr>
-        {{#if (lookup this 'value')}}
-        <tr class="group-subheader">
-          <td colspan="5" style="background: #f1f5f9; padding: 1.5mm 4mm; font-size: 8pt; color: #475569;">
-            <span style="margin-right: 3mm;"><strong>Code:</strong> {{lookup this 'value'}}</span>
-          </td>
+        <tr class="acct-open">
+          <td>{{@root.meta.ui.initialBalance}}</td>
+          <td class="cell-amount">{{formatCurrency this.opening.amtacctdr}}</td>
+          <td class="cell-amount">{{formatCurrency this.opening.amtacctcr}}</td>
+          <td class="cell-amount">{{formatCurrency this.opening.total}}</td>
+          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
         </tr>
-        {{/if}}
-        {{/if}}
+        {{#each this.rows}}
         <tr>
           <td>{{formatDate (lookup this 'dateacct')}}</td>
-          <td>{{lookup this 'groupbyname'}}</td>
           <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
           <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'total')}}</td>
+          <td class="cell-amount">{{formatCurrency (lookup this 'runningBalance')}}</td>
+          <td>{{lookup this 'groupbyname'}}</td>
+          {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+          <td>{{lookup this 'bpname'}}</td>
+          <td>{{lookup this 'productname'}}</td>
+          <td>{{lookup this 'projectname'}}</td>
+          {{/ifCond}}
         </tr>
+        {{/each}}
+        <tr class="acct-total">
+          <td>{{@root.meta.ui.subtotal}}</td>
+          <td class="cell-amount">{{formatCurrency this.subtotal.amtacctdr}}</td>
+          <td class="cell-amount">{{formatCurrency this.subtotal.amtacctcr}}</td>
+          <td class="cell-amount">{{formatCurrency this.subtotal.total}}</td>
+          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+        </tr>
+        <tr class="acct-total acct-grand-total">
+          <td>{{@root.meta.ui.total}}</td>
+          <td class="cell-amount">{{formatCurrency this.total.amtacctdr}}</td>
+          <td class="cell-amount">{{formatCurrency this.total.amtacctcr}}</td>
+          <td class="cell-amount">{{formatCurrency this.total.total}}</td>
+          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+        </tr>
+      </tbody>
       {{/each}}
-    </tbody>
+    {{/each}}
   </table>
+  {{/ifCond}}
 
   {{#if meta.totals}}
   <div class="report-totals">
     <div class="total-card">
-      <div class="total-label">Total Debit</div>
+      <div class="total-label">{{meta.ui.total}} {{meta.labels.amtacctdr}}</div>
       <div class="total-value">{{formatCurrency meta.totals.amtacctdr}}</div>
     </div>
     <div class="total-card">
-      <div class="total-label">Total Credit</div>
+      <div class="total-label">{{meta.ui.total}} {{meta.labels.amtacctcr}}</div>
       <div class="total-value">{{formatCurrency meta.totals.amtacctcr}}</div>
     </div>
     <div class="total-card">
-      <div class="total-label">Net Balance</div>
+      <div class="total-label">{{meta.labels.netBalance}}</div>
       <div class="total-value">{{formatCurrency meta.totals.total}}</div>
     </div>
   </div>
   {{/if}}
 
   <div class="report-footer">
-    <div class="report-summary">Total: {{meta.recordCount}} records</div>
-    <div>Generated by Etendo Go</div>
+    <div class="report-summary">{{meta.ui.total}}: {{meta.recordCount}} {{meta.ui.records}}</div>
+    <div>{{meta.ui.generatedBy}}</div>
   </div>
 </div></body></html>

@@ -644,16 +644,38 @@ describe('ReportViewer (viewer sub-component)', () => {
   it('renders the ReportViewer when searchParams has report=id', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      // ReportViewer renders the sidebar with "reportBuilder" label
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      // ReportViewer renders the sidebar header — anchored on its "Cancelar" action
+      // (ETP-4898 replaced the old "reportBuilder" label with this action + the
+      // "customizeReport" header block below it).
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
   });
 
   it('displays the report title in the viewer', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
+  });
+
+  it('renders the "customizeReport" header with its hint subtitle', async () => {
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('customizeReport')).toBeInTheDocument();
+    });
+    expect(screen.getByText('customizeReportHint')).toBeInTheDocument();
+  });
+
+  it('clicking the sidebar Cancelar action clears the report from searchParams', async () => {
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('action-cancel'));
+    expect(mockSetSearchParams).toHaveBeenCalled();
+    const paramsArg = mockSetSearchParams.mock.calls.at(-1)[0];
+    expect(paramsArg.has('report')).toBe(false);
   });
 
   it('renders ReportSidebar with parameter sections', async () => {
@@ -700,14 +722,15 @@ describe('ReportViewer (viewer sub-component)', () => {
     expect(screen.getByText('resetFilters')).toBeInTheDocument();
   });
 
-  it('renders format action buttons (preview, PDF, Excel, CSV)', async () => {
+  it('renders format action buttons (PDF, Excel, CSV) without a preview button', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('preview')).toBeInTheDocument();
+      expect(screen.getByText('PDF')).toBeInTheDocument();
     });
-    expect(screen.getByText('PDF')).toBeInTheDocument();
     expect(screen.getByText('Excel')).toBeInTheDocument();
     expect(screen.getByText('CSV')).toBeInTheDocument();
+    // "Vista Previa" was intentionally removed from the format actions bar (ETP-4898).
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
   it('renders the print button', async () => {
@@ -882,14 +905,14 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('Aging Report')).toBeInTheDocument();
     });
     // The viewer-specific UI should NOT be present
-    expect(screen.queryByText('reportBuilder')).toBeNull();
+    expect(screen.queryByTestId('action-cancel')).toBeNull();
   });
 
   it('renders with category filter in searchParams', async () => {
     mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
   });
 
@@ -906,7 +929,7 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
     // No parameter sections should appear, but the run button is still there
     expect(screen.getByText('runReport')).toBeInTheDocument();
@@ -1001,9 +1024,12 @@ describe('ReportViewer (viewer sub-component)', () => {
     await waitFor(() => {
       expect(screen.getByText('Group By')).toBeInTheDocument();
     });
-    // Select element should have options
-    const selectEl = screen.getByRole('combobox');
+    // ETP-4898: rendered as a CreatableSearchSelect (input[role=combobox]) rather
+    // than a native <select>. Query by testid so the assertion stays unambiguous
+    // if another combobox-based parameter is ever added to the same sidebar.
+    const selectEl = screen.getByTestId('field-groupBy');
     expect(selectEl).toBeInTheDocument();
+    expect(selectEl).toHaveAttribute('role', 'combobox');
   });
 
   it('renders hidden parameters without showing them', async () => {
@@ -1070,13 +1096,15 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
-  it('clicking preview button triggers render with html format', async () => {
+  it('clicking Run Report triggers render with html format (auto preview, no dedicated button)', async () => {
+    // ETP-4898 removed the standalone "Vista Previa" button; the html preview is
+    // still produced automatically via ReportSidebar's onSubmit={() => renderReport('html')}.
     const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('preview')).toBeInTheDocument();
+      expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    await user.click(screen.getByText('preview'));
+    await user.click(screen.getByText('runReport'));
     await waitFor(() => {
       const renderCalls = globalThis.fetch.mock.calls.filter(
         ([url]) => typeof url === 'string' && url.includes('/render')
@@ -1228,7 +1256,7 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
-  it('shows record count after successful html render', async () => {
+  it('renders the report iframe after successful html render (no record-count row)', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (typeof url === 'string' && url === '/api/reports') {
         return Promise.resolve({
@@ -1252,9 +1280,10 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
     await user.click(screen.getByText('runReport'));
     await waitFor(() => {
-      // The i18n mock returns the key as-is, so recordsFound is rendered literally
-      expect(screen.getByText('recordsFound')).toBeInTheDocument();
+      expect(document.querySelector('iframe')).toBeInTheDocument();
     });
+    // ETP-4898: the "X records found" row above the iframe was intentionally removed.
+    expect(screen.queryByText('recordsFound')).not.toBeInTheDocument();
   });
 
   it('renders sidebar with multiple sections when report has all parameter sections', async () => {
