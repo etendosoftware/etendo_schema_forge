@@ -89,15 +89,44 @@ function computeAutoFocus(idx, focusColIdx, visibleColumns) {
   return idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]));
 }
 
-// Catch-all Escape-to-cancel: bubbles here from any focused descendant control (Input,
-// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels uniformly regardless
-// of cell type. Only wired while the row is actually in edit mode.
-function makeRowEscapeHandler(isEditing, onCancelEdit) {
+// ETP-4886 — Enter inside the dimensions sub-row must NOT close the parent row. The
+// DimensionGrid renders inside the row's own DOM subtree (see renderDimensionsSubRow),
+// so its keydowns bubble to the same row-level handler. Matches the panel's own testid
+// (`dimensions-panel-${row.id}`).
+const DIMENSIONS_PANEL_SELECTOR = '[data-testid^="dimensions-panel-"]';
+
+// ETP-4886 — Enter-to-exit is limited to plain text/number/date inputs, whose own
+// onKeyDown already commits via blur() (see the <Input> below). That guard is what keeps
+// Enter's native meaning intact on every other control, because at keydown time the
+// overlay content is not in the DOM yet and cannot be detected:
+//   - Radix <SelectTrigger>  → <button role="combobox">, Enter opens the listbox
+//   - <PillToggle>           → <button role="switch">
+//   - <LookupTrigger>        → <button>, Enter opens the ProductSearchDrawer
+// InlineSearchCombo IS an <input>, but it stopPropagation()s Enter while its dropdown is
+// open, so this handler only sees it once the dropdown is closed.
+function isEnterExitTarget(target) {
+  if (!target || target.tagName !== 'INPUT') return false;
+  if (target.type === 'checkbox') return false;
+  return !target.closest?.(DIMENSIONS_PANEL_SELECTOR);
+}
+
+// Catch-all row-level key handler: bubbles here from any focused descendant control (Input,
+// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels — and Enter exits —
+// uniformly regardless of cell type. Only wired while the row is actually in edit mode.
+function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
   if (!isEditing) return undefined;
   return (e) => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    onCancelEdit();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancelEdit();
+      return;
+    }
+    // ETP-4886 — deliberately no preventDefault(): the focused <Input>'s own onKeyDown
+    // already ran in the target phase and blurred itself (firing the autosave commit),
+    // so by the time this bubble-phase handler runs the PATCH is in flight.
+    if (e.key === 'Enter' && isEnterExitTarget(e.target)) {
+      onConfirmEdit();
+    }
   };
 }
 
@@ -1009,6 +1038,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     setTimeout(() => { cancelingEditRef.current = false; }, 0);
   }, []);
 
+  // ETP-4886 — Enter-to-confirm sibling of handleCancelEdit. The value itself is already
+  // saved by the <Input>'s own Enter → blur() → commitField chain; this only closes the
+  // row, which nothing did before (the click-outside effect above was the sole implicit
+  // exit path and Enter never triggers it). Deferring to the next tick mirrors that same
+  // effect (lines ~736-739): it lets the in-flight commit's synchronous validation settle
+  // so a rejected value keeps the row open for correction instead of silently closing it.
+  const handleConfirmEdit = useCallback(() => {
+    setTimeout(() => {
+      if (hasValidationErrorRef.current) return;
+      setEditingRowId(null);
+    }, 0);
+  }, []);
+
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
     if (pendingDelete === row.id) return;
@@ -1113,7 +1155,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
-            onKeyDown={makeRowEscapeHandler(isEditing, handleCancelEdit)}
+            onKeyDown={makeRowKeyHandler(isEditing, handleCancelEdit, handleConfirmEdit)}
             onClick={makeRowClickHandler(onRowClick, row)}
           >
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring

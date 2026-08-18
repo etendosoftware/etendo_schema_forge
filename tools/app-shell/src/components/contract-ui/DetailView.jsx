@@ -98,7 +98,7 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -335,19 +335,7 @@ export function buildSecondaryLineHandlers(deps) {
     try {
       const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
       const fieldValues = {};
-      for (const [k, v] of Object.entries(secondaryLineEdits)) {
-        if (k.endsWith('$_identifier')) continue;
-        // NEO Headless PATCH expects camelCase API keys, not DB column names.
-        // Always use k (the API key) as the field name.
-        // Convert numeric strings to numbers for BigDecimal compatibility.
-        // Only strip when the value is already in standard format (no commas).
-        // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-          fieldValues[k] = parseFloat(v);
-        } else {
-          fieldValues[k] = v;
-        }
-      }
+      normalizePatchFieldValues(secondaryLineEdits, fieldValues, st.addLineFields?.entry);
       const res = await fetch(secUrl, {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
@@ -691,18 +679,17 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui }) {
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
-    // Inline autosave with callout chain. NEO Headless expects API keys
-    // (camelCase), an unwrapped body, and numeric strings coerced for
-    // BigDecimal — mirrors the side-panel save at line ~1750. When a
-    // trigger field changes (e.g., product), `handleLineFieldChange`
-    // populates `derivedUpdates` with all callout-driven fields (price,
-    // tax, description, etc.) so they can be PATCHed in one shot.
-    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-    const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
-    const payloadValue = coerce(value);
+    // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
+    // and numeric strings coerced for BigDecimal — mirrors the side-panel save at line ~1750. `coerce`
+    // (ETP-4886) skips `_ID` columns via buildRowValueCoercer: they're always strings even when
+    // numeric-looking (e.g. attributeSetValue's "0" sentinel), so PATCHing them as a Number 400s.
+    // Trigger fields (e.g. product) populate `derivedUpdates` with callout-driven fields (price, tax,
+    // description) PATCHed in one shot via `handleLineFieldChange`.
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id) || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    const coerce = buildRowValueCoercer(fields);
+    const payloadValue = coerce(value, fieldKey);
 
     // Build the row snapshot the callout sees: existing row + the change.
     // Strip null/empty inherited keys that the parent has set (e.g.
@@ -759,7 +746,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     //    standardPrice, unitPrice, listPrice).
     for (const [k, v] of Object.entries(derivedUpdates)) {
       if (k.endsWith('$_identifier')) continue;
-      fieldValues[k] = coerce(v);
+      fieldValues[k] = coerce(v, k);
     }
     // 3. The user-changed field always wins (last-write).
     fieldValues[fieldKey] = payloadValue;
@@ -2640,6 +2627,16 @@ export function DetailView({
         return;
       }
       hook.handleChange?.('etgoTotalDiscount', pct);
+      // ETP-4777 — the PATCH above also makes the backend recompute
+      // grandTotalAmount (GET-time discount compensation, see
+      // Abstract{Order,Invoice}HeaderHandler), but this endpoint's response
+      // isn't applied to local state beyond etgoTotalDiscount itself.
+      // Without this, DocumentTotalsPanel's persisted-baseline (ETP-4777)
+      // freezes on the stale pre-discount grandTotalAmount the instant
+      // inputPct catches up to the (now also stale) totalDiscountPct prop —
+      // same lightweight, non-disruptive header refresh already used after
+      // primary-line edits (see the exchangeRates PATCH handler above).
+      hook.refreshHeaderTotals?.(currentId);
       toast.success(ui('totalDiscountSaved'));
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
@@ -3516,7 +3513,7 @@ export function DetailView({
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
@@ -3828,7 +3825,7 @@ export function DetailView({
                                                 const patchEdits = { ...lineEdits };
                                                 if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
                                                 const fieldValues = {};
-                                                normalizePatchFieldValues(patchEdits, fieldValues);
+                                                normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
                                                   headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
