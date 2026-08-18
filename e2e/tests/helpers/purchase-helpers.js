@@ -99,6 +99,39 @@ export function waitForDocumentActionResponse(page) {
   );
 }
 
+/**
+ * Wait for the "Líneas N" summary button to show the expected count and
+ * REMAIN showing it — guards against a transient reload flash observed right
+ * after navigating into a freshly-created document (e.g. via a "Ver
+ * factura"/"Ver pedido" result-modal link): a related panel (the
+ * "Documentos" related-records panel) can finish its own async load right
+ * after the header/lines data first renders, momentarily resetting the
+ * detail view back to a loading state (0 lines, totals at 0.00) before the
+ * real data repopulates. A single toBeVisible() check on the lines button
+ * can pass DURING that in-between flash, so line-row assertions that run
+ * immediately after would read stale/reset DOM instead of the settled data.
+ *
+ * Mirrors the spinner-wait idiom already used by waitForDetailReady() — wait
+ * for any lingering "cargando/loading" text to clear — then also waits for
+ * the network to go idle (covers the related-panel fetch) and RE-ASSERTS the
+ * lines count actually stuck, instead of just increasing a timeout.
+ */
+export async function waitForLinesSettled(page, count, message) {
+  const linesPattern = new RegExp(`l[ií]neas\\s+${count}|lines\\s+${count}`, 'i');
+  const linesBtn = page.getByRole('button', { name: linesPattern });
+  await expect(linesBtn,
+    message || `Lines count should reach ${count}`,
+  ).toBeVisible({ timeout: 15_000 });
+
+  const spinner = page.getByText(/cargando|loading/i);
+  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+  await expect(linesBtn,
+    `Lines count should still read ${count} after related panels finish loading (no reload flash)`,
+  ).toBeVisible({ timeout: 15_000 });
+}
+
 // ── Common interactions ──────────────────────────────────────────────────────
 
 /**
