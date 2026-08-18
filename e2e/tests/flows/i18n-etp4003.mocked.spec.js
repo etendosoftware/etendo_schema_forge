@@ -33,7 +33,7 @@ const SI_ROWS = [
 ];
 
 async function installSalesInvoiceMock(page) {
-  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/header\/[^/?]+/.test(url)) {

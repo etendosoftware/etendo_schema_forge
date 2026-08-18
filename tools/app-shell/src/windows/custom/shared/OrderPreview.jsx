@@ -5,8 +5,8 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useOrderPdf } from './useOrderPdf.js';
 import { usePurchaseOrderPdf } from './usePurchaseOrderPdf.js';
-import { useDocumentCurrency } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -95,6 +95,10 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
 
   const isSalesOrder = specName === 'sales-order';
   const isDraft = order?.documentStatus === 'DR';
+  // ETP-4717 — Send is only available once the order is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates. No
+  // per-spec difference: sales-order and purchase-order share this rule.
+  const isSendable = order?.documentStatus === 'CO';
   const ratePrecision = useCurrencyPrecision();
 
   // Dual-currency: fetch exchange rate when doc currency differs from org currency.
@@ -108,18 +112,11 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     apiBaseUrl,
     token,
   });
-  const etgoRate = (!isSameCurrency && order?.eTGOCurrencyRate)
-    ? parseFloat(order.eTGOCurrencyRate)
-    : null;
-  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
-  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
-  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
-  const orgGrandTotal = (!isSameCurrency && exchangeRate && order?.grandTotalAmount != null)
-    ? Number(order.grandTotalAmount) / exchangeRate
-    : null;
+  const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
+    record: order,
+    isSameCurrency,
+    systemExchangeRate,
+  });
   const currencyData = { orgCurrencyCode, exchangeRate };
 
   const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);
@@ -175,24 +172,8 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
-        onSend={openEmailModal}
+        onSend={isSendable ? openEmailModal : undefined}
         data-testid="OrderGeneralTab__90f59a" />,
-    },
-    {
-      key: 'messages',
-      label: ui('orderPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('orderPreviewMessages')}
-        data-testid="PreviewEmptyPanel__90f59a" />,
-    },
-    {
-      key: 'history',
-      label: ui('orderPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('orderPreviewHistory')}
-        data-testid="PreviewEmptyPanel__90f59a" />,
     },
   ];
 
@@ -211,8 +192,8 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={openEmailModal}
-      onDownloadPdf={handleDownloadPdf}
+      onEmail={isSendable ? openEmailModal : undefined}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={!!pdfUrl}
       sendLabel={ui('orderPreviewSend')}
       downloadLabel={ui('orderPreviewDownloadPdf')}

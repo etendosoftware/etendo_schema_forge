@@ -3,9 +3,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:returnMaterialReceiptLine
 const columns = [
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product' },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', readOnly: true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
-  { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', label: 'Order Quantity' },
+  { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', label: 'Order Quantity', readOnly: true },
 ];
 // @sf-generated-end columns:returnMaterialReceiptLine
 

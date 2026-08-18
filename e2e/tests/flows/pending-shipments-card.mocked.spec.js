@@ -43,7 +43,7 @@ const GOODS_SHIPMENT_ROWS = [
  * Must run AFTER login() — Playwright matches routes in reverse registration order.
  */
 async function installDashboardPendingTasksMock(page) {
-  await page.route('**/sws/neo/dashboard/pending-tasks**', async (route) => {
+  await page.route('**/sws/neo/dashboard/pending-tasks{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -62,7 +62,7 @@ async function installDashboardPendingTasksMock(page) {
  * Must run AFTER login() to take priority over the generic /sws/** catch-all.
  */
 async function installGoodsShipmentMock(page) {
-  await page.route('**/sws/neo/goods-shipment/header**', async (route) => {
+  await page.route('**/sws/neo/goods-shipment/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

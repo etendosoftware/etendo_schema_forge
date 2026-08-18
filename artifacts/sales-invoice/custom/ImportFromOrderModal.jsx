@@ -91,6 +91,7 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     ...(grossUnitPrice ? { grossUnitPrice } : {}),
     ...(discount ? { etgoDiscount: discount } : {}),
     lineNetAmount: unitPrice * qty,
+    description: line.description || null,
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,

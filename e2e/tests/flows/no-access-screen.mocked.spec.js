@@ -26,7 +26,7 @@ async function installEmptyMenuTreeMock(page) {
   // below for why the initial useRoleMenu() fetch (fired during login()'s own
   // page.goto('/dashboard'), before this route exists) needs a fresh
   // navigation to actually observe this mock.
-  await page.route('**/sws/neo/listmenu**', async (route) => {
+  await page.route('**/sws/neo/listmenu{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

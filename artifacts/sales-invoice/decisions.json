@@ -9,7 +9,8 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
+    "listViewOptions": { "hidePrint": true },
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
@@ -58,7 +59,8 @@
         "label": "Exchange Rates",
         "tabOrder": 50,
         "requireSavedRecord": true,
-        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+        "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+        "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
       }
     },
     "processOverrides": {},
@@ -106,11 +108,38 @@
         "falseKey": "notPostedStatus",
         "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
       }
-    ]
+    ],
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
+    }
   },
   "entities": {
     "header": {
       "javaQualifier": "salesInvoiceHeaderHandler",
+      "namedFilters": [
+        {
+          "name": "completed",
+          "label": "Paid",
+          "description": "Fully paid invoices (payment complete).",
+          "where": "e.paymentComplete = true"
+        },
+        {
+          "name": "pending",
+          "label": "Unpaid",
+          "description": "Unpaid invoices with nothing collected yet (outstanding equals the total).",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "partial",
+          "label": "Partially paid",
+          "description": "Invoices with a partial payment: some amount collected but a balance remains.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        }
+      ],
       "fields": {
         "businessPartner": {
           "grid": true,
@@ -120,14 +149,16 @@
           "displayLogic": null,
           "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
-          "seq": 10
+          "seq": 10,
+          "businessCritical": true
         },
         "invoiceDate": {
           "grid": true,
           "gridOrder": 1,
           "searchable": true,
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "businessCritical": true
         },
         "accountingDate": {
           "visibility": "system",
@@ -214,7 +245,8 @@
           "gridOrder": 2,
           "searchable": true,
           "section": "principal",
-          "seq": 20
+          "seq": 20,
+          "businessCritical": true
         },
         "documentStatus": {
           "visibility": "readOnly",
@@ -255,7 +287,8 @@
           "visibility": "readOnly",
           "grid": true,
           "gridOrder": 6,
-          "section": "summary"
+          "section": "summary",
+          "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -266,7 +299,8 @@
           "grid": true,
           "gridOrder": 7,
           "form": false,
-          "section": "summary"
+          "section": "summary",
+          "businessCritical": true
         },
         "eTGODueDate": {
           "visibility": "readOnly",

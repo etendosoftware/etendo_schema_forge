@@ -359,6 +359,11 @@ and `RowQuickActions` stay in lockstep.
 
 **Real examples:** `tax` (ETP-4464 — paired with `hideDelete: true` for
 defense-in-depth: the API capability is disabled AND the UI icon is hidden).
+**Note (ETP-4745):** at ETP-4464 time, `hideDelete`'s "API capability" side was
+declarative only — it reached `contract.json` but not `ETGO_SF_ENTITY.ISDELETE`,
+so a direct API `DELETE` call still succeeded. ETP-4745 closed that gap; `tax`
+needs a re-push (`make regen ONLY=tax PUSH_TO_NEO=1` + `./gradlew export.database`)
+to pick up the real server-side enforcement — see `docs/feedback.md`.
 
 ---
 
@@ -388,7 +393,7 @@ below.
 Use this when a window already ships **its own** delete or bulk-delete
 affordance and stacking the generic action would be redundant/confusing.
 
-Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+Unlike `hidePrint` / `hideStatusFilter` (documented in
 `docs/decisions-reference.md` as `window.*` decisions.json keys that the
 generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
@@ -397,10 +402,16 @@ this sub-task). Today the only way to set it is to pass `listViewOptions`
 directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
 same way `contacts` does it. **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
-wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
 dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
 canonical example.
+
+> **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
+> `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
+> entirely from `ListView.jsx`. The button had no working backend and did not
+> apply to any window, so it is gone unconditionally, with no flag needed or
+> supported anymore.
 
 **Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
 does **not** mean "this window has no bulk delete." `contacts` has its own,
@@ -501,6 +512,43 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 **Real examples:** the generic mechanism applies to every window using the
 standard `ListView` (nothing to declare). `contacts` is the one window that
 currently opts out (see the known gap above).
+
+### 9d. `isRowDeletable` — gating bulk delete for a mixed selection (ETP-4871)
+
+An optional `ListView` prop, `(row) => boolean`, for windows where deletability is a
+**per-row, data-driven condition** rather than a blanket rule — e.g. `financial-account`,
+where an account is only really deletable once it has zero dependent records anywhere
+(every FK into `FIN_Financial_Account` is RESTRICT). Without this prop, `hideBulkDelete`
+(9c above) is all-or-nothing for the whole window; `isRowDeletable` instead lets the grid
+stay bulk-deletable in general while blocking the specific action on a bad selection.
+
+```jsx
+<ListView
+  isRowDeletable={(row) => row.deletable !== false}
+  ...
+/>
+```
+
+- **Absent (the default) behaves exactly as before ETP-4871** — every row counts as
+  deletable, so this never regresses any other window's bulk delete. This is a plain prop
+  passed straight to `ListView` (through a generated page's `{...props}` spread, same as
+  `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
+- When present, `ListView` recomputes on every selection change how many of the
+  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
+  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
+  batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
+  exists as a defense-in-depth backstop for a row that changed state between selection and
+  click, but the button being disabled up front is the primary UX).
+- `bulkDeleteBlockedTooltip` is a **generic**, entity-agnostic i18n key (`ListView` is
+  shared by every window) — "{count} registro(s) seleccionado(s) no se pueden eliminar." —
+  not a `financeAccounts*`-scoped one, even though `financial-account` is its first
+  consumer.
+- This is orthogonal to the per-row kebab delete affordance (`AccountRowMenu`'s "Eliminar
+  cuenta" item, gated the same way but reading `row.deletable` directly) — `isRowDeletable`
+  only concerns `ListView`'s own generic bulk-delete button.
+- **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
+  the only current consumer.
 
 ---
 
@@ -756,7 +804,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 **MVP scope (current iteration):**
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
-- **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the backend correctly rejected the delete, but nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before.
+- **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the frontend simply had no handler to call; nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before. **Correction (ETP-4745):** the original write-up here claimed "the backend correctly rejected the delete" — that was inaccurate even at ETP-4565 time. `hideDelete` did not reach `ETGO_SF_ENTITY.ISDELETE` until ETP-4745; before that fix a raw API `DELETE` against this same entity (`userRoles` on the `user` window) would have succeeded server-side. The ETP-4565 fix genuinely removed the dead UI affordance, it just didn't (and couldn't, at the time) rely on any real backend rejection.
 - Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
@@ -802,6 +850,8 @@ Clicking either the chevron or the hover action toggles the same expand state �
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
 
 **Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
+
+**ETP-4803 fix — the exclusion must ALSO apply to `DataTable`'s hidden add-row colgroup.** `DataTable.jsx` computes a hidden `<colgroup>` (used only while `hideHeader=true`, i.e. the inline add-line form) that must reproduce `InlineLinesPanel`'s flex math exactly — see `tools/app-shell/src/lib/linesColumnWidth.js`'s file header. When `DataTable`'s own `visibleColumns` filter never dropped `dimensionsPanel` (unlike `InlineLinesPanel`'s), any window with that column type got a phantom fixed-width column in the colgroup that the real header didn't have, desyncing `growColumnWidth()`'s fixed/grow totals for every column after it — misaligning the add-line form's inputs against the saved-rows header on purchase-invoice, sales-invoice, purchase-shipment, and sales-shipment. Fixed by extracting the exclusion into `isLineGridColumn(col)` (`linesColumnWidth.js`) and having **both** `InlineLinesPanel` and `DataTable` filter `visibleColumns` through it, so the two renderers can't diverge on this axis again. Any future column type that renders out-of-band (not as a fixed grid column in either renderer) must be added to `NON_GRID_COLUMN_TYPES` in that same file, not to one renderer's filter alone.
 
 **Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content). **Update (same ticket, follow-up pass):** `AmortizationLinesTable.jsx` also stopped using `DimSummary`/`DimBadge` — it hand-patched the same static Layers/"Edit dimensions" hover-action pattern (see below) instead of the permanent grid-column summary it used to render. `DimSummary`/`DimBadge` currently have no consumer left in this repo but remain exported as reusable building blocks.
 
@@ -924,6 +974,10 @@ Customer/Vendor Accounting, etc.).
    (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
    `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
    ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
+   (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
+   every other entry, not just within its own group — see `docs/decisions-reference.md`'s
+   `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires

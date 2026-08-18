@@ -22,7 +22,7 @@ import { SelectorInput } from './SelectorInput.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
-import { columnFlex } from '@/lib/linesColumnWidth.js';
+import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
@@ -49,7 +49,10 @@ const TOKENS = {
 // chevron gets the same breathing room from the row's left border that every other
 // leading column already has — it previously had none, sitting flush against the edge.
 const CHECKBOX_COLUMN_WIDTH = 40;
-const CHEVRON_COLUMN_WIDTH = 44;
+// Exported — DataTable's add-row-only companion table (see renderLinesColgroup
+// in DataTable.jsx) reserves a matching leading column so the two independently
+// mounted tables stay pixel-aligned when a dimensionsPanel column is present.
+export const CHEVRON_COLUMN_WIDTH = 44;
 // Left indent for the dimensions expand sub-row so its first field aligns with the first
 // real grid column above it: chevron column + checkbox column + the first cell's own
 // leading `cellPaddingX`.
@@ -86,15 +89,44 @@ function computeAutoFocus(idx, focusColIdx, visibleColumns) {
   return idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]));
 }
 
-// Catch-all Escape-to-cancel: bubbles here from any focused descendant control (Input,
-// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels uniformly regardless
-// of cell type. Only wired while the row is actually in edit mode.
-function makeRowEscapeHandler(isEditing, onCancelEdit) {
+// ETP-4886 — Enter inside the dimensions sub-row must NOT close the parent row. The
+// DimensionGrid renders inside the row's own DOM subtree (see renderDimensionsSubRow),
+// so its keydowns bubble to the same row-level handler. Matches the panel's own testid
+// (`dimensions-panel-${row.id}`).
+const DIMENSIONS_PANEL_SELECTOR = '[data-testid^="dimensions-panel-"]';
+
+// ETP-4886 — Enter-to-exit is limited to plain text/number/date inputs, whose own
+// onKeyDown already commits via blur() (see the <Input> below). That guard is what keeps
+// Enter's native meaning intact on every other control, because at keydown time the
+// overlay content is not in the DOM yet and cannot be detected:
+//   - Radix <SelectTrigger>  → <button role="combobox">, Enter opens the listbox
+//   - <PillToggle>           → <button role="switch">
+//   - <LookupTrigger>        → <button>, Enter opens the ProductSearchDrawer
+// InlineSearchCombo IS an <input>, but it stopPropagation()s Enter while its dropdown is
+// open, so this handler only sees it once the dropdown is closed.
+function isEnterExitTarget(target) {
+  if (!target || target.tagName !== 'INPUT') return false;
+  if (target.type === 'checkbox') return false;
+  return !target.closest?.(DIMENSIONS_PANEL_SELECTOR);
+}
+
+// Catch-all row-level key handler: bubbles here from any focused descendant control (Input,
+// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels — and Enter exits —
+// uniformly regardless of cell type. Only wired while the row is actually in edit mode.
+function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
   if (!isEditing) return undefined;
   return (e) => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    onCancelEdit();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancelEdit();
+      return;
+    }
+    // ETP-4886 — deliberately no preventDefault(): the focused <Input>'s own onKeyDown
+    // already ran in the target phase and blurred itself (firing the autosave commit),
+    // so by the time this bubble-phase handler runs the PATCH is in flight.
+    if (e.key === 'Enter' && isEnterExitTarget(e.target)) {
+      onConfirmEdit();
+    }
   };
 }
 
@@ -301,6 +333,7 @@ function renderLineCell({
           selectorContext={selectorContext}
           isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
           onCommit={(val, extras) => onCommit(row, col, val, extras)}
+          ui={ui}
           data-testid="EditCell__3b7ec2" />
       ) : (
         <ReadCell
@@ -422,6 +455,18 @@ function ReadCell({ row, col, locale, t, ui }) {
   if (col.type === 'date') {
     return renderDateCell(row[col.key], locale);
   }
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+  // display text; resolve through ui() like EditCell already does, or the
+  // read-only cell (what the user sees before ever clicking to edit it)
+  // falls through to the raw backend identifier below, untranslated.
+  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
+    const raw = row[col.key];
+    const key = col.enumLabels?.[raw];
+    if (key != null) {
+      const label = ui?.(key) ?? key;
+      return <span className="block truncate" title={label || undefined}>{label}</span>;
+    }
+  }
   const display = resolveIdentifier(row, col.key);
   if (typeof display === 'string') {
     return <span className="block truncate" title={display || undefined}>{display}</span>;
@@ -485,7 +530,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -549,7 +594,10 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectContent data-testid="SelectContent__3b7ec2">
           {!col.required && <SelectItem value="__empty__" data-testid="SelectItem__3b7ec2">&nbsp;</SelectItem>}
           {options.map(([v, label]) => (
-            <SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{label}</SelectItem>
+            // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+            // display text; resolve through ui() like DistinctEnumPicker/ListFilterBar do,
+            // or this shows the raw internal key instead of a translated label.
+            (<SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{ui(label) ?? label}</SelectItem>)
           ))}
         </SelectContent>
       </Select>
@@ -679,6 +727,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       const editingRowEl = panelRef.current?.querySelector(`[data-testid="line-row-${editingRowId}"]`);
       if (!editingRowEl) return;
       if (editingRowEl.contains(e.target)) return;
+      // Radix primitives with disableOutsidePointerEvents (e.g. <Select>) set
+      // document.body.style.pointerEvents = 'none' while open, so a click on
+      // an underlying field never reaches it — the event target resolves to
+      // <html>, matching none of the selectors below. Treat any click while
+      // such a layer is active as belonging to it, not to "outside the row".
+      if (document.body.style.pointerEvents === 'none') return;
       const portalSelectors = [
         '[data-radix-popper-content-wrapper]',
         '[role="dialog"]',
@@ -766,10 +820,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // longer rendered as a fixed grid column (no header cell, no width). Its metadata
   // (`rawDimensionsColumn`/`visibleDimensionFields` above) is still used to drive the
   // leading expand-chevron column and the "Add dimensions" hover action — see
-  // `hasDimensionsPanel` below.
+  // `hasDimensionsPanel` below. ETP-4803 — the exclusion itself now lives in
+  // `isLineGridColumn` (linesColumnWidth.js), shared with DataTable's hidden
+  // add-row colgroup, so the two renderers can't diverge on this again.
   const visibleColumns = useMemo(
     () => (columns || []).filter(c => (
-      c.type !== 'dimensionsPanel' && !c.hidden && !hiddenColumns.includes(c.key)
+      isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
     )),
     [columns, hiddenColumns]
   );
@@ -956,6 +1012,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     setTimeout(() => { cancelingEditRef.current = false; }, 0);
   }, []);
 
+  // ETP-4886 — Enter-to-confirm sibling of handleCancelEdit. The value itself is already
+  // saved by the <Input>'s own Enter → blur() → commitField chain; this only closes the
+  // row, which nothing did before (the click-outside effect above was the sole implicit
+  // exit path and Enter never triggers it). Deferring to the next tick mirrors that same
+  // effect (lines ~736-739): it lets the in-flight commit's synchronous validation settle
+  // so a rejected value keeps the row open for correction instead of silently closing it.
+  const handleConfirmEdit = useCallback(() => {
+    setTimeout(() => {
+      if (hasValidationErrorRef.current) return;
+      setEditingRowId(null);
+    }, 0);
+  }, []);
+
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
     if (pendingDelete === row.id) return;
@@ -1060,7 +1129,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
-            onKeyDown={makeRowEscapeHandler(isEditing, handleCancelEdit)}
+            onKeyDown={makeRowKeyHandler(isEditing, handleCancelEdit, handleConfirmEdit)}
             onClick={makeRowClickHandler(onRowClick, row)}
           >
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring

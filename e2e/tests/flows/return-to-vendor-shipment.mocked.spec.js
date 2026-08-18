@@ -387,9 +387,9 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     await modalConfirmBtn.click();
 
     // ConfirmResultModal shows the newly created invoice documentNo
-    await expect(
-      page.getByText(/FC-RTV-NEW-001/).or(page.getByTestId('confirm-result-modal')),
-    ).toBeVisible({ timeout: 10_000 });
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 10_000 });
+    await expect(resultModal).toContainText('FC-RTV-NEW-001');
 
     // ETP-4737: the rectificativa invoice is created with a negative total (credit
     // flow) — the result card must render the negative amount from the backend.
@@ -470,9 +470,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     await createDocsBtn.click();
 
     // createReturnInvoice POST returns FC-RTV-NEW-001 → ConfirmResultModal appears
-    await expect(
-      page.getByText(/FC-RTV-NEW-001/).or(page.getByTestId('confirm-result-modal')),
-    ).toBeVisible({ timeout: 10_000 });
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 10_000 });
+    await expect(resultModal).toContainText('FC-RTV-NEW-001');
 
     // ETP-4737: same negative-total contract applies from the CO (already confirmed)
     // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
