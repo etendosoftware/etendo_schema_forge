@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.32.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-08-07T12:18:02.094Z",
-  "checksum": "e15091d290bd10a5",
+  "updatedAt": "2026-08-13T12:52:08.773Z",
+  "checksum": "faaaff89df312265",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -701,6 +701,7 @@
             "form": true,
             "reference": "Product",
             "inputMode": "search",
+            "lookup": true,
             "section": "principal",
             "seq": 10,
             "validation": {
@@ -709,26 +710,6 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "attributeSetValue",
-            "apiKey": "attributeSetValue",
-            "column": "M_AttributeSetInstance_ID",
-            "label": "Attribute Set Value",
-            "type": "productAttribute",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 22
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -1791,7 +1772,7 @@
             "apiKey": "attributeSetValue",
             "column": "M_AttributeSetInstance_ID",
             "type": "productAttribute",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2893,14 +2874,6 @@
         "description": "Field 'asset' should be present in goodsReceiptLine"
       },
       {
-        "id": "t-field-presence-goodsReceiptLine-attributeSetValue",
-        "category": "field-presence",
-        "entity": "goodsReceiptLine",
-        "field": "attributeSetValue",
-        "runner": "node",
-        "description": "Field 'attributeSetValue' should be present in goodsReceiptLine"
-      },
-      {
         "id": "t-field-presence-goodsReceiptLine-costcenter",
         "category": "field-presence",
         "entity": "goodsReceiptLine",
@@ -3173,14 +3146,6 @@
         "description": "Field 'asset' should have type 'string' in goodsReceiptLine"
       },
       {
-        "id": "t-field-type-goodsReceiptLine-attributeSetValue",
-        "category": "field-type",
-        "entity": "goodsReceiptLine",
-        "field": "attributeSetValue",
-        "runner": "node",
-        "description": "Field 'attributeSetValue' should have type 'string' in goodsReceiptLine"
-      },
-      {
         "id": "t-field-type-goodsReceiptLine-costcenter",
         "category": "field-type",
         "entity": "goodsReceiptLine",
@@ -3413,14 +3378,6 @@
         "description": "Read-only logic for 'asset' in goodsReceiptLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceiptLine-attributeSetValue",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceiptLine",
-        "field": "attributeSetValue",
-        "runner": "node",
-        "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceiptLine-costcenter",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceiptLine",
@@ -3627,14 +3584,6 @@
         "field": "asset",
         "runner": "node",
         "description": "Read-only logic for 'asset' in goodsReceiptLine should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsReceiptLine-attributeSetValue",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceiptLine",
-        "field": "attributeSetValue",
-        "runner": "node",
-        "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceiptLine-costcenter",
@@ -4631,6 +4580,14 @@
         "description": "System field 'active' should exist in backend but not frontend for goodsReceiptLine"
       },
       {
+        "id": "t-system-field-goodsReceiptLine-attributeSetValue",
+        "category": "system-field",
+        "entity": "goodsReceiptLine",
+        "field": "attributeSetValue",
+        "runner": "node",
+        "description": "System field 'attributeSetValue' should exist in backend but not frontend for goodsReceiptLine"
+      },
+      {
         "id": "t-system-field-goodsReceiptLine-bOMParentID",
         "category": "system-field",
         "entity": "goodsReceiptLine",
@@ -4782,25 +4739,25 @@
       }
     ],
     "summary": {
-      "total": 293,
+      "total": 290,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 6,
         "displaylogic-valid": 6,
-        "field-presence": 35,
-        "field-type": 35,
-        "readonlylogic-evaluable": 27,
-        "readonlylogic-valid": 27,
+        "field-presence": 34,
+        "field-type": 34,
+        "readonlylogic-evaluable": 26,
+        "readonlylogic-valid": 26,
         "rule-declared": 38,
         "searchable-filters": 5,
         "selector-endpoint": 20,
-        "system-field": 71,
+        "system-field": 72,
         "visibility": 2
       },
       "byRunner": {
-        "node": 293,
+        "node": 290,
         "junit": 0
       }
     }

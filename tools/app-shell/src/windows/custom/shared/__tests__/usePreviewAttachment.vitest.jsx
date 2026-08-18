@@ -4,6 +4,11 @@
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { usePreviewAttachment, ACCEPTED_TYPES, ACCEPT_ATTR } from '../usePreviewAttachment.js';
+// Real bus and real attachments transport — both contracts are what broke.
+import {
+  ATTACHMENTS_CHANGED_EVENT,
+  notifyAttachmentsChanged,
+} from '@/components/attachments/attachmentsBus';
 
 // --- Tests ---
 
@@ -360,5 +365,203 @@ describe('usePreviewAttachment', () => {
       await waitFor(() => expect(result.current.isBusy).toBe(false));
       expect(result.current.storedFile).toBe(null);
     });
+  });
+});
+
+
+/**
+ * ETP-4855 — the record's document slot is what BOTH side panels render, and
+ * holding a slot file is what distinguishes an OCR-captured invoice from one
+ * typed by hand. `tableName` additionally mirrors the file into the record's
+ * attachments so it also shows in the Attachments tab.
+ */
+describe('usePreviewAttachment — document slot + attachments mirror', () => {
+  const SLOT = {
+    documentId: 'inv-1',
+    specName: 'purchase-invoice',
+    storeCondition: true,
+    token: 'tok',
+    apiBaseUrl: 'http://host/sws/neo/purchase-invoice',
+    tableName: 'C_Invoice',
+  };
+
+  const ATTACHMENTS_URL = 'http://host/sws/neo/attachments/C_Invoice/inv-1';
+
+  const pdfSlot = (fileName = 'supplier.pdf') => ({
+    fileName, mimeType: 'application/pdf', fileData: btoa('%PDF'),
+  });
+
+  /** Route every endpoint the hook can touch; anything else fails loudly. */
+  function routeFetch({ slot = null, rows = [] } = {}) {
+    globalThis.fetch = vi.fn((url, init = {}) => {
+      const u = String(url);
+      const method = init.method || 'GET';
+      if (u.includes('/preview-file')) {
+        if (method === 'GET') return Promise.resolve({ ok: true, json: async () => (slot ?? {}) });
+        return Promise.resolve({ ok: true, text: async () => '' });
+      }
+      if (u.includes('/attachments/file/')) return Promise.resolve({ ok: true, text: async () => '' });
+      if (u.includes('/attachments/')) {
+        if (method === 'POST') return Promise.resolve({ ok: true, text: async () => '' });
+        return Promise.resolve({ ok: true, json: async () => ({ items: rows }) });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${u}`));
+    });
+  }
+
+  const callsTo = (fragment, method) => globalThis.fetch.mock.calls
+    .filter(([url, init]) => String(url).includes(fragment) && (init?.method || 'GET') === method);
+
+  beforeEach(() => {
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:slot');
+    globalThis.URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the document held in the slot', async () => {
+    routeFetch({ slot: pdfSlot() });
+
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+
+    await waitFor(() => expect(result.current.storedFile).not.toBe(null));
+    expect(result.current.storedFile).toMatchObject({
+      fileName: 'supplier.pdf',
+      mimeType: 'application/pdf',
+    });
+  });
+
+  it('shows nothing when the slot is empty — the manual / historic case', async () => {
+    routeFetch({ slot: null, rows: [{ id: 'att-1', name: 'unrelated.pdf' }] });
+
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+    // An attachment added through the Attachments tab must NOT surface here.
+    expect(result.current.storedFile).toBe(null);
+  });
+
+  it('mirrors a stored document into the record attachments and announces it', async () => {
+    routeFetch({ slot: null });
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+    const seen = [];
+    const listener = (e) => seen.push(e.detail);
+    window.addEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    try {
+      await act(async () => {
+        await result.current.storeFile(new File(['%PDF'], 'dropped.pdf', { type: 'application/pdf' }));
+      });
+      await waitFor(() => expect(seen).toHaveLength(1));
+    } finally {
+      window.removeEventListener(ATTACHMENTS_CHANGED_EVENT, listener);
+    }
+
+    expect(callsTo('/preview-file', 'POST')).toHaveLength(1);
+    const mirror = callsTo('/attachments/C_Invoice/inv-1', 'POST');
+    expect(mirror).toHaveLength(1);
+    expect(String(mirror[0][0])).toBe(ATTACHMENTS_URL);
+    expect(mirror[0][1].body).toBeInstanceOf(FormData);
+    expect(result.current.storedFile).toMatchObject({ fileName: 'dropped.pdf' });
+  });
+
+  it('does not mirror when no table is declared — a generated-PDF cache', async () => {
+    routeFetch({ slot: null });
+    const { result } = renderHook(() => usePreviewAttachment({ ...SLOT, tableName: null }));
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+    await act(async () => {
+      await result.current.storeFile(new File(['%PDF'], 'generated.pdf', { type: 'application/pdf' }));
+    });
+
+    expect(callsTo('/preview-file', 'POST')).toHaveLength(1);
+    expect(globalThis.fetch.mock.calls.every(([u]) => !String(u).includes('/attachments'))).toBe(true);
+  });
+
+  it('still shows the document when only the mirror fails', async () => {
+    globalThis.fetch = vi.fn((url, init = {}) => {
+      const u = String(url);
+      const method = init.method || 'GET';
+      if (u.includes('/preview-file')) {
+        return method === 'GET'
+          ? Promise.resolve({ ok: true, json: async () => ({}) })
+          : Promise.resolve({ ok: true, text: async () => '' });
+      }
+      // The attachments copy is the part that breaks.
+      return Promise.resolve({ ok: false, status: 500, text: async () => 'boom' });
+    });
+
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+    await act(async () => {
+      await result.current.storeFile(new File(['%PDF'], 'dropped.pdf', { type: 'application/pdf' }));
+    });
+
+    // The slot holds it, which is what both panels render.
+    expect(result.current.storedFile).toMatchObject({ fileName: 'dropped.pdf' });
+    expect(result.current.storeFailed).toBe(false);
+  });
+
+  it('deleting empties the slot and removes the single matching attachment', async () => {
+    routeFetch({ slot: pdfSlot('supplier.pdf'), rows: [{ id: 'att-1', name: 'supplier.pdf' }] });
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.storedFile).not.toBe(null));
+
+    await act(async () => { await result.current.deleteFile(); });
+
+    expect(callsTo('/preview-file', 'DELETE')).toHaveLength(1);
+    const removed = callsTo('/attachments/file/', 'DELETE');
+    expect(removed).toHaveLength(1);
+    expect(String(removed[0][0])).toContain('att-1');
+    expect(result.current.storedFile).toBe(null);
+  });
+
+  it('leaves the attachments alone when several share the slot file name', async () => {
+    routeFetch({
+      slot: pdfSlot('supplier.pdf'),
+      rows: [{ id: 'att-1', name: 'supplier.pdf' }, { id: 'att-2', name: 'supplier.pdf' }],
+    });
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.storedFile).not.toBe(null));
+
+    await act(async () => { await result.current.deleteFile(); });
+
+    // Ambiguous: guessing which copy to delete would risk the wrong file.
+    expect(callsTo('/attachments/file/', 'DELETE')).toHaveLength(0);
+    expect(callsTo('/preview-file', 'DELETE')).toHaveLength(1);
+    expect(result.current.storedFile).toBe(null);
+  });
+
+  it('clears the slot when the file was deleted from the Attachments tab', async () => {
+    routeFetch({ slot: pdfSlot('supplier.pdf'), rows: [{ id: 'att-1', name: 'supplier.pdf' }] });
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.storedFile).not.toBe(null));
+
+    // The tab deleted it: the record no longer holds that file.
+    routeFetch({ slot: pdfSlot('supplier.pdf'), rows: [] });
+    act(() => {
+      notifyAttachmentsChanged({ tableName: 'C_Invoice', recordId: 'inv-1', source: 'the-tab' });
+    });
+
+    await waitFor(() => expect(result.current.storedFile).toBe(null));
+    expect(callsTo('/preview-file', 'DELETE')).toHaveLength(1);
+  });
+
+  it('keeps the slot when the file is still attached', async () => {
+    routeFetch({ slot: pdfSlot('supplier.pdf'), rows: [{ id: 'att-1', name: 'supplier.pdf' }] });
+    const { result } = renderHook(() => usePreviewAttachment(SLOT));
+    await waitFor(() => expect(result.current.storedFile).not.toBe(null));
+
+    act(() => {
+      notifyAttachmentsChanged({ tableName: 'C_Invoice', recordId: 'inv-1', source: 'the-tab' });
+    });
+
+    await waitFor(() => expect(callsTo('/attachments/C_Invoice/inv-1', 'GET').length).toBeGreaterThan(0));
+    expect(result.current.storedFile).toMatchObject({ fileName: 'supplier.pdf' });
+    expect(callsTo('/preview-file', 'DELETE')).toHaveLength(0);
   });
 });

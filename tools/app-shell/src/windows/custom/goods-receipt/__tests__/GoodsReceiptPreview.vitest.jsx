@@ -81,10 +81,6 @@ vi.mock('../../shared/PreviewActionButtons.jsx', async () => {
       }, []);
       return { showSendModal, sendModalClosing, openEmailModal, closeEmailModal };
     },
-    makeStaticPreviewTabs: (ui) => [
-      { key: 'messages', label: ui('invoicePreviewMessages'), content: <div data-testid="preview-empty-panel">💬 {ui('invoicePreviewNoMessagesYet')}</div> },
-      { key: 'history', label: ui('invoicePreviewHistory'), content: <div data-testid="preview-empty-panel">🕐 {ui('invoicePreviewNoActivityRecorded')}</div> },
-    ],
     ReceiptSendModal: ({ sendModal, pdfBlobUrl }) =>
       sendModal.showSendModal ? (
         <div data-testid="send-modal" data-pdf-url={pdfBlobUrl}>
@@ -224,11 +220,13 @@ describe('GoodsReceiptPreview', () => {
     });
   });
 
-  it('renders 3 tabs: general, messages, history', () => {
+  // ETP-4855 — Messages and History were empty placeholders and were removed
+  // from every preview. Only the general tab is left.
+  it('renders the general tab alone: no messages or history tab', () => {
     renderPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('calls onClose when close button is clicked', () => {

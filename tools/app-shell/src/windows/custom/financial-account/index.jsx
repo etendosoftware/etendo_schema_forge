@@ -20,6 +20,7 @@ import { ReconciliationListTab } from './ReconciliationList/index.jsx';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
 import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
+import { DeleteAccountDialog } from './DeleteAccountDialog.jsx';
 import { BankConnectionFlowUI } from './BankConnectionFlowUI.jsx';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
@@ -104,6 +105,7 @@ export function FinancialAccountDetail({ recordId }) {
   // Edit modal (ETP-4530): reachable from the detail view too, not just the accounts-list kebab.
   const [editOpen, setEditOpen] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   // The automatch modal opens whenever the user enters the Reconciliation tab — either via the
   // accounts-list pill (autoMatch=true), a deep link to the tab, or by clicking the tab here.
   const [autoMatchOpen, setAutoMatchOpen] = useState(
@@ -419,6 +421,7 @@ export function FinancialAccountDetail({ recordId }) {
         onClose={() => setEditOpen(false)}
         onSaved={reloadAccount}
         onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
+        onDelete={(acc) => { setEditOpen(false); setDeleteTarget(acc); }}
         onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}
         data-testid="EditAccountModal__f7dbb3" />
       <ArchiveAccountDialog
@@ -434,6 +437,14 @@ export function FinancialAccountDetail({ recordId }) {
           else navigate('/financial-account');
         }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
+      <DeleteAccountDialog
+        open={!!deleteTarget}
+        account={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        // A real delete removes the account outright — same "nothing left to look at" reasoning
+        // as the archive-branch above, unconditionally (there is no restore-and-stay case here).
+        onDeleted={() => { setDeleteTarget(null); navigate('/financial-account'); }}
+        data-testid="DeleteAccountDialog__f7dbb3" />
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__f7dbb3" />
     </TooltipProvider>
   );
@@ -469,6 +480,11 @@ export default function FinancialAccountWindow(props) {
       // rows — which the padding would inset from both edges. The slot handles its own
       // inner spacing instead.
       tablePaddingX=""
+      // ETP-4871 — gates ListView's own bulk-delete button (the multi-select "Eliminar
+      // seleccionados" bar) so it disables whenever the selection includes an account that
+      // still has dependent records anywhere. The per-row "Eliminar cuenta" kebab item
+      // (AccountRowMenu) reads `row.deletable` directly and needs no wiring through ListView.
+      isRowDeletable={(row) => row.deletable !== false}
       listViewOptions={{
         ...(props.listViewOptions || {}),
         // Drops the IDLE list bar only. ListView's SELECTION bar still renders on top of
