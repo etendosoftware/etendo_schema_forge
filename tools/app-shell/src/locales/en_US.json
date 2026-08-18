@@ -17419,7 +17419,7 @@
     "copyFailed": "Failed to copy",
     "linkCopied": "Link copied",
     "copyLink": "Copy link",
-    "oauthConnectHeading": "Connect your AI assistant to Etendo",
+    "oauthConnectHeading": "Connect your AI agent to Etendo",
     "oauthConnectSubheading": "Choose your app and follow the steps to give it access to your Etendo data through the MCP (Model Context Protocol).",
     "oauthConnectPickClient": "Pick your client to see the instructions",
     "oauthConnectTabClaudeDesktop": "Claude Desktop",

@@ -17665,7 +17665,7 @@
     "copyFailed": "No se pudo copiar",
     "linkCopied": "Enlace copiado",
     "copyLink": "Copiar enlace",
-    "oauthConnectHeading": "Conecta tu asistente de IA a Etendo",
+    "oauthConnectHeading": "Conecta tu agente de IA a Etendo",
     "oauthConnectSubheading": "Elige tu aplicación y sigue los pasos para darle acceso a los datos de Etendo mediante el protocolo MCP (Model Context Protocol).",
     "oauthConnectPickClient": "Elige tu cliente para ver las instrucciones",
     "oauthConnectTabClaudeDesktop": "Claude Desktop",
