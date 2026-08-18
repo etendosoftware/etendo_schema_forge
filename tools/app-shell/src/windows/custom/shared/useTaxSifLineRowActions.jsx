@@ -101,6 +101,11 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
   const [modalTaxId, setModalTaxId] = useState(null);
 
   useEffect(() => {
+    // Drop the previous record's catalog before (re)fetching: without this, navigating
+    // from invoice A to invoice B keeps rendering badges computed from A's catalog until
+    // B's fetch resolves (ETP-4888 QA finding). The functional form keeps the already-empty
+    // case referentially stable so the common mount path does not schedule a spare render.
+    setTaxById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
     if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
     let cancelled = false;
 
@@ -141,7 +146,23 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
         });
         const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         const data = taxResponse.ok ? await taxResponse.json() : null;
-        if (cancelled || !data?.items) return;
+        // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
+        // state, since nothing is waiting for it any more.
+        if (cancelled) return;
+        // A failed/malformed page, on the other hand, keeps whatever earlier pages already
+        // returned and commits it, degrading to a partial check instead of discarding
+        // everything. Returning here made a page-2 blip erase page 1 too, so NO badge
+        // rendered at all — the exact silent "nothing to fix" shape this feature exists to
+        // eliminate (ETP-4888 QA finding). Same contract as the MAX_PAGES branch below.
+        if (!data?.items) {
+          // eslint-disable-next-line no-console -- deliberate operator-facing warning,
+          // not routine logging: signals the SIF completeness check is incomplete.
+          console.warn(
+            `[useTaxSifLineRowActions] Tax catalog pagination failed at page ${page + 1} ` +
+              `(offset ${offset}) — some taxes may be missing from the SIF completeness check.`,
+          );
+          break;
+        }
         allItems.push(...data.items);
         page += 1;
         if (!data.hasMore || data.items.length === 0) break;
