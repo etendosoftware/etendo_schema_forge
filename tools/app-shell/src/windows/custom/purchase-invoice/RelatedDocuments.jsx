@@ -44,7 +44,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [returnDeliveries, setReturnDeliveries] = useState([]);
-  const [originInvoice, setOriginInvoice] = useState(null);
+  const [originInvoices, setOriginInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
@@ -92,18 +92,31 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
           setReturnDeliveries([]);
         });
     }
-    // ETP-4737: `originInvoice` is set when this rectificativa was created via the
+    // ETP-4737: `originInvoices` is set when this rectificativa was created via the
     // "Import from Source Invoice" popup (manual correction) — independent of the
     // isReturn branch above (which covers the auto-generated-from-Albarán case).
-    // Server injects just the id (+ _identifier), not the full record, so fetch it here.
-    const originInvoicePromise = data?.originInvoice
-      ? fetchById('purchase-invoice', 'header', data.originInvoice, token, apiBaseUrl).catch(() => null)
-      : Promise.resolve(null);
-    promise = Promise.all([promise, originInvoicePromise]).then(([, originResult]) => {
-      setOriginInvoice(originResult);
+    //
+    // ETP-4919: originInvoices is a JSON array of {id, documentNo} — a rectificativa can be
+    // linked to MORE THAN ONE source invoice across separate import runs (importing was
+    // silently collapsing to the single most-recently-imported one). The legacy singular
+    // `data.originInvoice` (a bare id string) is kept as a fallback for a
+    // stale/partially-rolled-out response shape. Server injects just ids (+ identifiers), not
+    // full records, so fetch each one here.
+    const originInvoiceIds = Array.isArray(data?.originInvoices)
+      ? data.originInvoices.map(o => o.id).filter(Boolean)
+      : (data?.originInvoice ? [data.originInvoice] : []);
+    const originInvoicesPromise = originInvoiceIds.length > 0
+      ? Promise.all(
+          originInvoiceIds.map(id =>
+            fetchById('purchase-invoice', 'header', id, token, apiBaseUrl).catch(() => null)
+          )
+        )
+      : Promise.resolve([]);
+    promise = Promise.all([promise, originInvoicesPromise]).then(([, originResults]) => {
+      setOriginInvoices(originResults.filter(Boolean));
     });
     promise.finally(() => setLoading(false));
-  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
+  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoices, data?.originInvoice, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 
@@ -134,11 +147,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
     );
   }
 
-  if (originInvoice) {
+  // ETP-4919: a rectificativa can have MORE THAN ONE linked origin invoice (imported across
+  // separate popup runs) — render one chip per entry, each keyed by its own id.
+  for (const inv of originInvoices) {
     chips.push(
       <DocChip
-        key="origin-invoice"
-        {...docChipProps({ type: 'invoice', doc: originInvoice, ui, navigate })}
+        key={`origin-invoice-${inv.id}`}
+        {...docChipProps({ type: 'invoice', doc: inv, ui, navigate })}
         data-testid="DocChip__bb79ed" />
     );
   }
