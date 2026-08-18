@@ -16,8 +16,7 @@ import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-co
  * 3. Idempotent accepted confirmation.
  * 4. Safe non-enumerating error states for expired/revoked/invalid tokens.
  */
-// NOSONAR -- this component intentionally owns the finite invitation state machine.
-export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_API_BASE || '' }) {
+export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_API_BASE || '' }) { // NOSONAR -- intentional finite invitation state machine.
   const ui = useUI();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
