@@ -4,12 +4,8 @@ import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 
 const CATALOG = [
-  { id: '303', cat: 'iva',  periodicity: 'quarterly', defaultActive: true,  locked: false },
-  { id: '349', cat: 'iva',  periodicity: 'monthly',   defaultActive: true,  locked: false },
-  { id: '115', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
-  { id: '111', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
-  { id: '190', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
-  { id: '180', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
+  { id: '303', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
+  { id: '349', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
 ];
 
 // Only 303 and 349 support per-model configuration
@@ -52,6 +48,8 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
   );
   const [configModel, setConfigModel] = useState(null);
 
+  const handleClose = () => { onSave?.(active); onBack?.(); };
+
   const toggleModel = (id) => setActive(prev => ({ ...prev, [id]: !prev[id] }));
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
@@ -66,81 +64,87 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
   );
 
   return (
-    <div className="fm-page">
-      {/* Header */}
-      <div className="fm-catalog-header">
-        <div className="fm-catalog-header__titles">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="fm-catalog-header__title">{t('fm.catalog.title')}</div>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center',
-              padding: '4px 8px', borderRadius: 8,
-              background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
-              fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
-            }}>
-              {CATALOG.length}
-            </span>
-          </div>
-          <div className="fm-catalog-header__sub">
-            • {activeCount} {t('fm.catalog.active_count') ?? 'modelos activos'}
-          </div>
-        </div>
-        <button
-          className="fm-catalog-header__back"
-          onClick={() => { onSave?.(active); onBack?.(); }}
-          aria-label={t('fm.action.close') ?? 'Cerrar'}
-          style={{ marginLeft: 'auto' }}
-        >
-          <X size={16} strokeWidth={1.75} data-testid="X__4ee693" />
-        </button>
-      </div>
-      {/* List */}
-      <div className="fm-catalog-body" style={{ padding: '8px 12px' }}>
-        {sortedCatalog.map(model => {
-          const isActive = active[model.id];
-          const isLocked = model.locked;
-          const badgeVariant = BADGE_VARIANT[model.id] ?? 'muted';
-          return (
-            <div
-              key={model.id}
-              className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}`}
-            >
-              <span className={`fm-catalog-card__badge fm-catalog-card__badge--${badgeVariant}`}>
-                {model.id}
-              </span>
-              <div className="fm-catalog-card__body">
-                <div className="fm-catalog-card__name">{t(`fm.catalog.${model.id}.name`)}</div>
-                <div className="fm-catalog-card__desc">{t(`fm.catalog.${model.id}.desc`)}</div>
-                <div className="fm-catalog-card__meta">
-                  <span className="fm-catalog-card__pill">
-                    {t(`fm.catalog.periodicity.${model.periodicity}`)}
-                  </span>
-                </div>
+    <div className="fm-catalog-overlay" onClick={handleClose}>
+      <div className="fm-catalog-drawer" onClick={e => e.stopPropagation()}>
+        <div className="fm-page">
+          {/* Header */}
+          <div className="fm-catalog-header">
+            <div className="fm-catalog-header__titles">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="fm-catalog-header__title">{t('fm.catalog.title')}</div>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '4px 8px', borderRadius: 8,
+                  background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
+                  fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
+                }}>
+                  {CATALOG.length}
+                </span>
               </div>
-              <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {isLocked ? (
-                  <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', fontWeight: 400, whiteSpace: 'nowrap' }}>
-                    {t('fm.catalog.coming_soon') ?? 'Próximamente'}
-                  </span>
-                ) : (
-                  <ToggleSwitch
-                    checked={!!isActive}
-                    onChange={() => toggleModel(model.id)}
-                    data-testid="ToggleSwitch__4ee693" />
-                )}
+              <div className="fm-catalog-header__sub">
+                • {activeCount} {t('fm.catalog.active_count') ?? 'modelos activos'}
               </div>
             </div>
-          );
-        })}
+            <button
+              className="fm-catalog-header__back"
+              onClick={handleClose}
+              aria-label={t('fm.action.close') ?? 'Cerrar'}
+              style={{ marginLeft: 'auto' }}
+            >
+              <X size={16} strokeWidth={1.75} data-testid="X__4ee693" />
+            </button>
+          </div>
+          {/* List */}
+          <div className="fm-catalog-body" style={{ padding: '8px 12px' }}>
+            {sortedCatalog.map(model => {
+              const isActive = active[model.id];
+              const isLocked = model.locked;
+              const badgeVariant = BADGE_VARIANT[model.id] ?? 'muted';
+              return (
+                <div
+                  key={model.id}
+                  className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}`}
+                >
+                  <span className={`fm-catalog-card__badge fm-catalog-card__badge--${badgeVariant}`}>
+                    {model.id}
+                  </span>
+                  <div className="fm-catalog-card__body">
+                    <div className="fm-catalog-card__name">{t(`fm.catalog.${model.id}.name`)}</div>
+                    <div className="fm-catalog-card__desc">{t(`fm.catalog.${model.id}.desc`)}</div>
+                    <div className="fm-catalog-card__meta">
+                      {(model.periodicities ?? []).map(p => (
+                        <span key={p} className="fm-catalog-card__pill">
+                          {t(`fm.catalog.periodicity.${p}`)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {isLocked ? (
+                      <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                        {t('fm.catalog.coming_soon') ?? 'Próximamente'}
+                      </span>
+                    ) : (
+                      <ToggleSwitch
+                        checked={!!isActive}
+                        onChange={() => toggleModel(model.id)}
+                        data-testid="ToggleSwitch__4ee693" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {configModel && (
+            <ConfigDrawer
+              model={configModel}
+              onClose={() => setConfigModel(null)}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              data-testid="ConfigDrawer__4ee693" />
+          )}
+        </div>
       </div>
-      {configModel && (
-        <ConfigDrawer
-          model={configModel}
-          onClose={() => setConfigModel(null)}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          data-testid="ConfigDrawer__4ee693" />
-      )}
     </div>
   );
 }
