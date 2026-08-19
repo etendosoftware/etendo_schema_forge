@@ -50,10 +50,14 @@ describe('Email Send Stress Test Runner', () => {
       req.on('end', () => {
         const url = req.url;
 
-        // Preview File cache endpoint
-        if (url.includes('/preview-file')) {
+        // PDF-cache endpoint (ETP-4315 — mark-as-main attachment upload,
+        // replaces the retired /sws/neo/preview-file). The `markAsMain=true`
+        // query param is unique to this write, distinct from other attachment
+        // traffic (plain reads/lookups at .../attachments/{table}/{id} or
+        // .../attachments/{table}/{id}/main).
+        if (url.includes('/attachments/') && url.includes('markAsMain=true')) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ status: 'cached' }));
+          res.end(JSON.stringify({ id: 'mock-attachment-id', status: 'cached' }));
           return;
         }
 
