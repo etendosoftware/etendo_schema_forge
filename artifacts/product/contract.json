@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-13T16:50:51.070Z",
-  "checksum": "d1799b1ceb48a2f8",
+  "updatedAt": "2026-08-19T19:35:56.607Z",
+  "checksum": "c2925dc80561dbe8",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -8862,6 +8862,13 @@
         "description": "Rule 'Relate Products to a Service Product' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-Situaci-n-Inmueble-IGIC",
+        "category": "rule-declared",
+        "rule": "Situación Inmueble IGIC",
+        "runner": "node",
+        "description": "Rule 'Situación Inmueble IGIC' (validation) should be declared"
+      },
+      {
         "id": "t-rule-declared-SL-Costing-Currency-AD-Org-ID",
         "category": "rule-declared",
         "rule": "SL_Costing_Currency_AD_Org_ID",
@@ -11253,7 +11260,7 @@
       }
     ],
     "summary": {
-      "total": 664,
+      "total": 665,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
@@ -11264,14 +11271,14 @@
         "field-type": 83,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
-        "rule-declared": 141,
+        "rule-declared": 142,
         "searchable-filters": 5,
         "selector-endpoint": 27,
         "system-field": 251,
         "visibility": 12
       },
       "byRunner": {
-        "node": 664,
+        "node": 665,
         "junit": 0
       }
     }
