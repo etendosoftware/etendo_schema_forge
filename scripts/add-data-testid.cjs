@@ -78,9 +78,20 @@ module.exports = function transformer(file, api) {
     return false;
   }
 
+  // Elements that can never meaningfully carry a `data-testid`:
+  //   - `Fragment`/`React.Fragment` — only accepts `key`/`children`; React's dev-mode
+  //     element validator logs "Invalid prop supplied to React.Fragment" for anything else.
+  //   - A context `XxxProvider`/`XxxConsumer` (React's `createContext()` naming
+  //     convention, e.g. `SomeContext.Provider` re-exported as `SomeProvider`) — it
+  //     renders no DOM node and doesn't forward unrecognized props, so any testid added
+  //     is silently inert. Matched by name suffix since these are almost always plain
+  //     re-exports of `Context.Provider`/`Context.Consumer`, not real components.
+  const isUntestableComponentName = (name) =>
+    name === "Fragment" || /(?:Provider|Consumer)$/.test(name);
+
   const elements = root.find(j.JSXOpeningElement).filter(path => {
     const n = path.node.name;
-    return n && n.type === "JSXIdentifier" && /^[A-Z]/.test(n.name);
+    return n && n.type === "JSXIdentifier" && /^[A-Z]/.test(n.name) && !isUntestableComponentName(n.name);
   });
 
   for (const path of elements.paths()) {

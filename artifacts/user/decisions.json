@@ -5,7 +5,17 @@
     "category": "settings",
     "name": "User",
     "headerExtra": {
-      "customForm": "AssignRoleControl"
+      "customForm": "AssignTemplateRolesControl"
+    },
+    "customPanelTabs": [
+      {
+        "key": "roles",
+        "labelKey": "userRolesTabLabel",
+        "component": "UserRolesTab"
+      }
+    ],
+    "customComponents": {
+      "headerTable": "UserHeaderTable"
     }
   },
   "discardPatterns": ["EM_*"],
@@ -27,14 +37,12 @@
           "reason": "ETP-4829: never shown or independently editable on the admin-facing form (create or edit) — always a direct copy of email, matching the convention EtendoGoJwtDalHelper/AD_User.username already relies on to link an AD_User row to its etgo_account row by matching value. Frontend never renders or sends this field; UserRoleAssignmentHandler.handle() enforces username=email server-side on POST (defense in depth, since generated code has no beforeSave derivation support per docs/possible-limitations.md L1)."
         },
         "firstName": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "principal"
+          "visibility": "discarded",
+          "reason": "ETP-4906: discarded to remove the duplicate 'Nombre' field on the form — Firstname's native AD dictionary label collides with Name's own label in Spanish (es_ES.json: both 'Nombre'), and no test user during manual QA ever used the first/last-name auto-compose path (name was always typed directly)."
         },
         "lastName": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "principal"
+          "visibility": "discarded",
+          "reason": "ETP-4906: discarded alongside firstName — keeping lastName alone would leave an orphaned 'Apellido' field with no paired 'Nombre' counterpart, which is more confusing than the original duplicate, not less."
         },
         "email": {
           "visibility": "editable",
@@ -165,22 +173,7 @@
         }
       }
     },
-    "userRoles": {
-      "hideDelete": true,
-      "fields": {
-        "role": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true,
-          "reason": "Role assignment now happens exclusively via the user header's AssignRoleControl (ETP-4512), which enforces a single active role and is the only writer of AD_User_Roles (via UserRoleAssignmentHandler in com.etendoerp.go). This grid becomes a read-only confirmation view; visibility:readOnly on every field in this entity empties addLineFields.entry so the Add-line button no longer renders."
-        },
-        "roleAdmin": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reason": "See role field above — locked read-only alongside it."
-        }
-      }
-    },
+    "userRoles": { "exclude": true },
     "emailConfiguration": {
       "fields": {
         "smtpServer": {
@@ -256,18 +249,18 @@
     "SL_User_Name_Lastname": {
       "type": "callout",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Auto-composes full Name from First Name and Last Name when Last Name changes",
-      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
-      "reason": "Simple name concatenation, core UX improvement"
+      "impactIfOmitted": "No impact since lastName is now discarded (ETP-4906) — there is nothing left to type into that would trigger this callout",
+      "reason": "lastName field discarded from the form in ETP-4906 (duplicate 'Nombre' field fix), so this callout has no trigger left"
     },
     "SL_User_Name_Firstname": {
       "type": "callout",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Auto-composes full Name from First Name and Last Name when First Name changes",
-      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
-      "reason": "Simple name concatenation, core UX improvement"
+      "impactIfOmitted": "No impact since firstName is now discarded (ETP-4906) — there is nothing left to type into that would trigger this callout",
+      "reason": "firstName field discarded from the form in ETP-4906 (duplicate 'Nombre' field fix), so this callout has no trigger left"
     },
     "SL_User_Name_Name": {
       "type": "callout",

@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.21.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-07T16:09:22.004Z",
-  "contractChecksum": "7e6dbf8f1a309fc6",
+  "updatedAt": "2026-08-16T16:28:20.141Z",
+  "contractChecksum": "3642d4e0deca769b",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -19,19 +19,6 @@
         "supportedFilters": [
           "name",
           "email"
-        ]
-      },
-      "userRoles": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": false,
-        "listUrl": "/sws/neo/user/userRoles",
-        "detailUrl": "/sws/neo/user/userRoles/{id}",
-        "supportedFilters": [
-          "role"
         ]
       },
       "emailConfiguration": {
@@ -131,14 +118,6 @@
             }
           ]
         }
-      },
-      {
-        "entity": "userRoles",
-        "field": "role",
-        "column": "AD_Role_ID",
-        "reference": "Role",
-        "inputMode": "selector",
-        "url": "/sws/neo/user/userRoles/selectors/role"
       }
     ],
     "actions": [
@@ -249,8 +228,6 @@
           "name": {
             "required": true
           },
-          "firstName": {},
-          "lastName": {},
           "password": {},
           "isPasswordExpired": {
             "readOnly": true,
@@ -280,19 +257,6 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "@#Date@"
-          }
-        }
-      },
-      "userRoles": {
-        "fields": {
-          "role": {
-            "readOnly": true,
-            "required": true
-          },
-          "roleAdmin": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
           }
         }
       },
@@ -435,5 +399,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "da23c08bd5a11cce"
+  "checksum": "ec549005b85affb8"
 }
