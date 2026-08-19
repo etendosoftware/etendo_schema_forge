@@ -2,25 +2,32 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import {
   Download, CircleCheck, Search,
-  RefreshCw, Globe, Eye, MoreVertical, ChevronDown, Users, FileEdit, Clock,
-  TriangleAlert, Folder, ReceiptText, Calculator, PenLine, ShieldAlert, Info,
+  Loader2, Globe, ChevronDown, Users, FileEdit,
+  TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
+  OctagonAlert,
 } from 'lucide-react';
-import { KpiWidget, Tabs } from '../../FmCommon.jsx';
-import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
+import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
+import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File } from '../../fiscalModelsUtils.js';
-import { use349Pdf } from './use349Pdf.js';
-import { DocumentPreview } from '../../../../../components/contract-ui/DocumentPreview.jsx';
+import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
 
-// ── Constants ────────────────────────────────────────────────────
-const STEPPER_INDEX = {
-  pending:0, draft:1, ready:2,
-  submitted:3, submitted_ext:3, submitted_ack:3,
-  skipped:-1,
-};
+// AD table name backing the AEAT justificante attachments store — this is the
+// same shared, model-agnostic table 303 uses. 349 only wires the manual
+// "Presentación con Acuse de recibo" upload path here — no telematic
+// submission flow (no backend endpoint for it yet).
+const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 
+// statusLabelKey (ETP-4755): see FmModel303Page.jsx for the identical helper — the status
+// badge must always read the plain "Presentado" for BOTH `submitted` and `submitted_ack`;
+// HOW it was submitted is shown exclusively via the `submissionMethod` suffix below.
+function statusLabelKey(status) {
+  return status === 'submitted_ack' ? 'submitted' : status;
+}
+
+// ── Constants ────────────────────────────────────────────────────
 const KEY_IDS = ['E', 'S', 'A', 'I'];
 
 const MOCK_OPERATORS = [
@@ -151,57 +158,86 @@ function KeyFilterDropdown({ value, onChange, t }) {
   );
 }
 
-// ── More options kebab menu ──────────────────────────────────────
-function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, generating, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+// VIES pending-validation banner — extracted out of the main component's render
+// (SonarQube S3776: keeps FmModel349Page's own cognitive complexity down without
+// changing behavior) so the `viesPending > 0 && !dismissed` gate lives in its own
+// small function instead of nesting inside the main render tree.
+function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
+  if (viesPending <= 0 || dismissed) return null;
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-btn"
-        style={{ padding: '8px 10px', borderRadius: 8 }}
-        onClick={() => setOpen(o => !o)}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__346dd5" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onVies(); setOpen(false); }}>
-            <Globe
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Globe__346dd5" />
-            VIES
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onPreviewPdf(); setOpen(false); }} disabled={pdfLoading}>
-            <Eye
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Eye__346dd5" />
-            {t('fm.action.preview_pdf') ?? 'Vista previa PDF'}
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onGenerate(); setOpen(false); }} disabled={generating}>
-            <Download
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Download__346dd5" />
-            {t('fm.action.generate_file') ?? 'Generar fichero'}
-          </button>
-        </div>
-      )}
+    <div style={{ padding: '8px 20px', flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
+      }}>
+        <Globe
+          size={14}
+          strokeWidth={1.75}
+          style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
+          data-testid="Globe__346dd5" />
+        <span style={{ fontSize: 14, flex: 1 }}>
+          <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
+            {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
+          </span>
+          {' '}
+          <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
+            {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
+          </span>
+        </span>
+        <button
+          style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+        >
+          {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
+        </button>
+        <button
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+          onClick={onDismiss}
+          aria-label={t('fm.action.close') ?? 'Cerrar'}
+        >×</button>
+      </div>
     </div>
   );
 }
 
+// Shared invoices/incidents/receipt tab content — extracted out of the main
+// component's render (SonarQube S3776, same rationale as ViesBanner above): the
+// `activeTab === 'invoices' || ... || ...` gate and its 3 nested per-tab `&&`
+// branches now live in their own function, called unconditionally below.
+function DetailTabContent({
+  activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
+}) {
+  if (activeTab !== 'invoices' && activeTab !== 'incidents' && activeTab !== 'receipt') return null;
+  return (
+    <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
+      {activeTab === 'invoices' && (
+        <SourcesTab
+          decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
+          t={t}
+          data-testid="SourcesTab__346dd5" />
+      )}
+      {activeTab === 'incidents' && (
+        <IncidentsTab
+          decl={decl}
+          blocking={blocking}
+          warning={warning}
+          t={t}
+          onGoToSources={onGoToSources}
+          data-testid="IncidentsTab__346dd5" />
+      )}
+      {activeTab === 'receipt' && (
+        <AttachmentsTab
+          tableName={FISCAL_DECL_TABLE}
+          recordId={decl.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          isActive={activeTab === 'receipt'}
+          config={{ allowedMimeTypes: ['application/pdf'] }}
+          key={status}
+          data-testid="AttachmentsTab__349receipt" />
+      )}
+    </div>
+  );
+}
 
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
@@ -209,6 +245,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const t = ui;
 
   const [status,      setStatus]      = useState(decl.status);
+  // submissionMethod (ETP-4755) — see FmModel303Page.jsx's identical state for the full
+  // rationale: distinguishes the manual "Presentado" paths from a real AEAT telematic
+  // submission (303-only; a 349 declaration only ever reaches the two manual paths).
+  const [submissionMethod, setSubmissionMethod] = useState(decl.submissionMethod);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -225,14 +265,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
   }, [decl._precomputed]);
-  const [invoiceNifFilter, setInvoiceNifFilter] = useState(null);
+  // Only the setter is used below (no consumer reads the filtered value yet —
+  // pre-existing, not introduced by this change); keeping the binding slot
+  // empty avoids an unused-variable warning without touching that behavior.
+  const [, setInvoiceNifFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
-  const [showPdf,      setShowPdf]      = useState(false);
-  const { pdfUrl, loading: pdfLoading, generatePdf, clearPdf } = use349Pdf();
+  const [genError,     setGenError]     = useState(null);
+
+  // Only used to grab `upload()` for the manual acuse-de-recibo path below —
+  // isActive: false keeps it from eagerly listing/fetching attachments on
+  // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
+  const { upload: uploadReceipt } = useAttachments({
+    tableName: FISCAL_DECL_TABLE,
+    recordId: decl.id,
+    token,
+    apiBaseUrl,
+    isActive: false,
+  });
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
-  const stepIdx   = STEPPER_INDEX[status] ?? 0;
 
   const monthNum  = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
   const monthName = monthNum
@@ -242,15 +294,30 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
-  const fileBlocked  = blocking > 0;
   const viesPending  = operators.filter(o => o.vies === 'pending').length;
   const totalBase    = operators.reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
   const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
 
-  function handleStatusChange(newStatus) {
+  function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
-    onStatusChange?.(decl.id, newStatus);
+    if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
+    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
+  }
+
+  // Manual "Presentación con Acuse de recibo" path: persist the uploaded
+  // receipt to the same attachments store the "Justificante" tab reads
+  // from. Fire-and-forget — useAttachments.upload() already toasts its
+  // own errors and never rethrows, so a failed upload must not block the
+  // status change the user explicitly confirmed.
+  function handlePresent({ status: newStatus, acuseFile }) {
+    if (newStatus === 'submitted_ack' && acuseFile) {
+      uploadReceipt(acuseFile);
+    }
+    // submissionMethod (ETP-4755) — see FmModel303Page.jsx's handlePresent for the
+    // identical rationale; 349 only ever exercises these two manual paths.
+    const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
+    handleStatusChange(newStatus, submissionMethodForPath);
   }
 
   async function handleCompute() {
@@ -265,16 +332,46 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     }
   }
 
-  async function handleGenerate({ phone, contact } = {}) {
-    setGenerating(true);
-    const ok = await generate349File(decl, { token, apiBaseUrl, phone, contact });
-    setGenerating(false);
-    if (!ok) console.error('generate349File failed for', decl.year, decl.period);
-  }
+  // Auto-compute on mount when the list didn't hand us any precomputed data
+  // (ETP-4755 regression). `FmListPage`'s `useFiscalAutoCompute` only ever
+  // precomputes DRAFT declarations — once a declaration is submitted (or is
+  // opened via a path that bypasses the list's own auto-compute), `decl._precomputed`
+  // is `undefined` and operators/invoices/rectifications all start blank (and, worse,
+  // `operators` below falls back to `MOCK_OPERATORS` — real-looking demo data —
+  // instead of showing empty). This mirrors what the (now hidden-when-submitted)
+  // "Calcular" button used to do manually. Scoped to `decl.id` only (not
+  // `liveOperators`/`decl._precomputed`) so it fires exactly once per opened
+  // declaration instead of looping once `handleCompute` populates state.
+  useEffect(() => {
+    const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
+    if (hasPrecomputed) return;
+    if (!token || !apiBaseUrl) return;
+    handleCompute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl.id]);
 
-  async function handlePreviewPdf() {
-    const url = await generatePdf(decl, operators);
-    if (url) setShowPdf(true);
+  async function handleGenerate({
+    phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+  } = {}) {
+    setGenError(null);
+    setGenerating(true);
+    const result = await generate349File(decl, {
+      token, apiBaseUrl, phone, contact,
+      fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+    });
+    setGenerating(false);
+    if (!result.ok) {
+      // Classic does not client-side-validate Substitutive/Navarra/Guipuzcoa combinations
+      // either (no AD_Val_Rule for it) — it lets the user attempt and shows AEAT3492010Report's
+      // real validation error (e.g. "@AEAT349_FormerStatement_Required@",
+      // "@AEAT349_NAVARRA_OR_GUIPUZCOA@") when the backend rejects it. Mirror that here instead
+      // of adding preventive validation, which would be stricter than classic.
+      const msg = result.serverMessage
+        || t('fm.gen349.error.generic')
+        || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
+      setGenError(msg);
+      console.error('generate349File failed for', decl.year, decl.period, result.error, result.serverMessage);
+    }
   }
 
   const searchLower  = searchQuery.trim().toLowerCase();
@@ -291,7 +388,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (!liveInvoices) return {};
     const map = {};
     liveInvoices.forEach(inv => {
-      const k = inv.nifIva;
+      const k = `${inv.nifIva}|${inv.key ?? ''}`;
       if (!map[k]) map[k] = { Compra: 0, Venta: 0 };
       map[k][inv.type] = (map[k][inv.type] ?? 0) + 1;
     });
@@ -300,7 +397,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
   function formatOrigin(op) {
     if (op.origin) return op.origin;
-    const counts = originByNif[op.nif];
+    const counts = originByNif[`${op.nif}|${op.key ?? ''}`];
     if (!counts) return null;
     const c = counts['Compra'] ?? 0;
     const v = counts['Venta']  ?? 0;
@@ -310,15 +407,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     return null;
   }
 
-  const declNif = decl.nif ?? '';
-
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
     { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
     { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
-    { id:'files',     label: t('fm.m349.tab.files'),     badge: null,                   icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__346dd5" /> },
-    { id:'history',   label: t('fm.m349.tab.history'),   badge: null,                   icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__346dd5" /> },
+    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
@@ -336,11 +430,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             Modelo 349 - {periodLabel}
           </span>
           <div style={{ flex: 1 }} />
-          <MoreVertical
-            size={16}
-            strokeWidth={1.75}
-            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
-            data-testid="MoreVertical__346dd5" />
+          <MoreOptionsMenu
+            favKey="fiscal-models"
+            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            data-testid="MoreOptionsMenu__346dd5" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
           Tesorería / Declaraciones / Modelo 349 - {periodLabel}
@@ -353,45 +446,57 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <button className="fm-btn" onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}>
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}>
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
         <span style={{
           padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
           background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         }}>
-          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
+          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${statusLabelKey(status)}`) ?? status}
+          {/* submissionMethod (ETP-4755) — see FmModel303Page.jsx for the identical pattern.
+              The badge text itself never varies between `submitted` and `submitted_ack`
+              (see `statusLabelKey`) — only this sub-suffix does. */}
+          {submissionMethod && (status === 'submitted' || status === 'submitted_ack') && (
+            <span style={{ opacity: .75 }}> · {t(`fm.present.method.${submissionMethod}`)}</span>
+          )}
         </span>
 
         <div style={{ flex: 1 }} />
 
-        <MoreOptionsMenu349
-          onVies={() => {}}
-          onPreviewPdf={handlePreviewPdf}
-          onGenerate={() => setShowFilegen(true)}
-          pdfLoading={pdfLoading}
-          generating={generating}
-          t={t}
-          data-testid="MoreOptionsMenu349__346dd5" />
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={handleCompute}
+            disabled={computing}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
+          >
+            {computing
+              ? <Loader2
+                  size={16}
+                  strokeWidth={1.75}
+                  style={{ animation: 'spin 1s linear infinite' }}
+                  data-testid="Loader2__346dd5" />
+              : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />
+            }
+            {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+          </button>
+        )}
 
         <button
           className="fm-btn"
-          onClick={handleCompute}
-          disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '8px 12px', fontSize: 14 }}
+          onClick={() => { setGenError(null); setShowFilegen(true); }}
+          disabled={generating}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
         >
-          <RefreshCw
-            size={20}
-            strokeWidth={1.75}
-            style={computing ? { animation: 'spin 1s linear infinite' } : {}}
-            data-testid="RefreshCw__346dd5" />
-          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.recalc') ?? 'Recalcular')}
+          <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+          {t('fm.action.gen349') ?? 'Generar fichero 349'}
         </button>
 
         {!isSubmitted && (
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
@@ -400,39 +505,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         )}
       </div>
       {/* ── VIES banner ──────────────────────────────────────────── */}
-      {viesPending > 0 && !viesBannerDismissed && (
-        <div style={{ padding: '8px 20px', flexShrink: 0 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
-          }}>
-            <Globe
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
-              data-testid="Globe__346dd5" />
-            <span style={{ fontSize: 14, flex: 1 }}>
-              <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
-                {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
-              </span>
-              {' '}
-              <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
-                {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
-              </span>
-            </span>
-            <button
-              style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
-            >
-              {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
-            </button>
-            <button
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
-              onClick={() => setViesBannerDismissed(true)}
-              aria-label={t('fm.action.close') ?? 'Cerrar'}
-            >×</button>
-          </div>
-        </div>
-      )}
+      <ViesBanner
+        viesPending={viesPending}
+        dismissed={viesBannerDismissed}
+        onDismiss={() => setViesBannerDismissed(true)}
+        t={t}
+        data-testid="ViesBanner__346dd5" />
       {/* ── KPI bar ──────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -477,6 +555,24 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           badgeColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--text-disabled))'}
           data-testid="KpiWidget__346dd5" />
       </div>
+      {/* ── Inline generate error ────────────────────────────────── */}
+      {genError && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: 'var(--status-destructive-bg)',
+          border: '1px solid hsl(var(--destructive) / 0.3)',
+          borderRadius: 8,
+          fontSize: 13,
+          color: 'hsl(var(--destructive))',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error_349" />
+          {genError}
+        </div>
+      )}
       {/* ── Tabs ─────────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
         <Tabs
@@ -514,9 +610,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                   <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
                 )}
               </div>
-              <button className="fm-toolbar__btn fm-toolbar__btn--primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, padding: '8px 12px' }}>
-                + {t('fm.m349.action.new_operator') ?? 'Nuevo operador'}
-              </button>
             </div>
 
             {/* Full-width separator above NIF-IVA columns */}
@@ -631,59 +724,32 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
-      {(activeTab === 'invoices' || activeTab === 'incidents' || activeTab === 'files' || activeTab === 'history') && (
-        <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
-          {activeTab === 'invoices' && (
-            <SourcesTab
-              decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
-              t={t}
-              data-testid="SourcesTab__346dd5" />
-          )}
-          {activeTab === 'incidents' && (
-            <IncidentsTab
-              decl={decl}
-              blocking={blocking}
-              warning={warning}
-              t={t}
-              onGoToSources={() => setActiveTab('invoices')}
-              data-testid="IncidentsTab__346dd5" />
-          )}
-          {activeTab === 'files' && (
-            <FilesTab
-              decl={decl}
-              t={t}
-              fileBlocked={fileBlocked}
-              onGenerate={() => setShowFilegen(true)}
-              genLabel={t('fm.action.gen349') ?? 'Generar fichero 349'}
-              data-testid="FilesTab__346dd5" />
-          )}
-          {activeTab === 'history' && (
-            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__346dd5" />
-          )}
-        </div>
-      )}
+      <DetailTabContent
+        activeTab={activeTab}
+        decl={decl}
+        liveInvoices={liveInvoices}
+        blocking={blocking}
+        warning={warning}
+        t={t}
+        onGoToSources={() => setActiveTab('invoices')}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        status={status}
+        data-testid="DetailTabContent__346dd5" />
       {/* Overlays */}
       {showPresent && (
         <PresentModal
           decl={decl}
-          onConfirm={({ status: s }) => handleStatusChange(s)}
+          onConfirm={handlePresent}
           onClose={() => setShowPresent(false)}
           data-testid="PresentModal__346dd5" />
       )}
       {showFilegen && (
         <FileGenModal
           decl={decl}
-          onConfirm={({ phone, contact }) => handleGenerate({ phone, contact })}
+          onConfirm={(payload) => handleGenerate(payload)}
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal__346dd5" />
-      )}
-      {showPdf && (
-        <DocumentPreview
-          open={showPdf}
-          onClose={() => { setShowPdf(false); clearPdf(); }}
-          title={`Modelo 349 · ${decl.year} ${decl.period}`}
-          pdfUrl={pdfUrl}
-          data-testid="DocumentPreview__346dd5" />
       )}
     </div>
   );

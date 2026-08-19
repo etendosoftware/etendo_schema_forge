@@ -130,18 +130,23 @@ describe('generate349File', () => {
     return anchor;
   }
 
-  it('returns false when token is missing', async () => {
-    expect(await generate349File(DECL, { apiBaseUrl: API_BASE })).toBe(false);
+  // Contract changed from a raw boolean to { ok, error, serverMessage? } — same
+  // shape as generate303File — see ETP-4755 QA fix (banner surfacing AEAT349
+  // backend validation errors, e.g. Substitutive/Navarra/Guipuzcoa combinations).
+  it('returns { ok: false, error: "no_token" } when token is missing', async () => {
+    const result = await generate349File(DECL, { apiBaseUrl: API_BASE });
+    expect(result).toEqual({ ok: false, error: 'no_token' });
   });
 
-  it('returns false when apiBaseUrl is missing', async () => {
-    expect(await generate349File(DECL, { token: TOKEN })).toBe(false);
+  it('returns { ok: false, error: "no_token" } when apiBaseUrl is missing', async () => {
+    const result = await generate349File(DECL, { token: TOKEN });
+    expect(result).toEqual({ ok: false, error: 'no_token' });
   });
 
-  it('returns true and triggers download on success', async () => {
+  it('returns { ok: true } and triggers download on success', async () => {
     const anchor = mockFetchOk();
     const result = await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
-    expect(result).toBe(true);
+    expect(result).toEqual({ ok: true });
     expect(anchor.download).toBe('349_T2_2026.txt');
     expect(anchor.click).toHaveBeenCalled();
   });
@@ -154,14 +159,17 @@ describe('generate349File', () => {
     expect(opts.body).toContain('contact=John');
   });
 
-  it('returns false when fetch responds not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
-    expect(await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE })).toBe(false);
+  it('returns { ok: false, error: "http_<status>" } when fetch responds not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => '' }));
+    const result = await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('http_500');
   });
 
-  it('returns false when fetch throws', async () => {
+  it('returns { ok: false, error: "network" } when fetch throws', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fail')));
-    expect(await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE })).toBe(false);
+    const result = await generate349File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(result).toEqual({ ok: false, error: 'network' });
   });
 });
 

@@ -319,6 +319,12 @@ export function ListView({
   window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
+  // ETP-4871 — optional `(row) => boolean` gating ListView's own bulk-delete button (the
+  // selection-bar "Delete selected", not to be confused with a window's own per-row delete
+  // affordance). Absent means "every row is deletable" — unchanged default behavior for every
+  // window that does not pass it. When present, the button disables the moment the CURRENT
+  // selection includes a row that fails the predicate, with a tooltip explaining how many.
+  isRowDeletable = null,
   listViewOptions = {},
   baseFilter = null,
   quickFilters = null,
@@ -754,29 +760,36 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
-  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
-  // standardized delete UX:
+  // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
+  // (succeeded, failed) rows, per the standardized delete UX:
   //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
   //   - partial failure → refetch (succeeded rows disappear) + keep only the
   //     failed rows selected, both in our own state and in DataTable's
   //     internal checkbox Set (via deselectTrigger/deselectRowIds).
   //   - all failed      → no refetch, selection untouched.
+  // Extracted so it can be reused both by the generic "Delete selected" button
+  // below (via useBulkRowDelete's onSuccess) AND by a custom
+  // selectionBarRightActions consumer that runs its own delete loop but still
+  // wants the same reselect-only-the-failed-rows behavior (see
+  // `reselectFailed` passed into selectionBarRightActions further down).
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
+    if (succeeded.length > 0) hook.refresh();
+    if (failed.length === 0) {
+      clearSelection();
+    } else {
+      setSelectedRows(failed);
+      if (succeeded.length > 0) {
+        setDeselectRowIds(succeeded.map((r) => r.id));
+        setDeselectTrigger((c) => c + 1);
+      }
+    }
+  }, [hook.refresh, clearSelection]);
+
   const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
     apiBaseUrl,
     entity: entity || 'header',
     token,
-    onSuccess: (succeeded, failed) => {
-      if (succeeded.length > 0) hook.refresh();
-      if (failed.length === 0) {
-        clearSelection();
-      } else {
-        setSelectedRows(failed);
-        if (succeeded.length > 0) {
-          setDeselectRowIds(succeeded.map((r) => r.id));
-          setDeselectTrigger((c) => c + 1);
-        }
-      }
-    },
+    onSuccess: applyBulkDeleteOutcome,
   });
 
   // Register this list view with the current-window context so the Copilot
@@ -902,6 +915,13 @@ export function ListView({
     hiddenColumns,
   };
 
+  // ETP-4871 — how many of the CURRENT selection fail `isRowDeletable`, if the host passed one.
+  // 0 (the default, `isRowDeletable` absent) means the bulk-delete button behaves exactly as
+  // before for every other window — this must never regress an existing window's bulk delete.
+  const blockedDeleteCount = isRowDeletable
+    ? selectedRows.filter((row) => !isRowDeletable(row)).length
+    : 0;
+
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
@@ -957,14 +977,20 @@ export function ListView({
                     selectionBarRightActions for an unrelated reason must opt out
                     explicitly — inferring it from that prop's mere presence was fragile,
                     since selectionBarRightActions can be used for things other than
-                    delete). */}
+                    delete).
+                    ETP-4871 — additionally disabled (with an explanatory tooltip) once the
+                    selection includes a row the host's `isRowDeletable` rejects; absent, this
+                    never differs from the pre-existing behavior. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
                     variant="outline"
                     size={selectionBarSize}
                     className="gap-1.5"
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
+                    title={blockedDeleteCount > 0
+                      ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
+                      : undefined}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                     {ui('bulkDeleteSelected')} ({selectedRows.length})
@@ -977,6 +1003,14 @@ export function ListView({
                   token,
                   apiBaseUrl,
                   onDataMutated: hook.refresh,
+                  // ETP-4656 — additive only: gives a custom
+                  // selectionBarRightActions consumer running its OWN delete
+                  // loop (e.g. Contacts) the same "reselect only the failed
+                  // rows" outcome handling the generic "Delete selected"
+                  // button gets for free via useBulkRowDelete's onSuccess.
+                  // No existing consumer reads this field, so this changes
+                  // nothing for any other window.
+                  reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
             </div>

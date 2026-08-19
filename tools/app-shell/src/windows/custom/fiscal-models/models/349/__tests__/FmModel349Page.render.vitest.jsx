@@ -1,7 +1,7 @@
 // Additional Vitest tests for FmModel349Page — rendering, tabs, status, key filter
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -9,7 +9,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
-  generate349File: vi.fn().mockResolvedValue(false),
+  generate349File: vi.fn().mockResolvedValue({ ok: false }),
 }));
 vi.mock('../use349Pdf.js', () => ({
   use349Pdf: () => ({
@@ -21,6 +21,7 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349' },
@@ -41,12 +42,40 @@ vi.mock('../../../FmCommon.jsx', () => ({
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
-  FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
-  FileGenModal: () => null,
+  // Exposes an "invoke onConfirm" button so tests can drive `handleGenerate`
+  // (and thus the `generating` state) without depending on the modal's own UI.
+  FileGenModal: ({ onConfirm }) => React.createElement(
+    'div',
+    { 'data-testid': 'FileGenModal-mock' },
+    'filegen-modal',
+    React.createElement(
+      'button',
+      { 'data-testid': 'filegen349-confirm', onClick: () => onConfirm?.({ phone: '', contact: '' }) },
+      'confirm-filegen',
+    ),
+    // Fires onConfirm with the full 8-key payload the real FileGenModal now produces,
+    // so tests can verify handleGenerate threads every field through unmodified.
+    React.createElement(
+      'button',
+      {
+        'data-testid': 'filegen349-confirm-full',
+        onClick: () => onConfirm?.({
+          fileName: 'my_349_file',
+          phone: '600111222',
+          contact: 'Jane Doe',
+          substitutive: true,
+          formerStatement: '1234567890123',
+          representativeTaxId: 'X1234567L',
+          navarra: true,
+          guipuzcoa: false,
+        }),
+      },
+      'confirm-filegen-full',
+    ),
+  ),
 }));
 vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
   DocumentPreview: () => null,
@@ -60,6 +89,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
   OctagonAlert: () => null, ArrowLeft: () => null, FileText: () => null,
   Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
+  FileCheck: () => null,
 }));
 
 import FmModel349Page from '../FmModel349Page.jsx';
@@ -164,6 +194,39 @@ describe('FmModel349Page — submit button', () => {
   });
 });
 
+// ── Calcular button ──────────────────────────────────────────────────────────
+
+describe('FmModel349Page — Calcular button', () => {
+  it('renders the Calcular button for a non-submitted status (draft)', async () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'draft' })} {...defaultProps} />);
+    // The mount-time auto-compute (ETP-4755) fires immediately since this
+    // declaration has no precomputed data, flipping the button to its
+    // "computing" (busy) label. Wait for it to settle back to idle before
+    // asserting on the idle "fm.action.compute" label — otherwise the
+    // assertion races the auto-fired compute call.
+    await waitFor(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(true);
+    });
+  });
+
+  it('hides the Calcular button for a submitted status, while Cancelar and Generar fichero 349 remain', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+  });
+
+  it('hides the Calcular button for a submitted_ack status, while Cancelar and Generar fichero 349 remain', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted_ack' })} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+  });
+});
+
 // ── Operator table ───────────────────────────────────────────────────────────
 
 describe('FmModel349Page — operator table', () => {
@@ -237,5 +300,159 @@ describe('FmModel349Page — totals card', () => {
     const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     const rows = container.querySelectorAll('.fm-349-total-row');
     expect(rows.length).toBe(4); // E, S, A, I
+  });
+});
+
+// ── Kebab / MoreOptionsMenu ──────────────────────────────────────────────────
+// The old MoreOptionsMenu349 (VIES + Vista previa PDF) was removed from this
+// page. PDF preview machinery (use349Pdf, DocumentPreview, showPdf) went with
+// it; Generar fichero already lives in its own standalone action-bar button
+// (see describe block below). A NEW, functional MoreOptionsMenu (favorites +
+// help) was added later (ETP-4755) — since FmCommon.jsx is mocked wholesale at
+// the top of this file, its real behavior is covered directly in
+// FmCommon.vitest.jsx instead.
+
+// ── Standalone "Generar fichero" action-bar button ─────────────────────────────
+
+describe('FmModel349Page — standalone Generar fichero button', () => {
+  it('renders a standalone "Generar fichero" button in the action bar', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const btns = Array.from(container.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+  });
+
+  it('clicking it opens the file-gen modal', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const btns = Array.from(container.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen349'));
+    expect(screen.queryByTestId('FileGenModal-mock')).toBeNull();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
+  });
+
+  it('is visible and functional when the declaration is already submitted', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
+    const btns = Array.from(container.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen349'));
+    expect(genBtn).toBeTruthy();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
+  });
+
+  it('is visible and functional when the declaration is not submitted (pending)', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const btns = Array.from(container.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen349'));
+    expect(genBtn).toBeTruthy();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
+  });
+
+  it('disables the standalone "Generar fichero" button while generation is in flight, re-enables after it settles', async () => {
+    let resolveGenerate;
+    const { generate349File } = await import('../../../fiscalModelsUtils.js');
+    generate349File.mockImplementation(() => new Promise((resolve) => { resolveGenerate = resolve; }));
+
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const genBtn = () => Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen349'));
+    fireEvent.click(genBtn());
+    expect(genBtn().disabled).toBe(false);
+
+    fireEvent.click(screen.getByTestId('filegen349-confirm'));
+    await waitFor(() => expect(genBtn().disabled).toBe(true));
+
+    await act(async () => { resolveGenerate({ ok: true }); await Promise.resolve(); });
+    await waitFor(() => expect(genBtn().disabled).toBe(false));
+  });
+
+  it('threads the full 8-key onConfirm payload from FileGenModal into generate349File unmodified', async () => {
+    const { generate349File } = await import('../../../fiscalModelsUtils.js');
+    generate349File.mockResolvedValue({ ok: true });
+
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const genBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen349'));
+    fireEvent.click(genBtn);
+
+    fireEvent.click(screen.getByTestId('filegen349-confirm-full'));
+
+    await waitFor(() => expect(generate349File).toHaveBeenCalled());
+    expect(generate349File).toHaveBeenCalledWith(
+      makeDecl(),
+      expect.objectContaining({
+        token: 'tok',
+        apiBaseUrl: '/api',
+        fileName: 'my_349_file',
+        phone: '600111222',
+        contact: 'Jane Doe',
+        substitutive: true,
+        formerStatement: '1234567890123',
+        representativeTaxId: 'X1234567L',
+        navarra: true,
+        guipuzcoa: false,
+      }),
+    );
+  });
+});
+
+// ── Generate error banner (genError) ────────────────────────────────────────
+// Mirrors the 303 genError banner pattern (FmModel303Page.jsx). The local
+// lucide-react mock nulls out OctagonAlert's rendering, so these assertions
+// go through the banner's text content — same convention already used above
+// for the VIES banner — rather than the icon's data-testid.
+
+describe('FmModel349Page — generate error banner', () => {
+  it('shows the backend serverMessage in the banner when generate349File fails with one', async () => {
+    const { generate349File } = await import('../../../fiscalModelsUtils.js');
+    generate349File.mockResolvedValue({
+      ok: false, error: 'http_400', serverMessage: 'AEAT349_FormerStatement_Required',
+    });
+
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const genBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen349'));
+    fireEvent.click(genBtn);
+    fireEvent.click(screen.getByTestId('filegen349-confirm'));
+
+    await waitFor(() => expect(document.body.textContent).toContain('AEAT349_FormerStatement_Required'));
+  });
+
+  it('falls back to the fm.gen349.error.generic key when generate349File fails without a serverMessage', async () => {
+    const { generate349File } = await import('../../../fiscalModelsUtils.js');
+    generate349File.mockResolvedValue({ ok: false });
+
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const genBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen349'));
+    fireEvent.click(genBtn);
+    fireEvent.click(screen.getByTestId('filegen349-confirm'));
+
+    await waitFor(() => expect(document.body.textContent).toContain('fm.gen349.error.generic'));
+  });
+
+  it('clears the error banner when "Generar fichero 349" is clicked again to reopen the modal', async () => {
+    const { generate349File } = await import('../../../fiscalModelsUtils.js');
+    generate349File.mockResolvedValue({ ok: false, serverMessage: 'Boom validation error' });
+
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const genBtn = () => Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen349'));
+
+    fireEvent.click(genBtn());
+    fireEvent.click(screen.getByTestId('filegen349-confirm'));
+    await waitFor(() => expect(document.body.textContent).toContain('Boom validation error'));
+
+    fireEvent.click(genBtn());
+    expect(document.body.textContent).not.toContain('Boom validation error');
+  });
+});
+
+// ── No Historial tab ────────────────────────────────────────────────────────────
+
+describe('FmModel349Page — no Historial tab', () => {
+  it('does not render a "Historial" tab', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    expect(container.textContent).not.toContain('fm.tab.history');
   });
 });

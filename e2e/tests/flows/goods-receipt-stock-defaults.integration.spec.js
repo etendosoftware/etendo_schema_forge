@@ -68,7 +68,7 @@ function extractRecordId(page, windowSlug) {
  */
 async function createUniqueProduct(page, { searchKey, name }) {
   await navigateTo(page, 'product');
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
   await slow(page);
 
   await page.getByTestId('action-new').click();
@@ -80,7 +80,8 @@ async function createUniqueProduct(page, { searchKey, name }) {
   await page.getByTestId('field-name').fill(name);
   await slow(page);
 
-  const saveBtn = page.getByTestId('action-save');
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
   const savePromise = expectSaveResponse(page);
   await saveBtn.click();
   await savePromise.catch(() => {});
@@ -133,7 +134,7 @@ async function createUniqueProduct(page, { searchKey, name }) {
  */
 async function createDraftGoodsReceipt(page) {
   await navigateTo(page, 'goods-receipt');
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
   await slow(page);
 
   await page.getByTestId('action-new').click();
@@ -166,7 +167,6 @@ async function createDraftGoodsReceipt(page) {
     `Goods receipt should be saved as draft (URL should include /goods-receipt/<id>). Current URL: ${page.url()}`,
   ).toBe(true);
 
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await waitForDetailReady(page);
   await slow(page);
 
@@ -185,24 +185,30 @@ async function createDraftGoodsReceipt(page) {
  */
 async function addGoodsReceiptLine(page, { isFirst = false, searchKey, quantity } = {}) {
   if (isFirst) {
-    let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
-    if (!(await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      emptyStateBtn = page.getByRole('button', { name: /añadir líneas|add lines/i }).first();
-    }
-    await emptyStateBtn.click();
+    const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
+      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
+
+    await expect(async () => {
+      await emptyStateBtn.click({ timeout: 3_000 });
+      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 15_000 });
   } else {
     const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i }).first();
-    await expect(addLineBtn).toBeVisible({ timeout: 10_000 });
-    await addLineBtn.click();
+    await expect(async () => {
+      await addLineBtn.click({ timeout: 3_000 });
+      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 15_000 });
   }
   await slow(page);
 
-  await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-  await page.getByTestId('inline-add-field-product').click();
-  await slow(page);
-
+  const productField = page.getByTestId('inline-add-field-product');
   const searchDrawer = page.getByTestId('product-search-drawer');
-  await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
+
+  await expect(async () => {
+    await productField.click({ timeout: 3_000 });
+    await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 15_000 });
+  await slow(page);
 
   const searchInput = page.getByTestId('product-search-input');
   await searchInput.fill(searchKey);
@@ -213,17 +219,14 @@ async function addGoodsReceiptLine(page, { isFirst = false, searchKey, quantity 
     option,
     `Product search should return the receipt's product ("${searchKey}")`,
   ).toBeVisible({ timeout: 10_000 });
+  // Start listening for callout (price/quantity fill) BEFORE clicking the product
+  const productCalloutResponse = page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+    { timeout: 15_000 },
+  );
   await option.click();
-  await slow(page);
-  await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
-
-  // Wait for the product-selection callout to resolve before reading/setting
-  // the quantity — this is the exact moment Bug 2's stock-derived override
-  // used to happen (or, post-fix, does not happen).
-  await page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-    { timeout: 10_000 },
-  ).catch(() => {});
+  await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
+  await productCalloutResponse.catch(() => {});
   await slow(page);
 
   const qtyField = page.getByTestId('inline-add-field-movementQuantity');
@@ -294,12 +297,13 @@ async function expectLineCount(page, count) {
  */
 async function confirmGoodsReceipt(page, { createInvoice = false } = {}) {
   const confirmTopbarBtn = page.getByTestId('action-save');
-  await expect(confirmTopbarBtn).toBeVisible({ timeout: 10_000 });
-  await confirmTopbarBtn.click();
-  await slow(page);
-
   const modal = page.getByTestId('confirm-inout-modal');
-  await expect(modal, 'Confirm receipt modal should open').toBeVisible({ timeout: 10_000 });
+
+  await expect(async () => {
+    await confirmTopbarBtn.click({ timeout: 3_000 });
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 15_000 });
+  await slow(page);
 
   const invoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
   const toggleIsOn = (await invoiceToggle.getAttribute('aria-checked').catch(() => null)) === 'true';
@@ -310,11 +314,15 @@ async function confirmGoodsReceipt(page, { createInvoice = false } = {}) {
 
   const confirmBtn = page.getByTestId('confirm-modal-confirm-btn');
   await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-  await confirmBtn.click();
 
-  // Give the backend call(s) time to resolve.
-  await page.waitForTimeout(3_000);
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  const confirmResponse = page.waitForResponse(
+    (r) => r.url().includes('/sws/neo/') &&
+      ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
+      r.ok(),
+    { timeout: 30_000 },
+  );
+  await confirmBtn.click();
+  await confirmResponse;
 
   const stillOpen = await modal.isVisible({ timeout: 1_000 }).catch(() => false);
   if (stillOpen) {
@@ -354,8 +362,9 @@ async function confirmGoodsReceipt(page, { createInvoice = false } = {}) {
   // state just hasn't been refetched yet. Reloading the page ourselves gets
   // the same fresh, persisted state without depending on an ambiguous UI
   // control at all.
-  await page.reload({ waitUntil: 'load' }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+  // Use goto on current URL instead of reload to avoid ERR_ABORTED
+  const currentUrl = page.url();
+  await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await slow(page);
 
   const detailView = page.getByTestId('detail-view');
@@ -382,71 +391,60 @@ test.describe('Goods Receipt — Stock defaults (ETP-4671, integration)', () => 
     const searchKey = `E2E-GR-${suffix}`;
     const productName = `E2E GR Product ${suffix}`;
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Login (real backend)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await login(page, { user, password });
-    await expect(page, 'Login should redirect to /dashboard').toHaveURL(/dashboard/, { timeout: 30_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Create a brand-new product — zero stock by construction
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const productId = await createUniqueProduct(page, { searchKey, name: productName });
-    expect(productId, `Product id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(productId)}, current URL: ${page.url()})`).toBeTruthy();
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: First goods receipt for this product — gives it real stock and
-    // proves Bug 1's fix (confirmation must succeed even with no prior stock
-    // / no resolved storage bin for the receipt line).
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const firstReceiptId = await createDraftGoodsReceipt(page);
-    expect(firstReceiptId, `First receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(firstReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
-
-    await addGoodsReceiptLine(page, { isFirst: true, searchKey, quantity: 10 });
-
-    await expectLineCount(page, 1);
-
-    await confirmGoodsReceipt(page, { createInvoice: false });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 4: Second goods receipt, SAME product (now has 10 units of stock)
-    // — proves Bug 2's fix: Movement Quantity must default to 1, not the
-    // product's on-hand stock (10) and not 0.
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const secondReceiptId = await createDraftGoodsReceipt(page);
-    expect(secondReceiptId, `Second receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(secondReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
-
-    const { qtyValueAfterProductSelect } = await addGoodsReceiptLine(page, {
-      isFirst: true,
-      searchKey,
-      quantity: null, // do NOT touch it — this is the core regression assertion
+    await test.step('Login', async () => {
+      await login(page, { user, password });
+      await expect(page, 'Login should redirect to /dashboard').toHaveURL(/dashboard/, { timeout: 30_000 });
+      await slow(page);
     });
 
-    expect(
-      qtyValueAfterProductSelect === '1' || qtyValueAfterProductSelect === '' || qtyValueAfterProductSelect === null,
-      `[Bug 2 regression] Movement Quantity should default to 1 (or render empty), ` +
-      `not the product's on-hand stock. Got: "${qtyValueAfterProductSelect}"`,
-    ).toBe(true);
-    expect(
-      qtyValueAfterProductSelect,
-      '[Bug 2 regression] Movement Quantity must NOT be pre-filled with the stock value (10)',
-    ).not.toBe('10');
-    expect(
-      qtyValueAfterProductSelect,
-      '[Bug 2 regression] Movement Quantity must NOT be pre-filled with 0',
-    ).not.toBe('0');
+    let productId;
+    await test.step('Create a brand-new product (zero stock by construction)', async () => {
+      productId = await createUniqueProduct(page, { searchKey, name: productName });
+      expect(productId, `Product id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(productId)}, current URL: ${page.url()})`).toBeTruthy();
+    });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 5: Sanity-confirm the second receipt too (quantity 1 is valid).
-    // ═══════════════════════════════════════════════════════════════════════
+    await test.step('First goods receipt — confirms with zero prior stock (Bug 1)', async () => {
+      const firstReceiptId = await createDraftGoodsReceipt(page);
+      expect(firstReceiptId, `First receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(firstReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
 
-    await expectLineCount(page, 1);
+      await addGoodsReceiptLine(page, { isFirst: true, searchKey, quantity: 10 });
 
-    await confirmGoodsReceipt(page, { createInvoice: false });
+      await expectLineCount(page, 1);
+
+      await confirmGoodsReceipt(page, { createInvoice: false });
+    });
+
+    let qtyValueAfterProductSelect;
+    await test.step('Second goods receipt — verify quantity defaults to 1 (Bug 2)', async () => {
+      const secondReceiptId = await createDraftGoodsReceipt(page);
+      expect(secondReceiptId, `Second receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(secondReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
+
+      const result = await addGoodsReceiptLine(page, {
+        isFirst: true,
+        searchKey,
+        quantity: null, // do NOT touch it — this is the core regression assertion
+      });
+      qtyValueAfterProductSelect = result.qtyValueAfterProductSelect;
+
+      expect(
+        qtyValueAfterProductSelect === '1' || qtyValueAfterProductSelect === '' || qtyValueAfterProductSelect === null,
+        `[Bug 2 regression] Movement Quantity should default to 1 (or render empty), ` +
+        `not the product's on-hand stock. Got: "${qtyValueAfterProductSelect}"`,
+      ).toBe(true);
+      expect(
+        qtyValueAfterProductSelect,
+        '[Bug 2 regression] Movement Quantity must NOT be pre-filled with the stock value (10)',
+      ).not.toBe('10');
+      expect(
+        qtyValueAfterProductSelect,
+        '[Bug 2 regression] Movement Quantity must NOT be pre-filled with 0',
+      ).not.toBe('0');
+    });
+
+    await test.step('Sanity-confirm the second receipt (quantity 1 is valid)', async () => {
+      await expectLineCount(page, 1);
+
+      await confirmGoodsReceipt(page, { createInvoice: false });
+    });
   });
 });

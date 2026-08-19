@@ -54,10 +54,81 @@ develop  (protected — manual merge only)
 
 - **Features branch FROM the current epic** and PRs **target the epic**, not `develop`.
 - **Agents NEVER merge to `develop` or `main`.** This is always a manual, supervised operation.
-- **NEVER target `main` directly.** The highest allowed PR target for agents is the current epic branch.
+- **NEVER target `main` directly.** The highest allowed PR target for agents is the current epic branch — the sole exception is a **promotion PR** explicitly requested by the user on a release day (see Release Cadence below).
 - **NEVER use squash merge.** Always use regular merge (`--merge`) to preserve full commit history. Squash discards individual commits and breaks traceability.
 - **Always assign the PR to the current user.**
 - **GitHub usernames must be stored in auto-memory** (not committed). On first interaction, look up the current user's GitHub username and any known reviewers, and save them to auto-memory for future use. **CRITICAL:** Before ANY GitHub operation, read the `github-usernames.md` file from the auto-memory directory (`~/.claude/projects/.../memory/github-usernames.md` — use the absolute path, NEVER a path relative to the project root). NEVER assume, hardcode, or guess a username — if no username is stored, ask the user and save it immediately.
+
+## Release Cadence — Monday & Thursday
+
+Twice a week, **before** the merge block runs, the branches are promoted upwards.
+`main` is the **production** environment and `develop` is **staging**, so this is
+a real deploy window, not just bookkeeping. Both repos (functional
+`etendo_schema_forge` and runtime `com.etendoerp.go`) are promoted together.
+
+Order of operations — each step waits for the previous one to be merged:
+
+```
+1. epic    → develop   PR in BOTH repos   (promotes the epic to staging)
+2. develop → main      PR in BOTH repos   (promotes staging to production)
+3. feature → epic      the usual merge block (Blockie pre-flight + block branch)
+```
+
+> **This order is provisional.** Today the epic lands on `develop` first and the
+> same content is promoted to `main` right after, so a release day ships the epic
+> all the way to production in one pass. If the team later wants staging to soak
+> before production, steps 1 and 2 swap back. Confirm the current order before a
+> release day rather than assuming.
+
+### Who does what
+
+| | Create the PR | Approve | Merge |
+|---|---|---|---|
+| `epic → develop` | **Clerk** (on request) | Team reviewers | **Human only** |
+| `develop → main` | **Clerk** (on request) | Team reviewers | **Human only** |
+| `feature → epic` | Clerk | Team reviewers | Human (via the block) |
+
+Creating a promotion PR is the **only** case where an agent may open a PR targeting
+`develop` or `main`, and only when the user explicitly asks for the promotion.
+The user then hands the PR to the team for approval.
+
+### Rules
+
+- **Agents never approve and never merge a promotion PR.** They only open it —
+  the merge stays human-only, exactly as in the hierarchy table above.
+- **Step 2 only starts once step 1 is merged.** `develop → main` is opened *after*
+  the epic has landed on `develop`, so the production PR carries the epic content
+  that was just promoted. Opening it first gives an empty PR.
+- **The merge block (step 3) runs last**, on top of an already-promoted epic. A
+  block prepared before the promotion must be rebased/re-verified afterwards —
+  its pre-flight result is stale once the epic moves.
+- **The block covers all three repos, `schema_forge_core` included.** Core always
+  gets its own block branch and PR, because that is where the new package version
+  is published — even when it carries no feature merges of its own.
+- Blockie's 🔴 flag on a PR targeting `main`/`develop` still applies: those two
+  targets are legal **only** for the promotion PRs of steps 1 and 2, never for a
+  `feature/*` PR.
+
+### The merge-block branch
+
+Each release day gets **one Jira task** under the current epic (`Merge Block DD/MM`,
+type Task) and **one branch per repo** named after it:
+
+```
+mergeblock/ETP-XXXX      in schema_forge, schema_forge_core and com.etendoerp.go
+```
+
+- **Always branch it off the epic, after a fresh `git fetch`/`pull`.** A block cut
+  from a stale epic re-merges work that is already there and produces noisy conflicts.
+- **A merge-block branch counts as a `feature` branch for Git Police.** Its commits
+  use the ordinary feature prefix — `Feature ETP-XXXX: ...` — where `ETP-XXXX` is the
+  merge-block task, not `Epic` and not `Merge`. Same 80-char limit on the first line.
+- Authorized `feature/*` branches are merged **into the block branch** with a plain
+  `git merge` (never squash, never rebase), and the block hits the epic **once** at
+  the end — one Jenkins run for the whole set.
+- **Never merge the block branch into the epic branch-by-branch**, and never point a
+  block branch's upstream at the epic (`git branch --unset-upstream` if git sets it
+  automatically) — a stray `git push` would then land straight on the epic.
 
 ## New Feature Branch Policy (MANDATORY)
 
