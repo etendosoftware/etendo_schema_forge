@@ -53,7 +53,11 @@ vi.mock('../PdfViewer.jsx', () => ({
 }));
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({
-  default: () => <div data-testid="new-payment-entry-modal" />,
+  default: ({ onSaved }) => (
+    <div data-testid="new-payment-entry-modal">
+      <button type="button" onClick={onSaved}>save payment</button>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
@@ -126,7 +130,7 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getLatestInstallmentDueDate: () => null,
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import InvoicePreview from '../InvoicePreview.jsx';
 import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
@@ -569,6 +573,34 @@ describe('InvoicePreview', () => {
         expect(cfg.storeCondition).toBe(true);
         expect(cfg.autoFetch).toBe(false);
       });
+    });
+  });
+
+  // ── ETP-4832: grid does not refresh after confirming a payment/collection ──
+  // from the side panel. `NewPaymentEntryModal`'s onSaved handler only called
+  // fetchPayments() (which is why the panel's own PaymentsCard correctly shows
+  // Pagada/Cobrada), but never refetchInvoice() — the only function that
+  // dispatches the `${specName}:invoice-updated` event / calls onInvoiceUpdated,
+  // which is what tells the hosting list view to refresh the grid row. Mirrors
+  // the already-correct SifSendingModal.onAfterSend pattern in this same file.
+  describe('payment modal onSaved refetches the invoice (ETP-4832)', () => {
+    it('calls refetchInvoice (not just fetchPayments) when a payment/collection is saved', async () => {
+      const refetchInvoice = vi.fn().mockResolvedValue(undefined);
+      const fetchPayments = vi.fn();
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        showPaymentModal: true,
+        canAddPayment: true,
+        refetchInvoice,
+        fetchPayments,
+      }));
+
+      renderInvoicePreview();
+      await act(async () => {
+        fireEvent.click(screen.getByText('save payment'));
+      });
+
+      expect(refetchInvoice).toHaveBeenCalled();
+      expect(fetchPayments).toHaveBeenCalled();
     });
   });
 

@@ -921,3 +921,69 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     expect(container.textContent).toMatch(/pagada/);
   });
 });
+
+// ── ETP-4833: badge/button renderers must not wrap onto two lines when the
+// grid's column width shrinks (column-width recalculation on scroll). Every
+// renderer touched by this fix must declare `whiteSpace: 'nowrap'` on its
+// outermost element; the four flex-based renderers (all but the doc-type
+// badge, which is a plain `inline-block` span) must also declare
+// `flexShrink: 0` so the flex container itself is never squeezed narrower
+// than its content. These assertions read the real inline `style` object of
+// the rendered node — not just its text — since the bug is a missing CSS
+// declaration, not a content/logic defect.
+//
+// Manual-check note (QA, long documentNo edge case): a very long `Nº
+// documento` (POReference) value in a neighboring column can still make the
+// browser's table auto-layout squeeze this column below these renderers'
+// natural content width. `white-space: nowrap` prevents the text from
+// breaking onto a second line in that case (it will truncate/overflow
+// instead, which is the desired degrade) — this is verified manually per the
+// window's `docs/generated-custom-windows/purchase-invoice.md` guide, not by
+// an automated test, since it depends on real browser layout metrics that
+// jsdom does not compute.
+describe('PurchaseInvoiceHeaderTable — badge/button nowrap styling (ETP-4833)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+  });
+
+  function renderColStyle(key, row) {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const cols = capturedColumnsHolder.value;
+    expect(cols, 'DataTable never received a columns prop').toBeTruthy();
+    const col = cols.find((c) => c.key === key);
+    expect(col, `expected column "${key}"`).toBeTruthy();
+    const { container } = render(<>{col.render(row)}</>);
+    return container.firstChild;
+  }
+
+  it('doc-type badge stays on one line for a two-word doc type ("Factura Rectificativa")', () => {
+    const el = renderColStyle('transactionDocument', POSITIVE_RECTIFICATIVA_ROW);
+    expect(el.style.whiteSpace).toBe('nowrap');
+  });
+
+  it('"Aplicada" (credit-applied) pill stays on one line', () => {
+    const el = renderColStyle('outstandingAmount', CREDIT_ROW_APPLIED);
+    expect(el.style.whiteSpace).toBe('nowrap');
+    expect(el.style.flexShrink).toBe('0');
+  });
+
+  it('"Saldo a favor · X €" (credit-available) button stays on one line', () => {
+    const el = renderColStyle('outstandingAmount', CREDIT_ROW);
+    expect(el.style.whiteSpace).toBe('nowrap');
+    expect(el.style.flexShrink).toBe('0');
+  });
+
+  it('"Pagada" pill stays on one line', () => {
+    const el = renderColStyle('outstandingAmount', PAID_ROW);
+    expect(el.style.whiteSpace).toBe('nowrap');
+    expect(el.style.flexShrink).toBe('0');
+  });
+
+  it('pending-payment button (amount + "+" icon) stays on one line', () => {
+    const el = renderColStyle('outstandingAmount', AP_INVOICE_ROW);
+    expect(el.style.whiteSpace).toBe('nowrap');
+    expect(el.style.flexShrink).toBe('0');
+  });
+});

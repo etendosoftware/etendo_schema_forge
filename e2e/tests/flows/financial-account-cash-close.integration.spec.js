@@ -6,9 +6,10 @@ import {
   // Generic despite the name: it picks the first real option of `field-businessPartner`, with no
   // vendor-specific step. Aliased so the call site reads correctly in a sales flow.
   selectVendorBP as selectBusinessPartner,
-  clickConfirmButton, waitForConfirmResponse, dismissSuccessModal,
+  clickConfirmButton, waitForConfirmResponse, waitForDocumentActionResponse, dismissSuccessModal,
   expectStatusPill, parseAmount,
 } from '../helpers/purchase-helpers.js';
+import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 
 /**
  * Cash close (ETP-4795) — REAL BACKEND.
@@ -153,8 +154,8 @@ async function openAccountByName(page, name) {
   await expect(row, `the account "${name}" should be in the list`).toBeVisible({ timeout: 20_000 });
   await row.click();
 
-  await expect(page).toHaveURL(/\/financial-account\/[A-Za-z0-9]+/, { timeout: 20_000 });
-  const accountId = page.url().match(/\/financial-account\/([A-Za-z0-9]+)/)?.[1];
+  await expect(page).toHaveURL(/\/financial-account\/(?!new\b)[A-Za-z0-9]+/, { timeout: 20_000 });
+  const accountId = page.url().match(/\/financial-account\/(?!new\b)([A-Za-z0-9]+)/)?.[1];
   expect(accountId, `could not read the account id out of ${page.url()}`).toBeTruthy();
   return accountId;
 }
@@ -180,6 +181,11 @@ test.describe('Cash close (real backend)', () => {
   );
 
   test('Case 1: happy path — sales invoice collected in cash, drawer balances, close completes', async ({ page }) => {
+    // ETP-4567 — open the accounting period for the doc types this flow
+    // confirms, instead of timing out ~10s later on an unrelated UI
+    // element with a confusing generic Playwright timeout.
+    await ensureOpenPeriod();
+
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
     const accountName = `Caja E2E ${Date.now()}`;
@@ -219,8 +225,8 @@ test.describe('Cash close (real backend)', () => {
     await saveDraft(page);
     await expect(page,
       'After saving, the URL should include the invoice record id',
-    ).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-    const invoiceId = page.url().match(/\/sales-invoice\/([a-zA-Z0-9]+)/)?.[1];
+    ).toHaveURL(/\/sales-invoice\/(?!new\b)[a-zA-Z0-9]+/, { timeout: 20_000 });
+    const invoiceId = page.url().match(/\/sales-invoice\/(?!new\b)([a-zA-Z0-9]+)/)?.[1];
     expect(invoiceId, `could not read the invoice id out of ${page.url()}`).toBeTruthy();
     await waitForDetailReady(page);
 
@@ -239,7 +245,11 @@ test.describe('Cash close (real backend)', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     await clickConfirmButton(page);
-    await waitForConfirmResponse(page);
+    // Precise wait for the sales-invoice documentAction confirmation itself — the generic
+    // waitForConfirmResponse() resolves on ANY successful NEO write and can race ahead of the
+    // actual confirmation request, letting the pill assertion below read the stale "Borrador"
+    // status before the invoice has actually finished completing on the backend.
+    await waitForDocumentActionResponse(page, 'sales-invoice');
     await dismissSuccessModal(page);
 
     // Confirming navigates back to the invoice list, so go back to the record by id instead of

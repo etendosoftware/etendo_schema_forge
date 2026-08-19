@@ -362,7 +362,15 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           outstanding={p.totalOutstanding}
           apiBaseUrl={apiBaseUrl}
           onClose={() => p.setShowPaymentModal(false)}
-          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          onSaved={async () => {
+            p.setShowPaymentModal(false);
+            // ETP-4832: refetchInvoice is what dispatches the invoice-updated event /
+            // calls onInvoiceUpdated, which is what tells the hosting list view to
+            // refresh the grid row — fetchPayments alone only updates this panel's
+            // own PaymentsCard, mirrors the working SifSendingModal.onAfterSend pattern below.
+            await p.refetchInvoice();
+            p.fetchPayments();
+          }}
           data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (
