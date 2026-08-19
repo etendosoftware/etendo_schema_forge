@@ -188,6 +188,25 @@ describe('fetchDeclarationIncidents', () => {
     });
   });
 
+  // ── model param (ETP-4755) ─────────────────────────────────────────────────
+  // FmListPage's list-row/KPI incidents refresh (fix 2) must be able to hit the
+  // right per-model route for a 349 declaration too — the URL is built from the
+  // new `model` option instead of always hardcoding "fiscal303".
+
+  it('builds the URL against fiscal349/incidents when model: "349" is passed', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+    await fetchDeclarationIncidents('349-2026-01', { ...OPTS, model: '349' });
+    const url = fetch.mock.calls[0][0];
+    expect(url).toBe('http://host/neo/fiscal349/incidents?id=349-2026-01');
+  });
+
+  it('still defaults to fiscal303/incidents when model is omitted (backward compat)', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+    await fetchDeclarationIncidents('303-2026-T2', OPTS);
+    const url = fetch.mock.calls[0][0];
+    expect(url).toBe('http://host/neo/fiscal303/incidents?id=303-2026-T2');
+  });
+
   it('counts legacy rows (no severity key, pre-ETP-4456 data) as blocking alongside new warn rows', async () => {
     fetch.mockResolvedValueOnce({
       ok: true,
