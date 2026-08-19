@@ -1,0 +1,141 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Service Project",
+    "noHeaderBorder": true,
+    "hidePrint": true,
+    "hideLink": true,
+    "labelOverrides": {
+      "es_ES": { "Isactive": "Activo" },
+      "es_AR": { "Isactive": "Activo" }
+    }
+  },
+  "entities": {
+    "serviceProject": {
+      "orderBy": [{ "field": "searchKey", "direction": "ASC" }],
+      "fields": {
+        "searchKey": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "seq": 1
+        },
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "seq": 2
+        },
+        "description": {
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "type": "textarea",
+          "span": 2,
+          "rows": 1,
+          "seq": 3
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "seq": 4,
+          "badge": true,
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          },
+          "reason": "Raw extraction classified this as system (derivation computed=Y); ETP-4892 explicitly requires it editable and visible, defaulting to true."
+        },
+        "summaryLevel": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "phase": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "startingDate": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "contractDate": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "endingDate": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "invoiceToProject": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "salesRepresentative": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "personInCharge": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "locationAddress": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "plannedAmount": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "plannedQuantity": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "plannedMargin": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "legallyBindingContract": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "priceCeiling": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "contractAmount": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "contractQuantity": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "serviceRevenue": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "plannedExpenses": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "serviceCost": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "reinvoicedExpenses": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "serviceMargin": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "expensesMargin": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "businessPartner": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "partnerAddress": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "userContact": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "orderReference": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "paymentMethod": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "paymentTerms": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "createTemporaryPriceList": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "priceList": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "currency": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "warehouse": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "changeProjectStatus": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "copyFrom": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "generateOrder": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "projectStatus": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "projectPhase": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "plannedPoAmount": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "initiativeType": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "workType": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "invoiceAddress": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "comments": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "priceListVersion": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "processed": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "salesCampaign": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "generateTo": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "standardPhase": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "projectType": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "invoiceQuantity": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "invoiceAmount": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "projectBalance": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "projectCategory": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "processNow": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "formOfPayment": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "lastPlannedProposalDate": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "accountNo": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "numberOfCopies": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "setProjectType": { "visibility": "discarded", "reason": "Process button — out of scope for ETP-4892 simplified window." },
+        "outsourcedCost": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "servicesProvidedCost": { "visibility": "discarded", "reason": "Out of scope for ETP-4892 simplified window." },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
+    },
+    "projectLine": {
+      "exclude": true
+    },
+    "supplier": {
+      "exclude": true
+    },
+    "proposal": {
+      "exclude": true
+    },
+    "proposalLine": {
+      "exclude": true
+    },
+    "followup": {
+      "exclude": true
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}
