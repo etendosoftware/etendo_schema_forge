@@ -20659,6 +20659,7 @@
     "selectedCount": "selected",
     "loadingDetails": "Loading details...",
     "detailReport": "Detail Report",
+    "openFullReport": "Open in new tab",
     "detailsSuffix": " — Details",
     "invoiceTitle": "Invoice",
     "install": "Install",
