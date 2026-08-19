@@ -2417,7 +2417,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "259d72828a97003ca4468495e3d7fdd9b8e7787c0b2f9475776c14d14458ad4d",
+      "checksum": "5021b0399e127cb4cfbd1fbe1b004e8d7e17d5d8b3fe05db57e72101e2ddedf4",
       "params": [
         "167"
       ],
@@ -2900,7 +2900,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateInvoiced",
@@ -2908,7 +2908,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DaysTillDue",
@@ -3711,6 +3711,14 @@
           "readonlylogic": null
         },
         {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Order Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+        },
+        {
           "columnname": "PaidConverted",
           "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
           "displaylogic_server": null,
@@ -4481,7 +4489,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "3935bdaec57909fa5ccbad24ec70ff050c11a8e18cb598b2d107b773189379b9",
+      "checksum": "e20fe6eef26262aada0cbbefaf1e28e622c2cc4ad28995ee391eda9c8f2d5f7e",
       "params": [
         "183"
       ],
@@ -4940,7 +4948,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateInvoiced",
@@ -4948,7 +4956,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DaysTillDue",
@@ -5605,6 +5613,14 @@
           "displaylogicgrid": null,
           "name": "Total Outstanding",
           "readonlylogic": null
+        },
+        {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Supplier Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
         },
         {
           "columnname": "PaidConverted",

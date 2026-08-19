@@ -3597,7 +3597,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "176ae49721c46e0247cb6fdbdf23abff183fcc6a438f19ffb390db11aaf72e9e",
+      "checksum": "601dd4a5b4fb1cca71d5b6ec92fcec5a61f9f838b11be397493c513af9c52101",
       "params": [
         "167"
       ],
@@ -3644,7 +3644,7 @@
           "displaylogic": null,
           "field_id": "2958",
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
           "tab_id": "263",
           "tab_name": "Header",
           "table_id": "318",
@@ -3927,12 +3927,24 @@
           "table_name": "C_Invoice"
         },
         {
+          "column_id": "3785",
+          "columnname": "POReference",
+          "displaylogic": null,
+          "field_id": "2962",
+          "name": "Order Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
+          "tab_id": "263",
+          "tab_name": "Header",
+          "table_id": "318",
+          "table_name": "C_Invoice"
+        },
+        {
           "column_id": "3508",
           "columnname": "DateAcct",
           "displaylogic": null,
           "field_id": "2776",
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'",
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
           "tab_id": "263",
           "tab_name": "Header",
           "table_id": "318",
@@ -6685,7 +6697,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "4d84e07d963db3b03af6dfcc14b4c0fd2a21e52a4d6d98e0a1854b54fe89f70b",
+      "checksum": "5a73097d105c05f5415151f3c25f206ae05f31b2b42fe4ff1635780f876cb682",
       "params": [
         "183"
       ],
@@ -6732,7 +6744,7 @@
           "displaylogic": null,
           "field_id": "3348",
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
           "tab_id": "290",
           "tab_name": "Header",
           "table_id": "318",
@@ -6780,7 +6792,7 @@
           "displaylogic": null,
           "field_id": "3333",
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'",
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
           "tab_id": "290",
           "tab_name": "Header",
           "table_id": "318",
@@ -6805,6 +6817,18 @@
           "field_id": "830698140BCD4AC3E040007F01000289",
           "name": "Payment Method",
           "readonlylogic": "@Processed@='Y'",
+          "tab_id": "290",
+          "tab_name": "Header",
+          "table_id": "318",
+          "table_name": "C_Invoice"
+        },
+        {
+          "column_id": "3785",
+          "columnname": "POReference",
+          "displaylogic": null,
+          "field_id": "3351",
+          "name": "Supplier Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
           "tab_id": "290",
           "tab_name": "Header",
           "table_id": "318",
