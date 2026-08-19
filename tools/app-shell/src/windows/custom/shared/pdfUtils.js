@@ -285,6 +285,12 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // ---------------------------------------------------------------------------
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
+async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, isCancelled }) {
+  const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
+  if (isCancelled() || !main?.id) return null;
+  return fetchAttachmentBlob({ token, attachmentId: main.id, apiBaseUrl });
+}
+
 /**
  * @param {Object} [cacheConfig] - ETP-4315 follow-up (2026-08-18): when a marked
  *   Attachment already exists for (tableName, recordId), it is served directly
@@ -320,12 +326,11 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
       try {
         let blob = null;
         if (cacheStoreCondition && cacheTableName) {
-          const main = await fetchMainAttachment({ token, tableName: cacheTableName, recordId, apiBaseUrl });
+          blob = await fetchCachedBlob({
+            token, tableName: cacheTableName, recordId, apiBaseUrl,
+            isCancelled: () => cancelled,
+          });
           if (cancelled) return;
-          if (main?.id) {
-            blob = await fetchAttachmentBlob({ token, attachmentId: main.id, apiBaseUrl });
-            if (cancelled) return;
-          }
         }
         if (!blob) {
           blob = await buildRef.current(recordId, base, token);

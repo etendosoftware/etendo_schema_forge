@@ -3,17 +3,7 @@ import { X, Upload, Trash2, Loader2, Download } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useMainAttachment } from './useMainAttachment.js';
 import PdfViewer from './PdfViewer.jsx';
-
-const ACCEPTED_TYPES = {
-  'application/pdf': 'pdf',
-  'image/jpeg': 'image',
-  'image/jpg': 'image',
-  'image/png': 'image',
-  'image/gif': 'image',
-  'image/webp': 'image',
-  'image/svg+xml': 'image',
-};
-const ACCEPT_ATTR = Object.keys(ACCEPTED_TYPES).join(',');
+import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 function getBackdropClass(animState) {
   if (animState === 'opening') return 'opacity-0';
@@ -41,7 +31,6 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     storeCondition: cfg.storeCondition ?? false,
     token: cfg.token ?? null,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
-    tableName: cfg.tableName ?? null,
   });
 
   useEffect(() => {

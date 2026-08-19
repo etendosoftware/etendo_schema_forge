@@ -4,22 +4,12 @@ import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { useMainAttachment } from './useMainAttachment.js';
 import { useLocation } from 'react-router-dom';
+import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 const LazyPdfViewer = lazy(() => import('./PdfViewer.jsx'));
 
 /* eslint-disable react/prop-types */
-
-const ACCEPTED_TYPES = {
-  'application/pdf': 'pdf',
-  'image/jpeg': 'image',
-  'image/jpg': 'image',
-  'image/png': 'image',
-  'image/gif': 'image',
-  'image/webp': 'image',
-  'image/svg+xml': 'image',
-};
-const ACCEPT_ATTR = Object.keys(ACCEPTED_TYPES).join(',');
 
 function FileTab(props) {
   const ui = useUI();
