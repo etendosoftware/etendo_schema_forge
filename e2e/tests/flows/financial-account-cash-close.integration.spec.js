@@ -154,8 +154,8 @@ async function openAccountByName(page, name) {
   await expect(row, `the account "${name}" should be in the list`).toBeVisible({ timeout: 20_000 });
   await row.click();
 
-  await expect(page).toHaveURL(/\/financial-account\/[A-Za-z0-9]+/, { timeout: 20_000 });
-  const accountId = page.url().match(/\/financial-account\/([A-Za-z0-9]+)/)?.[1];
+  await expect(page).toHaveURL(/\/financial-account\/(?!new\b)[A-Za-z0-9]+/, { timeout: 20_000 });
+  const accountId = page.url().match(/\/financial-account\/(?!new\b)([A-Za-z0-9]+)/)?.[1];
   expect(accountId, `could not read the account id out of ${page.url()}`).toBeTruthy();
   return accountId;
 }
@@ -225,8 +225,8 @@ test.describe('Cash close (real backend)', () => {
     await saveDraft(page);
     await expect(page,
       'After saving, the URL should include the invoice record id',
-    ).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-    const invoiceId = page.url().match(/\/sales-invoice\/([a-zA-Z0-9]+)/)?.[1];
+    ).toHaveURL(/\/sales-invoice\/(?!new\b)[a-zA-Z0-9]+/, { timeout: 20_000 });
+    const invoiceId = page.url().match(/\/sales-invoice\/(?!new\b)([a-zA-Z0-9]+)/)?.[1];
     expect(invoiceId, `could not read the invoice id out of ${page.url()}`).toBeTruthy();
     await waitForDetailReady(page);
 
