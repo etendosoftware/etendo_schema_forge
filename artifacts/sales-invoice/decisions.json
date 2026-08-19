@@ -457,6 +457,7 @@
         },
         "tbaiReverseinvoicecode": {
           "visibility": "editable",
+          "form": false,
           "defaultExpr": "\"\"",
           "displayLogic": "@tbaiConfigActive@='Y'",
           "displayLogicJs": "record['tbaiConfigActive'] === 'Y'"

@@ -11,6 +11,7 @@ import {
   getFiscalRecordId,
   getVerifactuTaxTypeLabel,
   isEtendoTrue,
+  normalizeEtendoBoolean,
   normalizeVerifactuTaxType,
   parseApiError,
   VERIFACTU_TAX_TYPE_OPTIONS,
@@ -35,7 +36,10 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
   const isLocked = isEtendoTrue(record?.isReady);
 
   const [form, setForm] = useState({
-    tAXType: normalizeVerifactuTaxType(record?.tAXType) ?? '',
+    tAXType:   normalizeVerifactuTaxType(record?.tAXType) ?? '',
+    // ETP-4783: preserve the DB value so the PUT never overrides what the user
+    // set in Classic. Falls back to 'Y' only when the record has no value at all.
+    defaultQR: normalizeEtendoBoolean(record?.defaultQR ?? 'Y'),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);

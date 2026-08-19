@@ -43,6 +43,16 @@ export const SII_MOTIVO_RECTIF_OPTIONS = [
   { value: 'R5', labelKey: 'sifDataTabs.option.siiMotivoR5' },
 ];
 
+// ETP-4783: TicketBAI reverse-invoice code options — shown in the TBAI SIF
+// panel when the transaction document type is marked as rectificative.
+export const TBAI_REVERSEINVOICECODE_OPTIONS = [
+  { value: 'R1', labelKey: 'sifDataTabs.option.tbaiReverseR1' },
+  { value: 'R2', labelKey: 'sifDataTabs.option.tbaiReverseR2' },
+  { value: 'R3', labelKey: 'sifDataTabs.option.tbaiReverseR3' },
+  { value: 'R4', labelKey: 'sifDataTabs.option.tbaiReverseR4' },
+  { value: 'R5', labelKey: 'sifDataTabs.option.tbaiReverseR5' },
+];
+
 // ETP-4463: SIF fields no longer persist themselves via a per-field PATCH on
 // blur/change. Instead they write into the shared `editing` state that
 // DetailView already maintains for the header form — via the `onChange`

@@ -72,16 +72,13 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(serializeBooleanFields({
           ...form,
-          // ETP-4783: invoiceDescription is not exposed in the UI — the value already in the
-          // record (set by Classic during onboarding) is preserved on every save. Classic
-          // defaults it to 'Descripcion Factura'; new tenants get that same value via the
-          // onboarding flow, so we never need to derive or override it here.
+          // Preserve read-only fields from the original record; fall back only for
+          // dates that can be blank. Do NOT hardcode productionEnv/uSEAsproductDesc/
+          // validatePreviousInvoice here — overriding them would silently revert any
+          // change the user made in Classic (e.g. productionEnv='N' for testing). (ETP-4783)
           invoiceDescription:      record?.invoiceDescription ?? 'Descripcion Factura',
           tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || new Date().toISOString().slice(0, 10),
-          productionEnv:           'Y',
-          uSEAsproductDesc:        'N',
-          validatePreviousInvoice: 'N',
-        }, ['productionEnv', 'uSEAsproductDesc', 'autoSendInvoices', 'validatePreviousInvoice'])),
+        }, ['autoSendInvoices'])),
       });
       if (!res.ok) throw new Error(await parseApiError(res));
       onSave();

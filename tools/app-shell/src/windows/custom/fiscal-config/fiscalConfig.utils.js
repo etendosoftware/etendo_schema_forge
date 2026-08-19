@@ -285,8 +285,11 @@ export function buildOnboardingPayloads(system, territory) {
 
 export function buildVerifactuUpdatePayload(form) {
   return {
-    tAXType: normalizeVerifactuTaxType(form?.tAXType),
-    defaultQR: true,
+    tAXType:   normalizeVerifactuTaxType(form?.tAXType),
+    // ETP-4783: read from form (populated from the DB record) so saves never
+    // override a value the user changed in Classic. Fallback to true only when
+    // the record pre-dates this field and has no stored value.
+    defaultQR: isEtendoTrue(form?.defaultQR ?? 'Y'),
   };
 }
 
@@ -301,19 +304,21 @@ export function getFiscalRecordId(record, _system) {
 }
 
 export function mapSiiRecordToForm(record) {
+  // Only map fields that the SII config UI can actually read or write.
+  // Numeric fields not exposed in the UI (plazoLmiteDeEnvoASII,
+  // cadenciaEnvoFacturasVentaASII, cadenciaEnvoFacturasCompraASII) are
+  // intentionally omitted: when those columns are NULL in a freshly-created
+  // record (via "Añadir SII") the empty-string fallback is coerced to null by
+  // the ORM layer, triggering a NOT-NULL violation on the next PUT. (ETP-4783)
   return {
-    acogidaAlSII: normalizeEtendoBoolean(record?.acogidaAlSII),
-    fechaAcogidaSII: normalizeDateInputValue(record?.fechaAcogidaSII),
-    plazoLmiteDeEnvoASII: record?.plazoLmiteDeEnvoASII ?? '',
-    cadenciaEnvoFacturasVentaASII: record?.cadenciaEnvoFacturasVentaASII ?? '',
-    cadenciaEnvoFacturasCompraASII: record?.cadenciaEnvoFacturasCompraASII ?? '',
+    acogidaAlSII:       normalizeEtendoBoolean(record?.acogidaAlSII),
+    fechaAcogidaSII:    normalizeDateInputValue(record?.fechaAcogidaSII),
     entornoDeProduccin: normalizeEtendoBoolean(record?.entornoDeProduccin),
     adjuntarArchivosXML: normalizeEtendoBoolean(record?.adjuntarArchivosXML),
-    recc: normalizeEtendoBoolean(record?.recc),
-    redeme: normalizeEtendoBoolean(record?.redeme),
-    monitordate: normalizeDateInputValue(record?.monitordate),
-    postedInvoices: normalizeEtendoBoolean(record?.postedInvoices),
-    authorizationno: record?.authorizationno ?? '',
+    redeme:             normalizeEtendoBoolean(record?.redeme),
+    monitordate:        normalizeDateInputValue(record?.monitordate),
+    postedInvoices:     normalizeEtendoBoolean(record?.postedInvoices),
+    authorizationno:    record?.authorizationno ?? '',
   };
 }
 

@@ -55,12 +55,13 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(serializeBooleanFields({
           ...form,
-          acogidaAlSII:      'Y',
-          entornoDeProduccin: 'Y',
-          adjuntarArchivosXML: 'Y',
+          // Preserve existing dates; fall back to today only if the record has none.
+          // Do NOT hardcode acogidaAlSII/entornoDeProduccin/adjuntarArchivosXML here —
+          // form already reflects the DB values via mapSiiRecordToForm(record), and
+          // overriding them would silently revert any change the user made in Classic. (ETP-4783)
           fechaAcogidaSII:   normalizeDateInputValue(record?.fechaAcogidaSII) || today,
           monitordate:       normalizeDateInputValue(record?.monitordate) || today,
-        }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'recc', 'redeme'])),
+        }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'redeme'])),
       });
       if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
@@ -80,13 +81,6 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
       {/* Régimen especial */}
       <SectionRow label={ui('fiscal.sii.legend.special')} data-testid="SectionRow__fcb159">
         <div className="flex flex-wrap gap-4 items-start">
-          <div className="flex items-center gap-2 pt-1 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.recc)}
-              onCheckedChange={v => set('recc', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.recc')}</span>
-          </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.redeme)}

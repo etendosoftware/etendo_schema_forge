@@ -1,8 +1,8 @@
 {
-  "version": "0.82.0",
+  "version": "0.82.1",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-19T14:57:04.194Z",
-  "checksum": "5961dc1f5f1641c1",
+  "updatedAt": "2026-08-19T17:46:40.397Z",
+  "checksum": "2c5dc6f68ec9ffee",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1022,7 +1022,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "enumValues": [
               {
                 "value": "R5",

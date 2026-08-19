@@ -9,6 +9,7 @@ import {
   useSifFieldPatcher,
   VERIFACTU_INV_TYPE_OPTIONS,
   SII_MOTIVO_RECTIF_OPTIONS,
+  TBAI_REVERSEINVOICECODE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
 
@@ -558,18 +559,6 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   data-testid="CheckboxField__b99c8b" />
               </Field>
             )}
-            <ReadOnlyField
-              id="sif-siiYear"
-              labelKey="sifDataTabs.field.siiYear"
-              value={data?.aeatsiiEjercicio}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-siiPeriod"
-              labelKey="sifDataTabs.field.siiPeriod"
-              value={data?.aeatsiiPeriodo}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
             <SifAttachmentsSection
               tableName="aeatsii_facturas"
               recordId={data?.aeatsiiFacturaId}
@@ -690,6 +679,33 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
             subtitleKey={PANEL_META.tbai.subtitleKey}
             ui={ui}
             data-testid="Panel__b99c8b">
+            {/* ETP-4783: "Código de Factura Rectificativa" — only visible when the
+                transaction document type is marked as rectificative (isRectificative
+                is injected by AbstractInvoiceHeaderHandler.enrichIsRectificative).
+                Moved here from the header form so it appears in the fiscal context. */}
+            {data?.isRectificative && (
+              <Field
+                label={ui('sifDataTabs.field.tbaiReverseinvoicecode')}
+                htmlFor="tbai-reverseinvoicecode"
+                data-testid="Field__tbai_reversecode">
+                <Select
+                  value={getVal('tbaiReverseinvoicecode') || undefined}
+                  onValueChange={val => onChange?.('tbaiReverseinvoicecode', val)}
+                  disabled={data?.processed === true}
+                  data-testid="Select__tbai_reversecode">
+                  <SelectTrigger id="tbai-reverseinvoicecode" data-testid="SelectTrigger__tbai_reversecode">
+                    <SelectValue placeholder="—" data-testid="SelectValue__tbai_reversecode" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__tbai_reversecode">
+                    {TBAI_REVERSEINVOICECODE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__tbai_reversecode">
+                        {o.value} — {ui(o.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             {/* ETP-4888: minimal TBAI rail — Adjuntos only. No date/type/checkbox fields here
                 (that per-invoice field panel was intentionally removed in ETP-4401, since TBAI
                 chaining sequences are now generated automatically per fiscal configuration). */}
