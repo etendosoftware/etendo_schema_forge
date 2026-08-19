@@ -59,6 +59,7 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 const COLUMN_CHROME = {
   name: { headClass: 'w-[480px] pl-[84px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
+  country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
   pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
 };
