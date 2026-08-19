@@ -113,6 +113,19 @@ describe('useFiscalStatus', () => {
       expect(result.current.sii).toBeNull();
       expect(result.current.tbai).toBeNull();
     });
+
+    it('maps VF_STATUS_MAP code CO to "accepted"', async () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      globalThis.fetch = makeFetchMock([
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'CO' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // CO (completado) maps to 'accepted' — distinct from 'AC' which passes through raw
+      expect(result.current.verifactu).toBe('accepted');
+    });
   });
 
   describe('showSii/showTbai/showVerifactu gating', () => {

@@ -61,7 +61,9 @@ import SiiSection from '../SiiSection.jsx';
 
 // --- Tests ----------------------------------------------------------------
 
-const BASE_RECORD = { plazoLmiteDeEnvoASII: 4 };
+// ETP-4783: plazoLmiteDeEnvoASII was removed from mapSiiRecordToForm to avoid NOT-NULL ORM violations.
+// BASE_RECORD does not include it — the SiiSection no longer reads or sends that field.
+const BASE_RECORD = { acogidaAlSII: 'N', entornoDeProduccin: 'N', adjuntarArchivosXML: 'N' };
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('SiiSection — rendering', () => {

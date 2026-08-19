@@ -87,9 +87,13 @@ describe('TbaiSection — rendering', () => {
 });
 
 describe('TbaiSection — validation', () => {
-  it('does not validate tbaisystemdate (ETP-4783: removed from UI, always uses record value)', async () => {
+  it('does not validate tbaisystemdate: save succeeds even with empty value (ETP-4783: removed from UI)', async () => {
+    const onSave = vi.fn();
     const ref = createRef();
-    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: '' }} ref={ref} />);
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: '' }} onSave={onSave} ref={ref} />);
+    await ref.current.save();
+    // If tbaisystemdate validation were still active, save() would throw before calling onSave
+    expect(onSave).toHaveBeenCalled();
     expect(screen.queryByText('fiscal.tbai.err.enrollDate')).not.toBeInTheDocument();
   });
 
