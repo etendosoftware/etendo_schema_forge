@@ -972,8 +972,10 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       <div className="flex-1 overflow-y-auto">
         {useAccordion ? (
           report.sections.map(({ id, label }) => {
-            const sectionParams = grouped[id];
-            if (!sectionParams?.length) return null;
+            // A section with no parameters yet still renders (header + empty
+            // body) instead of disappearing — a contract may declare a
+            // section ahead of the fields that will populate it later.
+            const sectionParams = grouped[id] || [];
             const isOpen = !!openSections[id];
             const sectionLabel = label?.[locale] || label?.en_US || id;
             return (
