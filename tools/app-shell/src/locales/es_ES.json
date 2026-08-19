@@ -17544,6 +17544,8 @@
     "rolesLoadError": "No se pudieron cargar los roles.",
     "accessTierFull": "Completo",
     "accessTierReadOnly": "Solo lectura",
+    "rolesWindowCount": "{count} Ventanas",
+    "rolesMatrixWindowColumn": "Ventana",
     "userRolesTabLabel": "Roles del usuario",
     "userRolesTabEmptyState": "Selecciona un rol para visualizar los permisos",
     "userRolesTabWindowColumn": "Ventana",
