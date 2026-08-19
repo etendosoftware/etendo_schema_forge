@@ -473,3 +473,94 @@ Small, and worth folding into this item rather than numbering separately.
 Not verified: whether a POST to a still-writable handler-backed entity now returns the clause-2 422
 (no write probe was authorized in this session), and the §8.4 handler-exemption gap is unaffected by
 any of the above.
+
+### 8.2 Scope added 2026-08-19 — actionable `notes` on `neo_defaults`
+
+**Human decision, same ticket (ETP-4918).** The 2026-08-19 measurement run (below) found the
+task reachable only because the operator read a value out of the database. The blocking field was
+`storageBin` on `physical-inventory/inventoryLine`, and the contract gave the agent **no signal at
+all**: the field was absent from `defaults` and `metadata.unresolvedFields` read `[]`.
+
+Traced in `NeoDefaultsService`: `unresolvedFields` is populated **only from the `catch`** (pass 1,
+line ~169), and the `@SQL=... WHERE M_WAREHOUSE_ID=@M_WAREHOUSE_ID@` default returns `null`
+*cleanly* when `NeoParentValuesLoader` has no parent values — nothing throws, so
+`applyDefaultWithComboFallback` (line ~276) skips the field into silence.
+
+**The fix chosen is not a change to `unresolvedFields`.** A `notes` array is added to `metadata`
+carrying short actionable prose — *why* a field is missing and *what to do*:
+
+```json
+"notes": ["storageBin: its default needs @M_WAREHOUSE_ID@ from the parent record, but no parentId
+was given. Call neo_defaults again with parentId to resolve it."]
+```
+
+Two reasons this shape was preferred over widening `unresolvedFields`:
+
+- **It dissolves a criterion nobody could settle.** Adding null-resolved fields to
+  `unresolvedFields` forces a binary call on whether an *optional* field with an unresolvable
+  default belongs there — mark all and the array becomes noise, mark none and `storageBin` stays
+  invisible. A note states the situation and lets the agent judge; no threshold to get wrong.
+- **The consumer is an LLM.** The usual objection to prose — "you cannot branch on a string" —
+  does not apply to this reader, and is the same reason this MCP's existing `hint` strings work.
+
+`unresolvedFields` is deliberately left untouched. The two coexist: the array is the short
+programmable list, `notes` is the why-and-how.
+
+**The rule that keeps it from rotting:** every note must name a concrete field **and** a concrete
+action, or it is not emitted. Response bytes are a measured cost here (ACE, registry §2.6), so a
+note earns its size by being actionable. Only two causes are attributable without guessing, and
+both are already detectable in code — `NeoDefaultsSqlHelper.resolveSQLDefault` (line ~73-87)
+already parses `@parameter@` tokens and looks them up in `parentValues`:
+
+1. a default references a parent token and `parentId` was absent (the `storageBin` case);
+2. an `@SQL=` default ran and matched zero rows — which separates "the tenant has no such record"
+   from "you forgot the parent", the exact distinction that required a DB query on 08-19.
+
+Anything not attributable to one of those emits nothing. Silence beats a vague note.
+
+**Still not fixed, and deliberately out of scope:** `view:"create"` classified `storageBin` under
+`optional` while it is in fact mandatory, because the view judges by whether a default *exists*, not
+whether it *resolves*. `neo_schema` receives no `parentId`, so it structurally cannot know. Closing
+that means changing `neo_schema`'s signature — a separate item, not approved.
+
+#### 8.2.1 Measured coverage of the `notes` mechanism (2026-08-19, live + diagnostic)
+
+Verified on the deployed build, then quantified with a diagnostic query. Over the **469 mandatory,
+writable, included fields** across every spec, grouped by what their default expression looks like:
+
+| Default shape | Fields | Covered by a note? |
+|---|---:|---|
+| No default at all | 266 | Not needed — `view:"create"` already lists them under `required` |
+| **`@SQL=` carrying a parent token** | **17** | **Yes** |
+| `@SQL=` with no token | 0 | Yes (zero-rows branch) — no instance in this tenant |
+| `@Token@`, non-SQL | 7 | **No** |
+| Literal / session | 179 | Not needed — they resolve |
+
+The 17 covered fields are precisely the dangerous class: a default that *looks* resolvable and is
+not, absent a parent. That is the shape that silently broke the 08-19 measured pass.
+
+**The 7 uncovered fields do not overlap the defect.** All are on **header** entities — `Currency` on
+the five document headers plus `Description` on the GL journal — defaulting from `@C_Currency_ID@`.
+A header has no parent, so `parentId` is inapplicable and this mechanism was never the right place
+for them. The gap is real and irrelevant to what the item fixes; recorded so nobody re-derives it.
+
+Live behaviour confirmed across three different specs:
+
+```
+physical-inventory/inventoryLine    -> note names storageBin + @M_WAREHOUSE_ID@ + the action
+sales-order/lines                   -> note names businessPartner + @C_Order_ID@
+goods-receipt/goodsReceiptLine      -> NO note, and correctly so
+```
+
+The third case is the one worth keeping. It emitted nothing, and the reason is right rather than
+lucky: that entity's `storageBin` is **not mandatory** (`ismandatory='N'`) and its default is
+`@OnHandLocatorDefault@`, not an `@SQL=` — so the create does not fail without it and there is
+nothing to report. The mechanism stayed silent where silence was correct, which is the half that
+decides whether an advisory array stays useful or decays into noise.
+
+Non-noise also confirmed: with `parentId` supplied, the `notes` key is **absent** — not an empty
+array — and three calls where no note was warranted produced none.
+
+**Not verified live:** the zero-rows branch never fired in any probe. It exists in code with unit
+tests, but no run has observed it. Forcing it needs a case with `parentId` present and a default
+query that legitimately matches nothing. Recorded as unverified rather than assumed working.
