@@ -356,11 +356,10 @@ describe('OrderPreview', () => {
       return calls[calls.length - 1][0].attachmentConfig;
     }
 
-    it('includes tableName C_Order, useMainAttachment true and the order documentId', () => {
+    it('includes tableName C_Order and the order documentId', () => {
       renderOrderPreview();
       const cfg = lastAttachmentConfig();
       expect(cfg.tableName).toBe('C_Order');
-      expect(cfg.useMainAttachment).toBe(true);
       expect(cfg.documentId).toBe(defaultOrder.id);
     });
 

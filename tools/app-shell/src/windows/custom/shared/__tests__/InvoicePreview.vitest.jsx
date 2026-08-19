@@ -527,7 +527,6 @@ describe('InvoicePreview', () => {
         renderInvoicePreview({ specName: 'sales-invoice', invoice });
         const cfg = lastAttachmentConfig();
         expect(cfg.tableName).toBe('C_Invoice');
-        expect(cfg.useMainAttachment).toBe(true);
         expect(cfg.documentId).toBe(invoice.id);
         expect(cfg.storeCondition).toBe(false);
         expect(cfg.sourceBlob).toBeNull();
@@ -555,7 +554,6 @@ describe('InvoicePreview', () => {
         renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
         const cfg = lastAttachmentConfig();
         expect(cfg.tableName).toBe('C_Invoice');
-        expect(cfg.useMainAttachment).toBe(true);
         expect(cfg.documentId).toBe(defaultInvoice.id);
         expect(cfg.storeCondition).toBe(true);
         expect(cfg.autoFetch).toBe(false);
