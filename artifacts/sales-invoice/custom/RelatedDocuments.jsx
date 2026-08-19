@@ -81,9 +81,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     // `data.originInvoice` (a bare id string) is kept as a fallback for a
     // stale/partially-rolled-out response shape. Server injects just ids (+ identifiers), not
     // full records, so fetch each one here.
+    const legacyOriginInvoiceIds = data.originInvoice ? [data.originInvoice] : [];
     const originInvoiceIds = Array.isArray(data.originInvoices)
       ? data.originInvoices.map(o => o.id).filter(Boolean)
-      : (data.originInvoice ? [data.originInvoice] : []);
+      : legacyOriginInvoiceIds;
     if (originInvoiceIds.length > 0) {
       promises.push(
         Promise.all(
