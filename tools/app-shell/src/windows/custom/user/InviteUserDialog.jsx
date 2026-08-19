@@ -95,16 +95,20 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} data-testid="Dialog__fdd5a3">
       <DialogContent className="sm:max-w-md" data-testid="invite-user-dialog">
         {successData ? (
           <div className="space-y-4 py-2" data-testid="invite-user-success-view">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-primary">
-                <CheckCircle2 className="h-5 w-5 text-status-success-foreground" />
+            <DialogHeader data-testid="DialogHeader__fdd5a3">
+              <DialogTitle
+                className="flex items-center gap-2 text-primary"
+                data-testid="DialogTitle__fdd5a3">
+                <CheckCircle2
+                  className="h-5 w-5 text-status-success-foreground"
+                  data-testid="CheckCircle2__fdd5a3" />
                 {ui('inviteUserSuccessTitle')}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription data-testid="DialogDescription__fdd5a3">
                 {ui('inviteUserSuccessMessage').replace('{email}', successData.email)}
               </DialogDescription>
             </DialogHeader>
@@ -122,7 +126,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
               </div>
             </div>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="pt-2" data-testid="DialogFooter__fdd5a3">
               <Button
                 type="button"
                 onClick={() => handleOpenChange(false)}
@@ -134,12 +138,12 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4" data-testid="invite-user-form">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
+            <DialogHeader data-testid="DialogHeader__fdd5a3">
+              <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__fdd5a3">
+                <Mail className="h-5 w-5 text-primary" data-testid="Mail__fdd5a3" />
                 {ui('inviteUserModalTitle')}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription data-testid="DialogDescription__fdd5a3">
                 {ui('inviteUserModalDescription')}
               </DialogDescription>
             </DialogHeader>
@@ -149,13 +153,13 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
                 className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                 data-testid="invite-user-error"
               >
-                <AlertCircle className="h-4 w-4 shrink-0" />
+                <AlertCircle className="h-4 w-4 shrink-0" data-testid="AlertCircle__fdd5a3" />
                 <span>{error}</span>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="invite-email">{ui('inviteUserEmailLabel')}</Label>
+              <Label htmlFor="invite-email" data-testid="Label__fdd5a3">{ui('inviteUserEmailLabel')}</Label>
               <Input
                 id="invite-email"
                 type="email"
@@ -169,7 +173,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-2 sm:gap-0">
+            <DialogFooter className="gap-2 pt-2 sm:gap-0" data-testid="DialogFooter__fdd5a3">
               <Button
                 type="button"
                 variant="outline"
@@ -186,7 +190,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__fdd5a3" />
                     {ui('inviteUserSending')}
                   </>
                 ) : (

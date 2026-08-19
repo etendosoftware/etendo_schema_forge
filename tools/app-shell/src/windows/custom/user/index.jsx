@@ -15,7 +15,7 @@ function InvitationInfoBanner({ onOpenInvite }) {
     >
       <div className="space-y-1">
         <div className="flex items-center gap-2 font-medium">
-          <Mail className="h-4 w-4 text-primary" />
+          <Mail className="h-4 w-4 text-primary" data-testid="Mail__853799" />
           <span>{ui('inviteUserDescriptionTitle')}</span>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -29,7 +29,7 @@ function InvitationInfoBanner({ onOpenInvite }) {
         className="shrink-0 gap-2"
         data-testid="action-open-invite"
       >
-        <UserPlus className="h-4 w-4" />
+        <UserPlus className="h-4 w-4" data-testid="UserPlus__853799" />
         {ui('inviteUser')}
       </Button>
     </div>
@@ -53,13 +53,15 @@ export default function UserWindow(props) {
         {...props}
         newLabel={ui('inviteUser')}
         headerContent={
-          <InvitationInfoBanner onOpenInvite={() => setInviteOpen(true)} />
+          <InvitationInfoBanner
+            onOpenInvite={() => setInviteOpen(true)}
+            data-testid="InvitationInfoBanner__853799" />
         }
-      />
+        data-testid="GeneratedUserPage__853799" />
       <InviteUserDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}
-      />
+        data-testid="InviteUserDialog__853799" />
     </>
   );
 }
