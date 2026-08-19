@@ -89,10 +89,16 @@ export async function waitForConfirmResponse(page) {
   );
 }
 
-/** Wait for the purchase-order documentAction confirmation request itself. */
-export function waitForDocumentActionResponse(page) {
+/**
+ * Wait for the documentAction confirmation request itself, scoped to a specific
+ * entity path — precise alternative to the generic waitForConfirmResponse() above,
+ * which resolves on ANY successful NEO write and can race ahead of the actual
+ * confirmation request (autosave, background poll, etc. resolving first).
+ * Defaults to 'purchase-order' for backward compatibility with existing call sites.
+ */
+export function waitForDocumentActionResponse(page, entityPath = 'purchase-order') {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/purchase-order/header/')
+    (resp) => resp.url().includes(`/${entityPath}/header/`)
       && resp.url().includes('/action/documentAction')
       && resp.request().method() === 'POST',
     { timeout: 30_000 },
