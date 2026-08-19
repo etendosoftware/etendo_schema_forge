@@ -7,7 +7,7 @@
   "title": { "en_US": "Trial Balance", "es_ES": "Balance de Sumas y Saldos" },
   "orientation": "landscape",
   "sql": {
-    "query": "SELECT ev.value AS account_no, ev.c_elementvalue_id AS account_id, ev.name AS account_name, COALESCE(SUM(CASE WHEN fa.dateacct < '__DATEFROM__'::date THEN fa.amtacctdr - fa.amtacctcr ELSE 0 END), 0) AS opening_balance, COALESCE(SUM(CASE WHEN fa.dateacct >= '__DATEFROM__'::date AND fa.dateacct <= '__DATETO__'::date THEN fa.amtacctdr ELSE 0 END), 0) AS activity_debit, COALESCE(SUM(CASE WHEN fa.dateacct >= '__DATEFROM__'::date AND fa.dateacct <= '__DATETO__'::date THEN fa.amtacctcr ELSE 0 END), 0) AS activity_credit, COALESCE(SUM(CASE WHEN fa.dateacct <= '__DATETO__'::date THEN fa.amtacctdr - fa.amtacctcr ELSE 0 END), 0) AS closing_balance FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND fa.dateacct <= '__DATETO__'::date AND ('__ORGID__' = '' OR fa.ad_org_id = '__ORGID__') AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__') AND ('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__') AND ('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__') AND ('__PROJECTID__' = '' OR fa.c_project_id = '__PROJECTID__') AND ('__FROMACCOUNTID__' = '' OR ev.value >= '__FROMACCOUNTID__') AND ('__TOACCOUNTID__' = '' OR ev.value <= '__TOACCOUNTID__') GROUP BY ev.value, ev.c_elementvalue_id, ev.name HAVING SUM(CASE WHEN fa.dateacct >= '__DATEFROM__'::date AND fa.dateacct <= '__DATETO__'::date THEN ABS(fa.amtacctdr) + ABS(fa.amtacctcr) ELSE 0 END) > 0 ORDER BY ev.value"
+    "query": "SELECT ev.value AS account_no, ev.c_elementvalue_id AS account_id, ev.name AS account_name, bp.name AS bpname, p.name AS productname, pj.name AS projectname, COALESCE(SUM(CASE WHEN fa.dateacct < '__DATEFROM__'::date THEN fa.amtacctdr - fa.amtacctcr ELSE 0 END), 0) AS opening_balance, COALESCE(SUM(CASE WHEN fa.dateacct >= '__DATEFROM__'::date AND fa.dateacct <= '__DATETO__'::date THEN fa.amtacctdr ELSE 0 END), 0) AS activity_debit, COALESCE(SUM(CASE WHEN fa.dateacct >= '__DATEFROM__'::date AND fa.dateacct <= '__DATETO__'::date THEN fa.amtacctcr ELSE 0 END), 0) AS activity_credit, COALESCE(SUM(CASE WHEN fa.dateacct <= '__DATETO__'::date THEN fa.amtacctdr - fa.amtacctcr ELSE 0 END), 0) AS closing_balance FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id LEFT JOIN c_bpartner bp ON bp.c_bpartner_id = fa.c_bpartner_id LEFT JOIN m_product p ON p.m_product_id = fa.m_product_id LEFT JOIN c_project pj ON pj.c_project_id = fa.c_project_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND fa.dateacct <= '__DATETO__'::date AND ('__ORGID__' = '' OR fa.ad_org_id = '__ORGID__') AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__') AND ('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__') AND ('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__') AND ('__PROJECTID__' = '' OR fa.c_project_id = '__PROJECTID__') AND ('__FROMACCOUNTID__' = '' OR ev.value >= '__FROMACCOUNTID__') AND ('__TOACCOUNTID__' = '' OR ev.value <= '__TOACCOUNTID__') GROUP BY ev.value, ev.c_elementvalue_id, ev.name, bp.name, p.name, pj.name ORDER BY ev.value"
   },
   "columns": [
     { "field": "account_no", "label": { "en_US": "Account No.", "es_ES": "Nº Cuenta" }, "type": "string", "width": "10%", "sortable": true },
@@ -18,17 +18,29 @@
     { "field": "closing_balance", "label": { "en_US": "Closing Balance", "es_ES": "Saldo Final" }, "type": "amount", "width": "15%", "sortable": true }
   ],
   "groups": [],
-  "parameters": [
-    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "default": "__FIRST_OF_PREV_MONTH__", "required": true, "section": "primary" },
-    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__", "required": true, "section": "primary" },
-    { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true },
-    { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "section": "primary" },
-    { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "primary" },
-    { "name": "toAccountId", "label": { "en_US": "To Account", "es_ES": "A la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "primary" },
-    { "name": "bPartnerId", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensions" },
-    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true, "inputStyle": "popup", "section": "dimensions" },
-    { "name": "projectId", "label": { "en_US": "Project", "es_ES": "Proyecto" }, "type": "search", "selector": "project", "multi": true, "inputStyle": "popup", "section": "dimensions" }
+  "sections": [
+    { "id": "periodo", "label": { "en_US": "Period", "es_ES": "Periodo" } },
+    { "id": "alcance", "label": { "en_US": "Scope", "es_ES": "Alcance" } },
+    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" } },
+    { "id": "agrupacion", "label": { "en_US": "Grouping", "es_ES": "Agrupación" } }
   ],
+  "parameters": [
+    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "default": "__FIRST_OF_PREV_MONTH__", "required": true, "section": "periodo" },
+    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__", "required": true, "section": "periodo" },
+    { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true },
+    { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true, "section": "alcance" },
+    { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "alcance" },
+    { "name": "toAccountId", "label": { "en_US": "To Account", "es_ES": "A la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "alcance" },
+    { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensiones", "groupByValue": "bpartner", "groupByField": "bpname" },
+    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true, "inputStyle": "popup", "section": "dimensiones", "groupByValue": "product", "groupByField": "productname" },
+    { "name": "projectId", "label": { "en_US": "Project", "es_ES": "Proyecto" }, "type": "search", "selector": "project", "multi": true, "inputStyle": "popup", "section": "dimensiones", "groupByValue": "project", "groupByField": "projectname" },
+    { "name": "showDimensions", "label": { "en_US": "Show accounting dimensions", "es_ES": "Mostrar dimensiones contables" }, "type": "toggle", "default": false, "section": "dimensiones" },
+    { "name": "groupBy", "label": { "en_US": "Group results by", "es_ES": "Agrupar por" }, "type": "select", "section": "agrupacion" }
+  ],
+  "labels": {
+    "balanceAsOf": { "en_US": "Balance As Of", "es_ES": "Saldo a" },
+    "activity": { "en_US": "Activity", "es_ES": "Movimientos" }
+  },
   "defaultSort": { "field": "account_no", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],
   "summary": { "totalRows": true },

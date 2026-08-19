@@ -101,7 +101,7 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  * CreatableSearchSelect's own cognitive complexity down — pure, no side effects). */
 function computeSelectDisplayState({
   parentKey, parentValue, value, emptyOptionLabel, required, editingIntent, open,
-  createLabel, loading, filteredOptions, query, resolvedLabel, ui,
+  createLabel, loading, filteredOptions, query, resolvedLabel, ui, placeholderOverride,
 }) {
   const hasSelection = value != null && value !== '';
   const isDisabled = !!(parentKey && !parentValue && !value);
@@ -109,7 +109,7 @@ function computeSelectDisplayState({
   const showChip = hasSelection && !editingIntent && !isDisabled;
   const placeholder = (showEmptyOption && !hasSelection)
     ? emptyOptionLabel
-    : `${ui('searchLabelPrefix')} ${resolvedLabel}...`;
+    : (placeholderOverride || `${ui('searchLabelPrefix')} ${resolvedLabel}...`);
   // Coerced to a real boolean (not left as the short-circuited `createLabel`/query string) —
   // it now also drives aria-expanded on the input, which must render "true"/"false", not
   // arbitrary text (ETP-4600 Gap A regression caught live: aria-expanded="+ Add address").
@@ -247,6 +247,10 @@ export function CreatableSearchSelect({
   staticOptions,
   preferDown = false,
   serverSearch = false,
+  // Optional flat override for the idle-state placeholder text (e.g. a plain "Select..."),
+  // replacing the default "Search {resolvedLabel}..." composition. Every existing caller
+  // omits this, so behavior is unchanged unless a caller opts in.
+  placeholderOverride,
 }) {
   const ui = useUI();
   // `query` is PURE search text — it must never be prefilled with the selected value's
@@ -488,7 +492,7 @@ export function CreatableSearchSelect({
   // since they all depend on the same selection/parent/query inputs.
   const { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown } =
     computeSelectDisplayState({
-      parentKey, parentValue, value, emptyOptionLabel, required: field.required,
+      parentKey, parentValue, value, emptyOptionLabel, placeholderOverride, required: field.required,
       editingIntent, open, createLabel, loading, filteredOptions, query, resolvedLabel, ui,
     });
 
