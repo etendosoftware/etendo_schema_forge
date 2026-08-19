@@ -28,8 +28,13 @@ function fmtAmount(val, currency) {
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 // FIN_Payment status added by com.etendoerp.go for a bank transfer the bank rejected. It is only
-// ever set on an unprocessed payment: no money moved, so the invoice is still owed. The row exists
-// to show the attempt happened and to be retried from (ETP-4895).
+// ever set on an unprocessed payment: no money moved, so the invoice is still owed.
+//
+// Currently unreachable, on purpose. A rejection is only observed while the payment modal is open,
+// and there it is reported in place with no payment recorded at all — so no row ever reaches this
+// status today. This branch (and the retry action below) is kept for the case that design does not
+// cover: a rejection arriving with nobody watching, which has no modal to report it in and would
+// have to surface on the invoice instead. See PisDeferredPaymentService's class javadoc.
 const PAYMENT_STATUS_ERROR = 'ETGOERR';
 
 /** True when a listed payment is processed/deposited (backend flag is source of truth). */

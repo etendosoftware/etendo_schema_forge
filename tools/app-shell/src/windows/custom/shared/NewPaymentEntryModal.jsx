@@ -69,6 +69,11 @@ const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
 // status to failure is what caused the bug; defaulting it to "keep polling" is self-healing if
 // Salt Edge ever adds a value.
 const PIS_SUCCESS_STATUSES = ['executed', 'settled'];
+// The user approved the transfer at the bank, so the payment is registered — but the funds have
+// not moved yet. It is a resolutive status ("AUTHORIZED → create payment" in the spec), so the
+// modal must close on it too: leaving it open while the payment already exists desynchronizes what
+// the user sees from what was recorded, and invites a duplicate submit.
+const PIS_REGISTERED_STATUSES = ['authorized'];
 const PIS_FAILURE_STATUSES = ['failed'];
 const PIS_STATUS_KEYS = {
   requested: 'cpPisStatusRequested',
@@ -79,19 +84,26 @@ const PIS_STATUS_KEYS = {
   executed: 'cpPisStatusExecuted',
   settled: 'cpPisStatusExecuted',
 };
-// Stop polling after ~3 minutes. Reaching this is NOT an error: the payment may still complete at
-// the bank, and the PSD2 background job keeps refreshing it, so the modal closes with an
-// "in progress" notice rather than the failure message.
-const PIS_MAX_POLL_MS = 180000;
+// Stop polling after ~10 minutes, and only once the bank window is gone (see the poll effect).
+// Generous on purpose: waiting too long costs nothing — the user has "Cancel wait" — while giving
+// up too early risks the transfer completing after we stopped looking, which is how a payment ends
+// up made at the bank and never recorded here. Reaching this is NOT an error.
+const PIS_MAX_POLL_MS = 600000;
 const PIS_POLL_INTERVAL_MS = 3000;
 // Consecutive transport failures tolerated before telling the user we lost contact. A network or
 // HTTP blip is NOT a bank-side failure — the previous code synthesized a literal 'failed' status
 // on any fetch error, which was indistinguishable from a real rejection.
 const PIS_MAX_TRANSPORT_ERRORS = 5;
 
-/** Classifies a Salt Edge PIS status into the only three outcomes the modal reacts to. */
+/**
+ * Classifies a Salt Edge PIS status into the outcomes the modal reacts to. Every status the spec
+ * calls resolutive — authorized / executed / settled / failed — closes the modal, because each one
+ * produces a payment. Only the genuinely in-flight ones (and any status this list does not know)
+ * keep the user waiting.
+ */
 function pisOutcome(status) {
   if (PIS_SUCCESS_STATUSES.includes(status)) return 'success';
+  if (PIS_REGISTERED_STATUSES.includes(status)) return 'registered';
   if (PIS_FAILURE_STATUSES.includes(status)) return 'failure';
   return 'pending';
 }
@@ -1139,21 +1151,38 @@ export default function NewPaymentEntryModal({
       setPisPolling(null);
       return undefined;
     }
-    if (outcome === 'failure') {
-      // The bank actually rejected the transfer. Stop polling, surface the inline error and let
-      // the user retry from the editable form.
+    if (outcome === 'registered') {
+      // Authorized at the bank: the payment exists but the money has not landed. Close showing that
+      // it is registered and still in progress — the history row carries the "in progress" state
+      // and will settle on its own once the bank executes.
       pisPopupRef.current?.close();
       pisPopupRef.current = null;
-      setError(ui('cpPisFailedError'));
+      toast.info(ui('cpPisAuthorizedRegistered'));
+      onSaved?.(pisResultRef.current || {}, 'pending');
       setPisPolling(null);
       return undefined;
     }
-    // Still running. Give up waiting after PIS_MAX_POLL_MS, but treat that as "we stopped
-    // watching", NOT as a failure: the transfer can still complete at the bank and the PSD2
-    // background job keeps refreshing it. Close the modal so the user is not stuck staring at a
-    // form for a payment that is already on its way.
-    if ((pisPolling.elapsedMs || 0) >= PIS_MAX_POLL_MS) {
+    if (outcome === 'failure') {
+      // The bank rejected the transfer and NO payment was created — the money never moved, so
+      // recording the attempt would only leave a row to clean up. The user is already here, so the
+      // modal stays open with its data intact and they just try again; the toast says what
+      // happened. This is why there is no onSaved call: there is nothing new to show.
       pisPopupRef.current?.close();
+      pisPopupRef.current = null;
+      toast.error(ui('cpPisRejectedNoPayment'));
+      setPisPolling(null);
+      return undefined;
+    }
+    // Still running. Stop watching after PIS_MAX_POLL_MS — but only once the user has left the
+    // bank window. While it is still open they are mid-authentication (logging in, waiting for an
+    // SMS, approving on their phone), which legitimately takes minutes; timing out there would
+    // yank the bank's own window away and abort the transfer they are in the middle of
+    // authorizing. The countdown only applies to a transfer nobody is attending to any more.
+    //
+    // Giving up is NOT a failure either: the transfer can still complete at the bank, so the modal
+    // closes with an "in progress" notice instead of an error, and the bank window is left alone.
+    const bankWindowGone = !pisPopupRef.current || pisPopupRef.current.closed;
+    if (bankWindowGone && (pisPolling.elapsedMs || 0) >= PIS_MAX_POLL_MS) {
       pisPopupRef.current = null;
       toast.info(ui('cpPisStillInProgress'));
       onSaved?.(pisResultRef.current || {}, 'pending');
@@ -1287,13 +1316,37 @@ export default function NewPaymentEntryModal({
     onSaved?.({ cancelled: true }, 'reverted');
   }, [apiFetch, specName, invoiceId, pisPolling, onSaved]);
 
-  // Reopens the Salt Edge popup after the user closed it before authorizing — reuses the
-  // last registerPayment result (which carries the pisPaymentUrl) rather than re-requesting it.
-  const onReopenPis = useCallback(() => {
-    pisPopupRef.current = openPisPopup(pisResultRef.current?.pisPaymentUrl);
-    pisReturnedRef.current = false;
+  /**
+   * Starts a fresh bank window after the user closed the previous one before authorizing.
+   *
+   * A Salt Edge widget session is single-use: once its window is closed the session is gone, and
+   * reopening the same pisPaymentUrl only ever renders "Sesión perdida". So this asks the backend
+   * to abandon the current attempt and start a new order — new URL, new end-to-end id — and opens
+   * that instead (ETP-4895).
+   */
+  const onReopenPis = useCallback(async () => {
+    const pid = pisPolling?.pisPaymentId;
+    if (!pid) return;
     setPisWindowClosed(false);
-  }, []);
+    try {
+      const res = await apiFetch(`/${specName}/header/${invoiceId}/action/retryPisPayment`, {
+        method: 'POST', body: JSON.stringify({ pisPaymentId: pid }),
+      });
+      const json = await readJson(res);
+      const data = json?.response?.data || json?.data || json;
+      if (!res?.ok || !data?.pisPaymentUrl || !data?.pisPaymentId) {
+        setError(ui('cpPisReopenFailed'));
+        return;
+      }
+      pisResultRef.current = data;
+      pisPopupRef.current = openPisPopup(data.pisPaymentUrl);
+      pisReturnedRef.current = false;
+      // Track the NEW attempt: the old one was abandoned server-side and will never resolve.
+      setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
+    } catch {
+      setError(ui('cpPisReopenFailed'));
+    }
+  }, [apiFetch, specName, invoiceId, pisPolling, ui]);
 
   // Closing the modal while a PIS transfer is still pending must also undo the PPM payment,
   // otherwise the invoice is left looking paid for a transfer that never happened.
