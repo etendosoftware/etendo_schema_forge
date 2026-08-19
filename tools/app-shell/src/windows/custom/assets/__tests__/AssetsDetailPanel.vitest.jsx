@@ -80,48 +80,67 @@ describe('AssetsDetailPanel — depreciation off', () => {
 });
 
 describe('AssetsDetailPanel — depreciation on', () => {
-  it('renders the accounting dimensions form with only the Project candidate (ETP-4529)', () => {
-    // ETP-4529 — Contacto/Producto/Centro de costo are "Nunca" for Activo and are no
-    // longer candidates at all; Project is the only "Por config" dimension left, and
-    // the evaluator (mocked here as visible-by-default) lets it through.
+  it('renders the accounting dimensions form with the Project and Cost Center candidates (ETP-4914)', () => {
+    // ETP-4914 — corrected matrix: Centro de costo is also "Por config" for Activo
+    // (Amortizaciones) Cabecera, not "Nunca" as ETP-4529 originally recorded. It is
+    // now a second dimension candidate alongside Project; the evaluator (mocked here
+    // as visible-by-default) lets both through. Contacto remains "Nunca"-equivalent
+    // in this pass (deferred pending an AD-metadata fix) and Producto is still not a
+    // GL-config-gated dimension, so neither is a candidate here.
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
     const dimForm = formsByFields(container).find(f => f.includes('project'));
     expect(dimForm).toBeDefined();
-    expect(dimForm.split(',')).toEqual(['project']);
-    // The 3 dropped-candidate dimensions and the 5 out-of-scope ones never appear.
+    expect(dimForm.split(',')).toEqual(['project', 'eTADASCostCenter']);
+    // Contacto/Producto and the 5 out-of-scope dimensions never appear.
     for (const key of [
-      'eTADASCostCenter', 'businessPartner', 'product',
+      'businessPartner', 'product',
       'eTADASUser1', 'eTADASUser2', 'eTADASSalesRegion', 'eTADASActivity', 'eTADASSalesCampaign',
     ]) {
       expect(dimForm).not.toContain(key);
     }
   });
 
-  it('hides the whole dimensions section when the evaluator marks Project not visible (ETP-4529)', () => {
+  it('hides the whole dimensions section when the evaluator marks both candidates not visible (ETP-4914)', () => {
     // NEW behavior under test: before ETP-4529 the dimensions section always rendered
     // whenever depreciate was on, regardless of any config. Now useAccountingDimensionFields
     // calls the same evaluate-display evaluator DetailView uses, and when it explicitly
-    // returns visibility.project === false, the candidate is filtered out — and since
-    // Project is the only candidate for Assets, the section (title + form) disappears
-    // entirely instead of rendering an empty grid.
-    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: false } });
+    // returns visibility.project === false and visibility.eTADASCostCenter === false, both
+    // candidates are filtered out — and since they are the only two candidates for Assets,
+    // the section (title + form) disappears entirely instead of rendering an empty grid.
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: false, eTADASCostCenter: false } });
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
     expect(formsByFields(container).some(f => f.includes('project'))).toBe(false);
+    expect(formsByFields(container).some(f => f.includes('eTADASCostCenter'))).toBe(false);
     expect(screen.queryByText('assetsGroupDimensionsTitle')).not.toBeInTheDocument();
   });
 
-  it('shows the dimensions section when the evaluator leaves Project visible (ETP-4529)', () => {
-    // Explicit visibility.project === true (config enables the dimension for this
-    // client) — same observable result as the fail-open default, proven separately.
-    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: true } });
+  it('shows the dimensions section when the evaluator leaves both candidates visible (ETP-4914)', () => {
+    // Explicit visibility.project === true / visibility.eTADASCostCenter === true (config
+    // enables both dimensions for this client) — same observable result as the fail-open
+    // default, proven separately.
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: true, eTADASCostCenter: true } });
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
     expect(formsByFields(container).some(f => f.includes('project'))).toBe(true);
+    expect(formsByFields(container).some(f => f.includes('eTADASCostCenter'))).toBe(true);
+    expect(screen.getByText('assetsGroupDimensionsTitle')).toBeInTheDocument();
+  });
+
+  it('hides only Cost Center when the evaluator marks it not visible, keeping Project (ETP-4914)', () => {
+    // The two dimensions are now independently config-gated — one can be enabled while
+    // the other is disabled for a given client.
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: true, eTADASCostCenter: false } });
+    const { container } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    const dimForm = formsByFields(container).find(f => f.includes('project'));
+    expect(dimForm).toBeDefined();
+    expect(dimForm).not.toContain('eTADASCostCenter');
     expect(screen.getByText('assetsGroupDimensionsTitle')).toBeInTheDocument();
   });
 
