@@ -29,6 +29,10 @@ const ACCOUNT = {
   type: 'B',
   currentBalance: 1234.56,
   currencyIso: 'EUR',
+  // ES on purpose: the connect affordance below is Spain-only since ETP-4896
+  // (see saltEdgeEligibility.js), so a fixture without it would hide the button.
+  countryIso: 'ES',
+  countryName: 'Spain',
   iban: 'ES1212340000000000000001',
   bankConnected: true,
 };

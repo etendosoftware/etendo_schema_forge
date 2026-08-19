@@ -5,6 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'type', column: 'Type', type: 'enum', label: 'Type', enumLabels: { 'B': 'typeB', 'CA': 'typeCa', 'C': 'typeC' }, required: true },
+  { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', required: true },
   { key: 'currentBalance', column: 'Currentbalance', type: 'amount', label: 'Current Balance', required: true },
   { key: 'pendingCount', column: 'pendingCount', type: 'number', label: 'Pending' },
 ];
