@@ -205,18 +205,59 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * Calls PUT /neo/fiscal303/declarations?id=... to persist a manual status
  * change. Despite the URL, this endpoint is generic across fiscal models —
  * both 303 and 349 declarations live in the same backend table.
+ *
+ * `submissionMethod` (ETP-4755, optional) distinguishes the manual "Presentado" paths
+ * (`manual_ack` / `manual_no_receipt`) that would otherwise collide on the exact same
+ * `submitted_ack` status as a real AEAT telematic submission (which sets its own
+ * `submission_method: 'aeat_telematic'` server-side — see `AeatSubmitFlow.jsx`, never
+ * sent from here). Omitted entirely for any status change that isn't one of the manual
+ * "Presentado" paths (see `FmModel303Page.jsx`/`FmModel349Page.jsx`'s `handlePresent`),
+ * so the backend's "explicit null means not sent" contract for this field is honored.
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
-export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl } = {}) {
+export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const body = { status: newStatus };
+    if (submissionMethod) body.submissionMethod = submissionMethod;
+    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls PUT /fiscal303/declarations?id=... to persist the manually-entered identification
+ * checks + box-value overrides for a Modelo 303 declaration, so they survive a page refresh.
+ * Mirrors persistDeclarationStatus's contract: { ok: true } on success, or
+ * { ok: false, error: string } on failure.
+ *
+ * The backend may respond { ok: true, manualDataApplied: false } (HTTP success, but the
+ * payload itself failed server-side validation and was NOT saved — other fields in the same
+ * PUT request still apply, but this function only ever sends manualData, so there's nothing
+ * else to report). That case is surfaced here as { ok: false, error: 'rejected' } — the caller
+ * can't do anything different between "the call failed" and "the call succeeded but the data
+ * was rejected", so both collapse to the same ok:false contract.
+ */
+export async function persistManualData(id, manualData, { token, apiBaseUrl } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ manualData }),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    const body = await res.json().catch(() => null);
+    if (body?.manualDataApplied === false) return { ok: false, error: 'rejected' };
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
@@ -243,12 +284,17 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
  * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
  * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
+ *
+ * `model` selects which route to hit (`303` by default). Per `AbstractFiscalHandler#handleIncidents`,
+ * `/fiscal303/incidents` and `/fiscal349/incidents` are both backed by the same
+ * `ETGO_Fiscal_Decl_Incident` table, so a 349 declaration can be queried the same way — it will
+ * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
-export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) {
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
   if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const res = await fetch(`${base}/fiscal303/incidents?id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return EMPTY_INCIDENTS;
@@ -267,15 +313,12 @@ export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) 
   }
 }
 
-// 'pending' is kept intentionally: Modelo 349 uses it as its initial draft state.
 export const STATUSES = [
-  'skipped', 'pending', 'draft', 'ready',
+  'draft', 'ready',
   'submitted', 'submitted_ext', 'submitted_ack',
 ];
 
 export const STATUS_COLOR = {
-  skipped:       'grey',
-  pending:       'orange',
   draft:         'blue',
   ready:         'green',
   submitted:     'teal',
@@ -284,8 +327,6 @@ export const STATUS_COLOR = {
 };
 
 export const STATUS_ICON = {
-  skipped:       '×',
-  pending:       '○',
   draft:         '✎',
   ready:         '✓',
   submitted:     '✓',
@@ -451,18 +492,95 @@ const COMPLETED_STATUSES = new Set([
   'submitted', 'submitted_ext', 'submitted_ack', 'skipped',
 ]);
 
+/**
+ * Computes the real AEAT filing deadline for a fiscal declaration.
+ *
+ * Rules verified (2026-08) against the official Agencia Tributaria sede electrónica:
+ *   - Modelo 303 plazos: https://sede.agenciatributaria.gob.es/Sede/iva/presentar-declaracion-iva-modelo-303/plazo-presentacion-modelo-303.html
+ *   - Modelo 349 plazos: https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/declaraciones-informativas/modelo-349-decla_____n-recapitulativa-operaciones-intracomunitarias_/plazos-presentacion.html
+ *
+ * ── Quarterly (303 AND 349 — AEAT uses the identical rule for both models) ──
+ *   T1 → April 20, T2 → July 20, T3 → October 20 (same year).
+ *   T4 → January 30 of the FOLLOWING year. NOT day 20 — AEAT explicitly extends
+ *   the last quarter's deadline ("...del último trimestre del año, que deberá
+ *   presentarse durante los treinta primeros días naturales del mes de enero").
+ *
+ * ── Monthly 303 (IVA autoliquidación) ──
+ *   Regular months → day 30 of the following month ("del 1 al 30 del mes
+ *   siguiente"), NOT day 20.
+ *   January        → extended through the LAST DAY OF FEBRUARY (28 or 29,
+ *   leap-year aware) — "hasta el último día del mes de febrero en el caso de
+ *   la autoliquidación correspondiente al mes de enero". This is a fixed
+ *   AEAT extension, not a generic "+1 month, day 30" shift.
+ *
+ * ── Monthly 349 (declaración recapitulativa de operaciones intracomunitarias) ──
+ *   Regular months → first 20 days of the following month → day 20 ("durante
+ *   los veinte primeros días naturales del mes inmediato siguiente").
+ *   July           → EXCEPTION: consolidated with August, filed during the
+ *   first 20 days of SEPTEMBER → day 20 of month+2, not month+1 ("la
+ *   correspondiente al mes de julio, que podrá presentarse durante el mes de
+ *   agosto y los veinte primeros días naturales del mes de septiembre").
+ *   August         → no separate rule needed: August's own "following month"
+ *   deadline is already September 20, which is where July's extended
+ *   deadline lands too — both converge on the same date.
+ *
+ * ── Deliberately NOT modeled: weekend/holiday shifting ──
+ *   AEAT shifts a deadline to the next business day when it falls on a
+ *   weekend or public holiday ("si el vencimiento del plazo... coincide con
+ *   día inhábil, la fecha límite de presentación se traslada al día hábil
+ *   inmediato posterior"). Doing this correctly would require a maintained
+ *   Spanish national-holiday calendar (which also isn't the same calendar as
+ *   AEAT's own "sede electrónica" non-working-day calendar in every year).
+ *   That's out of scope for this KPI: "Por vencer" is a planning aid, not a
+ *   legal compliance calculator, and skipping it only risks the count
+ *   resolving a borderline declaration 1-3 days early/late in years where a
+ *   deadline lands on a weekend. Revisit if this card starts being used for
+ *   anything more binding than a dashboard nudge.
+ *
+ * AEAT deadline rules change periodically (this codebase already tracks a
+ * 2024 AEAT rule change for Modelo 303 boxes elsewhere — see BOX_PARAM_MAP
+ * above). Re-verify against the sede electrónica if these dates look wrong
+ * for a given campaign year.
+ */
+// Quarterly deadline (303 AND 349 — AEAT uses the identical rule for both
+// models). T4 deadline is day 30 of January, not day 20.
+function getQuarterlyDeadline(year, quarter) {
+  if (quarter === 4) return new Date(year + 1, 0, 30);
+  const month = quarter * 3 + 1;
+  return new Date(year, month - 1, 20);
+}
+
+// Monthly 349 deadline. July's 349 is consolidated with August → deadline is
+// Sept 20, not Aug 20. Every other month → day 20 of the following month.
+function getMonthly349Deadline(year, month) {
+  if (month === 7) return new Date(year, 8, 20);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return new Date(nextYear, nextMonth - 1, 20);
+}
+
+// Monthly 303 deadline (and default fallback for any other/unspecified
+// monthly model): day 30 of the following month, except January which
+// extends to the last day of February. `new Date(year, 2, 0)` = "day 0 of
+// March" = the last day of February, automatically leap-year aware.
+function getMonthly303Deadline(year, month) {
+  if (month === 1) return new Date(year, 2, 0);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return new Date(nextYear, nextMonth - 1, 30);
+}
+
+// Dispatches to the quarterly/monthly-303/monthly-349 rule above based on
+// `period`'s shape and `model`. Split out of a single branch-heavy function
+// (SonarQube S3776) into these small, independently-testable helpers — same
+// dates, same logic, just decomposed.
 function getDeadlineDate(model, year, period) {
   if (/^T\d$/.test(period)) {
-    const q = parseInt(period[1], 10);
-    const month = q === 4 ? 1 : q * 3 + 1;
-    const y = q === 4 ? year + 1 : year;
-    return new Date(y, month - 1, 20);
+    return getQuarterlyDeadline(year, parseInt(period[1], 10));
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
-    const nextM = m === 12 ? 1 : m + 1;
-    const y = m === 12 ? year + 1 : year;
-    return new Date(y, nextM - 1, 20);
+    return model === '349' ? getMonthly349Deadline(year, m) : getMonthly303Deadline(year, m);
   }
   return null;
 }
@@ -520,13 +638,37 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
   return null;
 }
 
-export async function generate349File(decl, { token, apiBaseUrl, phone, contact } = {}) {
-  if (!token || !apiBaseUrl) return false;
+/**
+ * Calls POST /neo/fiscal349/generate and triggers a browser file download.
+ * Returns { ok: true } on success, or { ok: false, error: string, serverMessage?: string }
+ * on failure — same return contract as generate303File, so both 303 and 349 callers can
+ * surface the real backend error message the same way (see applyGenerateError-style helpers
+ * in FmModel303Page.jsx / FmModel349Page.jsx). This matters for 349 specifically because
+ * AEAT3492010Report.generateElectronicFile() (org.openbravo.module.aeat349.es) throws real
+ * validation exceptions the classic UI surfaces — e.g. Substitutive=Y with FormerStatement
+ * blank, or Navarra=Y and Guipuzcoa=Y together — which are only reachable now that this
+ * modal exposes those checkboxes (previously Substitutive was hardcoded to "N" and
+ * Navarra/Guipuzcoa did not exist as parameters).
+ */
+export async function generate349File(decl, {
+  token, apiBaseUrl, phone, contact,
+  fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+} = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = new URLSearchParams({ year: decl.year, period: decl.period });
-    if (phone)   body.set('phone',   phone);
-    if (contact) body.set('contact', contact);
+    if (phone)    body.set('phone',    phone);
+    if (contact)  body.set('contact',  contact);
+    if (fileName) body.set('fileName', fileName);
+    // Substitutive/Navarra/Guipuzcoa are checkbox parameters — always sent, mirroring the
+    // backend's own "must always be present" contract (Fiscal349BoxesHandler#handleGenerate,
+    // AEAT3492010Report.generateLine1 NPEs on Substitutive if the key is absent).
+    body.set('substitutive', substitutive ? 'Y' : 'N');
+    body.set('navarra',      navarra      ? 'Y' : 'N');
+    body.set('guipuzcoa',    guipuzcoa    ? 'Y' : 'N');
+    if (formerStatement)      body.set('formerStatement',      formerStatement);
+    if (representativeTaxId)  body.set('representativeTaxId',  representativeTaxId);
     const res = await fetch(`${base}/fiscal349/generate`, {
       method: 'POST',
       headers: {
@@ -535,20 +677,16 @@ export async function generate349File(decl, { token, apiBaseUrl, phone, contact 
       },
       body: body.toString(),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
+    }
     const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
     // .txt to match the Etendo classic Tax Report Launcher output extension
-    a.download = `349_${decl.period}_${decl.year}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objectUrl);
-    return true;
+    triggerDownload(blob, `349_${decl.period}_${decl.year}.txt`);
+    return { ok: true };
   } catch (_) {
-    return false;
+    return { ok: false, error: 'network' };
   }
 }
 
@@ -578,4 +716,48 @@ export function computeUpcomingDeadlines(decls, limit = 5) {
     .filter(Boolean)
     .sort((a, b) => a.deadline - b.deadline)
     .slice(0, limit);
+}
+
+/**
+ * Number of days the "Por vencer" KPI looks ahead — a rolling window, not "any day in the
+ * future". A deadline exactly `UPCOMING_DEADLINE_WINDOW_DAYS` days from today still counts
+ * (inclusive upper bound); one day further out does not. See `isUpcomingDeadline` below.
+ */
+const UPCOMING_DEADLINE_WINDOW_DAYS = 7;
+
+/**
+ * Per-declaration "is this one due within the next `UPCOMING_DEADLINE_WINDOW_DAYS` days"
+ * predicate — the single source of truth backing the "Por vencer" KPI card, extracted out of
+ * `countUpcomingDeadlines` (ETP-4755, KPI-cards-as-filters) so the KPI's own count and the
+ * list's "Por vencer" filter can never silently drift apart. Deliberately not derived from
+ * `computeUpcomingDeadlines`: that helper is a "top N nearest deadlines for a panel" API
+ * (defaults to `limit = 5`) that never compares against "today" at all — it returns the
+ * nearest deadlines regardless of how far out (or how overdue) they are, which is a different,
+ * legitimate use case ("what's coming up next" vs. this predicate's "is this urgent this
+ * week"). This predicate:
+ *   - reuses the same AEAT deadline rule (`getDeadlineDate`) and the same completed-status
+ *     exclusion (`COMPLETED_STATUSES`), so a presented/skipped declaration is never counted;
+ *   - compares the deadline against the real current date (`referenceDate`, defaults to
+ *     `new Date()` — never mocked/stale), true only when the deadline falls within
+ *     [today, today + UPCOMING_DEADLINE_WINDOW_DAYS] inclusive on both ends. A deadline 80 days
+ *     out (e.g. a 303/period-09 draft due Oct 30 when "today" is Aug 11) is genuinely not
+ *     "upcoming" in any intuitive sense — narrowed from the original unbounded
+ *     "today-or-later" rule for exactly that reason.
+ */
+export function isUpcomingDeadline(decl, referenceDate = new Date()) {
+  if (COMPLETED_STATUSES.has(decl.status)) return false;
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + UPCOMING_DEADLINE_WINDOW_DAYS);
+  const deadline = getDeadlineDate(decl.model, decl.year, decl.period);
+  return deadline != null && deadline >= today && deadline <= windowEnd;
+}
+
+/**
+ * Real count of declarations still pending a real AEAT deadline — used by the "Por vencer"
+ * KPI card. Has no artificial cap — it is a count, not a truncated preview list. See
+ * `isUpcomingDeadline` above for the per-declaration rule this counts.
+ */
+export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
+  return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
 }
