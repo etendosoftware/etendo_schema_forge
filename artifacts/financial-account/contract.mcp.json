@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.28.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-13T16:50:49.908Z",
-  "contractChecksum": "49fd1dce36afe518",
+  "updatedAt": "2026-08-19T12:24:01.114Z",
+  "contractChecksum": "2c0bd53da5b3c050",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -108,6 +108,14 @@
       },
       {
         "entity": "account",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/country"
+      },
+      {
+        "entity": "account",
         "field": "psd2Provider",
         "column": "EM_Psd2_Provider_ID",
         "reference": "PSD2_Provider",
@@ -137,6 +145,14 @@
         "reference": "BPartner",
         "inputMode": "search",
         "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
+      },
+      {
+        "entity": "transaction",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/product"
       },
       {
         "entity": "transaction",
@@ -193,6 +209,14 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "column": "EM_ETGO_Finacc_Trans_Dest",
+        "reference": "Finacc_Transaction",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
       },
       {
         "entity": "accountingConfiguration",
@@ -1087,6 +1111,9 @@
           "aprmGlitemDiff": {},
           "iBAN": {},
           "swiftCode": {},
+          "country": {
+            "required": true
+          },
           "writeofflimit": {},
           "aPRMImportBankFile": {},
           "aPRMMatchTransactions": {},
@@ -1196,6 +1223,10 @@
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
           },
+          "product": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
           "project": {
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
@@ -1237,6 +1268,9 @@
           "etprRemoveTransaction": {
             "required": true,
             "defaultValue": "N"
+          },
+          "eTGOFinaccTransDest": {
+            "readOnly": true
           }
         }
       },
@@ -1425,7 +1459,8 @@
       "headerFields": [
         "name",
         "currency",
-        "type"
+        "type",
+        "country"
       ],
       "lineFields": [
         "etprReactivateTransaction",
@@ -1476,7 +1511,8 @@
         "fields": [
           "name",
           "currency",
-          "type"
+          "type",
+          "country"
         ]
       },
       {
@@ -1507,5 +1543,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b2905c74cf0950a1"
+  "checksum": "751bc708819bfe59"
 }

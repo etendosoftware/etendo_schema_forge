@@ -15,8 +15,10 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowActions } from '../AccountRowActions.jsx';
 
-const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', bankConnected: true };
-const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', bankConnected: false };
+// countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
+// (see saltEdgeEligibility.js), so a fixture without it would hide that action.
+const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', countryIso: 'ES', bankConnected: true };
+const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', countryIso: 'ES', bankConnected: false };
 const CASH = { id: 'acc-3', name: 'Caja', type: 'C' };
 
 /** Opens the kebab so its menu items mount (Radix renders the content on demand). */
@@ -108,6 +110,20 @@ describe('AccountRowActions', () => {
     openMenu('acc-1');
     fireEvent.click(await screen.findByTestId('account-row-menu-archive-acc-1'));
     expect(handlers.onArchive).toHaveBeenCalledWith(CONNECTED);
+  });
+
+  // ETP-4871 — onDelete threads through to the kebab menu the same way onArchive does; the
+  // menu item itself only renders once `account.deletable === true` (covered in
+  // AccountRowMenu.vitest.jsx), so this fixture opts in explicitly.
+  it('forwards onDelete to the kebab menu for a deletable account', async () => {
+    const onDelete = vi.fn();
+    const deletable = { ...CONNECTED, deletable: true };
+    render(<AccountRowActions account={deletable} onDelete={onDelete} />);
+    openMenu('acc-1');
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+    expect(onDelete).toHaveBeenCalledWith(deletable);
   });
 
   it('offers disconnect for a connected account and connect for an offline one', async () => {

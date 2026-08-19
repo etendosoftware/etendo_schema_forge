@@ -1,0 +1,38 @@
+{{!-- Excel-only template (ETP-4898) — same one-row-per-account shape as template.hbs
+      (this report's HTML is already flat), just with numeric amount cells instead of
+      formatCurrency text, so Excel can sum/pivot the columns.
+      Amount cells use data-cell-type="number" with the RAW value (no formatCurrency) —
+      html-to-xlsx does `parseFloat(cell.innerText)` for that type, so a formatted
+      amount would silently truncate at the thousands separator. Never format here. --}}
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  table { border-collapse: collapse; font-family: sans-serif; font-size: 10pt; }
+  th { font-weight: bold; text-align: left; background: #f1f5f9; }
+  th, td { padding: 1px 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.account_no}}</th>
+      <th>{{meta.labels.account_name}}</th>
+      <th>{{meta.labels.opening_balance}}</th>
+      <th>{{meta.labels.activity_debit}}</th>
+      <th>{{meta.labels.activity_credit}}</th>
+      <th>{{meta.labels.closing_balance}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td>{{lookup this 'account_no'}}</td>
+        <td>{{lookup this 'account_name'}}</td>
+        <td data-cell-type="number">{{lookup this 'opening_balance'}}</td>
+        <td data-cell-type="number">{{lookup this 'activity_debit'}}</td>
+        <td data-cell-type="number">{{lookup this 'activity_credit'}}</td>
+        <td data-cell-type="number">{{lookup this 'closing_balance'}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</body></html>

@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -217,14 +217,26 @@ WORKERS ?= 5
 test-e2e: ## Run E2E tests with visible browser (override parallelism with WORKERS=N)
 	cd e2e && npx playwright test --headed --workers=$(WORKERS)
 
-test-e2e-headless: ## Run E2E tests headless (CI mode; override parallelism with WORKERS=N)
-	cd e2e && CI=true npx playwright test --workers=$(WORKERS)
+test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own port — mocked defaults to 4 workers, integration to 1 (shared admin/backend — E2E_WORKERS>1 there is an accepted data-race risk); override E2E_PASSWORD, E2E_BACKEND_URL, E2E_PORT, E2E_WORKERS, E2E_SUITE=mocked|integration|all
+	./scripts/run-e2e-full.sh
+
+test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
+	E2E_FILES=tests/flows/sales-order-happy-path.integration.spec.js,tests/flows/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
+
+test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run
+	./scripts/run-e2e-last-failed.sh
 
 test-e2e-debug: ## Run E2E tests in debug mode (step by step)
 	cd e2e && npx playwright test --debug
 
-test-e2e-ui: ## Open Playwright UI for interactive test running
-	cd e2e && npx playwright test --ui
+test-e2e-ui: ## Open Playwright UI; optionally select E2E_FILES=a.spec.js,b.spec.js
+	cd e2e && \
+	SPECS="$${E2E_FILES:-$${E2E_FILE:-}}"; \
+	if [ -n "$$SPECS" ]; then \
+	  npx playwright test --ui --project=integration --no-deps $$(printf '%s' "$$SPECS" | tr ',' ' '); \
+	else \
+	  npx playwright test --ui; \
+	fi
 
 test-e2e-report: ## Show last E2E test report in browser
 	cd e2e && npx playwright show-report ../artifacts/e2e-report
@@ -539,6 +551,9 @@ dev-mock: ensure-locale ## Start app-shell dev server with mock data — require
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
 	$(SF) sf-generate-reports-manifest
+
+preview: build ## Build app-shell for production and serve it locally on :3100 (strictPort — fails instead of drifting to another port if 3100 is busy)
+	cd tools/app-shell && npm run preview -- --port 3100
 
 # --- Setup ---
 

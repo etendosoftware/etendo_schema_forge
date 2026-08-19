@@ -89,15 +89,44 @@ function computeAutoFocus(idx, focusColIdx, visibleColumns) {
   return idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]));
 }
 
-// Catch-all Escape-to-cancel: bubbles here from any focused descendant control (Input,
-// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels uniformly regardless
-// of cell type. Only wired while the row is actually in edit mode.
-function makeRowEscapeHandler(isEditing, onCancelEdit) {
+// ETP-4886 — Enter inside the dimensions sub-row must NOT close the parent row. The
+// DimensionGrid renders inside the row's own DOM subtree (see renderDimensionsSubRow),
+// so its keydowns bubble to the same row-level handler. Matches the panel's own testid
+// (`dimensions-panel-${row.id}`).
+const DIMENSIONS_PANEL_SELECTOR = '[data-testid^="dimensions-panel-"]';
+
+// ETP-4886 — Enter-to-exit is limited to plain text/number/date inputs, whose own
+// onKeyDown already commits via blur() (see the <Input> below). That guard is what keeps
+// Enter's native meaning intact on every other control, because at keydown time the
+// overlay content is not in the DOM yet and cannot be detected:
+//   - Radix <SelectTrigger>  → <button role="combobox">, Enter opens the listbox
+//   - <PillToggle>           → <button role="switch">
+//   - <LookupTrigger>        → <button>, Enter opens the ProductSearchDrawer
+// InlineSearchCombo IS an <input>, but it stopPropagation()s Enter while its dropdown is
+// open, so this handler only sees it once the dropdown is closed.
+function isEnterExitTarget(target) {
+  if (!target || target.tagName !== 'INPUT') return false;
+  if (target.type === 'checkbox') return false;
+  return !target.closest?.(DIMENSIONS_PANEL_SELECTOR);
+}
+
+// Catch-all row-level key handler: bubbles here from any focused descendant control (Input,
+// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels — and Enter exits —
+// uniformly regardless of cell type. Only wired while the row is actually in edit mode.
+function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
   if (!isEditing) return undefined;
   return (e) => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    onCancelEdit();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancelEdit();
+      return;
+    }
+    // ETP-4886 — deliberately no preventDefault(): the focused <Input>'s own onKeyDown
+    // already ran in the target phase and blurred itself (firing the autosave commit),
+    // so by the time this bubble-phase handler runs the PATCH is in flight.
+    if (e.key === 'Enter' && isEnterExitTarget(e.target)) {
+      onConfirmEdit();
+    }
   };
 }
 
@@ -254,7 +283,7 @@ function renderLineCell({
   col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
   visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
-  locale, t, ui, onCommit, onCellClick,
+  locale, t, ui, onCommit, onCellClick, cellBadges,
 }) {
   const isTrailing = col === trailingColumn;
   // The trailing column is hidden when the action strip is showing,
@@ -277,6 +306,45 @@ function renderLineCell({
   };
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
+  const cellContent = editable ? (
+    <EditCell
+      // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
+      // its defaultValue whenever a callout updates this field externally
+      // (e.g., listPrice changes after the user picks a different product).
+      // The user's currently-focused cell never has its value mutated mid-typing,
+      // so this does not interrupt their input.
+      key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
+      col={col}
+      row={row}
+      value={row[col.key]}
+      displayLabel={resolveIdentifier(row, col.key)}
+      autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
+      entity={entity}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      selectorContext={selectorContext}
+      isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
+      onCommit={(val, extras) => onCommit(row, col, val, extras)}
+      ui={ui}
+      data-testid="EditCell__3b7ec2" />
+  ) : (
+    <ReadCell
+      row={row}
+      col={col}
+      locale={locale}
+      t={t}
+      ui={ui}
+      data-testid="ReadCell__3b7ec2" />
+  );
+
+  // ETP-4888 — optional per-column trailing badge (e.g. the amber "needs SIF
+  // config" trigger next to an invoice line's tax value), see `cellBadges` on
+  // InlineLinesPanel itself. Only wraps cellContent in the extra flex row when
+  // this column actually has a badge to show for this row — every other column,
+  // and every caller that doesn't pass `cellBadges` at all, renders byte-for-byte
+  // the same single-child markup as before this slot existed.
+  const badge = cellBadges?.[col.key]?.(row) ?? null;
+
   return (
     <div
       key={col.key}
@@ -285,36 +353,12 @@ function renderLineCell({
       data-cell-key={col.key}
       onClick={cellClickable ? () => onCellClick(row, idx, col) : undefined}
     >
-      {editable ? (
-        <EditCell
-          // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
-          // its defaultValue whenever a callout updates this field externally
-          // (e.g., listPrice changes after the user picks a different product).
-          // The user's currently-focused cell never has its value mutated mid-typing,
-          // so this does not interrupt their input.
-          key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
-          col={col}
-          row={row}
-          value={row[col.key]}
-          displayLabel={resolveIdentifier(row, col.key)}
-          autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
-          entity={entity}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          selectorContext={selectorContext}
-          isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
-          onCommit={(val, extras) => onCommit(row, col, val, extras)}
-          ui={ui}
-          data-testid="EditCell__3b7ec2" />
-      ) : (
-        <ReadCell
-          row={row}
-          col={col}
-          locale={locale}
-          t={t}
-          ui={ui}
-          data-testid="ReadCell__3b7ec2" />
-      )}
+      {badge ? (
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          <div className="min-w-0 flex-1 truncate">{cellContent}</div>
+          {badge}
+        </div>
+      ) : cellContent}
     </div>
   );
 }
@@ -673,6 +717,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // through the exact same mechanism, so it and any future caller-supplied
   // action share one code path.
   rowActions = [],
+  // ETP-4888 — generic per-column trailing-badge extension slot: an optional map
+  // of `{ [columnKey]: (row) => ReactNode | null }`. Any caller can render a small
+  // icon/badge right next to a specific column's own value (read AND edit mode —
+  // see `renderLineCell`'s `cellBadges` usage), instead of grouping it into the
+  // unrelated hover `rowActions` strip at the far right of the row. Returning
+  // `null`/`undefined` for a given row renders nothing extra for that cell — the
+  // wrapping layout itself is only added when a badge is actually present (see
+  // `renderLineCell`), so a caller that never returns a badge (or never passes
+  // this prop at all — every existing caller today) renders byte-for-byte the
+  // same as before this slot existed.
+  cellBadges = {},
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -983,6 +1038,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     setTimeout(() => { cancelingEditRef.current = false; }, 0);
   }, []);
 
+  // ETP-4886 — Enter-to-confirm sibling of handleCancelEdit. The value itself is already
+  // saved by the <Input>'s own Enter → blur() → commitField chain; this only closes the
+  // row, which nothing did before (the click-outside effect above was the sole implicit
+  // exit path and Enter never triggers it). Deferring to the next tick mirrors that same
+  // effect (lines ~736-739): it lets the in-flight commit's synchronous validation settle
+  // so a rejected value keeps the row open for correction instead of silently closing it.
+  const handleConfirmEdit = useCallback(() => {
+    setTimeout(() => {
+      if (hasValidationErrorRef.current) return;
+      setEditingRowId(null);
+    }, 0);
+  }, []);
+
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
     if (pendingDelete === row.id) return;
@@ -1087,7 +1155,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
-            onKeyDown={makeRowEscapeHandler(isEditing, handleCancelEdit)}
+            onKeyDown={makeRowKeyHandler(isEditing, handleCancelEdit, handleConfirmEdit)}
             onClick={makeRowClickHandler(onRowClick, row)}
           >
             {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
@@ -1121,7 +1189,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
               visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
-              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick,
+              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick, cellBadges,
             }))}
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells

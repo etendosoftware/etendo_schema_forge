@@ -53,6 +53,14 @@ vi.mock('@/windows/custom/financial-account/EditAccountModal.jsx', () => ({
 vi.mock('@/windows/custom/financial-account/ArchiveAccountDialog.jsx', () => ({
   ArchiveAccountDialog: ({ open }) => <div data-testid="archive-dialog" data-open={String(open)} />,
 }));
+// ETP-4871 — a sibling of ArchiveAccountDialog, not a mode of it: mounted the same
+// unconditional way in AccountsHeaderTable.jsx, so it needs the same module-level stub —
+// otherwise the REAL component renders and its own `useAccountMutations()` call reaches the
+// real (unmocked) `useAuth()`, throwing "useAuth must be used within AuthProvider" for every
+// test in this file.
+vi.mock('@/windows/custom/financial-account/DeleteAccountDialog.jsx', () => ({
+  DeleteAccountDialog: ({ open }) => <div data-testid="delete-dialog" data-open={String(open)} />,
+}));
 vi.mock('@/windows/custom/financial-account/BankConnectionFlowUI.jsx', () => ({
   BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" />,
 }));
@@ -328,10 +336,10 @@ describe('AccountsHeaderTable — columns', () => {
   it('takes the data columns from the contract grid definition, in gridOrder', () => {
     renderTable();
 
-    // contract.json → entities.account: name(1), type(2), currentBalance(3) and the
-    // `virtualFields[]` entry pendingCount(4).
-    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 4);
-    expect(dataKeys).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
+    // contract.json → entities.account: name(1), type(2), country(3, ETP-4896),
+    // currentBalance(4) and the `virtualFields[]` entry pendingCount(5).
+    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 5);
+    expect(dataKeys).toEqual(['name', 'type', 'country', 'currentBalance', 'pendingCount']);
   });
 
   it('appends exactly one synthetic column after the contract ones', () => {
@@ -340,7 +348,7 @@ describe('AccountsHeaderTable — columns', () => {
     // Only `_rowActions` is hand-written: its declarative equivalent
     // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'type', 'currentBalance', 'pendingCount', '_rowActions',
+      'name', 'type', 'country', 'currentBalance', 'pendingCount', '_rowActions',
     ]);
   });
 

@@ -16,7 +16,6 @@ vi.mock('@/components/ui/checkbox', () => ({
 }));
 
 import {
-  CompareDrawer,
   ConfigDrawer,
   DrillDownPanel,
   FileGenModal,
@@ -66,12 +65,11 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(screen.getByText('fm.present.path.sin_acuse'));
     await user.click(screen.getByText('fm.action.confirm_presentation'));
     expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted', acuseFile: null });
+  });
 
-    onConfirm.mockClear();
-    rerender(<PresentModal decl={{ id: 'd1' }} onConfirm={onConfirm} onClose={onClose} />);
-    await user.click(screen.getByText('fm.present.path.otra'));
-    await user.click(screen.getByText('fm.action.confirm_presentation'));
-    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ext', acuseFile: null });
+  it('does not render the "Otra Plataforma" (submitted_ext) path', () => {
+    render(<PresentModal decl={{ id: 'd1' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByText('fm.present.path.otra')).not.toBeInTheDocument();
   });
 
   it('edits and confirms file generation contact data', async () => {
@@ -80,14 +78,21 @@ describe('FmOverlays interactive coverage', () => {
     const onClose = vi.fn();
     render(<FileGenModal decl={{ model: '303', year: 2026, period: 'T2', phone: '111', contact: 'Ana' }} onConfirm={onConfirm} onClose={onClose} />);
 
+    // Textbox order: FileName, Contact, Phone, FormerStatement, RepresentativeTaxId.
     const inputs = screen.getAllByRole('textbox');
-    await user.clear(inputs[0]);
-    await user.type(inputs[0], 'Bea');
+    expect(inputs).toHaveLength(5);
     await user.clear(inputs[1]);
-    await user.type(inputs[1], '222');
+    await user.type(inputs[1], 'Bea');
+    await user.clear(inputs[2]);
+    await user.type(inputs[2], '222');
     await user.click(screen.getByText('fm.filegen.generate'));
 
-    expect(onConfirm).toHaveBeenCalledWith({ phone: '222', contact: 'Bea' });
+    expect(onConfirm).toHaveBeenCalledWith({
+      // fileName/formerStatement/representativeTaxId are untouched here, so
+      // `field.trim() || undefined` yields undefined, not ''.
+      fileName: undefined, phone: '222', contact: 'Bea', substitutive: false,
+      formerStatement: undefined, representativeTaxId: undefined, navarra: false, guipuzcoa: false,
+    });
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -95,14 +100,46 @@ describe('FmOverlays interactive coverage', () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     const onClose = vi.fn();
-    render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} />);
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={{ '303': true, '349': true }} />);
 
-    await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.model/), '349');
-    await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.year/), '2025');
-    await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.period/), '01');
-    await user.click(screen.getByText('fm.action.create'));
+    // Modelo is a button + dropdown (ModelSelectMenu), not a native <select>.
+    await user.click(container.querySelector('.fm-newdecl-model-trigger'));
+    const option349 = Array.from(container.querySelectorAll('[role="option"]'))
+      .find(o => o.querySelector('.fm-model-badge')?.textContent === '349');
+    await user.click(option349);
+
+    // Año is a button + dropdown (YearSelectMenu), not a segmented-pill group.
+    await user.click(container.querySelector('.fm-newdecl-year-trigger'));
+    const yearOption2025 = Array.from(container.querySelectorAll('.fm-newdecl-year-option'))
+      .find(o => o.textContent.trim() === '2025');
+    await user.click(yearOption2025);
+
+    // Frecuencia defaults to quarterly; switch to monthly to reach period "01".
+    await user.click(screen.getByText('fm.new_decl.period_monthly'));
+    const period01 = Array.from(container.querySelectorAll('.fm-newdecl-period-btn'))
+      .find(b => b.textContent.trim() === '01');
+    await user.click(period01);
+
+    await user.click(screen.getByText('fm.new_decl.create_cta'));
 
     expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2025, period: '01', status: 'draft' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('only offers active models and creates a declaration for the sole active one', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={{ '303': false, '349': true }} />);
+
+    await user.click(container.querySelector('.fm-newdecl-model-trigger'));
+    const optionIds = Array.from(container.querySelectorAll('[role="option"]'))
+      .map(o => o.querySelector('.fm-model-badge').textContent);
+    expect(optionIds).toEqual(['349']);
+
+    await user.click(screen.getByText('fm.new_decl.create_cta'));
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '349', status: 'draft' }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -137,29 +174,6 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(screen.getByText('fm.config.m349.title'));
     expect(screen.getByText('fm.config.m349.keys')).toBeInTheDocument();
     await user.click(screen.getByText('fm.action.save'));
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('renders comparison rows with explicit previous declaration and fallback previous data', () => {
-    const onClose = vi.fn();
-    const { rerender } = render(
-      <CompareDrawer
-        decl={{ period: 'T2', year: 2026, boxes: { 1: 100, 27: 200, 45: 50, 46: 150, 59: 10, 60: 20 }, summary: {} }}
-        prevDecl={{ period: 'T1', year: 2026, boxes: { 1: 80, 27: 100, 45: 60, 46: 40 } }}
-        onClose={onClose}
-      />,
-    );
-    expect(screen.getByText('T1 2026 → T2 2026')).toBeInTheDocument();
-    expect(screen.getByText(/fm.compare.insight.dev_improved/)).toBeInTheDocument();
-
-    rerender(
-      <CompareDrawer
-        decl={{ period: 'T3', year: 2026, boxes: { 27: 1, 46: -1 }, summary: { deductible: 2 } }}
-        onClose={onClose}
-      />,
-    );
-    expect(screen.getByText('T1 2026 → T3 2026')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('fm.action.close'));
     expect(onClose).toHaveBeenCalled();
   });
 

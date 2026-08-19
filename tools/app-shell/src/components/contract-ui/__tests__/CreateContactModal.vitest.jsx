@@ -247,6 +247,108 @@ describe('CreateContactModal', () => {
   });
 });
 
+/**
+ * ETP-4855 Error 1 — the create-contact popup opened empty, discarding
+ * everything the OCR had already read off the invoice.
+ */
+describe('CreateContactModal — pre-fill', () => {
+  const baseProps = {
+    bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
+    headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+    onClose: vi.fn(),
+    onCreated: vi.fn(),
+  };
+
+  const OCR_PREFILL = {
+    name: 'Laura Morat',
+    taxID: 'B81639719',
+    address: 'Calle Mayor 1',
+    postalCode: '28001',
+    city: 'Madrid',
+    country: 'España',
+    etgoEmail: 'facturacion@lauramorat.es',
+    etgoPhone: '+34 600 123 456',
+  };
+
+  function mockFetchWithCountries(countries) {
+    globalThis.fetch = vi.fn((url) => {
+      if (typeof url === 'string' && url.includes('C_Country_ID')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: countries, hasMore: false }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedProps = {};
+    mockFetchWithCountries([]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('seeds every free-text field the extraction found', () => {
+    render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
+    const values = capturedProps.initialValues;
+    expect(values.name).toBe('Laura Morat');
+    expect(values.taxID).toBe('B81639719');
+    expect(values.address).toBe('Calle Mayor 1');
+    expect(values.postalCode).toBe('28001');
+    expect(values.city).toBe('Madrid');
+    expect(values.etgoEmail).toBe('facturacion@lauramorat.es');
+    expect(values.etgoPhone).toBe('+34 600 123 456');
+  });
+
+  it('keeps the country label out of the form — that field holds an option id', () => {
+    render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
+    expect(capturedProps.initialValues.country).toBe('');
+  });
+
+  it('resolves the country label to its option id once the selector loads', async () => {
+    mockFetchWithCountries([{ id: 'ES-ID', label: 'España' }, { id: 'FR-ID', label: 'Francia' }]);
+    render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
+    await waitFor(() => {
+      expect(capturedProps.patchValues?.country).toBe('ES-ID');
+    });
+  });
+
+  it('leaves the country unset when no option matches the printed label', async () => {
+    mockFetchWithCountries([{ id: 'FR-ID', label: 'Francia' }]);
+    render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
+    // Wait for the options themselves to land, so this cannot pass merely
+    // because the match had not been attempted yet.
+    await waitFor(() => {
+      expect(capturedProps.opts.countries.options).toHaveLength(1);
+    });
+    expect(capturedProps.patchValues).toBeNull();
+  });
+
+  it('pre-fills the legal name from initialQuery when there is no extraction', () => {
+    render(<CreateContactModal {...baseProps} initialQuery="Acme SL" />);
+    expect(capturedProps.initialValues.name).toBe('Acme SL');
+  });
+
+  it('prefers the extracted name over initialQuery', () => {
+    render(<CreateContactModal {...baseProps} initialQuery="Laur" prefill={{ name: 'Laura Morat' }} />);
+    expect(capturedProps.initialValues.name).toBe('Laura Morat');
+  });
+
+  it('ignores blank and unknown-shaped prefill values', () => {
+    render(<CreateContactModal {...baseProps} prefill={{ name: '   ', city: null, taxID: 'B1' }} />);
+    expect(capturedProps.initialValues.name).toBe('');
+    expect(capturedProps.initialValues.city).toBe('');
+    expect(capturedProps.initialValues.taxID).toBe('B1');
+  });
+
+  it('stays inert with no prefill at all', () => {
+    render(<CreateContactModal {...baseProps} />);
+    expect(capturedProps.initialValues.name).toBe('');
+    expect(capturedProps.patchValues).toBeNull();
+  });
+});
+
 describe('getBillingPatch', () => {
   const baseOpts = {
     salesPriceLists: { options: [{ id: 'pl-1' }] },

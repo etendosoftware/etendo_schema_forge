@@ -8,6 +8,8 @@
     "dev:mock": "VITE_MOCK=true vite",
     "build": "vite build",
     "preview": "vite preview",
+    "build:e2e": "E2E_BUILD=1 vite build --outDir dist-e2e",
+    "preview:e2e": "vite preview --outDir dist-e2e",
     "test": "node --test src/lib/__tests__/*.test.js src/hooks/__tests__/*.test.js src/windows/__tests__/*.test.js src/locales/__tests__/*.test.js",
     "test:vitest": "vitest run",
     "test:vitest:coverage": "vitest run --coverage",

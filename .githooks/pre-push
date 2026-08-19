@@ -262,10 +262,39 @@ exec_with_progress() {
   return $st
 }
 
-# Print the failure detail and abort. If the step produced a ready-to-use handoff
-# prompt (e.g. the Sonar gate), print it IN FULL so the developer sees what to fix.
+# Every failed check lands here instead of aborting the script — the rest of
+# the relevant checks still get their turn, so a push with a new bug AND a
+# failing test AND a coverage drop shows all three in one attempt, not one
+# per push. Only the final summary (after everything relevant has run) blocks
+# the push. STEP_OK lets an immediate caller know whether ITS step just
+# passed, when it needs to decide whether follow-on logic still makes sense.
+FAILED_STEPS=()
+
+record_failure() {
+  local label="$1" existing
+  for existing in "${FAILED_STEPS[@]}"; do
+    [ "$existing" = "$label" ] && return 0
+  done
+  FAILED_STEPS+=("$label")
+}
+
+# Per-check timing/outcome, printed as one table at the end (see print_summary)
+# so a dev can paste real numbers into a task/PR without re-timing anything by
+# hand. One row per check regardless of outcome — skipped/cached checks are
+# summary-worthy too (they explain why the total is lower than expected).
+# $2 duration in seconds, or "-" when not applicable (skipped/instant checks).
+SUMMARY_ROWS=()
+record_summary_row() {
+  SUMMARY_ROWS+=("$1|$2|$3|${4:-}")
+}
+
+# Print the failure detail and record it, but keep going. If the step produced
+# a ready-to-use handoff prompt (e.g. the Sonar gate), print it IN FULL so the
+# developer sees what to fix, then remove it — otherwise a LATER, unrelated
+# step's failure in this same run would show this stale handoff instead of
+# its own detail.
 # $4 (optional): step key to remember for the next run's quick re-check.
-fail_with_log() {
+report_failure() {
   local step_name="$1" exit_status="$2" abs_log="$3" step_key="${4:-}"
   if [ -n "$step_key" ]; then
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
@@ -274,6 +303,7 @@ fail_with_log() {
   echo ""
   if [ -f "$HANDOFF_FILE" ]; then
     cat "$HANDOFF_FILE"
+    rm -f "$HANDOFF_FILE"
   else
     echo "========================================================================="
     echo "❌ ERROR: Step '$step_name' failed with exit code $exit_status."
@@ -285,10 +315,12 @@ fail_with_log() {
     echo "-------------------------------------------------------------------------"
     echo ""
   fi
-  exit 1
+  record_failure "$step_name"
 }
 
-# Pipeline runner helper
+# Pipeline runner helper. Always returns 0 — never trips `set -e` at the call
+# site — regardless of whether the step passed. Sets STEP_OK=1/0 so a caller
+# that needs to gate follow-on logic on THIS step's own result still can.
 run_step() {
   local step_num="$1"
   local step_name="$2"
@@ -297,12 +329,14 @@ run_step() {
   local cmd="$5"
   local cache_key="${6:-}"
   local abs_log="$REPO_DIR/$log_file"
+  STEP_OK=1
 
   # A hit means every input this step reads is byte-identical to the last time it
   # passed. Announced loudly and never silently: a quiet skip is how "it passed
   # locally" turns into a lie.
   if step_cache_lookup "$step_num" "$cache_key"; then
     echo "==> [$step_num/5] $step_name... CACHED (inputs unchanged since it last passed)"
+    record_summary_row "$step_name" "$(prev_duration "step-${step_num}")" "CACHED" ""
     return 0
   fi
 
@@ -318,12 +352,15 @@ run_step() {
     echo "==> [$step_num/5] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
     step_cache_store "$step_num" "$cache_key"
     [ "$step_num" = "$LAST_FAILED_STEP" ] && rm -f "$LAST_FAILED_FILE"
-    true
+    record_summary_row "$step_name" "$LAST_DURATION" "OK" ""
   else
     echo "==> [$step_num/5] $step_name... FAILED ❌ (${LAST_DURATION}s)"
     step_cache_invalidate "$step_num"
-    fail_with_log "$step_name" "$exit_status" "$abs_log" "$step_num"
+    report_failure "$step_name" "$exit_status" "$abs_log" "$step_num"
+    STEP_OK=0
+    record_summary_row "$step_name" "$LAST_DURATION" "FAILED" ""
   fi
+  return 0
 }
 
 # 1. Run domain boundary check
@@ -451,6 +488,7 @@ check_base_conflicts() {
 # a different branch than CI would resolve, we skip rather than touch it.
 check_go_module_push_sync() {
   local go_dir="$REPO_DIR/etendo_core/modules/com.etendoerp.go"
+  STEP_OK=1
   [ -d "$go_dir/.git" ] || return 0
 
   echo "==> Checking com.etendoerp.go is fully pushed (sibling used by the offline regen-check)..."
@@ -508,92 +546,130 @@ check_go_module_push_sync() {
   echo "     git -C etendo_core/modules/com.etendoerp.go push origin $expected_branch"
   echo "   or bypass with 'git push --no-verify'."
   echo "========================================================================="
-  exit 1
+  record_failure "com.etendoerp.go not fully pushed (blocks step 4 comparison)"
+  STEP_OK=0
+  return 0
 }
 
 # ----------------------------------------------------------------------------
 # Playwright E2E tests (MANDATORY) — mocked + integration must pass before push.
 # ----------------------------------------------------------------------------
-# The experimental CI no longer runs these on PRs, so they gate here. The developer
-# must ALREADY have the stack running — this hook starts nothing: the app on :3100,
-# Tomcat + Etendo backend, and PostgreSQL. A missing piece is reported and the push
-# is aborted; a failing test also blocks the push.
-# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, WORKERS. WIP bypass: git push --no-verify.
+# Delegates to scripts/run-e2e-full.sh (ETP-4883): it owns the whole server
+# lifecycle itself (builds a dedicated no-PWA bundle, serves it with `vite
+# preview` on its own port, tears it down on exit) instead of assuming a
+# developer's own `make dev` is already up on :3100 — no more stale-dev-server
+# drift between what pre-push validates and what actually ships.
+# Mocked and integration run as TWO SEPARATE invocations (not E2E_SUITE=all)
+# so a mocked failure never prevents integration from also running and being
+# reported — same "collect everything, don't stop at the first problem"
+# contract as the rest of this hook.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
 run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
-  local workers="${WORKERS:-5}"
   local backend_url="${E2E_BACKEND_URL:-http://localhost:8080/etendo}"
-  local st=0
 
-  # Relevance-gated (per suite). Neither relevant → nothing to run.
   if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
+    record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
+    record_summary_row "Playwright — integration" "-" "SKIPPED" ""
     return 0
   fi
 
-  # The app on :3100 is a prerequisite for BOTH suites (this hook starts nothing).
-  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
-    echo "❌ App dev server is not running on http://localhost:3100."
-    echo "   Bring your dev server up on :3100, then re-push. WIP bypass: 'git push --no-verify'."
-    exit 1
-  fi
-
-  # 1. Mocked specs — backend mocked at the browser level (no live backend needed).
-  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-    echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (integration-only resume)"
-  elif [ "$RUN_PW_MOCKED" = "1" ]; then
-    echo "==> Playwright E2E — mocked specs (${workers} workers)..."
-    set +e
-    ( cd "$REPO_DIR/e2e" && CI=true npx playwright test --project=mocked --workers="$workers" )
-    st=$?
-    set -e
-    if [ "$st" -ne 0 ]; then
-      echo "==> Playwright E2E — mocked specs... FAILED ❌ (exit $st)"
-      echo "👉 Push blocked. Fix the tests, or bypass with 'git push --no-verify' (WIP only)."
-      exit 1
-    fi
+  if [ "$RUN_PW_MOCKED" = "1" ]; then
+    run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
+    record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
   fi
 
-  # 2. Integration specs — real auth against the live backend behind :3100 (mirrors CI;
-  # no BASE_URL, E2E_USE_MOCK=0). Only this suite needs the live backend, so its
-  # reachability is checked here — a mocked-only push never requires the stack.
-  # Override E2E_PASSWORD if your local admin pass differs.
   if [ "$RUN_PW_INTEGRATION" = "1" ]; then
-    if ! curl -sf -o /dev/null --max-time 10 "$backend_url" 2>/dev/null; then
-      echo "❌ Etendo backend is not reachable at $backend_url."
-      echo "   Bring up Tomcat + PostgreSQL (set E2E_BACKEND_URL if your context path differs),"
-      echo "   then re-push. WIP bypass: 'git push --no-verify'."
-      exit 1
-    fi
-    if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-      echo "==> Playwright E2E — integration specs (${workers} workers, no onboarding dependency)..."
-    else
-      echo "==> Playwright E2E — integration specs (${workers} workers)..."
-    fi
-    set +e
-    if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-      ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
-          E2E_ONBOARDING_INTEGRATION=0 E2E_SALES_INTEGRATION=1 \
-          npx playwright test --project=integration --no-deps "integration.spec" --workers="$workers" )
-    else
-      ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
-          E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
-          npx playwright test --project=onboarding-setup --project=integration "integration.spec" --workers="$workers" )
-    fi
-    st=$?
-    set -e
-    if [ "$st" -ne 0 ]; then
-      echo "==> Playwright E2E — integration specs... FAILED ❌ (exit $st)"
-      echo "👉 Push blocked. Fix the failing tests, or bypass with 'git push --no-verify' (WIP only)."
-      exit 1
-    fi
+    run_e2e_suite integration "integration specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
+    record_summary_row "Playwright — integration" "-" "SKIPPED" ""
   fi
 
-  echo "==> Playwright E2E tests... SUCCESS ✅"
+  return 0
+}
+
+# Extracts Playwright's own end-of-run counters ("498 passed", "1 flaky", ...)
+# from a captured log — these lines are always left-anchored with just a
+# number (test NAMES in the same failed/flaky block start with "[project]"
+# instead), so the pattern can't accidentally match those.
+playwright_test_counts() {
+  local log="$1" pw_status n result=""
+  for pw_status in passed failed flaky skipped interrupted; do
+    # No hard end-anchor: the "passed" line carries a trailing "(3.9m)"
+    # duration that the others don't, so this tolerates trailing text —
+    # `\>` isn't POSIX-portable, hence the explicit space-or-EOL alternation.
+    n="$(grep -oE "^[[:space:]]*[0-9]+ ${pw_status}([[:space:]]|\$)" "$log" 2>/dev/null | tail -1 | grep -oE '[0-9]+')"
+    if [ -n "$n" ]; then
+      [ -n "$result" ] && result="${result}, "
+      result="${result}${n} ${pw_status}"
+    fi
+  done
+  [ -z "$result" ] && result="no test-count line found in log"
+  echo "$result"
+}
+
+# Lists the actual test titles under a "N failed"/"N flaky" block (indented
+# lines starting with "[project] › ..." right after that count line) — the
+# count alone says something broke, this says exactly what to go look at.
+playwright_named_tests() {
+  local log="$1" pw_status="$2"
+  awk -v st="$pw_status" '
+    $0 ~ "^[[:space:]]*[0-9]+ " st "([[:space:]]|$)" { grab=1; next }
+    grab && /^[[:space:]]*\[/ { line=$0; sub(/^[[:space:]]+/, "", line); print "      - " line; next }
+    grab { grab=0 }
+  ' "$log" 2>/dev/null
+}
+
+# Runs one E2E_SUITE value through run-e2e-full.sh, streaming output live
+# (via `tee`, not just captured — a multi-minute suite with silent output
+# looks hung) while also keeping a copy to classify the failure reason below.
+# $1 suite (mocked|integration)  $2 label for echo/record_failure  $3 password
+# $4 backend url (also passed as ETENDO_URL — the built bundle's proxy target
+# must point at the same instance the reachability check just verified).
+run_e2e_suite() {
+  local suite="$1" label="$2" password="$3" backend_url="$4" st start dur counts
+  local log="$REPO_DIR/tmp/pre-push/e2e-${suite}.log"
+  mkdir -p "$REPO_DIR/tmp/pre-push"
+
+  echo "==> Playwright E2E — ${label}..."
+  start=$SECONDS
+  set +e
+  ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
+      E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
+      ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
+  st=${PIPESTATUS[0]}
+  set -e
+  dur=$(( SECONDS - start ))
+  counts="$(playwright_test_counts "$log")"
+
+  local flaky_names failed_names
+  flaky_names="$(playwright_named_tests "$log" flaky)"
+  if [ -n "$flaky_names" ]; then
+    echo "   ⚠️  Flaky (failed once, passed on retry):"
+    echo "$flaky_names"
+  fi
+
+  if [ "$st" -ne 0 ]; then
+    local reason="Playwright E2E — ${label}"
+    if grep -q "backend is not reachable" "$log"; then
+      reason="${reason} (backend not reachable)"
+    elif grep -q "Build failed" "$log"; then
+      reason="${reason} (E2E build failed)"
+    elif grep -q "Preview server did not come up" "$log"; then
+      reason="${reason} (preview server didn't start)"
+    fi
+    failed_names="$(playwright_named_tests "$log" failed)"
+    [ -n "$failed_names" ] && { echo "   ❌ Failed:"; echo "$failed_names"; }
+    echo "==> Playwright E2E — ${label}... FAILED ❌ (exit $st)"
+    record_failure "$reason"
+    record_summary_row "Playwright — ${label%% specs}" "$dur" "FAILED" "$counts"
+  else
+    record_summary_row "Playwright — ${label%% specs}" "$dur" "OK" "$counts"
+  fi
 }
 
 check_base_conflicts
@@ -654,6 +730,7 @@ fi
 run_step_0() {
   if [ "$RUN_S0" != "1" ]; then
     echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
+    record_summary_row "Syncing npm dependencies with package-lock.json (npm ci)" "-" "SKIPPED" ""
     return 0
   fi
   # npm ci is a pure function of the lockfile and the node major it installs for.
@@ -666,6 +743,7 @@ run_step_0() {
 run_step_1() {
   if [ "$RUN_S1" != "1" ]; then
     echo "==> [1/5] Running data-testid check... SKIPPED ⏭️  (no app-shell/src changes)"
+    record_summary_row "Running data-testid check" "-" "SKIPPED" ""
     return 0
   fi
   # The checker only ever reads the app-shell sources it scans, plus its own script.
@@ -688,6 +766,7 @@ run_step_1() {
 run_step_2() {
   if [ "$RUN_S2" != "1" ]; then
     echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"
+    record_summary_row "Running unit tests and SonarQube analysis" "-" "SKIPPED" ""
     return 0
   fi
   local sonar_cmd
@@ -697,6 +776,19 @@ run_step_2() {
     sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate --compare-coverage"
   fi
   run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$sonar_cmd"
+
+  # run_step already recorded this row (duration + OK/FAILED) — patch in the
+  # unit-test counts vitest itself reported, e.g. "Tests  11676 passed | 3
+  # skipped (11679)", so the summary shows how many tests actually ran, not
+  # just pass/fail.
+  local abs_log="$REPO_DIR/tmp/pre-push/sonar-and-tests.log" counts
+  counts="$(grep -E '^[[:space:]]*Tests[[:space:]]+[0-9]' "$abs_log" 2>/dev/null | tail -1 \
+    | sed -E 's/^[[:space:]]*Tests[[:space:]]+//; s/ \| /, /g; s/\(([0-9]+)\)/(\1 total)/')"
+  if [ -n "$counts" ] && [ "${#SUMMARY_ROWS[@]}" -gt 0 ]; then
+    local last_idx=$(( ${#SUMMARY_ROWS[@]} - 1 )) name dur row_status
+    IFS='|' read -r name dur row_status _ <<< "${SUMMARY_ROWS[$last_idx]}"
+    SUMMARY_ROWS[$last_idx]="${name}|${dur}|${row_status}|${counts}"
+  fi
 }
 
 # 3. Run offline regeneration check
@@ -726,6 +818,7 @@ run_step_2() {
 run_step_3() {
   if [ "$RUN_S3" != "1" ]; then
     echo "==> [3/5] Regenerating all windows from cache (UI / contract drift check)... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    record_summary_row "Regenerating all windows from cache (UI / contract drift check)" "-" "SKIPPED" ""
     return 0
   fi
   local all_windows regen_all_cmd
@@ -741,6 +834,12 @@ process.stdout.write(r.windows.filter(w=>{\
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" artifacts cli/cache cli/config/regen-windows.json package-lock.json)"
   run_step "3" "Regenerating all windows from cache (UI / contract drift check)" "$REPO_DIR" "tmp/pre-push/regen-all.log" "$regen_all_cmd" "$key"
+
+  if [ "$STEP_OK" != "1" ]; then
+    # Already recorded above — a crashed/partial regen makes a drift check on
+    # top of it meaningless (and possibly misleading), so skip it.
+    return 0
+  fi
 
   echo "==> Verifying no UI / contract drift (git status after regen)..."
   if [ -n "$(git status --porcelain)" ]; then
@@ -762,11 +861,14 @@ process.stdout.write(r.windows.filter(w=>{\
     echo "========================================================================="
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
     echo "3" > "$LAST_FAILED_FILE"
-    exit 1
+    record_failure "UI / contract drift (step 3)"
+    record_summary_row "UI / contract drift check" "-" "FAILED" ""
+    return 0
   fi
   echo "    SUCCESS ✅ (schema_forge clean — no UI / contract drift)"
   [ "$LAST_FAILED_STEP" = "3" ] && rm -f "$LAST_FAILED_FILE"
-  true
+  record_summary_row "UI / contract drift check" "-" "OK" ""
+  return 0
 }
 
 # 4. Compare ETGO_SF_*.xml against com.etendoerp.go (conditionally skipped
@@ -775,10 +877,17 @@ process.stdout.write(r.windows.filter(w=>{\
 run_step_4() {
   if [ "$RUN_S4" != "1" ]; then
     echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "SKIPPED" ""
     return 0
   fi
   if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
     check_go_module_push_sync
+    if [ "$STEP_OK" != "1" ]; then
+      # Already recorded above — comparing against a sibling repo that isn't
+      # fully pushed would just produce a misleading diff, so skip the compare.
+      record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "FAILED" "sibling not fully pushed"
+      return 0
+    fi
     local regen_cmd="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
     local key
     key="$(step_cache_compute "node-${NODE_MAJOR}" artifacts cli/cache cli/config/regen-windows.json package-lock.json \
@@ -786,15 +895,18 @@ run_step_4() {
     run_step "4" "Comparing ETGO_SF_*.xml against com.etendoerp.go" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$regen_cmd" "$key"
   else
     echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⚠️ (sourcedata not found — UI/contract drift above was still checked)"
+    record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "SKIPPED" "no sibling checkout"
   fi
 }
 
 # ----------------------------------------------------------------------------
 # Quick re-check: if the previous push attempt failed on a specific numbered
-# step, run just that step first. If it still fails, bail immediately instead
-# of burning several minutes re-running steps that already passed last time.
-# If it now passes, fall through to the full 0-4 sequence below anyway — a
-# fix for one step must not skip verifying the others still hold.
+# step, run just that step first — fast feedback on the known issue before
+# spending time on the ones that already passed. Either way (fixed or still
+# broken), fall through to the full 0-4 sequence below: a fix for one step
+# must not skip verifying the others still hold, and a still-broken step is
+# simply recorded here (see the consolidated summary at the end) rather than
+# stopping the run.
 # ----------------------------------------------------------------------------
 LAST_FAILED_STEP=""
 [ -f "$LAST_FAILED_FILE" ] && LAST_FAILED_STEP="$(cat "$LAST_FAILED_FILE" 2>/dev/null || echo "")"
@@ -819,7 +931,7 @@ if [ -n "$LAST_FAILED_STEP" ]; then
     0|1|2|3|4)
       echo "==> Previous push failed at step $LAST_FAILED_STEP — quick re-check before the full run..."
       "run_step_${LAST_FAILED_STEP}"
-      echo "==> Quick re-check passed — running the full pipeline to confirm nothing else regressed."
+      echo "==> Quick re-check done — running the full pipeline (re-confirms this step and checks everything else)."
       ;;
     *)
       rm -f "$LAST_FAILED_FILE"
@@ -827,12 +939,8 @@ if [ -n "$LAST_FAILED_STEP" ]; then
   esac
 fi
 
-if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ] || [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-    echo "==> Resuming at integration stage (--from=integration): stages 0-4 and onboarding skipped by request."
-  else
-    echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
-  fi
+if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
+  echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
 else
   run_step_0
   run_step_1
@@ -841,13 +949,59 @@ else
   run_step_4
 fi
 
-# Steps 0-4 passed — now the mandatory Playwright E2E suites (mocked + integration).
+# Playwright always gets its turn too, regardless of whether steps 0-4 passed —
+# same reasoning throughout this hook: a push with a new Sonar issue AND a
+# failing E2E test should show both here, not one now and the other on the
+# next push attempt.
 run_playwright
 
-# Reaching here means steps 0-4 all succeeded or legitimately skipped — clear
-# any stale marker (e.g. step 4 recorded a failure, then a later run skips it
-# because the sibling checkout's sourcedata went away) so the next push starts
-# clean instead of quick-rechecking a step that's no longer relevant.
+# One line per check that had a turn this run (skipped ones included) — real
+# numbers a dev can drop straight into a task update instead of re-timing
+# things by hand. Always printed, pass or fail.
+print_summary() {
+  [ "${#SUMMARY_ROWS[@]}" -eq 0 ] && return 0
+  echo ""
+  echo "=========================================="
+  echo "📊 Pre-push summary"
+  echo "=========================================="
+  local row name dur row_status detail total=0 dur_disp
+  for row in "${SUMMARY_ROWS[@]}"; do
+    IFS='|' read -r name dur row_status detail <<< "$row"
+    if [[ "$dur" =~ ^[0-9]+$ ]]; then
+      dur_disp="${dur}s"
+      total=$(( total + dur ))
+    else
+      dur_disp="-"
+    fi
+    if [ -n "$detail" ]; then
+      echo "  • ${name} — ${dur_disp} — ${row_status} — ${detail}"
+    else
+      echo "  • ${name} — ${dur_disp} — ${row_status}"
+    fi
+  done
+  echo "------------------------------------------"
+  printf 'Total measured time: %ds (%dm %ds)\n' "$total" $(( total / 60 )) $(( total % 60 ))
+  echo "=========================================="
+}
+print_summary
+
+if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
+  echo ""
+  echo "=========================================="
+  echo "❌ Pre-push checks failed — ${#FAILED_STEPS[@]} problem(s) found (see details above):"
+  i=1
+  for f in "${FAILED_STEPS[@]}"; do
+    echo "   $i. $f"
+    i=$((i + 1))
+  done
+  echo ""
+  echo "   Fix everything listed, then re-push (each is re-checked together —"
+  echo "   no need to push once per problem). Bypass with 'git push --no-verify'."
+  echo "=========================================="
+  exit 1
+fi
+
+# Reaching here means every relevant check passed — clear any stale marker.
 rm -f "$LAST_FAILED_FILE"
 
 echo ""

@@ -20,7 +20,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('../GenericPreviewModal.jsx', () => ({
-  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose }) => (
+  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose, attachmentConfig }) => (
     <div data-testid="generic-preview-modal">
       <span data-testid="modal-title">{title}</span>
       {subtitle && <span data-testid="modal-subtitle">{subtitle}</span>}
@@ -35,6 +35,18 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
       <button data-testid="close-btn" onClick={onClose}>
         Close
       </button>
+      {/* ETP-4789: simulates ManagedLeftPanel invoking attachmentConfig.onFileChange
+          once the cached attachment (GET /preview-file) resolves — ahead of the
+          jsreport regeneration behind useQuotationPdf. Mirrors the same mechanism
+          already used in GoodsReceiptPreview.vitest.jsx. */}
+      {attachmentConfig?.onFileChange && (
+        <button
+          data-testid="simulate-file-change"
+          onClick={() => attachmentConfig.onFileChange({ objectUrl: 'blob:cached-url', fileName: 'cached.pdf' })}
+        >
+          SimulateFileChange
+        </button>
+      )}
     </div>
   )),
 }));
@@ -175,11 +187,13 @@ describe('QuotationPreview', () => {
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
   });
 
-  it('renders 3 tabs: general, messages, history', () => {
+  // ETP-4855 — Messages and History were empty placeholders and were removed
+  // from every preview. Only the general tab is left.
+  it('renders the general tab alone: no messages or history tab', () => {
     renderQuotationPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('shows send modal when email button is clicked', () => {
@@ -241,6 +255,54 @@ describe('QuotationPreview', () => {
       renderHidden: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'DR' }),
       renderShown: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'UE' }),
       findElement: () => screen.getByTestId('download-btn'),
+    });
+  });
+
+  // ── ETP-4789 (reject-cycle fix): Download gates on the cached attachment too ──
+  // The cached attachment (GenericPreviewModal's ManagedLeftPanel, GET /preview-file)
+  // resolves ahead of the slow jsreport regeneration behind useQuotationPdf. hasPdf
+  // must become true as soon as attachmentConfig.onFileChange fires, even while
+  // pdfUrl is still null — closing the perceptible gap QA reported between the
+  // preview panel showing the PDF and the Download button enabling.
+  describe('Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)', () => {
+    it('enables the download button once the cached attachment resolves, even while pdfUrl is still null', () => {
+      useQuotationPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: true, error: null });
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+    });
+
+    it('downloads via cachedAttachment.objectUrl/fileName, not the (still-null) pdfUrl', () => {
+      useQuotationPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      // Spy AFTER render/state-update — mocking document.createElement globally
+      // before React finishes creating real DOM nodes breaks reconciliation.
+      const clickMock = vi.fn();
+      const fakeAnchor = { href: '', download: '', click: clickMock };
+      const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+
+      try {
+        fireEvent.click(screen.getByTestId('download-btn'));
+        expect(fakeAnchor.href).toBe('blob:cached-url');
+        expect(fakeAnchor.download).toBe('cached.pdf');
+        expect(clickMock).toHaveBeenCalledTimes(1);
+      } finally {
+        createElementSpy.mockRestore();
+      }
+    });
+
+    it('keeps the download button disabled when documentStatus is DR, even with a cached attachment present (status gate is not bypassed by cache)', () => {
+      useQuotationPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
     });
   });
 });

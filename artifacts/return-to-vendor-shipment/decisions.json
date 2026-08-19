@@ -359,6 +359,7 @@
         "product": {
           "grid": true,
           "gridOrder": 1,
+          "gridReadOnly": true,
           "searchable": true,
           "inputMode": "search",
           "readOnlyLogic": null,
@@ -395,7 +396,8 @@
           "section": "other"
         },
         "storageBin": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "_note": "ETP-4863: included in the spec (IsIncluded=Y) so the header-warehouse locator injected by NeoHandlerUtils survives NeoFieldFilter.filterCreateRequest; hidden from the UI, derived backend-side."
         },
         "mConditionGoodsID": {
           "visibility": "discarded"

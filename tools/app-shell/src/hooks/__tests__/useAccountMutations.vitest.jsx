@@ -92,6 +92,19 @@ describe('useAccountMutations', () => {
     expect(body).not.toHaveProperty('swiftCode');
     expect(body).not.toHaveProperty('iBAN');
     expect(body).not.toHaveProperty('type');
+    expect(body).not.toHaveProperty('country');
+  });
+
+  it('createAccount maps countryId to country (ETP-4896)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.createAccount({ name: 'BBVA', currencyId: '102', countryId: '106' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ name: 'BBVA', currency: '102', country: '106' });
   });
 
   it('createAccount returns the first record of the W envelope', async () => {
@@ -216,6 +229,18 @@ describe('useAccountMutations', () => {
     });
   });
 
+  it('updateAccount PUTs only { country } for a country-only edit (ETP-4896)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { countryId: '106' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ country: '106' });
+  });
+
   it('updateAccount omits both tolerance keys when neither is in the payload', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
@@ -255,7 +280,10 @@ describe('useAccountMutations', () => {
 
   // ── archiveAccount ──────────────────────────────────────────────────────────
 
-  it('archiveAccount DELETEs /account/{id} and returns true', async () => {
+  // ETP-4871: archiving used to be the DELETE verb (the backend short-circuited every delete
+  // into an archive). It is now its own PATCH, the mirror of unarchiveAccount, and DELETE is
+  // reserved for the new deleteAccount below.
+  it('archiveAccount PATCHes /account/{id} with { active: false } and returns true', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
 
     const { result } = renderHook(() => useAccountMutations());
@@ -267,7 +295,8 @@ describe('useAccountMutations', () => {
 
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
-    expect(init.method).toBe('DELETE');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ active: false });
     expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(res).toBe(true);
   });
@@ -279,6 +308,40 @@ describe('useAccountMutations', () => {
     await act(async () => {
       await expect(result.current.archiveAccount('acc-1')).rejects.toMatchObject({
         message: 'open reconciliations',
+        status: 409,
+      });
+    });
+  });
+
+  // ── deleteAccount ───────────────────────────────────────────────────────────
+
+  // ETP-4871: a REAL delete, reachable from the UI only when the row's `deletable` flag is
+  // true. The backend still re-validates on DELETE and answers 409 (with a human-readable
+  // message) if a dependency appeared between the list load and this call.
+  it('deleteAccount DELETEs /account/{id} and returns true', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
+
+    const { result } = renderHook(() => useAccountMutations());
+
+    let res;
+    await act(async () => {
+      res = await result.current.deleteAccount('acc-1');
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`${ENTITY_URL}/acc-1`);
+    expect(init.method).toBe('DELETE');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(res).toBe(true);
+  });
+
+  it('deleteAccount throws with .status on a 409 (a dependency appeared since the row was loaded)', async () => {
+    globalThis.fetch.mockResolvedValue(errorResponse(409, 'account has dependent records'));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await expect(result.current.deleteAccount('acc-1')).rejects.toMatchObject({
+        message: 'account has dependent records',
         status: 409,
       });
     });
@@ -365,7 +428,55 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '€' }],
       defaultCurrencyId: '102',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
+  });
+
+  it('fetchDefaults reads defaults.country into defaultCountryId (ETP-4896)', async () => {
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102', country: '106' } },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.defaultCountryId).toBe('106');
+  });
+
+  it('fetchDefaults reads the countryIbanRules catalog (ETP-4896)', async () => {
+    const rules = [{ id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 }];
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' }, countryIbanRules: rules },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.countryIbanRules).toEqual(rules);
+  });
+
+  it('fetchDefaults tolerates a missing countryIbanRules payload', async () => {
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' } },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.countryIbanRules).toEqual([]);
   });
 
   it('fetchDefaults maps selector rows from the response.data envelope shape', async () => {
@@ -388,6 +499,8 @@ describe('useAccountMutations', () => {
         { id: '102', iso: 'EUR', symbol: '' },
       ],
       defaultCurrencyId: '100',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 
@@ -424,6 +537,8 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '' }],
       defaultCurrencyId: '',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 
@@ -442,6 +557,8 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '' }],
       defaultCurrencyId: '',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 
@@ -457,5 +574,18 @@ describe('useAccountMutations', () => {
     });
     // The best-effort defaults call must not happen when selectors fail.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ── returned shape ──────────────────────────────────────────────────────────
+
+  // ETP-4871: deleteAccount is a new, distinct mutation alongside archiveAccount — a caller
+  // must be able to reach both rather than deleteAccount silently missing from the hook.
+  it('exposes deleteAccount alongside the other mutations', () => {
+    const { result } = renderHook(() => useAccountMutations());
+    expect(typeof result.current.deleteAccount).toBe('function');
+    expect(Object.keys(result.current)).toEqual(expect.arrayContaining([
+      'createAccount', 'updateAccount', 'archiveAccount', 'unarchiveAccount',
+      'deleteAccount', 'fetchDefaults',
+    ]));
   });
 });

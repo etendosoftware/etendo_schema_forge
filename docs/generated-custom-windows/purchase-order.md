@@ -279,3 +279,46 @@ detail/record route goes through the generated component), so the generator's li
 list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
 this file's own `<ListView>` call, matching the existing pattern already used there for
 `dateFilterKey` and other generator-derived list props.
+
+## Related Documents auto-refresh — ETP-4779
+
+The "Documentos" tab (`artifacts/purchase-order/custom/RelatedDocuments.jsx`) did not update
+after confirming a Purchase Order and generating a Goods Receipt / Purchase Invoice — it required
+the manual 🔄 button. This turned out to be **two separate bugs**, found in two passes (the first
+pass fixed only the first one, which manual QA retesting on `localhost:3100` then showed was not
+sufficient):
+
+1. **Missing listener.** `PurchaseOrderActions.jsx` (this window's `topbarRight` component)
+   already dispatched a `purchase-order:document-created` `window` `CustomEvent` after generating
+   a derived document, mirroring the `sales-order:document-created` convention — but nothing was
+   listening for it. Fixed by having `RelatedDocuments.jsx` listen for that event and bump its
+   local `refreshKey` (the same key that drives its `fetchByCriteria`/`fetchChild` effect).
+
+2. **Premature dispatch (found via live reproduction after the listener fix alone didn't resolve
+   the bug in manual testing).** In `ConfirmModal.handleConfirm` — the "Confirmar" flow used to
+   confirm a still-Draft order and optionally generate its receipt/invoice in the same modal —
+   the event was dispatched right after **Step 1** (`documentAction=CO`, confirming the order),
+   *before* **Steps 2/3** (`createGoodsReceipt` / `createPurchaseInvoice`) had even run. The
+   listener added in the previous fix reacted correctly and refetched immediately, but at that
+   point neither derived document existed yet, so the refetch always came back empty — and
+   because nothing dispatched the event again afterward, the panel never learned about the
+   documents Steps 2/3 went on to create. Symptom when reproduced live: confirming with both
+   "Crear albarán de proveedor" and "Crear factura" checked showed the success modal with both
+   documents listed, but the "Documentos" row behind it stayed on "Sin documentos relacionados"
+   forever (not merely delayed) — matching the original bug reports exactly. `CreateDocsModal`
+   (used for the already-`CO` "Gestionar factura"/"Gestionar recepción" flow, a separate modal in
+   the same file) did **not** have this bug — it already dispatched once, after its POST(s)
+   resolved, which is why that flow worked correctly and briefly made the earlier fix look
+   sufficient.
+
+   Fixed by moving the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle,
+   right before `onConfirmed(result)` — mirroring `CreateDocsModal.handleCreate`'s already-correct
+   placement — and guarding it to only fire when a receipt or invoice actually exists
+   (`finalReceipt || finalInvoice`). Also added the same guarded dispatch to `handleClose`'s
+   partial-failure path (e.g. the receipt POST succeeds but the invoice POST then fails and the
+   user closes instead of retrying), which previously could leave a successfully-created receipt
+   with no event at all.
+
+Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
+checkboxes shows both the new Recibo and Factura chips in the "Documentos" row immediately,
+before even closing the success modal — no reload, no lag.

@@ -22,10 +22,11 @@ Use this window to register supplier invoices, keep the payable document aligned
 - Implementation type: custom window override registered in `tools/app-shell/src/windows/registry.js`, combining generated header/detail scaffolding with custom list preview, topbar, line table, bottom panel, and related-documents behavior.
 - Window shape: master-child. The master record is the invoice header and the main child dataset is invoice lines; the detail page also surfaces a custom related-documents tab instead of relying on the generated payment secondary tabs.
 - Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. FK fields in line rows (product, tax, account, project, cost center, asset, and dimension fields) use `InlineSearchCombo`: a text input with server-side search that lets the user filter by typing — for example, typing "IVA" filters all matching tax rates. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
-- List interaction: the list uses a custom `PurchaseInvoiceHeaderTable` component (`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`). The visible columns, in order, are: Invoice Date (no dot indicator), Document No. (`POReference`, relabeled through `window.labelOverrides`), Due Date (4-state dot computed from the row's `outstandingAmount` and shown as "—" when no due date exists on the row). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status, Total Gross Amount, **Pending Payment** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Pending Payment" / "Pendiente de pago" so the grid reads in payment terms rather than ledger terms), and **Delivery Status** (a percent progress bar driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the list. When the fiscal profile enables SII for the organisation, an **SII Status** badge column is injected between Document Status and Total Gross Amount. The badge reads `row.aeatsiiEstado` directly from the list API response — no secondary fetch is needed (ETP-4125 eliminated the batch `useInvoiceListFiscalStatus` hook that previously caused HTTP 403 errors on large invoice lists due to nginx URL-length limits). The badge component is `FiscalStatusBadge` from the shared module. **Verifactu and TBAI are sales-only fiscal systems — they never appear as columns or badges in the purchase-invoice list.** Selecting a row opens a preview modal instead of navigating directly to the detail route.
+- List interaction: the list uses a custom `PurchaseInvoiceHeaderTable` component (`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`). The visible columns, in order, are: Invoice Date (no dot indicator), Document No. (`POReference`, relabeled through `window.labelOverrides`), Due Date (4-state dot computed from the row's `outstandingAmount` and shown as "—" when no due date exists on the row). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status, Total Gross Amount, **Pending Payment** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Pending Payment" / "Pendiente de pago" so the grid reads in payment terms rather than ledger terms), and **Delivery Status** (a percent progress bar driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the list. When the fiscal profile enables SII for the organisation, an **SII Status** badge column is injected between Document Status and Total Gross Amount. The badge reads `row.aeatsiiEstado` directly from the list API response — no secondary fetch is needed (ETP-4125 eliminated the batch `useInvoiceListFiscalStatus` hook that previously caused HTTP 403 errors on large invoice lists due to nginx URL-length limits). The badge component is `FiscalStatusBadge` from the shared module. **Verifactu and TBAI are sales-only fiscal systems — they never appear as columns or badges in the purchase-invoice list.** Selecting a row opens a preview modal instead of navigating directly to the detail route. **ETP-4833:** the doc-type badge and the four `outstandingAmount` badges/buttons (`Aplicada`, `Saldo a favor · X €`, `Pagada`, and the pending-payment button) all declare `whiteSpace: 'nowrap'` (plus `flexShrink: 0` on the four flex-based ones, via the shared `NOWRAP_FLEX` style const) so two-word labels and amount+icon content never wrap onto a second line when the grid's column width shrinks.
 - Detail interaction: the record page uses the generated header page with a custom lines table, a custom topbar, summary amounts, notes editing, footer totals, and related-document chips. The principal header section shows `POReference` as `Document No.` / `Nº documento`, placed right after `Business Partner`, while the internal AD `documentNo` field stays hidden in this custom workflow. `POReference` remains editable after completion here, matching the current Classic metadata for this field.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - A **SIF** tab (Suministro Inmediato de Facturación) is available in the detail tab strip when the organisation is configured for SII (TBAI and Verifactu are not shown for purchase invoices at all — see below). The tab is declared in `decisions.json → window.extraTabs` and rendered by the shared `tools/app-shell/src/windows/custom/shared/SifTab.jsx` component. For purchase invoices the SII panel uses the `aeatsiiClaveTipoFc` field and the purchase-specific invoice type options (F6 / LC / F5 / F1). **ETP-4401:** the per-invoice `tbaiIssent` field (and its sibling `tbaiSequence`/`tbaiInvoicenum`/`tbaiInvoiceseq` fields on the sales side) now carries an explicit `"visibility": "discarded"` override in `decisions.json` so it no longer reaches the frontend contract, because TBAI chaining sequences are now generated automatically per fiscal configuration by the `TbaiConfigSequenceHandler` NeoHandler instead of being tracked per invoice. When no fiscal target is active for the organisation, the SIF tab now disappears entirely from the detail tab strip instead of showing an empty-state message: `SifTab.jsx` reports its own visibility via the `onVisibilityChange` callback that `tools/app-shell/src/components/contract-ui/DetailView.jsx` passes to every `placement: 'tab'` custom tab, and the view redirects to the first remaining tab if the hidden tab was the active one. Editable fields are patched immediately on blur via `PATCH /sws/neo/purchase-invoice/header/{id}`.
+- **Line-level "tax needs SIF configuration" shortcut (ETP-4888 point 5):** on the lines grid's `tax` cell, an amber warning-color badge (`text-status-warning-foreground`) renders inline right next to the tax value itself (`InlineLinesPanel`'s `cellBadges` slot, `docs/ui-customization.md` §14e) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII, which has nothing to configure at tax level (its equivalent, `aeatsiiCauseExemption`, lives on the invoice header and is handled by the SIF tab above, unaffected by this feature). Clicking it opens `TaxSifModal.jsx` — a standalone dialog shared with sales-invoice (own vertical layout: tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer — see `docs/ui-design-guidelines.md`), that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to show the same 0–2 applicable fields the Tax window's own header form would, and saves the fix directly without leaving the invoice. Gated by `decisions.json → window.lineTaxSifTrigger` (see `docs/decisions-reference.md`); the "missing" check is driven by a backend selector enrichment (`InvoiceLineTaxSifSelectorPolicy`, `com.etendoerp.go`) that projects the relevant `C_Tax` columns onto the tax selector's response, scoped to this window and sales-invoice only — see `docs/ui-customization.md` §14e for the full mechanism.
 
 ## Reactive behavior and dependencies
 
@@ -67,6 +68,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 ## Manual verification
 
 1. Open `/purchase-invoice` and confirm the list shows: Invoice Date (no dot), Document No. (the `POReference` value relabeled through `labelOverrides`), Due Date (green dot for `outstandingAmount ≤ 0` regardless of date, red dot + red date text for past-due rows that still have outstanding balance, yellow dot for rows due within the next 7 days with outstanding balance, gray dot for everything else, "—" when no due date exists), Business Partner, Document Status, Total Gross Amount, and Pending Payment in that exact column order. Pay particular attention to invoices that are past their due date but already paid — they must render with the green dot, not the red one. Also confirm date-only values keep their original calendar day when rendered.
+1a. **ETP-4833 (manual-only check):** with a row whose `Nº documento` (`POReference`) value is very long, scroll the list and confirm the `Factura rectificativa` doc-type badge and the `Saldo a favor · X €` / `Aplicada` / `Pagada` / pending-payment badges never wrap onto a second line, even as the browser's table auto-layout squeezes their column. This depends on real browser layout metrics that the automated Vitest coverage (which asserts the `whiteSpace`/`flexShrink` style properties directly) cannot reproduce in jsdom, so it stays a manual check.
 15. Open a completed purchase invoice and verify that **Contacto** (`businessPartner`), **Dirección** (`partnerAddress`), **Método de pago** (`paymentMethod`), **Condiciones de pago** (`paymentTerms`), and **Tarifa** (`priceList`) fields are all disabled (read-only). Confirm that **Nº documento** (`orderReference`) remains editable.
 2. Click a list row and confirm the preview modal opens instead of immediate navigation.
 3. In the preview modal, verify the General tab shows total, due/payable state, and payment history, while Messages and History remain placeholder states.
@@ -657,6 +659,21 @@ rectificative type and the legacy `APC` credit memo.
   `enrichOriginInvoice`) — the same table the separate "Reversed Invoices" / Modelo 349 tab
   (`ReversedInvoicesPanel.jsx`, `window.extraTabs.reversedInvoices`) manages its own rows on,
   for a different purpose (349 corrective-box reporting). The two are independent.
+  - **New (ETP-4755): the tab's "Correctiva del 349" checkbox is now gated by the tenant's
+    Fiscal Models catalog.** `ReversedInvoicesPanel.jsx` — shared, unchanged, by both
+    `sales-invoice` and `purchase-invoice` — fetches the cross-spec, generic
+    `GET /sws/neo/fiscal-models-catalog` endpoint (the same per-`AD_PREFERENCE` catalog the
+    `fiscal-models` window itself uses to enable/disable tax forms; see
+    `fiscal-models.md`'s "Downstream consumer" note for the full write-up) and only renders
+    the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
+    confirms Modelo 349 is active. **Fail-closed** in every failure mode — loading, non-200,
+    network error, or a malformed/missing-key response all hide the checkbox, never show it
+    by default. The read-only "Modelo 349" grid-column badge (`CorrectivaBadge`) is **not**
+    gated — it always reflects the underlying `aEAT349IsCorrective` value regardless of
+    catalog state; only the interactive checkbox is affected. **Known non-blocking gap:**
+    toggling 349 off does not clear or warn about an already-`true` `aEAT349IsCorrective` on
+    existing lines — the checkbox just becomes invisible while the data (and the grid badge)
+    stay intact.
 
 ### List subset filters: "Todos" / "Facturas" / "Facturas rectificativas"
 
@@ -997,3 +1014,215 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — create-contact pre-fill — ETP-4855
+
+When the OCR reader cannot match the invoice's supplier to an existing business partner, the
+vendor field offers "create contact" and opens `CreateContactModal`. That popup used to open
+**completely empty**, discarding everything the extraction had already read — the user retyped
+the name, tax ID and address by hand.
+
+### The pre-fill chain
+
+Four links, each of which has to carry the data:
+
+| Step | File | Role |
+|---|---|---|
+| 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
+| 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
+| 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
+| 4 | `CreateContactModalAdapter.jsx` | forwards the whole map as the modal's `prefill` prop |
+
+`createPrefilledFrom` is keyed by **form field id**, not by AD column: `name`, `taxID`,
+`address`, `postalCode`, `city`, `country`, `etgoEmail`, `etgoPhone`. Adding a field to the
+popup is one entry there plus one `extraHeaderFields` entry — no component change.
+
+### Why `country` is special
+
+Text fields are seeded straight into `EntityCreationModal`'s `initialValues`. `country` (and
+`region`) cannot be: the form holds an **option id**, while the invoice prints a **label**
+("España"). Writing the label in would satisfy the required-field check with a value the API
+rejects.
+
+So those two are resolved through `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) against
+the country selector — accent- and case-insensitive, exact match first, then a prefix match in
+either direction so `España` still finds `ESPAÑA (ES)`. **No match leaves the field empty**
+rather than guessing: a wrong country id is invisible to the user, an empty picker is not.
+
+The selector options are fetched *after* the modal mounts, and `EntityCreationModal` snapshots
+`initialValues` in a `useState` initializer — so a late value cannot be delivered through it.
+That is what the `patchValues` prop is for: it merges into fields that are **still empty**,
+which makes it both idempotent and safe against clobbering something the user typed while the
+options were loading. Resolving the country also seeds `currentCountry`, because the region
+selector only loads once a country is known.
+
+### Side effect worth knowing
+
+`CreateContactModal` creates the BP up front (`BP → address → contacts → banks → billing
+PATCH`) and posts the address whenever `address || city || country` is set. Pre-filling the
+address block therefore means the new BP now gets a location — which is what
+`resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
+header's `partnerAddress` (NOT NULL on `C_Invoice`). Before this change, a BP created from the
+OCR popup had no location at all.
+
+### Automated evidence
+
+- `src/lib/__tests__/matchOptionLabel.test.js` — label matching, including the refusal to
+  prefix-match a 2-character option label and the empty-on-no-match contract.
+- `src/components/contract-ui/__tests__/CreateContactModal.vitest.jsx` → `describe('CreateContactModal — pre-fill')`
+  — free-text seeding, country label kept out of the form, resolution once the selector loads,
+  and `initialQuery` precedence.
+- `src/components/contract-ui/__tests__/EntityCreationModal.vitest.jsx` → `describe('EntityCreationModal — patchValues')`
+  — fills empty, never overwrites typed input, successive patches.
+- `src/components/copilot/ocr/__tests__/ocrDocTypes.prefill.vitest.js` — every
+  `createPrefilledFrom` source must be a key the extraction schema actually emits. A typo there
+  fails silently at runtime (the field just looks unextracted), so it is asserted in CI.
+
+## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
+
+### Three removals
+
+The panel shipped with UI that did nothing:
+
+- **"Messages" / "History" tabs** — both rendered a permanent `ComingSoon` placeholder.
+- **The context-menu button** (`MoreVertical`) — had no `onClick` at all.
+
+With a single view left there is no tab bar to render, so the whole header row is gone and
+`OcrSidePanel` renders the file view directly. The i18n keys (`ocrSidePanelTabFile`,
+`ocrSidePanelTabMessages`, `ocrSidePanelTabHistory`, `ocrSidePanelComingSoon`,
+`ocrSidePanelMore`) were removed from **both** locale files.
+
+### Attaching from the panel
+
+In edit mode `AttachmentsView` was **read-only** — it listed attachments and rendered the first
+PDF, with no way to add one. It can now attach, and the requirement that the file "quede visible
+en la sección de Adjuntos" needs no synchronisation at all:
+
+| Path | Endpoint | Store |
+|---|---|---|
+| Side panel (read) — `listAttachments` | `GET /sws/neo/attachments/{table}/{id}` | `AD_Attachment` |
+| Side panel (write) — `uploadAttachment` **(new)** | `POST /sws/neo/attachments/{table}/{id}` | `AD_Attachment` |
+| Attachments tab — `useAttachments` | same endpoint | `AD_Attachment` |
+| OCR post-commit — `attachFile` | `POST /webhooks/?name=AttachFile` (by `AD_Tab_ID`) | `AD_Attachment` |
+| Document preview — `usePreviewAttachment` | `/sws/neo/preview-file` | **`ETGO_PREVIEW_FILE`** |
+
+> The two "Side panel" rows describe this pass only. The Error 4 fix below moved the
+> panel onto the document slot: it now reads `ETGO_PREVIEW_FILE` and *mirrors* the
+> write into the attachments endpoint. The table is kept because the rest of this
+> section reasons about it.
+
+The panel and the Attachments tab were already reading the same endpoint; only the write side was
+missing. `uploadAttachment` lives in `listAttachments.js` — the documented thin client for
+`/sws/neo/attachments/*` — and returns `{ ok, error }` rather than throwing, matching its
+siblings. `useAttachments` keeps its own `upload` (hook layer, with toasts and optimistic
+state); de-duplicating the two is a follow-up, not part of this fix.
+
+**PDF first, images once the slot landed.** This pass accepted PDF only, because the view
+rendered the attachment in a PDF viewer and the ticket requires the attached file and the one on
+screen to be the same document. Sharing the slot with the grid preview made that too narrow — a
+scanned JPG dropped there has to render — so `ACCEPTED_TYPES` now covers PDF plus the common
+image types, and the panel renders images through `<img>` instead of the PDF viewer.
+
+### Why the OCR reader cannot run on a hand-captured invoice
+
+No flag was needed. `OcrInlineUploader` is the only thing that dispatches the extraction event,
+and `FileTab` mounts it **only** when `isNew`. On a saved record the panel renders
+`AttachmentsView`, which attaches a file and never triggers extraction. The gap the ticket
+described was the missing attach capability, not a missing guard — the guard is structural.
+`OcrSidePanel.vitest.jsx` asserts the uploader is never mounted for a saved record, so a future
+refactor cannot quietly reintroduce it.
+
+### Keeping the two views in sync
+
+The panel and the Attachments tab each hold their own copy of the list, and
+DetailView keeps inactive tabs **mounted** — so a write through one left the other
+showing stale data until the user left form view and came back. `useAttachments`
+also only ever loaded eagerly on mount, never again.
+
+They share a server store, not a client one, so the fix is a notification, not
+shared state: `components/attachments/attachmentsBus.js`. A writer calls
+`notifyAttachmentsChanged({ tableName, recordId, source })` **after** the server
+confirms; every other view of the same record reloads via
+`useAttachmentsChanged(...)`. Same `window` CustomEvent mechanism the OCR
+extraction flow already uses to cross component boundaries.
+
+Each view passes its own `source` (from `newAttachmentsSource()`) and skips its own
+events — otherwise the tab would fire a redundant GET after every optimistic
+mutation and undo its own optimistic UX. Events are addressed by
+`(tableName, recordId)`, compared as strings, and a notification without a record
+is dropped rather than broadcast to every view.
+
+Emitters: the panel's upload, and `useAttachments`' `upload` / `remove` /
+`removeAll` — the three operations that change the *set* of attachments.
+`updateDescription` deliberately does not emit: the panel does not render
+descriptions.
+
+### Superseded: the preview modal — the document slot
+
+An earlier pass made the grid preview read `AD_Attachment` directly. That was
+replaced once a simpler invariant surfaced: **a purchase invoice has no generated
+report** (`useInvoicePreview` passes `null` to `useInvoicePdf` unless the spec is
+`sales-invoice`, and no jsreport template exists for it), so nothing competes for
+its `ETGO_PREVIEW_FILE` slot — one file per `(specName, recordId)`.
+
+That makes the slot the definition of *"the document of this record"*, which is
+exactly what the team asked the panels to show: only the OCR source, and nothing
+for invoices captured by hand or imported historically.
+
+| | |
+|---|---|
+| **Read** | both side panels (grid preview and form view) read the slot via `usePreviewAttachment` |
+| **Write** | storing from a panel writes the slot **and** mirrors the file into `/sws/neo/attachments`, so it appears in the Attachments tab |
+| **OCR flow** | after the batch commits, `OcrInlineUploader` fills the slot alongside its existing `attachFile` call — that webhook is untouched |
+| **Manual / historic** | no slot row → panels empty |
+
+The mirror is opt-in per caller via `attachmentConfig.tableName`. Generated-PDF
+caches (sales invoice, order, quotation) omit it: nobody attached those files, so
+they must not appear as attachments.
+
+**The cost, stated plainly:** the bytes live twice — once in `C_File`, once
+base64-encoded in `ETGO_PREVIEW_FILE.file_data` (~33% larger). For scanned
+supplier documents that is not free. It buys zero backend work: no AD column, no
+Java, no `export.database`.
+
+**Deletions are kept consistent in both directions**, because a stale slot is the
+same class of bug as the one fixed above:
+
+- deleting from a panel empties the slot and removes the mirrored attachment —
+  but only when exactly one attachment matches the slot file's name; an ambiguous
+  match is left untouched rather than guessing which copy to remove
+- deleting from the Attachments tab fires the attachments bus; the hook then
+  checks whether its slot file is still attached and, if not, empties the slot
+
+Both panels now share `usePreviewAttachment`, so `OcrSidePanel` no longer carries
+its own listing logic — the duplication between the two disappeared.
+
+### Also removed: the preview modals' placeholder tabs
+
+The Messages / History tabs were permanent `EmptyPanel` placeholders in every
+preview modal, injected in four files directly and in three more through a shared
+`makeStaticPreviewTabs(ui)` builder (goods receipt and both return windows). The
+builder and all call sites are gone, along with two dead local `EmptyPanel`
+helpers and eight orphaned locale keys across the three locale files.
+
+### Automated evidence
+
+- `src/windows/custom/shared/__tests__/OcrSidePanel.vitest.jsx` → `describe('OcrSidePanel —
+  removed placeholder UI')`, `describe('… — OCR reader gating')` and `describe('… — the document
+  slot')` — the three removals (no tab bar, no `tablist`/`tab` roles, no context-menu button), the
+  uploader never mounting on a saved record, and the slot contract: which arguments the hook is
+  asked for, empty slot ⇒ nothing rendered, PDF vs image rendering, rejected file type, failed
+  store surfaced, attach action hidden without a record id.
+- `src/windows/custom/shared/__tests__/usePreviewAttachment.vitest.jsx` — the slot itself: the
+  mirror written on store, a failed mirror staying non-fatal, mirror deletion only on an
+  unambiguous name match, and the bus-driven slot cleanup.
+- `src/components/copilot/ocr/__tests__/listAttachments.upload.vitest.js` — transport contract:
+  multipart body, **no** hand-set `Content-Type` (it would drop the boundary), and never throwing.
+- `src/components/attachments/__tests__/attachmentsBus.vitest.jsx` — addressing rules:
+  own-source suppression, per-record and per-table filtering, string id comparison,
+  unsubscribe on unmount, no broadcast without a record.
+- `src/components/attachments/__tests__/useAttachments.vitest.jsx` →
+  `describe('useAttachments — cross-view sync')` — the tab reloading on a foreign write and
+  staying silent on its own, including silence when the write failed.
+
+The previous `OcrSidePanel.test.js` was deleted: it asserted the removed tabs via source regex,
+and it was matched by neither npm test script, so it had never run.

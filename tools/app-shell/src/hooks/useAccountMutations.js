@@ -8,18 +8,33 @@ import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
  *
  * ETP-4239: the spec is a generic W (CRUD) spec — standard REST verbs against
  * the `account` header entity, validated/enriched server-side by the
- * `financialAccountHeaderHandler` pre-hook (country derived from the IBAN,
- * default matching algorithm, name uniqueness, archive guard):
+ * `financialAccountHeaderHandler` pre-hook (country derived from the IBAN when the caller sends
+ * none — ETP-4896 lets a caller-supplied country win instead — default matching algorithm, name
+ * uniqueness, archive guard):
  *   - createAccount(payload)     → POST   /sws/neo/financial-account/account
  *   - updateAccount(id, payload) → PUT    /sws/neo/financial-account/account/{id}
- *   - archiveAccount(id)         → DELETE /sws/neo/financial-account/account/{id}
- *                                  (the hook soft-archives: IsActive='N')
+ *   - archiveAccount(id)         → PATCH  /sws/neo/financial-account/account/{id} {active:false}
  *   - unarchiveAccount(id)       → PATCH  /sws/neo/financial-account/account/{id} {active:true}
+ *   - deleteAccount(id)          → DELETE /sws/neo/financial-account/account/{id}
+ *                                  (ETP-4871: a REAL delete, gated server-side by `deletable` —
+ *                                  every account row now carries `deletable`/
+ *                                  `deleteBlockedReason`; the backend still answers 409 in case a
+ *                                  dependency appeared after the row was loaded, a defense against
+ *                                  the list-load/click race)
  *   - fetchDefaults()            → GET selectors/C_Currency_ID + GET defaults
+ *                                  (ETP-4896: `defaults` also carries `country`, and the response
+ *                                  envelope's `countryIbanRules` sibling is the ≤45-country IBAN
+ *                                  metadata catalog — `{id, iso, name, ibanPrefix, ibanLength}` —
+ *                                  used by `@/lib/countryIban.js` for inline validation. This is
+ *                                  NOT the country picker's option list: that still comes from the
+ *                                  generic `selectors/C_Country_ID` endpoint via
+ *                                  `CreatableSearchSelect`'s live search, same as every other
+ *                                  Country field in the app — 239 active countries is too many for
+ *                                  a preloaded `staticOptions` list.)
  *
- * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode }`;
+ * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode, countryId }`;
  * this hook maps it to the DAL property names the W contract persists
- * (`currency`, `iBAN`). `useNeoResource` only handles GETs, so these mutations
+ * (`currency`, `iBAN`, `country`). `useNeoResource` only handles GETs, so these mutations
  * use `fetch` directly with the same bearer-token auth. Errors throw with the
  * backend message and an attached `status` so callers can branch (e.g. 409
  * duplicate name → inline error).
@@ -40,6 +55,10 @@ function toDalBody(payload) {
   if ('currencyId' in payload) body.currency = payload.currencyId;
   if ('iban' in payload) body.iBAN = payload.iban;
   if ('swiftCode' in payload) body.swiftCode = payload.swiftCode;
+  // Country (ETP-4896) — always editable, unlike currency/type which lock once transactions or a
+  // bank link exist. Emitted only when present so a PUT that omits it leaves the stored value
+  // untouched, same rule as every other field here.
+  if ('countryId' in payload) body.country = payload.countryId;
   // Optional Salt Edge provider chosen at offline creation — the backend upserts it and links it
   // to the account so a later bank connect can preselect that bank.
   if (payload.providerCode) body.providerCode = payload.providerCode;
@@ -99,7 +118,30 @@ export function useAccountMutations() {
     return firstRecord(json);
   }, [token]);
 
+  /**
+   * Soft-archives an account (`IsActive` to 'N'). ETP-4871: this used to be the DELETE verb
+   * (the backend short-circuited every delete into an archive), which meant a real delete could
+   * never be offered — "Eliminar" only ever archived. Archiving is now its own PATCH, the exact
+   * mirror of {@link unarchiveAccount} below, and DELETE is reserved for {@link deleteAccount}.
+   */
   const archiveAccount = useCallback(async (accountId) => {
+    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: authHeaders(token),
+      body: JSON.stringify({ active: false }),
+    });
+    if (!res.ok) await throwHttpError(res);
+    return true;
+  }, [token]);
+
+  /**
+   * Permanently deletes an account (ETP-4871). Only ever reachable from the UI when the row's
+   * `deletable` flag is true — every FK into `FIN_Financial_Account` is RESTRICT, so the backend
+   * still re-validates and 409s (with a human-readable `message`) if a dependent record appeared
+   * between the list load and this call.
+   */
+  const deleteAccount = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
     if (!res.ok) await throwHttpError(res);
@@ -150,18 +192,27 @@ export function useAccountMutations() {
     }));
 
     let defaultCurrencyId = '';
+    let defaultCountryId = '';
+    let countryIbanRules = [];
     try {
       const defRes = await fetch(defaultsUrl, { headers });
       if (defRes.ok) {
         const defJson = await defRes.json();
         defaultCurrencyId = defJson?.defaults?.currency || '';
+        // ETP-4896: the org's country, injected by the same defaults post-hook. Never the
+        // AD-seeded ISDEFAULT='Y' country (United States) — the backend omits the key entirely
+        // rather than send a plausible-but-wrong default, so '' here means "no default available".
+        defaultCountryId = defJson?.defaults?.country || '';
+        countryIbanRules = Array.isArray(defJson?.countryIbanRules) ? defJson.countryIbanRules : [];
       }
     } catch {
       // Defaults are best-effort; the form simply starts without a preselection.
     }
 
-    return { currencies, defaultCurrencyId };
+    return { currencies, defaultCurrencyId, defaultCountryId, countryIbanRules };
   }, [token]);
 
-  return { createAccount, updateAccount, archiveAccount, unarchiveAccount, fetchDefaults };
+  return {
+    createAccount, updateAccount, archiveAccount, unarchiveAccount, deleteAccount, fetchDefaults,
+  };
 }

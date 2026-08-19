@@ -6,7 +6,9 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 
-const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B' };
+// countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
+// (see saltEdgeEligibility.js), so a fixture without it would hide that item.
+const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B', countryIso: 'ES' };
 
 /** Radix opens on pointerdown, not click. */
 function openMenu(id = 'acc-1') {
@@ -123,12 +125,76 @@ describe('AccountRowMenu', () => {
       expect(screen.queryByTestId('account-row-menu-delete-connection-acc-1')).toBeNull();
     });
 
+    // ETP-4896 Test Case 6 — Salt Edge is Spain-only. Hidden rather than disabled here: this menu
+    // has no disabled-item styling and conditionally renders every other inapplicable action.
+    it('hides connect for a non-Spanish account', () => {
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('hides connect when the account country is unknown', () => {
+      openMenu({ ...baseAccount, countryIso: '', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('still offers disconnect on a non-Spanish account that is already linked', () => {
+      // The rule gates CONNECTING, not managing an existing link — an account connected before
+      // the restriction existed must still be releasable.
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: true });
+      expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
+    });
+
     it('dispatches deleteConnection with the account', () => {
       const onBankConnectionAction = openMenu({ ...baseAccount, bankConnected: true });
       fireEvent.click(screen.getByTestId('account-row-menu-delete-connection-acc-1'));
       expect(onBankConnectionAction).toHaveBeenCalledWith(
         'deleteConnection', expect.objectContaining({ id: 'acc-1' }),
       );
+    });
+  });
+
+  // ETP-4871 — a real, irreversible delete. Independent of Archivar/Desarchivar above: both
+  // items can appear on the same still-active, deletable account.
+  describe('delete item (ETP-4871)', () => {
+    it('is offered when the account is deletable', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is explicitly false', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: false }} />);
+      openMenu();
+      // Wait on something that IS rendered so the query below isn't racing the menu mount.
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is absent (most fixtures)', async () => {
+      render(<AccountRowMenu account={baseAccount} />);
+      openMenu();
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is still offered alongside Archive on a deletable, still-active account', async () => {
+      // Deleting and archiving are independent actions on this row (see AccountRowMenu.jsx's
+      // doc comment) — neither one replaces the other while the account is active.
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+    });
+
+    it('fires onDelete with the account on click', async () => {
+      const onDelete = vi.fn();
+      const deletable = { ...baseAccount, deletable: true };
+      render(<AccountRowMenu account={deletable} onDelete={onDelete} />);
+      openMenu();
+
+      fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+      expect(onDelete).toHaveBeenCalledWith(deletable);
     });
   });
 });

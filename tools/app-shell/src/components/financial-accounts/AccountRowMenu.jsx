@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
+import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
 
 /**
  * Per-row kebab menu. Shows every action available on a financial account so
@@ -35,17 +36,24 @@ import { ACCOUNT_TYPE } from './tokens';
  *   4'. Reconectar               (soft-disconnected only — revives the surviving link)
  *   4''. Conectar banco          (no bank link at all)
  *   5. Borrar conexión           (any bank link — irreversible, ETP-4764)
+ *   ───
+ *   6. Eliminar cuenta            (only when `account.deletable === true`, ETP-4871 — a real,
+ *                                  irreversible delete; independent of Archivar/Desarchivar, so
+ *                                  both can be offered on the same deletable-but-active account)
  *
  * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
  * Cash accounts (type=C) never expose the bank connection group because the connection
  * does not apply to manual cash drawers.
  */
-export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
+export function AccountRowMenu({
+  account, onOpen, onEdit, onArchive, onDelete, onBankConnectionAction, onTransfer, onNewMovement,
+}) {
   const ui = useUI();
   const isCash = account.type === ACCOUNT_TYPE.CASH;
   const bankConnected = account.bankConnected === true;
   const isArchived = account.active === false;
+  const isDeletable = account.deletable === true;
   // Soft-disconnected: not connected, but the bank link survives and can be revived.
   const bankReconnectable = account.bankReconnectable === true;
 
@@ -148,7 +156,12 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
               </>
             ) : null}
 
-            {!bankConnected && !bankReconnectable ? (
+            {/* ETP-4896: Salt Edge is contracted for Spain only, so a non-ES account is never
+                offered the connect action. Hidden rather than disabled, matching how every other
+                item in this menu handles inapplicability (conditional render — the menu has no
+                disabled-item styling); the edit modal is where the rule gets explained, since
+                that is where the Country field lives. Rule owned by saltEdgeEligibility.js. */}
+            {!bankConnected && !bankReconnectable && canConnectToSaltEdge(account) ? (
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
@@ -202,6 +215,22 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
             </span>
           </DropdownMenuItem>
         )}
+
+        {/* ETP-4871 — independent of Archivar/Desarchivar above: a deletable, still-active
+            account can be archived OR deleted, whichever the user prefers, so this never
+            replaces the item above it. Only offered once the row confirms zero dependent
+            records anywhere (every FK into FIN_Financial_Account is RESTRICT). */}
+        {isDeletable ? (
+          <DropdownMenuItem
+            onClick={() => onDelete?.(account)}
+            data-testid={`account-row-menu-delete-${account.id}`}
+          >
+            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountsMenuDelete')}
+            </span>
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
