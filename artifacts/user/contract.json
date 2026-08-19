@@ -1,8 +1,7 @@
 {
-  "version": "0.21.0",
-  "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-16T16:28:20.141Z",
-  "checksum": "3642d4e0deca769b",
+  "version": "0.21.1",
+  "generatedAt": "2026-08-19T19:01:09.365Z",
+  "checksum": "ac2e18f50a4b14be",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -220,7 +219,7 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": true,
             "form": false,
@@ -963,7 +962,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -999,14 +998,6 @@
             "required": false
           },
           {
-            "name": "defaultOrganization",
-            "apiKey": "defaultOrganization",
-            "column": "Default_Ad_Org_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
             "name": "lastContactDate",
             "apiKey": "lastContactDate",
             "column": "LastContact",
@@ -1015,9 +1006,9 @@
             "required": false
           },
           {
-            "name": "defaultWarehouse",
-            "apiKey": "defaultWarehouse",
-            "column": "Default_M_Warehouse_ID",
+            "name": "defaultOrganization",
+            "apiKey": "defaultOrganization",
+            "column": "Default_Ad_Org_ID",
             "type": "foreignKey",
             "visibility": "editable",
             "required": false
@@ -1028,6 +1019,14 @@
             "column": "LastResult",
             "type": "string",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultWarehouse",
+            "apiKey": "defaultWarehouse",
+            "column": "Default_M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1055,20 +1054,20 @@
             "required": true
           },
           {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "AD_User_ID",
             "type": "id",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "commercialauth",
@@ -1303,6 +1302,14 @@
             "required": false
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Poc_Configuration_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1339,14 +1346,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Poc_Configuration_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }

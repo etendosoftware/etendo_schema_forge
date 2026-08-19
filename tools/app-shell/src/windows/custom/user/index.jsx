@@ -1,11 +1,14 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Mail, UserPlus } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { Button } from '@/components/ui/button';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { InviteUserDialog } from './InviteUserDialog.jsx';
 
 function sameIdSet(a, b) {
   if (a.length !== b.length) return false;
@@ -13,8 +16,50 @@ function sameIdSet(a, b) {
   return b.every((id) => setA.has(id));
 }
 
+function InvitationInfoBanner({ onOpenInvite }) {
+  const ui = useUI();
+
+  return (
+    <div
+      className="mx-2 mb-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center text-foreground"
+      data-testid="user-invitation-info"
+    >
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 font-medium">
+          <Mail className="h-4 w-4 text-primary" data-testid="Mail__853799" />
+          <span>{ui('inviteUserDescriptionTitle')}</span>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {ui('inviteUserDescription')}
+        </p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        onClick={onOpenInvite}
+        className="shrink-0 gap-2"
+        data-testid="action-open-invite"
+      >
+        <UserPlus className="h-4 w-4" data-testid="UserPlus__853799" />
+        {ui('inviteUser')}
+      </Button>
+    </div>
+  );
+}
+
 /**
- * ETP-4906 — wraps the generated `UserPage` to wire the multi-role assignment flow:
+ * Company user administration. Wraps the generated `UserPage` to combine two
+ * independent extensions:
+ *
+ * A) ETP-4894 — email-only invitation flow with pending confirmation. The AD_User
+ *    and its organization roles must already exist; the invitation only links that
+ *    prepared ERP user to an Etendo Go account after acceptance. Rendered via
+ *    `headerContent` (the `InvitationInfoBanner` below, shown above the generated
+ *    page's own header) plus a sibling `InviteUserDialog` controlled by local
+ *    `inviteOpen` state. `newLabel` overrides the generic "new record" label with
+ *    "Invite user" copy, since this window never creates an AD_User directly.
+ *
+ * B) ETP-4906 — wraps the generated `UserPage` to wire the multi-role assignment flow:
  *
  * 1. On loading an EXISTING user, fetches the currently-applied template role ids
  *    (`fetchUserRoleAssignments`, ETP-4906) and seeds both the shared selection state
@@ -40,6 +85,10 @@ function sameIdSet(a, b) {
  *    is also mirrored back into `selectedRoleIds` state after a successful save (a
  *    ref mutation alone doesn't trigger a re-render, so without it this prop would
  *    stay stuck at `true` after Guardar instead of flipping back to `false`).
+ *
+ * Both flows are independent — the invitation banner/dialog has no dependency on
+ * role-selection context — but they share the same generated `UserPage` instance,
+ * so all props from both are passed into the single call below.
  */
 export default function UserWindow(props) {
   const { recordId, token, apiBaseUrl } = props;
@@ -47,6 +96,7 @@ export default function UserWindow(props) {
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const appliedRoleIdsRef = useRef([]);
   const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   useEffect(() => {
     if (!recordId || recordId === 'new' || !token || !apiBaseUrl) return undefined;
@@ -117,6 +167,12 @@ export default function UserWindow(props) {
       value={{ selectedRoleIds, setSelectedRoleIds }}>
       <UserPage
         {...props}
+        newLabel={ui('inviteUser')}
+        headerContent={
+          <InvitationInfoBanner
+            onOpenInvite={() => setInviteOpen(true)}
+            data-testid="InvitationInfoBanner__853799" />
+        }
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}
         customTabs={customTabs}
@@ -135,6 +191,10 @@ export default function UserWindow(props) {
         // electrónico, Adjuntos.
         detailTabOrder={1}
         data-testid="UserPage__853799" />
+      <InviteUserDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        data-testid="InviteUserDialog__853799" />
     </RoleSelectionProvider>
   );
 }

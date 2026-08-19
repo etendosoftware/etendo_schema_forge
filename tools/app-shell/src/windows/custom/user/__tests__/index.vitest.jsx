@@ -1,11 +1,13 @@
 /**
- * Tests for windows/custom/user/index.jsx — ETP-4906. See the file's own doc comment
- * for the 3-step flow it owns: fetch applied roles on load for an existing user, thread
- * the live selection to `AssignTemplateRolesControl`/`UserRolesTab` via
- * `RoleSelectionProvider`, and fire `saveUserRoleAssignments` from
- * `onAfterExistingSave` — but ONLY when the locally-selected set actually differs from
- * what was loaded (the `sameIdSet` no-op guard, this ticket's "fires exactly once, only
- * when the role selection actually changed" constraint).
+ * Tests for windows/custom/user/index.jsx — covers both ETP-4906 (role assignment)
+ * and ETP-4894 (invitation flow), which share the same `UserWindow` component. See
+ * the source file's own doc comment for the full contract of both flows: fetch
+ * applied roles on load for an existing user, thread the live selection to
+ * `AssignTemplateRolesControl`/`UserRolesTab` via `RoleSelectionProvider`, fire
+ * `saveUserRoleAssignments` from `onAfterExistingSave` (only when the locally-selected
+ * set actually differs from what was loaded — the `sameIdSet` no-op guard), and render
+ * the invitation banner/dialog as an independent extension via `headerContent` and a
+ * sibling `InviteUserDialog`.
  *
  * Mirrors `windows/custom/warehouse/__tests__/index.vitest.jsx`'s convention of
  * capturing the generated page's props via a mock and driving its callbacks directly.
@@ -20,7 +22,8 @@ vi.mock('@/i18n', () => ({
   // Interpolates params into the returned string (rather than the trivial `(key) => key`)
   // so tests asserting the toast call shape can distinguish between a `detail` sourced
   // from the rejection's domain message vs. the `roleAssignmentSaveFailed` i18n fallback
-  // key — both otherwise collapse to the same bare key under `(key) => key`.
+  // key — both otherwise collapse to the same bare key under `(key) => key`. Plain
+  // (no-params) calls — e.g. the invitation banner's copy — still just return the key.
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
@@ -61,17 +64,22 @@ function SelectionProbe() {
 
 let lastUserPageProps;
 vi.mock('@generated/user/generated/web/user/UserPage', () => ({
+  // Captures every prop (needed by the ETP-4906 assertions below) AND renders
+  // `headerContent` (the real, unmocked `InvitationInfoBanner` markup, ETP-4894) next
+  // to the role-selection probe — the two extensions are independent, so both need to
+  // show up in this single mock's output.
   default: (props) => {
     lastUserPageProps = props;
     return (
       <div data-testid="user-page">
+        {props.headerContent}
         <SelectionProbe />
       </div>
     );
   },
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 
@@ -334,5 +342,35 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
     // was not mirrored, so this stayed stuck at `true` (no re-render). The regression this
     // test locks in: the confirmed set is mirrored back into state, flipping this to `false`.
     await waitFor(() => expect(lastUserPageProps.additionalDirtyState).toBe(false));
+  });
+});
+
+describe('UserWindow — invitation entry point (ETP-4894)', () => {
+  it('renders the invitation info banner and invite button', () => {
+    render(<UserWindow />);
+
+    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
+      'inviteUserDescriptionTitle',
+    );
+    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
+      'inviteUserDescription',
+    );
+    expect(screen.getByTestId('action-open-invite')).toBeInTheDocument();
+  });
+
+  it('opens the InviteUserDialog when clicking the invite button', () => {
+    render(<UserWindow />);
+
+    expect(screen.queryByTestId('invite-user-dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('action-open-invite'));
+
+    // `InviteUserDialog` is a real (unmocked) component — this asserts the actual
+    // DOM node its own `DialogContent` renders (`invite-user-dialog`, see
+    // `InviteUserDialog.jsx`), not the wrapper's `data-testid` prop passed by
+    // `index.jsx` (`InviteUserDialog__853799`), which the component never spreads
+    // onto its DOM since it only destructures `open`/`onOpenChange`/`onSuccess`/`apiBase`.
+    expect(screen.getByTestId('invite-user-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('invite-user-email')).toBeInTheDocument();
   });
 });

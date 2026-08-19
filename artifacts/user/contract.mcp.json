@@ -1,8 +1,7 @@
 {
-  "version": "0.21.0",
-  "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-08-16T16:28:20.141Z",
-  "contractChecksum": "3642d4e0deca769b",
+  "version": "0.21.1",
+  "generatedAt": "2026-08-19T19:01:09.365Z",
+  "contractChecksum": "ac2e18f50a4b14be",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -246,9 +245,7 @@
           "position": {},
           "phone": {},
           "supervisor": {},
-          "defaultRole": {
-            "readOnly": true
-          },
+          "defaultRole": {},
           "defaultLanguage": {},
           "defaultClient": {},
           "defaultOrganization": {},
@@ -399,5 +396,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ec549005b85affb8"
+  "checksum": "04aa2813026ba774"
 }

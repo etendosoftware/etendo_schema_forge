@@ -102,11 +102,11 @@
           "reason": "Supervisor for escalation workflows"
         },
         "defaultRole": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
           "form": false,
           "section": "defaults",
-          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
+          "reason": "Editing is handled by the AssignRoleControl headerExtra (ETP-4512), which writes this field while sourcing options from the unrestricted userRoles.role selector instead of this field's EXISTS-restricted native selector. Keep the field out of the generated form (form:false) but writable in the API so the custom control and UserRoleAssignmentHandler can persist the administrator's assignment. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
         },
         "defaultLanguage": {
           "visibility": "editable",
