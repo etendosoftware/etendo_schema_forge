@@ -13,18 +13,42 @@ import { login } from '../helpers/auth.js';
  *   2. The document preview opened from the list view (GenericPreviewModal),
  *      backed by a completely separate cache table: GET /sws/neo/preview-file.
  *
- * The fix unifies all three surfaces (sidebar, "Adjuntos" tab, and list-view
- * preview) on a single new endpoint — GET
+ * The fix unified all three surfaces (sidebar, "Adjuntos" tab, and list-view
+ * preview) on a single endpoint — GET
  * /sws/neo/attachments/{tableName}/{recordId}/main, which returns the one
  * attachment metadata object marked as the record's "main" document — via
- * `fetchMainAttachment` (listAttachments.js) and the `useMainAttachment` hook,
- * so they can no longer diverge by construction.
+ * `fetchMainAttachment` (listAttachments.js) and the `useMainAttachment` hook
+ * (tools/app-shell/src/windows/custom/shared/useMainAttachment.js), so they
+ * can no longer diverge by construction. The retired `/sws/neo/preview-file`
+ * cache and its `usePreviewAttachment` hook were removed once every window
+ * had migrated (see docs/plans/2026-08-03-etp-4315-attachment-preview-sync.md
+ * and docs/plans/2026-08-14-etp-4315-attachment-preview-unification-plan.md).
+ * `installPreviewFileMock` below still seeds that retired endpoint — it is
+ * now dead code from the app's point of view, kept deliberately as a canary:
+ * if a future regression ever re-reads it, this fixture returns an
+ * obviously-wrong file name that would fail these tests immediately.
+ *
+ * Separately, ETP-4855 removed OcrSidePanel's tab bar (`role="tablist"` —
+ * the "File" / "Messages" / "History" tabs, the latter two permanent
+ * "coming soon" placeholders). OcrSidePanel now renders its single view
+ * (`FileTab` → `DocumentView`) directly with no tabs at all — see
+ * tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx. `DocumentView`
+ * shows the resolved file's name in a plain
+ * `<span className="truncate">{storedFile.fileName}</span>`, with no
+ * data-testid reaching the DOM on that span or its container — the nearby
+ * `FileText` icon carries the codemod-generated `FileText__c851a1` testid
+ * (its hash suffix is derived from OcrSidePanel.jsx alone and appears
+ * nowhere else in the app), which lucide-react forwards onto the rendered
+ * `<svg>`. That icon and the file-name span are both direct children of the
+ * same row `<div>`, so scoping through the icon's parent reliably isolates
+ * the sidebar's rendered file name from the unrelated "Adjuntos" tab, which
+ * fetches the same real-attachments endpoint and stays mounted (hidden, not
+ * unmounted) while the "General" tab is active.
  *
  * These two suites render BOTH surfaces for the SAME record id and assert
  * the preview shows the exact same file the sidebar/tab already show. This
- * confirms the fix: both surfaces now resolve through the same `/main`
- * endpoint (see docs/plans/2026-08-03-etp-4315-attachment-preview-sync.md
- * and docs/plans/2026-08-14-etp-4315-attachment-preview-unification-plan.md).
+ * guards against the ETP-4315 regression: both surfaces resolve through the
+ * same `/main` endpoint, so they cannot diverge again without this failing.
  *
  * Routing note: login() installs a `**\/sws/**` catch-all; window-specific
  * mocks are installed AFTER login() so they take priority (LIFO order).
@@ -120,6 +144,17 @@ function previewDownloadAnchor(modal, fileName) {
   return modal.locator(`a[title*="${fileName}"]`);
 }
 
+// Scopes to OcrSidePanel's rendered file-name row via the `FileText__c851a1`
+// testid — a codemod-generated id whose hash suffix is unique to
+// OcrSidePanel.jsx (verified: no other file in the app renders it). OcrSidePanel
+// no longer has a tablist (ETP-4855) to anchor on, and neither `DocumentView`'s
+// file-name `<span>` nor its container forward a testid to the DOM, so the
+// icon — which lucide-react does forward onto its `<svg>` — is the only stable
+// anchor. The icon and the file-name span are siblings in the same row `<div>`.
+function sidebarFileRow(page) {
+  return page.locator('[data-testid="FileText__c851a1"]').locator('xpath=..');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PURCHASE INVOICE — sidebar (OcrSidePanel) vs. list-view preview modal
 // ═══════════════════════════════════════════════════════════════════════════
@@ -195,23 +230,22 @@ test.describe('Purchase Invoice — attachment/preview sync (ETP-4315, mocked)',
 
     await page.goto(`/purchase-invoice/${PI_ID}`);
     await page.waitForLoadState('domcontentloaded');
+    // The sidebar only renders the "has file" branch (the one with the
+    // FileText testid sidebarFileRow scopes to) once useMainAttachment's two
+    // SEQUENTIAL fetches (fetchMainAttachment, then fetchAttachmentBlobUrl)
+    // both resolve — on top of purchase-invoice's own heavier HeaderPage load
+    // (combos, lines, evaluate-display). Wait for the network to settle
+    // before polling the DOM, so a slow/cold run doesn't race the 15s budget.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
 
-    // OcrSidePanel is the only element on this page with role="tablist"
-    // (File / Messages / History). Its file-name text is a sibling section
-    // of the tablist's own row, NOT inside any testid'd container (verified
-    // by reading OcrSidePanel.jsx — none of its data-testid props reach the
-    // DOM), so we scope to that structural sibling to avoid also matching
-    // the unrelated "Adjuntos" tab's attachment-name-{id} cell, which fetches
-    // the same real-attachments endpoint and would otherwise render the same
-    // file name elsewhere on the page.
-    const tablist = page.getByRole('tablist');
-    await expect(tablist).toBeVisible({ timeout: 8_000 });
-    const sidebarFileArea = tablist.locator('xpath=../following-sibling::div[1]');
-
-    await expect(sidebarFileArea.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 8_000 });
+    // See sidebarFileRow() above for why this is the correct scope now that
+    // OcrSidePanel no longer renders a tablist (ETP-4855).
+    const fileRow = sidebarFileRow(page);
+    await expect(fileRow).toBeVisible({ timeout: 15_000 });
+    await expect(fileRow.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('list-view preview modal must show the SAME file as the sidebar for the same record (currently diverges)', async ({ page }) => {
+  test('list-view preview modal must show the SAME file as the sidebar for the same record', async ({ page }) => {
     await login(page);
     await installAttachmentsMock(page, 'C_Invoice', [PI_REAL_ATTACHMENT]);
     await installPreviewFileMock(page, PI_WRONG_CACHE);
@@ -221,15 +255,17 @@ test.describe('Purchase Invoice — attachment/preview sync (ETP-4315, mocked)',
     // as the test above — this is the file the preview is expected to match.
     await page.goto(`/purchase-invoice/${PI_ID}`);
     await page.waitForLoadState('domcontentloaded');
-    const tablist = page.getByRole('tablist');
-    await expect(tablist).toBeVisible({ timeout: 8_000 });
-    const sidebarFileArea = tablist.locator('xpath=../following-sibling::div[1]');
-    await expect(sidebarFileArea.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 8_000 });
+    // See the sibling test above for why this wait matters here too.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    const fileRow = sidebarFileRow(page);
+    await expect(fileRow).toBeVisible({ timeout: 15_000 });
+    await expect(fileRow.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 15_000 });
 
     // Now open the list-view preview (GenericPreviewModal) for the SAME
-    // record and compare. Today this reads a completely separate cache
-    // (/sws/neo/preview-file) and shows a different file entirely — the
-    // exact bug reported in ETP-4315.
+    // record and compare. It resolves via useMainAttachment — the same
+    // /main endpoint the sidebar uses — so it must show the same file. The
+    // mocked /preview-file cache (PI_WRONG_CACHE) is provably unused: this
+    // is what would fail if that retired endpoint were ever read again.
     await page.goto('/purchase-invoice');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
@@ -338,7 +374,7 @@ test.describe('Goods Receipt — attachment/preview sync (ETP-4315, mocked)', ()
     );
   });
 
-  test('list-view preview modal must show the SAME file as the "Adjuntos" tab for the same record (currently diverges)', async ({ page }) => {
+  test('list-view preview modal must show the SAME file as the "Adjuntos" tab for the same record', async ({ page }) => {
     await login(page);
     await installAttachmentsMock(page, 'M_InOut', [GR_REAL_ATTACHMENT]);
     await installPreviewFileMock(page, GR_WRONG_CACHE);
