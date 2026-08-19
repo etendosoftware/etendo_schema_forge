@@ -189,7 +189,7 @@ export function FinancialAccountDetail({ recordId }) {
   // mounted — and without a second fetch of the same endpoint. Idle (`null`) on non-cash accounts,
   // which never render that tab.
   const {
-    reconciliations, loading: reconciliationsLoading,
+    reconciliations, loading: reconciliationsLoading, reload: reloadReconciliations,
   } = useReconciliations(isCashAccount ? recordId : null);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
@@ -380,7 +380,10 @@ export function FinancialAccountDetail({ recordId }) {
             <CashCloseTab
               key={reconciliationRefreshKey}
               account={account}
-              onCloseSuccess={() => { reloadAccount(); reloadMovements(); }}
+              // The confirmed close becomes a new row of the Reconciliations tab and bumps its
+              // badge count, and that list is fetched here (not inside the tab), so it has to be
+              // reloaded too — otherwise the close only shows up after a manual page refresh.
+              onCloseSuccess={() => { reloadAccount(); reloadMovements(); reloadReconciliations(); }}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
             <ReconciliationTab
