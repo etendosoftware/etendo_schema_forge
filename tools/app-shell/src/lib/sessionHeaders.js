@@ -25,7 +25,12 @@
  * to look when asking "how do requests authenticate?".
  */
 export {
-  credentialOptions,
   jsonHeaders,
   writeHeaders,
 } from '@etendosoftware/app-shell-core/auth';
+
+// `credentialOptions` (the `{ credentials: 'include' }` bag) was re-exported here
+// too and never adopted — every call site writes the literal. Dropped rather than
+// left dangling: it was also the first name Node failed to resolve when these
+// modules load outside Vite, which made that error point at the least relevant of
+// the three.

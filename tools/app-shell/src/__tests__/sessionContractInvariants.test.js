@@ -13,9 +13,28 @@ import { resolve, join, relative } from 'node:path';
  * specs were failing on exactly this. Playwright does catch it, but it covers the
  * flows it covers, not every file.
  *
- * These assertions are exhaustive by construction: they read every production
- * source file, so "did we miss a call site?" stops being a judgement call. When
- * they pass, the migration is complete by definition.
+ * ─── THESE ARE RATCHETS, NOT COMPLETION PROOFS ──────────────────────────────
+ *
+ * They were originally written as `assert.deepEqual(offenders, [])` — "when they
+ * pass, the migration is complete by definition". They never passed, because they
+ * never RAN: this file lives in `src/__tests__/`, which `npm test`'s glob did not
+ * cover (the globs are per-directory and not recursive) and which vitest does not
+ * pick up either (its include is `*.vitest.*` / `*.spec.*`). Wiring them in
+ * revealed the real scope: 62 files still build a credential header and 46 still
+ * gate on a client-held token. ETP-4576 migrated a slice of the app, not the app.
+ *
+ * So each rule now carries the list of files that still violate it, and asserts
+ * two things:
+ *   1. no file OUTSIDE the list violates it — new code cannot add to the debt;
+ *   2. every file IN the list still violates it — a fixed file must be removed
+ *      from the list, so the list can only shrink.
+ *
+ * That second half is what makes it a ratchet rather than a suppression. When a
+ * list reaches zero, delete it and restore the `deepEqual(offenders, [])` form:
+ * at that point the rule really is a completion proof.
+ *
+ * Paths are file-level on purpose. Line numbers would churn on every unrelated
+ * edit and make the list a merge-conflict magnet.
  *
  * IMPORTANT — comments are stripped before matching. The migrated code explains
  * itself with prose like "instead of a bearer token", and a naive whole-file regex
@@ -61,7 +80,250 @@ function code(src) {
     .replace(/"(?:\\.|[^"\\])*"/g, '"L"');
 }
 
-const FILES = sourceFiles().map((f) => ({ ...f, code: code(readFileSync(f.path, 'utf8')) }));
+const FILES = sourceFiles().map((f) => {
+  const raw = readFileSync(f.path, 'utf8');
+  return { ...f, raw, code: code(raw) };
+});
+
+/**
+ * G3's helpers. They need the raw source, not `code()`'s output: the HTTP method IS
+ * a string literal (`method: 'POST'`), and `code()` replaces every literal with 'L'
+ * precisely so G1/G2 cannot match prose. So only comments are stripped here.
+ */
+const stripComments = (src) => src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
+const PROOF = /\bwriteHeaders\b|\bbuildWriteHeaders\b|X-Go-CSRF/;
+const UNSAFE_METHOD = /^(POST|PUT|PATCH|DELETE|VAR)$/i;
+
+/** The argument list of the call starting at `at`, matched by paren balance. */
+function callArgs(src, at) {
+  let depth = 0;
+  const open = src.indexOf('(', at);
+  for (let k = open; k < src.length && k < open + 4000; k += 1) {
+    if (src[k] === '(') depth += 1;
+    else if (src[k] === ')') { depth -= 1; if (depth === 0) return src.slice(at, k + 1); }
+  }
+  return src.slice(at, at + 1200);
+}
+
+/**
+ * Unsafe-method fetch sites in one file that carry no write proof.
+ *
+ * Deliberately LENIENT: when the headers come from an identifier it resolves that
+ * identifier's definition in the same file and accepts it if the definition
+ * mentions a write builder — including `const authHeaders = writeHeaders;`, a
+ * reference with no call parens, which an earlier version of this check missed and
+ * reported as a violation. A ratchet that cries wolf gets deleted, so it errs
+ * toward under-reporting rather than blocking a correct call site.
+ *
+ * `VAR` means the method itself is a variable (`fetch(url, { method, ... })`).
+ * Those count: a site that can be called with DELETE needs the proof.
+ */
+function unsafeSitesWithoutProof(raw) {
+  const src = stripComments(raw);
+  const hits = [];
+  const re = /\bfetch\s*\(/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const seg = callArgs(src, m.index);
+    const explicit = seg.match(/method\s*:\s*['"`]([A-Za-z]+)['"`]/);
+    const method = explicit
+      ? explicit[1]
+      : (/method\s*,|method\s*:\s*method/.test(seg) ? 'VAR' : 'GET');
+    if (!UNSAFE_METHOD.test(method)) continue;
+    if (PROOF.test(seg)) continue;
+    const named = seg.match(/headers\s*:\s*([A-Za-z_$][\w$]*)/);
+    const id = named ? named[1] : (/headers\s*,/.test(seg) ? 'headers' : null);
+    if (id) {
+      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${id}\\b[\\s\\S]{0,800}`));
+      if (def && PROOF.test(def[0])) continue;
+    }
+    hits.push(method);
+  }
+  return hits;
+}
+
+/**
+ * Files that still build a credential header (G1). Measured when these rules were
+ * first wired in. Shrinks as the sweep lands; never grows.
+ */
+const G1_DEBT = new Set([
+  'components/attachments/useAttachments.js',
+  'components/contract-ui/ImageField.jsx',
+  'components/contract-ui/InlineCreateSelector.jsx',
+  'components/contract-ui/SendDocumentModal.jsx',
+  'components/contract-ui/documentEmailSend.js',
+  'components/copilot/ocr/CreateContactModalAdapter.jsx',
+  'components/copilot/ocr/ProductResolverPopup.jsx',
+  'components/copilot/ocr/attachFile.js',
+  'components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js',
+  'components/copilot/ocr/ingest/useBatch.js',
+  'components/copilot/ocr/kinds/entityLookup.js',
+  'components/copilot/ocr/listAttachments.js',
+  'components/copilot/ocr/strategies.js',
+  'components/dashboard/TopClientsList.jsx',
+  'hooks/useCashClose.js',
+  'lib/flags/bootstrap.js',
+  'lib/surveys/survey-config.js',
+  'windows/custom/amortization/AmortizationLinesTable.jsx',
+  'windows/custom/assets/AssetsAmortizationPanel.jsx',
+  'windows/custom/calendar/AccountingPanel.jsx',
+  'windows/custom/calendar/PeriodsExpandablePanel.jsx',
+  'windows/custom/calendar/useYearCloseStatus.js',
+  'windows/custom/chart-of-accounts/AccountTreeView.jsx',
+  'windows/custom/chart-of-accounts/NewAccountModal.jsx',
+  'windows/custom/contacts/BillingPreferencesForm.jsx',
+  'windows/custom/contacts/ContactsFinanceContext.jsx',
+  'windows/custom/contacts/ContactsFinancialPanel.jsx',
+  'windows/custom/contacts/ContactsTable.jsx',
+  'windows/custom/contacts/contactsFkResolvers.js',
+  'windows/custom/contacts/index.jsx',
+  'windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx',
+  'windows/custom/fiscal-config/FiscalConfigDebugPanel.jsx',
+  'windows/custom/fiscal-models/FmListPage.jsx',
+  'windows/custom/fiscal-models/FmOverlays.jsx',
+  'windows/custom/fiscal-models/fiscalModelsUtils.js',
+  'windows/custom/fiscal-models/models/303/FmModel303Page.jsx',
+  'windows/custom/goods-receipt/index.jsx',
+  'windows/custom/goods-shipment/GoodsShipmentPreview.jsx',
+  'windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx',
+  'windows/custom/organization/OrgLogoField.jsx',
+  'windows/custom/payment-out/RelatedDocuments.jsx',
+  'windows/custom/price-list/PriceListProductPrices.jsx',
+  'windows/custom/product/ProductPriceBar.jsx',
+  'windows/custom/product/ProductSidebar.jsx',
+  'windows/custom/product/productImportDescriptor.js',
+  'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
+  'windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx',
+  'windows/custom/purchase-order/PurchaseOrderActions.jsx',
+  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
+  'windows/custom/sales-invoice/SalesInvoiceTopbar.jsx',
+  'windows/custom/shared/PaymentDetailSidebarBase.jsx',
+  'windows/custom/shared/PaymentHeaderTableBase.jsx',
+  'windows/custom/shared/ReturnWindowShell.jsx',
+  'windows/custom/shared/pdfUtils.js',
+  'windows/custom/shared/previewFileApi.js',
+  'windows/custom/shared/useConfirmWithCredit.js',
+  'windows/custom/shared/usePreviewAttachment.js',
+  'windows/custom/user/AssignRoleControl.jsx',
+  'windows/custom/warehouse/WarehouseCustomTable.jsx',
+  'windows/custom/warehouse/index.jsx',
+  'windows/custom/warehouse/useWarehouseStock.js',
+  'windows/spike-apps-host/AppIframeHost.jsx',
+]);
+
+/**
+ * Files that still gate on a client-held token (G2). Same rules as G1_DEBT.
+ * 32 of these also appear in G1_DEBT — the two smells travel together.
+ */
+const G2_DEBT = new Set([
+  'components/contract-ui/DataTable.jsx',
+  'components/contract-ui/DetailView.jsx',
+  'components/contract-ui/DocumentPrintDrawer.jsx',
+  'components/contract-ui/ImageField.jsx',
+  'components/contract-ui/ReportDrawer.jsx',
+  'components/contract-ui/SendDocumentModal.jsx',
+  'components/contract-ui/documentEmailSend.js',
+  'components/copilot/ocr/attachFile.js',
+  'components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js',
+  'components/copilot/ocr/listAttachments.js',
+  'components/copilot/ocr/strategies.js',
+  'components/copilot/ocr/useOcrExtraction.js',
+  'components/copilot/useCopilotChat.js',
+  'components/dashboard/TopClientsList.jsx',
+  'hooks/useDisplayLogic.js',
+  'hooks/useSurveyEngine.js',
+  'hooks/useWidget.js',
+  'lib/flags/bootstrap.js',
+  'lib/flags/useAccountIdentity.js',
+  'lib/observability/providers/mixpanel.js',
+  'lib/surveys/survey-config.js',
+  'pages/UpgradePage.jsx',
+  'windows/custom/assets/AssetsAmortizationPanel.jsx',
+  'windows/custom/chart-of-accounts/AccountTreeView.jsx',
+  'windows/custom/chart-of-accounts/NewAccountModal.jsx',
+  'windows/custom/contacts/BillingPreferencesForm.jsx',
+  'windows/custom/contacts/ContactsFinanceContext.jsx',
+  'windows/custom/contacts/ContactsFinancialPanel.jsx',
+  'windows/custom/contacts/contactsFkResolvers.js',
+  'windows/custom/fiscal-models/FmListPage.jsx',
+  'windows/custom/fiscal-models/FmOverlays.jsx',
+  'windows/custom/fiscal-models/fiscalModelsUtils.js',
+  'windows/custom/fiscal-models/models/303/FmModel303Page.jsx',
+  'windows/custom/organization/OrgLogoField.jsx',
+  'windows/custom/price-list/PriceListProductPrices.jsx',
+  'windows/custom/product/ProductPriceBar.jsx',
+  'windows/custom/product/ProductSidebar.jsx',
+  'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
+  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
+  'windows/custom/shared/PaymentDetailSidebarBase.jsx',
+  'windows/custom/shared/pdfUtils.js',
+  'windows/custom/shared/previewFileApi.js',
+  'windows/custom/shared/useConversionRate.js',
+  'windows/custom/shared/useDocumentCurrency.js',
+  'windows/custom/user/AssignRoleControl.jsx',
+  'windows/spike-apps-host/AppIframeHost.jsx',
+]);
+
+/**
+ * Files with at least one unsafe request that carries no write proof (G3):
+ * 49 files, 92 sites when the rule was written. Same ratchet rules as G1_DEBT.
+ */
+const G3_DEBT = new Set([
+  'components/attachments/useAttachments.js',
+  'components/contract-ui/CloneOrderModal.jsx',
+  'components/contract-ui/ConfirmDocumentModal.jsx',
+  'components/contract-ui/ConfirmInOutModal.jsx',
+  'components/contract-ui/CreateContactModal.jsx',
+  'components/contract-ui/DataTable.jsx',
+  'components/contract-ui/documentEmailSend.js',
+  'components/contract-ui/DocumentPrintDrawer.jsx',
+  'components/contract-ui/ImageField.jsx',
+  'components/contract-ui/ImportLinesModal.jsx',
+  'components/contract-ui/InlineCreateSelector.jsx',
+  'components/contract-ui/ReportDrawer.jsx',
+  'components/contract-ui/SendDocumentModal.jsx',
+  'components/copilot/ocr/attachFile.js',
+  'components/copilot/ocr/ingest/useBatch.js',
+  'components/copilot/ocr/listAttachments.js',
+  'components/copilot/ocr/ProductResolverPopup.jsx',
+  'components/import-return-lines/ImportReturnLinesModal.jsx',
+  'explorer/useDiscovery.js',
+  'hooks/useCashClose.js',
+  'hooks/useDisplayLogic.js',
+  'hooks/useEntity.js',
+  'pages/ReportViewerPage.jsx',
+  'windows/custom/amortization/AmortizationLinesTable.jsx',
+  'windows/custom/assets/AssetsAmortizationPanel.jsx',
+  'windows/custom/calendar/PeriodsExpandablePanel.jsx',
+  'windows/custom/chart-of-accounts/NewAccountModal.jsx',
+  'windows/custom/contacts/BillingPreferencesForm.jsx',
+  'windows/custom/contacts/ContactsFinancialPanel.jsx',
+  'windows/custom/contacts/ContactsTable.jsx',
+  'windows/custom/contacts/index.jsx',
+  'windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx',
+  'windows/custom/fiscal-config/FiscalConfigDebugPanel.jsx',
+  'windows/custom/fiscal-models/fiscalModelsUtils.js',
+  'windows/custom/fiscal-models/FmListPage.jsx',
+  'windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx',
+  'windows/custom/organization/OrgLogoField.jsx',
+  'windows/custom/price-list/PriceListProductPrices.jsx',
+  'windows/custom/product/ProductPriceBar.jsx',
+  'windows/custom/purchase-order/PurchaseOrderActions.jsx',
+  'windows/custom/return-material-receipt/ImportFromShipmentModal.jsx',
+  'windows/custom/return-to-vendor-shipment/ImportFromReceiptModal.jsx',
+  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
+  'windows/custom/shared/PaymentHeaderTableBase.jsx',
+  'windows/custom/shared/pdfUtils.js',
+  'windows/custom/shared/previewFileApi.js',
+  'windows/custom/shared/useConfirmWithCredit.js',
+  'windows/custom/warehouse/index.jsx',
+  'windows/spike-apps-host/AppIframeHost.jsx',
+]);
+
+const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;
 
 describe('ETP-4576 — cookie-session invariants across app-shell source', () => {
   it('finds source files to scan (guards against a silently empty sweep)', () => {
@@ -83,11 +345,21 @@ describe('ETP-4576 — cookie-session invariants across app-shell source', () =>
    * bearer scheme is eventually removed this assertion does not change; it just
    * stops having a second scheme to protect against.
    */
-  it('G1: no production file builds an Authorization or Bearer header', () => {
+  it('G1: no NEW file builds an Authorization or Bearer header', () => {
     const offenders = FILES
       .filter((f) => /\bAuthorization\b/.test(f.code) || /\bBearer\b/.test(f.code))
-      .map((f) => f.rel);
-    assert.deepEqual(offenders, [], `${offenders.length} file(s) still send a credential header:\n  ${offenders.join('\n  ')}`);
+      .map((f) => f.rel)
+      .sort();
+    const added = offenders.filter((f) => !G1_DEBT.has(f));
+    assert.deepEqual(added, [], `${added.length} NEW file(s) build a credential header. Use the shared builders (writeHeaders/jsonHeaders) instead:\n  ${added.join('\n  ')}`);
+  });
+
+  it('G1: the debt list is still accurate — remove what has been fixed', () => {
+    const offenders = new Set(FILES
+      .filter((f) => /\bAuthorization\b/.test(f.code) || /\bBearer\b/.test(f.code))
+      .map((f) => f.rel));
+    const fixed = [...G1_DEBT].filter((f) => !offenders.has(f)).sort();
+    assert.deepEqual(fixed, [], `${fixed.length} file(s) no longer build a credential header. Delete them from G1_DEBT so the ratchet holds:\n  ${fixed.join('\n  ')}`);
   });
 
   /**
@@ -99,9 +371,51 @@ describe('ETP-4576 — cookie-session invariants across app-shell source', () =>
    * the header builder already omits the credential when none is held. So the
    * gate is wrong in one scheme and pointless in the other.
    */
-  it('G2: no production file gates behaviour on a client-held token', () => {
-    const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;
-    const offenders = FILES.filter((f) => GATE.test(f.code)).map((f) => f.rel);
-    assert.deepEqual(offenders, [], `${offenders.length} file(s) still gate on a token:\n  ${offenders.join('\n  ')}`);
+  it('G2: no NEW file gates behaviour on a client-held token', () => {
+    const offenders = FILES.filter((f) => GATE.test(f.code)).map((f) => f.rel).sort();
+    const added = offenders.filter((f) => !G2_DEBT.has(f));
+    assert.deepEqual(added, [], `${added.length} NEW file(s) gate on a token. Under the cookie session that gate is permanently false and the request is never issued:\n  ${added.join('\n  ')}`);
+  });
+
+  it('G2: the debt list is still accurate — remove what has been fixed', () => {
+    const offenders = new Set(FILES.filter((f) => GATE.test(f.code)).map((f) => f.rel));
+    const fixed = [...G2_DEBT].filter((f) => !offenders.has(f)).sort();
+    assert.deepEqual(fixed, [], `${fixed.length} file(s) no longer gate on a token. Delete them from G2_DEBT:\n  ${fixed.join('\n  ')}`);
+  });
+
+  /**
+   * G3 — every unsafe request carries the proof the active scheme requires.
+   *
+   * This is the rule that would have caught today's real bugs, and did not exist:
+   * two DELETEs using the read builder, a PATCH with no proof, and two helpers the
+   * epic extracted out of DetailView that hand-built a bearer header. G1 does not
+   * cover them — a call site can avoid the word "Authorization" and still send no
+   * credential at all — and the unit suites mock the builders away.
+   *
+   * Under the cookie session a missing proof is a 403, not a silent empty screen,
+   * so this one fails loudly in production. Which is exactly why it must fail here
+   * first.
+   *
+   * Note on `credentials: 'include'`: deliberately NOT asserted. For same-origin
+   * requests fetch already sends cookies by default, so its absence is only a bug
+   * cross-origin — which is the dev setup (:3100 → :8080) and any split-origin
+   * deploy, but not same-origin production. Worth fixing, not worth a rule that
+   * would flag ~200 sites where nothing is broken.
+   */
+  it('G3: no NEW unsafe request omits the write proof', () => {
+    const offenders = FILES
+      .filter((f) => unsafeSitesWithoutProof(f.raw).length > 0)
+      .map((f) => f.rel)
+      .sort();
+    const added = offenders.filter((f) => !G3_DEBT.has(f));
+    assert.deepEqual(added, [], `${added.length} NEW file(s) issue an unsafe request with no write proof. Use writeHeaders() (or buildWriteHeaders() when the request also needs the locale):\n  ${added.join('\n  ')}`);
+  });
+
+  it('G3: the debt list is still accurate — remove what has been fixed', () => {
+    const offenders = new Set(FILES
+      .filter((f) => unsafeSitesWithoutProof(f.raw).length > 0)
+      .map((f) => f.rel));
+    const fixed = [...G3_DEBT].filter((f) => !offenders.has(f)).sort();
+    assert.deepEqual(fixed, [], `${fixed.length} file(s) now carry the proof everywhere. Delete them from G3_DEBT:\n  ${fixed.join('\n  ')}`);
   });
 });

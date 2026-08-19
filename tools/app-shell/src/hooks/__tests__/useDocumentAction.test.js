@@ -84,13 +84,19 @@ describe('useDocumentAction source', () => {
     assert.match(codeOnly, /credentials:\s*['"]include['"]/);
   });
 
-  it('sends the CSRF proof header on the POST', () => {
-    assert.match(codeOnly, new RegExp(CSRF_HEADER));
+  it('asks the write builder for the POST headers, and names no proof itself', () => {
+    // Inverted in ETP-4576. The hook used to read useAuth().csrfToken and paste the
+    // X-Go-CSRF header itself, which pinned it to the cookie scheme: with the
+    // preference off it would have sent a meaningless proof and no bearer token.
+    // Now it asks writeHeaders() and never learns what authenticates the request —
+    // so the literal header name must NOT appear here any more.
+    assert.match(codeOnly, /writeHeaders\(\s*\)/);
+    assert.doesNotMatch(codeOnly, new RegExp(CSRF_HEADER));
   });
 
-  it('reads the CSRF proof from the auth context', () => {
-    assert.match(codeOnly, /useAuth/);
-    assert.match(codeOnly, /csrfToken/);
+  it('reads no credential from the auth context', () => {
+    assert.doesNotMatch(codeOnly, /useAuth/);
+    assert.doesNotMatch(codeOnly, /csrfToken/);
   });
 
   it('no longer names a bare `token` identifier — the option is gone', () => {

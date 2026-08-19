@@ -49,8 +49,14 @@ describe('CreatableSearchSelect', () => {
     assert.match(src, /onChangeRef\.current\('', ''\)/);
   });
 
-  it('fetches options from selectorUrl with Authorization header', () => {
-    assert.match(src, /Authorization.*Bearer.*token/);
+  it('fetches options from selectorUrl through the shared read builder', () => {
+    // ETP-4576 — this asserted `Authorization: Bearer <token>` before the cookie
+    // migration. The component no longer decides how the request authenticates: it
+    // asks jsonHeaders() (a GET, so the read builder) and sends the session, which
+    // is what lets one preference switch the whole app between the bearer token and
+    // the `__Host-` cookie.
+    assert.match(src, /jsonHeaders\(\s*\)/);
+    assert.doesNotMatch(src, /Authorization/);
     assert.match(src, /buildUrlWithParams/);
   });
 
