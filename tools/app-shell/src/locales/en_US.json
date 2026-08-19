@@ -13655,7 +13655,7 @@
       "label": "Matched Purchase Invoices"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Client": {
       "label": "Client"
@@ -14625,7 +14625,7 @@
       "label": "Window Translation"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Role": {
       "label": "Role"
@@ -24201,7 +24201,7 @@
       "label": "Language"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Client": {
       "label": "Client"

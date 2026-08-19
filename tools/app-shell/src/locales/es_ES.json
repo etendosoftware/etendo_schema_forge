@@ -13847,7 +13847,7 @@
       "label": "Facturas cuadradas"
     },
     "User": {
-      "label": "Usuario"
+      "label": "Usuarios"
     },
     "Client": {
       "label": "Entidad"
@@ -14963,7 +14963,7 @@
       "label": "Traducción"
     },
     "User": {
-      "label": "Usuario"
+      "label": "Usuarios"
     },
     "Role": {
       "label": "Rol"
@@ -25022,7 +25022,7 @@
       "label": "Facturas cuadradas"
     },
     "User": {
-      "label": "Usuario"
+      "label": "Usuarios"
     },
     "Organization": {
       "label": "Organización"
