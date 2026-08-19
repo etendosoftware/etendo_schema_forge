@@ -454,8 +454,8 @@
         "tbaiReverseinvoicecode": {
           "visibility": "editable",
           "defaultExpr": "\"\"",
-          "displayLogic": "@tbaiConfigActive@!='N'",
-          "displayLogicJs": "record['tbaiConfigActive'] !== 'N'"
+          "displayLogic": "@tbaiConfigActive@='Y'",
+          "displayLogicJs": "record['tbaiConfigActive'] === 'Y'"
         },
         "aeatsiiDescription": {
           "visibility": "discarded"

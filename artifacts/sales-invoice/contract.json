@@ -1,8 +1,8 @@
 {
-  "version": "0.81.0",
+  "version": "0.82.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-19T14:24:08.307Z",
-  "checksum": "fc5f163a70e55dc8",
+  "updatedAt": "2026-08-19T14:57:04.194Z",
+  "checksum": "5961dc1f5f1641c1",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1049,9 +1049,9 @@
               "maxLength": 60
             },
             "displayLogic": {
-              "raw": "@tbaiConfigActive@!='N'",
+              "raw": "@tbaiConfigActive@='Y'",
               "evaluable": true,
-              "js": "record['tbaiConfigActive'] !== 'N'"
+              "js": "record['tbaiConfigActive'] === 'Y'"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",

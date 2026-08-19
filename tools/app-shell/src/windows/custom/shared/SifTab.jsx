@@ -322,8 +322,9 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
       if (hasError) {
         onChange?.('aeatsiiIsauthorization', !val); // revert on error
       } else {
-        for (const [field, value] of Object.entries(result.updates ?? {})) {
-          onChange?.(field, value);
+        for (const [field, entry] of Object.entries(result.updates ?? {})) {
+          // Backend update entries are { value: "..." } objects — unwrap like applyCalloutFieldUpdates.
+          onChange?.(field, typeof entry === 'object' && entry !== null ? entry.value : entry);
         }
       }
     } catch { /* network error — keep optimistic state */ }
