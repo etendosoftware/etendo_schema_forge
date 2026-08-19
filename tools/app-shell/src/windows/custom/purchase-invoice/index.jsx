@@ -17,8 +17,16 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 /* eslint-disable react/prop-types */
+
+// Mirrors artifacts/purchase-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
+// point 5, docs/decisions-reference.md). See sales-invoice/index.jsx's identical constant
+// for the full rationale: DetailView's `lineCellBadges` prop has no generate-frontend.js
+// wiring, so it's hand-added on the `<HeaderPage>` call like this window's other extras
+// (topbarRight, sidePanel, notesField below). Keep in sync with the decisions.json flag.
+const LINE_TAX_SIF_TRIGGER_ENABLED = true;
 
 const DOC_TYPE_LABELS = {
   'AP Invoice': 'Factura',
@@ -126,6 +134,10 @@ export default function PurchaseInvoiceWindow(props) {
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   const breadcrumb = 'Purchases / Purchase Invoice';
+  // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
+  const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
+  });
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
@@ -184,8 +196,10 @@ export default function PurchaseInvoiceWindow(props) {
           onAfterSave={true}
           refetchAfterSave={true}
           transformRecord={applyDocTypeLabels}
+          lineCellBadges={taxSifCellBadges}
           data-testid="HeaderPage__c20e53" />
         {contactPortal}
+        {taxSifModal}
       </CreateContactContext.Provider>
     );
   }

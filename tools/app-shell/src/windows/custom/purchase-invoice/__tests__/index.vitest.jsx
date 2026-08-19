@@ -35,10 +35,22 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 }));
 
 // ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
+// ETP-4888 — index.jsx now also reads selectedOrg from useAuth() (via
+// useTaxSifLineRowActions -> useFiscalConfig) to resolve the org's fiscal
+// profile for the tax-SIF line trigger. Mirrors the convention already used by
+// sales-invoice/__tests__/index.vitest.jsx and PurchaseInvoiceHeaderTable.vitest.jsx
+// / PurchaseInvoiceTopbar.vitest.jsx for the same @/auth/AuthContext.jsx +
+// useFiscalConfig.js pair.
 let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
   useWindowAccess: () => currentWindowAccessTier,
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
+let fiscalProfile = null;
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
 }));
 
 let rowDeleteConfig;
