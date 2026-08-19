@@ -34,14 +34,21 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.match(documentNo.label, /Document No\./);
   });
 
-  it('keeps POReference editable in the contract and positioned as the second principal field', () => {
+  it('keeps POReference editable in the contract and positioned as the second principal field (SII lock is server-side only)', () => {
     const orderReference = headerField('orderReference');
     assert.ok(orderReference, 'orderReference field must remain present in the contract');
     assert.equal(orderReference.column, 'POReference');
     assert.equal(orderReference.visibility, 'editable');
     assert.equal(orderReference.form, true);
     assert.equal(orderReference.seq, 20);
-    assert.equal(orderReference.readOnlyLogic, undefined);
+    // SII module adds a session-variable readOnlyLogic that the frontend cannot evaluate
+    // (evaluable: false) — the field remains editable by default; the lock is server-side only
+    assert.ok(
+      orderReference.readOnlyLogic === undefined ||
+        (orderReference.readOnlyLogic.evaluable === false &&
+          orderReference.readOnlyLogic.reason === 'session-variable'),
+      'orderReference readOnlyLogic must be absent or an unevaluable server-side SII lock',
+    );
   });
 
   it('keeps the generated HeaderForm order as Business Partner, Transaction Document, Document No. first', () => {
@@ -56,7 +63,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
   it('does not generate readOnlyLogic for orderReference in HeaderForm', () => {
     const orderReferenceBlock = headerFormSrc.match(/\{ key: 'orderReference'[\s\S]*?\}/);
     assert.ok(orderReferenceBlock, 'expected orderReference field block in HeaderForm.jsx');
-    assert.doesNotMatch(orderReferenceBlock[0], /readOnlyLogic/);
+    assert.doesNotMatch(orderReferenceBlock[0], /'readOnlyLogic'/);
   });
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {

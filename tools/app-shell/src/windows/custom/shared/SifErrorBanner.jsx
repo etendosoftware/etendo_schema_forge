@@ -56,14 +56,27 @@ export default function SifErrorBanner({ data }) {
   return (
     <div className="mt-4 space-y-3">
       {hasSiiError && (
-        <ErrorBlock title={`SII — ${siiStatusLabel(ui, data.aeatsiiEstado)}`}>
-          <ErrorRow label={ui('sifErrorBanner.errorCode')} value={data.aeatsiiErrorCode} />
-          <ErrorRow label={ui('sifErrorBanner.errorDetail')} value={data.aeatsiiErrorMsg} />
+        <ErrorBlock
+          title={`SII — ${siiStatusLabel(ui, data.aeatsiiEstado)}`}
+          data-testid="ErrorBlock__d24a25">
+          <ErrorRow
+            label={ui('sifErrorBanner.errorCode')}
+            value={data.aeatsiiErrorCode}
+            data-testid="ErrorRow__d24a25" />
+          <ErrorRow
+            label={ui('sifErrorBanner.errorDetail')}
+            value={data.aeatsiiErrorMsg}
+            data-testid="ErrorRow__d24a25" />
         </ErrorBlock>
       )}
       {hasVerifactuError && (
-        <ErrorBlock title={`VERI*FACTU — ${verifactuStatusLabel(ui, data.etvfacInvoiceStatus)}`}>
-          <ErrorRow label={ui('sifErrorBanner.errorDetail')} value={data.etvfacIssueDescription} />
+        <ErrorBlock
+          title={`VERI*FACTU — ${verifactuStatusLabel(ui, data.etvfacInvoiceStatus)}`}
+          data-testid="ErrorBlock__d24a25">
+          <ErrorRow
+            label={ui('sifErrorBanner.errorDetail')}
+            value={data.etvfacIssueDescription}
+            data-testid="ErrorRow__d24a25" />
         </ErrorBlock>
       )}
     </div>

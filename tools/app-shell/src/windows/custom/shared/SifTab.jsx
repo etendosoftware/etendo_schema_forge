@@ -276,6 +276,24 @@ function shouldShowNoRecipientIdArt61d(invType) {
   return invType === 'R5' || invType === 'F2';
 }
 
+/**
+ * Processes SII authorization callout messages (toasts) and returns true if any
+ * ERROR-type message was found (signals that the optimistic update must be reverted).
+ * Extracted from handleAuthorizationToggle to reduce its cognitive complexity (S3776).
+ */
+function applyCalloutMessages(messages) {
+  let hasError = false;
+  for (const msg of messages) {
+    const text = msg.text || msg.message || '';
+    if (!text) continue;
+    const type = (msg.type || '').toUpperCase();
+    if (type === 'ERROR') { toast.error(text); hasError = true; }
+    else if (type === 'WARNING') toast.warning(text);
+    else toast.info(text);
+  }
+  return hasError;
+}
+
 // Classic displayLogic: `@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R1' | ... | @EM_Etvfac_Inv_Type@='R5')`
 // ETP-4783: the 'S' (substitute) option was removed — only 'I' (by difference) remains.
 function shouldShowReverseInvType(showVerifactu, invType) {
@@ -326,21 +344,13 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
       });
       if (!res.ok) return;
       const result = await res.json();
-      let hasError = false;
-      for (const msg of (result.messages ?? [])) {
-        const text = msg.text || msg.message || '';
-        if (!text) continue;
-        const type = (msg.type || '').toUpperCase();
-        if (type === 'ERROR') { toast.error(text); hasError = true; }
-        else if (type === 'WARNING') toast.warning(text);
-        else toast.info(text);
-      }
+      const hasError = applyCalloutMessages(result.messages ?? []);
       if (hasError) {
         onChange?.('aeatsiiIsauthorization', !val); // revert on error
       } else {
         for (const [field, entry] of Object.entries(result.updates ?? {})) {
           // Backend update entries are { value: "..." } objects — unwrap like applyCalloutFieldUpdates.
-          onChange?.(field, typeof entry === 'object' && entry !== null ? entry.value : entry);
+          onChange?.(field, entry?.value ?? entry);
         }
       }
     } catch { /* network error — keep optimistic state */ }
