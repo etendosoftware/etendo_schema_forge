@@ -697,11 +697,10 @@ const SIDEBAR_SECTIONS = [
 // collapsible accordion below. Reports without one keep the legacy flat
 // primary/dimensions/options layout untouched — migrate them one at a time
 // by adding a `sections` array to their report-contract.json (ETP-4898).
-function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds }) {
+function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds, errors, setErrors }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [displayValues, setDisplayValues] = useState({});
-  const [errors, setErrors] = useState({});
   const [popup, setPopup] = useState(null); // { name, selector, label } for popup-single
   const useAccordion = Array.isArray(report.sections) && report.sections.length > 0;
   // Independent open/closed state per section — several can be expanded at once,
@@ -720,16 +719,6 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   const handleChange = (name, value) => {
     if (errors[name] && value) setErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
     onChange(name, value);
-  };
-
-  const handleSubmit = () => {
-    const newErrors = {};
-    for (const p of report.parameters || []) {
-      if (p.hidden) continue;
-      if (p.required && !params[p.name]) newErrors[p.name] = true;
-    }
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) onSubmit();
   };
 
   const grouped = {};
@@ -1031,7 +1020,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           {ui('resetFilters')}
         </button>
         <button
-          onClick={handleSubmit}
+          onClick={onSubmit}
           disabled={loading}
           className="flex-1 h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
@@ -1159,6 +1148,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
         const now = new Date();
         defaults[p.name] = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      } else if (p.default === '__FIRST_OF_YEAR__') {
+        defaults[p.name] = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
       } else if (p.default !== undefined && p.default !== null && p.default !== false) {
         defaults[p.name] = String(p.default);
       } else {
@@ -1172,6 +1163,22 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   }, [report, selectedOrgId]);
 
   const [params, setParams] = useState(getDefaultParams);
+  // Lifted from ReportSidebar (ETP-4899): the top bar's PDF/Excel/CSV buttons call
+  // renderReport() directly, bypassing ReportSidebar's own "Generate Report" button —
+  // so validation has to live here too, shared by both entry points, or the top bar
+  // buttons silently send an incomplete request straight to the backend (which then
+  // fails server-side, e.g. NEO 400 "dateFrom and dateTo are required", instead of the
+  // sidebar showing its usual red "Required" boxes).
+  const [errors, setErrors] = useState({});
+  const validateRequired = useCallback(() => {
+    const newErrors = {};
+    for (const p of report.parameters || []) {
+      if (p.hidden) continue;
+      if (p.required && !params[p.name]) newErrors[p.name] = true;
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [report, params]);
 
   useEffect(() => {
     if (!(report.parameters || []).some(p => p.name === 'orgId')) return;
@@ -1184,16 +1191,28 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
 
   // Auto-load defaults for params marked with autoDefault: true.
   // Params with dependsOn are loaded in a second pass, after their dependency is resolved.
-  useEffect(() => {
+  // Extracted so "Limpiar filtros" can re-run it too — getDefaultParams() has no literal
+  // default for these (that's the whole point of autoDefault), so a plain reset blanked
+  // them out (e.g. Moneda) instead of restoring the auto-loaded value.
+  const loadAutoDefaults = useCallback(() => {
     const autoParams = (report.parameters || []).filter(p => p.autoDefault && p.selector && p.name !== 'orgId');
     if (!autoParams.length) return;
     Promise.all(
-      autoParams.map(p =>
-        fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+      autoParams.map(p => {
+        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency
+        // (ad_org.c_currency_id, same field /organization shows as "Moneda"), not just
+        // the client's base currency — a multi-org client can have orgs in different
+        // currencies. report-api.js's 'currency' selector already prefers the org's
+        // currency in its ORDER BY when selectedOrgId is passed; without it, it falls
+        // back to the client's base currency.
+        const orgParam = (p.selector === 'currency' && selectedOrgId)
+          ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
+          : '';
+        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
           .then(r => r.json())
           .then(data => { const rows = Array.isArray(data) ? data : (data.items || []); return rows[0] ? { name: p.name, id: rows[0].id, display: rows[0].name } : null; })
-          .catch(() => null)
-      )
+          .catch(() => null);
+      })
     ).then(results => {
       const updates = {};
       for (const r of results) {
@@ -1203,7 +1222,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       }
       if (Object.keys(updates).length) setParams(prev => ({ ...prev, ...updates }));
     });
-  }, [report]);
+  }, [report, selectedOrgId]);
+
+  useEffect(() => { loadAutoDefaults(); }, [loadAutoDefaults]);
 
   const writeToIframe = (html) => {
     const iframe = iframeRef.current;
@@ -1269,6 +1290,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const handleReset = () => {
     setParams(getDefaultParams());
     setResetKey(k => k + 1);
+    loadAutoDefaults();
   };
 
   const { toggleFavorite, isFavorite } = useFavorites();
@@ -1309,7 +1331,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             {DOWNLOAD_FORMATS.map(fmt => {
               const Icon = fmt.icon;
               return (
-                <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
+                <button key={fmt.id} onClick={() => { if (validateRequired()) renderReport(fmt.id); }} disabled={loading}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
                   <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
                 </button>
@@ -1331,13 +1353,15 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               report={report}
               params={params}
               onChange={(name, value) => setParams(prev => ({ ...prev, [name]: value }))}
-              onSubmit={() => renderReport('html')}
+              onSubmit={() => { if (validateRequired()) renderReport('html'); }}
               onReset={handleReset}
               loading={loading}
               resetKey={resetKey}
               token={token}
               selectedOrgId={selectedOrgId}
               roleOrgIds={roleOrgIds}
+              errors={errors}
+              setErrors={setErrors}
               data-testid="ReportSidebar__3c998a" />
           </div>
 

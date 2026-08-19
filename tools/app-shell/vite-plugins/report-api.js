@@ -638,9 +638,35 @@ export default function reportApiPlugin() {
                   select: `SELECT y.c_year_id AS id, y.year || ' (' || c.name || ')' AS name, y.year || ' (' || c.name || ')' AS label`
                 },
                 'currency': {
-                  fromWhere: `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
+                  // Unlike every other selector above, this used to skip byClient(...) entirely
+                  // and return the full ~150-row ISO currency table. Scoped down to mirror
+                  // /sales-order's CurrencyRatePicker (client's base currency + anything with an
+                  // active C_Conversion_Rate row for this client, either direction) — without its
+                  // date-validity check, since a report has a dateFrom/dateTo range, not one single
+                  // document date to convert against.
+                  //
+                  // The DEFAULT/first-choice currency prefers the ACTIVE ORGANIZATION's own
+                  // currency (ad_org.c_currency_id — the same field /organization's "Moneda" shows),
+                  // not just the client's base currency: a multi-org client can have organizations
+                  // in different currencies. Falls back to the client's base currency when no
+                  // selectedOrgId is passed (matches every other org-scoped selector's fallback).
+                  fromWhere: clientId
+                    ? `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)
+                        AND (
+                          c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}')
+                          ${selectedOrgId ? `OR c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}')` : ''}
+                          OR EXISTS (
+                            SELECT 1 FROM c_conversion_rate cr
+                             WHERE cr.isactive = 'Y'
+                               AND cr.ad_client_id IN ('${clientId}', '0')
+                               AND (cr.c_currency_id = c_currency.c_currency_id OR cr.c_currency_id_to = c_currency.c_currency_id)
+                          )
+                        )`
+                    : `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
                   orderBy: clientId
-                    ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`
+                    ? (selectedOrgId
+                        ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}') THEN 0 ELSE 1 END), iso_code`
+                        : `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`)
                     : 'ORDER BY iso_code',
                   select: `SELECT c_currency_id AS id, iso_code AS name, iso_code || ' - ' || description AS label`
                 },
