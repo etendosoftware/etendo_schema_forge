@@ -10,6 +10,7 @@ import {
   VERIFACTU_INV_TYPE_OPTIONS,
   SII_MOTIVO_RECTIF_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
+import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
 
 function Field({ label, htmlFor, children }) {
   return (
@@ -119,21 +120,25 @@ function VerifactuBadge({ status, sent, ui, size = 'md' }) {
 const RAIL_META = {
   sii: { labelKey: 'sifDataTabs.tab.sii', subtitleKey: 'sifDataTabs.rail.sii.subtitle' },
   verifactu: { labelKey: 'sifDataTabs.tab.verifactu', subtitleKey: 'sifDataTabs.rail.verifactu.subtitle' },
+  tbai: { labelKey: 'sifDataTabs.tab.tbai', subtitleKey: 'sifDataTabs.rail.tbai.subtitle' },
 };
 
 const PANEL_META = {
   sii: { titleKey: 'sifDataTabs.panel.sii.title', subtitleKey: 'sifDataTabs.panel.sii.subtitle' },
   verifactu: { titleKey: 'sifDataTabs.panel.verifactu.title', subtitleKey: 'sifDataTabs.panel.verifactu.subtitle' },
+  tbai: { titleKey: 'sifDataTabs.panel.tbai.title', subtitleKey: 'sifDataTabs.panel.tbai.subtitle' },
 };
 
-function resolveDefaultTab(showSii) {
+function resolveDefaultTab(showSii, showVerifactu) {
   if (showSii) return 'sii';
-  return 'verifactu';
+  if (showVerifactu) return 'verifactu';
+  return 'tbai';
 }
 
-function resolveEffectiveTab(activeTab, showSii, showVerifactu, defaultTab) {
+function resolveEffectiveTab(activeTab, showSii, showVerifactu, showTbai, defaultTab) {
   if (activeTab === 'sii' && showSii) return 'sii';
   if (activeTab === 'verifactu' && showVerifactu) return 'verifactu';
+  if (activeTab === 'tbai' && showTbai) return 'tbai';
   return defaultTab;
 }
 
@@ -279,6 +284,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     siiTypeOptions,
     showSii,
     showVerifactu,
+    showTbai,
     dateReadOnly,
     siiFieldReadOnly,
     isDraft,
@@ -377,23 +383,24 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     }
   }, [data?.exemptionCauseWarning, ui]);
 
-  const defaultTab = resolveDefaultTab(showSii);
+  const defaultTab = resolveDefaultTab(showSii, showVerifactu);
   const [activeTab, setActiveTab] = useState(defaultTab);
   // Read live (possibly unsaved) pending value so dependent Verifactu fields react
   // immediately as the user picks a Tipo de Factura — `data` already reflects the
   // pending edit (shared `editing` state) as soon as onChange fires.
   const vfInvType = getVal('etvfacInvType');
 
-  // Report up to DetailView whether the SIF tab has anything to show at all — a fiscal
-  // configuration that is TBAI-only (no SII, no Verifactu) has nothing for this tab to
-  // display, so the tab itself should disappear from the tab bar instead of showing an
-  // empty placeholder. `onVisibilityChange` is optional: this must be a no-op-safe call
-  // for any consumer that doesn't pass it.
+  // Report up to DetailView whether the SIF tab has anything to show at all. ETP-4888
+  // reintroduces a minimal TBAI rail (Adjuntos only — see the "tbai" panel below), so a
+  // TBAI-only fiscal configuration is no longer empty either; only a configuration with
+  // NONE of the 3 targets active has nothing for this tab to display, and the tab itself
+  // disappears from the tab bar instead of showing an empty placeholder. `onVisibilityChange`
+  // is optional: this must be a no-op-safe call for any consumer that doesn't pass it.
   useEffect(() => {
-    onVisibilityChange?.(showSii || showVerifactu);
-  }, [showSii, showVerifactu, onVisibilityChange]);
+    onVisibilityChange?.(showSii || showVerifactu || showTbai);
+  }, [showSii, showVerifactu, showTbai, onVisibilityChange]);
 
-  if (!showSii && !showVerifactu) {
+  if (!showSii && !showVerifactu && !showTbai) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted-foreground p-8">
         {ui('sifDataTabs.sectionTitle')}
@@ -401,11 +408,12 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     );
   }
 
-  const effectiveTab = resolveEffectiveTab(activeTab, showSii, showVerifactu, defaultTab);
+  const effectiveTab = resolveEffectiveTab(activeTab, showSii, showVerifactu, showTbai, defaultTab);
 
   const railItems = [
     showSii && { key: 'sii', ...RAIL_META.sii },
     showVerifactu && { key: 'verifactu', ...RAIL_META.verifactu },
+    showTbai && { key: 'tbai', ...RAIL_META.tbai },
   ].filter(Boolean);
 
   return (
@@ -550,6 +558,24 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   data-testid="CheckboxField__b99c8b" />
               </Field>
             )}
+            <ReadOnlyField
+              id="sif-siiYear"
+              labelKey="sifDataTabs.field.siiYear"
+              value={data?.aeatsiiEjercicio}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-siiPeriod"
+              labelKey="sifDataTabs.field.siiPeriod"
+              value={data?.aeatsiiPeriodo}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <SifAttachmentsSection
+              tableName="aeatsii_facturas"
+              recordId={data?.aeatsiiFacturaId}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              data-testid="SifAttachmentsSection__sii" />
           </Panel>
         )}
 
@@ -602,12 +628,77 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
-            {/* etvfacSimpinvart7273 ("Factura Simplificada Art 7.2 y 7.3") and
-                etvfacInvNoIDArt61d ("Sin ID Destinatario Art61d") are intentionally
-                hidden in GO — confirmed with PM (ETP-4783). */}
-            {/* ETP-4783: etvfacReverseinvtype is always 'I' (por diferencias) — the only
-                supported value. It is auto-set by useSifFieldPatcher when etvfacInvType
-                is an R-type, so the field is intentionally hidden from the UI. */}
+            {shouldShowSimplifiedArt7273(vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.simplifiedInvoiceArt7273')}
+                htmlFor="sif-vfSimp7273"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-vfSimp7273"
+                  checked={Boolean(getVal('etvfacSimpinvart7273'))}
+                  disabled={dateReadOnly}
+                  onToggle={val => onChange?.('etvfacSimpinvart7273', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
+            {shouldShowNoRecipientIdArt61d(vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.noRecipientIdArt61d')}
+                htmlFor="sif-vfNoId61d"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-vfNoId61d"
+                  checked={Boolean(getVal('etvfacInvNoIDArt61d'))}
+                  disabled={dateReadOnly}
+                  onToggle={val => onChange?.('etvfacInvNoIDArt61d', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
+            {shouldShowReverseInvType(showVerifactu, vfInvType) && (
+              <Field
+                label={ui('sifDataTabs.field.correctiveInvoiceType')}
+                htmlFor="sif-vfReverseType"
+                data-testid="Field__b99c8b">
+                <Select
+                  value={getVal('etvfacReverseinvtype') || undefined}
+                  onValueChange={val => onChange?.('etvfacReverseinvtype', val)}
+                  disabled={dateReadOnly}
+                  data-testid="Select__b99c8b">
+                  <SelectTrigger id="sif-vfReverseType" data-testid="SelectTrigger__b99c8b">
+                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__b99c8b">
+                    {VERIFACTU_REVERSE_TYPE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            <SifAttachmentsSection
+              tableName="etvfac_c_invoice_verifactu"
+              recordId={data?.invoiceVerifactuId}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              data-testid="SifAttachmentsSection__verifactu" />
+          </Panel>
+        )}
+
+        {effectiveTab === 'tbai' && showTbai && (
+          <Panel
+            titleKey={PANEL_META.tbai.titleKey}
+            subtitleKey={PANEL_META.tbai.subtitleKey}
+            ui={ui}
+            data-testid="Panel__b99c8b">
+            {/* ETP-4888: minimal TBAI rail — Adjuntos only. No date/type/checkbox fields here
+                (that per-invoice field panel was intentionally removed in ETP-4401, since TBAI
+                chaining sequences are now generated automatically per fiscal configuration). */}
+            <SifAttachmentsSection
+              tableName="tbai_syncinvoice"
+              recordId={data?.tbaiSyncInvoiceId}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              data-testid="SifAttachmentsSection__tbai" />
           </Panel>
         )}
       </div>

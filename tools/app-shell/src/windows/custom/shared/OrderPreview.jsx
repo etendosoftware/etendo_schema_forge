@@ -92,6 +92,11 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const modalRef = useRef(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-4789 (reject-cycle fix): GenericPreviewModal's ManagedLeftPanel resolves
+  // the cached attachment (GET /preview-file) much faster than the jsreport
+  // regeneration below. Capturing it here lets the Download button gate on
+  // whichever source resolves first, instead of always waiting on the slow one.
+  const [cachedAttachment, setCachedAttachment] = useState(null);
 
   const isSalesOrder = specName === 'sales-order';
   const isDraft = order?.documentStatus === 'DR';
@@ -143,8 +148,8 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // ── Attachment config ───────────────────────────────────────────────────────
 
   const attachmentConfig = !isDraft
-    ? { storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, documentId: order.id, specName, token, apiBaseUrl }
-    : { storeCondition: false, documentId: order.id, specName, token, apiBaseUrl };
+    ? { storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, documentId: order.id, specName, token, apiBaseUrl, onFileChange: setCachedAttachment }
+    : { storeCondition: false, documentId: order.id, specName, token, apiBaseUrl, onFileChange: setCachedAttachment };
 
   // ── Email modal helpers ─────────────────────────────────────────────────────
 
@@ -177,7 +182,19 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     },
   ];
 
+  // Prefer the cached attachment when available — it is already fetched and
+  // resolves far ahead of the jsreport regeneration, closing the perceptible
+  // gap between the preview panel rendering and the Download button enabling.
+  const hasPdf = !!pdfUrl || !!cachedAttachment;
+
   const handleDownloadPdf = () => {
+    if (cachedAttachment) {
+      const a = document.createElement('a');
+      a.href = cachedAttachment.objectUrl;
+      a.download = cachedAttachment.fileName || `${order.documentNo || 'order'}.pdf`;
+      a.click();
+      return;
+    }
     if (!pdfBlob) return;
     const a = document.createElement('a');
     a.href = pdfUrl;
@@ -194,7 +211,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
-      hasPdf={!!pdfUrl}
+      hasPdf={hasPdf}
       sendLabel={ui('orderPreviewSend')}
       downloadLabel={ui('orderPreviewDownloadPdf')}
       editLabel={ui('orderPreviewEdit')}

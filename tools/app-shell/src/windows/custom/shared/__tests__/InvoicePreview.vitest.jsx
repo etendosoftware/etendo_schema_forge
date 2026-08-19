@@ -17,7 +17,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('../GenericPreviewModal.jsx', () => ({
-  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose }) => (
+  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose, attachmentConfig }) => (
     <div data-testid="generic-preview-modal">
       <span data-testid="modal-title">{title}</span>
       {subtitle && <span data-testid="modal-subtitle">{subtitle}</span>}
@@ -32,6 +32,18 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
       <button data-testid="close-btn" onClick={onClose}>
         Close
       </button>
+      {/* ETP-4789: simulates ManagedLeftPanel invoking attachmentConfig.onFileChange
+          once the cached attachment (GET /preview-file) resolves — ahead of the
+          jsreport regeneration behind p.pdfUrl. Mirrors the same mechanism already
+          used in GoodsReceiptPreview.vitest.jsx. */}
+      {attachmentConfig?.onFileChange && (
+        <button
+          data-testid="simulate-file-change"
+          onClick={() => attachmentConfig.onFileChange({ objectUrl: 'blob:cached-url', fileName: 'cached.pdf' })}
+        >
+          SimulateFileChange
+        </button>
+      )}
     </div>
   )),
 }));
@@ -41,7 +53,11 @@ vi.mock('../PdfViewer.jsx', () => ({
 }));
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({
-  default: () => <div data-testid="new-payment-entry-modal" />,
+  default: ({ onSaved }) => (
+    <div data-testid="new-payment-entry-modal">
+      <button type="button" onClick={onSaved}>save payment</button>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
@@ -109,7 +125,7 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getLatestInstallmentDueDate: () => null,
 }));
 
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import InvoicePreview from '../InvoicePreview.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
@@ -489,6 +505,126 @@ describe('InvoicePreview', () => {
       renderHidden: () => renderSalesInvoiceWithPdf('DR'),
       renderShown: () => renderSalesInvoiceWithPdf('CO'),
       findElement: () => screen.getByTestId('Download__cf88e6').closest('button'),
+    });
+  });
+
+  // ── ETP-4832: grid does not refresh after confirming a payment/collection ──
+  // from the side panel. `NewPaymentEntryModal`'s onSaved handler only called
+  // fetchPayments() (which is why the panel's own PaymentsCard correctly shows
+  // Pagada/Cobrada), but never refetchInvoice() — the only function that
+  // dispatches the `${specName}:invoice-updated` event / calls onInvoiceUpdated,
+  // which is what tells the hosting list view to refresh the grid row. Mirrors
+  // the already-correct SifSendingModal.onAfterSend pattern in this same file.
+  describe('payment modal onSaved refetches the invoice (ETP-4832)', () => {
+    it('calls refetchInvoice (not just fetchPayments) when a payment/collection is saved', async () => {
+      const refetchInvoice = vi.fn().mockResolvedValue(undefined);
+      const fetchPayments = vi.fn();
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        showPaymentModal: true,
+        canAddPayment: true,
+        refetchInvoice,
+        fetchPayments,
+      }));
+
+      renderInvoicePreview();
+      await act(async () => {
+        fireEvent.click(screen.getByText('save payment'));
+      });
+
+      expect(refetchInvoice).toHaveBeenCalled();
+      expect(fetchPayments).toHaveBeenCalled();
+    });
+  });
+
+  // ── ETP-4789 (reject-cycle fix): Download gates on the cached attachment too ──
+  // The cached attachment (GenericPreviewModal's ManagedLeftPanel, GET /preview-file)
+  // resolves ahead of the slow jsreport regeneration behind p.pdfUrl (useInvoicePreview).
+  // hasPdf must become true as soon as attachmentConfig.onFileChange fires, even while
+  // p.pdfUrl is still null — closing the perceptible gap QA reported between the
+  // preview panel showing the PDF and the Download button enabling. The Download
+  // button only renders for sales invoices at all (isSalesInvoice), so these cases
+  // set that flag; the isSendable gate (specName !== 'purchase-invoice' &&
+  // documentStatus === 'CO') is unchanged and must still hold even when hasPdf is
+  // driven by the cache instead of p.pdfUrl.
+  describe('Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)', () => {
+    function renderSalesInvoice(status, { pdfUrl = null } = {}) {
+      const invoice = { ...defaultInvoice, documentStatus: status };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: invoice,
+        isSalesInvoice: true,
+        isDraft: status === 'DR',
+        pdfUrl,
+        pdfBlob: pdfUrl ? new Blob(['%PDF'], { type: 'application/pdf' }) : null,
+      }));
+      return renderInvoicePreview({ specName: 'sales-invoice', invoice });
+    }
+
+    function downloadButton() {
+      return screen.getByTestId('Download__cf88e6').closest('button');
+    }
+
+    it('enables the download button once the cached attachment resolves, even while p.pdfUrl is still null', () => {
+      renderSalesInvoice('CO');
+      expect(downloadButton()).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(downloadButton()).not.toBeDisabled();
+    });
+
+    it('downloads via cachedAttachment.objectUrl/fileName, without calling the (still-null-pdfUrl) p.handleDownloadPdf', () => {
+      renderSalesInvoice('CO');
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      // Spy AFTER render/state-update — mocking document.createElement globally
+      // before React finishes creating real DOM nodes breaks reconciliation.
+      const clickMock = vi.fn();
+      const fakeAnchor = { href: '', download: '', click: clickMock };
+      const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+      const { handleDownloadPdf: parentHandleDownloadPdf } = useInvoicePreview.mock.results.at(-1).value;
+
+      try {
+        fireEvent.click(downloadButton());
+        expect(fakeAnchor.href).toBe('blob:cached-url');
+        expect(fakeAnchor.download).toBe('cached.pdf');
+        expect(clickMock).toHaveBeenCalledTimes(1);
+        expect(parentHandleDownloadPdf).not.toHaveBeenCalled();
+      } finally {
+        createElementSpy.mockRestore();
+      }
+    });
+
+    it('keeps the download button disabled when documentStatus is DR, even with a cached attachment present (status gate is not bypassed by cache)', () => {
+      renderSalesInvoice('DR');
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(downloadButton()).toBeDisabled();
+    });
+
+    it('keeps the download button disabled when hasPdf is true via cache but the invoice is not confirmed (documentStatus !== CO)', () => {
+      // Any non-DR, non-CO status also leaves isSendable false — the gate is not
+      // limited to the draft case; confirmation (CO) is what it actually requires.
+      renderSalesInvoice('AE');
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(downloadButton()).toBeDisabled();
+    });
+
+    it('never renders a Download button for purchase-invoice, even with a cached attachment — storeCondition is always true there, but the button itself is gated on isSalesInvoice, not on the attachment', () => {
+      const invoice = { ...defaultInvoice, documentStatus: 'DR' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: invoice,
+        isSalesInvoice: false,
+        isDraft: true,
+        pdfUrl: null,
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice });
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(screen.queryByTestId('Download__cf88e6')).not.toBeInTheDocument();
     });
   });
 });
