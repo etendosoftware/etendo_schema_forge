@@ -56,18 +56,45 @@ const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: tr
 const PIS_AMBER_TEXT = 'var(--status-warning-fg)';
 const PIS_ALERT_BG = 'var(--status-warning-bg)';
 const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
-// 'initiated' is a real Salt Edge PIS status (seen for "connect"-flow payments) that isn't in the
-// PSD2_PIS_PAYMENT ref-list's documented set (requested/authorizing/authorized/processing/executed/
-// settled/failed) but does get returned/persisted — without it here, a payment sitting in that
-// state gets misread as a terminal failure and the modal wrongly shows "transfer failed".
-const PIS_NON_TERMINAL_STATUSES = ['requested', 'initiated', 'authorizing', 'authorized', 'processing'];
+// The authoritative status vocabulary is the AD ref-list "PIS Payment Status"
+// (AD_REFERENCE_ID D5483E7D91134499B42BBD963BC2F9CC, Bank Integration module), which has exactly
+// these 8 values. An earlier version of this list was transcribed wrong: it carried an invented
+// 'processing' value that is not in the ref-list, and omitted the real 'initiated_info_required'.
+// Confirmed live against Salt Edge — a payment landed in 'initiated_info_required', fell through
+// to the terminal branch and was reported to the user as a failed transfer while it was still in
+// progress (ETP-4895).
+//
+// Classification is deliberately explicit on success and failure, and treats EVERYTHING else —
+// including a status this list does not know yet — as "still running". Defaulting an unknown
+// status to failure is what caused the bug; defaulting it to "keep polling" is self-healing if
+// Salt Edge ever adds a value.
+const PIS_SUCCESS_STATUSES = ['executed', 'settled'];
+const PIS_FAILURE_STATUSES = ['failed'];
 const PIS_STATUS_KEYS = {
   requested: 'cpPisStatusRequested',
+  initiated: 'cpPisStatusRequested',
+  initiated_info_required: 'cpPisStatusInfoRequired',
   authorizing: 'cpPisStatusAuthorizing',
   authorized: 'cpPisStatusAuthorized',
-  processing: 'cpPisStatusProcessing',
   executed: 'cpPisStatusExecuted',
+  settled: 'cpPisStatusExecuted',
 };
+// Stop polling after ~3 minutes. Reaching this is NOT an error: the payment may still complete at
+// the bank, and the PSD2 background job keeps refreshing it, so the modal closes with an
+// "in progress" notice rather than the failure message.
+const PIS_MAX_POLL_MS = 180000;
+const PIS_POLL_INTERVAL_MS = 3000;
+// Consecutive transport failures tolerated before telling the user we lost contact. A network or
+// HTTP blip is NOT a bank-side failure — the previous code synthesized a literal 'failed' status
+// on any fetch error, which was indistinguishable from a real rejection.
+const PIS_MAX_TRANSPORT_ERRORS = 5;
+
+/** Classifies a Salt Edge PIS status into the only three outcomes the modal reacts to. */
+function pisOutcome(status) {
+  if (PIS_SUCCESS_STATUSES.includes(status)) return 'success';
+  if (PIS_FAILURE_STATUSES.includes(status)) return 'failure';
+  return 'pending';
+}
 // Template search-keys (match the AD "Template List for Bank Payments" ref-list values).
 const PIS_TEMPLATE_SEPA = 'SEPA';
 const PIS_TEMPLATE_DOMESTIC = 'DOMESTIC';
@@ -217,9 +244,26 @@ function openPisPopup(url) {
   return window.open(url, 'saltEdgePisWidget', features);
 }
 
-/** i18n key for a PIS payment status; any terminal status other than "executed" reads as a failure. */
+/**
+ * i18n key for a PIS payment status. Only the documented failure status reads as a failure — an
+ * unmapped/unknown value is shown with the neutral "in progress" label, because the poll treats it
+ * as still-running (see pisOutcome). Previously anything unmapped fell back to the failure label,
+ * so a perfectly healthy 'initiated_info_required' told the user the authorization had failed.
+ */
 function pisStatusKey(status) {
-  return PIS_STATUS_KEYS[status] || 'cpPisStatusFailed';
+  if (PIS_STATUS_KEYS[status]) return PIS_STATUS_KEYS[status];
+  return PIS_FAILURE_STATUSES.includes(status) ? 'cpPisStatusFailed' : 'cpPisStatusRequested';
+}
+
+/**
+ * Text shown in the waiting footer: the closed-window warning wins, then a soft "lost contact"
+ * notice after repeated transport errors, otherwise the current status label. The lost-contact
+ * notice deliberately does not claim the transfer failed — we simply cannot reach our own backend.
+ */
+function pisWaitingLabel(pisPolling, pisWindowClosed, ui) {
+  if (pisWindowClosed) return ui('cpPisWindowClosed');
+  if ((pisPolling.transportErrors || 0) >= PIS_MAX_TRANSPORT_ERRORS) return ui('cpPisConnectionLost');
+  return ui(pisStatusKey(pisPolling.status));
 }
 /** True when `account` supports `methodId` (or the account's methods are unknown/legacy). */
 function accountSupportsMethod(account, methodId) {
@@ -662,7 +706,7 @@ function PaymentModalFooter({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
-            {pisWindowClosed ? ui('cpPisWindowClosed') : ui(pisStatusKey(pisPolling.status))}
+            {pisWaitingLabel(pisPolling, pisWindowClosed, ui)}
           </span>
           {pisWindowClosed && (
             <button
@@ -1064,18 +1108,27 @@ export default function NewPaymentEntryModal({
       if (event.data?.type === 'pis-completed') {
         pisReturnedRef.current = true;
         setPisWindowClosed(false);
+        // The user is back from the bank, so the status has almost certainly just moved. Re-arm
+        // the poll immediately (new object identity re-runs the effect, which schedules the next
+        // tick) instead of leaving the user waiting out the remainder of the 3s interval — this
+        // is what makes the modal close promptly on return.
+        setPisPolling(prev => (prev ? { ...prev, transportErrors: 0 } : prev));
       }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA
-  // authorization. Re-runs on every status change (new object identity),
-  // scheduling the next poll or reacting to a terminal status inline.
+  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA authorization. Re-runs on
+  // every status change (new object identity), scheduling the next poll or reacting to a resolved
+  // outcome inline. `pisOutcome` collapses the 8 ref-list statuses into success/failure/pending;
+  // pending covers unknown statuses too, so an unrecognized value keeps the transfer alive rather
+  // than reporting a failure that never happened.
   useEffect(() => {
     if (!pisPolling) return undefined;
-    if (pisPolling.status === 'executed') {
+    const outcome = pisOutcome(pisPolling.status);
+
+    if (outcome === 'success') {
       // Force-close the Salt Edge popup from the opener side rather than waiting on its own
       // return page to close itself — that page is a shared Classic-styled static resource
       // and self-close can be delayed/blocked, leaving the user staring at it needlessly.
@@ -1086,15 +1139,28 @@ export default function NewPaymentEntryModal({
       setPisPolling(null);
       return undefined;
     }
-    if (!PIS_NON_TERMINAL_STATUSES.includes(pisPolling.status)) {
-      // Terminal, non-executed status (or an unrecognized one) — stop polling,
-      // surface an inline error, and let the user retry from the editable form.
+    if (outcome === 'failure') {
+      // The bank actually rejected the transfer. Stop polling, surface the inline error and let
+      // the user retry from the editable form.
       pisPopupRef.current?.close();
       pisPopupRef.current = null;
       setError(ui('cpPisFailedError'));
       setPisPolling(null);
       return undefined;
     }
+    // Still running. Give up waiting after PIS_MAX_POLL_MS, but treat that as "we stopped
+    // watching", NOT as a failure: the transfer can still complete at the bank and the PSD2
+    // background job keeps refreshing it. Close the modal so the user is not stuck staring at a
+    // form for a payment that is already on its way.
+    if ((pisPolling.elapsedMs || 0) >= PIS_MAX_POLL_MS) {
+      pisPopupRef.current?.close();
+      pisPopupRef.current = null;
+      toast.info(ui('cpPisStillInProgress'));
+      onSaved?.(pisResultRef.current || {}, 'pending');
+      setPisPolling(null);
+      return undefined;
+    }
+
     let cancelled = false;
     const timer = setTimeout(async () => {
       // Surface whether the user closed the Salt Edge window before authorizing. We keep polling
@@ -1112,11 +1178,28 @@ export default function NewPaymentEntryModal({
         });
         const json = await readJson(res);
         if (cancelled) return;
-        setPisPolling(prev => (prev ? { ...prev, status: json?.status || 'failed' } : prev));
+        // A transport-level problem (non-ok response → readJson null, or a thrown fetch) is NOT a
+        // bank rejection: keep the last known status and try again. Only after
+        // PIS_MAX_TRANSPORT_ERRORS consecutive failures do we tell the user we lost contact —
+        // still without claiming the transfer failed.
+        setPisPolling(prev => {
+          if (!prev) return prev;
+          const elapsedMs = (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS;
+          if (!json?.status) {
+            return { ...prev, elapsedMs, transportErrors: (prev.transportErrors || 0) + 1 };
+          }
+          return { ...prev, status: json.status, elapsedMs, transportErrors: 0 };
+        });
       } catch {
-        if (!cancelled) setPisPolling(prev => (prev ? { ...prev, status: 'failed' } : prev));
+        if (!cancelled) {
+          setPisPolling(prev => prev ? {
+            ...prev,
+            elapsedMs: (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS,
+            transportErrors: (prev.transportErrors || 0) + 1,
+          } : prev);
+        }
       }
-    }, 3000);
+    }, PIS_POLL_INTERVAL_MS);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pisPolling]);

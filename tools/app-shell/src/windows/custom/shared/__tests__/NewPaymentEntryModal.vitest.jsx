@@ -2448,11 +2448,12 @@ describe('NewPaymentEntryModal', () => {
         expect(props.onSaved).not.toHaveBeenCalled();
       }, 8000);
 
-      it('treats a rejected pisPaymentStatus poll as "failed" (network-error catch branch) and surfaces the inline error', async () => {
-        // Unlike the "terminal non-executed status" test above (which resolves the poll with
-        // a JSON body carrying status:"failed"), this rejects the apiFetch call outright —
-        // exercising the poll's own `catch { setPisPolling(... status: 'failed' ...) }` branch
-        // instead of its success path.
+      it('keeps waiting when a pisPaymentStatus poll rejects — a network blip is not a bank failure (ETP-4895)', async () => {
+        // Regression guard. This used to assert the opposite: the poll's catch branch synthesized
+        // a literal 'failed' status, which was indistinguishable from a real bank rejection, so a
+        // transient network/HTTP error told the user the transfer had failed and stopped polling —
+        // stranding a payment that was still in flight. A transport error must now be retried,
+        // never reported as a failed transfer.
         const base = buildPisApiFetch({
           register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
         });
@@ -2468,13 +2469,82 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(confirm);
         expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
 
-        // First poll tick rejects -> status becomes 'failed', a terminal, non-executed status
-        // that immediately surfaces the inline error and stops polling.
-        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
-          { timeout: 4500 });
-        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        // Let several poll ticks reject (interval is 3s; two ticks is enough to prove it retries
+        // rather than resolving to a terminal state on the first error).
+        await new Promise(r => setTimeout(r, 7000));
+
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(mockApiFetch.mock.calls.filter(([p]) => p.includes('pisPaymentStatus')).length)
+          .toBeGreaterThan(1);
         expect(props.onSaved).not.toHaveBeenCalled();
-      }, 8000);
+      }, 15000);
+
+      it('keeps waiting on "initiated_info_required" instead of reporting a failed transfer (ETP-4895)', async () => {
+        // The exact status that caused the reported bug: a real value of the AD ref-list
+        // "PIS Payment Status" that the old whitelist did not know, so it fell through to the
+        // terminal branch and showed "could not be completed" while the transfer was alive.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['initiated_info_required', 'initiated_info_required', 'executed'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // It must never show the failure copy on the way through, and must still resolve to
+        // success once the bank finishes.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), 'deposited'),
+          { timeout: 14000 });
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+      }, 20000);
+
+      it('treats "settled" as success, not as a failure (ETP-4895)', async () => {
+        // 'settled' (funds received) is the ideal terminal status, but the old code only accepted
+        // 'executed' as success, so a settled transfer took the failure branch.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['settled'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), 'deposited'),
+          { timeout: 8000 });
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+      }, 12000);
+
+      it('keeps waiting on an unrecognized status instead of assuming failure (ETP-4895)', async () => {
+        // Forward-compatibility guard: if Salt Edge introduces a new status, the modal must keep
+        // polling rather than declaring the transfer failed. This is the defaulting choice that
+        // makes the whole class of bug non-recurring.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['some_future_saltedge_status'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        await new Promise(r => setTimeout(r, 7000));
+
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+      }, 15000);
 
       it('lets the user cancel the wait and return to the editable form', async () => {
         mockApiFetch = buildPisApiFetch({

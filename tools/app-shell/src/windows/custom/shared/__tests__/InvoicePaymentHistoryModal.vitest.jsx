@@ -952,4 +952,114 @@ describe('InvoicePaymentHistoryModal', () => {
       expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull(),
     );
   });
+  describe('PIS transfer states (ETP-4895)', () => {
+    const PROPS = {
+      invoiceId: '42',
+      invoiceData: INVOICE_DATA,
+      specName: 'purchase-invoice',
+      apiBaseUrl: 'http://host/sws/neo/purchase-invoice',
+      onClose: vi.fn(),
+    };
+
+    it('shows "Error" for a payment whose bank transfer was rejected, not "Borrador"', async () => {
+      // ETGOERR is set on an UNPROCESSED payment, so without its own branch the row would fall
+      // through to the draft pill and the user could not tell the transfer had failed.
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__error')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__draft')).toBeNull();
+    });
+
+    it('shows "in progress" while the transfer is authorized but the funds have not landed', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PPM', processed: true, viaPis: true, pisPending: true, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__inProgress')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__deposited')).toBeNull();
+    });
+
+    it('still shows a settled transfer as deposited', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PPM', processed: true, viaPis: true, pisPending: false, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__deposited')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__inProgress')).toBeNull();
+    });
+
+    it('offers Retry only on a failed transfer', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+        { id: 'p2', documentNo: 'PAY-2', amount: '50.00', status: 'PPM', processed: true },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      await screen.findByTestId('PaymentStateTag__error');
+      expect(screen.getAllByTestId('InvoicePaymentHistoryModal__retry-btn')).toHaveLength(1);
+    });
+
+    it('retries against the PIS attempt and reopens the bank window', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const fetchMock = vi.fn((url) => {
+        if (url.includes('/paymentPlan')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+        }
+        if (url.includes('action/retryPisPayment')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ response: { data: { pisPaymentUrl: 'https://saltedge.example/w/2' } } }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [
+            { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+          ] } }),
+        });
+      });
+      useApiFetch.mockReturnValue(fetchMock);
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      fireEvent.click(await screen.findByTestId('InvoicePaymentHistoryModal__retry-btn'));
+
+      await waitFor(() => expect(openSpy).toHaveBeenCalledWith(
+        'https://saltedge.example/w/2', 'saltEdgePisWidget', expect.any(String)));
+      // The retry targets the PIS attempt, not the payment — a retry starts a brand-new transfer.
+      const retryCall = fetchMock.mock.calls.find(([u]) => u.includes('retryPisPayment'));
+      expect(JSON.parse(retryCall[1].body)).toEqual({ pisPaymentId: 'pis-1' });
+      openSpy.mockRestore();
+    });
+
+    it('surfaces an inline error when the retry is rejected, without opening a window', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const fetchMock = vi.fn((url) => {
+        if (url.includes('/paymentPlan')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+        }
+        if (url.includes('action/retryPisPayment')) {
+          return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [
+            { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+          ] } }),
+        });
+      });
+      useApiFetch.mockReturnValue(fetchMock);
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      fireEvent.click(await screen.findByTestId('InvoicePaymentHistoryModal__retry-btn'));
+
+      expect(await screen.findByTestId('InvoicePaymentHistoryModal__retry-error')).toBeInTheDocument();
+      expect(openSpy).not.toHaveBeenCalled();
+      openSpy.mockRestore();
+    });
+  });
 });

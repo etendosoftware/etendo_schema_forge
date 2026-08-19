@@ -27,12 +27,77 @@ function fmtAmount(val, currency) {
 // without them a confirmed purchase payment was mislabeled as "Borrador".
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
+// FIN_Payment status added by com.etendoerp.go for a bank transfer the bank rejected. It is only
+// ever set on an unprocessed payment: no money moved, so the invoice is still owed. The row exists
+// to show the attempt happened and to be retried from (ETP-4895).
+const PAYMENT_STATUS_ERROR = 'ETGOERR';
+
 /** True when a listed payment is processed/deposited (backend flag is source of truth). */
 function isProcessed(p) {
   return p?.processed === true || PAID_STATUSES.has(p?.status || '');
 }
 
-function PaymentStateTag({ status, processed, isSales, ui }) {
+/** True when the payment's bank transfer failed and can be retried. */
+function isFailedTransfer(p) {
+  return p?.status === PAYMENT_STATUS_ERROR;
+}
+
+/**
+ * True while a bank transfer has been authorized but the funds have not landed yet: the payment is
+ * processed, was initiated through PIS, and has no bank transaction attached. Reported by the
+ * backend as `pisPending`; the local derivation is a fallback for older backends.
+ */
+function isTransferInProgress(p) {
+  if (p?.pisPending === true) return true;
+  return isProcessed(p) && p?.viaPis === true && p?.hasTransaction === false;
+}
+
+/** Shared pill shape; only the tone and copy differ between states. */
+function StatePill({ testid, bg, fg, dot, children }) {
+  return (
+    <span
+      data-testid={testid}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '2px 10px', borderRadius: 6,
+        background: bg, color: fg,
+        fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      {children}
+    </span>
+  );
+}
+
+function PaymentStateTag({ status, processed, isSales, ui, payment }) {
+  // A rejected bank transfer wins over everything else: the row is unprocessed, so without this it
+  // would read as an ordinary editable draft and the user could not tell the transfer had failed.
+  if (isFailedTransfer(payment ?? { status })) {
+    return (
+      <StatePill
+        testid="PaymentStateTag__error"
+        bg="var(--status-destructive-bg)"
+        fg="var(--status-destructive-fg)"
+        dot="var(--status-destructive-fg)"
+      >
+        {ui('cpPaymentStateError')}
+      </StatePill>
+    );
+  }
+  // Authorized at the bank but the funds have not landed: processed, yet not settled.
+  if (payment && isTransferInProgress(payment)) {
+    return (
+      <StatePill
+        testid="PaymentStateTag__inProgress"
+        bg="var(--status-warning-bg)"
+        fg="var(--status-warning-fg)"
+        dot="var(--status-warning-fg)"
+      >
+        {ui('cpPaymentStateInProgress')}
+      </StatePill>
+    );
+  }
   // The `processed` flag from the backend is the source of truth; the status
   // whitelist is a fallback for rows that don't carry it.
   const isDeposited = processed === true || PAID_STATUSES.has(status);
@@ -95,6 +160,28 @@ function DeleteDraftButton({ onClick, ui }) {
       <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
         <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * Relaunches a bank transfer the bank rejected. Shown only on a failed payment, which is the only
+ * row that carries the original request needed to retry it.
+ */
+function RetryTransferButton({ onClick, ui }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ui('cpRetryTransfer')}
+      title={ui('cpRetryTransfer')}
+      data-testid="InvoicePaymentHistoryModal__retry-btn"
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: 'none', background: 'none', color: 'hsl(var(--foreground))', cursor: 'pointer', flexShrink: 0 }}
+    >
+      <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
       </svg>
     </button>
   );
@@ -210,6 +297,7 @@ function PaymentHistoryBody({
   isSales,
   handleRowClick,
   handleDeleteClick,
+  handleRetryClick,
   isCreditInstrument,
   currency,
 }) {
@@ -310,12 +398,16 @@ function PaymentHistoryBody({
                   processed={payment.processed}
                   isSales={isSales}
                   ui={ui}
+                  payment={payment}
                   data-testid="PaymentStateTag__b82d4f" />
               </div>
               <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amountColor, whiteSpace: 'nowrap' }}>
                 {amountSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={amountClassName} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-history-row" />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                {isFailedTransfer(payment) && (
+                  <RetryTransferButton onClick={(e) => handleRetryClick(e, payment)} ui={ui} />
+                )}
                 {!isProcessed(payment) && (
                   <DeleteDraftButton onClick={(e) => handleDeleteClick(e, payment)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />
                 )}
@@ -398,6 +490,8 @@ export default function InvoicePaymentHistoryModal({
   // The draft being edited (null = "add new"); drives the modal's edit mode.
   const [editingPayment, setEditingPayment] = useState(null);
   // Draft pending delete confirmation (null = no confirm dialog open).
+  const [retryingId, setRetryingId] = useState(null);
+  const [retryError, setRetryError] = useState(null);
   const [deletingPayment, setDeletingPayment] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -430,6 +524,37 @@ export default function InvoicePaymentHistoryModal({
     setLoading(true);
     fetchData();
   }, [fetchData]);
+
+  /**
+   * Relaunches a rejected bank transfer. The backend rebuilds the request from the failed attempt,
+   * drops the errored payment and starts a fresh transfer, so all this has to do is reopen the
+   * bank window with the URL it returns and refresh the list.
+   */
+  const handleRetryClick = useCallback(async (e, p) => {
+    e.stopPropagation();
+    if (retryingId) return;
+    setRetryingId(p.id);
+    setRetryError(null);
+    try {
+      const res = await apiFetch(`/${specName}/header/${invoiceId}/action/retryPisPayment`, {
+        method: 'POST', body: JSON.stringify({ pisPaymentId: p.pisPaymentId || p.id }),
+      });
+      const json = res?.ok ? await res.json().catch(() => null) : null;
+      const url = json?.response?.data?.pisPaymentUrl;
+      if (!res?.ok || !url) {
+        setRetryError(ui('cpRetryTransferFailed'));
+        return;
+      }
+      window.open(url, 'saltEdgePisWidget',
+        'popup=yes,width=500,height=720,resizable=yes,scrollbars=yes');
+      setLoading(true);
+      fetchData();
+    } catch {
+      setRetryError(ui('cpRetryTransferFailed'));
+    } finally {
+      setRetryingId(null);
+    }
+  }, [apiFetch, specName, invoiceId, retryingId, ui, fetchData]);
 
   // Draft-only deletion (row click already routes drafts to edit, never here for deposited rows).
   const handleDeleteClick = useCallback((e, p) => {
@@ -548,6 +673,14 @@ export default function InvoicePaymentHistoryModal({
 
         {/* Payment history table */}
         <div className="flex-1 overflow-y-auto">
+          {retryError && (
+            <div
+              data-testid="InvoicePaymentHistoryModal__retry-error"
+              style={{ margin: '8px 24px 0', padding: '8px 12px', borderRadius: 6, background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)', fontSize: 13, lineHeight: '18px' }}
+            >
+              {retryError}
+            </div>
+          )}
           <PaymentHistoryBody
             loading={loading}
             payments={payments}
@@ -557,6 +690,7 @@ export default function InvoicePaymentHistoryModal({
             isSales={isSales}
             handleRowClick={handleRowClick}
             handleDeleteClick={handleDeleteClick}
+            handleRetryClick={handleRetryClick}
             isCreditInstrument={isCreditInstrument}
             currency={currency}
             data-testid="PaymentHistoryBody__b82d4f" />
