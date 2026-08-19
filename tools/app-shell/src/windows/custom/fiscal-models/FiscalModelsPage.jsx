@@ -46,8 +46,8 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onBack={handleBack}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onStatusChange={async (id, newStatus) => {
-            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl });
+          onStatusChange={async (id, newStatus, submissionMethod) => {
+            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
             }
@@ -60,8 +60,8 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onBack={handleBack}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onStatusChange={async (id, newStatus) => {
-            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl });
+          onStatusChange={async (id, newStatus, submissionMethod) => {
+            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
             }
