@@ -276,7 +276,16 @@ function shouldShowNoRecipientIdArt61d(invType) {
   return invType === 'R5' || invType === 'F2';
 }
 
-// Classic displayLogic (verbatim, operator-precedence quirk intentional — `&` binds tighter than `|`
+// Classic displayLogic: `@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R1' | ... | @EM_Etvfac_Inv_Type@='R5')`
+// ETP-4783: the 'S' (substitute) option was removed — only 'I' (by difference) remains.
+function shouldShowReverseInvType(showVerifactu, invType) {
+  return showVerifactu && typeof invType === 'string' && invType.startsWith('R');
+}
+
+// ETP-4783: 'S' (substitute) option removed — only 'I' (by difference) remains.
+const VERIFACTU_REVERSE_TYPE_OPTIONS = [
+  { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
+];
 
 export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {

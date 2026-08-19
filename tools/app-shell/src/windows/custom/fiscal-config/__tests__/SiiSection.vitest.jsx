@@ -131,9 +131,11 @@ describe('SiiSection — save', () => {
     });
   });
 
-  // ETP-4783 regression guard: fields hidden from UI must always be sent with
-  // forced values, regardless of what the record contains.
-  it('always sends acogidaAlSII=Y in the PUT body, regardless of record value', async () => {
+  // ETP-4783 (final design): acogidaAlSII / entornoDeProduccin / adjuntarArchivosXML are no
+  // longer hardcoded in the PUT body. They are read from the form (which maps the DB record
+  // via mapSiiRecordToForm), so a user who toggles them in Classic is not silently overridden
+  // on every Go save. The onboarding wizard sets correct defaults at creation time.
+  it('sends acogidaAlSII from the form (preserves the record value, no override)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -141,10 +143,11 @@ describe('SiiSection — save', () => {
     render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, acogidaAlSII: 'N' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.acogidaAlSII).toBe('Y');
+    // The record value 'N' is preserved — no hardcoded override to 'Y'
+    expect(body.acogidaAlSII).toBe('N');
   });
 
-  it('always sends entornoDeProduccin=Y in the PUT body, regardless of record value', async () => {
+  it('sends entornoDeProduccin from the form (preserves the record value, no override)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -152,10 +155,10 @@ describe('SiiSection — save', () => {
     render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, entornoDeProduccin: 'N' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.entornoDeProduccin).toBe('Y');
+    expect(body.entornoDeProduccin).toBe('N');
   });
 
-  it('always sends adjuntarArchivosXML=Y in the PUT body, regardless of record value', async () => {
+  it('sends adjuntarArchivosXML from the form (preserves the record value, no override)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -163,7 +166,7 @@ describe('SiiSection — save', () => {
     render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, adjuntarArchivosXML: 'N' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.adjuntarArchivosXML).toBe('Y');
+    expect(body.adjuntarArchivosXML).toBe('N');
   });
 
   it('always sends a truthy fechaAcogidaSII in the PUT body (falls back to today when record has null)', async () => {

@@ -53,9 +53,12 @@ describe('VerifactuSection — form fields', () => {
     assert.match(src, /getVerifactuTaxTypeLabel/);
   });
 
-  it('does not render the QR code toggle (ETP-4783: defaultQR is always forced to true in the payload)', () => {
+  it('QR code toggle hidden from UI but defaultQR preserved from DB record (ETP-4783)', () => {
+    // The QR label key must NOT appear in the JSX — the toggle is not rendered
     assert.doesNotMatch(src, /fiscal\.verifactu\.field\.qr/);
-    assert.doesNotMatch(src, /defaultQR/);
+    // defaultQR IS read from the DB record and included in form state (fed to
+    // buildVerifactuUpdatePayload which always forces it to true in the PUT body)
+    assert.match(src, /defaultQR/);
   });
 
   it('does not render the removed enrollment date field (inVfactuSystem)', () => {

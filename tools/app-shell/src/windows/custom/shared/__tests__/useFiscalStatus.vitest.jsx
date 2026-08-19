@@ -107,7 +107,9 @@ describe('useFiscalStatus', () => {
       const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
 
       await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.verifactu).toBe('ER');
+      // ETP-4783: raw DB code 'ER' is mapped to 'rejected' via VF_STATUS_MAP to avoid
+      // collision with SII's own 'IN' code ("Rechazado" vs "Inválido").
+      expect(result.current.verifactu).toBe('rejected');
       expect(result.current.sii).toBeNull();
       expect(result.current.tbai).toBeNull();
     });

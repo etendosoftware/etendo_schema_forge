@@ -104,9 +104,12 @@ describe('TbaiSection — save', () => {
     expect(onSave).toHaveBeenCalled();
   });
 
-  // ETP-4783 regression guard: fields hidden from UI must always be sent with
-  // forced values, regardless of what the record contains.
-  it('always sends productionEnv=Y in the PUT body, regardless of record value', async () => {
+  // ETP-4783 (final design): productionEnv / uSEAsproductDesc / validatePreviousInvoice are
+  // NOT included in the PUT body from the Go UI at all. They live only in the DB record and
+  // are maintained via the backend / Classic. Including them and hardcoding values would
+  // silently revert any change the user made in Classic (e.g. productionEnv='N' for testing).
+  // The onboarding wizard sets correct defaults at creation time.
+  it('does not include productionEnv in the PUT body (managed by backend, not overridden)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -114,10 +117,10 @@ describe('TbaiSection — save', () => {
     render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, productionEnv: 'N' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.productionEnv).toBe('Y');
+    expect(body).not.toHaveProperty('productionEnv');
   });
 
-  it('always sends uSEAsproductDesc=N in the PUT body, regardless of record value', async () => {
+  it('does not include uSEAsproductDesc in the PUT body (managed by backend, not overridden)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -125,10 +128,10 @@ describe('TbaiSection — save', () => {
     render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, uSEAsproductDesc: 'Y' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.uSEAsproductDesc).toBe('N');
+    expect(body).not.toHaveProperty('uSEAsproductDesc');
   });
 
-  it('always sends validatePreviousInvoice=N in the PUT body, regardless of record value', async () => {
+  it('does not include validatePreviousInvoice in the PUT body (managed by backend, not overridden)', async () => {
     const { useApiFetch } = await import('@/auth/useApiFetch.js');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     useApiFetch.mockReturnValueOnce(fetchMock);
@@ -136,7 +139,7 @@ describe('TbaiSection — save', () => {
     render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, validatePreviousInvoice: 'Y' }} ref={ref} />);
     await ref.current.save();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.validatePreviousInvoice).toBe('N');
+    expect(body).not.toHaveProperty('validatePreviousInvoice');
   });
 
   it('always sends a truthy tbaisystemdate in the PUT body (falls back to today when record has null)', async () => {

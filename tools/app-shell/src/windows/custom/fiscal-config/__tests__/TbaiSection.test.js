@@ -69,9 +69,16 @@ describe('TbaiSection — validation', () => {
     assert.doesNotMatch(src, /fiscal\.tbai\.err\.enrollDate/);
   });
 
-  it('validates invoiceDescription is present before saving', () => {
+  // ETP-4783: invoiceDescription validation was removed — the field is no longer
+  // shown in the UI and instead uses a fallback value ('Descripcion Factura') in the
+  // PUT body. No error is thrown when the field is absent.
+  // ETP-4783: invoiceDescription validation was removed — the field is no longer
+  // shown in the UI. It is still sent in the PUT body with a fallback value so
+  // the backend never receives a blank description.
+  it('invoiceDescription is preserved from record in the PUT body with a fallback (no UI validation)', () => {
     assert.match(src, /invoiceDescription/);
-    assert.match(src, /fiscal\.tbai\.err\.invoiceDesc/);
+    assert.match(src, /'Descripcion Factura'/);
+    assert.doesNotMatch(src, /fiscal\.tbai\.err\.invoiceDesc/);
   });
 });
 

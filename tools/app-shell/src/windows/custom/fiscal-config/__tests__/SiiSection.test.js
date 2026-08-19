@@ -60,14 +60,15 @@ describe('SiiSection — form fields', () => {
     assert.match(src, /monitordate/);
   });
 
-  it('renders the submission deadline (plazoLmiteDeEnvoASII) field', () => {
-    assert.match(src, /fiscal\.sii\.field\.deadline/);
-    assert.match(src, /plazoLmiteDeEnvoASII/);
+  // ETP-4783: the entire "Envíos" section (plazo/cadencia/postedInvoices) was removed
+  // from SiiSection. Validation of the deadline is gone; the field is not sent in the PUT body.
+  it('does not render the submission deadline field (ETP-4783: Envíos section removed)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.deadline/);
+    assert.doesNotMatch(src, /plazoLmiteDeEnvoASII/);
   });
 
-  it('validates deadline is present before saving', () => {
-    assert.match(src, /plazoLmiteDeEnvoASII/);
-    assert.match(src, /fiscal\.sii\.err\.deadline/);
+  it('does not validate the submission deadline before saving (ETP-4783: validation removed)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.err\.deadline/);
   });
 });
 

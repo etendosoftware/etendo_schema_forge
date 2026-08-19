@@ -21,6 +21,7 @@ import {
   activeOrNull,
   getChangeSifNoticeKey,
   getSystemsToDeactivate,
+  parseApiError,
 } from '../fiscalConfig.utils.js';
 
 // ---------------------------------------------------------------------------
@@ -411,13 +412,16 @@ describe('buildVerifactuUpdatePayload', () => {
     expect(p.defaultQR).toBe(true);
   });
 
-  it('always sets defaultQR to true regardless of input (ETP-4783)', () => {
+  // ETP-4783: defaultQR is now read from the form/DB record rather than always forced to
+  // true. The PUT preserves whatever value is stored, so Classic users who toggle it off
+  // do not have it silently re-enabled on every Go save.
+  it('preserves defaultQR=false when the record has defaultQR=N (ETP-4783)', () => {
     const p = buildVerifactuUpdatePayload({ tAXType: 'IGIC', defaultQR: 'N' });
     expect(p.tAXType).toBe('03');
-    expect(p.defaultQR).toBe(true);
+    expect(p.defaultQR).toBe(false);
   });
 
-  it('handles null form gracefully, defaultQR always true', () => {
+  it('defaults defaultQR to true when form is null (fallback via ?? Y)', () => {
     const p = buildVerifactuUpdatePayload(null);
     expect(p.tAXType).toBe('');
     expect(p.defaultQR).toBe(true);
@@ -472,16 +476,18 @@ describe('getFiscalRecordId', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapSiiRecordToForm', () => {
-  it('maps a fully-populated record correctly', () => {
+  // ETP-4783: plazoLmiteDeEnvoASII, cadenciaEnvoFacturasVentaASII,
+  // cadenciaEnvoFacturasCompraASII, and recc were intentionally removed from the mapping.
+  // When those numeric columns are NULL in a freshly-created record, the empty-string
+  // fallback is coerced to null by the ORM layer, triggering NOT-NULL violations on PUT.
+  // They are not editable in the Go UI and must not be in the form.
+  it('maps the editable fields correctly (ETP-4783: numeric-only fields excluded)', () => {
     const record = {
       acogidaAlSII: 'Y',
       fechaAcogidaSII: '2025-01-15',
-      plazoLmiteDeEnvoASII: '10',
-      cadenciaEnvoFacturasVentaASII: '5',
-      cadenciaEnvoFacturasCompraASII: '3',
+      // plazoLmiteDeEnvoASII, cadenciaEnvo* excluded — NOT-NULL ORM issue (ETP-4783)
       entornoDeProduccin: 'Y',
       adjuntarArchivosXML: 'N',
-      recc: 'N',
       redeme: 'Y',
       monitordate: '2025-06-01',
       postedInvoices: 'Y',
@@ -490,23 +496,25 @@ describe('mapSiiRecordToForm', () => {
     const form = mapSiiRecordToForm(record);
     expect(form.acogidaAlSII).toBe('Y');
     expect(form.fechaAcogidaSII).toBe('2025-01-15');
-    expect(form.plazoLmiteDeEnvoASII).toBe('10');
-    expect(form.cadenciaEnvoFacturasVentaASII).toBe('5');
-    expect(form.cadenciaEnvoFacturasCompraASII).toBe('3');
     expect(form.entornoDeProduccin).toBe('Y');
     expect(form.adjuntarArchivosXML).toBe('N');
-    expect(form.recc).toBe('N');
     expect(form.redeme).toBe('Y');
     expect(form.monitordate).toBe('2025-06-01');
     expect(form.postedInvoices).toBe('Y');
     expect(form.authorizationno).toBe('AUTH123');
+    // Confirm the dropped fields are not present in the form shape
+    expect(form).not.toHaveProperty('plazoLmiteDeEnvoASII');
+    expect(form).not.toHaveProperty('cadenciaEnvoFacturasVentaASII');
+    expect(form).not.toHaveProperty('cadenciaEnvoFacturasCompraASII');
+    expect(form).not.toHaveProperty('recc');
   });
 
   it('maps missing optional fields to empty strings / default N', () => {
     const form = mapSiiRecordToForm({});
     expect(form.acogidaAlSII).toBe('N');
     expect(form.fechaAcogidaSII).toBe('');
-    expect(form.plazoLmiteDeEnvoASII).toBe('');
+    // plazoLmiteDeEnvoASII is intentionally excluded from the mapping (ETP-4783)
+    expect(form).not.toHaveProperty('plazoLmiteDeEnvoASII');
     expect(form.authorizationno).toBe('');
   });
 
@@ -738,5 +746,53 @@ describe('getSystemsToDeactivate', () => {
     expect(getSystemsToDeactivate('unconfigured')).toEqual([]);
     expect(getSystemsToDeactivate('conflict')).toEqual([]);
     expect(getSystemsToDeactivate(null)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseApiError
+// ---------------------------------------------------------------------------
+
+describe('parseApiError', () => {
+  function makeRes(bodyText, statusText = 'Error') {
+    return {
+      text: () => Promise.resolve(bodyText),
+      statusText,
+    };
+  }
+
+  it('returns error.message from a JSON body with { error: { message } }', async () => {
+    const res = makeRes(JSON.stringify({ error: { message: 'Nested error message' } }));
+    expect(await parseApiError(res)).toBe('Nested error message');
+  });
+
+  it('returns message from a JSON body with top-level { message }', async () => {
+    const res = makeRes(JSON.stringify({ message: 'Top-level message' }));
+    expect(await parseApiError(res)).toBe('Top-level message');
+  });
+
+  it('falls back to raw body when JSON has neither error.message nor message', async () => {
+    const res = makeRes(JSON.stringify({ code: 42 }));
+    const raw = JSON.stringify({ code: 42 });
+    expect(await parseApiError(res)).toBe(raw);
+  });
+
+  it('returns raw text when body is not valid JSON', async () => {
+    const res = makeRes('plain text error');
+    expect(await parseApiError(res)).toBe('plain text error');
+  });
+
+  it('returns statusText when body is empty and body has no usable content', async () => {
+    const res = makeRes('', 'Internal Server Error');
+    // empty string is falsy → falls back to statusText
+    expect(await parseApiError(res)).toBe('Internal Server Error');
+  });
+
+  it('returns statusText when res.text() rejects', async () => {
+    const res = {
+      text: () => Promise.reject(new Error('stream error')),
+      statusText: 'Bad Gateway',
+    };
+    expect(await parseApiError(res)).toBe('Bad Gateway');
   });
 });
