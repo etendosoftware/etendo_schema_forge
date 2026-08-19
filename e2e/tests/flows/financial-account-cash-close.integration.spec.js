@@ -6,7 +6,7 @@ import {
   // Generic despite the name: it picks the first real option of `field-businessPartner`, with no
   // vendor-specific step. Aliased so the call site reads correctly in a sales flow.
   selectVendorBP as selectBusinessPartner,
-  clickConfirmButton, waitForConfirmResponse, dismissSuccessModal,
+  clickConfirmButton, waitForConfirmResponse, waitForDocumentActionResponse, dismissSuccessModal,
   expectStatusPill, parseAmount,
 } from '../helpers/purchase-helpers.js';
 
@@ -239,7 +239,11 @@ test.describe('Cash close (real backend)', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     await clickConfirmButton(page);
-    await waitForConfirmResponse(page);
+    // Precise wait for the sales-invoice documentAction confirmation itself — the generic
+    // waitForConfirmResponse() resolves on ANY successful NEO write and can race ahead of the
+    // actual confirmation request, letting the pill assertion below read the stale "Borrador"
+    // status before the invoice has actually finished completing on the backend.
+    await waitForDocumentActionResponse(page, 'sales-invoice');
     await dismissSuccessModal(page);
 
     // Confirming navigates back to the invoice list, so go back to the record by id instead of
