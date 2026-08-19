@@ -259,6 +259,7 @@ export default function PurchaseInvoiceWindow(props) {
             specName="purchase-invoice"
             onClose={onClose}
             onEdit={onEdit}
+            onInvoiceUpdated={() => setRefreshKey(k => k + 1)}
             data-testid="InvoicePreview__c20e53" />
         )}
         externalPreviewRow={effectiveRecord}

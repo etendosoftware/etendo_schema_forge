@@ -1,0 +1,114 @@
+{
+  "version": "0.3.0",
+  "generatedAt": "2026-08-13T18:05:12.953Z",
+  "updatedAt": "2026-08-13T18:26:29.915Z",
+  "contractChecksum": "89386212b4f8a290",
+  "apiPrediction": {
+    "specName": "cost-center",
+    "baseUrl": "/sws/neo/cost-center",
+    "crud": {
+      "costCenter": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/cost-center/costCenter",
+        "detailUrl": "/sws/neo/cost-center/costCenter/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Isactive": "Activo"
+      },
+      "es_AR": {
+        "Isactive": "Activo"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "costCenter": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage cost center financial records.",
+    "whenToUse": [
+      "Use for cost center management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "active"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "active"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "5521738e1f2d7941"
+}

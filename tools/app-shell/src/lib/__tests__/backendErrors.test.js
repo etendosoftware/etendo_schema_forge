@@ -669,3 +669,97 @@ describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)'
     });
   });
 });
+
+describe('translateBackendError — cash close (ETP-4795)', () => {
+  describe('exact-match rejections', () => {
+    const CASES = [
+      { raw: 'The close date cannot be in the future.', key: 'backendError.cashCloseDateInFuture' },
+      {
+        raw: 'This reconciliation already has bank-statement lines linked to it; cash close and bank reconciliation cannot share the same document.',
+        key: 'backendError.cashCloseHasBankStatementLines',
+      },
+      {
+        raw: 'Cash close is only available for cash-type financial accounts',
+        key: 'backendError.cashCloseOnlyForCashAccount',
+      },
+    ];
+
+    for (const { raw, key } of CASES) {
+      it(`maps "${raw.slice(0, 40)}…" to ${key}`, () => {
+        const es = fakeUiTranslator({ [key]: 'mensaje en español' });
+        assert.equal(translateBackendError(raw, es), 'mensaje en español');
+      });
+
+      it(`returns "${raw.slice(0, 40)}…" unchanged when the key is missing (guard)`, () => {
+        assert.equal(translateBackendError(raw, (k) => k), raw);
+      });
+    }
+  });
+
+  describe('"There is a difference of <amount>…" parameterized match', () => {
+    // The amount is deliberately not interpolated — the backend sends a raw
+    // BigDecimal.toPlainString(), which must never be rendered as money in the UI.
+    const RAW = 'There is a difference of -162.05 and this account has no accounting concept'
+      + ' configured for it. Configure a GL Item Difference in Edit account before confirming the'
+      + ' close.';
+
+    it('translates to es_ES without echoing the unformatted amount', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseNoConcept': 'Esta cuenta no tiene concepto contable de diferencias.',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Esta cuenta no tiene concepto contable de diferencias.',
+      );
+    });
+
+    it('matches whatever the amount is, including a positive surplus', () => {
+      const es = fakeUiTranslator({ 'backendError.cashCloseNoConcept': 'Falta el concepto.' });
+      const surplus = RAW.replace('-162.05', '200');
+      assert.equal(translateBackendError(surplus, es), 'Falta el concepto.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The close date cannot be earlier than the last confirmed close (<date>)." match', () => {
+    const RAW = 'The close date cannot be earlier than the last confirmed close (2026-07-31).';
+
+    it('translates to es_ES, interpolating the last close date', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseDateBeforeLastClose':
+          'La fecha del cierre no puede ser anterior al último cierre confirmado ({date}).',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'La fecha del cierre no puede ser anterior al último cierre confirmado (2026-07-31).',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The movement <id> has an accounting date in a closed period." match', () => {
+    const RAW = 'The movement "1000381 - Transportes Vega" has an accounting date in a closed'
+      + ' period. Reopen that period or unmark the movement before confirming the close.';
+
+    it('translates to es_ES, interpolating the movement identifier', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseLineInClosedPeriod':
+          'El movimiento «{movement}» tiene fecha contable en un periodo cerrado.',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'El movimiento «1000381 - Transportes Vega» tiene fecha contable en un periodo cerrado.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+});

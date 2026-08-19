@@ -1,14 +1,14 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import {
-  LayoutGrid, Settings, ArrowUpDown,
-  ChevronDown, MoreVertical, Calendar, Clock, TriangleAlert, OctagonAlert, ArrowUpRight, Search, Play, Check,
+  LayoutGrid, ArrowUpDown,
+  ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
+import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators, persistDeclarationStatus } from './fiscalModelsUtils.js';
+import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
@@ -103,100 +103,107 @@ function FilterDropdown({ label, value, options, onChange }) {
   );
 }
 
-// Row-level kebab menu — Demo, Configuración, Catálogo de modelos
-function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-section-header__icon-btn"
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={16} strokeWidth={1.75} data-testid="MoreVertical__cb728e" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onDemo(); setOpen(false); }}>
-            <Play
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Play__cb728e" />
-            Demo
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onConfig(); setOpen(false); }}>
-            <Settings
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Settings__cb728e" />
-            {t('fm.config.title') ?? 'Configuración'}
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onCatalog(); setOpen(false); }}>
-            <LayoutGrid
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="LayoutGrid__cb728e" />
-            {t('fm.catalog.title') ?? 'Catálogo de modelos'} ({activeCount})
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 const STATUS_PLAIN_LABEL = {
-  submitted_ack: 'Presentado con acuse',
   submitted_ext: 'Presentado en otra plataforma',
 };
 
-const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']);
+// statusLabelKey (ETP-4755): the status BADGE text must always read the plain
+// "Presentado"/"Submitted" for BOTH `submitted` and `submitted_ack` — `submitted_ack`
+// collapses onto `submitted`'s i18n key here. HOW it was submitted (manual ack, no
+// receipt, real AEAT telematic ack) is shown exclusively via the `submissionMethod`
+// sub-label rendered underneath, never inside the badge text itself. `submitted_ext`
+// is untouched — a distinct legacy status, not part of this unification.
+function statusLabelKey(status) {
+  return status === 'submitted_ack' ? 'submitted' : status;
+}
 
-const STATUS_DROPDOWN_STYLE = {
-  ready:         { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
-  submitted:     { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
-  submitted_ext: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
-  submitted_ack: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
-  pending:       { background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
-  draft:         { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
-  skipped:       { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
-};
+const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']);
 
 // Fixed status filter options (consolidated)
 const STATUS_FILTER_OPTIONS = [
   { value: 'presentado', label: 'Presentado', statusStyle: { background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' } },
-  { value: 'pendiente',  label: 'Pendiente',  statusStyle: { background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' } },
   { value: 'borrador',   label: 'Borrador',   statusStyle: { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' } },
-  { value: 'omitido',    label: 'Omitido',    statusStyle: { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' } },
 ];
 
 const STATUS_FILTER_RAW = {
   presentado: new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']),
-  pendiente:  new Set(['pending']),
   borrador:   new Set(['draft']),
-  omitido:    new Set(['skipped']),
 };
 
-function StatusText({ status, t }) {
-  const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${status}`) ?? status);
+// ── Sort ("Ordenar" popover) ─────────────────────────────────────────
+// Mirrors ListView.jsx's column-based sort (used by the generated/Factura
+// windows): a field selector, not a bare asc/desc toggle. Scoped to columns
+// already visible in this table with a well-defined raw value to compare.
+function periodSortValue(period) {
+  if (/^T\d$/.test(period)) return parseInt(period[1], 10) * 3;
+  if (/^\d{2}$/.test(period)) return parseInt(period, 10);
+  return 0;
+}
+
+const STATUS_SORT_ORDER = ['pending', 'draft', 'ready', 'submitted', 'submitted_ack', 'submitted_ext', 'skipped'];
+
+const SORT_FIELDS = [
+  { key: 'model',  labelKey: 'fm.col.model',  value: d => d.model },
+  { key: 'year',   labelKey: 'fm.col.year',   value: d => d.year },
+  { key: 'period', labelKey: 'fm.col.period', value: d => periodSortValue(d.period) },
+  { key: 'status', labelKey: 'fm.col.status', value: d => STATUS_SORT_ORDER.indexOf(d.status) },
+];
+
+// Applies the toolbar "Ordenar" popover's field selector to a declaration list.
+// `sortColumn === null` = default order (year+period, descending, most recent
+// first) — same fallback the main component's render already relied on before
+// this was extracted out of it (SonarQube S3776: keeps FmListPage's own
+// cognitive complexity down without changing any ordering behavior).
+function sortDeclarations(list, sortColumn, sortDirection) {
+  const sorted = [...list];
+  if (!sortColumn) {
+    sorted.sort((a, b) =>
+      (b.year * 100 + periodSortValue(b.period)) - (a.year * 100 + periodSortValue(a.period))
+    );
+    return sorted;
+  }
+  const field = SORT_FIELDS.find(f => f.key === sortColumn);
+  if (!field) return sorted;
+  sorted.sort((a, b) => {
+    const av = field.value(a);
+    const bv = field.value(b);
+    const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
+}
+
+// SUBMISSION_METHOD_STATUSES (ETP-4755) — only these two statuses can carry a
+// submissionMethod (the two manual "Presentado" paths persist it themselves via
+// handlePresent; a real AEAT telematic success also lands on submitted_ack, set
+// server-side). submitted_ext (the removed "otra plataforma" path) never carries one.
+const SUBMISSION_METHOD_STATUSES = new Set(['submitted', 'submitted_ack']);
+
+// submissionMethod (ETP-4755, optional) — shown as a compact sub-label under the status
+// badge, only for the statuses that can actually carry one, and only when present (a
+// declaration that predates this feature simply shows the bare status badge, unchanged).
+function StatusText({ status, submissionMethod, t }) {
+  const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${statusLabelKey(status)}`) ?? status);
   const isGreen = STATUS_GREEN.has(status);
+  const methodLabel = submissionMethod && SUBMISSION_METHOD_STATUSES.has(status)
+    ? t(`fm.present.method.${submissionMethod}`)
+    : null;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      padding: '2px 8px', borderRadius: 6,
-      fontSize: 12, fontWeight: 400, lineHeight: '16px',
-      background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
-      color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
-    }}>
-      {label}
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center',
+        padding: '2px 8px', borderRadius: 6,
+        fontSize: 12, fontWeight: 400, lineHeight: '16px',
+        background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
+        color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
+      }}>
+        {label}
+      </span>
+      {methodLabel && (
+        <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', paddingLeft: 2 }}>
+          {methodLabel}
+        </span>
+      )}
     </span>
   );
 }
@@ -232,11 +239,26 @@ function ResultText({ isComputing, error, result, t }) {
   );
 }
 
-// KPI cards row — compact horizontal layout
-function KpiCardsRow({ decls, t }) {
-  const upcomingCount = useMemo(() => computeUpcomingDeadlines(decls).length, [decls]);
-  const pendingCount  = useMemo(() => decls.filter(d => d.status === 'pending' || d.status === 'draft').length, [decls]);
-  const incidentCount = useMemo(() => decls.filter(d => (d.incidents?.blocking ?? 0) + (d.incidents?.warning ?? 0) > 0).length, [decls]);
+// Shared "does this declaration have an incidence" predicate (ETP-4755, KPI-cards-as-filters)
+// — reused by both the "Incidencias" KPI count below and the list's KPI filter, so they can't
+// drift apart. Mirrors exactly how `IncidentsCell` reads the same field (`decl.incidents?.blocking`
+// / `.warning`, defaulting to 0).
+function hasIncidents(decl) {
+  return (decl.incidents?.blocking ?? 0) > 0 || (decl.incidents?.warning ?? 0) > 0;
+}
+
+// KPI cards row — compact horizontal layout.
+// `kpiFilter`/`onFilterClick` (ETP-4755, KPI-cards-as-filters): each card is now a toggleable
+// filter — clicking one narrows the list to exactly what that card counts, clicking the same
+// (already-active) card again clears it. Counts are always computed off `decls` as handed down
+// by the parent (model+year filtered, but NOT status- or KPI-filtered) so a card's own number
+// never changes because of the filter it itself controls.
+function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
+  const upcomingCount = useMemo(() => countUpcomingDeadlines(decls), [decls]);
+  // 'pending' never occurs in real data (no write path produces it — see fiscalModelsUtils.js
+  // STATUSES); this KPI has always effectively counted 'draft' only.
+  const pendingCount  = useMemo(() => decls.filter(d => d.status === 'draft').length, [decls]);
+  const incidentCount = useMemo(() => decls.filter(hasIncidents).length, [decls]);
 
   return (
     <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: 'hsl(var(--card))', flexShrink: 0 }}>
@@ -249,6 +271,8 @@ function KpiCardsRow({ decls, t }) {
           badgeBg="var(--status-warning-bg)"
           badgeColor="var(--status-warning-fg)"
           value={upcomingCount}
+          onClick={() => onFilterClick('upcoming')}
+          active={kpiFilter === 'upcoming'}
           data-testid="KpiWidget__cb728e" />
       </div>
       <div style={{ width: 360, flexShrink: 0 }}>
@@ -260,6 +284,8 @@ function KpiCardsRow({ decls, t }) {
           badgeBg="hsl(var(--muted))"
           badgeColor="hsl(var(--muted-foreground))"
           value={pendingCount}
+          onClick={() => onFilterClick('pending')}
+          active={kpiFilter === 'pending'}
           data-testid="KpiWidget__cb728e" />
       </div>
       <div style={{ width: 360, flexShrink: 0 }}>
@@ -271,61 +297,13 @@ function KpiCardsRow({ decls, t }) {
           badgeBg="var(--status-destructive-bg)"
           badgeColor="hsl(var(--destructive))"
           value={incidentCount}
+          onClick={() => onFilterClick('incidents')}
+          active={kpiFilter === 'incidents'}
           data-testid="KpiWidget__cb728e" />
       </div>
     </div>
   );
 }
-
-const DEFAULT_ACTIVE = { '303': true, '349': true };
-
-const DEMO_DECLARATIONS = [
-  {
-    id: 'demo-303-2026-T2', model: '303', year: 2026, period: 'T2',
-    type: 'ord', status: 'draft', nif: 'B12345678',
-    result: { kind: 'C', amount: 35479.08 },
-    incidents: { blocking: 0, warning: 1, items: [] },
-    summary: { accrued: 1309.98, deductible: 36789.06, result: -35479.08 },
-    boxes: { 7: 6162.60, 9: 1294.15, 27: 1309.98, 28: 175186, 29: 36789.06, 45: 36789.06, 46: -35479.08 },
-    file: null, sources: [], history: [],
-    updatedAt: '2026-06-01',
-  },
-  {
-    id: 'demo-303-2026-T1', model: '303', year: 2026, period: 'T1',
-    type: 'ord', status: 'ready', nif: 'B12345678',
-    result: { kind: 'C', amount: 2816.31 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    summary: { accrued: 682.08, deductible: 3498.39, result: -2816.31 },
-    boxes: { 7: 3248, 9: 682.08, 27: 682.08, 28: 16659, 29: 3498.39, 45: 3498.39, 46: -2816.31 },
-    file: '303_B12345678_2026_T1.303', sources: [], history: [],
-    updatedAt: '2026-04-20',
-  },
-  {
-    id: 'demo-303-2025-T4', model: '303', year: 2025, period: 'T4',
-    type: 'ord', status: 'submitted_ack', nif: 'B12345678',
-    result: { kind: 'I', amount: 12179.75 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    summary: { accrued: 45230.80, deductible: 33051.05, result: 12179.75 },
-    boxes: { 7: 215385, 9: 45230.85, 27: 45230.80, 28: 157386, 29: 33051.05, 45: 33051.05, 46: 12179.75 },
-    file: '303_B12345678_2025_T4.303', sources: [], history: [],
-    updatedAt: '2026-01-20',
-  },
-  {
-    id: 'demo-349-2026-T2', model: '349', year: 2026, period: 'T2',
-    type: 'ord', status: 'draft', nif: 'B12345678',
-    result: { kind: 'N', amount: 0 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    updatedAt: '2026-06-01',
-  },
-  {
-    id: 'demo-349-2026-T1', model: '349', year: 2026, period: 'T1',
-    type: 'ord', status: 'submitted_ack', nif: 'B12345678',
-    result: { kind: 'N', amount: 0 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    file: '349_B12345678_2026_T1.txt',
-    updatedAt: '2026-04-20',
-  },
-];
 
 function normDecl(d) {
   return {
@@ -339,18 +317,6 @@ function normDecl(d) {
 // ── Sub-components ───────────────────────────────────────────────
 function ModelBadge({ model }) {
   return <span className={`fm-model-badge fm-model-badge--${model}`}>{model}</span>;
-}
-
-function FileCell({ file, fileExternal }) {
-  if (!file && !fileExternal) return <span style={{ color: 'hsl(var(--text-disabled))' }}>—</span>;
-  if (fileExternal) {
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'hsl(var(--primary))', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', fontSize: 12 }}>
-        <ArrowUpRight size={12} strokeWidth={2} data-testid="ArrowUpRight__cb728e" />Externa
-              </span>
-    );
-  }
-  return <span className="fm-file">{file}</span>;
 }
 
 function IncidentsCell({ blocking, warning, t }) {
@@ -419,8 +385,22 @@ function getResultKind(r) {
   return 'N';
 }
 
+// Resolves the auto-computed boxes/operators entry for a declaration row —
+// draft declarations read from the polling maps (computedMap/computedMap349),
+// any other status reads from the one-time-compute maps (see the
+// otherDecls303/otherDecls349 comment in the main component for why both are
+// needed). Extracted out of the table row's nested ternary (SonarQube S3358);
+// same values, same logic.
+function getComputedForDecl(decl, isDraft, maps) {
+  const { computedMap, computedMapOther303, computedMap349, computedMapOther349 } = maps;
+  if (decl.model === '349') {
+    return isDraft ? computedMap349[decl.id] : computedMapOther349[decl.id];
+  }
+  return isDraft ? computedMap[decl.id] : computedMapOther303[decl.id];
+}
+
 // ── Main component ───────────────────────────────────────────────
-export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange, onComputeUpdate, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
 
@@ -437,6 +417,51 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       .catch(() => {});
   }, [token, apiBaseUrl]);
 
+  // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
+  // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize
+  // incidents at all, only the dedicated `GET /fiscal{model}/incidents?id=` endpoint does (the
+  // same one the detail pages already call on mount via `fetchDeclarationIncidents`). Without
+  // this, every row's "Incidencias" column stayed frozen at `normDecl()`'s all-zero default
+  // regardless of real AEAT errors/warnings persisted for that declaration, and regardless of
+  // status (draft or already submitted) — this fetch is not gated on `status === 'draft'` the
+  // way `useFiscalAutoCompute`'s box/operator polling is, since incidents are independent of
+  // that pipeline. Keyed off the id set (`declIdsKey`), not the full `decls` array, so a status
+  // change alone (which changes object identity but not the id set) doesn't re-trigger every
+  // row's fetch.
+  const declIdsKey = useMemo(() => decls.map(d => d.id).join(','), [decls]);
+
+  useEffect(() => {
+    if (!token || !apiBaseUrl || !decls.length) return;
+    let cancelled = false;
+    Promise.all(decls.map(d =>
+      fetchDeclarationIncidents(d.id, { token, apiBaseUrl, model: d.model })
+        .then(result => ({ id: d.id, result }))
+    )).then(entries => {
+      if (cancelled) return;
+      setDecls(ds => ds.map(d => {
+        const found = entries.find(e => e.id === d.id);
+        return found ? { ...d, incidents: found.result } : d;
+      }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [declIdsKey, token, apiBaseUrl]);
+
+  const [activeModels, setActiveModels] = useState({});
+  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+
+  useEffect(() => {
+    if (!token || !apiBaseUrl) return;
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    fetch(`${base}/fiscal-models-catalog`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => setActiveModels(data ?? {}))
+      .catch(() => {})
+      .finally(() => setCatalogLoaded(true));
+  }, [token, apiBaseUrl]);
+
   const draftDecls303 = useMemo(
     () => decls.filter(d => d.model === '303' && d.status === 'draft'),
     [decls]
@@ -444,6 +469,32 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
   const draftDecls349 = useMemo(
     () => decls.filter(d => d.model === '349' && d.status === 'draft'),
+    [decls]
+  );
+
+  // Non-draft declarations (ETP-4755 "Resultado" fix): `declToJson`
+  // (FiscalDeclCrudHandler, backend) never persists a computed result on the
+  // declaration record — GET /fiscal303/declarations always comes back with no
+  // `result` field, for every status. The draft-only hooks above are correct for
+  // drafts (live-recompute + poll, since their underlying invoices can still
+  // change), but once a declaration leaves draft its boxes are otherwise NEVER
+  // computed at all in this list — the "Resultado" column stayed stuck on "—"
+  // forever, the same class of bug the "Incidencias" column had before this list
+  // fetched real data. Mirrors FmModel303Page.jsx's own already-shipped fix for
+  // its KPIs/boxes ("Auto-compute on mount when the list didn't hand us any
+  // precomputed data" — same ETP-4755, same `/fiscal303/boxes` and
+  // `/fiscal349/operators` endpoints, which recompute from invoice data
+  // regardless of declaration status): compute ONCE per declaration, with no
+  // `checkModifiedFn` so `useFiscalAutoCompute`'s polling effect never engages
+  // (it no-ops without one) — a submitted/ready/skipped declaration's boxes are
+  // not expected to keep changing, unlike a draft's.
+  const otherDecls303 = useMemo(
+    () => decls.filter(d => d.model === '303' && d.status !== 'draft'),
+    [decls]
+  );
+
+  const otherDecls349 = useMemo(
+    () => decls.filter(d => d.model === '349' && d.status !== 'draft'),
     [decls]
   );
 
@@ -465,6 +516,20 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
     enabled:         Boolean(token && apiBaseUrl),
   });
 
+  const { computedMap: computedMapOther303 } = useFiscalAutoCompute(otherDecls303, {
+    computeFn: computeBoxes303Real,
+    token,
+    apiBaseUrl,
+    enabled:   Boolean(token && apiBaseUrl),
+  });
+
+  const { computedMap: computedMapOther349 } = useFiscalAutoCompute(otherDecls349, {
+    computeFn: computeOperators349Real,
+    token,
+    apiBaseUrl,
+    enabled:   Boolean(token && apiBaseUrl),
+  });
+
   useEffect(() => {
     if (onComputeUpdate && Object.keys(computedMap349).length > 0) {
       onComputeUpdate(computedMap349);
@@ -474,26 +539,30 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const [modelFilter, setModelFilter]   = useState('all');
   const [yearFilter,  setYearFilter]    = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [activeModels, setActiveModels] = useState(DEFAULT_ACTIVE);
+  // kpiFilter (ETP-4755, KPI-cards-as-filters): which KPI card (if any) is toggled on.
+  // Mutually exclusive with itself (clicking a 2nd card replaces the 1st — "one at a time"),
+  // but combines as an additional AND-condition with the year/model/status filters above,
+  // which keep working independently. `null` = no KPI filter active.
+  const [kpiFilter,   setKpiFilter]     = useState(null);
+  const handleKpiFilterClick = useCallback((key) => {
+    setKpiFilter(f => (f === key ? null : key));
+  }, []);
   const [showCatalog,  setShowCatalog]  = useState(false);
-  const [showConfig,   setShowConfig]   = useState(false);
   const [showNewDecl,  setShowNewDecl]  = useState(false);
   const [selected,     setSelected]     = useState(new Set());
-
-  const handleStatusChange = useCallback((id, newStatus) => {
-    if (token && apiBaseUrl) {
-      persistDeclarationStatus(id, newStatus, { token, apiBaseUrl })
-        .then(result => {
-          if (!result.ok) return;
-          setDecls(ds =>
-            ds.map(d => d.id === id
-              ? { ...d, status: newStatus, updatedAt: new Date().toLocaleDateString('es-ES') }
-              : d)
-          );
-          onStatusChange?.(id, newStatus);
-        });
-    }
-  }, [onStatusChange, token, apiBaseUrl]);
+  // Sort state — field-selector popover (mirrors ListView.jsx's sortColumn/sortDirection
+  // pattern used by the generated/Factura windows, not a generic single-toggle button).
+  // `null` sortColumn = default order (year+period, most recent first).
+  const [sortColumn,    setSortColumn]    = useState(null);
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [showSortMenu,  setShowSortMenu]  = useState(false);
+  const sortBtnRef = useRef(null);
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handler = (e) => { if (!sortBtnRef.current?.contains(e.target)) setShowSortMenu(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSortMenu]);
 
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
     if (token && apiBaseUrl) {
@@ -520,9 +589,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const modelOptions = [
     { value: '303', label: 'Modelo 303', badge: '303' },
     { value: '349', label: 'Modelo 349', badge: '349' },
-  ];
+  ].filter(opt => activeModels[opt.value]);
 
-  const modelYearFiltered = decls.filter(d =>
+  const activeDecls = decls.filter(d => activeModels[d.model]);
+
+  const modelYearFiltered = activeDecls.filter(d =>
     (modelFilter === 'all' || d.model === modelFilter) &&
     (yearFilter  === 'all' || String(d.year) === yearFilter)
   );
@@ -531,11 +602,158 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
     statusFilter === 'all' || (STATUS_FILTER_RAW[statusFilter]?.has(d.status) ?? false)
   );
 
+  // KPI filter (ETP-4755, KPI-cards-as-filters) — an additional AND-condition on top of
+  // `filtered` above, not a replacement for it, so it combines with the year/model/status
+  // filters. Each branch reuses the exact predicate its KPI card counts with (see
+  // `isUpcomingDeadline` in fiscalModelsUtils.js and `hasIncidents` above), so the filtered
+  // rows always match the card's own displayed number.
+  const kpiFiltered = filtered.filter(d => {
+    if (kpiFilter === 'upcoming') return isUpcomingDeadline(d);
+    if (kpiFilter === 'pending') return d.status === 'draft';
+    if (kpiFilter === 'incidents') return hasIncidents(d);
+    return true;
+  });
+
+  // ── Sort (toolbar "Ordenar" button → field-selector popover) ────────
+  // Same mechanism as ListView.jsx's column sort (used by the generated/Factura
+  // windows): pick a field, click again to flip direction, "Limpiar orden" resets
+  // to the default. `sortColumn === null` = default order (year+period, descending).
+  // See `sortDeclarations` above for the implementation.
+  const sortedDecls = sortDeclarations(kpiFiltered, sortColumn, sortDirection);
+
   const activeCount = Object.values(activeModels).filter(Boolean).length;
 
   const toggleSelect = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const allSelected = filtered.length > 0 && filtered.every(d => selected.has(d.id));
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map(d => d.id)));
+  const allSelected = sortedDecls.length > 0 && sortedDecls.every(d => selected.has(d.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(sortedDecls.map(d => d.id)));
+
+  const handleSortSelect = (key) => {
+    if (sortColumn === key) {
+      setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(key);
+      setSortDirection('asc');
+    }
+    setShowSortMenu(false);
+  };
+  const handleClearSort = () => {
+    setSortColumn(null);
+    setSortDirection('desc');
+    setShowSortMenu(false);
+  };
+
+  // ── Table body (EmptyState variants vs. the real table) ─────────────
+  // If/else-if chain instead of a nested ternary (SonarQube S3358) — same four
+  // outcomes in the same order of precedence, same JSX per outcome.
+  let tableSection;
+  if (!catalogLoaded) {
+    tableSection = (
+      <EmptyState
+        message={t('loading') ?? 'Cargando…'}
+        data-testid="EmptyState__cb728e" />
+    );
+  } else if (activeCount === 0) {
+    tableSection = (
+      <EmptyState
+        title={t('fm.list.empty_no_active_models') ?? 'No hay modelos activos. Configúralos desde el Catálogo de modelos.'}
+        data-testid="EmptyState__cb728e" />
+    );
+  } else if (sortedDecls.length === 0) {
+    tableSection = <EmptyState data-testid="EmptyState__cb728e" />;
+  } else {
+    tableSection = (
+      <table className="fm-table">
+        <thead>
+          <tr>
+            <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+              <Checkbox
+                checked={allSelected}
+                onChange={toggleAll}
+                onClick={e => e.stopPropagation()}
+                data-testid="Checkbox__cb728e" />
+            </th>
+            <th>{t('fm.col.model')}</th>
+            <th>{t('fm.col.period')}</th>
+            <th>{t('fm.col.type')}</th>
+            <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
+            <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
+            <th>{t('fm.col.incidents')}</th>
+            <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedDecls.map(decl => {
+            // Draft declarations read from the polling maps (computedMap/computedMap349);
+            // any other status reads from the one-time-compute maps above — see the
+            // otherDecls303/otherDecls349 comment for why both are needed.
+            // (see `getComputedForDecl` above for the implementation)
+            const isDraft = decl.status === 'draft';
+            const computed = getComputedForDecl(decl, isDraft, {
+              computedMap, computedMapOther303, computedMap349, computedMapOther349,
+            });
+            const hasStoredResult = !!decl.result?.kind;
+            const isComputingThis = ['303', '349'].includes(decl.model)
+              && !computed && !hasStoredResult;
+            const computeError = (computed?.error && !hasStoredResult) ? computed.error : null;
+
+            let displayResult = decl.result;
+            if (computed?.summary && !computed.error) {
+              if (decl.model === '349') {
+                const total = ['totalE','totalS','totalA','totalI']
+                  .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
+                displayResult = { kind: 'info', amount: total };
+              } else {
+                const r = computed.summary.result;
+                const kind = getResultKind(r);
+                displayResult = { kind, amount: Math.abs(r) };
+              }
+            }
+
+            return (
+              <tr
+                key={decl.id}
+                className={decl.current ? 'fm-table__row--current' : ''}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
+              >
+                <td onClick={e => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selected.has(decl.id)}
+                    onChange={() => toggleSelect(decl.id)}
+                    onClick={e => e.stopPropagation()}
+                    data-testid="Checkbox__cb728e" />
+                </td>
+                <td>
+                  <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
+                  <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
+                </td>
+                <td><span className="fm-period">{decl.period}</span></td>
+                <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
+                <td>
+                  <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <ResultText
+                    isComputing={isComputingThis}
+                    error={computeError}
+                    result={displayResult}
+                    t={t}
+                    data-testid="ResultText__cb728e" />
+                </td>
+                <td>
+                  <IncidentsCell
+                    blocking={decl.incidents?.blocking ?? 0}
+                    warning={decl.incidents?.warning ?? 0}
+                    t={t}
+                    data-testid="IncidentsCell__cb728e" />
+                </td>
+                <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
 
   return (
     <div className="fm-page">
@@ -551,17 +769,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
             background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
             fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
           }}>{decls.length}</span>
-          <button style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 2, width: 24, height: 24,
-            background: 'hsl(var(--muted))', borderRadius: 8, border: 'none', cursor: 'pointer',
-          }}>
-            <MoreVertical
-              size={16}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="MoreVertical__cb728e" />
-          </button>
+          <MoreOptionsMenu
+            favKey="fiscal-models"
+            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            data-testid="MoreOptionsMenu__cb728e" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
           Tesorería / {t('fm.list.title') ?? 'Declaraciones'}
@@ -575,12 +786,14 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
           options={yearOptions}
           onChange={setYearFilter}
           data-testid="FilterDropdown__cb728e" />
-        <FilterDropdown
-          label="Todos los modelos"
-          value={modelFilter}
-          options={modelOptions}
-          onChange={setModelFilter}
-          data-testid="FilterDropdown__cb728e" />
+        {catalogLoaded && (
+          <FilterDropdown
+            label="Todos los modelos"
+            value={modelFilter}
+            options={modelOptions}
+            onChange={setModelFilter}
+            data-testid="FilterDropdown__cb728e" />
+        )}
         <FilterDropdown
           label="Todos los estados"
           value={statusFilter}
@@ -590,149 +803,123 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
         <div className="fm-toolbar__space" />
 
-        <button className="fm-section-header__icon-btn" title={t('fm.action.filter')} aria-label={t('fm.action.filter')}>
-          <Search size={16} strokeWidth={1.75} data-testid="Search__cb728e" />
-        </button>
-        <button className="fm-section-header__icon-btn" title={t('fm.action.sort')} aria-label={t('fm.action.sort')}>
-          <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
-        </button>
-        <RowKebab
-          onDemo={() => setDecls(DEMO_DECLARATIONS.map(normDecl))}
-          onConfig={() => setShowConfig(true)}
-          onCatalog={() => setShowCatalog(true)}
-          activeCount={activeCount}
-          t={t}
-          data-testid="RowKebab__cb728e" />
+        {/* "Ordenar" — field-selector popover (same mechanism as ListView.jsx's
+            column sort used by the generated/Factura windows), not a bare toggle. */}
+        <div className="fm-filter-select" ref={sortBtnRef} style={{ position: 'relative' }}>
+          <button
+            className="fm-section-header__icon-btn"
+            title={t('sortBy')}
+            aria-label={t('sortBy')}
+            aria-haspopup="listbox"
+            aria-expanded={showSortMenu}
+            aria-pressed={Boolean(sortColumn)}
+            onClick={() => setShowSortMenu(o => !o)}
+            style={sortColumn ? { color: 'hsl(var(--foreground))', borderColor: 'var(--fm-border-2)' } : undefined}
+          >
+            <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
+          </button>
+          {showSortMenu && (
+            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200 }}>
+              <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
+                {t('sortBy')}
+              </div>
+              {SORT_FIELDS.map(field => {
+                const isActive = sortColumn === field.key;
+                return (
+                  <button
+                    key={field.key}
+                    className="fm-status-select__item"
+                    style={{ justifyContent: 'space-between' }}
+                    role="option" aria-selected={isActive}
+                    onClick={() => handleSortSelect(field.key)}
+                  >
+                    <span style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: isActive ? 500 : 400 }}>
+                      {t(field.labelKey)}
+                    </span>
+                    {isActive && (
+                      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>
+                        {sortDirection === 'asc' ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              {sortColumn && (
+                <>
+                  <div style={{ height: 1, background: 'hsl(var(--border-subtle))', margin: '2px 8px' }} />
+                  <button
+                    className="fm-status-select__item"
+                    onClick={handleClearSort}
+                  >
+                    <span style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>{t('clearSort')}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <button
-          className="fm-toolbar__btn fm-toolbar__btn--primary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
-          onClick={() => setShowNewDecl(true)}
+          className="fm-toolbar__btn"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
+          onClick={() => setShowCatalog(true)}
         >
-          + Nueva declaración
+          <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
         </button>
+
+        {catalogLoaded && activeCount > 0 && (
+          <button
+            className="fm-toolbar__btn fm-toolbar__btn--primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowNewDecl(true)}
+          >
+            + Nueva declaración
+          </button>
+        )}
       </div>
       {/* ── KPI cards row ─────────────────────────────────────── */}
-      <KpiCardsRow decls={modelYearFiltered} t={t} data-testid="KpiCardsRow__cb728e" />
+      {catalogLoaded && (
+        <KpiCardsRow
+          decls={modelYearFiltered}
+          t={t}
+          kpiFilter={kpiFilter}
+          onFilterClick={handleKpiFilterClick}
+          data-testid="KpiCardsRow__cb728e" />
+      )}
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
-        {filtered.length === 0
-          ? <EmptyState data-testid="EmptyState__cb728e" />
-          : (
-            <table className="fm-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-                    <Checkbox
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      onClick={e => e.stopPropagation()}
-                      data-testid="Checkbox__cb728e" />
-                  </th>
-                  <th>{t('fm.col.model')}</th>
-                  <th>{t('fm.col.period')}</th>
-                  <th>{t('fm.col.type')}</th>
-                  <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
-                  <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
-                  <th>{t('fm.col.incidents')}</th>
-                  <th>{t('fm.col.file')}</th>
-                  <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(decl => {
-                  const computed = decl.model === '349' ? computedMap349[decl.id] : computedMap[decl.id];
-                  const hasStoredResult = !!decl.result?.kind;
-                  const isComputingThis = ['303', '349'].includes(decl.model)
-                    && decl.status === 'draft' && !computed && !hasStoredResult;
-                  const computeError = (computed?.error && !hasStoredResult) ? computed.error : null;
-
-                  let displayResult = decl.result;
-                  if (computed?.summary && !computed.error) {
-                    if (decl.model === '349') {
-                      const total = ['totalE','totalS','totalA','totalI']
-                        .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
-                      displayResult = { kind: 'info', amount: total };
-                    } else {
-                      const r = computed.summary.result;
-                      const kind = getResultKind(r);
-                      displayResult = { kind, amount: Math.abs(r) };
-                    }
-                  }
-
-                  return (
-                    <tr
-                      key={decl.id}
-                      className={decl.current ? 'fm-table__row--current' : ''}
-                      onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
-                    >
-                      <td onClick={e => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selected.has(decl.id)}
-                          onChange={() => toggleSelect(decl.id)}
-                          onClick={e => e.stopPropagation()}
-                          data-testid="Checkbox__cb728e" />
-                      </td>
-                      <td>
-                        <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
-                        <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
-                      </td>
-                      <td><span className="fm-period">{decl.period}</span></td>
-                      <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
-                      <td>
-                        <StatusText status={decl.status} t={t} data-testid="StatusText__cb728e" />
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <ResultText
-                          isComputing={isComputingThis}
-                          error={computeError}
-                          result={displayResult}
-                          t={t}
-                          data-testid="ResultText__cb728e" />
-                      </td>
-                      <td>
-                        <IncidentsCell
-                          blocking={decl.incidents?.blocking ?? 0}
-                          warning={decl.incidents?.warning ?? 0}
-                          t={t}
-                          data-testid="IncidentsCell__cb728e" />
-                      </td>
-                      <td><FileCell
-                        file={decl.file}
-                        fileExternal={decl.fileExternal}
-                        data-testid="FileCell__cb728e" /></td>
-                      <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        {tableSection}
       </div>
       {/* ── Overlays ─────────────────────────────────────────────── */}
-      {showConfig  && <ConfigDrawer
-        onClose={() => setShowConfig(false)}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ConfigDrawer__cb728e" />}
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}
         onClose={() => setShowNewDecl(false)}
+        activeModels={activeModels}
+        existingDeclarations={decls}
         data-testid="NewDeclModal__cb728e" />}
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
       {showCatalog && (
-        <>
-          <div className="fm-catalog-overlay" onClick={() => setShowCatalog(false)} />
-          <div className="fm-catalog-drawer">
-            <FmCatalogPage
-              activeModels={activeModels}
-              onBack={() => setShowCatalog(false)}
-              onSave={(newActive) => { setActiveModels(newActive); setShowCatalog(false); }}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              data-testid="FmCatalogPage__cb728e" />
-          </div>
-        </>
+        <FmCatalogPage
+          activeModels={activeModels}
+          onBack={() => setShowCatalog(false)}
+          onSave={(newActive) => {
+            setActiveModels(newActive);
+            setShowCatalog(false);
+            if (token && apiBaseUrl) {
+              const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+              fetch(`${base}/fiscal-models-catalog`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(newActive),
+              })
+                .then(r => { if (!r.ok) throw new Error(r.status); })
+                .catch(() => {});
+            }
+          }}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="FmCatalogPage__cb728e" />
       )}
     </div>
   );

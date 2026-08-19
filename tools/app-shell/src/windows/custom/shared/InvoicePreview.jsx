@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
@@ -193,6 +193,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
   const ratePrecision = useCurrencyPrecision();
+  // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
+  // (GET /preview-file) resolves ahead of the jsreport regeneration behind
+  // p.pdfUrl; capturing it here lets Download gate on whichever resolves first.
+  const [cachedAttachment, setCachedAttachment] = useState(null);
 
   // Dual-currency: fetch exchange rate when doc currency differs from org currency.
   // When the invoice has a per-document custom rate (eTGOCurrencyRate = org→doc multiplyRate,
@@ -248,6 +252,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     autoFetch: true,
     token,
     apiBaseUrl,
+    onFileChange: setCachedAttachment,
   } : {
     documentId: invoice.id,
     specName,
@@ -261,6 +266,22 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     tableName: 'C_Invoice',
     token,
     apiBaseUrl,
+    onFileChange: setCachedAttachment,
+  };
+
+  // Prefer the cached attachment when available — already fetched, resolves
+  // ahead of the jsreport regeneration and closes the preview/button gap.
+  const hasPdf = !!p.pdfUrl || !!cachedAttachment;
+
+  const handleDownloadPdf = () => {
+    if (cachedAttachment) {
+      const a = document.createElement('a');
+      a.href = cachedAttachment.objectUrl;
+      a.download = cachedAttachment.fileName || `invoice-${p.displayInvoice?.documentNo || 'document'}.pdf`;
+      a.click();
+      return;
+    }
+    p.handleDownloadPdf();
   };
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -312,8 +333,8 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       canAddPayment={p.canAddPayment}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={isSendable ? p.handleDownloadPdf : undefined}
-      hasPdf={!!p.pdfUrl}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
+      hasPdf={hasPdf}
       data-testid="InvoiceActionButtons__cf88e6" />
   );
 
@@ -339,7 +360,15 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           outstanding={p.totalOutstanding}
           apiBaseUrl={apiBaseUrl}
           onClose={() => p.setShowPaymentModal(false)}
-          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          onSaved={async () => {
+            p.setShowPaymentModal(false);
+            // ETP-4832: refetchInvoice is what dispatches the invoice-updated event /
+            // calls onInvoiceUpdated, which is what tells the hosting list view to
+            // refresh the grid row — fetchPayments alone only updates this panel's
+            // own PaymentsCard, mirrors the working SifSendingModal.onAfterSend pattern below.
+            await p.refetchInvoice();
+            p.fetchPayments();
+          }}
           data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (

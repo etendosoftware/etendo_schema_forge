@@ -365,7 +365,16 @@ describe('ReportViewerPage — popup multi-select (PopupMultiSelector)', () => {
     await user.click(openButton);
 
     await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument());
-    await user.click(screen.getByText('cancel'));
+
+    // The sidebar now also has a top "cancel" action (data-testid="action-cancel")
+    // that reads the same 'cancel' i18n key — disambiguate by picking the
+    // modal's own cancel button (a plain <button> with no data-testid).
+    const cancelButtons = screen.getAllByText('cancel');
+    const modalCancelButton = cancelButtons
+      .map((el) => el.closest('button'))
+      .find((btn) => btn && !btn.hasAttribute('data-testid'));
+    expect(modalCancelButton).toBeTruthy();
+    await user.click(modalCancelButton);
 
     await waitFor(() => {
       expect(screen.queryByText('Acme')).not.toBeInTheDocument();
@@ -624,61 +633,91 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     expect(input).toHaveValue('');
   });
 
-  // NOTE (found while writing this suite, not fixed per Tester's "never modify
-  // source" rule): DrillDownViewer (ReportViewerPage.jsx ~line 999) references
-  // `ui(f.labelKey)` in its format-buttons row but never calls `useUI()` in that
-  // component's scope — `ui` is only defined in the enclosing ReportViewer. This
-  // throws a ReferenceError as soon as either drilldown dialog (aging or
-  // trial-balance) is opened, crashing the render tree. The event-listener
-  // wiring itself (window 'message' → setDrillDownBp/setDrillDownAccount) is
-  // exercised and asserted below without letting the DrillDownViewer render
-  // crash escape as an unhandled test-runner error.
-  it('wires the window message listener for aging-drilldown and reaches DrillDownViewer (which then throws — pre-existing bug)', async () => {
+  // Regression test (ETP — DrillDownViewer `ui is not defined`): DrillDownViewer
+  // (ReportViewerPage.jsx ~line 1030) used `ui(f.labelKey)` / `ui('loadingDetails')`
+  // / `ui('detailReport')` in its render without ever calling `useUI()` inside
+  // that component's own scope — it silently relied on `ui` from the enclosing
+  // ReportViewer closure, which does NOT apply to a separately-declared function
+  // component. This threw `ReferenceError: ui is not defined` the first time either
+  // drilldown dialog (aging or trial-balance) was opened, crashing the render tree
+  // with a blank screen. Fixed by declaring `const ui = useUI();` at the top of
+  // DrillDownViewer. These tests mount the real dialog via the same postMessage
+  // wiring a real drill-down click uses, and assert the format buttons + iframe
+  // title render via ui() without throwing.
+  it('opens the aging-drilldown dialog and renders DrillDownViewer without throwing, with ui()-driven labels', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>detail</body></html>') });
+      }
       return Promise.resolve(makeSelectorResponse([]));
     });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
 
-    let caught = null;
-    try {
-      act(() => {
-        window.dispatchEvent(new MessageEvent('message', {
-          data: { type: 'aging-drilldown', bpId: 'bp-42', bpName: 'Acme Corp' },
-        }));
-      });
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(ReferenceError);
-    expect(caught.message).toMatch(/ui is not defined/);
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'aging-drilldown', bpId: 'bp-42', bpName: 'Acme Corp' },
+      }));
+    });
+
+    // Dialog opens and DrillDownViewer mounts and renders — no ReferenceError.
+    // Scope to the dialog since the sidebar export actions also render "PDF".
+    let dialog;
+    await waitFor(() => {
+      dialog = screen.getByTestId('dialog');
+      expect(within(dialog).getByText('PDF')).toBeInTheDocument();
+    });
+    expect(within(dialog).getByText('Excel')).toBeInTheDocument();
+    expect(within(dialog).getByText('CSV')).toBeInTheDocument();
+    // The "Vista Previa" button was removed from DrillDownViewer's format
+    // selector (only PDF/Excel/CSV remain, matching the main ReportViewer).
+    expect(within(dialog).queryByText('preview')).toBeNull();
+    expect(within(dialog).getByTitle('detailReport')).toBeInTheDocument();
+
+    // The render request went to the base report (no targetReportId override).
+    await waitFor(() => {
+      const renderCalls = globalThis.fetch.mock.calls.filter(([u]) => typeof u === 'string' && u.includes('/render'));
+      expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+    });
+    expect(globalThis.fetch.mock.calls.some(([u]) => typeof u === 'string' && u.includes(`/api/reports/${BASE_REPORT.id}/render`))).toBe(true);
   });
 
-  it('wires the window message listener for trial-balance-drilldown and reaches DrillDownViewer (which then throws — pre-existing bug)', async () => {
+  it('opens the trial-balance-drilldown dialog (targeting report-general-ledger) and renders DrillDownViewer without throwing, with ui()-driven labels', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>detail</body></html>') });
+      }
       return Promise.resolve(makeSelectorResponse([]));
     });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
 
-    let caught = null;
-    try {
-      act(() => {
-        window.dispatchEvent(new MessageEvent('message', {
-          data: { type: 'trial-balance-drilldown', accountId: 'acc-1', accountName: 'Cash', accountValue: '1100' },
-        }));
-      });
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(ReferenceError);
-    expect(caught.message).toMatch(/ui is not defined/);
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'trial-balance-drilldown', accountId: 'acc-1', accountName: 'Cash', accountValue: '1100' },
+      }));
+    });
+
+    let dialog;
+    await waitFor(() => {
+      dialog = screen.getByTestId('dialog');
+      expect(within(dialog).getByText('PDF')).toBeInTheDocument();
+    });
+    expect(within(dialog).getByText('Excel')).toBeInTheDocument();
+    expect(within(dialog).getByText('CSV')).toBeInTheDocument();
+    // The "Vista Previa" button was removed from DrillDownViewer's format
+    // selector (only PDF/Excel/CSV remain, matching the main ReportViewer).
+    expect(within(dialog).queryByText('preview')).toBeNull();
+    expect(within(dialog).getByTitle('detailReport')).toBeInTheDocument();
+
+    // targetReportId overrides the reportId used for the render request.
+    await waitFor(() => {
+      expect(globalThis.fetch.mock.calls.some(([u]) => typeof u === 'string' && u.includes('/api/reports/report-general-ledger/render'))).toBe(true);
+    });
   });
 
   it('opens the invoice popup dialog on postMessage("navigate-invoice")', async () => {

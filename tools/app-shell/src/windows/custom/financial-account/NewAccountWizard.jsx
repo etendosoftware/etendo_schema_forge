@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
@@ -95,6 +96,7 @@ function resolveFormMode(accountType) {
  */
 export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreation }) {
   const ui = useUI();
+  const { token } = useAuth();
   const { createAccount, fetchDefaults } = useAccountMutations();
 
   const [step, setStep] = useState(STEP.TYPE);
@@ -103,6 +105,12 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
   const [bankQuery, setBankQuery] = useState('');
   const [currencies, setCurrencies] = useState([]);
   const [defaultCurrencyId, setDefaultCurrencyId] = useState('');
+  // ETP-4896: the country the BankPicker's flag dropdown is filtering Salt Edge providers by,
+  // lifted up from that component so a chosen bank's country can seed the FORM step's Country
+  // field (Flujo A of the ticket) instead of resetting to the org default every time.
+  const [bankCountryIso, setBankCountryIso] = useState(BANK_COUNTRIES[0].code);
+  const [defaultCountryId, setDefaultCountryId] = useState('');
+  const [countryIbanRules, setCountryIbanRules] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -112,6 +120,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     setAccountType(null);
     setSelectedBank(null);
     setBankQuery('');
+    setBankCountryIso(BANK_COUNTRIES[0].code);
     setSubmitting(false);
     setFormError(null);
     let cancelled = false;
@@ -120,6 +129,8 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
         if (cancelled) return;
         setCurrencies(Array.isArray(data.currencies) ? data.currencies : []);
         setDefaultCurrencyId(data.defaultCurrencyId || '');
+        setDefaultCountryId(data.defaultCountryId || '');
+        setCountryIbanRules(Array.isArray(data.countryIbanRules) ? data.countryIbanRules : []);
       })
       .catch(() => {
         if (!cancelled) toast.error(ui('financeAccountsNewCreateError'));
@@ -131,6 +142,13 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     // the catch but must not retrigger the reset/refetch and wipe wizard progress.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fetchDefaults]);
+
+  // ETP-4896: resolve the BankPicker's ISO code (BANK_COUNTRIES is a curated static list — its
+  // codes aren't C_Country ids, which are per-instance UUIDs) against the IBAN-rules catalog,
+  // which is the only country list already loaded here. A code with no active match (e.g. a
+  // deactivated country row) yields '', and AccountFormStep falls back to the org default via its
+  // own `defaultCountryId || ''` guard — never a hard error.
+  const seededCountryId = countryIbanRules.find((c) => c.iso === bankCountryIso)?.id ?? '';
 
   const goBack = () => {
     setFormError(null);
@@ -270,6 +288,8 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
             ui={ui}
             query={bankQuery}
             onQueryChange={setBankQuery}
+            country={bankCountryIso}
+            onCountryChange={setBankCountryIso}
             onPick={pickBank}
             onSkip={() => { setSelectedBank(null); setStep(STEP.FORM); }}
             data-testid="BankPicker__24760b" />
@@ -290,6 +310,13 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
             bankName={selectedBank?.name}
             currencies={currencies}
             defaultCurrencyId={defaultCurrencyId}
+            countryIbanRules={countryIbanRules}
+            // ETP-4896: the bank the user picked in the BankPicker step (Flujo A) wins over the
+            // org default — `seededCountryId` is '' when Cash skipped the picker entirely or the
+            // BankPicker's country has no active C_Country match, in which case this falls back to
+            // the org default exactly like before this ticket.
+            defaultCountryId={seededCountryId || defaultCountryId}
+            token={token}
             // Pre-fill the account name with the chosen bank's name so the user only tweaks it
             // (e.g. "Santander" → "Santander nóminas"). Empty when no bank was selected (skip / cash).
             initialValues={{ name: selectedBank?.name ?? '' }}
@@ -341,9 +368,8 @@ function TypePicker({ ui, onPick }) {
   );
 }
 
-function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
+function BankPicker({ ui, query, onQueryChange, country, onCountryChange, onPick, onSkip }) {
   const { fetchProviders } = useBankConnectionActions();
-  const [country, setCountry] = useState(BANK_COUNTRIES[0].code);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -395,7 +421,7 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
               {BANK_COUNTRIES.map((c) => (
                 <DropdownMenuItem
                   key={c.code}
-                  onClick={() => setCountry(c.code)}
+                  onClick={() => onCountryChange(c.code)}
                   data-testid={`new-account-bank-country-${c.code}`}
                 >
                   <span className="text-base leading-none">{c.flag}</span>
