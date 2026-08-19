@@ -37,16 +37,16 @@ describe('FmCatalogPage — rendering', () => {
     expect(document.body.textContent).toContain('fm.catalog.title');
   });
 
-  it('renders a card for each catalog model (6 total)', () => {
+  it('renders a card for each catalog model (2 total)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const cards = container.querySelectorAll('.fm-catalog-card');
-    expect(cards.length).toBe(6);
+    expect(cards.length).toBe(2);
   });
 
-  it('shows total catalog count badge (6)', () => {
+  it('shows total catalog count badge (2)', () => {
     render(<FmCatalogPage {...defaultProps} />);
-    // The count badge text contains '6'
-    expect(document.body.textContent).toContain('6');
+    // The count badge text contains '2'
+    expect(document.body.textContent).toContain('2');
   });
 
   it('shows model 303 and 349 name keys', () => {
@@ -55,15 +55,68 @@ describe('FmCatalogPage — rendering', () => {
     expect(document.body.textContent).toContain('fm.catalog.349.name');
   });
 
+  it('does not render discontinued models 111, 115, 180, 190', () => {
+    render(<FmCatalogPage {...defaultProps} />);
+    for (const id of ['111', '115', '180', '190']) {
+      expect(document.body.textContent).not.toContain(`fm.catalog.${id}.name`);
+    }
+  });
+
   it('shows periodicity labels from i18n', () => {
     render(<FmCatalogPage {...defaultProps} />);
     expect(document.body.textContent).toContain('fm.catalog.periodicity.quarterly');
     expect(document.body.textContent).toContain('fm.catalog.periodicity.monthly');
   });
 
-  it('shows "Próximamente" text for locked models', () => {
-    render(<FmCatalogPage {...defaultProps} />);
-    expect(document.body.textContent).toContain('fm.catalog.coming_soon');
+  it('303 shows both Trimestral and Mensual periodicity pills', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card303 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('303'));
+    const pills = card303.querySelectorAll('.fm-catalog-card__pill');
+    const pillText = Array.from(pills).map(p => p.textContent);
+    expect(pillText).toContain('fm.catalog.periodicity.quarterly');
+    expect(pillText).toContain('fm.catalog.periodicity.monthly');
+  });
+
+  it('349 shows both Mensual and Trimestral periodicity pills', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('349'));
+    const pills = card349.querySelectorAll('.fm-catalog-card__pill');
+    const pillText = Array.from(pills).map(p => p.textContent);
+    expect(pillText).toContain('fm.catalog.periodicity.monthly');
+    expect(pillText).toContain('fm.catalog.periodicity.quarterly');
+  });
+
+  it('303 pills render in the same order as 349: monthly then quarterly', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card303 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('303'));
+    const pillText = Array.from(card303.querySelectorAll('.fm-catalog-card__pill'))
+      .map(p => p.textContent);
+    expect(pillText).toEqual([
+      'fm.catalog.periodicity.monthly',
+      'fm.catalog.periodicity.quarterly',
+    ]);
+  });
+
+  it('349 pills render in exact declared order: monthly then quarterly', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('349'));
+    const pillText = Array.from(card349.querySelectorAll('.fm-catalog-card__pill'))
+      .map(p => p.textContent);
+    expect(pillText).toEqual([
+      'fm.catalog.periodicity.monthly',
+      'fm.catalog.periodicity.quarterly',
+    ]);
+  });
+
+  it('303 and 349 pills render simultaneously without cross-contamination', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const allPills = container.querySelectorAll('.fm-catalog-card__pill');
+    // 2 pills per model x 2 models = 4 pills total, rendered together.
+    expect(allPills.length).toBe(4);
   });
 });
 
@@ -90,17 +143,32 @@ describe('FmCatalogPage — toggle', () => {
     expect(document.body.textContent).toContain('1');
   });
 
-  it('locked models do not have a switch (no toggle)', () => {
+  it('both 303 and 349 have a toggle switch (no locked models in the catalog)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const switches = container.querySelectorAll('[role="switch"]');
-    // Only 303 and 349 are not locked → 2 switches max
-    expect(switches.length).toBeLessThanOrEqual(2);
+    expect(switches.length).toBe(2);
   });
 
-  it('locked cards have --locked CSS class', () => {
+  it('no cards have the --locked CSS class', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const locked = container.querySelectorAll('.fm-catalog-card--locked');
-    expect(locked.length).toBeGreaterThan(0);
+    expect(locked.length).toBe(0);
+  });
+
+  it('re-sorts cards so the still-active model renders first after a toggle', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    // Initially both active — id order wins the tie-break (303 before 349).
+    let order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+      .map(b => b.textContent);
+    expect(order).toEqual(['303', '349']);
+
+    // Deactivate 303 (first switch) — 349 (still active) should now sort first.
+    const switches = container.querySelectorAll('[role="switch"]');
+    fireEvent.click(switches[0]);
+
+    order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+      .map(b => b.textContent);
+    expect(order).toEqual(['349', '303']);
   });
 });
 
@@ -133,6 +201,100 @@ describe('FmCatalogPage — close and save', () => {
     // After toggling 303 off it should be false
     expect(savedActive['303']).toBe(false);
     expect(savedActive['349']).toBe(true);
+  });
+
+  // Regression: previously the backdrop overlay was rendered externally by
+  // FmListPage, so clicking it to close the drawer bypassed FmCatalogPage's
+  // onSave entirely and silently discarded toggled model states. Now
+  // FmCatalogPage owns its own overlay + drawer wrapper, and a single
+  // handleClose (calling onSave then onBack) backs BOTH the backdrop click
+  // and the X button, so both close paths save consistently.
+  it('calls onSave and onBack when the backdrop overlay is clicked (not just the X button)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('persists a toggle made before closing via the backdrop overlay (the actual bug being fixed)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const switches = container.querySelectorAll('[role="switch"]');
+    fireEvent.click(switches[0]); // toggle 303 off
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    const savedActive = onSave.mock.calls[0][0];
+    expect(savedActive['303']).toBe(false);
+    expect(savedActive['349']).toBe(true);
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('does not close when clicking inside the drawer itself (stopPropagation on the drawer wrapper)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const drawer = container.querySelector('.fm-catalog-drawer');
+    fireEvent.click(drawer);
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('calls onSave/onBack with the unchanged activeModels when the backdrop is clicked without any toggle', () => {
+    // Edge case: closing via backdrop when `active` state is identical to the
+    // original `activeModels` prop — no toggles made before closing.
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const original = { '303': true, '349': true };
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={original} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  // Gap: handleClose has no idempotency guard (no "already closed" flag). In
+  // the real app this is masked because FmListPage unmounts FmCatalogPage on
+  // the first onBack, but the component itself does not protect against being
+  // invoked twice (e.g. two click events reaching it before that unmount
+  // commits). This test documents the current (unguarded) behavior — see
+  // BUG report to Forge for the risk assessment.
+  it('handleClose has no de-dup guard: firing the backdrop click twice invokes onSave/onBack twice', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onBack).toHaveBeenCalledTimes(2);
+  });
+
+  it('handleClose has no de-dup guard: firing the X button twice invokes onSave/onBack twice', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const closeBtn = container.querySelector('.fm-catalog-header__back');
+    fireEvent.click(closeBtn);
+    fireEvent.click(closeBtn);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onBack).toHaveBeenCalledTimes(2);
   });
 });
 
