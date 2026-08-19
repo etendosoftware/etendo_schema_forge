@@ -56,8 +56,8 @@ describe('VerifactuSection — form fields', () => {
   it('QR code toggle hidden from UI but defaultQR preserved from DB record (ETP-4783)', () => {
     // The QR label key must NOT appear in the JSX — the toggle is not rendered
     assert.doesNotMatch(src, /fiscal\.verifactu\.field\.qr/);
-    // defaultQR IS read from the DB record and included in form state (fed to
-    // buildVerifactuUpdatePayload which always forces it to true in the PUT body)
+    // defaultQR IS read from the DB record and included in form state so that
+    // buildVerifactuUpdatePayload can forward the value as-is (no forced override)
     assert.match(src, /defaultQR/);
   });
 

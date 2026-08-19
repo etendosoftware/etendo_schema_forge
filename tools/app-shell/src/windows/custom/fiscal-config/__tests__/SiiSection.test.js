@@ -34,20 +34,12 @@ describe('SiiSection — Navarra badge', () => {
 });
 
 describe('SiiSection — form fields', () => {
-  it('does not render the enrolled (acogidaAlSII) toggle (ETP-4783: always forced to Y)', () => {
+  it('does not render the enrolled (acogidaAlSII) toggle (ETP-4783: value comes from record via mapSiiRecordToForm)', () => {
     assert.doesNotMatch(src, /fiscal\.sii\.field\.enrolled/);
   });
 
-  it('acogidaAlSII is still sent in the PUT body with forced value Y', () => {
-    assert.match(src, /acogidaAlSII/);
-  });
-
-  it('does not render the production environment toggle (ETP-4783: always forced to Y)', () => {
+  it('does not render the production environment toggle (ETP-4783: value comes from record via mapSiiRecordToForm)', () => {
     assert.doesNotMatch(src, /fiscal\.sii\.field\.production/);
-  });
-
-  it('entornoDeProduccin is still sent in the PUT body with forced value Y', () => {
-    assert.match(src, /entornoDeProduccin/);
   });
 
   it('does not render enrollment date fields (ETP-4783: always set to creation date)', () => {

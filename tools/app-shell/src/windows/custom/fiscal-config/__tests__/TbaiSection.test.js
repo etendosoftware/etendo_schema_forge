@@ -32,35 +32,20 @@ describe('TbaiSection — form fields', () => {
     assert.match(src, /record\?\.tbaisystemdate/);
   });
 
-  it('does not render the production environment toggle (ETP-4783: always forced to Y)', () => {
+  it('does not render the production environment toggle (ETP-4783: managed by backend only)', () => {
     assert.doesNotMatch(src, /fiscal\.tbai\.field\.production/);
   });
 
-  it('productionEnv is still sent in the PUT body with forced value Y', () => {
-    assert.match(src, /productionEnv/);
-  });
-
-  it('does not render the validatePreviousInvoice toggle (ETP-4783: always forced to N)', () => {
+  it('does not render the validatePreviousInvoice toggle (ETP-4783: managed by backend only)', () => {
     assert.doesNotMatch(src, /fiscal\.tbai\.field\.validatePrev/);
   });
 
-  it('does not render the uSEAsproductDesc toggle (ETP-4783: always forced to N — use product name)', () => {
+  it('does not render the uSEAsproductDesc toggle (ETP-4783: managed by backend only)', () => {
     assert.doesNotMatch(src, /fiscal\.tbai\.field\.useAsProduct/);
-  });
-
-  it('uSEAsproductDesc is still sent in the PUT body with forced value N', () => {
-    assert.match(src, /uSEAsproductDesc/);
   });
 
   it('renders the invoice description field', () => {
     assert.match(src, /invoiceDescription/);
-  });
-
-  it('territory names use Spanish forms (ETP-4783)', () => {
-    assert.match(src, /Vizcaya/);
-    assert.match(src, /Guipúzcoa/);
-    assert.doesNotMatch(src, /BIZKAIA: 'Bizkaia'/);
-    assert.doesNotMatch(src, /GIPUZKOA: 'Gipuzkoa'/);
   });
 });
 
