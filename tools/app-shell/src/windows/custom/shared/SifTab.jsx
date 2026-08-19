@@ -8,7 +8,7 @@ import { SelectorInput } from '@/components/contract-ui/SelectorInput.jsx';
 import {
   useSifFieldPatcher,
   VERIFACTU_INV_TYPE_OPTIONS,
-  VERIFACTU_REVERSE_TYPE_OPTIONS,
+  SII_MOTIVO_RECTIF_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 
 function Field({ label, htmlFor, children }) {
@@ -271,16 +271,6 @@ function shouldShowNoRecipientIdArt61d(invType) {
 }
 
 // Classic displayLogic (verbatim, operator-precedence quirk intentional — `&` binds tighter than `|`
-// in the raw AD string with no parens): `@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1'
-// | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'`
-// Only R1 is gated by showVerifactu/config; R2–R5 show regardless. Mirrors Classic exactly.
-function shouldShowReverseInvType(showVerifactu, invType) {
-  return (showVerifactu && invType === 'R1')
-    || invType === 'R2'
-    || invType === 'R3'
-    || invType === 'R4'
-    || invType === 'R5';
-}
 
 export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {
@@ -474,6 +464,27 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 </SelectContent>
               </Select>
             </Field>
+            {getVal(siiTypeField) === 'R' && (
+              <Field
+                label={ui('sifDataTabs.field.rectificationReason')}
+                htmlFor="sif-siiMotivoRectif"
+                data-testid="Field__b99c8b">
+                <Select
+                  value={getVal('aeatsiiMotivoRectif') || undefined}
+                  onValueChange={val => onChange?.('aeatsiiMotivoRectif', val)}
+                  disabled={siiFieldReadOnly}
+                  data-testid="Select__b99c8b">
+                  <SelectTrigger id="sif-siiMotivoRectif" data-testid="SelectTrigger__b99c8b">
+                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__b99c8b">
+                    {SII_MOTIVO_RECTIF_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field
               label={ui('sifDataTabs.field.siiDescription')}
               htmlFor="sif-siiDesc"
@@ -590,53 +601,12 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
-            {shouldShowSimplifiedArt7273(vfInvType) && (
-              <Field
-                label={ui('sifDataTabs.field.simplifiedInvoiceArt7273')}
-                htmlFor="sif-vfSimp7273"
-                data-testid="Field__b99c8b">
-                <CheckboxField
-                  id="sif-vfSimp7273"
-                  checked={Boolean(getVal('etvfacSimpinvart7273'))}
-                  disabled={dateReadOnly}
-                  onToggle={val => onChange?.('etvfacSimpinvart7273', val)}
-                  data-testid="CheckboxField__b99c8b" />
-              </Field>
-            )}
-            {shouldShowNoRecipientIdArt61d(vfInvType) && (
-              <Field
-                label={ui('sifDataTabs.field.noRecipientIdArt61d')}
-                htmlFor="sif-vfNoId61d"
-                data-testid="Field__b99c8b">
-                <CheckboxField
-                  id="sif-vfNoId61d"
-                  checked={Boolean(getVal('etvfacInvNoIDArt61d'))}
-                  disabled={dateReadOnly}
-                  onToggle={val => onChange?.('etvfacInvNoIDArt61d', val)}
-                  data-testid="CheckboxField__b99c8b" />
-              </Field>
-            )}
-            {shouldShowReverseInvType(showVerifactu, vfInvType) && (
-              <Field
-                label={ui('sifDataTabs.field.correctiveInvoiceType')}
-                htmlFor="sif-vfReverseType"
-                data-testid="Field__b99c8b">
-                <Select
-                  value={getVal('etvfacReverseinvtype') || undefined}
-                  onValueChange={val => onChange?.('etvfacReverseinvtype', val)}
-                  disabled={dateReadOnly}
-                  data-testid="Select__b99c8b">
-                  <SelectTrigger id="sif-vfReverseType" data-testid="SelectTrigger__b99c8b">
-                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
-                  </SelectTrigger>
-                  <SelectContent data-testid="SelectContent__b99c8b">
-                    {VERIFACTU_REVERSE_TYPE_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
+            {/* etvfacSimpinvart7273 ("Factura Simplificada Art 7.2 y 7.3") and
+                etvfacInvNoIDArt61d ("Sin ID Destinatario Art61d") are intentionally
+                hidden in GO — confirmed with PM (ETP-4783). */}
+            {/* ETP-4783: etvfacReverseinvtype is always 'I' (por diferencias) — the only
+                supported value. It is auto-set by useSifFieldPatcher when etvfacInvType
+                is an R-type, so the field is intentionally hidden from the UI. */}
           </Panel>
         )}
       </div>

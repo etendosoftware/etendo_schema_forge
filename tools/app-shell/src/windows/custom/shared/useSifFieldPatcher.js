@@ -34,6 +34,15 @@ export const VERIFACTU_REVERSE_TYPE_OPTIONS = [
   { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
 ];
 
+// ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
+export const SII_MOTIVO_RECTIF_OPTIONS = [
+  { value: 'R1', labelKey: 'sifDataTabs.option.siiMotivoR1' },
+  { value: 'R2', labelKey: 'sifDataTabs.option.siiMotivoR2' },
+  { value: 'R3', labelKey: 'sifDataTabs.option.siiMotivoR3' },
+  { value: 'R4', labelKey: 'sifDataTabs.option.siiMotivoR4' },
+  { value: 'R5', labelKey: 'sifDataTabs.option.siiMotivoR5' },
+];
+
 // ETP-4463: SIF fields no longer persist themselves via a per-field PATCH on
 // blur/change. Instead they write into the shared `editing` state that
 // DetailView already maintains for the header form — via the `onChange`

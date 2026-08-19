@@ -13609,8 +13609,8 @@
       "description": "Authorization number"
     },
     "EM_Tbai_Reverseinvoicecode": {
-      "label": "Código de Factura Rectificativa",
-      "description": "Código asignado a la factura rectificativa."
+      "label": "Corrective Invoice Code",
+      "description": "Code assigned to the corrective invoice."
     },
     "Paymentnumber": {
       "label": "Payment Number",
@@ -20524,6 +20524,12 @@
     "sifDataTabs.toast.exemptionCauseRequired.description": "This invoice contains exempt taxes. Indicate an exemption cause in the SIF tab.",
     "sifDataTabs.toast.exemptionCauseModified.title": "Exemption cause modified.",
     "sifDataTabs.toast.exemptionCauseModified.description": "The default exemption cause has been selected in the invoice header selector.",
+    "sifDataTabs.field.rectificationReason": "Rectification reason",
+    "sifDataTabs.option.siiMotivoR1": "R1 - Founded error",
+    "sifDataTabs.option.siiMotivoR2": "R2 - Competition",
+    "sifDataTabs.option.siiMotivoR3": "R3 - Bad debt",
+    "sifDataTabs.option.siiMotivoR4": "R4 - Rest",
+    "sifDataTabs.option.siiMotivoR5": "R5 - Simplified invoice",
     "sifDataTabs.field.authorization": "Authorization",
     "sifDataTabs.field.authorizationNo": "Authorization number",
     "sifDataTabs.field.accountingRegDate": "Accounting register date",
