@@ -16404,6 +16404,11 @@
     }
   },
   "genericLabels": {
+    "Factura rectificativa: error fundado en derecho": "Corrective invoice: Article 80(1), 80(2) and 80(6)",
+    "Factura rectificativa: artículo 80 Tres de la Ley del IVA.": "Corrective invoice: Article 80(3)",
+    "Factura rectificativa: artículo 80 Cuatro de la Ley del IVA.": "Corrective invoice: Article 80(4)",
+    "Factura rectificativa: Resto.": "Corrective invoice: Other",
+    "Factura rectificativa en facturas simplificadas.": "Corrective invoice for simplified invoices",
     "computedFreshnessQueued": "This value is computed in the background and may take a few minutes to refresh.",
     "computedFreshnessManual": "This value is computed and is refreshed manually.",
     "computedFreshnessAria": "Computed value — may be delayed",

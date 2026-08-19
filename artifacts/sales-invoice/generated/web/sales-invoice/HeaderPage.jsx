@@ -660,6 +660,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         ]}
         formFooter={SifErrorBanner}
         hideDeleteWhenComplete
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}

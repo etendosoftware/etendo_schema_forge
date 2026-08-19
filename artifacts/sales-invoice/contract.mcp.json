@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.81.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-17T12:04:09.145Z",
-  "contractChecksum": "e3216f3c984912c6",
+  "updatedAt": "2026-08-19T14:24:08.307Z",
+  "contractChecksum": "fc5f163a70e55dc8",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1017,7 +1017,7 @@
           },
           "invoiceDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
             "defaultValue": "@#Date@"
           },
           "businessPartner": {
@@ -1041,6 +1041,9 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "DR"
+          },
+          "tbaiIsreverseinvoice": {
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "grandTotalAmount": {
             "readOnly": true,
@@ -1095,22 +1098,15 @@
           "etvfacVerifacDesc": {
             "readOnlyLogic": "@processed@='Y'"
           },
-          "etvfacReverseinvtype": {
-            "readOnlyLogic": "@processed@='Y'"
-          },
-          "etvfacSimpinvart7273": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
-          },
-          "etvfacInvNoIDArt61d": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
-          },
           "etvfacIssueDescription": {
             "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
+          },
+          "tbaiReverseinvoicecode": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "tbaiReverseinvoicetype": {
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "aeatsiiIssent": {
             "readOnly": true,
@@ -1121,6 +1117,13 @@
           "aeatsiiClaveTipo": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "aeatsiiTipoRectif": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "I"
+          },
+          "aeatsiiMotivoRectif": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'"
           },
           "aeatsiiDescripcionSii": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
@@ -1328,8 +1331,6 @@
         "paymentMethod",
         "currency",
         "priceList",
-        "etvfacSimpinvart7273",
-        "etvfacInvNoIDArt61d",
         "aeatsiiErrorRegistral",
         "aeatsiiIsauthorization"
       ],
@@ -1481,8 +1482,6 @@
           "paymentMethod",
           "currency",
           "priceList",
-          "etvfacSimpinvart7273",
-          "etvfacInvNoIDArt61d",
           "aeatsiiErrorRegistral",
           "aeatsiiIsauthorization"
         ]
@@ -1511,5 +1510,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "30e16b08cfe004f8"
+  "checksum": "4d1ac8ccb0776d2e"
 }

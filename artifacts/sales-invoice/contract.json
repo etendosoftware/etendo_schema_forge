@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.81.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-17T12:04:09.145Z",
-  "checksum": "e3216f3c984912c6",
+  "updatedAt": "2026-08-19T14:24:08.307Z",
+  "checksum": "fc5f163a70e55dc8",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -12,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -158,7 +163,7 @@
               "cascadeParams": []
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization"
+              "className": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout"
             },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
@@ -274,9 +279,10 @@
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
-              "evaluable": true,
-              "js": "record['posted'] === true || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
+              "evaluable": false,
+              "reason": "session-variable",
+              "js": null
             }
           },
           {
@@ -302,7 +308,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
+              "className": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -520,6 +526,30 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            }
+          },
+          {
+            "name": "tbaiIsreverseinvoice",
+            "apiKey": "tbaiIsreverseinvoice",
+            "column": "EM_Tbai_Isreverseinvoice",
+            "label": "Factura Rectificativa",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -959,102 +989,6 @@
             }
           },
           {
-            "name": "etvfacReverseinvtype",
-            "apiKey": "etvfacReverseinvtype",
-            "column": "EM_Etvfac_Reverseinvtype",
-            "label": "Tipo de Factura Rectificativa",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "enumValues": [
-              {
-                "value": "I",
-                "name": "Por Diferencias"
-              },
-              {
-                "value": "S",
-                "name": "Por Sustitución"
-              }
-            ],
-            "validation": {
-              "maxLength": 60
-            },
-            "displayLogic": {
-              "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1' | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "@processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "etvfacSimpinvart7273",
-            "apiKey": "etvfacSimpinvart7273",
-            "column": "EM_Etvfac_Simpinvart7273",
-            "label": "Factura Simplificada Art 7.2 y 7.3",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            },
-            "displayLogic": {
-              "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@!'R5' & @EM_Etvfac_Inv_Type@!'F2' ",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "@processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "etvfacInvNoIDArt61d",
-            "apiKey": "etvfacInvNoIDArt61d",
-            "column": "EM_Etvfac_Invnoidart61d",
-            "label": "Sin ID Destinatario Art61d",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            },
-            "displayLogic": {
-              "raw": "@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R5' | @EM_Etvfac_Inv_Type@='F2')",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "@processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          },
-          {
             "name": "etvfacIssueDescription",
             "apiKey": "etvfacIssueDescription",
             "column": "EM_Etvfac_Issue_Description",
@@ -1074,6 +1008,87 @@
             },
             "readOnlyLogic": {
               "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "tbaiReverseinvoicecode",
+            "apiKey": "tbaiReverseinvoicecode",
+            "column": "EM_Tbai_Reverseinvoicecode",
+            "label": "Código de Factura Rectificativa",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "R5",
+                "name": "Factura rectificativa en facturas simplificadas."
+              },
+              {
+                "value": "R4",
+                "name": "Factura rectificativa: Resto."
+              },
+              {
+                "value": "R3",
+                "name": "Factura rectificativa: artículo 80 Cuatro de la Ley del IVA."
+              },
+              {
+                "value": "R2",
+                "name": "Factura rectificativa: artículo 80 Tres de la Ley del IVA."
+              },
+              {
+                "value": "R1",
+                "name": "Factura rectificativa: error fundado en derecho"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@tbaiConfigActive@!='N'",
+              "evaluable": true,
+              "js": "record['tbaiConfigActive'] !== 'N'"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "tbaiReverseinvoicetype",
+            "apiKey": "tbaiReverseinvoicetype",
+            "column": "EM_Tbai_Reverseinvoicetype",
+            "label": "Tipo de rectificativa",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "S",
+                "name": "Por sustitución"
+              },
+              {
+                "value": "I",
+                "name": "Por diferencias"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@EM_Tbai_Isreverseinvoice@='Y' & @TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
             }
@@ -1160,6 +1175,108 @@
             },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiTipoRectif",
+            "apiKey": "aeatsiiTipoRectif",
+            "column": "EM_Aeatsii_Tipo_Rectif",
+            "label": "Rectification invoice type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "I",
+                "name": "Differences",
+                "labels": {
+                  "es_ES": "Por diferencias"
+                }
+              },
+              {
+                "value": "S",
+                "name": "Revise",
+                "labels": {
+                  "es_ES": "Por sustitución"
+                }
+              }
+            ],
+            "defaultValue": "I",
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y' & @EM_Aeatsii_Clave_Tipo@='R'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiMotivoRectif",
+            "apiKey": "aeatsiiMotivoRectif",
+            "column": "EM_Aeatsii_Motivo_Rectif",
+            "label": "Rectification reason",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "R1",
+                "name": "R1 - Founded error",
+                "labels": {
+                  "es_ES": "R1 - Error fundado"
+                }
+              },
+              {
+                "value": "R2",
+                "name": "R2 - Competition",
+                "labels": {
+                  "es_ES": "R2 - Concurso"
+                }
+              },
+              {
+                "value": "R3",
+                "name": "R3 - Bad debt",
+                "labels": {
+                  "es_ES": "R3 - Deuda incobrable"
+                }
+              },
+              {
+                "value": "R4",
+                "name": "R4 - Rest",
+                "labels": {
+                  "es_ES": "R4 - Resto"
+                }
+              },
+              {
+                "value": "R5",
+                "name": "R5 - Simplified invoice",
+                "labels": {
+                  "es_ES": "R5 - Factura simplificada"
+                }
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y' & @EM_Aeatsii_Clave_Tipo@='R'",
               "evaluable": true
             },
             "readOnlyLogic": {
@@ -1621,20 +1738,6 @@
             "derivation": {
               "type": "computed",
               "source": "F1"
-            }
-          },
-          {
-            "name": "etvfacSimpinvart7273",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "etvfacInvNoIDArt61d",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           },
           {
@@ -2693,6 +2796,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -2896,7 +3004,7 @@
             "apiKey": "tbaiIsreverseinvoice",
             "column": "EM_Tbai_Isreverseinvoice",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -3282,7 +3390,7 @@
             "apiKey": "etvfacReverseinvtype",
             "column": "EM_Etvfac_Reverseinvtype",
             "type": "enum",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3298,7 +3406,7 @@
             "apiKey": "etvfacSimpinvart7273",
             "column": "EM_Etvfac_Simpinvart7273",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3306,7 +3414,7 @@
             "apiKey": "etvfacInvNoIDArt61d",
             "column": "EM_Etvfac_Invnoidart61d",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3458,7 +3566,7 @@
             "apiKey": "tbaiReverseinvoicecode",
             "column": "EM_Tbai_Reverseinvoicecode",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -3466,7 +3574,7 @@
             "apiKey": "tbaiReverseinvoicetype",
             "column": "EM_Tbai_Reverseinvoicetype",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -3474,7 +3582,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
@@ -3530,7 +3638,7 @@
             "apiKey": "aeatsiiTipoRectif",
             "column": "EM_Aeatsii_Tipo_Rectif",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -3538,7 +3646,7 @@
             "apiKey": "aeatsiiMotivoRectif",
             "column": "EM_Aeatsii_Motivo_Rectif",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6160,6 +6268,14 @@
         "description": "Default value for 'aeatsiiIssent' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-aeatsiiTipoRectif",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiTipoRectif' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-currency",
         "category": "default-value-type",
         "entity": "header",
@@ -6184,28 +6300,12 @@
         "description": "Default value for 'etsgDateOperation' in header should be a string"
       },
       {
-        "id": "t-default-value-type-header-etvfacInvNoIDArt61d",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Default value for 'etvfacInvNoIDArt61d' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-etvfacInvType",
         "category": "default-value-type",
         "entity": "header",
         "field": "etvfacInvType",
         "runner": "node",
         "description": "Default value for 'etvfacInvType' in header should be a string"
-      },
-      {
-        "id": "t-default-value-type-header-etvfacSimpinvart7273",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Default value for 'etvfacSimpinvart7273' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-invoiceDate",
@@ -6376,6 +6476,22 @@
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiMotivoRectif",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMotivoRectif' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiTipoRectif",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiTipoRectif' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-costcenter",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6390,14 +6506,6 @@
         "field": "etsgDateOperation",
         "runner": "node",
         "description": "Display logic for 'etsgDateOperation' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-etvfacInvNoIDArt61d",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Display logic for 'etvfacInvNoIDArt61d' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-etvfacInvoiceStatus",
@@ -6422,22 +6530,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Display logic for 'etvfacIssueDescription' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-etvfacReverseinvtype",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Display logic for 'etvfacReverseinvtype' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-etvfacSimpinvart7273",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Display logic for 'etvfacSimpinvart7273' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-etvfacVerifacDesc",
@@ -6478,6 +6570,30 @@
         "field": "project",
         "runner": "node",
         "description": "Display logic for 'project' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiIsreverseinvoice",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Display logic for 'tbaiIsreverseinvoice' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiReverseinvoicecode",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Display logic for 'tbaiReverseinvoicecode' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiReverseinvoicetype",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Display logic for 'tbaiReverseinvoicetype' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-lines-costcenter",
@@ -6616,6 +6732,22 @@
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-aeatsiiMotivoRectif",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMotivoRectif' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiTipoRectif",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiTipoRectif' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-costcenter",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6630,14 +6762,6 @@
         "field": "etsgDateOperation",
         "runner": "node",
         "description": "Display logic for 'etsgDateOperation' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-etvfacInvNoIDArt61d",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Display logic for 'etvfacInvNoIDArt61d' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-etvfacInvoiceStatus",
@@ -6662,22 +6786,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Display logic for 'etvfacIssueDescription' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-etvfacReverseinvtype",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Display logic for 'etvfacReverseinvtype' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-etvfacSimpinvart7273",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Display logic for 'etvfacSimpinvart7273' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-etvfacVerifacDesc",
@@ -6718,6 +6826,30 @@
         "field": "project",
         "runner": "node",
         "description": "Display logic for 'project' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiIsreverseinvoice",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Display logic for 'tbaiIsreverseinvoice' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiReverseinvoicecode",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Display logic for 'tbaiReverseinvoicecode' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiReverseinvoicetype",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Display logic for 'tbaiReverseinvoicetype' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-lines-costcenter",
@@ -6912,6 +7044,22 @@
         "description": "Field 'aeatsiiIssent' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiMotivoRectif",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Field 'aeatsiiMotivoRectif' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiTipoRectif",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Field 'aeatsiiTipoRectif' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-businessPartner",
         "category": "field-presence",
         "entity": "header",
@@ -7000,14 +7148,6 @@
         "description": "Field 'etsgDateOperation' should be present in header"
       },
       {
-        "id": "t-field-presence-header-etvfacInvNoIDArt61d",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Field 'etvfacInvNoIDArt61d' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-etvfacInvoiceStatus",
         "category": "field-presence",
         "entity": "header",
@@ -7030,22 +7170,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Field 'etvfacIssueDescription' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-etvfacReverseinvtype",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Field 'etvfacReverseinvtype' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-etvfacSimpinvart7273",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Field 'etvfacSimpinvart7273' should be present in header"
       },
       {
         "id": "t-field-presence-header-etvfacVerifacDesc",
@@ -7150,6 +7274,30 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiIsreverseinvoice",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Field 'tbaiIsreverseinvoice' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiReverseinvoicecode",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Field 'tbaiReverseinvoicecode' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiReverseinvoicetype",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Field 'tbaiReverseinvoicetype' should be present in header"
       },
       {
         "id": "t-field-presence-header-transactionDocument",
@@ -7520,6 +7668,22 @@
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiMotivoRectif",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Field 'aeatsiiMotivoRectif' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiTipoRectif",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Field 'aeatsiiTipoRectif' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-businessPartner",
         "category": "field-type",
         "entity": "header",
@@ -7608,14 +7772,6 @@
         "description": "Field 'etsgDateOperation' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-etvfacInvNoIDArt61d",
-        "category": "field-type",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Field 'etvfacInvNoIDArt61d' should have type 'boolean' in header"
-      },
-      {
         "id": "t-field-type-header-etvfacInvoiceStatus",
         "category": "field-type",
         "entity": "header",
@@ -7638,22 +7794,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Field 'etvfacIssueDescription' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-etvfacReverseinvtype",
-        "category": "field-type",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Field 'etvfacReverseinvtype' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-etvfacSimpinvart7273",
-        "category": "field-type",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Field 'etvfacSimpinvart7273' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-etvfacVerifacDesc",
@@ -7758,6 +7898,30 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiIsreverseinvoice",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Field 'tbaiIsreverseinvoice' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiReverseinvoicecode",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Field 'tbaiReverseinvoicecode' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiReverseinvoicetype",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Field 'tbaiReverseinvoicetype' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-transactionDocument",
@@ -8112,6 +8276,22 @@
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiMotivoRectif",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMotivoRectif' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiTipoRectif",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiTipoRectif' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8152,14 +8332,6 @@
         "description": "Read-only logic for 'etsgDateOperation' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-etvfacInvNoIDArt61d",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacInvNoIDArt61d' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-etvfacInvoiceStatus",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8182,22 +8354,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Read-only logic for 'etvfacIssueDescription' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-etvfacReverseinvtype",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacReverseinvtype' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-etvfacSimpinvart7273",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacSimpinvart7273' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-etvfacVerifacDesc",
@@ -8254,6 +8410,30 @@
         "field": "project",
         "runner": "node",
         "description": "Read-only logic for 'project' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-tbaiIsreverseinvoice",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiIsreverseinvoice' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-tbaiReverseinvoicecode",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiReverseinvoicecode' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-tbaiReverseinvoicetype",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiReverseinvoicetype' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-transactionDocument",
@@ -8496,6 +8676,22 @@
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-aeatsiiMotivoRectif",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMotivoRectif",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMotivoRectif' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiTipoRectif",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiTipoRectif",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiTipoRectif' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8536,14 +8732,6 @@
         "description": "Read-only logic for 'etsgDateOperation' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-etvfacInvNoIDArt61d",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacInvNoIDArt61d' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-etvfacInvoiceStatus",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8566,22 +8754,6 @@
         "field": "etvfacIssueDescription",
         "runner": "node",
         "description": "Read-only logic for 'etvfacIssueDescription' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-etvfacReverseinvtype",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacReverseinvtype' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-etvfacSimpinvart7273",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "Read-only logic for 'etvfacSimpinvart7273' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-etvfacVerifacDesc",
@@ -8638,6 +8810,30 @@
         "field": "project",
         "runner": "node",
         "description": "Read-only logic for 'project' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-tbaiIsreverseinvoice",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "tbaiIsreverseinvoice",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiIsreverseinvoice' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-tbaiReverseinvoicecode",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "tbaiReverseinvoicecode",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiReverseinvoicecode' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-tbaiReverseinvoicetype",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "tbaiReverseinvoicetype",
+        "runner": "node",
+        "description": "Read-only logic for 'tbaiReverseinvoicetype' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-transactionDocument",
@@ -9294,14 +9490,6 @@
         "description": "System field 'aeatsiiModified' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiMotivoRectif",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiMotivoRectif",
-        "runner": "node",
-        "description": "System field 'aeatsiiMotivoRectif' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiMultiDua",
         "category": "system-field",
         "entity": "header",
@@ -9332,14 +9520,6 @@
         "field": "aeatsiiSend",
         "runner": "node",
         "description": "System field 'aeatsiiSend' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiTipoRectif",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiTipoRectif",
-        "runner": "node",
-        "description": "System field 'aeatsiiTipoRectif' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiUnsubscribe",
@@ -9638,6 +9818,14 @@
         "description": "System field 'etvfacHash' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-etvfacInvNoIDArt61d",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "System field 'etvfacInvNoIDArt61d' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etvfacIsGenManual",
         "category": "system-field",
         "entity": "header",
@@ -9734,12 +9922,28 @@
         "description": "System field 'etvfacRegionCopy' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-etvfacReverseinvtype",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "System field 'etvfacReverseinvtype' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etvfacSentToVerifac",
         "category": "system-field",
         "entity": "header",
         "field": "etvfacSentToVerifac",
         "runner": "node",
         "description": "System field 'etvfacSentToVerifac' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etvfacSimpinvart7273",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "System field 'etvfacSimpinvart7273' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etvfacVoid",
@@ -9982,14 +10186,6 @@
         "description": "System field 'tbaiInvoiceseq' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-tbaiIsreverseinvoice",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiIsreverseinvoice",
-        "runner": "node",
-        "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-tbaiIssent",
         "category": "system-field",
         "entity": "header",
@@ -10012,22 +10208,6 @@
         "field": "tBAIQRcode",
         "runner": "node",
         "description": "System field 'tBAIQRcode' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiReverseinvoicecode",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiReverseinvoicecode",
-        "runner": "node",
-        "description": "System field 'tbaiReverseinvoicecode' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiReverseinvoicetype",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiReverseinvoicetype",
-        "runner": "node",
-        "description": "System field 'tbaiReverseinvoicetype' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiSequence",
@@ -10746,25 +10926,25 @@
       }
     ],
     "summary": {
-      "total": 615,
+      "total": 624,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 27,
-        "displaylogic-evaluable": 30,
-        "displaylogic-valid": 30,
-        "field-presence": 76,
-        "field-type": 76,
-        "readonlylogic-evaluable": 48,
-        "readonlylogic-valid": 48,
+        "default-value-type": 26,
+        "displaylogic-evaluable": 32,
+        "displaylogic-valid": 32,
+        "field-presence": 78,
+        "field-type": 78,
+        "readonlylogic-evaluable": 50,
+        "readonlylogic-valid": 50,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 207,
+        "system-field": 205,
         "visibility": 5
       },
       "byRunner": {
-        "node": 615,
+        "node": 624,
         "junit": 0
       }
     }

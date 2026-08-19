@@ -9,8 +9,14 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
-    "listViewOptions": { "hidePrint": true },
+    "hidePrintWhen": {
+      "documentStatus": {
+        "notEquals": "CO"
+      }
+    },
+    "listViewOptions": {
+      "hidePrint": true
+    },
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
@@ -428,6 +434,29 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiTipoRectif": {
+          "visibility": "editable",
+          "form": false,
+          "defaultValue": "I"
+        },
+        "aeatsiiMotivoRectif": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiIsreverseinvoice": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicetype": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicecode": {
+          "visibility": "editable",
+          "defaultExpr": "\"\"",
+          "displayLogic": "@tbaiConfigActive@!='N'",
+          "displayLogicJs": "record['tbaiConfigActive'] !== 'N'"
+        },
         "aeatsiiDescription": {
           "visibility": "discarded"
         },
@@ -473,7 +502,7 @@
           "form": false
         },
         "tbaiIssent": {
-          "visibility": "discarded",
+          "visibility": "system",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -494,16 +523,13 @@
           "form": false
         },
         "etvfacSimpinvart7273": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacInvNoIDArt61d": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacReverseinvtype": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacDateIssue": {
           "visibility": "discarded"
