@@ -4,6 +4,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   dismissSuccessModal, safeReload, readDocumentTotals, verifyTotalsConsistency,
+  derivedFieldLocator,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -60,25 +61,27 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     await test.step('Select vendor BP and verify callout fields', async () => {
       await selectVendorBP(page);
 
-      // [Plan 2.2] Verify BP callout populated dependent fields
-      // The live dependent selector can render the selected country as a plain
-      // button rather than the chip test id, depending on the loaded
-      // contract/form variant. Prefer the user-visible selected value and keep
-      // the chip selector as a compatibility fallback.
-      const addressValue = await page.getByRole('button', { name: /Espa[nñ]a|Spain/ }).first().textContent().catch(async () => (
-        page.getByTestId('field-partnerAddress-chip').textContent().catch(() => '')
-      ));
-      expect(addressValue,
+      // [Plan 2.2] Verify BP callout populated dependent fields.
+      // partnerAddress (column C_BPartner_Location_ID) is special-cased in
+      // DependentFkField (EntityForm.jsx) to render via PartnerAddressPicker →
+      // CreatableSearchSelect, which shows the value as a `-chip` (SelectorChip)
+      // once selected, or the plain `field-partnerAddress` search input
+      // otherwise — never both, and never a generic `.truncate` CSS class (the
+      // previous CSS fallback here matched an empty node instead). Use a
+      // retrying assertion, not a one-shot textContent() sample — selectVendorBP
+      // already waits for this field to settle, but that wait covers the modal
+      // click above; re-asserting here also guards against future changes to
+      // that helper regressing this check silently.
+      const addressField = derivedFieldLocator(page, 'partnerAddress');
+      await expect(addressField,
         '[Plan 2.2] Address should be auto-filled after selecting the vendor (callout)',
-      ).toBeTruthy();
+      ).not.toHaveText(/^$|buscar|search|seleccionar|select/i, { timeout: 15_000 });
 
       // [Plan 2.6] Verify purchase price list was inherited
-      const priceListField = page.getByTestId('field-priceList')
-        .or(page.locator('[data-testid*="priceList"]')).first();
-      const priceListValue = await priceListField.textContent().catch(() => '');
-      expect(priceListValue,
+      const priceListField = derivedFieldLocator(page, 'priceList');
+      await expect(priceListField,
         '[Plan 2.6] Price list should be inherited from the vendor',
-      ).toBeTruthy();
+      ).not.toHaveText(/^$|buscar|search|seleccionar|select/i, { timeout: 15_000 });
 
       // [Plan 2.5] Verify "Fecha de entrega esperada" is present (PO-exclusive required field)
       await expect(page.getByText(/fecha de entrega esperada|expected delivery/i),
