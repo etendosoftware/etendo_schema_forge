@@ -9,6 +9,7 @@ import {
   clickConfirmButton, waitForConfirmResponse, waitForDocumentActionResponse, dismissSuccessModal,
   expectStatusPill, parseAmount,
 } from '../helpers/purchase-helpers.js';
+import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 
 /**
  * Cash close (ETP-4795) — REAL BACKEND.
@@ -180,6 +181,11 @@ test.describe('Cash close (real backend)', () => {
   );
 
   test('Case 1: happy path — sales invoice collected in cash, drawer balances, close completes', async ({ page }) => {
+    // ETP-4567 — open the accounting period for the doc types this flow
+    // confirms, instead of timing out ~10s later on an unrelated UI
+    // element with a confusing generic Playwright timeout.
+    await ensureOpenPeriod();
+
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
     const accountName = `Caja E2E ${Date.now()}`;
