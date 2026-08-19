@@ -88,6 +88,33 @@ MARI has four components, each normalized to 0–100 before weighting:
 | **Coverage** — probe surfaces exercised (§2.5) | 15 | `probed / 6` | 2 / 6 → 33 | 6 / 6 → 100 | 6 / 6 → 100 | 6 / 6 → 100 | **6 / 6 → 100** ¹⁰ | 15.0 |
 | | | | **MARI = 28** | **MARI = 49** | **MARI = 73** → 70 ⁷ | **MARI = 79** | | **MARI = 80** |
 
+**2026-08-19 (job B, blind-subagent run) — reported as a range, per the rule below:**
+
+| Component | Weight | Value | Contribution |
+|---|---:|---|---:|
+| **M2** — first-call success | 30 | **100 %** (4 of 4 executable tasks) ¹¹ | 30.0 |
+| **M1** — calls-to-outcome vs Holded | 30 | **0.75× measured → 133** · **1.00× conservative → 100** ¹² | 40.0 / **30.0** |
+| **Delivery** | 25 | 77.5 / 126 → 62 (unchanged) | 15.4 |
+| **Coverage** | 15 | 6 / 6 → 100 | 15.0 |
+| | | | **MARI = 90 conservative · 100 measured** |
+
+¹¹ **The first M2 measured by agents that did not already know the contract.** One blind subagent per
+task, MCP tools only, no repo and no database, each instructed that a value the contract fails to
+surface means the task fails. Tasks 1, 3 and 5 pass; task 2 passes after the aging-report fix
+(`00db2ba4`) verified live at run-report row E10. **Frozen task 3 passed for the first time since the
+suite was frozen** — the ETP-4918 objective. Task 4 is excluded from the denominator, not failed: it
+requires firing a completion action, forbidden in every mode, so it is permanently `n/m`.
+
+¹² **Measurable on 2 of 5 tasks, and one of those two is distorted — hence the range.** T1 and T3 are
+`n/m` because Holded *cannot perform them at all* (no `create_invoice`; no `get_product`, so it cannot
+read its own write back). T4 is `n/m` as above. Of the two that remain, **T2 flatters Etendo**: it
+answers in one call because the tenant has no receivables and the report returns `count: 0`, while
+Holded needs two because it *has* data and splits `pending` from `partial`. The identical asymmetry ran
+*against* Etendo earlier the same day (7 calls spent confirming an emptiness, M1 44, MARI 66), so
+accepting it now that it pushes the other way would be incoherent. **90 is the figure to quote**; 100 is
+the measured upper bound and 84 the pessimistic one. Closing this band is not product work — it needs
+comparable tasks added to the suite (§ owed by the human).
+
 ¹ Measured on the write suite only (2 attempts, 2 FK failures — see Appendix A.5). The read suite
 was not scored per call. Flagged at the time as the least solid of the four inputs.
 
@@ -311,6 +338,7 @@ rises only by discovery, with no multiplier in between.
 | 2026-08-12 — quota re-based to 126 for IMP-26 + IMP-27; **no code changed and no status moved** | 80 % | 1.4× | 49.0 / 126 | 6 / 6 | 70 |
 | 2026-08-13 (job B) — IMP-11 + IMP-12 + IMP-22 resolved, IMP-19 + IMP-21 + IMP-23 scored; IMP-28 + IMP-29 registered (no re-base) | 67 % | 1.0× | 68.0 / 126 | 6 / 6 | 79 |
 | **Today** (2026-08-13, job A) — IMP-17 scored ✅ 3/3; IMP-18 + IMP-24 scored ⚠️; IMP-28 ⏳ → ⚠️; **IMP-30 + IMP-31 registered** (no re-base). M1/M2 carried, not re-measured | **67 %** | **1.0×** | **77.5 / 126** | 6 / 6 | **80** |
+| **Today** (2026-08-19, job B — **blind subagents**, build `00db2ba4`) — frozen task 3 passes for the first time; aging-report resolution fixed and verified; IMP-34 + IMP-35 + IMP-36 registered at zero cost. M1/M2 **measured, not carried** | **100 %** | **0.75× meas. / 1.00× cons.** | **77.5 / 126** | 6 / 6 | **90 cons. · 100 meas.** |
 | ~~**Registry closed** — all 31 ✅, full probe surface, M1 at its target~~ *(retired 2026-08-13 — see §2.2.1; the scope-closed ceiling no longer exists)* | ~~90 %~~ | ~~1.2×~~ | ~~123 / 126~~ | ~~6 / 6~~ | ~~**90**~~ |
 
 The 2026-08-06 jump from 28 to 49 is **measurement, not shipped product**: no code changed. Coverage
@@ -563,10 +591,22 @@ Environment for all 2026-08-05 statuses: **`etendo-go-local`**, build `c597c7c2`
 | **IMP-32** | `_identifier` renders dates day-first while the API demands ISO on input | P2 | C6 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report §7.2** · registered 2026-08-13 (job A), under the frozen-quota policy (§2.2.1). A9 returned `"_identifier": "1000035 - 13-08-2026 - 9999"` while A3 of the same run **rejected** `03-04-2026` as ambiguous and instructed `yyyy-MM-dd`. The server therefore hands an agent a day-first date in the human-readable field and refuses one on input: an agent that round-trips an identifier back into a write — a plausible thing for an agent to do — earns a 422 for echoing what the server just said. **Distinct from IMP-16**, which is about one date format across the *write* verbs; this is the *display* string contradicting that contract, so it is a new number rather than a clause folded into IMP-16. `Done when:` `_identifier` renders dates in the same `yyyy-MM-dd` form the write verbs accept, verified on a record whose identifier contains a date | run report §7.2 · A3, A9 |
 | **IMP-33** | Write-verb routing errors send the agent to the *reading* docs topic | P3 | C6 | 0 / 1 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report §7.1** · registered 2026-08-13 (job A), under the frozen-quota policy (§2.2.1). A2 returned, on a **`neo_create`** failure, `"seeAlso": "docs(topic:\"reading records\")"` alongside `"tool": "neo_create"` — the envelope correctly identifies the failing tool as a write verb and then points the agent at the read recipe. A one-line mapping bug in an otherwise exemplary error body (the envelope IMP-5 and IMP-17 built), which is exactly why it is worth fixing: `seeAlso` is only useful if it is trustworthy, and one wrong topic teaches an agent to ignore the field. `Done when:` a write-verb error resolves `seeAlso` to a write topic, with a test pinning the verb→topic map | run report §7.1 · A2 |
 
+| **IMP-34** | `view:"create"` omits the parent FK that `neo_create` then requires on a child entity | P1 | C7 | 0 / 5 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report 2026-08-19 §7** · found by blind subagents on three separate entities: `physInventory` on `physical-inventory/inventoryLine` (E5), `product` on `product/price` (E8), `invoice` on `sales-invoice/lines` — the last one additionally marked `visibility:"system"`, contradicting the hint that says to send it (E9). The child-entity hint added in `a544eb4f` tells the agent a parent FK is required but **does not name it**, so a blind agent probed three candidate names to find it. One instance is a case; three across three specs is a systematic defect of the projection. `Done when:` on all three entities a blind agent assembles a valid create body from `view:"create"` + `neo_defaults(parentId)` alone, with no name-guessing round trip | run report 2026-08-19 · E5, E8, E9 |
+| **IMP-35** | A derived field names where it is written but never where it is read, and refreshes asynchronously | P2 | C7 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report 2026-08-19 §7** · after a processed physical inventory, `neo_get` on the product returned `eTGOStock: null` while the stock was real — `product/stock` reported `quantityOnHand: 100` (E7). `EM_ETGO_Stock` is `refresh_mode='Q'` (asynchronous) unlike the two prices (`'S'`, immediate), and IMP-28's `writableVia` names the *write* location only. The blind agent recovered by exploring a sibling entity and recorded that a less patient one *"would very plausibly report stock: unverifiable"* — i.e. this generates false failures on work that actually succeeded. `Done when:` an agent that writes a derived value can confirm it from the field descriptor alone, and the descriptor states that the refresh is asynchronous so `null` is not evidence of failure | run report 2026-08-19 · E7 |
+| **IMP-36** | `metadata.unresolvedFields` omits a field whose default failed to resolve without throwing | P2 | C7 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report 2026-08-19 §7** · with no `parentId`, `storageBin` is absent from `defaults` **and** from `unresolvedFields`, which reads `[]` (E6). Root-caused in `NeoDefaultsService`: the array is populated only from the pass-1 `catch` (~line 169), and the `@SQL=… WHERE M_WAREHOUSE_ID=@M_WAREHOUSE_ID@` default returns `null` *cleanly* via `NeoDefaultsSqlHelper` when `NeoParentValuesLoader` has no parent values — nothing throws, so `applyDefaultWithComboFallback` skips the field into silence. Distinct from the `partnerAddress` blank-string case `McpDefaultsView` documents, which is downstream of this. Partially mitigated by `metadata.notes` (`a6a2045c`), which now explains the same situation in prose. `Done when:` no response reports `unresolvedFields: []` while omitting a field the caller must supply | run report 2026-08-19 · E6 |
+
 **Totals (2026-08-13, job A):** earned **77.5** of a known scope of **127** (C1 32/40 · C2 16.5/21 ·
 C3 13/20 · C4 13.5/16 · C5 0/8 · C6 2.5/22) against the **frozen** quota of **126** (§2.2.1) → the Delivery
 component of MARI = **62** (§2.1). Verify the column sums before publishing; a `Pts` cell that disagrees with
 its `Status` mark makes MARI unauditable.
+
+**Totals (2026-08-19, job B — blind-subagent run):** `earned` **unchanged at 77.5**. IMP-34, IMP-35 and
+IMP-36 open cohort **C7** and enter at ⏳ = 0 points, so registering them cost **0 MARI** exactly as
+§2.2.1 intends. Known scope 127 → **138** (P1 5 + P2 3 + P2 3). Open debt = 138 − 77.5 = **60.5 points**.
+IMP-28 was advanced on live evidence but **stays ⚠️ 2.5/5**: `writableVia` and the readOnly invariant are
+verified (E3), and clause 2 remains deliberately deferred per `imps/IMP-28.md` §8. Delivery therefore
+holds at **62** — this run's MARI move is entirely M1 and M2, which is the only kind of move that is a
+product claim rather than bookkeeping.
 
 **Known scope now exceeds the quota — by design.** Job A registered IMP-30 and IMP-31 (P1 + P1 = 10 points),
 taking known scope 113 → 123, and then IMP-32 (P2) and IMP-33 (P3) took it to **127**, one point past the
@@ -658,6 +698,36 @@ subquery).
 ---
 
 ## 4. Changelog
+
+### 2026-08-19 — job B, blind-subagent run · `etendo-go-local` @ `00db2ba4` · Holded re-probed live
+
+Method change worth recording on its own: the frozen suite was executed by **one blind subagent per
+task** — no memory of prior sessions, no repo, no database, MCP tools only — after every previous
+column had been measured by an operator who already knew the contract.
+
+* **Advanced IMP-28** — `writableVia` live on all three computed product fields and `readOnly` now
+  agrees with `visibility` (E3); frozen task 3 passes end to end. Clause 2 stays deferred, so
+  **⚠️ 2.5/5 holds** and Delivery does not move.
+* **Added IMP-34** — the parent FK is required by `neo_create` but absent from `view:"create"`, on
+  three entities across three specs (P1, ♻️, C7). E5, E8, E9.
+* **Added IMP-35** — a derived field names its write location but not its read location, and refreshes
+  asynchronously, so an agent reads `null` and concludes failure (P2, ♻️, C7). E7.
+* **Added IMP-36** — `unresolvedFields` reports `[]` while omitting a field that failed to resolve
+  without throwing (P2, ♻️, C7). E6.
+* **Fixed and verified, no item needed** — `generate_aging_receivable` returned a **factually false**
+  422 claiming no accounting schema was configured for an organization that had one by both routes
+  (FK and link table, same schema id, all active). Root cause unconfirmed; the fix resolves the ledger
+  via `Organization.getGeneralLedger()` first, mirroring `FinancialAccountAccountingHandler`, keeping
+  the original subquery as fallback. Now returns 200 with buckets (E10).
+* **No regressions.**
+
+Three of this run's findings are **one defect class**: IMP-36, the false 422, and IMP-28's original
+silent 200 all have the server *reporting a cause it never verified*. Recorded as a design rule for the
+team rather than only as three tickets.
+
+**MARI 80 → 90 (conservative) / 100 (measured).** Both moved components are outcome components (M2 and
+M1), so this is a product claim, not bookkeeping — with the M1 base of 2-of-5 tasks stated as the caveat.
+Known scope 127 → 138; open debt 60.5 points; registering three items cost 0 MARI.
 
 ### 2026-08-13 — metric policy: the quota is frozen and MARI becomes a score (**human decision, not a run**)
 
