@@ -314,12 +314,12 @@ describe('collectRowFieldValues', () => {
     expect(fieldValues).toEqual({ qty: 3 });
   });
 
-  it('applies coerce to each remaining value', () => {
+  it('applies coerce to each remaining value, passing the key too (ETP-4886 — coercer needs the key to look up _ID columns)', () => {
     const fieldValues = {};
     const coerce = vi.fn((v) => `c:${v}`);
     collectRowFieldValues({ qty: 3, price: 10 }, fieldValues, coerce);
-    expect(coerce).toHaveBeenCalledWith(3);
-    expect(coerce).toHaveBeenCalledWith(10);
+    expect(coerce).toHaveBeenCalledWith(3, 'qty');
+    expect(coerce).toHaveBeenCalledWith(10, 'price');
     expect(fieldValues).toEqual({ qty: 'c:3', price: 'c:10' });
   });
 });

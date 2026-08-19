@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
 import './contacts.css';
 import './contactsFkResolvers.js';
 import './contactsImportDescriptor.js';
@@ -16,7 +15,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { extractApiErrorMessage } from '@/lib/apiError';
+import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 /* eslint-disable react/prop-types */
 
@@ -44,34 +44,43 @@ export default function ContactsWindow(props) {
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
-    const { rows, clearSelection, onDataMutated, apiBaseUrl, token } = pendingBulkDelete;
+    const { rows, apiBaseUrl, token, reselectFailed } = pendingBulkDelete;
     setPendingBulkDelete(null);
 
-    // Sequential: stop on first error so no records are deleted if any would fail.
-    for (const row of rows) {
-      const res = await fetch(`${apiBaseUrl}/businessPartner/${row.id || row}`, {
+    // ETP-4656 (QA fix) — was a sequential loop that stopped on the first
+    // error (never attempting the remaining rows) and toasted the raw,
+    // untranslated backend error message. Now mirrors every other
+    // bulk-delete consumer (see `useBulkRowDelete.jsx`): parallel deletes via
+    // `runBatchDelete`, backend errors translated through
+    // `extractErrorMessage` (FK-violation → `deleteBlockedByReferences`), and
+    // exactly one Spanish 3-outcome toast via `toastBatchDeleteOutcome`.
+    const { succeeded, failed } = await runBatchDelete(rows, (row) =>
+      fetch(`${apiBaseUrl}/businessPartner/${row.id || row}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        toast.error(await extractApiErrorMessage(res));
-        return;
-      }
-    }
+      }).then(async (res) => {
+        if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+        return row;
+      })
+    );
 
-    clearSelection();
-    onDataMutated?.();
-  }, [pendingBulkDelete]);
+    toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+
+    // Reselect only the failed rows (keeping them checked for retry) and
+    // deselect the succeeded ones — same outcome handling the generic
+    // "Delete selected" toolbar button gets for free via useBulkRowDelete.
+    reselectFailed(succeeded, failed);
+  }, [pendingBulkDelete, ui]);
 
   const handleBulkDeleteCancel = useCallback(() => {
     setPendingBulkDelete(null);
   }, []);
 
   const selectionBarRightActions = useCallback(
-    ({ selectedRows, clearSelection, token, apiBaseUrl, onDataMutated }) => (
+    ({ selectedRows, clearSelection, token, apiBaseUrl, reselectFailed }) => (
       <>
         <button
-          onClick={() => setPendingBulkDelete({ rows: selectedRows, clearSelection, onDataMutated, apiBaseUrl, token })}
+          onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
           className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--destructive) / 0.3)] bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)] transition-colors"
         >
           <Trash2 className="h-4 w-4 text-[hsl(var(--destructive))]" data-testid="Trash2__ef097c" />

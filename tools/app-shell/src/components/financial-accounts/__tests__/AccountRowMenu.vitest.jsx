@@ -131,4 +131,49 @@ describe('AccountRowMenu', () => {
       );
     });
   });
+
+  // ETP-4871 — a real, irreversible delete. Independent of Archivar/Desarchivar above: both
+  // items can appear on the same still-active, deletable account.
+  describe('delete item (ETP-4871)', () => {
+    it('is offered when the account is deletable', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is explicitly false', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: false }} />);
+      openMenu();
+      // Wait on something that IS rendered so the query below isn't racing the menu mount.
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is absent (most fixtures)', async () => {
+      render(<AccountRowMenu account={baseAccount} />);
+      openMenu();
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is still offered alongside Archive on a deletable, still-active account', async () => {
+      // Deleting and archiving are independent actions on this row (see AccountRowMenu.jsx's
+      // doc comment) — neither one replaces the other while the account is active.
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+    });
+
+    it('fires onDelete with the account on click', async () => {
+      const onDelete = vi.fn();
+      const deletable = { ...baseAccount, deletable: true };
+      render(<AccountRowMenu account={deletable} onDelete={onDelete} />);
+      openMenu();
+
+      fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+      expect(onDelete).toHaveBeenCalledWith(deletable);
+    });
+  });
 });

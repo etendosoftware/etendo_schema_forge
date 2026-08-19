@@ -5,7 +5,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useQuotationPdf } from './useQuotationPdf.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -66,6 +66,10 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const modalRef = useRef(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
+  // (GET /preview-file) resolves ahead of the jsreport regeneration below;
+  // capturing it here lets Download gate on whichever source resolves first.
+  const [cachedAttachment, setCachedAttachment] = useState(null);
 
   const ratePrecision = useCurrencyPrecision();
 
@@ -113,7 +117,18 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     setTimeout(() => setShowSendModal(false), 300);
   };
 
+  // Prefer the cached attachment when available — already fetched, resolves
+  // ahead of the jsreport regeneration and closes the preview/button gap.
+  const hasPdf = !!pdfUrl || !!cachedAttachment;
+
   const handleDownloadPdf = () => {
+    if (cachedAttachment) {
+      const a = document.createElement('a');
+      a.href = cachedAttachment.objectUrl;
+      a.download = cachedAttachment.fileName || `quotation-${quotation.documentNo || quotation.id}.pdf`;
+      a.click();
+      return;
+    }
     if (!pdfUrl) return;
     const a = document.createElement('a');
     a.href = pdfUrl;
@@ -144,6 +159,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         specName: 'sales-quotation',
         token,
         apiBaseUrl,
+        onFileChange: setCachedAttachment,
       }
     : {
         storeCondition: false,
@@ -151,6 +167,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         specName: 'sales-quotation',
         token,
         apiBaseUrl,
+        onFileChange: setCachedAttachment,
       };
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
@@ -170,22 +187,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         ratePrecision={ratePrecision}
         data-testid="QuotationGeneralTab__7eb018" />,
     },
-    {
-      key: 'messages',
-      label: ui('quotationPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('quotationPreviewMessages')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
-    {
-      key: 'history',
-      label: ui('quotationPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('quotationPreviewHistory')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
   ];
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -198,7 +199,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
-      hasPdf={!!pdfUrl}
+      hasPdf={hasPdf}
       sendLabel={ui('quotationPreviewSend')}
       downloadLabel={ui('quotationPreviewDownloadPdf')}
       editLabel={ui('quotationPreviewEdit')}

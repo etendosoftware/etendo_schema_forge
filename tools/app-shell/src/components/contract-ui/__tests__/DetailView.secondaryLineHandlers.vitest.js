@@ -161,6 +161,31 @@ describe('buildSecondaryLineHandlers.onSaveLine', () => {
     expect(body).toEqual({ amount: '10,50', qty: 5, note: 'hello' });
   });
 
+  it('ETP-4886: an _ID-backed field (e.g. attributeSetValue) is PATCHed as a string even with a "0" sentinel value', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
+
+    const deps = makeDeps({
+      st: {
+        key: 'rate',
+        addLineFields: {
+          entry: [
+            { key: 'qty' },
+            { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+          ],
+        },
+      },
+      selectedSecondaryLine: { id: 'r1', _tabKey: 'rate' },
+      secondaryLineEdits: { qty: '5', attributeSetValue: '0' },
+    });
+    const { onSaveLine } = buildSecondaryLineHandlers(deps);
+
+    await onSaveLine();
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body).toEqual({ qty: 5, attributeSetValue: '0' });
+    expect(typeof body.attributeSetValue).toBe('string');
+  });
+
   it('success with null server payload: falls back to local edits for the cache update', async () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
 

@@ -17,6 +17,7 @@ import {
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
   collectRowFieldValues,
+  buildRowValueCoercer,
   resolveCanAddLines,
   parseBackendErrorMessage,
   getDocumentIds,
@@ -130,6 +131,106 @@ describe('normalizePatchFieldValues', () => {
     const out = {};
     normalizePatchFieldValues({ flag: true, n: 7, nil: null }, out);
     expect(out).toEqual({ flag: true, n: 7, nil: null });
+  });
+
+  // ETP-4886 — with field metadata (3rd arg), an `_ID`-backed field with a
+  // numeric-looking value (e.g. the attributeSetValue "0" sentinel) must stay
+  // a string, never be coerced to Number.
+  describe('with field metadata (ETP-4886 — _ID columns stay strings)', () => {
+    const fields = [
+      { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+      { key: 'unitPrice', column: 'PriceActual' },
+    ];
+
+    it('does NOT coerce an _ID-backed field even when its value looks numeric', () => {
+      const out = {};
+      normalizePatchFieldValues({ attributeSetValue: '0' }, out, fields);
+      expect(out).toEqual({ attributeSetValue: '0' });
+      expect(typeof out.attributeSetValue).toBe('string');
+    });
+
+    it('still coerces a real numeric field that is not an _ID column', () => {
+      const out = {};
+      normalizePatchFieldValues({ unitPrice: '10.50' }, out, fields);
+      expect(out).toEqual({ unitPrice: 10.5 });
+    });
+
+    it('falls back to the legacy numeric heuristic for a key absent from fields', () => {
+      const out = {};
+      normalizePatchFieldValues({ unmappedIdLookingKey: '19' }, out, fields);
+      expect(out).toEqual({ unmappedIdLookingKey: 19 });
+    });
+
+    it('without a fields argument at all, behaves exactly like the legacy call (backward compatible)', () => {
+      const out = {};
+      normalizePatchFieldValues({ attributeSetValue: '0' }, out);
+      expect(out).toEqual({ attributeSetValue: 0 });
+    });
+  });
+});
+
+describe('buildRowValueCoercer (ETP-4886)', () => {
+  const fields = [
+    { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
+    { key: 'businessPartner', column: 'C_BPartner_ID' },
+    { key: 'unitPrice', column: 'PriceActual' },
+    { key: 'discount', column: 'Discount' },
+  ];
+
+  it('does not coerce an _ID-backed field even when its value looks numeric ("0", "19", negative, decimal)', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('0', 'attributeSetValue')).toBe('0');
+    expect(coerce('19', 'businessPartner')).toBe('19');
+    expect(coerce('-5', 'businessPartner')).toBe('-5');
+    expect(coerce('19.5', 'businessPartner')).toBe('19.5');
+  });
+
+  it('matches the column suffix case-insensitively', () => {
+    const coerce = buildRowValueCoercer([{ key: 'foo', column: 'Some_id' }]);
+    expect(coerce('42', 'foo')).toBe('42');
+  });
+
+  it('coerces real numeric (non-_ID) fields to Number', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('10.50', 'unitPrice')).toBe(10.5);
+    expect(coerce('5', 'discount')).toBe(5);
+    expect(coerce('-3.5', 'unitPrice')).toBe(-3.5);
+  });
+
+  it('falls back to the legacy numeric-looking heuristic for a key not present in fields', () => {
+    const coerce = buildRowValueCoercer(fields);
+    // Not declared in `fields` at all -> old blanket behavior applies.
+    expect(coerce('19', 'someUndeclaredIdField')).toBe(19);
+    expect(coerce('not-a-number', 'someUndeclaredIdField')).toBe('not-a-number');
+  });
+
+  it('with no fields (undefined/empty array) reproduces the full legacy heuristic', () => {
+    const coerceUndefined = buildRowValueCoercer(undefined);
+    const coerceEmpty = buildRowValueCoercer([]);
+    for (const coerce of [coerceUndefined, coerceEmpty]) {
+      expect(coerce('0', 'attributeSetValue')).toBe(0);
+      expect(coerce('10.50', 'unitPrice')).toBe(10.5);
+      expect(coerce('10,50', 'amount')).toBe('10,50');
+    }
+  });
+
+  it('leaves non-string values untouched regardless of field metadata', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce(7, 'unitPrice')).toBe(7);
+    expect(coerce(null, 'attributeSetValue')).toBeNull();
+    expect(coerce(undefined, 'businessPartner')).toBeUndefined();
+    expect(coerce(true, 'discount')).toBe(true);
+    expect(coerce(false, 'attributeSetValue')).toBe(false);
+  });
+
+  it('leaves comma-decimal (locale) strings untouched even for numeric non-_ID fields', () => {
+    const coerce = buildRowValueCoercer(fields);
+    expect(coerce('10,50', 'unitPrice')).toBe('10,50');
+  });
+
+  it('a field present in the map but with no column value falls back to the numeric heuristic', () => {
+    const coerce = buildRowValueCoercer([{ key: 'weirdField' }]);
+    expect(coerce('42', 'weirdField')).toBe(42);
   });
 });
 

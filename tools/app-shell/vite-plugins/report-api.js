@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { resolve, join } from 'node:path';
-import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, buildJsreportHelpersString, computeDocumentQrDataUrl } from '../../../templates/reports/helpers/report-html-helpers.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -882,32 +882,29 @@ export default function reportApiPlugin() {
               ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
               : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, ...neoMeta }, rows };
 
+            // Document (print-*) reports render a QR of the header. QRCode.toDataURL
+            // is async while Handlebars.compile is sync, so the QR cannot be a helper
+            // on the HTML path — precompute it once here, before the format branch, so
+            // both the local HTML render and the jsreport PDF/XLSX payload see the same
+            // {{header.qrDataUrl}}. A QR failure degrades to a report without QR
+            // instead of failing the whole render.
+            if (documentData?.header && templateData.header) {
+              try {
+                templateData.header.qrDataUrl = await computeDocumentQrDataUrl(documentData.header, { qrcode: _require('qrcode') });
+              } catch (qrErr) {
+                console.warn('[report-api] QR generation failed:', qrErr.message);
+              }
+            }
+
             // Direct HTML render — no jsreport needed for preview
             if (format === 'html') {
               const Handlebars = _require('handlebars');
 
               // Register the trusted in-repo helper set — no dynamic code execution.
               // helpersCode is read (not executed) only to preserve a report's
-              // formatNumber decimals.
+              // formatNumber decimals. Document QR codes are precomputed as data
+              // (header.qrDataUrl) above — never as a helper.
               registerReportHelpers(Handlebars, helpersCode);
-
-              // qrCode is report-specific (only document-type reports reference it)
-              // and async (QRCode.toDataURL returns a Promise) — Handlebars.compile()
-              // is synchronous, so it can't be registered as a per-report extra like
-              // the jsreport path does below. Precompute it once here (generic content
-              // — doc type/number/partner/status — good enough for an on-screen
-              // preview) and register a plain sync helper returning the resolved value.
-              if (documentData?.header) {
-                const QRCode = _require('qrcode');
-                const header = documentData.header;
-                const parts = [];
-                if (header.doc_type) parts.push('T:' + header.doc_type);
-                if (header.documentno) parts.push('N:' + header.documentno);
-                if (header.bp_name) parts.push('BP:' + header.bp_name);
-                if (header.status) parts.push('S:' + header.status);
-                const qrDataUrl = await QRCode.toDataURL(parts.length ? parts.join('|') : 'empty', { width: 120, margin: 1 });
-                Handlebars.registerHelper('qrCode', () => qrDataUrl);
-              }
 
               const template = Handlebars.compile(templateContent);
               const html = template(templateData);
@@ -917,7 +914,7 @@ export default function reportApiPlugin() {
             }
 
             // Serialize the same canonical helpers used above for the HTML preview,
-            // plus only this report's specific extras (e.g. qrCode) — a single
+            // plus only this report's specific extras — a single
             // source of truth for both render paths instead of a hand-maintained
             // copy per report. See buildJsreportHelpersString() for why jsreport
             // (a separate Docker container, reachable only over HTTP) can't just

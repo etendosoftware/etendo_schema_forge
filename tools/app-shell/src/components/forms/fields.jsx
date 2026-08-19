@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
+import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { getCurrencySymbol } from '@/lib/formatCurrency.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -247,7 +248,15 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
           // ChipSelect (this modal, GL Item Difference in Editar cuenta, the reconciliation payment
           // method, ManualStatementModal, PaymentForm, FundsTransferModal). CreatableSearchSelect,
           // which renders the same chip for the FK pickers in sales-invoice, has always had it.
-          className="group relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[hsl(var(--text-primary))] focus-within:ring-[3px] focus-within:ring-[hsl(var(--focus-ring))]/[0.08]"
+          //
+          // The box itself is deliberately the SAME shell CreatableSearchSelect draws for those FK
+          // pickers â€” shared FIELD_HEIGHT, rounded-lg, token-based shadow, hover fill and a
+          // ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own
+          // focus treatment, which made an accounting-concept picker 4px taller and differently
+          // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
+          // let alone than the equivalent field in every generated window. Height, radius and focus
+          // belong to the density tokens, not to this component.
+          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))] focus-within:ring-2 focus-within:ring-primary`}
           onClick={showChip ? startEditing : undefined}
         >
           {showChip ? (
