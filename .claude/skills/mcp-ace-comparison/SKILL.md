@@ -54,6 +54,60 @@ term moved. A break-even that fell because ACE-v regressed is bad news wearing a
 (This is the same defect that retired MARI's scope-closed ceiling: a metric needing the identical
 caveat on every move.)
 
+### Break-even assumes the priming is actually paid — since 2026 it often is not
+
+**Read this before computing or quoting a break-even. It invalidated the 2026-08-19 figure.**
+
+The formula silently assumes the agent pays each server's full ACE-p up front. Modern clients break
+that assumption. Since January 2026, **MCP Tool Search** defers loading tool definitions once they
+exceed roughly **10 % of the context window**, and the model discovers them on demand instead —
+reported ~95 % cut in start-up token cost. So a catalogue large enough to look expensive is exactly
+the catalogue the client refuses to preload, and its owner never pays the number you measured.
+
+Consequences for this skill, all mandatory:
+
+- **Establish the deferral threshold for the client, and state which side each server falls on.**
+  At a 200k window the trigger is ~20k tokens. A server below it is preloaded and pays its ACE-p in
+  full; a server above it is deferred and pays a per-use discovery cost instead.
+- **A break-even is only meaningful between two preloaded servers.** When one side is deferred, say
+  so and **do not report the raw figure** — it describes a session that does not happen. On
+  2026-08-19 a break-even of ~46 tasks was computed and then withdrawn for exactly this reason:
+  Holded's ~180 tools arrived deferred in the very session that measured them, so its ~100k priming
+  was never paid.
+- **Deferral is not free — count it on the deferred side.** Each `ToolSearch` round trip to load a
+  schema is calls and bytes the preloaded server does not spend. Record them; that is where the
+  advantage of a small catalogue now lives, no longer in the priming delta.
+- **Check the threshold empirically, not from the spec.** Whether a server is deferred in *this*
+  session is observable: its tools arrive needing a `ToolSearch` before they are callable. Note it
+  per server, per run, and remember it depends on the total across every connected server, not on
+  the one under test.
+
+**The strategic reading, worth writing down once.** A few-generic-verbs design used to buy a real
+structural advantage in priming. Tool Search neutralises most of it — it solves *having 180 tools*.
+It does nothing about a response returning 50 fields when the caller asked for 3. **So ACE-v is the
+component that still decides the outcome**, and it is the one with no ecosystem mitigation coming.
+Weight the report accordingly: ACE-v is the headline, ACE-p is context.
+
+### Absolute reference points (industry, 2026)
+
+Never present an ACE number without saying whether it is healthy in absolute terms. A ratio between
+two servers says nothing about whether either is in trouble.
+
+| Reference | Tools | Priming tokens |
+|---|---:|---:|
+| GitHub MCP — the canonical bloat example | 93 | 42k–55k |
+| Playwright | 21 | ~13.6k |
+| Typical 5-server setup | ~150 | 30k–60k |
+| Per-tool cost, industry range | — | 100–500, some report 550–1,400 |
+| **Hard per-response ceiling in Claude Code** | — | **25k** (`MAX_MCP_OUTPUT_TOKENS`) |
+
+Practical consensus is that 5–7 connected servers is the ceiling before degradation. The 25k
+per-response limit is a hard failure, not a slowdown: on 2026-08-13 a 61,963-character `neo_schema`
+dump (~16.7k tokens, two thirds of the limit) is what registered IMP-12 after the call failed
+against the client limit. When a response approaches that ceiling, say so — it is a defect, not a
+cost.
+
+
 ## Step 0 — Non-negotiable rules
 
 1. **Bytes are the unit. Tokens are never reported as measured.** Count bytes with `wc -c` on the
