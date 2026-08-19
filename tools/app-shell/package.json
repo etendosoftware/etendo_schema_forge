@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.34-preview.feature-ETP-4905.20260818121451.b7868fc",
-    "@etendosoftware/etendo-go-core": "0.3.34-preview.feature-ETP-4905.20260818121451.b7868fc",
+    "@etendosoftware/app-shell-core": "0.3.35-preview.feature-ETP-4894.20260819142321.cc8ac74",
+    "@etendosoftware/etendo-go-core": "0.3.35-preview.feature-ETP-4894.20260819142321.cc8ac74",
     "@iconicapp/iconic-react": "^1.1.4",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
