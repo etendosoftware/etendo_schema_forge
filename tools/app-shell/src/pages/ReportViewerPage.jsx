@@ -740,6 +740,190 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     grouped[sec].push(p);
   }
 
+  // Each renderXParam below owns exactly one `p.type` branch that renderParam
+  // used to inline — pure extraction (ETP-4898/Sonar cognitive complexity),
+  // no behavior change. They stay as closures alongside renderParam so they
+  // keep direct access to the same component state/handlers (params, errors,
+  // handleChange, displayValues, setPopup, token, selectedOrgId, roleOrgIds,
+  // report, ui, locale, resetKey) instead of threading a dozen props through.
+
+  // Multi-select popup (checkboxes)
+  const renderSearchPopupParam = (p, { label, labelEl }) => (
+    <div key={`${p.name}-${resetKey}`}>
+      {labelEl}
+      <PopupMultiSelector
+        key={`${p.name}-${resetKey}`}
+        selector={p.selector}
+        label={label}
+        onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
+        data-testid="PopupMultiSelector__3c998a" />
+    </div>
+  );
+
+  // Single-select popup modal
+  const renderSearchPopupSingleParam = (p, { label, labelEl, hasError, errorBorder }) => {
+    const display = displayValues[p.name] || params['_display_' + p.name] || '';
+    return (
+      <div key={p.name}>
+        {labelEl}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+            const extra = {};
+            if (p.dependsOn) {
+              const paramKey = p.selector === 'account' ? 'selectedAcctSchemaId' : 'selectedOrgId';
+              extra[paramKey] = params[p.dependsOn] || '';
+            }
+            setPopup({ name: p.name, selector: p.selector, label, extraParams: extra });
+          }}
+            className={`flex-1 h-9 px-3 text-sm border rounded-md bg-card hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
+          >
+            {display || <span className="opacity-50">{ui('selectPlaceholder')}</span>}
+          </button>
+          {display && (
+            <button
+              type="button"
+              onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
+              className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
+            ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
+          )}
+        </div>
+        {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+      </div>
+    );
+  };
+
+  // Inline search dropdown (default)
+  const renderSearchInlineParam = (p, { label, labelEl, hasError }) => (
+    <div key={p.name}>
+      {labelEl}
+      <SearchInput
+        selector={p.selector}
+        value={params[p.name] || ''}
+        displayValue={displayValues[p.name] || params['_display_' + p.name] || ''}
+        onChange={(id, name) => {
+          handleChange(p.name, id);
+          handleChange('_display_' + p.name, name);
+          setDisplayValues(prev => ({ ...prev, [p.name]: name }));
+        }}
+        multi={p.multi}
+        minLength={p.inputStyle === 'dropdown' ? 0 : 2}
+        fullWidth
+        hasError={hasError}
+        token={token}
+        label={label}
+        selectedOrgId={selectedOrgId}
+        roleOrgIds={roleOrgIds}
+        selectedWarehouseId={params.M_Warehouse_ID || ''}
+        data-testid="SearchInput__3c998a" />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
+  const renderSearchParam = (p, ctx) => {
+    if (p.inputStyle === 'popup') return renderSearchPopupParam(p, ctx);
+    if (p.inputStyle === 'popup-single') return renderSearchPopupSingleParam(p, ctx);
+    return renderSearchInlineParam(p, ctx);
+  };
+
+  const renderSelectParam = (p, { label, labelEl }) => {
+    const resolvedOptions = p.options ?? (() => {
+      // groupByValue is the deliberate opt-in marker for "usable as a Group By
+      // option" — filtering on it alone is robust across section-naming schemes
+      // (legacy 'dimensions', or a report's own 'sections' ids like 'dimensiones').
+      const base = { value: '', label: ui('none') };
+      const fromDimensions = (report.parameters || [])
+        .filter(d => d.groupByValue)
+        .map(d => ({ value: d.groupByValue, label: d.label?.[locale] || d.label?.en_US || d.name }));
+      return [base, ...fromDimensions];
+    })();
+    const resolveOptLabel = (o) => (o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label);
+    // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
+    // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
+    // behavior), not via a pinned empty option.
+    const staticOpts = resolvedOptions
+      .filter(o => o.value !== '')
+      .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
+    const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
+    return (
+      <div key={p.name}>
+        {labelEl}
+        <CreatableSearchSelect
+          field={{ key: p.name, required: p.required }}
+          value={params[p.name] || ''}
+          displayValue={selectedOpt ? selectedOpt.name : ''}
+          onChange={(id) => handleChange(p.name, id)}
+          resolvedLabel={label}
+          staticOptions={staticOpts}
+          placeholderOverride={ui('selectPlaceholder')}
+          data-testid="CreatableSearchSelect__3c998a" />
+      </div>
+    );
+  };
+
+  const renderToggleParam = (p, { label }) => {
+    const isOn = params[p.name] === 'true';
+    return (
+      <div key={p.name} className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <button
+          type="button"
+          onClick={() => handleChange(p.name, isOn ? 'false' : 'true')}
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOn ? 'bg-foreground' : 'bg-muted'}`}
+          role="switch"
+          aria-checked={isOn}
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderBooleanParam = (p, { label }) => (
+    <div key={p.name} className="flex items-start gap-2.5 p-3 rounded-lg border border-border/40 bg-muted/20 cursor-pointer"
+      onClick={() => handleChange(p.name, params[p.name] === 'true' ? 'false' : 'true')}
+    >
+      <input
+        type="checkbox"
+        checked={params[p.name] === 'true'}
+        onChange={e => handleChange(p.name, e.target.checked ? 'true' : 'false')}
+        onClick={e => e.stopPropagation()}
+        className="mt-0.5 w-4 h-4 accent-primary shrink-0"
+      />
+      <div>
+        <div className="text-xs font-medium text-foreground">{label}</div>
+        {p.description && <div className="text-[10px] text-muted-foreground mt-0.5">{p.description}</div>}
+      </div>
+    </div>
+  );
+
+  const renderDateParam = (p, { labelEl, hasError, errorBorder }) => (
+    <div key={p.name}>
+      {labelEl}
+      <DateField
+        value={params[p.name] || ''}
+        onChange={(iso) => handleChange(p.name, iso)}
+        className={errorBorder}
+        data-testid="DateField__3c998a" />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
+  // number, text
+  const renderTextParam = (p, { labelEl, hasError, errorBorder }) => (
+    <div key={p.name}>
+      {labelEl}
+      <input
+        type={p.type === 'number' ? 'number' : 'text'}
+        value={params[p.name] || ''}
+        onChange={e => handleChange(p.name, e.target.value)}
+        className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
+      />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
   const renderParam = (p) => {
     const label = p.label?.[locale] || p.label?.en_US || p.name;
     const hasError = !!errors[p.name];
@@ -749,185 +933,14 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </label>
     );
     const errorBorder = hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border';
+    const ctx = { label, hasError, labelEl, errorBorder };
 
-    if (p.type === 'search') {
-      // Multi-select popup (checkboxes)
-      if (p.inputStyle === 'popup') {
-        return (
-          <div key={`${p.name}-${resetKey}`}>
-            {labelEl}
-            <PopupMultiSelector
-              key={`${p.name}-${resetKey}`}
-              selector={p.selector}
-              label={label}
-              onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
-              data-testid="PopupMultiSelector__3c998a" />
-          </div>
-        );
-      }
-
-      // Single-select popup modal
-      if (p.inputStyle === 'popup-single') {
-        const display = displayValues[p.name] || params['_display_' + p.name] || '';
-        return (
-          <div key={p.name}>
-            {labelEl}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                const extra = {};
-                if (p.dependsOn) {
-                  const paramKey = p.selector === 'account' ? 'selectedAcctSchemaId' : 'selectedOrgId';
-                  extra[paramKey] = params[p.dependsOn] || '';
-                }
-                setPopup({ name: p.name, selector: p.selector, label, extraParams: extra });
-              }}
-                className={`flex-1 h-9 px-3 text-sm border rounded-md bg-card hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
-              >
-                {display || <span className="opacity-50">{ui('selectPlaceholder')}</span>}
-              </button>
-              {display && (
-                <button
-                  type="button"
-                  onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
-                  className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
-                ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
-              )}
-            </div>
-            {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-          </div>
-        );
-      }
-
-      // Inline search dropdown (default)
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <SearchInput
-            selector={p.selector}
-            value={params[p.name] || ''}
-            displayValue={displayValues[p.name] || params['_display_' + p.name] || ''}
-            onChange={(id, name) => {
-              handleChange(p.name, id);
-              handleChange('_display_' + p.name, name);
-              setDisplayValues(prev => ({ ...prev, [p.name]: name }));
-            }}
-            multi={p.multi}
-            minLength={p.inputStyle === 'dropdown' ? 0 : 2}
-            fullWidth
-            hasError={hasError}
-            token={token}
-            label={label}
-            selectedOrgId={selectedOrgId}
-            roleOrgIds={roleOrgIds}
-            selectedWarehouseId={params.M_Warehouse_ID || ''}
-            data-testid="SearchInput__3c998a" />
-          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-        </div>
-      );
-    }
-
-    if (p.type === 'select') {
-      const resolvedOptions = p.options ?? (() => {
-        // groupByValue is the deliberate opt-in marker for "usable as a Group By
-        // option" — filtering on it alone is robust across section-naming schemes
-        // (legacy 'dimensions', or a report's own 'sections' ids like 'dimensiones').
-        const base = { value: '', label: ui('none') };
-        const fromDimensions = (report.parameters || [])
-          .filter(d => d.groupByValue)
-          .map(d => ({ value: d.groupByValue, label: d.label?.[locale] || d.label?.en_US || d.name }));
-        return [base, ...fromDimensions];
-      })();
-      const resolveOptLabel = (o) => (o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label);
-      // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
-      // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
-      // behavior), not via a pinned empty option.
-      const staticOpts = resolvedOptions
-        .filter(o => o.value !== '')
-        .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
-      const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <CreatableSearchSelect
-            field={{ key: p.name, required: p.required }}
-            value={params[p.name] || ''}
-            displayValue={selectedOpt ? selectedOpt.name : ''}
-            onChange={(id) => handleChange(p.name, id)}
-            resolvedLabel={label}
-            staticOptions={staticOpts}
-            placeholderOverride={ui('selectPlaceholder')}
-            data-testid="CreatableSearchSelect__3c998a" />
-        </div>
-      );
-    }
-
-    if (p.type === 'toggle') {
-      const isOn = params[p.name] === 'true';
-      return (
-        <div key={p.name} className="flex items-center justify-between gap-3">
-          <div className="text-sm font-medium text-foreground">{label}</div>
-          <button
-            type="button"
-            onClick={() => handleChange(p.name, isOn ? 'false' : 'true')}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOn ? 'bg-foreground' : 'bg-muted'}`}
-            role="switch"
-            aria-checked={isOn}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-      );
-    }
-
-    if (p.type === 'boolean') {
-      return (
-        <div key={p.name} className="flex items-start gap-2.5 p-3 rounded-lg border border-border/40 bg-muted/20 cursor-pointer"
-          onClick={() => handleChange(p.name, params[p.name] === 'true' ? 'false' : 'true')}
-        >
-          <input
-            type="checkbox"
-            checked={params[p.name] === 'true'}
-            onChange={e => handleChange(p.name, e.target.checked ? 'true' : 'false')}
-            onClick={e => e.stopPropagation()}
-            className="mt-0.5 w-4 h-4 accent-primary shrink-0"
-          />
-          <div>
-            <div className="text-xs font-medium text-foreground">{label}</div>
-            {p.description && <div className="text-[10px] text-muted-foreground mt-0.5">{p.description}</div>}
-          </div>
-        </div>
-      );
-    }
-
-    if (p.type === 'date') {
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <DateField
-            value={params[p.name] || ''}
-            onChange={(iso) => handleChange(p.name, iso)}
-            className={errorBorder}
-            data-testid="DateField__3c998a" />
-          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-        </div>
-      );
-    }
-
-    // number, text
-    return (
-      <div key={p.name}>
-        {labelEl}
-        <input
-          type={p.type === 'number' ? 'number' : 'text'}
-          value={params[p.name] || ''}
-          onChange={e => handleChange(p.name, e.target.value)}
-          className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
-        />
-        {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-      </div>
-    );
+    if (p.type === 'search') return renderSearchParam(p, ctx);
+    if (p.type === 'select') return renderSelectParam(p, ctx);
+    if (p.type === 'toggle') return renderToggleParam(p, ctx);
+    if (p.type === 'boolean') return renderBooleanParam(p, ctx);
+    if (p.type === 'date') return renderDateParam(p, ctx);
+    return renderTextParam(p, ctx);
   };
 
   const renderSection = (sec, sectionParams) => {
