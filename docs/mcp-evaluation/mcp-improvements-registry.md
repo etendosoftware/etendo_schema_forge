@@ -595,6 +595,8 @@ Environment for all 2026-08-05 statuses: **`etendo-go-local`**, build `c597c7c2`
 | **IMP-35** | A derived field names where it is written but never where it is read, and refreshes asynchronously | P2 | C7 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report 2026-08-19 §7** · after a processed physical inventory, `neo_get` on the product returned `eTGOStock: null` while the stock was real — `product/stock` reported `quantityOnHand: 100` (E7). `EM_ETGO_Stock` is `refresh_mode='Q'` (asynchronous) unlike the two prices (`'S'`, immediate), and IMP-28's `writableVia` names the *write* location only. The blind agent recovered by exploring a sibling entity and recorded that a less patient one *"would very plausibly report stock: unverifiable"* — i.e. this generates false failures on work that actually succeeded. `Done when:` an agent that writes a derived value can confirm it from the field descriptor alone, and the descriptor states that the refresh is asynchronous so `null` is not evidence of failure | run report 2026-08-19 · E7 |
 | **IMP-36** | `metadata.unresolvedFields` omits a field whose default failed to resolve without throwing | P2 | C7 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report 2026-08-19 §7** · with no `parentId`, `storageBin` is absent from `defaults` **and** from `unresolvedFields`, which reads `[]` (E6). Root-caused in `NeoDefaultsService`: the array is populated only from the pass-1 `catch` (~line 169), and the `@SQL=… WHERE M_WAREHOUSE_ID=@M_WAREHOUSE_ID@` default returns `null` *cleanly* via `NeoDefaultsSqlHelper` when `NeoParentValuesLoader` has no parent values — nothing throws, so `applyDefaultWithComboFallback` skips the field into silence. Distinct from the `partnerAddress` blank-string case `McpDefaultsView` documents, which is downstream of this. Partially mitigated by `metadata.notes` (`a6a2045c`), which now explains the same situation in prose. `Done when:` no response reports `unresolvedFields: []` while omitting a field the caller must supply | run report 2026-08-19 · E6 |
 
+| **IMP-37** | Clause 2 rejects the link-to-parent FK, making child-row creation impossible | P0 | C8 | 0 / 5 | ♻️ | `com.etendoerp.go` | ⏳ open | **[IMP-37](imps/IMP-37.md)** · registered 2026-08-20 under the frozen-quota policy (§2.2.1). Found by `contacts-integration.spec.js`, not by inspection: `POST /sws/neo/contacts/bankAccount` answers `422 read_only_field` on `businessPartner` — the parent link, which a child row can neither omit nor send. `NeoFieldFilter.forEntity` grants write permission to `id`, `active` and every link-to-parent column **after** `processFieldMappings` has already built the clause-2 set, and never reconciles the two, so `rejectDisallowedReadOnlyFields` (which reads only the rejection set, and runs before `filterBody`) wins over `addParentColumnMappings`'s stated guarantee that these are *"always allowed — needed for child record creation"*. Measured blast radius: **74 rows / 58 entities**, including `warehouse/storageBin`, `simple-g-l-journal/gLJournalLine`, `financial-account/bankStatementLines`, `price-list/productPrice` and eight `contacts/*`; plus 81 PK rows via the same path (no symptom observed — no known client sends `id` on create). Not a curation mistake: **128 of 150 (85%)** parent FKs are curated read-only, which is the pipeline's correct convention, so the other 54 escape only because their entity happens to carry a `Java_Qualifier` ([IMP-31](imps/IMP-31.md)'s blanket) or their column an AD default — today, whether a child row can be created depends on whether someone incidentally wrote a handler. Fix implemented on `feature/ETP-4918` (`rejectableOnCreate.removeAll(writable)`) with two `forEntity`-level tests, mutation-verified; status stays ⏳ until re-measured in a job A run against a rebuilt deploy. `Done when:` a POST carrying the read-only parent FK is accepted on all 58 entities while a read-only non-parent field on the same entity is still rejected | ETP-4918 Playwright integration run 2026-08-20 |
+
 **Totals (2026-08-13, job A):** earned **77.5** of a known scope of **127** (C1 32/40 · C2 16.5/21 ·
 C3 13/20 · C4 13.5/16 · C5 0/8 · C6 2.5/22) against the **frozen** quota of **126** (§2.2.1) → the Delivery
 component of MARI = **62** (§2.1). Verify the column sums before publishing; a `Pts` cell that disagrees with
@@ -698,6 +700,38 @@ subquery).
 ---
 
 ## 4. Changelog
+
+### 2026-08-20 — IMP-37, found by the Playwright integration suite (not by a benchmark run)
+
+Not a job A/B run and it scores nothing: no MCP task was executed and no status moved. Recorded
+here because the finding came from a source this registry has not used before — the **ETP-4918
+Playwright integration suite**, whose 3 failures were being triaged as flakiness until the trace
+produced a verbatim 422.
+
+* **Added IMP-37** — clause 2 rejects the link-to-parent FK, so a child row can neither omit its
+  parent link nor send it (P0, ♻️, **C8**). `NeoFieldFilter.forEntity` grants write permission to
+  `id`, `active` and every link-to-parent column *after* `processFieldMappings` built the clause-2
+  set, and never reconciles them. **74 rows / 58 entities.** Fix implemented on
+  `feature/ETP-4918` with two `forEntity`-level tests, mutation-verified; status stays ⏳ until a
+  job A run re-measures it against a rebuilt deploy.
+
+**Two things this changes about how earlier findings should be read.**
+
+`warehouse/storageBin` is one of the 58. Creating a storage bin was the step that blocked the stock
+task in the 2026-08-19 run, and was attributed there to a missing `parentId` on `neo_defaults`
+(IMP-36). That attribution may have been incomplete — the same call would also have been rejected
+outright. The earlier text is left as written per this directory's no-rewriting rule; this is the
+correction.
+
+And IMP-31's per-entity blanket, filed as a hole, is currently the **only** thing keeping child
+creation working on 54 other entities. Closing IMP-31 before IMP-37 would have converted a
+documented weakness into an outage. The sequencing note in IMP-31 §6 covers IMP-30; it did not
+anticipate this.
+
+**Method note.** The 422 was in the failing run's trace all along. Three specs failed, the first
+two runs were read as load flakiness, and the deciding evidence was a `.network` entry inside
+`trace.zip` — not a log, not a hypothesis. Worth remembering that the integration suite is a
+defect *source* for this registry, not only a regression gate.
 
 ### 2026-08-19 — job B, blind-subagent run · `etendo-go-local` @ `00db2ba4` · Holded re-probed live
 

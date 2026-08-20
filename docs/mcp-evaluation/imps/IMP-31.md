@@ -166,3 +166,25 @@ distinction between those two cases is exactly what the per-field signal has to 
 - [ ] The javadoc at `NeoFieldFilter.java:76-78` no longer describes the removed limitation.
 - [ ] Re-measured in a job A run, together with [IMP-30](IMP-30.md); status moved in the registry
       only then.
+
+## 6.2 The blanket is currently load-bearing — do not close this before IMP-37
+
+**Added 2026-08-20. This does not revise §3; it quantifies it.**
+
+§3 argues the `!entityHasHandler` blanket cannot simply be deleted because some handlers rely on it
+to inject read-only fields. [IMP-37](IMP-37.md) shows the dependency is far broader than those three
+handlers, and structural rather than incidental.
+
+Clause 2 also captures **link-to-parent FKs**, which are curated read-only on 128 of 150 occurrences
+(85%) — correctly, since the user does not choose a record's parent. On 58 entities that rejection is
+live and child-row creation is impossible. On **54 more it is suppressed only by this blanket**: the
+entity happens to carry a `Java_Qualifier`, so nothing on it is ever rejected, parent FK included.
+
+So the blanket is not merely masking IMP-30 (§6). It is the only thing keeping child creation working
+on those 54 entities. **Re-arming clause 2 per-field, as §4 step 2 proposes, without first landing
+IMP-37's reconciliation would take child creation from broken-on-58 to broken-on-112.**
+
+Ordering: IMP-37 first (it is one line and independent), then IMP-30, then this item. IMP-37's
+`rejectableOnCreate.removeAll(writable)` also removes the parent-FK class from the §4.3 backfill
+problem entirely — those fields never need a per-field exemption signal, because
+`addParentColumnMappings` already grants them explicitly.
