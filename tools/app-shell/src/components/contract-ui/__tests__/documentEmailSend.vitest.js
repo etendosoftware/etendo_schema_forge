@@ -8,8 +8,15 @@ import {
   resolveNeoBaseUrl,
   sendDocumentEmail,
 } from '../documentEmailSend.js';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 beforeEach(() => {
+  declareBearerSession();
   vi.clearAllMocks();
   global.fetch = vi.fn();
 });
@@ -77,14 +84,17 @@ describe('documentEmailSend', () => {
     expect(buildPreviewFileName('', '///', 'invoice-1')).toBe('document-invoice-1.pdf');
   });
 
+  // ETP-4315 — preview caching before send no longer POSTs base64 JSON to the
+  // retired /preview-file endpoint. It now uploads the blob as a real, marked
+  // Attachment via uploadAndMarkMainAttachment (multipart FormData), keyed by
+  // WINDOW_ATTACHMENT_TABLE[windowName] (e.g. 'C_Invoice' for sales-invoice).
   it('caches a generated PDF before sending the email contract', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { id: 'att-1' } } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { status: 'SENT' } } }) });
 
     const result = await sendDocumentEmail({
       apiBaseUrl: 'http://localhost:8080/etendo/neo/sales-invoice',
-      token: 'tok',
       documentId: 'invoice-1',
       windowName: 'sales-invoice',
       documentNo: 'INV-001',
@@ -94,7 +104,7 @@ describe('documentEmailSend', () => {
     expect(result).toEqual({ status: 'SENT' });
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:8080/etendo/neo/preview-file',
+      'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/invoice-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -102,14 +112,16 @@ describe('documentEmailSend', () => {
       'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
       expect.objectContaining({ method: 'POST' }),
     );
-    const previewBody = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(previewBody).toMatchObject({
-      specName: 'sales-invoice',
-      recordId: 'invoice-1',
-      fileName: 'sales-invoice-INV-001.pdf',
-      mimeType: 'application/pdf',
-    });
-    expect(previewBody.fileData).toBeTruthy();
+    const uploadOptions = global.fetch.mock.calls[0][1];
+    expect(uploadOptions.body).toBeInstanceOf(FormData);
+    // A multipart upload: the credential travels, but NO Content-Type — the
+    // browser owns the boundary, and declaring one produces a body the backend
+    // cannot parse.
+    expect(uploadOptions.headers).toMatchObject({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` });
+    expect(uploadOptions.headers).not.toHaveProperty('Content-Type');
+    const uploadedFile = uploadOptions.body.get('file');
+    expect(uploadedFile.name).toBe('sales-invoice-INV-001.pdf');
+    expect(uploadedFile.type).toBe('application/pdf');
   });
 
   it('uses an existing PDF blob URL as the default preview cache source', async () => {
@@ -118,12 +130,11 @@ describe('documentEmailSend', () => {
         ok: true,
         blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
       })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { id: 'att-2' } } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { status: 'SENT' } } }) });
 
     await sendDocumentEmail({
       apiBaseUrl: 'http://localhost:8080/etendo/neo/sales-invoice',
-      token: 'tok',
       documentId: 'invoice-1',
       windowName: 'sales-invoice',
       documentNo: 'INV-001',
@@ -133,7 +144,7 @@ describe('documentEmailSend', () => {
     expect(global.fetch).toHaveBeenNthCalledWith(1, 'blob:invoice-preview');
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8080/etendo/neo/preview-file',
+      'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/invoice-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
@@ -151,7 +162,6 @@ describe('documentEmailSend', () => {
 
     await sendDocumentEmail({
       apiBaseUrl: 'http://localhost:8080/etendo/neo/sales-order',
-      token: 'tok',
       documentId: 'order-1',
       windowName: 'sales-order',
       documentNo: 'SO-001',
@@ -169,12 +179,11 @@ describe('documentEmailSend', () => {
 
     await expect(cacheDocumentPreviewFile({
       apiBaseUrl: 'http://localhost:8080/etendo/neo/sales-invoice',
-      token: 'tok',
       specName: 'sales-invoice',
       documentId: 'invoice-1',
       documentNo: 'INV-001',
       pdfBlob: new Blob(['%PDF'], { type: 'application/pdf' }),
-    })).rejects.toThrow('Preview file cache failed (500)');
+    })).rejects.toThrow('Preview file cache failed');
   });
 
   it('stops the send when preview blob URL cannot be read', async () => {
@@ -182,7 +191,6 @@ describe('documentEmailSend', () => {
 
     await expect(sendDocumentEmail({
       apiBaseUrl: 'http://localhost:8080/etendo/neo/sales-invoice',
-      token: 'tok',
       documentId: 'invoice-1',
       windowName: 'sales-invoice',
       documentNo: 'INV-001',

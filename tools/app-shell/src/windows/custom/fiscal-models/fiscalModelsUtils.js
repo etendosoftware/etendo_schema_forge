@@ -149,10 +149,8 @@ export function triggerDownload(blob, downloadName) {
 }
 
 /**
- * Decodes a base64 string (no `data:` URI prefix) into a Blob. Mirrors the
- * atob → Uint8Array pattern already used by usePreviewAttachment.js for
- * base64-encoded attachment payloads, so both call sites agree on the same
- * decoding convention.
+ * Decodes a base64 string (no `data:` URI prefix) into a Blob, via the
+ * standard atob → Uint8Array pattern.
  */
 export function base64ToBlob(base64, mimeType = 'application/pdf') {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));

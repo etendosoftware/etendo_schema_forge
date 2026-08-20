@@ -8,9 +8,14 @@
  * escape (this client is documented as never throwing).
  */
 import { uploadAttachment } from '../listAttachments.js';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 const PARAMS = {
-  token: 'tok',
   tableName: 'C_Invoice',
   recordId: 'inv-1',
   apiBaseUrl: 'http://host/sws/neo/purchase-invoice',
@@ -21,6 +26,7 @@ function pdf() {
 }
 
 beforeEach(() => {
+    declareBearerSession();
   globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, text: async () => '' });
 });
 
@@ -35,7 +41,9 @@ describe('uploadAttachment', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('http://host/sws/neo/attachments/C_Invoice/inv-1');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer tok');
+    expect(init.headers.Authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+    // No Content-Type: the browser must set the multipart boundary itself.
+    expect(init.headers).not.toHaveProperty('Content-Type');
   });
 
   it('sends the file as multipart and lets the browser set the boundary', async () => {
@@ -79,7 +87,7 @@ describe('uploadAttachment', () => {
   });
 
   it('refuses incomplete parameters without hitting the network', async () => {
-    for (const missing of ['token', 'tableName', 'recordId']) {
+    for (const missing of ['tableName', 'recordId']) {
       const args = { ...PARAMS, file: pdf(), [missing]: null };
       await expect(uploadAttachment(args)).resolves.toEqual({ ok: false, error: 'missing_params' });
     }

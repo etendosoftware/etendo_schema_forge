@@ -210,34 +210,44 @@ describe('sales-invoice RelatedDocuments — isReturn classification (behavioral
 // component fetches it via fetchById inside the same effect.
 // ---------------------------------------------------------------------------
 
-describe('sales-invoice RelatedDocuments — originInvoice chip (ETP-4737)', () => {
-  it('declares an originInvoice state slot', () => {
-    assert.match(src, /const \[originInvoice, setOriginInvoice\] = useState\(null\)/);
+describe('sales-invoice RelatedDocuments — originInvoices chip (ETP-4737, plural since ETP-4919)', () => {
+  it('declares an originInvoices state slot (plural, ETP-4919)', () => {
+    assert.match(src, /const \[originInvoices, setOriginInvoices\] = useState\(\[\]\)/);
   });
 
-  it('fetches originInvoice via fetchById when data.originInvoice is present', () => {
-    assert.match(src, /if \(data\.originInvoice\) \{/);
+  it('builds the origin id list from data.originInvoices, falling back to the singular data.originInvoice', () => {
+    assert.match(src, /Array\.isArray\(data\.originInvoices\)/);
+    assert.match(src, /data\.originInvoices\.map\(o => o\.id\)/);
+    assert.match(src, /data\.originInvoice \? \[data\.originInvoice\] : \[\]/);
+  });
+
+  it('fetches every origin id via fetchById and stores all resolved records', () => {
     assert.match(
       src,
-      /fetchById\('sales-invoice', 'header', data\.originInvoice, token, apiBaseUrl\)/
+      // ETP-4576: `fetchById` no longer takes a credential — it reads the active
+      // session scheme — so `apiBaseUrl` moved into the argument slot `token` held.
+      /fetchById\('sales-invoice', 'header', id, apiBaseUrl\)/
+    );
+    assert.match(src, /Promise\.all\(\s*originInvoiceIds\.map/);
+    assert.match(src, /setOriginInvoices\(invs\.filter\(Boolean\)\)/);
+  });
+
+  it('resets originInvoices to an empty array when no origin id is present (no stale chips on re-fetch)', () => {
+    assert.match(src, /\} else \{\s*setOriginInvoices\(\[\]\);\s*\}/);
+  });
+
+  it('renders one origin-invoice chip per entry, each keyed by its own id (not a shared static key)', () => {
+    assert.match(src, /for \(const inv of originInvoices\) \{/);
+    assert.match(src, /key=\{`origin-invoice-\$\{inv\.id\}`\}/);
+    assert.match(
+      src,
+      /docChipProps\(\{\s*type:\s*'sales-invoice',\s*doc:\s*inv,\s*ui,\s*navigate\s*\}\)/
     );
   });
 
-  it('resets originInvoice to null when data.originInvoice is absent (no stale chip on re-fetch)', () => {
-    assert.match(src, /\} else \{\s*setOriginInvoice\(null\);\s*\}/);
-  });
-
-  it('renders the origin-invoice chip with type "sales-invoice", gated on the fetched originInvoice state', () => {
-    assert.match(src, /if \(originInvoice\) \{/);
-    assert.match(
-      src,
-      /docChipProps\(\{\s*type:\s*'sales-invoice',\s*doc:\s*originInvoice,\s*ui,\s*navigate\s*\}\)/
-    );
-  });
-
-  it('keeps the sourceInvoice chip gate separate and independent from the originInvoice gate', () => {
-    // Both are their own top-level `if` blocks — not an if/else pair — so one
-    // being present never suppresses the other.
+  it('keeps the sourceInvoice chip gate separate and independent from the originInvoices loop', () => {
+    // sourceInvoice stays its own top-level `if` block, unrelated to the originInvoices loop
+    // above — one being present never suppresses the other.
     assert.match(src, /if \(data\?\.sourceInvoice\) \{/);
     assert.doesNotMatch(src, /if \(data\?\.sourceInvoice\)[\s\S]{0,40}\belse\b/);
   });
@@ -250,44 +260,51 @@ describe('sales-invoice RelatedDocuments — originInvoice chip (ETP-4737)', () 
 // replaces or hides any pre-existing chip.
 // ---------------------------------------------------------------------------
 
-function buildChipKinds({ order, shipments = [], originalInvoices = [], sourceInvoice, originInvoice } = {}) {
+function buildChipKinds({ order, shipments = [], originalInvoices = [], sourceInvoice, originInvoices = [] } = {}) {
   const kinds = [];
   if (order) kinds.push('order');
   for (const s of shipments) kinds.push(s.isReturn === true ? 'return-material-receipt' : 'shipment');
   for (const _inv of originalInvoices) kinds.push('invoice');
   if (sourceInvoice) kinds.push('source-invoice');
-  if (originInvoice) kinds.push('origin-invoice');
+  for (const _origin of originInvoices) kinds.push('origin-invoice');
   return kinds;
 }
 
-describe('sales-invoice RelatedDocuments — chip composition with originInvoice (behavioral)', () => {
+describe('sales-invoice RelatedDocuments — chip composition with originInvoices (behavioral, ETP-4919)', () => {
   it('produces no chips when nothing is set', () => {
     assert.deepEqual(buildChipKinds(), []);
   });
 
   it('renders only the origin-invoice chip when it is the sole related document', () => {
-    assert.deepEqual(buildChipKinds({ originInvoice: { id: 'o1' } }), ['origin-invoice']);
+    assert.deepEqual(buildChipKinds({ originInvoices: [{ id: 'o1' }] }), ['origin-invoice']);
   });
 
-  it('renders nothing when originInvoice is absent, even with other data present', () => {
+  it('renders nothing when originInvoices is empty, even with other data present', () => {
     assert.deepEqual(
       buildChipKinds({ order: { id: 'ord' } }),
       ['order']
     );
   });
 
+  // ETP-4919 regression: importing from two source invoices across two separate popup runs
+  // must render TWO origin-invoice chips, not just the most recent one.
+  it('renders one origin-invoice chip per linked origin — this used to collapse to a single chip', () => {
+    const kinds = buildChipKinds({ originInvoices: [{ id: 'o1' }, { id: 'o2' }] });
+    assert.deepEqual(kinds, ['origin-invoice', 'origin-invoice']);
+  });
+
   it('is additive alongside the pre-existing sourceInvoice chip (both render, neither replaces the other)', () => {
-    const kinds = buildChipKinds({ sourceInvoice: { id: 's1' }, originInvoice: { id: 'o1' } });
+    const kinds = buildChipKinds({ sourceInvoice: { id: 's1' }, originInvoices: [{ id: 'o1' }] });
     assert.deepEqual(kinds, ['source-invoice', 'origin-invoice']);
   });
 
-  it('is additive alongside order, shipment and original-invoice chips (full house)', () => {
+  it('is additive alongside order, shipment and original-invoice chips (full house, two origins)', () => {
     const kinds = buildChipKinds({
       order: { id: 'ord' },
       shipments: [{ id: 'sh1', isReturn: true }, { id: 'sh2', isReturn: false }],
       originalInvoices: [{ id: 'oi1' }],
       sourceInvoice: { id: 's1' },
-      originInvoice: { id: 'o1' },
+      originInvoices: [{ id: 'o1' }, { id: 'o2' }],
     });
     assert.deepEqual(kinds, [
       'order',
@@ -295,6 +312,7 @@ describe('sales-invoice RelatedDocuments — chip composition with originInvoice
       'shipment',
       'invoice',
       'source-invoice',
+      'origin-invoice',
       'origin-invoice',
     ]);
   });
