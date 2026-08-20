@@ -541,6 +541,38 @@ describe('SupportChatContext', () => {
     });
   });
 
+  describe('fabDismissed (in-memory only — no localStorage persistence)', () => {
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it('starts fabDismissed at false even when a stale flag from a previous app version is still in localStorage', async () => {
+      // Older versions of the app persisted the dismissal under this key. The current
+      // behavior is deliberately in-memory only, so a leftover value must NOT be honored.
+      window.localStorage.setItem('sf_support_fab_dismissed', '1');
+      const { result } = await renderSupportChat();
+      expect(result.current.state.fabDismissed).toBe(false);
+    });
+
+    it('dismissFab flips fabDismissed to true without writing anything to localStorage', async () => {
+      const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.dismissFab());
+      expect(result.current.state.fabDismissed).toBe(true);
+      expect(setItemSpy).not.toHaveBeenCalledWith('sf_support_fab_dismissed', expect.anything());
+      expect(window.localStorage.getItem('sf_support_fab_dismissed')).toBeNull();
+      setItemSpy.mockRestore();
+    });
+
+    it('openChat resets fabDismissed back to false', async () => {
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.dismissFab());
+      expect(result.current.state.fabDismissed).toBe(true);
+      act(() => result.current.actions.open());
+      expect(result.current.state.fabDismissed).toBe(false);
+    });
+  });
+
   describe('additional coverage', () => {
     it('serializes text and binary attachments differently when starting a conversation', async () => {
       // jsdom's FileReader schedules its onload/onerror callbacks via a real timer,
