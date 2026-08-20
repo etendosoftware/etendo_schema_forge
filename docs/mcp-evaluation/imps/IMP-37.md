@@ -150,7 +150,12 @@ error (`READ_ONLY_FIELD_REJECTED: businessPartner`) and the second still passes.
 - [x] A read-only non-parent field on the same entity is still rejected.
 - [x] Both javadocs (`rejectableOnCreateFields`, `addParentColumnMappings`) describe the
       reconciliation.
-- [ ] `contacts-integration.spec.js` passes against a rebuilt deploy.
+- [x] `contacts-integration.spec.js` passes against a rebuilt deploy (2026-08-20, after the fix
+      was deployed). Verified two ways: the spec goes green, and `POST /sws/neo/contacts/bankAccount`
+      no longer appears among the run's 4xx responses. The spec is reported `flaky` — its first
+      attempt failed waiting 10s for the `Nombre` textbox, an unrelated timeout, and the retry
+      passed. Also observed in the same trace and NOT part of this item: `POST
+      /sws/neo/contacts/locationAddress?parentId=…` answers **404**. The spec tolerates it.
 - [ ] The 81 `id` rows re-checked: no client is known to send `id` on create, so no symptom was
       observed, but the same defect covered them.
 - [ ] Re-measured in a job A run; status moved in the registry only then.
