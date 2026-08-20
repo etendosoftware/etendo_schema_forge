@@ -15,6 +15,11 @@ import {
   generate303File,
   applyIdentParams,
 } from '../fiscalModelsUtils.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
 
@@ -1041,9 +1046,11 @@ describe('computeUpcomingDeadlines', () => {
 
 describe('generate303File', () => {
   const DECL = { id: '303-2026-T2', model: '303', year: 2026, period: 'T2', result: { kind: 'I' } };
-  const TOKEN = 'test-token';
   const API_BASE = 'http://host/neo/fiscal-models';
 
+  // ETP-4576: `token` is no longer an option — the credential comes from the
+  // active scheme. Bearer is the production default, so it is the baseline here.
+  beforeEach(() => { declareBearerSession(); });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   function mockFetchOk(blob = new Blob(['data'])) {
@@ -1060,20 +1067,17 @@ describe('generate303File', () => {
     return { anchor, objectUrl };
   }
 
-  it('returns false when token is missing', async () => {
-    expect((await generate303File(DECL, { token: '', apiBaseUrl: API_BASE })).ok).toBe(false);
-    expect((await generate303File(DECL, { apiBaseUrl: API_BASE })).ok).toBe(false);
-  });
-
-  it('returns false when apiBaseUrl is missing', async () => {
-    expect((await generate303File(DECL, { token: TOKEN })).ok).toBe(false);
+  it('returns { ok: false, error: "no_base_url" } when apiBaseUrl is missing, without issuing a request', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    expect(await generate303File(DECL, {})).toEqual({ ok: false, error: 'no_base_url' });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('builds the correct URL with URLSearchParams', async () => {
     mockFetchOk();
     // tipo=I no longer requires IBAN (EDID065 fix) — identChecks is optional here,
     // kept to also cover the "extra IBAN param" pass-through path.
-    await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
+    await generate303File(DECL, { apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     const calledUrl = vi.mocked(fetch).mock.calls[0][0];
     expect(calledUrl).toContain('/fiscal303/generate?');
     expect(calledUrl).toContain('year=2026');
@@ -1083,25 +1087,39 @@ describe('generate303File', () => {
 
   it('uses the result.kind from decl as tipo', async () => {
     mockFetchOk();
-    await generate303File({ ...DECL, result: { kind: 'C' } }, { token: TOKEN, apiBaseUrl: API_BASE });
+    await generate303File({ ...DECL, result: { kind: 'C' } }, { apiBaseUrl: API_BASE });
     expect(vi.mocked(fetch).mock.calls[0][0]).toContain('tipo=C');
   });
 
   it('defaults tipo to N when result.kind is absent', async () => {
     mockFetchOk();
-    await generate303File({ ...DECL, result: null }, { token: TOKEN, apiBaseUrl: API_BASE });
+    await generate303File({ ...DECL, result: null }, { apiBaseUrl: API_BASE });
     expect(vi.mocked(fetch).mock.calls[0][0]).toContain('tipo=N');
   });
 
   it('sends Authorization header', async () => {
     mockFetchOk();
-    await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
-    expect(vi.mocked(fetch).mock.calls[0][1].headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    await generate303File(DECL, { apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
+    expect(vi.mocked(fetch).mock.calls[0][1].headers.Authorization)
+      .toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+  });
+
+  // 303 generation is a GET (every parameter travels in the query string), so
+  // the cookie scheme sends no credential header at all — just the cookie, which
+  // only crosses origins when `credentials: 'include'` is set.
+  it('sends no credential header under the cookie scheme, and still includes the cookie', async () => {
+    declareCookieSession();
+    mockFetchOk();
+    await generate303File(DECL, { apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(init.headers).not.toHaveProperty('Authorization');
+    expect(init.headers).not.toHaveProperty('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
   });
 
   it('returns { ok: true } and triggers download on success', async () => {
     const { anchor } = mockFetchOk();
-    const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
+    const result = await generate303File(DECL, { apiBaseUrl: API_BASE, identChecks: { bank_iban: 'ES9121000418450200051332' } });
     expect(result.ok).toBe(true);
     expect(anchor.download).toBe('303_T2_2026.txt');
     expect(anchor.click).toHaveBeenCalled();
@@ -1110,27 +1128,27 @@ describe('generate303File', () => {
   it('returns { ok: false } when fetch responds not ok', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, text: () => Promise.resolve('err') }));
     // Use tipo=N so IBAN gate is not triggered
-    const result = await generate303File({ ...DECL, result: { kind: 'N' } }, { token: TOKEN, apiBaseUrl: API_BASE });
+    const result = await generate303File({ ...DECL, result: { kind: 'N' } }, { apiBaseUrl: API_BASE });
     expect(result.ok).toBe(false);
   });
 
   it('returns { ok: false } when fetch throws', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
-    const result = await generate303File({ ...DECL, result: { kind: 'N' } }, { token: TOKEN, apiBaseUrl: API_BASE });
+    const result = await generate303File({ ...DECL, result: { kind: 'N' } }, { apiBaseUrl: API_BASE });
     expect(result.ok).toBe(false);
   });
 
   it('returns { ok: false, error: iban_required } when tipo needs IBAN and none provided', async () => {
     // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
     // extranjero) require IBAN per AEAT error EDID065 — tipo=I no longer does.
-    const result = await generate303File({ ...DECL, result: { kind: 'D' } }, { token: TOKEN, apiBaseUrl: API_BASE });
+    const result = await generate303File({ ...DECL, result: { kind: 'D' } }, { apiBaseUrl: API_BASE });
     expect(result).toEqual({ ok: false, error: 'iban_required' });
   });
 
   it('does not require IBAN for tipo=I, G or V (EDID065 fix — no longer in IBAN_REQUIRED_TIPOS)', async () => {
     for (const kind of ['I', 'G', 'V']) {
       mockFetchOk();
-      const result = await generate303File({ ...DECL, result: { kind } }, { token: TOKEN, apiBaseUrl: API_BASE });
+      const result = await generate303File({ ...DECL, result: { kind } }, { apiBaseUrl: API_BASE });
       expect(result.ok).toBe(true);
     }
   });
@@ -1141,7 +1159,7 @@ describe('generate303File', () => {
     // the bank section, so the download flow must gate on it too.
     vi.stubGlobal('fetch', vi.fn());
     const result = await generate303File(DECL, {
-      token: TOKEN, apiBaseUrl: API_BASE,
+      apiBaseUrl: API_BASE,
       identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
     });
     expect(result).toEqual({ ok: false, error: 'iban_required' });
@@ -1151,7 +1169,7 @@ describe('generate303File', () => {
   it('still proceeds to fetch for tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {
     mockFetchOk();
     const result = await generate303File(DECL, {
-      token: TOKEN, apiBaseUrl: API_BASE,
+      apiBaseUrl: API_BASE,
       identChecks: { tipo_declaracion: 'I', bank_iban: '' },
     });
     expect(result.ok).toBe(true);

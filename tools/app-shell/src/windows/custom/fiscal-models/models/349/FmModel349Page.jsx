@@ -204,7 +204,7 @@ function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
 // `activeTab === 'invoices' || ... || ...` gate and its 3 nested per-tab `&&`
 // branches now live in their own function, called unconditionally below.
 function DetailTabContent({
-  activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
+  activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, apiBaseUrl, status,
 }) {
   if (activeTab !== 'invoices' && activeTab !== 'incidents' && activeTab !== 'receipt') return null;
   return (
@@ -228,7 +228,6 @@ function DetailTabContent({
         <AttachmentsTab
           tableName={FISCAL_DECL_TABLE}
           recordId={decl.id}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           isActive={activeTab === 'receipt'}
           config={{ allowedMimeTypes: ['application/pdf'] }}
@@ -240,7 +239,7 @@ function DetailTabContent({
 }
 
 // ── Main ─────────────────────────────────────────────────────────
-export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
+export default function FmModel349Page({ decl, onBack, onStatusChange, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
 
@@ -279,7 +278,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const { upload: uploadReceipt } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
-    token,
     apiBaseUrl,
     isActive: false,
   });
@@ -323,7 +321,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   async function handleCompute() {
     setComputing(true);
     try {
-      const res = await compute349Operators(decl, { token, apiBaseUrl });
+      const res = await compute349Operators(decl, { apiBaseUrl });
       if (res?.operators) setLiveOperators(res.operators);
       if (res?.invoices)  setLiveInvoices(res.invoices);
       if (res?.rectifications) setLiveRectifications(res.rectifications);
@@ -345,7 +343,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
@@ -355,8 +353,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   } = {}) {
     setGenError(null);
     setGenerating(true);
-    const result = await generate349File(decl, {
-      token, apiBaseUrl, phone, contact,
+    const result = await generate349File(decl, { apiBaseUrl, phone, contact,
       fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
     });
     setGenerating(false);
@@ -732,7 +729,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         warning={warning}
         t={t}
         onGoToSources={() => setActiveTab('invoices')}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         status={status}
         data-testid="DetailTabContent__346dd5" />

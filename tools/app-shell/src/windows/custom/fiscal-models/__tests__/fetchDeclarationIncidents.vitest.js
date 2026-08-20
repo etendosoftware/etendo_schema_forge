@@ -4,22 +4,22 @@
 // in the same file).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchDeclarationIncidents } from '../fiscalModelsUtils.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
-const OPTS = { token: 'tok', apiBaseUrl: 'http://host/neo/fiscal-models' };
+// ETP-4576: no `token` option — the credential comes from the active scheme.
+const OPTS = { apiBaseUrl: 'http://host/neo/fiscal-models' };
 const EMPTY = { blocking: 0, warning: 0, items: [] };
 
 describe('fetchDeclarationIncidents', () => {
-  beforeEach(() => { vi.spyOn(global, 'fetch'); });
+  beforeEach(() => { declareBearerSession(); vi.spyOn(global, 'fetch'); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('returns the empty shape when token is absent', async () => {
-    const result = await fetchDeclarationIncidents('303-2026-T2', { apiBaseUrl: OPTS.apiBaseUrl });
-    expect(result).toEqual(EMPTY);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
   it('returns the empty shape when apiBaseUrl is absent', async () => {
-    const result = await fetchDeclarationIncidents('303-2026-T2', { token: OPTS.token });
+    const result = await fetchDeclarationIncidents('303-2026-T2', {});
     expect(result).toEqual(EMPTY);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -52,7 +52,10 @@ describe('fetchDeclarationIncidents', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe('http://host/neo/fiscal303/incidents?id=303-2026-T2');
-    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${TEST_BEARER_TOKEN}`,
+    });
 
     expect(result).toEqual({
       blocking: 2,
@@ -230,5 +233,19 @@ describe('fetchDeclarationIncidents', () => {
         { origin: 'AVISO01', message: 'New AEAT warning', severity: 'warn' },
       ],
     });
+  });
+  // The other half of the switch. A GET carries no CSRF proof in either scheme;
+  // what changes is that the bearer header disappears and the cookie must be
+  // allowed to travel cross-origin.
+  it('sends no Authorization header and no CSRF proof under the cookie scheme', async () => {
+    declareCookieSession();
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ incidents: [] }) });
+
+    await fetchDeclarationIncidents('303-2026-T2', OPTS);
+
+    const [, init] = fetch.mock.calls[0];
+    expect(init.headers).not.toHaveProperty('Authorization');
+    expect(init.headers).not.toHaveProperty('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
   });
 });

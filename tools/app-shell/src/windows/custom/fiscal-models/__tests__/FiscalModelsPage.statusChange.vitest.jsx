@@ -38,18 +38,25 @@ vi.mock('../FmDebugPanel.jsx', () => ({
 }));
 
 import FiscalModelsPage from '../FiscalModelsPage.jsx';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
-const TOKEN = 'test-token';
 const API_BASE = 'http://host/neo/fiscal-models';
 
 describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
-  beforeEach(() => { vi.spyOn(global, 'fetch'); });
+  // ETP-4576: the page no longer takes (or threads) a `token` prop — the
+  // credential is read from the active scheme at request time.
+  beforeEach(() => { declareBearerSession(); vi.spyOn(global, 'fetch'); });
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('persists the new status via PUT before applying it to local view state', async () => {
     fetch.mockResolvedValueOnce({ ok: true });
 
-    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+    render(<FiscalModelsPage apiBaseUrl={API_BASE} />);
 
     fireEvent.click(screen.getByTestId('select-303'));
     fireEvent.click(screen.getByTestId('present-303'));
@@ -59,7 +66,7 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
     expect(url).toBe('http://host/neo/fiscal303/declarations?id=303-2026-T2');
     expect(init.method).toBe('PUT');
     expect(init.headers).toEqual({
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${TEST_BEARER_TOKEN}`,
       'Content-Type': 'application/json',
     });
     expect(JSON.parse(init.body)).toEqual({ status: 'submitted' });
@@ -68,7 +75,7 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
   it('does not update local view state when the PUT fails', async () => {
     fetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
-    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+    render(<FiscalModelsPage apiBaseUrl={API_BASE} />);
 
     fireEvent.click(screen.getByTestId('select-303'));
     fireEvent.click(screen.getByTestId('present-303'));
@@ -77,5 +84,23 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
     // The detail view for the 303 declaration must still be mounted — a
     // failed persist must not throw or unmount the page.
     expect(screen.getByTestId('present-303')).toBeInTheDocument();
+  });
+  it('persists the status with the CSRF proof under the cookie scheme', async () => {
+    declareCookieSession();
+    fetch.mockResolvedValueOnce({ ok: true });
+
+    render(<FiscalModelsPage apiBaseUrl={API_BASE} />);
+
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('present-303'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [, init] = fetch.mock.calls[0];
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({
+      'X-Go-CSRF': TEST_CSRF_TOKEN,
+      'Content-Type': 'application/json',
+    });
+    expect(init.credentials).toBe('include');
   });
 });

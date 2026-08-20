@@ -1,28 +1,41 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { persistDeclarationStatus } from '../fiscalModelsUtils.js';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
-const OPTS = { token: 'tok', apiBaseUrl: 'http://host/neo/fiscal-models' };
+// ETP-4576: `token` is gone from the options — the credential comes from the
+// active scheme, so each test declares one. Bearer is the default so the
+// non-header tests read the same as before.
+const OPTS = { apiBaseUrl: 'http://host/neo/fiscal-models' };
 
 describe('persistDeclarationStatus', () => {
-  beforeEach(() => { vi.spyOn(global, 'fetch'); });
+  beforeEach(() => { declareBearerSession(); vi.spyOn(global, 'fetch'); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('returns { ok: false, error: "no_token" } when token is absent', async () => {
-    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', { apiBaseUrl: OPTS.apiBaseUrl });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
+  it('returns { ok: false, error: "no_base_url" } when apiBaseUrl is absent', async () => {
+    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', {});
+    expect(result).toEqual({ ok: false, error: 'no_base_url' });
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('returns { ok: false, error: "no_token" } when apiBaseUrl is absent', async () => {
-    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', { token: OPTS.token });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it('returns { ok: false, error: "no_token" } when no opts are passed at all', async () => {
+  it('returns { ok: false, error: "no_base_url" } when no opts are passed at all', async () => {
     const result = await persistDeclarationStatus('303-2026-T2', 'submitted');
-    expect(result).toEqual({ ok: false, error: 'no_token' });
+    expect(result).toEqual({ ok: false, error: 'no_base_url' });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  // The caller no longer supplies a credential, so "no token" is not a
+  // caller-side failure any more: with a base URL present the request goes out
+  // and the scheme decides what it carries.
+  it('issues the request with only apiBaseUrl, taking the credential from the scheme', async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
+    expect(result).toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('calls PUT with the correct URL, headers and body, and returns { ok: true }', async () => {
@@ -35,10 +48,26 @@ describe('persistDeclarationStatus', () => {
     expect(url).toBe('http://host/neo/fiscal303/declarations?id=303-2026-T2');
     expect(init.method).toBe('PUT');
     expect(init.headers).toEqual({
-      Authorization: 'Bearer tok',
+      Authorization: `Bearer ${TEST_BEARER_TOKEN}`,
       'Content-Type': 'application/json',
     });
     expect(JSON.parse(init.body)).toEqual({ status: 'submitted' });
+  });
+
+  it('carries the CSRF proof and no bearer token under the cookie scheme', async () => {
+    declareCookieSession();
+    fetch.mockResolvedValueOnce({ ok: true });
+    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
+
+    expect(result).toEqual({ ok: true });
+    const [, init] = fetch.mock.calls[0];
+    // PUT is an unsafe method: the proof is mandatory or the backend answers 403.
+    expect(init.headers).toEqual({
+      'X-Go-CSRF': TEST_CSRF_TOKEN,
+      'Content-Type': 'application/json',
+    });
+    // Cross-origin deployments only send the `__Host-` cookie when asked to.
+    expect(init.credentials).toBe('include');
   });
 
   it('encodes the declaration id in the URL', async () => {

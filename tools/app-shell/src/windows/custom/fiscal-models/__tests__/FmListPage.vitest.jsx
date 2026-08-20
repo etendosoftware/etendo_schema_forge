@@ -2,6 +2,12 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -108,18 +114,19 @@ const defaultProps = {
   onComputeUpdate: vi.fn(),
 };
 
-// FmListPage now fetches the active-models catalog from the backend on mount
-// when `token`/`apiBaseUrl` are present (see FmListPage.jsx). Without them,
+// FmListPage fetches the active-models catalog from the backend on mount when
+// `apiBaseUrl` is present (see FmListPage.jsx). ETP-4576 removed the `token`
+// prop — the credential now comes from the active session scheme, so the only
+// prop that gates the fetch is `apiBaseUrl`. Without it,
 // `activeModels` starts empty and stays empty — there is no more in-memory
 // default of "303 and 349 active". Tests that need non-empty activeModels
 // (row rendering, filtering, KPI counts, "+ Nueva declaración" visibility,
 // etc.) must supply these props and mock `fetch`.
-const TOKEN = 'test-token';
 const API_BASE_URL = '/api/window';
 // Mirrors FmListPage's `base = apiBaseUrl.replace(/\/[^/]+$/, '')`.
 const BASE = '/api';
 
-const withCatalogProps = { ...defaultProps, token: TOKEN, apiBaseUrl: API_BASE_URL };
+const withCatalogProps = { ...defaultProps, apiBaseUrl: API_BASE_URL };
 
 // Mocks GET/PUT `{BASE}/fiscal-models-catalog`. Any other fetch (e.g. the
 // `fiscal303/declarations` GET also triggered on mount when token/apiBaseUrl
@@ -144,6 +151,9 @@ async function waitForCatalogLoad() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // ETP-4576: bearer is the production default scheme; the cookie-scheme cases
+  // below opt in explicitly.
+  declareBearerSession();
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('fetch not mocked for this test')));
 });
 
@@ -199,8 +209,8 @@ describe('FmListPage — rendering', () => {
 
 // ── Catalog fetch (no token/apiBaseUrl) ─────────────────────────────────────
 
-describe('FmListPage — catalog fetch skipped without token/apiBaseUrl', () => {
-  it('starts with activeModels={} synchronously and never shows "loading" when token/apiBaseUrl are absent', () => {
+describe('FmListPage — catalog fetch skipped without apiBaseUrl', () => {
+  it('starts with activeModels={} synchronously and never shows "loading" when apiBaseUrl is absent', () => {
     const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain('loading');
@@ -283,7 +293,6 @@ describe('FmListPage — row click', () => {
         onSelect={onSelect}
         onStatusChange={vi.fn()}
         onComputeUpdate={vi.fn()}
-        token={TOKEN}
         apiBaseUrl={API_BASE_URL}
       />
     );
@@ -507,7 +516,7 @@ describe('FmListPage — new declaration modal', () => {
 // ── Model catalog toolbar button ───────────────────────────────────────────
 // These don't depend on activeModels state (the button and drawer always
 // render, independent of catalogLoaded/activeCount), so they keep the plain
-// no-token props.
+// no-apiBaseUrl props.
 
 describe('FmListPage — model catalog moved to toolbar', () => {
   it('renders a "Catálogo de modelos" button in the toolbar with the active count', () => {
@@ -821,13 +830,16 @@ describe('FmListPage — column headers', () => {
 // on catalog save.
 
 describe('FmListPage — fiscal-models-catalog backend integration', () => {
-  it('calls GET {base}/fiscal-models-catalog with the bearer token on mount when token+apiBaseUrl are present', async () => {
+  it('calls GET {base}/fiscal-models-catalog with the bearer token on mount when apiBaseUrl is present', async () => {
     globalThis.fetch = mockCatalogFetch({ '303': true, '349': true });
     render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE}/fiscal-models-catalog`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        credentials: 'include',
+      })
     );
   });
 
@@ -877,7 +889,32 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TEST_BEARER_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ '303': true, '349': false }),
+        })
+      );
+    });
+  });
+
+  // The cookie-scheme twin of the PUT above. This is the call site that would
+  // start answering 403 the day the preference is switched on if the proof were
+  // missing, so it is asserted directly rather than inferred from the builder.
+  it('PUTs the catalog with the CSRF proof and no bearer token under the cookie scheme', async () => {
+    declareCookieSession();
+    globalThis.fetch = mockCatalogFetch();
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE}/fiscal-models-catalog`,
+        expect.objectContaining({
+          method: 'PUT',
+          headers: { 'X-Go-CSRF': TEST_CSRF_TOKEN, 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ '303': true, '349': false }),
         })
       );
@@ -897,16 +934,16 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TEST_BEARER_TOKEN}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': false, '349': false }),
         })
       );
     });
   });
 
-  it('does not PUT the catalog when token/apiBaseUrl are absent — local state still updates', () => {
+  it('does not PUT the catalog when apiBaseUrl is absent — local state still updates', () => {
     const { container, getByText, queryByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
-    // Without token/apiBaseUrl, catalogLoaded starts true and activeModels {} —
+    // Without apiBaseUrl, catalogLoaded starts true and activeModels {} —
     // reactivating 303 must still work locally without hitting the network.
     fireEvent.click(getByText(/fm\.catalog\.title/));
     fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
@@ -1083,7 +1120,10 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE}/fiscal303/incidents?id=decl-url-check`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+        expect.objectContaining({
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        credentials: 'include',
+      })
       );
     });
   });

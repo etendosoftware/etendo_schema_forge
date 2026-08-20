@@ -1,3 +1,4 @@
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import {
@@ -12,19 +13,20 @@ import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
-async function computeBoxes303Real(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) throw new Error('missing credentials');
+async function computeBoxes303Real(decl, { apiBaseUrl } = {}) {
+  if (!apiBaseUrl) throw new Error('missing credentials');
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const params = new URLSearchParams({ year: decl.year, period: decl.period });
   const res = await fetch(`${base}/fiscal303/boxes?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: jsonHeaders(),
+        credentials: 'include',
   });
   if (!res.ok) throw new Error(`boxes fetch failed: ${res.status}`);
   return await res.json();
 }
 
-async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
-  return compute349Operators(decl, { token, apiBaseUrl });
+async function computeOperators349Real(decl, { apiBaseUrl } = {}) {
+  return compute349Operators(decl, { apiBaseUrl });
 }
 
 // Generic filter dropdown — handles year, model and status filters
@@ -400,22 +402,23 @@ function getComputedForDecl(decl, isDraft, maps) {
 }
 
 // ── Main component ───────────────────────────────────────────────
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
 
   const [decls, setDecls] = useState(propDecls ?? []);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     fetch(`${base}/fiscal303/declarations`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+        credentials: 'include',
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
       .catch(() => {});
-  }, [token, apiBaseUrl]);
+  }, [apiBaseUrl]);
 
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize
@@ -431,10 +434,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const declIdsKey = useMemo(() => decls.map(d => d.id).join(','), [decls]);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl || !decls.length) return;
+    if (!apiBaseUrl || !decls.length) return;
     let cancelled = false;
     Promise.all(decls.map(d =>
-      fetchDeclarationIncidents(d.id, { token, apiBaseUrl, model: d.model })
+      fetchDeclarationIncidents(d.id, { apiBaseUrl, model: d.model })
         .then(result => ({ id: d.id, result }))
     )).then(entries => {
       if (cancelled) return;
@@ -445,22 +448,23 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [declIdsKey, token, apiBaseUrl]);
+  }, [declIdsKey, apiBaseUrl]);
 
   const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     fetch(`${base}/fiscal-models-catalog`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+        credentials: 'include',
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setActiveModels(data ?? {}))
       .catch(() => {})
       .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl]);
+  }, [apiBaseUrl]);
 
   const draftDecls303 = useMemo(
     () => decls.filter(d => d.model === '303' && d.status === 'draft'),
@@ -501,33 +505,29 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const { computedMap } = useFiscalAutoCompute(draftDecls303, {
     computeFn:       computeBoxes303Real,
     checkModifiedFn: checkModified303,
-    token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled:         Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMap349 } = useFiscalAutoCompute(draftDecls349, {
     computeFn:       computeOperators349Real,
     checkModifiedFn: checkModified349,
-    token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled:         Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther303 } = useFiscalAutoCompute(otherDecls303, {
     computeFn: computeBoxes303Real,
-    token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled:   Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther349 } = useFiscalAutoCompute(otherDecls349, {
     computeFn: computeOperators349Real,
-    token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled:   Boolean(apiBaseUrl),
   });
 
   useEffect(() => {
@@ -565,18 +565,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   }, [showSortMenu]);
 
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
-    if (token && apiBaseUrl) {
+    if (apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       fetch(`${base}/fiscal303/declarations`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created), ...ds]))
         .catch(() => {});
     }
-  }, [token, apiBaseUrl]);
+  }, [apiBaseUrl]);
 
   const yearOptions = useMemo(
     () => Array.from(new Set(decls.map(d => String(d.year)))).sort((a, b) => b - a)
@@ -906,18 +907,18 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onSave={(newActive) => {
             setActiveModels(newActive);
             setShowCatalog(false);
-            if (token && apiBaseUrl) {
+            if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               fetch(`${base}/fiscal-models-catalog`, {
                 method: 'PUT',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                headers: writeHeaders(),
+        credentials: 'include',
                 body: JSON.stringify(newActive),
               })
                 .then(r => { if (!r.ok) throw new Error(r.status); })
                 .catch(() => {});
             }
           }}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           data-testid="FmCatalogPage__cb728e" />
       )}

@@ -6,7 +6,7 @@ import FmDebugPanel from './FmDebugPanel.jsx';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import { persistDeclarationStatus } from './fiscalModelsUtils.js';
 
-export default function FiscalModelsPage({ token, apiBaseUrl }) {
+export default function FiscalModelsPage({ apiBaseUrl }) {
   const [view, setView] = useState({ type: 'list' });
   const debugMode = useDebugMode();
 
@@ -35,7 +35,6 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
       <div style={inDetail ? { display: 'none' } : { height: '100%' }}>
         <FmListPage
           onSelect={handleSelect}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onComputeUpdate={handleComputeUpdate}
           data-testid="FmListPage__ca1112" />
@@ -44,10 +43,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
         <FmModel303Page
           decl={view.decl}
           onBack={handleBack}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onStatusChange={async (id, newStatus, submissionMethod) => {
-            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
+            const result = await persistDeclarationStatus(id, newStatus, { apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
             }
@@ -58,10 +56,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
         <FmModel349Page
           decl={view.decl}
           onBack={handleBack}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onStatusChange={async (id, newStatus, submissionMethod) => {
-            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
+            const result = await persistDeclarationStatus(id, newStatus, { apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
             }

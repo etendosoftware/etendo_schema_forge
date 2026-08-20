@@ -105,7 +105,6 @@ const makeDecl = (overrides = {}) => ({
 const defaultProps = {
   onBack: vi.fn(),
   onStatusChange: vi.fn(),
-  token: 'tok',
   apiBaseUrl: '/api',
 };
 
@@ -381,7 +380,6 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
     expect(generate349File).toHaveBeenCalledWith(
       makeDecl(),
       expect.objectContaining({
-        token: 'tok',
         apiBaseUrl: '/api',
         fileName: 'my_349_file',
         phone: '600111222',

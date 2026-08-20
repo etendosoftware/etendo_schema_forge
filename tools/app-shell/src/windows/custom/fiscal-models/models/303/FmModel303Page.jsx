@@ -1,3 +1,4 @@
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import {
@@ -68,10 +69,11 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
   if (res.sources) setLiveSources(res.sources);
 }
 
-function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
-  if (!token || !apiBaseUrl) return;
+function fetchOrgIdent(apiBaseUrl, setOrgIdent) {
+  if (!apiBaseUrl) return;
   fetch(`${neoBase(apiBaseUrl)}/session`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: jsonHeaders(),
+        credentials: 'include',
   })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -199,7 +201,7 @@ function buildIncidentVariants(blocking, warning, t) {
 
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   const [status, setStatus] = useState(decl.status);
@@ -239,7 +241,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const { upload: uploadReceipt } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
-    token,
     apiBaseUrl,
     isActive: false,
   });
@@ -266,22 +267,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [incidents, setIncidents] = useState(decl.incidents ?? { blocking: 0, warning: 0, items: [] });
 
   async function refreshIncidents() {
-    const fresh = await fetchDeclarationIncidents(decl.id, { token, apiBaseUrl });
+    const fresh = await fetchDeclarationIncidents(decl.id, { apiBaseUrl });
     setIncidents(fresh);
   }
 
   useEffect(() => {
     // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
     // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     refreshIncidents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decl.id, token, apiBaseUrl]);
+  }, [decl.id, apiBaseUrl]);
 
   async function handleCompute() {
     setComputing(true);
     try {
-      const res = await computeBoxes303(decl, { token, apiBaseUrl });
+      const res = await computeBoxes303(decl, { apiBaseUrl });
       applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     } finally {
       setComputing(false);
@@ -300,7 +301,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
     if (hasPrecomputed) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
@@ -308,12 +309,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   async function handleGenerate({ filename } = {}) {
     setGenError(null);
     setGenerating(true);
-    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
+    const result = await generate303File(decl, { apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
     if (!result.ok) applyGenerateError(result, t, setGenError);
   }
 
-  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
+  useEffect(() => { fetchOrgIdent(apiBaseUrl, setOrgIdent); }, [apiBaseUrl]);
 
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
@@ -371,14 +372,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       isFirstManualDataRender.current = false;
       return;
     }
-    if (isSubmitted || !token || !apiBaseUrl) return;
+    if (isSubmitted || !apiBaseUrl) return;
     if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
     manualDataSaveTimer.current = setTimeout(() => {
-      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });
+      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { apiBaseUrl });
     }, 800);
     return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identChecks, manualOverrides, isSubmitted, token, apiBaseUrl, decl.id]);
+  }, [identChecks, manualOverrides, isSubmitted, apiBaseUrl, decl.id]);
 
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
@@ -633,7 +634,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             (<AttachmentsTab
               tableName={FISCAL_DECL_TABLE}
               recordId={decl.id}
-              token={token}
               apiBaseUrl={apiBaseUrl}
               isActive={activeTab === 'receipt'}
               config={{ allowedMimeTypes: ['application/pdf'] }}
@@ -656,7 +656,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           orgIdent={orgIdent}
           identChecks={identChecks}
           summary={summary}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onSuccess={(newStatus) => handleStatusChange(newStatus)}
           onAttached={handleAeatAttached}

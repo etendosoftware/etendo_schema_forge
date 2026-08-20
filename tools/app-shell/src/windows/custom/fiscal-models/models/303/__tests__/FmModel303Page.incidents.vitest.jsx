@@ -1,7 +1,7 @@
 // Vitest tests for the ETP-4456 "Incidencias" tab wiring in FmModel303Page.jsx:
-// fetchDeclarationIncidents is called on mount when token/apiBaseUrl are present, its result
+// fetchDeclarationIncidents is called on mount when apiBaseUrl is present, its result
 // drives the incidents KPI/tab badge/IncidentsTab props, a fresh fetch fully replaces (not
-// appends to) the previous state, and demo/mock mode (no token/apiBaseUrl) never overwrites the
+// appends to) the previous state, and demo/mock mode (no apiBaseUrl) never overwrites the
 // seeded decl.incidents. Kept in its own file (rather than editing FmModel303Page.vitest.jsx or
 // FmModel303Page.aeatFlow.vitest.jsx) so its fetchDeclarationIncidents mock and its
 // badge-exposing Tabs/KpiWidget/IncidentsTab mocks — which differ from those other files' inert
@@ -137,10 +137,10 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
       ],
     });
 
-    render(<FmModel303Page decl={BASE_DECL} token="tok" apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    render(<FmModel303Page decl={BASE_DECL} apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
     await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledWith(
-      BASE_DECL.id, { token: 'tok', apiBaseUrl: '/api' },
+      BASE_DECL.id, { apiBaseUrl: '/api' },
     ));
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('2'));
 
@@ -161,7 +161,7 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
       incidents: { blocking: 5, warning: 0, items: [{ origin: 'STALE', message: 'x', severity: 'block' }] },
     };
 
-    render(<FmModel303Page decl={seeded} token="tok" apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    render(<FmModel303Page decl={seeded} apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
     await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('0'));
@@ -188,7 +188,7 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
         items: [{ origin: 'C', message: 'c', severity: 'block' }],
       });
 
-    render(<FmModel303Page decl={BASE_DECL} token="tok" apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    render(<FmModel303Page decl={BASE_DECL} apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('2'));
 
     openAeatFlow();
@@ -206,7 +206,7 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
 });
 
 describe('FmModel303Page — demo/mock mode does not overwrite seeded incidents (ETP-4456)', () => {
-  it('never calls fetchDeclarationIncidents and keeps decl.incidents as-is when token/apiBaseUrl are absent', async () => {
+  it('never calls fetchDeclarationIncidents and keeps decl.incidents as-is when apiBaseUrl is absent', async () => {
     const seeded = {
       ...BASE_DECL,
       incidents: { blocking: 3, warning: 1, items: [{ origin: 'SEED', message: 'seed msg', severity: 'block' }] },
@@ -214,7 +214,7 @@ describe('FmModel303Page — demo/mock mode does not overwrite seeded incidents 
 
     render(<FmModel303Page decl={seeded} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
-    // No token/apiBaseUrl means demo mode — give pending microtasks a tick, then assert the
+    // No apiBaseUrl means demo mode — give pending microtasks a tick, then assert the
     // fetch never happened and the seeded value rendered as-is.
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents')).toBeInTheDocument());
     expect(fetchDeclarationIncidents).not.toHaveBeenCalled();

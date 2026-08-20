@@ -525,9 +525,9 @@ describe('generate349File', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns { ok: false, error: "no_token" } when no token', async () => {
+  it('returns { ok: false, error: "no_base_url" } when no apiBaseUrl', async () => {
     const result = await generate349File({ year: 2026, period: 'T1' });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
+    expect(result).toEqual({ ok: false, error: 'no_base_url' });
   });
 
   it('returns { ok: false } on non-ok response', async () => {

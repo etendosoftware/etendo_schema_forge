@@ -24,10 +24,17 @@
  * ~170 call sites already import from this path, and it gives the app one place
  * to look when asking "how do requests authenticate?".
  */
+// Imported from the `sessionCredentials` leaf, NOT the `./auth` barrel. The
+// barrel re-exports `AuthContext.jsx`, so going through it pulls React and a
+// `.jsx` file into the graph of every module that only wanted headers. Vite does
+// not care; `node --test` has no JSX loader and dies with
+// ERR_UNKNOWN_FILE_EXTENSION before running a single assertion — which took out
+// two whole unit-test files the first time a util here started asking for
+// headers. Keep this pointed at the leaf.
 export {
   jsonHeaders,
   writeHeaders,
-} from '@etendosoftware/app-shell-core/auth';
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 
 // `credentialOptions` (the `{ credentials: 'include' }` bag) was re-exported here
 // too and never adopted — every call site writes the literal. Dropped rather than

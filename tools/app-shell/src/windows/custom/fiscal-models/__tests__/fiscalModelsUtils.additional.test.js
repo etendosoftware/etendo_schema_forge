@@ -10,6 +10,28 @@ import {
   checkModified349,
   computeUpcomingDeadlines,
 } from '../fiscalModelsUtils.js';
+// ETP-4576: the credential is no longer a caller argument. It is published by
+// the auth provider in production; here it is published directly. Imported from
+// the `sessionCredentials` leaf rather than the `./auth` barrel, because the
+// barrel re-exports AuthContext.jsx and `node --test` has no JSX loader.
+import {
+  CREDENTIAL_MODES,
+  setSessionCredentials,
+  resetSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
+
+const TEST_BEARER = 'test-bearer';
+const TEST_CSRF = 'test-csrf';
+
+/** Bearer is the production default while the CSRF preference is off. */
+function declareBearer() {
+  setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: TEST_BEARER, csrfToken: TEST_CSRF });
+}
+
+/** Both credentials are published in either mode, so `mode` is the only variable. */
+function declareCookie() {
+  setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, token: TEST_BEARER, csrfToken: TEST_CSRF });
+}
 
 // ── DOM stub ───────────────────────────────────────────────────────────────
 // generate303File/generate349File call triggerDownload(), which touches
@@ -40,18 +62,37 @@ afterEach(() => {
 // computeBoxes303 — token/apiBaseUrl path
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('computeBoxes303 — with token and apiBaseUrl', () => {
+describe('computeBoxes303 — with apiBaseUrl', () => {
+  beforeEach(declareBearer);
+  afterEach(resetSessionCredentials);
+
   it('returns the parsed JSON when the fetch succeeds', async () => {
     globalThis.fetch = async (url, opts) => {
       assert.match(url, /\/fiscal303\/boxes\?/);
-      assert.equal(opts.headers.Authorization, 'Bearer tok123');
+      assert.equal(opts.headers.Authorization, `Bearer ${TEST_BEARER}`);
       return { ok: true, json: async () => ({ boxes: { 1: 10 }, summary: { accrued: 10 } }) };
     };
     const result = await computeBoxes303(
       { year: 2025, period: 'T1' },
-      { token: 'tok123', apiBaseUrl: '/sws/neo/fiscal303' }
+      { apiBaseUrl: '/sws/neo/fiscal303' }
     );
     assert.deepEqual(result, { boxes: { 1: 10 }, summary: { accrued: 10 } });
+  });
+
+  // Same call site, other scheme: a GET, so no credential header at all — the
+  // `__Host-` cookie carries the session and `credentials: 'include'` is what
+  // lets it cross origins.
+  it('sends no credential header under the cookie scheme', async () => {
+    declareCookie();
+    let seen;
+    globalThis.fetch = async (url, opts) => {
+      seen = opts;
+      return { ok: true, json: async () => ({ boxes: {}, summary: {} }) };
+    };
+    await computeBoxes303({ year: 2025, period: 'T1' }, { apiBaseUrl: '/sws/neo/fiscal303' });
+    assert.equal(seen.headers.Authorization, undefined);
+    assert.equal(seen.headers['X-Go-CSRF'], undefined);
+    assert.equal(seen.credentials, 'include');
   });
 
   it('falls back to mock data when the response is not ok', async () => {
@@ -85,14 +126,10 @@ describe('computeBoxes303 — with token and apiBaseUrl', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('generate303File — guard clauses', () => {
-  it('returns no_token error when token is missing', async () => {
-    const result = await generate303File({ year: 2026, period: 'T1' }, { apiBaseUrl: '/x' });
-    assert.deepEqual(result, { ok: false, error: 'no_token' });
-  });
-
-  it('returns no_token error when apiBaseUrl is missing', async () => {
-    const result = await generate303File({ year: 2026, period: 'T1' }, { token: 'tok' });
-    assert.deepEqual(result, { ok: false, error: 'no_token' });
+  // Only the base URL gates now: there is no credential for a caller to omit.
+  it('returns no_base_url error when apiBaseUrl is missing', async () => {
+    const result = await generate303File({ year: 2026, period: 'T1' }, {});
+    assert.deepEqual(result, { ok: false, error: 'no_base_url' });
   });
 
   it('requires an IBAN for IBAN-required tipos (e.g. D)', async () => {
@@ -547,10 +584,10 @@ describe('compute349Operators — mock fallback (no token)', () => {
 describe('generate349File', () => {
   // Contract changed from a raw boolean to { ok, error, serverMessage? } — same
   // shape as generate303File (see 'generate303File — error paths' above).
-  it('returns { ok: false, error: "no_token" } when token or apiBaseUrl is missing', async () => {
+  it('returns { ok: false, error: "no_base_url" } when apiBaseUrl is missing', async () => {
     const result = await generate349File({ year: 2026, period: 'T1' }, {});
     assert.equal(result.ok, false);
-    assert.equal(result.error, 'no_token');
+    assert.equal(result.error, 'no_base_url');
   });
 
   it('returns { ok: true } and triggers a download on success, with phone and contact set', async () => {

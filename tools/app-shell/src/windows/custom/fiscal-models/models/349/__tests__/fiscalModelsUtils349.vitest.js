@@ -4,9 +4,17 @@ import {
   generate349File,
   checkModified349,
 } from '../../../fiscalModelsUtils.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+} from '@/test/sessionContract.js';
+
+// ETP-4576: the credential is not a caller argument any more — it comes from the
+// active session scheme. The gate that remains is `apiBaseUrl`.
+beforeEach(() => { declareBearerSession(); });
 
 describe('compute349Operators', () => {
-  it('returns mock data when no token', async () => {
+  it('returns mock data when no apiBaseUrl is given', async () => {
     const decl = { year: 2026, period: 'T1' };
     const result = await compute349Operators(decl);
     expect(result).not.toBeNull();
@@ -34,7 +42,7 @@ describe('compute349Operators', () => {
     expect(result).toBeNull();
   });
 
-  it('calls the correct endpoint when token is provided', async () => {
+  it('calls the correct endpoint when apiBaseUrl is provided', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ operators: [], summary: {} }),
@@ -43,23 +51,24 @@ describe('compute349Operators', () => {
 
     const decl = { year: 2026, period: 'T1' };
     const result = await compute349Operators(decl, {
-      token: 'tok',
       apiBaseUrl: 'https://host/sws/neo/fiscal-models',
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/fiscal349/operators?'),
-      expect.objectContaining({ headers: { Authorization: 'Bearer tok' } }),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        credentials: 'include',
+      }),
     );
     expect(result.operators).toEqual([]);
     vi.unstubAllGlobals();
   });
 
-  it('returns null (not mock) when token is present but fetch fails', async () => {
+  it('returns null (not mock) when a base URL is given but fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
     const decl = { year: 2026, period: 'T1' };
     const result = await compute349Operators(decl, {
-      token: 'tok',
       apiBaseUrl: 'https://host/sws/neo/fiscal-models',
     });
     expect(result).toBeNull();
@@ -72,16 +81,16 @@ describe('generate349File', () => {
   // shape as generate303File — so QA-flagged backend validation errors (e.g.
   // AEAT3492010Report rejecting Substitutive/Navarra/Guipuzcoa combinations) can
   // be surfaced to the user instead of just logged.
-  it('returns { ok: false, error: "no_token" } when no token', async () => {
+  it('returns { ok: false, error: "no_base_url" } when no apiBaseUrl', async () => {
     const result = await generate349File({ year: 2026, period: 'T1' });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
+    expect(result).toEqual({ ok: false, error: 'no_base_url' });
   });
 
   it('returns { ok: false } with the http error code when fetch returns non-ok', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => '' }));
     const result = await generate349File(
       { year: 2026, period: 'T1' },
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
     );
     expect(result.ok).toBe(false);
     expect(result.error).toBe('http_500');
@@ -93,7 +102,7 @@ describe('generate349File', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400, text: async () => raw }));
     const result = await generate349File(
       { year: 2026, period: 'T1' },
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models', substitutive: true },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models', substitutive: true },
     );
     expect(result).toEqual({ ok: false, error: 'http_400', serverMessage: 'AEAT349_FormerStatement_Required' });
     vi.unstubAllGlobals();
@@ -110,14 +119,14 @@ describe('generate349File', () => {
 
     await generate349File(
       { year: 2026, period: 'T1' },
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
     );
 
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/fiscal349/generate'),
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
+        headers: expect.objectContaining({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` }),
         body: expect.stringContaining('year=2026'),
       }),
     );
@@ -155,7 +164,7 @@ describe('generate349File', () => {
 
       await generate349File(
         { year: 2026, period: 'T1' },
-        { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models', phone: '600111222', contact: 'Ana' },
+        { apiBaseUrl: 'https://host/sws/neo/fiscal-models', phone: '600111222', contact: 'Ana' },
       );
 
       const body = fetchMock.mock.calls[0][1].body;
@@ -177,7 +186,7 @@ describe('generate349File', () => {
       await generate349File(
         { year: 2026, period: 'T2' },
         {
-          token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models',
+          apiBaseUrl: 'https://host/sws/neo/fiscal-models',
           phone: '600111222', contact: 'Ana Garcia',
           fileName: 'my_349_file', substitutive: true,
           formerStatement: '1234567890123', representativeTaxId: 'X1234567L',
@@ -206,7 +215,7 @@ describe('generate349File', () => {
       await generate349File(
         { year: 2026, period: 'T1' },
         {
-          token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models',
+          apiBaseUrl: 'https://host/sws/neo/fiscal-models',
           substitutive: false, navarra: false, guipuzcoa: false,
         },
       );
@@ -225,7 +234,7 @@ describe('generate349File', () => {
       await generate349File(
         { year: 2026, period: 'T1' },
         {
-          token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models',
+          apiBaseUrl: 'https://host/sws/neo/fiscal-models',
           fileName: '', formerStatement: '', representativeTaxId: '',
         },
       );
@@ -245,7 +254,7 @@ describe('generate349File', () => {
 });
 
 describe('checkModified349', () => {
-  it('returns false when no token', async () => {
+  it('returns false when no apiBaseUrl', async () => {
     const result = await checkModified349({ year: 2026, period: 'T1' }, Date.now());
     expect(result).toBe(false);
   });
@@ -257,7 +266,7 @@ describe('checkModified349', () => {
     }));
     const result = await checkModified349(
       { year: 2026, period: 'T1' }, 0,
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
     );
     expect(result).toBe(true);
     vi.unstubAllGlobals();
@@ -270,7 +279,7 @@ describe('checkModified349', () => {
     }));
     const result = await checkModified349(
       { year: 2026, period: 'T1' }, 0,
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
     );
     expect(result).toBe(false);
     vi.unstubAllGlobals();
@@ -280,7 +289,7 @@ describe('checkModified349', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net')));
     const result = await checkModified349(
       { year: 2026, period: 'T1' }, 0,
-      { token: 'tok', apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
+      { apiBaseUrl: 'https://host/sws/neo/fiscal-models' },
     );
     expect(result).toBe(false);
     vi.unstubAllGlobals();

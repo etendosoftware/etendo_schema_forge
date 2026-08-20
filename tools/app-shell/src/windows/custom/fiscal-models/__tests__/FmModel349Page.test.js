@@ -53,8 +53,12 @@ describe('FmModel349Page — compute & generate wiring', () => {
     assert.match(src, /compute349Operators/));
   it('imports generate349File from fiscalModelsUtils', () =>
     assert.match(src, /generate349File/));
-  it('accepts token and apiBaseUrl props', () =>
-    assert.match(src, /token.*apiBaseUrl|apiBaseUrl.*token/));
+  // ETP-4576 removed the `token` prop — the credential comes from the active
+  // session scheme, so `apiBaseUrl` is the only request-shaping prop left.
+  it('accepts an apiBaseUrl prop and no longer threads a token', () => {
+    assert.match(src, /apiBaseUrl/);
+    assert.doesNotMatch(src.replace(/\/\/.*$/gm, ''), /\btoken\b/);
+  });
   it('has handleCompute function', () =>
     assert.match(src, /function handleCompute|handleCompute\s*=/));
   it('has handleGenerate function', () =>

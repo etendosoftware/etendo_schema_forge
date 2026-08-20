@@ -1,15 +1,16 @@
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
-// Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
-export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+// Falls back to hardcoded GOOrg mock data when apiBaseUrl is absent or the request fails.
+export async function computeBoxes303(decl, { apiBaseUrl } = {}) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
       const url = `${base}/fiscal303/boxes?${params}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(url, { headers: jsonHeaders(), credentials: 'include' });
       if (res.ok) return await res.json();
     } catch (_) {
       // fall through to mock
@@ -168,8 +169,8 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
   triggerDownload(base64ToBlob(base64, mimeType), downloadName);
 }
 
-export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+export async function generate303File(decl, { apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+  if (!apiBaseUrl) return { ok: false, error: 'no_base_url' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
@@ -188,7 +189,7 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     if (manualOverrides) applyBoxParams(params, manualOverrides);
 
     const url = `${base}/fiscal303/generate?${params}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { headers: jsonHeaders(), credentials: 'include' });
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
       return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
@@ -215,15 +216,16 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * so the backend's "explicit null means not sent" contract for this field is honored.
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
-export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+export async function persistDeclarationStatus(id, newStatus, { apiBaseUrl, submissionMethod } = {}) {
+  if (!apiBaseUrl) return { ok: false, error: 'no_base_url' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = { status: newStatus };
     if (submissionMethod) body.submissionMethod = submissionMethod;
     const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: writeHeaders(),
+      credentials: 'include',
       body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
@@ -246,13 +248,14 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
  * can't do anything different between "the call failed" and "the call succeeded but the data
  * was rejected", so both collapse to the same ok:false contract.
  */
-export async function persistManualData(id, manualData, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+export async function persistManualData(id, manualData, { apiBaseUrl } = {}) {
+  if (!apiBaseUrl) return { ok: false, error: 'no_base_url' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: writeHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ manualData }),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
@@ -283,19 +286,20 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)`) naturally never renders for
  * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
  * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
- * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
+ * apiBaseUrl/id are missing or the request fails — safe to always destructure.
  *
  * `model` selects which route to hit (`303` by default). Per `AbstractFiscalHandler#handleIncidents`,
  * `/fiscal303/incidents` and `/fiscal349/incidents` are both backed by the same
  * `ETGO_Fiscal_Decl_Incident` table, so a 349 declaration can be queried the same way — it will
  * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
-export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
-  if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
+export async function fetchDeclarationIncidents(id, { apiBaseUrl, model = '303' } = {}) {
+  if (!apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await fetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     });
     if (!res.ok) return EMPTY_INCIDENTS;
     const body = await res.json().catch(() => null);
@@ -589,13 +593,13 @@ function getDeadlineDate(model, year, period) {
  * Returns true if any invoice affecting the given declaration's period was
  * updated after sinceMs (Unix ms timestamp). Returns false on any error.
  */
-export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+export async function checkModified303(decl, sinceMs, { apiBaseUrl } = {}) {
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
     const url = `${base}/fiscal303/modified?${params}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { headers: jsonHeaders(), credentials: 'include' });
     if (!res.ok) return false;
     const data = await res.json();
     return data.modified === true;
@@ -606,13 +610,14 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
 
 // ── Model 349 utilities ───────────────────────────────────────────
 
-export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+export async function compute349Operators(decl, { apiBaseUrl } = {}) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
       const res = await fetch(`${base}/fiscal349/operators?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: jsonHeaders(),
+      credentials: 'include',
       });
       if (!res.ok) return null;
       return await res.json();
@@ -621,7 +626,7 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
     }
   }
 
-  // Mock fallback — demo mode only (no token)
+  // Mock fallback — demo mode only (no apiBaseUrl)
   await new Promise(r => setTimeout(r, 700));
   if (decl.year === 2026 && (decl.period === 'T1' || decl.period === 'T2')) {
     return {
@@ -651,10 +656,10 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
  * Navarra/Guipuzcoa did not exist as parameters).
  */
 export async function generate349File(decl, {
-  token, apiBaseUrl, phone, contact,
+  apiBaseUrl, phone, contact,
   fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
 } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_base_url' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -672,9 +677,10 @@ export async function generate349File(decl, {
     const res = await fetch(`${base}/fiscal349/generate`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...writeHeaders(),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
+      credentials: 'include',
       body: body.toString(),
     });
     if (!res.ok) {
@@ -690,13 +696,14 @@ export async function generate349File(decl, {
   }
 }
 
-export async function checkModified349(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+export async function checkModified349(decl, sinceMs, { apiBaseUrl } = {}) {
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
     const res = await fetch(`${base}/fiscal349/modified?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     });
     if (!res.ok) return false;
     const data = await res.json();

@@ -147,7 +147,7 @@ function Banner({ tone, icon, title, body, children }) {
 //             attempt (test mode included), so the "Incidencias" tab must re-fetch after every
 //             attempt, not just on success — see ETP-4456, `Fiscal303BoxesHandler#handleSubmit`.
 // onClose:    called to dismiss the flow (any step)
-export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
+export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
