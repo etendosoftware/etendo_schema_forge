@@ -98,11 +98,16 @@ import BillingPreferencesForm from '@/windows/custom/contacts/BillingPreferences
 <DetailView formFooter={BillingPreferencesForm} … />
 ```
 
-Props received: `recordId`, `data`, `token`, `apiBaseUrl`, `api`. **Real example:** `contacts`.
+Props received: `recordId`, `data`, `token`, `apiBaseUrl`, `api`. **Real examples:** `contacts`, `user`.
 
 For `contacts`, the custom `BillingPreferencesForm` keeps customer/vendor billing controls disabled
 until the header record exists (`data.id` present). This mirrors Classic behavior where billing
 details are edited after the Business Partner is created.
+
+For `user`, `AssignTemplateRolesControl` (ETP-4906) renders a multi-select chip control for
+composing 1+ system-level template roles onto an existing user, with its own save-first
+placeholder while `data.id` is absent — see `docs/generated-custom-windows/user.md` → "Role
+assignment — multi-role composition" for the full mechanism.
 
 ---
 
@@ -136,7 +141,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
-- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`)
+- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
 
 ---
 
