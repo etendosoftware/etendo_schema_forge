@@ -8,6 +8,8 @@ import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx';
+import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
+import { Switch } from '@/components/ui/switch';
 
 function sameIdSet(a, b) {
   if (a.length !== b.length) return false;
@@ -60,6 +62,85 @@ function PendingInvitationPill({ data }) {
     );
   }
   return null;
+}
+
+/**
+ * ETP-4830 — 'Activo' active/inactive Switch, rendered in the SAME `topbarExtra`
+ * slot as `PendingInvitationPill` above (see `TopbarExtra` below) — matches the
+ * ticket's reference screenshot, which places the pending-invite pill next to an
+ * "Inactivo" active/inactive toggle in the detail-form header. Mirrors the Users
+ * grid's own inline "Activo" column (`UserHeaderTable.jsx`, `active` field's
+ * `inlineToggle: true` in `artifacts/user/decisions.json`) — same live-PATCH
+ * behavior, reusing the exact same request/optimistic-update/error-toast helper
+ * (`runInlineToggleRequest`, exported from `DataTable.jsx` for this reuse) instead
+ * of re-implementing it here.
+ *
+ * De-activating a user only flips `AD_User.IsActive` — it never deletes the record
+ * or blocks an admin from still opening/editing it afterward (standard Etendo
+ * de-activation semantics; see the field's own AD help text, quoted in this ticket's
+ * `active` field decision in `decisions.json`).
+ *
+ * Hidden entirely while creating a new user (no `id`/`recordId` yet to PATCH against
+ * — same guard `AssignTemplateRolesControl` uses for its own save-first placeholder).
+ */
+function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
+  const ui = useUI();
+  const [optimisticToggles, setOptimisticToggles] = useState({});
+  const [savingToggles, setSavingToggles] = useState({});
+  const id = data?.id || recordId;
+  const toggleKey = 'active';
+
+  if (!id || id === 'new') return null;
+
+  const rawValue = Object.hasOwn(optimisticToggles, toggleKey) ? optimisticToggles[toggleKey] : data?.active;
+  const checked = rawValue === true || rawValue === 'Y' || rawValue === 'true';
+  const disabled = !!savingToggles[toggleKey];
+
+  const handleCheckedChange = (nextChecked) => {
+    runInlineToggleRequest({
+      apiBaseUrl,
+      entity: 'user',
+      row: { id },
+      col: { key: 'active' },
+      token,
+      checked: nextChecked,
+      toggleKey,
+      setOptimisticToggles,
+      setSavingToggles,
+      onDataMutated: onRefresh,
+    }).catch((err) => {
+      console.error('Failed to toggle user active status:', err);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2" data-testid="ActiveStatusToggle__toolbar">
+      <span className="text-sm text-muted-foreground">{ui('active')}</span>
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={handleCheckedChange}
+        aria-label={ui('active')}
+        data-testid="ActiveStatusToggle__switch" />
+    </div>
+  );
+}
+
+/**
+ * ETP-4830 — composite `topbarExtra` component: pending-invitation pill first, then
+ * the active/inactive toggle, matching the reference screenshot's visual order
+ * (pill-then-toggle is the reasonable default absent a pixel-exact mockup). Both
+ * children read from the same props `DetailView.jsx` passes into `topbarExtra`
+ * (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread straight
+ * through to each.
+ */
+function TopbarExtra(props) {
+  return (
+    <div className="flex items-center gap-3" data-testid="UserTopbarExtra">
+      <PendingInvitationPill {...props} />
+      <ActiveStatusToggle {...props} />
+    </div>
+  );
 }
 
 /**
@@ -239,7 +320,7 @@ export default function UserWindow(props) {
       <UserPage
         {...props}
         newLabel={ui('newUser')}
-        topbarExtra={PendingInvitationPill}
+        topbarExtra={TopbarExtra}
         onAfterCreate={handleAfterCreate}
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}

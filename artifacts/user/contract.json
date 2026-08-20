@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-20T15:35:51.783Z",
-  "checksum": "fc68e61d3018cfe0",
+  "updatedAt": "2026-08-20T15:39:16.471Z",
+  "checksum": "f26d6514b2858ce6",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -107,6 +107,26 @@
             "section": "details",
             "validation": {
               "maxLength": 255
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "security",
+            "gridOrder": 5,
+            "inlineToggle": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -867,7 +887,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1829,6 +1849,14 @@
         "description": "Field 'testSuccessful' should be present in emailConfiguration"
       },
       {
+        "id": "t-field-presence-user-active",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in user"
+      },
+      {
         "id": "t-field-presence-user-businessPartner",
         "category": "field-presence",
         "entity": "user",
@@ -2075,6 +2103,14 @@
         "field": "testSuccessful",
         "runner": "node",
         "description": "Field 'testSuccessful' should have type 'boolean' in emailConfiguration"
+      },
+      {
+        "id": "t-field-type-user-active",
+        "category": "field-type",
+        "entity": "user",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in user"
       },
       {
         "id": "t-field-type-user-businessPartner",
@@ -2493,14 +2529,6 @@
         "description": "System field 'userContact' should exist in backend but not frontend for emailConfiguration"
       },
       {
-        "id": "t-system-field-user-active",
-        "category": "system-field",
-        "entity": "user",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for user"
-      },
-      {
         "id": "t-system-field-user-alternativePhone",
         "category": "system-field",
         "entity": "user",
@@ -2748,25 +2776,25 @@
       }
     ],
     "summary": {
-      "total": 147,
+      "total": 148,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 2,
         "default-value-type": 8,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 31,
-        "field-type": 31,
+        "field-presence": 32,
+        "field-type": 32,
         "readonlylogic-evaluable": 1,
         "readonlylogic-valid": 1,
         "rule-declared": 16,
         "searchable-filters": 3,
         "selector-endpoint": 7,
-        "system-field": 40,
+        "system-field": 39,
         "visibility": 2
       },
       "byRunner": {
-        "node": 147,
+        "node": 148,
         "junit": 0
       }
     }

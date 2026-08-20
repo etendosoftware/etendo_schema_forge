@@ -6,6 +6,7 @@ const fields = [
   { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security', displayLogic: (record) => !!record.id },
   { key: 'isPasswordExpired', column: 'Isexpiredpassword', type: 'checkbox', label: 'Expired Password', readOnly: true, section: 'security' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details' },
+  { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'security' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', section: 'details', reference: 'BusinessPartner', inputMode: 'search' },
   { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal', readOnlyLogic: (record) => !!record.id },
   { key: 'locked', column: 'IsLocked', type: 'checkbox', label: 'Locked', required: true, readOnly: true, section: 'security' },

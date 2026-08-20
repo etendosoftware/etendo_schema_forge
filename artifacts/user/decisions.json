@@ -76,6 +76,15 @@
           "section": "security",
           "reason": "Account lock status, typically system-managed but visible for admin review"
         },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "inlineToggle": true,
+          "gridOrder": 5,
+          "section": "security",
+          "derivation": null,
+          "reason": "ETP-4830 — 'Activo' toggle, human-confirmed to match the ticket's reference screenshot (grid column + detail-header toggle next to the invitation pill). Raw AD default pins this field to visibility: system with derivation: {type: computed, source: true} (always hardcoded true, hidden) — overridden here to visibility: editable + an explicit derivation: null (same 'suppress the raw computed derivation on a system->editable transition' escape hatch resolve-curated.js already documents and purchase-order/sales-order/sales-quotation/purchase-invoice/sales-invoice's currency/transactionDocument fields already use; without it, resolve-curated.js's copyRawProps would still copy the raw computed derivation onto the curated field even after visibility flips, and NEO would keep overriding any admin-set value on save). inlineToggle: true renders it as a live-PATCHing Switch in the grid (generate-frontend.js's togglePart, no generator change needed — DataTable.cellRenderers.jsx's renderBooleanCell already handles col.toggle generically). De-activating a user does NOT delete the AD_User record or block admins from viewing/editing it — standard Etendo de-activation semantics (see this field's own AD help text: de-activated records stay available for reporting/auditing, just unavailable for new selection)."
+        },
         "description": {
           "visibility": "editable",
           "section": "details"

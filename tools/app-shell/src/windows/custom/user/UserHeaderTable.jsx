@@ -45,6 +45,14 @@ const columns = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
   { key: 'email', column: 'Email', type: 'string', required: true },
   { key: 'locked', column: 'IsLocked', type: 'boolean', required: true },
+  // ETP-4830 — 'Activo' column (reference screenshot). `toggle: true` mirrors what
+  // generate-frontend.js emits for `inlineToggle: true` on this field in
+  // decisions.json (see artifacts/user/generated/web/user/UserTable.jsx's own
+  // `active` column, which this custom headerTable would otherwise shadow) — the
+  // generic `DataTable`/`renderBooleanCell` picks up `col.toggle` and renders an
+  // inline `Switch` that PATCHes `user/{id}` with `{ active: checked }` on change,
+  // no custom render function needed here.
+  { key: 'active', column: 'IsActive', type: 'boolean', toggle: true, required: true },
 ];
 
 const filters = ['name', 'email'];

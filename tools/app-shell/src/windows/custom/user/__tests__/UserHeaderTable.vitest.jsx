@@ -116,8 +116,23 @@ describe('UserHeaderTable — layout', () => {
 
     await screen.findByTestId('data-table');
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'businessPartner', 'email', 'locked', 'defaultRole',
+      'name', 'businessPartner', 'email', 'locked', 'active', 'defaultRole',
     ]);
+  });
+
+  // ETP-4830 — 'Activo' column smoke test. The generic `inlineToggle: true` →
+  // `toggle: true` decisions.json wiring (generate-frontend.js) is exercised
+  // generically by the plain generated UserTable.jsx path; this window bypasses
+  // that generated table via `customComponents.headerTable`, so the hand-mirrored
+  // column here needs its own confirmation that `toggle: true` survived the port.
+  it('marks the active column as a boolean inline toggle', async () => {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    await screen.findByTestId('data-table');
+    const col = tableProps.columns.find((c) => c.key === 'active');
+    expect(col.type).toBe('boolean');
+    expect(col.toggle).toBe(true);
   });
 
   it('marks the defaultRole column as type "custom" with an identifier filterMode', async () => {

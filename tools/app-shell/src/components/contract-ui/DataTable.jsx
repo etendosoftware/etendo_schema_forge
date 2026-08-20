@@ -148,7 +148,13 @@ function applyLocalSearch(rows, filters, searchQuery) {
   );
 }
 
-async function runInlineToggleRequest({
+// Exported (ETP-4830) so window-scoped topbar/header controls that need the exact
+// same PATCH + optimistic-update + error-toast behavior as a grid inline toggle
+// (e.g. `windows/custom/user/index.jsx`'s detail-header "Activo" Switch) can reuse
+// it instead of re-implementing the request/rollback/toast logic. Generic by
+// design already — every dependency is passed in as a param, none are closed over
+// component state — so exporting adds no coupling.
+export async function runInlineToggleRequest({
   apiBaseUrl, entity, row, col, token, checked,
   toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated,
 }) {

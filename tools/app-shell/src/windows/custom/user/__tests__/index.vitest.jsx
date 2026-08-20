@@ -84,22 +84,31 @@ function SelectionProbe() {
 let lastUserPageProps;
 vi.mock('@generated/user/generated/web/user/UserPage', () => ({
   // Captures every prop (needed by the ETP-4906/ETP-4830 assertions below) AND renders
-  // `topbarExtra` (the real, unmocked `PendingInvitationPill`, ETP-4830) — mirroring how
-  // `DetailView.jsx` itself instantiates it, passing `data` straight through — next to
-  // the role-selection probe.
+  // `topbarExtra` (the real, unmocked composite `TopbarExtra` — `PendingInvitationPill` +
+  // `ActiveStatusToggle`, ETP-4830) — mirroring how `DetailView.jsx` itself instantiates
+  // it, passing `data`/`recordId`/`token`/`apiBaseUrl`/`onRefresh` straight through — next
+  // to the role-selection probe.
   default: (props) => {
     lastUserPageProps = props;
     const TopbarExtra = props.topbarExtra;
     return (
       <div data-testid="user-page">
-        {TopbarExtra && <TopbarExtra data={props.data} />}
+        {TopbarExtra && (
+          <TopbarExtra
+            data={props.data}
+            recordId={props.recordId}
+            token={props.token}
+            apiBaseUrl={props.apiBaseUrl}
+            onRefresh={props.onRefresh}
+          />
+        )}
         <SelectionProbe />
       </div>
     );
   },
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 
@@ -418,6 +427,61 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
   it('renders nothing on a brand-new, not-yet-saved record (no data yet)', () => {
     render(<UserWindow recordId="new" />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+});
+
+describe('UserWindow — "Activo" active/inactive toggle (ETP-4830, detail-header topbarExtra)', () => {
+  afterEach(() => {
+    globalThis.fetch = undefined;
+  });
+
+  it('renders the toggle, checked, for an existing active user', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: true }} />);
+    const toggle = screen.getByTestId('ActiveStatusToggle__switch');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('renders the toggle, unchecked, for an existing inactive user', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: false }} />);
+    const toggle = screen.getByTestId('ActiveStatusToggle__switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('renders nothing on a brand-new, not-yet-saved record (no id to PATCH against)', () => {
+    render(<UserWindow recordId="new" />);
+    expect(screen.queryByTestId('ActiveStatusToggle__switch')).not.toBeInTheDocument();
+  });
+
+  it('PATCHes user/{id} with { active: checked } on toggle and refreshes the record', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true }));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        token="tkn"
+        apiBaseUrl="/api"
+        data={{ id: 'user-1', active: true }}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('ActiveStatusToggle__switch'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/user/user-1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ active: false }),
+    })));
+  });
+
+  it('rolls back the optimistic value and shows an error toast when the PATCH fails', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500 }));
+    render(<UserWindow recordId="user-1" token="tkn" apiBaseUrl="/api" data={{ id: 'user-1', active: true }} />);
+
+    fireEvent.click(screen.getByTestId('ActiveStatusToggle__switch'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('ActiveStatusToggle__switch')).toHaveAttribute('aria-checked', 'true'));
   });
 });
 
