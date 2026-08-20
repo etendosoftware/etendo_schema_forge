@@ -989,7 +989,8 @@ export function useEntity(entity, childEntity, {
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
-        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers, credentials: 'include' })
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${sortParam}`, { headers, credentials: 'include' })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();

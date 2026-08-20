@@ -1534,7 +1534,7 @@ export function DetailView({
       .map(([key]) => key),
     [lineDisplayLogic?.visibility, trustedDimensionKeys]
   );
-  const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { apiBaseUrl });
+  const { calloutResult, executeCallout } = useCallout(entity, { apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl });
   // ETP-4479 — fall back to the per-window default when the caller didn't
