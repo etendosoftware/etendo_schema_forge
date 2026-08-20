@@ -1,8 +1,8 @@
 {
   "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-15T03:01:25.636Z",
-  "checksum": "4d3d4a22a8301944",
+  "updatedAt": "2026-08-20T18:26:28.366Z",
+  "checksum": "9ac52a4ccf729dc7",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -214,7 +214,7 @@
               "nombre"
             ],
             "label": "First Name (Company)",
-            "required": false,
+            "required": true,
             "type": "string"
           },
           {
@@ -224,7 +224,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": false,
+            "required": true,
             "type": "string"
           },
           {
@@ -272,7 +272,7 @@
               "tax id type"
             ],
             "label": "Tax ID Type",
-            "required": false,
+            "required": true,
             "type": "enum"
           },
           {
@@ -5287,7 +5287,7 @@
               "nombre"
             ],
             "label": "First Name (Company)",
-            "required": false,
+            "required": true,
             "type": "string"
           },
           {
@@ -5297,7 +5297,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": false,
+            "required": true,
             "type": "string"
           },
           {
@@ -5345,7 +5345,7 @@
               "tax id type"
             ],
             "label": "Tax ID Type",
-            "required": false,
+            "required": true,
             "type": "enum"
           },
           {
