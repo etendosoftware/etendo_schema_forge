@@ -33,6 +33,17 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [existingAuthenticated, setExistingAuthenticated] = useState(false);
+  // ETP-4576 — the CSRF proof handed back by LoginStep's `onAuthenticated`.
+  //
+  // This page lives OUTSIDE the authenticated shell, so there is no AuthProvider
+  // publishing credentials to `sessionCredentials` and the shared header
+  // builders would return nothing. The proof therefore has to be threaded
+  // explicitly, exactly as the onboarding flow does. It previously read a bearer
+  // token back out of `localStorage.sf_platform_token`, which no longer works
+  // twice over: the session endpoints stopped returning a bearer token, and
+  // `purgeLegacyAuthStorage()` deletes that key on mount — so the accept call
+  // was going out with no credential at all.
+  const [sessionCsrfToken, setSessionCsrfToken] = useState(null);
 
   const clearTokenFromUrl = () => {
     try {
@@ -91,8 +102,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     };
   }, [token, apiBase]);
 
-  const handleExistingAuthenticated = async () => {
+  const handleExistingAuthenticated = async (csrfToken) => {
     setActionError(null);
+    setSessionCsrfToken(csrfToken || null);
     setExistingAuthenticated(true);
   };
 
@@ -100,13 +112,17 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     setActionError(null);
     setSubmitting(true);
     try {
-      const sessionToken = globalThis.localStorage?.getItem('sf_platform_token') || '';
       const res = await fetch(`${apiBase}/sws/go/company-invitations/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          // Unsafe method under a cookie session: the proof is what tells the
+          // backend this POST was intended by the page, not by a third party.
+          ...(sessionCsrfToken ? { 'X-Go-CSRF': sessionCsrfToken } : {}),
         },
+        // The `__Host-` session cookie is the credential; it only crosses
+        // origins when the request asks for it.
+        credentials: 'include',
         body: JSON.stringify({ token: token.trim() }),
       });
       const data = await res.json().catch(() => ({}));
@@ -144,6 +160,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           token: token.trim(),
           name: trimmedName,
@@ -161,13 +178,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         return;
       }
 
-      if (data.token) {
-        try {
-          globalThis.localStorage?.setItem('sf_platform_token', data.token);
-        } catch {
-          // Ignore
-        }
-      }
+      // ETP-4576 — the registration response no longer carries a bearer token to
+      // stash: it sets the `__Host-` session cookie and returns the CSRF proof
+      // bound to it. Writing `sf_platform_token` here was worse than useless,
+      // since `purgeLegacyAuthStorage()` deletes that key on the next mount.
+      if (data.csrfToken) setSessionCsrfToken(data.csrfToken);
 
       clearTokenFromUrl();
       setSuccessData({
@@ -184,6 +199,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         token: token.trim(),
         name: accountName.trim(),
@@ -199,7 +215,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return data;
   };
 
-  const handleInvitationRegistered = async (_sessionToken, account) => {
+  const handleInvitationRegistered = async (csrfToken, account) => {
+    // RegisterStep hands back the proof bound to the freshly-minted cookie
+    // session — the same first argument LoginStep's onAuthenticated passes.
+    if (csrfToken) setSessionCsrfToken(csrfToken);
     clearTokenFromUrl();
     setSuccessData({
       clientName: invitationData?.clientName,

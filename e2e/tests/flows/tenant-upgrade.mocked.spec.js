@@ -83,17 +83,23 @@ async function installEnvironmentsMock(page, environments) {
 
 /**
  * Mocks entering an already-provisioned environment. `switchTo`
- * (`useEnvironmentSwitch.js`) calls `GET /sws/go/login?userId=...` and only
- * proceeds with its hard `window.location.href = '/'` navigation if the
- * response includes a `token` — without one it silently no-ops.
+ * (`useEnvironmentSwitch.js`) calls `POST /sws/go/session/environment` and only
+ * proceeds with its hard `window.location.href = '/'` navigation when the
+ * response says `status: 'success'` — otherwise it silently no-ops.
+ *
+ * ETP-4575/4576: this used to be `GET /sws/go/login?userId=...` gated on a
+ * `token` in the body. The backend now rotates the `__Host-` session cookie for
+ * the target environment and returns only a fresh CSRF proof, so there is no
+ * token to hand back and `status` is what the client reads. A route on the old
+ * path never matches, and the switch would no-op forever.
  */
-async function installEnvironmentLoginMock(page, { token, roleList } = {}) {
-  await page.route('**/sws/go/login{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
+async function installEnvironmentLoginMock(page, { roleList } = {}) {
+  await page.route('**/sws/go/session/environment', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ token, roleList }),
+      body: JSON.stringify({ status: 'success', csrfToken: 'e2e-csrf-env', roleList }),
     });
   });
 }
@@ -245,9 +251,7 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     // enterByClientName (useEnvironmentSwitch.js) re-fetches /environments to
     // find the tenant by name, then switchTo() logs into it via this route —
     // both need a response, or the auto-enter after success silently fails.
-    const NEW_ENV_TOKEN = 'e2e-new-env-token';
     await installEnvironmentLoginMock(page, {
-      token: NEW_ENV_TOKEN,
       roleList: [{ id: 'role-productive', name: 'Administrator', orgList: [{ id: 'org-productive', name: 'Acme Productive HQ' }] }],
     });
 

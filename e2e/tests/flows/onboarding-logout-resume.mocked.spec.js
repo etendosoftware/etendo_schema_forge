@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
  */
 
 const ACCOUNT = { name: 'QA Resume User', email: 'resume@example.com' };
-const PLATFORM_TOKEN = 'platform-token';
+const CSRF_TOKEN = 'e2e-csrf';
 
 function json(route, body, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -21,9 +21,16 @@ async function installOnboardingMocks(page, { failDraftSave = false, holdProvisi
   const state = { draft: null, events: [], releaseProvisioning: null };
 
   await page.route('**/sws/go/me', route => json(route, ACCOUNT));
-  await page.route('**/sws/go/register', route => json(route, { token: PLATFORM_TOKEN, account: ACCOUNT }));
-  await page.route('**/sws/go/login', route => {
-    if (route.request().method() === 'POST') return json(route, { token: PLATFORM_TOKEN, account: ACCOUNT });
+  // ETP-4575/4576: the onboarding flow mints the `__Host-` session cookie, so it
+  // moved off the legacy bearer endpoints (`/sws/go/register`, `/sws/go/login`,
+  // which still answer with a `token`) onto the `/sws/go/session/*` family,
+  // which answers with `csrfToken`. A route on the old path never matches now.
+  await page.route('**/sws/go/session/register',
+    route => json(route, { status: 'success', csrfToken: CSRF_TOKEN, account: ACCOUNT }));
+  await page.route('**/sws/go/session', route => {
+    if (route.request().method() === 'POST') {
+      return json(route, { status: 'success', csrfToken: CSRF_TOKEN, account: ACCOUNT });
+    }
     return route.fallback();
   });
   await page.route('**/sws/go/environments', route => json(route, { environments: [] }));

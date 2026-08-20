@@ -97,12 +97,18 @@ test.describe('Company User Invitations — ETP-4894', () => {
       });
     });
 
-    await page.route('**/sws/go/login', async (route) => {
+    // ETP-4575/4576: the login moved from the legacy bearer `/sws/go/login` to
+    // `POST /sws/go/session`, which sets the `__Host-` cookie and returns the
+    // CSRF proof bound to it instead of a token. LoginStep hands that proof to
+    // the page's `onAuthenticated`, and the page sends it back on the accept.
+    await page.route('**/sws/go/session', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          token: 'existing-session-token',
+          status: 'success',
+          csrfToken: 'existing-session-csrf',
           account: { email: 'existing.employee@example.com' },
         }),
       });
@@ -111,7 +117,10 @@ test.describe('Company User Invitations — ETP-4894', () => {
     let acceptRequested = false;
     await page.route('**/sws/go/company-invitations/accept', async (route) => {
       acceptRequested = true;
-      expect(route.request().headers().authorization).toBe('Bearer existing-session-token');
+      // The credential is the cookie, which the browser attaches on its own; what
+      // the page must prove is intent, and this POST is an unsafe method.
+      expect(route.request().headers()['x-go-csrf']).toBe('existing-session-csrf');
+      expect(route.request().headers().authorization).toBeUndefined();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -313,11 +322,16 @@ test.describe('Company User Invitations — ETP-4894', () => {
         }),
       });
     });
-    await page.route('**/sws/go/login', async (route) => {
+    await page.route('**/sws/go/session', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ token: 'existing-session-token', account: { email: 'existing.employee@example.com' } }),
+        body: JSON.stringify({
+          status: 'success',
+          csrfToken: 'existing-session-csrf',
+          account: { email: 'existing.employee@example.com' },
+        }),
       });
     });
     await page.route('**/sws/go/company-invitations/accept', async (route) => {

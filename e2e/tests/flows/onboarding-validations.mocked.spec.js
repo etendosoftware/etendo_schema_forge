@@ -22,7 +22,13 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );
 
-  await page.route('**/sws/go/register', async route => {
+  // ETP-4575/4576: onboarding moved from the legacy bearer endpoints
+  // (`/sws/go/register`, `/sws/go/login` — still answering with a `token`) to
+  // the `/sws/go/session/*` family, which sets the `__Host-` cookie and answers
+  // with `csrfToken`. The environment switch moved too, from
+  // `GET /sws/go/login?userId=` to `POST /sws/go/session/environment`, so what
+  // used to be one route on two methods is now two distinct endpoints.
+  await page.route('**/sws/go/session/register', async route => {
     if (registerBehavior === 'fail') {
       return route.fulfill({
         status: 400,
@@ -34,7 +40,11 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ token: 'platform-token', account: { name: body.name, email: body.email } }),
+      body: JSON.stringify({
+        status: 'success',
+        csrfToken: 'e2e-csrf',
+        account: { name: body.name, email: body.email },
+      }),
     });
   });
 
@@ -44,35 +54,39 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
-  await page.route('**/sws/go/login', async route => {
-    const method = route.request().method();
-    const url = route.request().url();
-    if (method === 'GET' && url.includes('userId=')) {
+  await page.route('**/sws/go/session/environment', async route => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        // The client gates on `status`, not on a token: the credential is the
+        // rotated cookie, and the body only carries the new CSRF proof.
+        status: 'success',
+        csrfToken: 'e2e-csrf-env',
+        roleList: [{ id: 'ROLE_1', name: 'Admin', orgList: [{ id: 'ORG_1', name: 'QA Org' }] }],
+      }),
+    });
+  });
+
+  await page.route('**/sws/go/session', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    if (loginBehavior === 'first-fails') {
+      loginBehavior = 'success'; // next call succeeds
       return route.fulfill({
-        status: 200,
+        status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({
-          token: 'env-token',
-          roleList: [{ id: 'ROLE_1', name: 'Admin', orgList: [{ id: 'ORG_1', name: 'QA Org' }] }],
-        }),
+        body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
       });
     }
-    if (method === 'POST') {
-      if (loginBehavior === 'first-fails') {
-        loginBehavior = 'success'; // next call succeeds
-        return route.fulfill({
-          status: 401,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ token: 'platform-token', account: { name: 'QA User', email: 'qa@test.com' } }),
-      });
-    }
-    route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'success',
+        csrfToken: 'e2e-csrf',
+        account: { name: 'QA User', email: 'qa@test.com' },
+      }),
+    });
   });
 
   await page.route('**/sws/go/environments', route =>
@@ -356,7 +370,7 @@ test.describe('Onboarding — Login & password recovery flow', () => {
 
     // Set up listeners before clicking
     const loginPromise = page.waitForRequest(
-      req => req.url().includes('/sws/go/login') && req.method() === 'POST',
+      req => req.url().includes('/sws/go/session') && req.method() === 'POST',
       { timeout: 10_000 }
     );
     const envPromise = page.waitForRequest(

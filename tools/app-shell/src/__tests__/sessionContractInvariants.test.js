@@ -167,7 +167,6 @@ const G1_DEBT = new Set([
   'hooks/useCashClose.js',
   'lib/flags/bootstrap.js',
   'lib/surveys/survey-config.js',
-  'pages/InviteAcceptancePage.jsx',
   'windows/custom/amortization/AmortizationLinesTable.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
   'windows/custom/calendar/AccountingPanel.jsx',

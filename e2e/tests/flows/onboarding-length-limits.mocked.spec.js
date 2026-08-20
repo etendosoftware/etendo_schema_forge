@@ -37,7 +37,13 @@ async function installMocks(page, { registerBehavior = 'success', onboardingResu
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );
 
-  await page.route('**/sws/go/register', async route => {
+  // ETP-4575/4576 split the auth endpoints into two families: the legacy
+  // `/sws/go/register` + `/sws/go/login` pair still answers with a bearer
+  // `token`, while `/sws/go/session/*` issues the `__Host-` cookie and answers
+  // with `csrfToken`. The onboarding flow is where the cookie is minted, so it
+  // moved to the session family — a mock on the legacy path simply never
+  // matches any more, and the request escapes to the network.
+  await page.route('**/sws/go/session/register', async route => {
     if (registerBehavior === 'field-too-long') {
       // The envelope a non-browser client gets when it bypasses maxLength.
       return route.fulfill({
@@ -57,7 +63,11 @@ async function installMocks(page, { registerBehavior = 'success', onboardingResu
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ token: 'platform-token', account: { name: body.name, email: body.email } }),
+      body: JSON.stringify({
+        status: 'success',
+        csrfToken: 'e2e-csrf',
+        account: { name: body.name, email: body.email },
+      }),
     });
   });
 

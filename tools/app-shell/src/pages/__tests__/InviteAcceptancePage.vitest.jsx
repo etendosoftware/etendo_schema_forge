@@ -7,17 +7,25 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// The stubs below stand in for the real onboarding steps, so their CALLBACK
+// SIGNATURES have to match the real ones or this suite proves nothing about how
+// the page is wired. ETP-4576 changed both: the steps post to the
+// `/sws/go/session*` family (which sets the `__Host-` cookie and returns a CSRF
+// proof instead of a bearer token), and they hand that proof back as the FIRST
+// argument — `onAuthenticated(csrfToken, account)` /
+// `onRegistered(csrfToken, account)` — rather than passing the whole payload.
+// Neither stub writes `sf_platform_token` any more: the real steps stopped, and
+// `purgeLegacyAuthStorage()` deletes that key regardless.
 vi.mock('@etendosoftware/etendo-go-core/onboarding', () => ({
   AuthShell: ({ children }) => <div data-testid="auth-shell">{children}</div>,
   LoginStep: ({ initialEmail, onAuthenticated }) => (
     <form data-testid="invite-existing-login-form" onSubmit={(event) => {
       event.preventDefault();
-      globalThis.fetch('/sws/go/login', {
+      globalThis.fetch('/sws/go/session', {
         method: 'POST',
         body: JSON.stringify({ email: initialEmail, password: event.currentTarget.querySelector('#login-password').value }),
       }).then((response) => response.json()).then((data) => {
-        globalThis.localStorage.setItem('sf_platform_token', data.token);
-        onAuthenticated(data);
+        onAuthenticated(data.csrfToken, data.account);
       });
     }}>
       <input id="login-email" value={initialEmail} readOnly data-testid="invite-existing-email" />
@@ -33,8 +41,7 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding', () => ({
         email: initialEmail,
         password: event.currentTarget.querySelector('#reg-password').value,
       });
-      globalThis.localStorage.setItem('sf_platform_token', data.token);
-      await onRegistered(data.token, data.account);
+      await onRegistered(data.csrfToken, data.account);
     }}>
       <input id="reg-name" data-testid="invite-name" />
       <input id="reg-email" value={initialEmail} readOnly data-testid="invite-email" />
@@ -85,7 +92,10 @@ describe('InviteAcceptancePage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          token: 'existing-session-token',
+          // ETP-4575/4576: the login endpoint sets the `__Host-` session cookie
+          // and returns the CSRF proof bound to it, not a bearer token.
+          status: 'success',
+          csrfToken: 'existing-session-csrf',
           account: { email: 'existing.user@example.com' },
         }),
       })
@@ -120,7 +130,7 @@ describe('InviteAcceptancePage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/sws/go/login'),
+        expect.stringContaining('/sws/go/session'),
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
@@ -129,11 +139,16 @@ describe('InviteAcceptancePage', () => {
           }),
         })
       );
+      // The accept is an unsafe method on a cookie session: no Authorization
+      // header exists to send, and the proof is what authorizes the write. This
+      // page threads it from the login response because it renders outside the
+      // AuthProvider, so nothing publishes credentials for the shared builders.
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/sws/go/company-invitations/accept'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer existing-session-token' }),
+          headers: expect.objectContaining({ 'X-Go-CSRF': 'existing-session-csrf' }),
+          credentials: 'include',
           body: JSON.stringify({ token: 'valid-token-123' }),
         })
       );
@@ -160,7 +175,9 @@ describe('InviteAcceptancePage', () => {
         ok: true,
         json: async () => ({
           status: 'success',
-          token: 'new-session-token',
+          // register-and-accept mints the session too, so it answers with the
+          // proof bound to the new cookie rather than a bearer token.
+          csrfToken: 'new-session-csrf',
           account: { id: 'acc-1', email: 'new.user@example.com', name: 'New User' },
           clientName: 'Acme Corp',
         }),
@@ -188,6 +205,7 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/company-invitations/register-and-accept'),
         expect.objectContaining({
           method: 'POST',
+          credentials: 'include',
           body: JSON.stringify({
             token: 'valid-token-456',
             name: 'New User',

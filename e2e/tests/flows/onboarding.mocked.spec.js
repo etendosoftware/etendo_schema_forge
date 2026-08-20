@@ -42,7 +42,10 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/go/register', async route => {
+  // ETP-4575/4576: onboarding mints the `__Host-` session cookie, so it moved
+  // off the legacy bearer endpoints onto the `/sws/go/session/*` family, which
+  // answers with `csrfToken` instead of a `token`.
+  await page.route('**/sws/go/session/register', async route => {
     const body = route.request().postDataJSON();
     expect(body).toMatchObject({
       name: 'QA Onboarding User',
@@ -52,7 +55,8 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        token: 'platform-token',
+        status: 'success',
+        csrfToken: 'e2e-csrf',
         account: { name: body.name, email: body.email },
       }),
     });
@@ -101,12 +105,16 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
-  await page.route('**/sws/go/login?userId=USER_1', async route => {
+  // The environment switch moved with it: `GET /sws/go/login?userId=` became
+  // `POST /sws/go/session/environment`, which rotates the cookie and returns a
+  // fresh CSRF proof. The client gates on `status`, not on a token.
+  await page.route('**/sws/go/session/environment', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        token: 'env-token',
+        status: 'success',
+        csrfToken: 'e2e-csrf-env',
         roleList: [{
           id: 'ROLE_1',
           name: 'Admin',
