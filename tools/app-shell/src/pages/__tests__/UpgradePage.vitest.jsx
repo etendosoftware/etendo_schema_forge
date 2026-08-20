@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { configureAuthMock } from '@/test/authContextMock.js';
+import { configureAuthMock, setAuthMock } from '@/test/authContextMock.js';
 import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
@@ -30,7 +30,6 @@ import UpgradePage from '../UpgradePage.jsx';
 // Stripe's hosted page owns card entry now, there is no local decline constant.
 import { track } from '@/lib/observability.js';
 
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const EXISTING_TENANT = 'Acme Trial';
 
 /**
@@ -162,7 +161,6 @@ async function renderUpgradePage() {
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.localStorage.clear();
-  globalThis.localStorage.setItem(PLATFORM_TOKEN_KEY, 'platform-token');
   globalThis.sessionStorage.clear();
   vi.stubGlobal('location', { ...globalThis.location, assign: assignMock });
 });
@@ -271,8 +269,11 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
   });
 
-  it('reports the unavailable branch when there is no platform token to look up with', async () => {
-    globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
+  // ETP-4576: "no credential" is now the absence of a SESSION, not the absence
+  // of a localStorage key — that key is purged on mount, so removing it proved
+  // nothing about the branch under test.
+  it('reports the unavailable branch when there is no session to look up with', async () => {
+    setAuthMock({ isAuthenticated: false });
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
@@ -305,7 +306,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
   it('tracks an expired session instead of a submission', async () => {
     const user = userEvent.setup();
-    globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
+    setAuthMock({ isAuthenticated: false });
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 

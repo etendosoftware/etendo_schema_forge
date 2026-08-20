@@ -1,4 +1,16 @@
-import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api';
+// Relative, NOT the `@/` alias: this module is imported by a `node --test` file,
+// and plain Node has no idea what `@/` means — an alias here fails the whole
+// suite with ERR_MODULE_NOT_FOUND before any assertion runs. Vite resolves both.
+import { jsonHeaders, writeHeaders } from '../sessionHeaders.js';
+
+// ETP-4576 — these three calls used to take a credential the caller had read out
+// of localStorage and pass it to the onboarding package's `buildAuthHeaders`.
+// That was wrong on both ends: `buildAuthHeaders` emits `X-Go-CSRF`, so a bearer
+// token was travelling in the CSRF header, and both keys it was read from
+// (`sf_auth_token`, `sf_platform_token`) are deleted by
+// `purgeLegacyAuthStorage()` — so in practice the value was null and every
+// upgrade action short-circuited before issuing a request. The credential now
+// comes from the active session scheme, like every other call site.
 
 /** Error codes this module raises, mapped to i18n keys by the page. */
 export const UPGRADE_ERROR_CODES = {
@@ -15,10 +27,11 @@ export const UPGRADE_ERROR_CODES = {
  * and payment confirmation are server-owned. The returned URL is safe to use
  * as a redirect target because it is issued by the authenticated backend.
  */
-export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {}) {
+export async function createCheckoutSession(fetchImpl, baseUrl, input = {}) {
   const response = await fetchImpl(`${baseUrl}/sws/go/checkout/sessions`, {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    headers: writeHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
@@ -39,10 +52,10 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
   return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
 }
 
-export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
+export async function getCheckoutStatus(fetchImpl, baseUrl, requestId) {
   const response = await fetchImpl(
     `${baseUrl}/sws/go/checkout/sessions/${encodeURIComponent(requestId)}`,
-    { headers: buildAuthHeaders(token) }
+    { headers: jsonHeaders(), credentials: 'include' }
   );
   const data = await readJsonSafely(response);
   if (!response.ok) {
@@ -53,10 +66,11 @@ export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
 }
 
 /** Starts the existing idempotent onboarding chain after the webhook authorizes the request. */
-export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMessage) {
+export async function runPaidOnboarding(fetchImpl, baseUrl, input, onMessage) {
   const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    headers: writeHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       clientName: input.clientName,
       currency: input.currency || 'EUR',
@@ -101,37 +115,6 @@ function consumeOnboardingLines(lines, onMessage, result) {
     if (message.type === 'result') result = message;
   }
   return result;
-}
-
-/** localStorage key holding the account-level token that owns tenants. */
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
-
-/**
- * Tenant creation is an account-level operation, so it authenticates with the
- * platform token — the same credential onboarding uses — not the ERP session
- * token tied to the tenant the user is currently inside.
- */
-export function getPlatformToken(storage = globalThis.localStorage) {
-  try {
-    return storage?.getItem(PLATFORM_TOKEN_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Returns the active browser credential for account-level upgrade operations. The backend accepts
- * both the account session and the selected environment JWT and resolves them to one account.
- */
-export function getCheckoutToken(storage = globalThis.localStorage) {
-  try {
-    // The selected environment JWT is the session currently used by NEO and remains valid when
-    // another tab refreshes the account token. The platform token is only the fallback for the
-    // account/onboarding screen where no environment has been selected yet.
-    return storage?.getItem('sf_auth_token') || storage?.getItem('sf_platform_token') || null;
-  } catch {
-    return null;
-  }
 }
 
 function buildError(code, message, status) {

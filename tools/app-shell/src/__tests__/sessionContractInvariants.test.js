@@ -237,7 +237,6 @@ const G2_DEBT = new Set([
   'lib/observability/providers/mixpanel.js',
   'lib/surveys/survey-config.js',
   'pages/InviteAcceptancePage.jsx',
-  'pages/UpgradePage.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
   'windows/custom/chart-of-accounts/AccountTreeView.jsx',
   'windows/custom/chart-of-accounts/NewAccountModal.jsx',

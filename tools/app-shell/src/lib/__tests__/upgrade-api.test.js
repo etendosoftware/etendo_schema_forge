@@ -2,10 +2,20 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   UPGRADE_ERROR_CODES,
-  getCheckoutToken,
-  getPlatformToken,
   createCheckoutSession,
 } from '../upgrade/api.js';
+// ETP-4576: the credential comes from the active session scheme, so the tests
+// publish one directly instead of stubbing a localStorage that no longer holds
+// anything. Imported from the `sessionCredentials` leaf, not the `./auth`
+// barrel, which re-exports AuthContext.jsx and cannot load under `node --test`.
+import {
+  CREDENTIAL_MODES,
+  setSessionCredentials,
+  resetSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
+
+const TEST_BEARER = 'test-bearer';
+const TEST_CSRF = 'test-csrf';
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => data };
@@ -21,32 +31,14 @@ function recordingFetch(response) {
   return fetchImpl;
 }
 
-describe('getPlatformToken', () => {
-  it('reads the account-level token', () => {
-    assert.equal(getPlatformToken({ getItem: key => (key === 'sf_platform_token' ? 'tok' : null) }), 'tok');
-  });
-
-  it('returns null when storage is absent or throws', () => {
-    assert.equal(getPlatformToken(undefined), null);
-    assert.equal(getPlatformToken({ getItem: () => { throw new Error('blocked'); } }), null);
-  });
-});
-
-describe('getCheckoutToken', () => {
-  it('prefers the active environment JWT over a stale account token', async () => {
-    assert.equal(getCheckoutToken({
-      getItem: key => ({ sf_auth_token: 'environment-token', sf_platform_token: 'stale-token' }[key]),
-    }), 'environment-token');
-  });
-});
-
 describe('createCheckoutSession', () => {
   it('posts product intent without card or price fields', async () => {
     const fetchImpl = recordingFetch(jsonResponse({
       requestId: 'req-1',
       checkoutUrl: 'https://checkout.stripe.test/session-1',
     }));
-    const result = await createCheckoutSession(fetchImpl, 'https://api.test', 'platform-token', {
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: TEST_BEARER, csrfToken: TEST_CSRF });
+    const result = await createCheckoutSession(fetchImpl, 'https://api.test', {
       action: 'productive-tenant',
       clientName: 'Acme Productive',
       language: 'es_ES',
@@ -69,7 +61,7 @@ describe('createCheckoutSession', () => {
   it('raises a stable error when session creation fails', async () => {
     const fetchImpl = recordingFetch(jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }));
     await assert.rejects(
-      () => createCheckoutSession(fetchImpl, '', 'token'),
+      () => createCheckoutSession(fetchImpl, ''),
       error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 503
     );
   });
@@ -77,8 +69,38 @@ describe('createCheckoutSession', () => {
   it('rejects a response without a hosted URL or request id', async () => {
     const fetchImpl = recordingFetch(jsonResponse({ ok: true }));
     await assert.rejects(
-      () => createCheckoutSession(fetchImpl, '', 'token'),
+      () => createCheckoutSession(fetchImpl, ''),
       error => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable
     );
+  });
+
+  it('carries the bearer token under the bearer scheme', async () => {
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: TEST_BEARER, csrfToken: TEST_CSRF });
+    const fetchImpl = recordingFetch(jsonResponse({
+      requestId: 'req-1', checkoutUrl: 'https://checkout.stripe.test/session-1',
+    }));
+    await createCheckoutSession(fetchImpl, 'https://api.test', {});
+
+    const { init } = fetchImpl.calls[0];
+    assert.equal(init.headers.Authorization, `Bearer ${TEST_BEARER}`);
+    assert.equal(init.headers['X-Go-CSRF'], undefined);
+    assert.equal(init.credentials, 'include');
+    resetSessionCredentials();
+  });
+
+  it('carries the CSRF proof and no bearer token under the cookie scheme', async () => {
+    setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, token: TEST_BEARER, csrfToken: TEST_CSRF });
+    const fetchImpl = recordingFetch(jsonResponse({
+      requestId: 'req-1', checkoutUrl: 'https://checkout.stripe.test/session-1',
+    }));
+    await createCheckoutSession(fetchImpl, 'https://api.test', {});
+
+    const { init } = fetchImpl.calls[0];
+    // POST is unsafe: without this header the backend answers 403 once the
+    // cookie-session preference is on, and no bearer-only test can see it.
+    assert.equal(init.headers['X-Go-CSRF'], TEST_CSRF);
+    assert.equal(init.headers.Authorization, undefined);
+    assert.equal(init.credentials, 'include');
+    resetSessionCredentials();
   });
 });

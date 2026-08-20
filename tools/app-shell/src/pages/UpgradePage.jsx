@@ -13,12 +13,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   createCheckoutSession,
-  getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { useAuth } from '@/auth/AuthContext.jsx';
 
 /**
  * Display price until the backend plan catalog is exposed to the product UI.
@@ -209,6 +209,9 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
+  // ETP-4576 — the session, not a localStorage token, is what gates the paid
+  // actions below. Works under either credential scheme.
+  const { isAuthenticated } = useAuth();
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
   const [form, setForm] = useState(EMPTY_FORM);
@@ -226,13 +229,17 @@ export default function UpgradePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getCheckoutToken();
-    if (!token) {
+    // ETP-4576 — this used to test for a bearer token in localStorage. The
+    // question it was really asking is "is there a session?", which the auth
+    // context answers directly and correctly under either credential scheme;
+    // the localStorage keys it read are purged on mount, so it had become an
+    // unconditional "unavailable".
+    if (!isAuthenticated) {
       setAccountState('unavailable');
       return undefined;
     }
 
-    fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
+    fetchEnvironments(fetch, getUpgradeBaseUrl())
       .then(list => {
         if (cancelled) return;
         setEnvironments(Array.isArray(list) ? list : []);
@@ -245,7 +252,7 @@ export default function UpgradePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   // Fires once accountState settles ('loading' happens exactly once at mount),
   // reporting which branch the user actually landed on.
@@ -263,14 +270,13 @@ export default function UpgradePage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
-    const token = getCheckoutToken();
     const tenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token || !tenantName) {
+    if (!requestId || !isAuthenticated || !tenantName) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
@@ -281,11 +287,11 @@ export default function UpgradePage() {
       try {
         let status = { status: 'pending' };
         for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);
+          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), requestId);
           if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
         }
         if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
-        await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, {
+        await runPaidOnboarding(fetch, getUpgradeBaseUrl(), {
           clientName: status.clientName || tenantName,
           paymentToken: requestId,
           upgradeAction,
@@ -316,7 +322,7 @@ export default function UpgradePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [isAuthenticated]);
 
   const update = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -324,8 +330,7 @@ export default function UpgradePage() {
   };
 
   const runUpgrade = async () => {
-    const token = getCheckoutToken();
-    if (!token) {
+    if (!isAuthenticated) {
       setFormError('upgradeSessionExpired');
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
       return;
@@ -342,7 +347,6 @@ export default function UpgradePage() {
       const session = await createCheckoutSession(
         fetch,
         getUpgradeBaseUrl(),
-        token,
         {
           action: 'productive-tenant',
           clientName: form.tenantName.trim(),
