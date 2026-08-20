@@ -30,10 +30,6 @@ export const VERIFACTU_INV_TYPE_OPTIONS = [
   { value: 'R5', labelKey: 'sifDataTabs.option.vfR5' },
 ];
 
-export const VERIFACTU_REVERSE_TYPE_OPTIONS = [
-  { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
-];
-
 // ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
 export const SII_MOTIVO_RECTIF_OPTIONS = [
   { value: 'R1', labelKey: 'sifDataTabs.option.siiMotivoR1' },
@@ -89,6 +85,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   const siiFieldReadOnly = isSentToSii;
 
   const vfInvTypeDefaultedRef = useRef(null);
+  const vfReverseTypeRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -113,6 +110,22 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
     if (data?.etvfacInvType) return; // already has a value — never clobber
     vfInvTypeDefaultedRef.current = recordId;
     onChange?.('etvfacInvType', 'F1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+
+  // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
+  // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
+  // always be persisted as 'I' (Por Diferencias) — the only valid value. We write it
+  // into the shared editing state so the batch save picks it up automatically.
+  // Keyed on recordId + vfInvType so a type change within the same record re-fires.
+  useEffect(() => {
+    if (!showVerifactu || !isDraft || !recordId) return;
+    const vfInvType = data?.etvfacInvType;
+    if (typeof vfInvType !== 'string' || !vfInvType.startsWith('R')) return;
+    const key = `${recordId}:${vfInvType}`;
+    if (vfReverseTypeRef.current === key) return;
+    vfReverseTypeRef.current = key;
+    onChange?.('etvfacReverseinvtype', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
 

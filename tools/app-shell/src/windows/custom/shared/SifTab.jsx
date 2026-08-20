@@ -294,16 +294,6 @@ function applyCalloutMessages(messages) {
   return hasError;
 }
 
-// Classic displayLogic: `@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R1' | ... | @EM_Etvfac_Inv_Type@='R5')`
-// ETP-4783: the 'S' (substitute) option was removed — only 'I' (by difference) remains.
-function shouldShowReverseInvType(showVerifactu, invType) {
-  return showVerifactu && typeof invType === 'string' && invType.startsWith('R');
-}
-
-// ETP-4783: 'S' (substitute) option removed — only 'I' (by difference) remains.
-const VERIFACTU_REVERSE_TYPE_OPTIONS = [
-  { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
-];
 
 export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {
@@ -662,27 +652,9 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   data-testid="CheckboxField__b99c8b" />
               </Field>
             )}
-            {shouldShowReverseInvType(showVerifactu, vfInvType) && (
-              <Field
-                label={ui('sifDataTabs.field.correctiveInvoiceType')}
-                htmlFor="sif-vfReverseType"
-                data-testid="Field__b99c8b">
-                <Select
-                  value={getVal('etvfacReverseinvtype') || undefined}
-                  onValueChange={val => onChange?.('etvfacReverseinvtype', val)}
-                  disabled={dateReadOnly}
-                  data-testid="Select__b99c8b">
-                  <SelectTrigger id="sif-vfReverseType" data-testid="SelectTrigger__b99c8b">
-                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
-                  </SelectTrigger>
-                  <SelectContent data-testid="SelectContent__b99c8b">
-                    {VERIFACTU_REVERSE_TYPE_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
+            {/* ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) removed from UI.
+                Always saved as 'I' (Por Diferencias) automatically via useSifFieldPatcher
+                when vfInvType is rectificative (R1-R5). */}
             <SifAttachmentsSection
               tableName="etvfac_c_invoice_verifactu"
               recordId={data?.invoiceVerifactuId}
