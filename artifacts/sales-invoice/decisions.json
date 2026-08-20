@@ -534,7 +534,8 @@
           "visibility": "discarded"
         },
         "etvfacReverseinvtype": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": { "type": "hardcoded", "value": "I" }
         },
         "etvfacDateIssue": {
           "visibility": "discarded"
