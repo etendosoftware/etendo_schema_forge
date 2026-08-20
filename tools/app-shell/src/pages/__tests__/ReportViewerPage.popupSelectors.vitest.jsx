@@ -720,11 +720,15 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     });
   });
 
-  it('opens the invoice popup dialog on postMessage("navigate-invoice")', async () => {
+  it('opens the invoice in a new tab on postMessage("navigate-invoice") defaulting to sales-invoice', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
       return Promise.resolve(makeSelectorResponse([]));
     });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
 
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
@@ -734,8 +738,45 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     }));
 
     await waitFor(() => {
-      expect(screen.getByTitle('invoice')).toBeInTheDocument();
+      expect(openSpy).toHaveBeenCalled();
     });
+    const [url, target] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/sales-invoice\/inv-99$/);
+    expect(target).toBe('_blank');
+
+    // No embedded modal opens anymore — the invoice navigates in a real new tab.
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    window.open = originalOpen;
+  });
+
+  it('opens the invoice in a new tab respecting an explicit docWindow from the postMessage', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'navigate-invoice', invoiceId: 'inv-88', docWindow: 'purchase-invoice' },
+    }));
+
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalled();
+    });
+    const [url, target] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/purchase-invoice\/inv-88$/);
+    expect(target).toBe('_blank');
+
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    window.open = originalOpen;
   });
 
   it('ignores unrelated postMessage payloads', async () => {
