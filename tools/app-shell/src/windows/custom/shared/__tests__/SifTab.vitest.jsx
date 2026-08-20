@@ -894,28 +894,30 @@ describe('SifTab', () => {
   describe('Verifactu conditional fields visibility matrix', () => {
     const SIMPLIFIED_LABEL = 'sifDataTabs.field.simplifiedInvoiceArt7273';
     const NO_RECIPIENT_LABEL = 'sifDataTabs.field.noRecipientIdArt61d';
-    const REVERSE_LABEL = 'sifDataTabs.field.correctiveInvoiceType';
+    // ETP-4783: correctiveInvoiceType (etvfacReverseinvtype) is no longer shown in
+    // the UI — it is always saved as 'I' automatically via useSifFieldPatcher.
 
     beforeEach(() => {
       mockFiscalConfig('verifactu');
     });
 
     it.each([
-      // invType,   simplified(art7273), noRecipient(art61d), reverse(correctiveType)
-      [undefined, true, false, false],
-      ['F1', true, false, false],
-      ['F2', false, true, false],
-      ['F3', true, false, false],
-      ['R1', true, false, true],
-      ['R2', true, false, true],
-      ['R3', true, false, true],
-      ['R4', true, false, true],
-      ['R5', false, true, true],
-    ])('invType=%s → simplified=%s noRecipient=%s reverse=%s', (invType, simplified, noRecipient, reverse) => {
+      // invType,   simplified(art7273), noRecipient(art61d)
+      [undefined, true, false],
+      ['F1', true, false],
+      ['F2', false, true],
+      ['F3', true, false],
+      ['R1', true, false],
+      ['R2', true, false],
+      ['R3', true, false],
+      ['R4', true, false],
+      ['R5', false, true],
+    ])('invType=%s → simplified=%s noRecipient=%s', (invType, simplified, noRecipient) => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: invType } })} />);
       expect(Boolean(screen.queryByText(SIMPLIFIED_LABEL))).toBe(simplified);
       expect(Boolean(screen.queryByText(NO_RECIPIENT_LABEL))).toBe(noRecipient);
-      expect(Boolean(screen.queryByText(REVERSE_LABEL))).toBe(reverse);
+      // correctiveInvoiceType is always hidden from the UI (ETP-4783)
+      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
     });
 
     it('simplified and noRecipient are mutually exclusive for every invType', () => {
@@ -941,23 +943,8 @@ describe('SifTab', () => {
       mockFiscalConfig('verifactu');
     });
 
-    it('shows the corrective invoice type field immediately after selecting R2', () => {
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } });
-      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByTestId('mock-select-option-R2'));
-
-      expect(screen.getByText('sifDataTabs.field.correctiveInvoiceType')).toBeInTheDocument();
-    });
-
-    it('hides the corrective invoice type field again after switching to F1', () => {
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } });
-      expect(screen.getByText('sifDataTabs.field.correctiveInvoiceType')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-
-      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
-    });
+    // ETP-4783: correctiveInvoiceType is no longer shown in the UI — it is
+    // always saved as 'I' automatically. See useSifFieldPatcher auto-set tests.
 
     it('flips simplified/noRecipient live when switching from F1 to R5', () => {
       renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } });
@@ -970,12 +957,8 @@ describe('SifTab', () => {
       expect(screen.getByText('sifDataTabs.field.noRecipientIdArt61d')).toBeInTheDocument();
     });
 
-    it('calls onChange with etvfacReverseinvtype when changed via its select (ETP-4783: S option removed, only I remains)', () => {
-      const onChange = vi.fn();
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } }, onChange);
-      fireEvent.click(screen.getByTestId('mock-select-option-I'));
-      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
-    });
+    // ETP-4783: etvfacReverseinvtype is auto-set to 'I' via useSifFieldPatcher
+    // when invType is R1-R5 — no UI select needed. Tested in useSifFieldPatcher tests.
   });
 
   // ── onChange wiring for every editable SIF field (ETP-4463) ────────────────
@@ -1023,12 +1006,8 @@ describe('SifTab', () => {
       expect(onChange).toHaveBeenCalledWith('etvfacInvNoIDArt61d', true);
     });
 
-    it('etvfacReverseinvtype calls onChange when a select option is picked', () => {
-      const onChange = vi.fn();
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'R2' }, onChange })} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-I'));
-      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
-    });
+    // ETP-4783: etvfacReverseinvtype has no UI select — it is auto-set to 'I'
+    // via useSifFieldPatcher when invType is R1-R5.
   });
 
   // ── etvfacInvType auto-default effect (ETP-4390) ────────────────────────────
@@ -1091,17 +1070,8 @@ describe('SifTab', () => {
       expect(screen.getByRole('checkbox')).not.toBeDisabled();
     });
 
-    it('etvfacReverseinvtype select is disabled for completed (R2 branch)', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', etvfacInvType: 'R2' } })} />);
-      const wrapper = document.querySelector('#sif-vfReverseType').closest('[data-testid="select-wrapper"]');
-      expect(wrapper).toHaveAttribute('data-disabled', 'true');
-    });
-
-    it('etvfacReverseinvtype select is enabled for draft (R2 branch)', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } })} />);
-      const wrapper = document.querySelector('#sif-vfReverseType').closest('[data-testid="select-wrapper"]');
-      expect(wrapper).toHaveAttribute('data-disabled', 'false');
-    });
+    // ETP-4783: etvfacReverseinvtype select removed from UI — no disabled/enabled
+    // check needed. The field is always saved as 'I' via useSifFieldPatcher.
   });
 
   // ── edge cases ──────────────────────────────────────────────────────────────
