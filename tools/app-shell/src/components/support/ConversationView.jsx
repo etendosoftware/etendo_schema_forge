@@ -54,6 +54,12 @@ const HEADING_RE = /^(#{1,3})\s+(\S.*)$/;
 const BULLET_RE = /^[-*]\s+(\S.*)$/;
 const ORDERED_RE = /^\d+\.\s+(\S.*)$/;
 
+// Zero-width-prefixed marker the backend appends to a message's text (see
+// SupportIntegrationClient.SUGGESTS_ESCALATION_MARKER) when the ADK's response for that
+// turn set pending_escalation=confirm — i.e. ValerIA just offered to escalate to a human.
+// Stripped before rendering; its presence renders the one-click escalate button instead.
+const SUGGESTS_ESCALATION_MARKER = '​##SUGGESTS_ESCALATION##';
+
 // Consumes consecutive lines matching `re` (a bullet or ordered list marker) starting at
 // `startIndex`, returning the rendered <ul>/<ol> node and the index of the first line past
 // the list. Keyed by item text (not position) — list items are one-off parsed strings with no
@@ -185,6 +191,10 @@ function Bubble({ message, onQuickReply, getLocalImageUrl }) {
     : '';
   const fullTs = ts ? `${ui('supportToday')} · ${ts}` : undefined;
   const bubbleRole = role === 'user' ? 'user' : 'bot';
+  const suggestsEscalation = typeof message.text === 'string' && message.text.includes(SUGGESTS_ESCALATION_MARKER);
+  const displayText = suggestsEscalation
+    ? message.text.split(SUGGESTS_ESCALATION_MARKER).join('')
+    : message.text;
 
   return (
     <div className={`sc-msg ${bubbleRole}`} data-time={fullTs}>
@@ -201,7 +211,7 @@ function Bubble({ message, onQuickReply, getLocalImageUrl }) {
           <span className="sc-typing"><i /><i /><i /></span>
         ) : (
           <>
-            {renderText(message.text)}
+            {renderText(displayText)}
             {message.attachments?.length > 0 && (
               <div className="sc-att-list">
                 {message.attachments.map((a) => (
@@ -437,7 +447,7 @@ function ConversationMessageItem({ message, index, messages, seenCount, dateLoca
 function ConvMeta({ isClosed, isHuman, ui }) {
   if (isClosed) return ui('supportConversationClosedMeta');
   if (isHuman) return <><span className="sc-typing-dot" />{ui('supportActiveNow')}</>;
-  return ui('supportTeamCanHelp');
+  return null;
 }
 
 function ConversationHeader({
@@ -462,11 +472,13 @@ function ConversationHeader({
       <div className="sc-grow">
         <div className="sc-conv-name">{assigneeName}</div>
         <div className="sc-conv-meta">
-          <ConvMeta
-            isClosed={isClosed}
-            isHuman={isHuman}
-            ui={ui}
-            data-testid="ConvMeta__50ab90" />
+          {conversation?.jiraTicketKey ? conversation.jiraTicketKey : (
+            <ConvMeta
+              isClosed={isClosed}
+              isHuman={isHuman}
+              ui={ui}
+              data-testid="ConvMeta__50ab90" />
+          )}
         </div>
       </div>
       <div className="sc-conv-actions" ref={menuRef} style={{ position: 'relative' }}>
@@ -608,6 +620,12 @@ export function ConversationView({
     setDraft(input || '');
   }, [conversation?.id]);
 
+  // ── "Talk to a human" bar dismissal (per conversation) ──────────────────────
+  const [escalateBarDismissed, setEscalateBarDismissed] = React.useState(false);
+  React.useEffect(() => {
+    setEscalateBarDismissed(false);
+  }, [conversation?.id]);
+
   const { username } = useAuth();
   const firstName = React.useMemo(() => {
     if (!username) return '';
@@ -623,7 +641,23 @@ export function ConversationView({
   const isHuman  = conversation?.assigneeKind === 'human';
   const assigneeName = conversation?.assigneeName || 'ValerIA';
 
+  // Once ValerIA has EVER offered to escalate in this conversation, keep the one-click
+  // "talk to a human" option available for the rest of it — not just on the offering
+  // message, which scrolls out of view as the conversation goes on. The offering message
+  // itself never leaves `messages`, so this naturally stays true from that point on.
+  const showEscalateSticky = !isHuman && !isClosed && !escalateBarDismissed && messages.some(
+    (m) => typeof m.text === 'string' && m.text.includes(SUGGESTS_ESCALATION_MARKER)
+  );
+
   // ── Send ───────────────────────────────────────────────────────────────────
+  // Sends a fixed, unambiguous request text through the normal message pipeline —
+  // reuses the ADK's existing conversational escalation flow (intent classification,
+  // confirmation turn, Jira ticket transition) instead of a separate backend path.
+  const handleEscalateToHuman = () => {
+    playSendSound();
+    onSend(ui('supportEscalateMessage'), []);
+  };
+
   const send = () => {
     const text = draft.trim();
     if (!text && pendingFiles.length === 0) return;
@@ -709,6 +743,24 @@ export function ConversationView({
         menuRef={menuRef}
         ui={ui}
         data-testid="ConversationHeader__50ab90" />
+      {showEscalateSticky && (
+        <div className="sc-escalate-bar">
+          <div className="sc-escalate-bar-inner">
+            <button className="sc-escalate-btn" onClick={handleEscalateToHuman}>
+              {ui('supportEscalateToHuman')}
+            </button>
+            <button
+              type="button"
+              className="sc-escalate-dismiss"
+              onClick={() => setEscalateBarDismissed(true)}
+              aria-label={ui('supportDismissEscalateBar')}
+              title={ui('supportDismissEscalateBar')}
+            >
+              <X size={12} data-testid="X__50ab90" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Thread */}
       <div className="sc-conv-thread" ref={threadRef}>
         <div className="sc-conv-greet">
