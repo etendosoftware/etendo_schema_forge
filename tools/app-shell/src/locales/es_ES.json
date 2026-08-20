@@ -21842,6 +21842,7 @@
     "taxSif.modal.saveSuccess": "Configuración SIF del impuesto guardada",
     "taxSif.modal.searchPlaceholder": "Buscar código o descripción",
     "taxSif.modal.caption": "Se aplicará a todas las facturas que usen este impuesto.",
+    "taxSif.modal.editingComponent": "Editando el componente del {rate}% ({name}) — el impuesto mostrado arriba es un resumen, solo a modo de referencia.",
     "taxSif.modal.optionCount": "{shown} de {total} opciones",
     "taxSif.opt.tbaiRegime.01": "Operación de régimen general",
     "taxSif.opt.tbaiRegime.02": "Exportación",
