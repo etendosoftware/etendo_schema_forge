@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-20T14:40:34.174Z",
-  "checksum": "de02f754399688a4",
+  "updatedAt": "2026-08-20T15:35:51.783Z",
+  "checksum": "fc68e61d3018cfe0",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -68,7 +68,7 @@
               "maxLength": 255
             },
             "displayLogic": {
-              "js": "!record.id",
+              "js": "!!record.id",
               "evaluable": true
             }
           },

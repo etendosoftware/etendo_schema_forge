@@ -3,7 +3,7 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:user
 const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security', displayLogic: (record) => !record.id },
+  { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security', displayLogic: (record) => !!record.id },
   { key: 'isPasswordExpired', column: 'Isexpiredpassword', type: 'checkbox', label: 'Expired Password', readOnly: true, section: 'security' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', section: 'details', reference: 'BusinessPartner', inputMode: 'search' },
