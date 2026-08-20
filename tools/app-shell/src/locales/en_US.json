@@ -21590,7 +21590,6 @@
     "taxSif.modal.saveSuccess": "Tax SIF configuration saved",
     "taxSif.modal.searchPlaceholder": "Search code or description",
     "taxSif.modal.caption": "This will apply to every invoice that uses this tax.",
-    "taxSif.modal.editingComponent": "Editing the {rate}% rate component ({name}) — the tax shown above is a summary, kept for reference only.",
     "taxSif.modal.optionCount": "{shown} of {total} options",
     "taxSif.opt.tbaiRegime.01": "General regime operation",
     "taxSif.opt.tbaiRegime.02": "Export",

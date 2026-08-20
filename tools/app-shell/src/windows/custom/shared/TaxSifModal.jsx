@@ -50,11 +50,14 @@ const TAX_ENTITY_NAME = 'tax';
  * like a fix but never satisfied Classic's check. `taxId` therefore names the record
  * the modal was OPENED against (typically the line's own — possibly summary — tax);
  * the effect below resolves the actual EDIT TARGET (`resolvedTaxId`/`editing`/
- * `original`) separately, which may be a different record. The summary tax's own
- * name/badge (`summaryRecord`) is kept for context regardless, since that is what the
- * user actually saw on the line — hiding the divergence would be more confusing than
- * showing it, so a caption clarifies which component is being edited whenever they
- * differ (`resolvedComponent`). A non-compound tax resolves to itself, unchanged.
+ * `original`) separately, which may be a different record. The badge shows the
+ * RESOLVED record's own name (`resolvedComponent?.name`) whenever resolution picked
+ * a child, falling back to the summary's name (`summaryRecord`) otherwise — the user
+ * should see the name of the tax they're actually configuring, not the one they
+ * clicked from the line, per ETP-4888 review feedback (an earlier version showed
+ * the summary's name plus a "kept for reference only" caption; that read as more
+ * confusing than just naming the real target). A non-compound tax resolves to
+ * itself, unchanged, so the badge is unaffected in that case.
  *
  * @param {object}   props
  * @param {string|null} props.taxId      C_Tax_ID of the record the modal is opened
@@ -228,25 +231,13 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
           </div>
         ) : (
           <>
-            {summaryRecord?.name && (
+            {(resolvedComponent?.name || summaryRecord?.name) && (
               <span
                 className="inline-flex w-fit items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                 data-testid="tax-sif-modal-tax-badge"
               >
-                {summaryRecord.name}
+                {resolvedComponent?.name || summaryRecord?.name}
               </span>
-            )}
-
-            {resolvedComponent && (
-              <p
-                className="text-xs text-muted-foreground"
-                data-testid="tax-sif-modal-resolved-component"
-              >
-                {ui('taxSif.modal.editingComponent', {
-                  rate: resolvedComponent.rate,
-                  name: resolvedComponent.name,
-                })}
-              </p>
             )}
 
             <div className="space-y-4">
