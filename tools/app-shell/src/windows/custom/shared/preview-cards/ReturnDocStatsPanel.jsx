@@ -32,7 +32,6 @@ export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, to
       </MovementSummaryCard>
       <RelatedDocumentsCard
         documentId={doc.id}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         specs={specs}
         data-testid="RelatedDocumentsCard__2cd27e" />

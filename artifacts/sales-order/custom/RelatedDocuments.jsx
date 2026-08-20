@@ -10,6 +10,7 @@ import {
   fetchChild,
   neoBase,
 } from '@/components/related-documents';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 const STATUS_LABEL_KEYS = {
   CO: 'statusComplete',
@@ -54,11 +55,11 @@ function resolveStatusLabel(status, ui) {
   return key ? ui(key) : status;
 }
 
-async function fetchPayments(orderId, token, apiBaseUrl) {
-  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
+async function fetchPayments(orderId, apiBaseUrl) {
+  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, apiBaseUrl);
   if (plans.length === 0) return [];
   const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
+    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, apiBaseUrl))
   );
   const paymentIds = [...new Set(
     detailResults.flat().filter(d => d.payment).map(d => d.payment)
@@ -67,7 +68,8 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   const base = neoBase(apiBaseUrl);
   const results = await Promise.all(paymentIds.map(id =>
     fetch(`${base}/payment-in/finPayment/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(r => r.ok ? r.json() : null)
       .then(j => j?.response?.data?.[0] || null)
@@ -76,7 +78,7 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl }) {
   const ui = useUI();
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
@@ -112,16 +114,16 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     setLoading(true);
 
     // Shipments via criteria; invoices via listInvoices action (finds all, even when C_Order_ID is null)
-    const shipmentPromise = fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', recordId, token, apiBaseUrl);
+    const shipmentPromise = fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', recordId, apiBaseUrl);
     const invoicePromise = fetch(
       `${apiBaseUrl}/header/${recordId}/action/listInvoices`,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      { headers: jsonHeaders(), credentials: 'include' },
     )
       .then(r => r.ok ? r.json() : null)
       .then(j => j?.response?.data ?? [])
       .catch(() => []);
 
-    Promise.all([shipmentPromise, invoicePromise, fetchPayments(recordId, token, apiBaseUrl)])
+    Promise.all([shipmentPromise, invoicePromise, fetchPayments(recordId, apiBaseUrl)])
       .then(([shipments, invoices, paymentResults]) => {
         setRelated({
           'goods-shipment': shipments,
@@ -130,7 +132,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setPayments(paymentResults);
         setLoading(false);
       });
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apiBaseUrl, refreshKey]);
 
   const onRefresh = () => setRefreshKey(k => k + 1);
 

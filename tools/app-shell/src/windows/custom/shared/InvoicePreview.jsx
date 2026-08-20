@@ -111,8 +111,8 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
     const orderId = invoice?.salesOrder;
     if (!orderId) return [];
     return [
-      { key: 'sales-order', type: 'sales-order', fetch: (_id, tok, base) => fetchById('sales-order', 'header', orderId, tok, base).then(r => r ? [r] : []) },
-      { key: 'shipment',    type: 'shipment',     fetch: (_id, tok, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, tok, base) },
+      { key: 'sales-order', type: 'sales-order', fetch: (_id, base) => fetchById('sales-order', 'header', orderId, base).then(r => r ? [r] : []) },
+      { key: 'shipment',    type: 'shipment',     fetch: (_id, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, base) },
     ];
   }, [invoice?.salesOrder]);
 
@@ -177,7 +177,6 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
       {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
       <RelatedDocumentsCard
         documentId={invoice?.id}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         specs={invoiceRelatedSpecs}
         data-testid="RelatedDocumentsCard__cf88e6" />

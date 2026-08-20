@@ -90,12 +90,17 @@ function DocRow({ type, doc, ui, navigate }) {
  *
  * Props:
  *   documentId   string   — parent record ID
- *   token        string
  *   apiBaseUrl   string
- *   specs        Array<{ key, type, fetch: async(id, token, base) => row[] }>
- *   fetchExtra   async(id, token, base) => Array<{ type, doc }> — optional chained fetch
+ *   specs        Array<{ key, type, fetch: async(id, base) => row[] }>
+ *   fetchExtra   async(id, base) => Array<{ type, doc }> — optional chained fetch
+ *
+ * ETP-4576: the `token` prop and the `token` argument of the `fetch`/`fetchExtra`
+ * contract are gone. Every implementation of that contract ends in a request
+ * helper that now reads the credential from the active session scheme, so
+ * threading one through here was both dead weight and a way to end up with a
+ * credential that disagrees with the active scheme.
  */
-export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal }) {
+export default function RelatedDocumentsCard({ documentId, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal }) {
   const ui = useUI();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
@@ -112,19 +117,19 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
     if (!documentId || specs.length === 0) { setLoading(false); return; }
     setLoading(true);
     const specPromises = specs.map(s =>
-      s.fetch(documentId, token, apiBaseUrl)
+      s.fetch(documentId, apiBaseUrl)
         .then(rows => rows.map(doc => ({ type: s.type, doc })))
         .catch(() => [])
     );
     const extraPromise = fetchExtra
-      ? fetchExtra(documentId, token, apiBaseUrl).catch(() => [])
+      ? fetchExtra(documentId, apiBaseUrl).catch(() => [])
       : Promise.resolve([]);
     Promise.all([Promise.all(specPromises), extraPromise])
       .then(([specResults, extraResults]) => {
         setItems([...specResults.flat(), ...extraResults]);
       })
       .finally(() => setLoading(false));
-  }, [documentId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
+  }, [documentId, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   if (!documentId || specs.length === 0) return null;
 

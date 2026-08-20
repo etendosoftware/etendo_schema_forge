@@ -65,7 +65,6 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
 import { render, screen, act, waitFor } from '@testing-library/react';
 import { useTaxSifLineRowActions } from '../useTaxSifLineRowActions.jsx';
 
-const TOKEN = 'test-token';
 const API_BASE_URL = '/sws/neo/sales-invoice';
 const RECORD_ID = 'inv-1';
 const TAX_ID = 'tax-verifactu-2field';
@@ -80,7 +79,7 @@ function headerResponse(record) {
 
 function Harness() {
   const { cellBadges, modal } = useTaxSifLineRowActions({
-    apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
   });
   const badge = cellBadges.tax?.({ tax: TAX_ID });
   return (
@@ -158,7 +157,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — Verifactu
     await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
       'tax', 'tax', TAX_ID,
       { etvfacVatRegime: '01' },
-      TOKEN, API_BASE_URL,
+      API_BASE_URL,
     ));
 
     // Modal closed as part of a successful save.
@@ -187,7 +186,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — Verifactu
         etvfacVatRegime: '01',
         etvfacCauseNotTaxable: 'N1',
       },
-      TOKEN, API_BASE_URL,
+      API_BASE_URL,
     ));
 
     expect(screen.getByTestId('still-missing')).toHaveTextContent('false');

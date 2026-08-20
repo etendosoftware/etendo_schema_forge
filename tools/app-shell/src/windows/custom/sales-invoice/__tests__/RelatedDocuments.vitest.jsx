@@ -111,7 +111,7 @@ describe('RelatedDocuments (sales-invoice, from artifacts/)', () => {
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
     expect(screen.getByTestId('chip-explicit-quotation-icon')).toBeInTheDocument();
-    expect(mockFetchById).not.toHaveBeenCalledWith('sales-order', 'header', 'q-1', 'tok', '/api');
+    expect(mockFetchById).not.toHaveBeenCalledWith('sales-order', 'header', 'q-1', '/api');
   });
 
   it('reads data.linkedShipments directly (no fetch) and classifies via the server-provided isReturn flag', async () => {
@@ -159,7 +159,7 @@ describe('RelatedDocuments (sales-invoice, from artifacts/)', () => {
         expect(screen.getByTestId('shell').dataset.loading).toBe('false')
       );
       expect(mockFetchByCriteria).toHaveBeenCalledWith(
-        'sales-invoice', 'header', 'salesOrder', 'so-1', 'tok', '/api'
+        'sales-invoice', 'header', 'salesOrder', 'so-1', '/api'
       );
       // inv-1 (== recordId) must be filtered out, only inv-2 remains
       expect(screen.getAllByTestId('chip-explicit-invoice-icon')).toHaveLength(1);
@@ -228,7 +228,7 @@ describe('RelatedDocuments (sales-invoice) — originInvoice chip (ETP-4737)', (
     await waitFor(() =>
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
-    expect(mockFetchById).toHaveBeenCalledWith('sales-invoice', 'header', 'origin-1', 'tok', '/api');
+    expect(mockFetchById).toHaveBeenCalledWith('sales-invoice', 'header', 'origin-1', '/api');
     const chip = screen.getByTestId('chip-sales-invoice');
     expect(chip.dataset.docId).toBe('origin-1');
   });

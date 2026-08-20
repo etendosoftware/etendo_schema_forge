@@ -60,14 +60,12 @@ import { toast } from 'sonner';
 // interaction contract (search/select/chip) lives inside it.
 import TaxSifModal from '../TaxSifModal.jsx';
 
-const TOKEN = 'test-token';
 const API_BASE_URL = '/sws/neo/sales-invoice';
 
 function baseProps(overrides = {}) {
   return {
     taxId: 'tax-1',
     apiBaseUrl: API_BASE_URL,
-    token: TOKEN,
     onClose: vi.fn(),
     onSaved: vi.fn(),
     ...overrides,
@@ -108,9 +106,9 @@ describe('TaxSifModal — open/closed + fetch-on-open', () => {
     expect(fetchByIdMock).not.toHaveBeenCalled();
   });
 
-  it('fetches the tax record via fetchById(spec="tax", entity="tax", taxId, token, apiBaseUrl) when opened', async () => {
+  it('fetches the tax record via fetchById(spec="tax", entity="tax", taxId, apiBaseUrl) when opened', async () => {
     render(<TaxSifModal {...baseProps()} />);
-    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-1', TOKEN, API_BASE_URL));
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-1', API_BASE_URL));
   });
 
   it('shows a loading state before the fetch resolves, and hides the fields afterward', async () => {
@@ -130,10 +128,10 @@ describe('TaxSifModal — open/closed + fetch-on-open', () => {
 
   it('re-fetches when taxId changes to a different record', async () => {
     const { rerender } = render(<TaxSifModal {...baseProps({ taxId: 'tax-1' })} />);
-    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-1', TOKEN, API_BASE_URL));
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-1', API_BASE_URL));
 
     rerender(<TaxSifModal {...baseProps({ taxId: 'tax-2' })} />);
-    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-2', TOKEN, API_BASE_URL));
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalledWith('tax', 'tax', 'tax-2', API_BASE_URL));
   });
 });
 
@@ -247,7 +245,7 @@ describe('TaxSifModal — save flow', () => {
     await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
       'tax', 'tax', 'tax-1',
       { tbaiClaveregimeniva: '05' },
-      TOKEN, API_BASE_URL,
+      API_BASE_URL,
     ));
   });
 

@@ -57,7 +57,6 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
       </MovementSummaryCard>
       <RelatedDocumentsCard
         documentId={receipt.id}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         specs={specs}
         data-testid="RelatedDocumentsCard__ba7c74" />

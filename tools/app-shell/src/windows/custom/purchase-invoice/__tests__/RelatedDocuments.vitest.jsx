@@ -104,7 +104,6 @@ describe('RelatedDocuments (purchase-invoice)', () => {
       'goodsReceipt',
       'salesOrder',
       'so-1',
-      'tok',
       '/api'
     );
   });
@@ -347,7 +346,7 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
     await waitFor(() =>
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
-    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', 'tok', '/api');
+    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', '/api');
     expect(screen.getByTestId('chip-invoice')).toBeInTheDocument();
   });
 

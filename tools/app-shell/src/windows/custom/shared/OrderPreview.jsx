@@ -16,15 +16,15 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 // ── SO related-documents helpers ─────────────────────────────────────────────
 
 const SO_SPECS = [
-  { key: 'shipment',      type: 'shipment',      fetch: (id, token, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, base) },
-  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, token, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, token, base) },
+  { key: 'shipment',      type: 'shipment',      fetch: (id, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, base) },
+  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, base) },
 ];
 
-async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
-  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
+async function fetchPaymentsIn(orderId, apiBaseUrl) {
+  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, apiBaseUrl);
   if (plans.length === 0) return [];
   const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
+    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, apiBaseUrl))
   );
   const seen = new Set();
   const paymentIds = detailResults.flat()
@@ -32,7 +32,7 @@ async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
     .map(d => { seen.add(d.payment); return d.payment; });
   if (paymentIds.length === 0) return [];
   const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, token, apiBaseUrl))
+    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, apiBaseUrl))
   );
   return results.filter(Boolean).map(doc => ({ type: 'payment-in', doc }));
 }
@@ -74,7 +74,6 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
       {isSalesOrder && (
         <RelatedDocumentsCard
           documentId={order.id}
-          token={token}
           apiBaseUrl={apiBaseUrl}
           specs={SO_SPECS}
           fetchExtra={fetchPaymentsIn}

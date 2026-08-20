@@ -14,11 +14,11 @@ const RELATED_SPECS = [
   { key: 'purchase-invoice', type: 'invoice', specName: 'purchase-invoice', entityName: 'header', filterColumn: 'salesOrder' },
 ];
 
-async function fetchPayments(orderId, token, apiBaseUrl) {
-  const plans = await fetchChild('purchase-order', 'Payment Plan', orderId, token, apiBaseUrl);
+async function fetchPayments(orderId, apiBaseUrl) {
+  const plans = await fetchChild('purchase-order', 'Payment Plan', orderId, apiBaseUrl);
   if (plans.length === 0) return [];
   const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('purchase-order', 'Payment Details', plan.id, token, apiBaseUrl))
+    plans.map(plan => fetchChild('purchase-order', 'Payment Details', plan.id, apiBaseUrl))
   );
   const seen = new Set();
   const paymentIds = detailResults.flat()
@@ -26,12 +26,12 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
     .map(d => { seen.add(d.payment); return d.payment; });
   if (paymentIds.length === 0) return [];
   const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-out', 'finPayment', id, token, apiBaseUrl))
+    paymentIds.map(id => fetchById('payment-out', 'finPayment', id, apiBaseUrl))
   );
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl, docsRefreshSignal }) {
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,10 +43,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
     if (!recordId) return;
     setLoading(true);
     const specPromises = RELATED_SPECS.map(s =>
-      fetchByCriteria(s.specName, s.entityName, s.filterColumn, recordId, token, apiBaseUrl)
+      fetchByCriteria(s.specName, s.entityName, s.filterColumn, recordId, apiBaseUrl)
         .then(rows => ({ key: s.key, rows }))
     );
-    Promise.all([Promise.all(specPromises), fetchPayments(recordId, token, apiBaseUrl)])
+    Promise.all([Promise.all(specPromises), fetchPayments(recordId, apiBaseUrl)])
       .then(([specResults, paymentResults]) => {
         const map = {};
         for (const r of specResults) map[r.key] = r.rows;
@@ -54,7 +54,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
         setPayments(paymentResults);
         setLoading(false);
       });
-  }, [recordId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
+  }, [recordId, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 

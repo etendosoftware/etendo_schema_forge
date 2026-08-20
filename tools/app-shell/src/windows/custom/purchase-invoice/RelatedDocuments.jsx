@@ -7,11 +7,11 @@ import {
 } from '@/components/related-documents';
 import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
-async function fetchPayments(invoiceId, token, apiBaseUrl) {
-  const plans = await fetchChild('purchase-invoice', 'paymentPlan', invoiceId, token, apiBaseUrl);
+async function fetchPayments(invoiceId, apiBaseUrl) {
+  const plans = await fetchChild('purchase-invoice', 'paymentPlan', invoiceId, apiBaseUrl);
   if (plans.length === 0) return [];
   const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('purchase-invoice', 'paymentDetails', plan.id, token, apiBaseUrl))
+    plans.map(plan => fetchChild('purchase-invoice', 'paymentDetails', plan.id, apiBaseUrl))
   );
   const seen = new Set();
   const paymentIds = detailResults.flat()
@@ -19,27 +19,27 @@ async function fetchPayments(invoiceId, token, apiBaseUrl) {
     .map(d => { seen.add(d.payment); return d.payment; });
   if (paymentIds.length === 0) return [];
   const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-out', 'finPayment', id, token, apiBaseUrl))
+    paymentIds.map(id => fetchById('payment-out', 'finPayment', id, apiBaseUrl))
   );
   return results.filter(Boolean);
 }
 
-async function fetchLinkedReturnDeliveries(invoiceId, token, apiBaseUrl) {
-  const lines = await fetchChild('purchase-invoice', 'lines', invoiceId, token, apiBaseUrl);
+async function fetchLinkedReturnDeliveries(invoiceId, apiBaseUrl) {
+  const lines = await fetchChild('purchase-invoice', 'lines', invoiceId, apiBaseUrl);
   const shipmentLineIds = [...new Set(lines.filter(l => l.goodsShipmentLine).map(l => l.goodsShipmentLine))];
   if (shipmentLineIds.length === 0) return [];
   const lineRecords = await Promise.all(
-    shipmentLineIds.map(id => fetchById('return-to-vendor-shipment', 'returnToVendorShipmentLine', id, token, apiBaseUrl))
+    shipmentLineIds.map(id => fetchById('return-to-vendor-shipment', 'returnToVendorShipmentLine', id, apiBaseUrl))
   );
   const shipmentIds = [...new Set(lineRecords.filter(Boolean).map(l => l.parentId || l.inOut).filter(Boolean))];
   if (shipmentIds.length === 0) return [];
   const results = await Promise.all(
-    shipmentIds.map(id => fetchById('return-to-vendor-shipment', 'returnToVendorShipment', id, token, apiBaseUrl))
+    shipmentIds.map(id => fetchById('return-to-vendor-shipment', 'returnToVendorShipment', id, apiBaseUrl))
   );
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl, docsRefreshSignal }) {
   const [purchaseOrder, setPurchaseOrder] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -64,8 +64,8 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
     let promise;
     if (isReturn) {
       promise = Promise.all([
-        fetchLinkedReturnDeliveries(recordId, token, apiBaseUrl).catch(() => []),
-        fetchPayments(recordId, token, apiBaseUrl),
+        fetchLinkedReturnDeliveries(recordId, apiBaseUrl).catch(() => []),
+        fetchPayments(recordId, apiBaseUrl),
       ]).then(([deliveries, paymentResults]) => {
         setReturnDeliveries(deliveries);
         setPayments(paymentResults);
@@ -75,16 +75,16 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
     } else {
       const orderId = data?.salesOrder;
       const orderPromise = orderId
-        ? fetchById('purchase-order', 'header', orderId, token, apiBaseUrl).catch(() => null)
+        ? fetchById('purchase-order', 'header', orderId, apiBaseUrl).catch(() => null)
         : Promise.resolve(null);
       const backendReceipts = Array.isArray(data?.linkedReceipts) ? data.linkedReceipts : null;
       const fallbackReceiptPromise = orderId
-        ? fetchByCriteria('goods-receipt', 'goodsReceipt', 'salesOrder', orderId, token, apiBaseUrl)
+        ? fetchByCriteria('goods-receipt', 'goodsReceipt', 'salesOrder', orderId, apiBaseUrl)
         : Promise.resolve([]);
       const receiptPromise = backendReceipts !== null
         ? Promise.resolve(backendReceipts)
         : fallbackReceiptPromise;
-      promise = Promise.all([orderPromise, receiptPromise, fetchPayments(recordId, token, apiBaseUrl)])
+      promise = Promise.all([orderPromise, receiptPromise, fetchPayments(recordId, apiBaseUrl)])
         .then(([orderResult, receiptRows, paymentResults]) => {
           setPurchaseOrder(orderResult);
           setReceipts(receiptRows);
@@ -97,13 +97,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
     // isReturn branch above (which covers the auto-generated-from-Albarán case).
     // Server injects just the id (+ _identifier), not the full record, so fetch it here.
     const originInvoicePromise = data?.originInvoice
-      ? fetchById('purchase-invoice', 'header', data.originInvoice, token, apiBaseUrl).catch(() => null)
+      ? fetchById('purchase-invoice', 'header', data.originInvoice, apiBaseUrl).catch(() => null)
       : Promise.resolve(null);
     promise = Promise.all([promise, originInvoicePromise]).then(([, originResult]) => {
       setOriginInvoice(originResult);
     });
     promise.finally(() => setLoading(false));
-  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
+  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 

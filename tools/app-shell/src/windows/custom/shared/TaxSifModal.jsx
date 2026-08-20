@@ -45,13 +45,12 @@ const TAX_ENTITY_NAME = 'tax';
  * @param {string}   props.apiBaseUrl    The CALLING window's own NEO base (e.g.
  *                                       `/sws/neo/sales-invoice`) — cross-spec helpers
  *                                       derive the shared NEO root from it.
- * @param {string}   props.token         NEO bearer token.
  * @param {Function} props.onClose       () => void — called on cancel/backdrop/save.
  * @param {Function} props.onSaved       (updatedTaxRecord) => void — called after a
  *                                       successful PATCH, so the caller can refresh its
  *                                       local tax-completeness cache without a full reload.
  */
-export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved }) {
+export default function TaxSifModal({ taxId, apiBaseUrl, onClose, onSaved }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -70,14 +69,14 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     }
     let cancelled = false;
     setLoading(true);
-    fetchById(TAX_SPEC_NAME, TAX_ENTITY_NAME, taxId, token, apiBaseUrl).then((record) => {
+    fetchById(TAX_SPEC_NAME, TAX_ENTITY_NAME, taxId, apiBaseUrl).then((record) => {
       if (cancelled) return;
       setOriginal(record);
       setEditing(record ? { ...record } : null);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [taxId, token, apiBaseUrl]);
+  }, [taxId, apiBaseUrl]);
 
   const selectedFields = useMemo(
     () => (editing ? selectSifFields({ profile, verifactuRecord, data: editing, ui }) : []),
@@ -102,7 +101,7 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     }
     setSaving(true);
     try {
-      await patchById(TAX_SPEC_NAME, TAX_ENTITY_NAME, taxId, payload, token, apiBaseUrl);
+      await patchById(TAX_SPEC_NAME, TAX_ENTITY_NAME, taxId, payload, apiBaseUrl);
       toast.success(ui('taxSif.modal.saveSuccess'));
       // `patchById`'s response uses the tax entity's own camelCase field names (e.g.
       // `tbaiClaveregimeniva`), but the caller's completeness cache (built from the
@@ -122,7 +121,7 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     } finally {
       setSaving(false);
     }
-  }, [editing, original, selectedFields, taxId, token, apiBaseUrl, onSaved, onClose, ui]);
+  }, [editing, original, selectedFields, taxId, apiBaseUrl, onSaved, onClose, ui]);
 
   // Drives the Save button's disabled state: nothing to persist until at least one
   // selected field's value actually differs from the record as originally loaded.

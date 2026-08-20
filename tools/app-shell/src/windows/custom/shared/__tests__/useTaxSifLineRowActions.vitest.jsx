@@ -54,8 +54,13 @@ vi.mock('../TaxSifModal.jsx', () => ({
 
 import { render, screen, renderHook, act, waitFor } from '@testing-library/react';
 import { useTaxSifLineRowActions, isTaxSifMissing } from '../useTaxSifLineRowActions.jsx';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
-const TOKEN = 'test-token';
 const API_BASE_URL = '/sws/neo/sales-invoice';
 const RECORD_ID = 'inv-1';
 
@@ -96,6 +101,8 @@ function Harness({ options }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // ETP-4576: bearer is the production default scheme.
+  declareBearerSession();
   installDefaultFetch();
   useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
   useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
@@ -156,24 +163,54 @@ describe('isTaxSifMissing — pure completeness check', () => {
 describe('useTaxSifLineRowActions — fetch gating', () => {
   it('enabled=false: does not fetch, returns empty cellBadges and null modal', () => {
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: false, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: false, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(result.current.cellBadges).toEqual({});
     expect(result.current.modal).toBeNull();
   });
 
-  it('does not fetch when apiBaseUrl, token, or recordId is missing', () => {
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: '', token: TOKEN, enabled: true, recordId: RECORD_ID }));
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: '', enabled: true, recordId: RECORD_ID }));
-    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: null }));
+  // ETP-4576: `token` used to be part of this gate, and under a cookie session
+  // it is structurally undefined — so this hook returned early forever and the
+  // SIF badge simply never appeared. No error, no failed request, just a missing
+  // affordance. Only the two preconditions a caller can actually control remain.
+  it('does not fetch when apiBaseUrl or recordId is missing', () => {
+    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: '', enabled: true, recordId: RECORD_ID }));
+    renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, enabled: true, recordId: null }));
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches with only apiBaseUrl and recordId, taking the credential from the scheme', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [{}] } }) }));
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(init.headers.Authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+    expect(init.credentials).toBe('include');
+  });
+
+  // Both requests this hook issues are GETs, so under the cookie scheme they
+  // carry no credential header at all — the session travels in the `__Host-`
+  // cookie, and no CSRF proof belongs on a safe method.
+  it('sends no credential header under the cookie scheme', async () => {
+    declareCookieSession();
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    for (const [, init] of globalThis.fetch.mock.calls) {
+      expect(init.headers).not.toHaveProperty('Authorization');
+      expect(init.headers).not.toHaveProperty('X-Go-CSRF');
+      expect(init.credentials).toBe('include');
+    }
   });
 
   it('a failed header fetch (ok:false) is swallowed — no crash, cellBadges.tax stays absent for the row', async () => {
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
@@ -182,7 +219,7 @@ describe('useTaxSifLineRowActions — fetch gating', () => {
   it('a network-level rejection is swallowed — no crash', async () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
@@ -205,12 +242,15 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
     });
 
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${API_BASE_URL}/header/${RECORD_ID}`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        credentials: 'include',
+      },
     ));
 
     await waitFor(() => {
@@ -225,13 +265,16 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       expect(url).toContain('priceList=PL-1');
       expect(url).toContain('C_BPartner_Location_ID=ADDR-1');
       expect(url).toContain('currency=EUR');
-      expect(init).toEqual({ headers: { Authorization: `Bearer ${TOKEN}` } });
+      expect(init).toEqual({
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        credentials: 'include',
+      });
     });
   });
 
   it('windowCategory: "purchases" derives isSOTrx=N via buildLineSelectorContext', async () => {
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases',
     }));
 
     await waitFor(() => {
@@ -250,7 +293,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       return taxSelectorResponse([]);
     });
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => {
       const selectorCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
@@ -264,7 +307,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }]);
     });
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(result.current.cellBadges.tax({ tax: 'tax-1' })).not.toBeNull());
   });
@@ -277,7 +320,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
       return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: '05' }], false);
     });
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => {
@@ -305,7 +348,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
     });
 
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => {
@@ -329,7 +372,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
       throw new Error(`Unexpected selector URL: ${u}`);
     });
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => {
       const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
@@ -343,7 +386,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
       return taxSelectorResponse([], true);
     });
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => {
       const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
@@ -364,7 +407,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
     });
 
     renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => {
@@ -390,7 +433,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
     });
 
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => expect(warnSpy).toHaveBeenCalled());
@@ -410,7 +453,7 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
     });
 
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     await waitFor(() => expect(warnSpy).toHaveBeenCalled());
@@ -437,7 +480,7 @@ describe('useTaxSifLineRowActions — cancellation ordering (torn-down effect ne
     });
 
     const { unmount } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
 
     // Wait until page 2's request has actually been issued — proves teardown happens
@@ -484,7 +527,7 @@ describe('useTaxSifLineRowActions — stale catalog reset on recordId change', (
       (props) => useTaxSifLineRowActions(props),
       {
         initialProps: {
-          apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: 'inv-1', windowCategory: 'sales',
+          apiBaseUrl: API_BASE_URL, enabled: true, recordId: 'inv-1', windowCategory: 'sales',
         },
       },
     );
@@ -492,7 +535,7 @@ describe('useTaxSifLineRowActions — stale catalog reset on recordId change', (
     await waitFor(() => expect(result.current.cellBadges.tax({ tax: 'tax-old' })).not.toBeNull());
 
     rerender({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: 'inv-2', windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: 'inv-2', windowCategory: 'sales',
     });
 
     // Synchronous assertion, on purpose: inv-2's own fetch (inv2Page1Promise) is still
@@ -519,7 +562,7 @@ describe('useTaxSifLineRowActions — stale catalog reset on recordId change', (
 
     const { rerender } = render(
       <RenderCountHarness
-        options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }}
+        options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }}
       />,
     );
     await waitFor(() => {
@@ -543,7 +586,7 @@ describe('useTaxSifLineRowActions — stale catalog reset on recordId change', (
     // not a no-op re-render) while taxById is already {}.
     rerender(
       <RenderCountHarness
-        options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases' }}
+        options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases' }}
       />,
     );
 
@@ -559,7 +602,7 @@ describe('useTaxSifLineRowActions — stale catalog reset on recordId change', (
 describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel extension-point contract)', () => {
   it('exposes ONLY a "tax" key when enabled — the badge renderer function', async () => {
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(Object.keys(result.current.cellBadges)).toEqual(['tax']);
@@ -569,7 +612,7 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
   it('renders null (no badge) for a row whose tax is not missing anything', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: '05' }] });
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
@@ -578,7 +621,7 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
   it('renders null for a row whose tax id has no entry in the fetched catalog', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-other', EM_Tbai_Claveregimeniva: null }] });
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(result.current.cellBadges.tax({ tax: 'tax-unknown' })).toBeNull();
@@ -588,7 +631,7 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
     useFiscalConfigMock.mockReturnValue({ profile: 'sii', verifactuRecord: null });
     installDefaultFetch({ taxItems: [{ id: 'tax-1' }] });
     const { result } = renderHook(() => useTaxSifLineRowActions({
-      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+      apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
     }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(result.current.cellBadges.tax({ tax: 'tax-1' })).toBeNull();
@@ -596,7 +639,7 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
 
   it('renders a button with the AlertTriangle icon, aria-label/title from taxSif.trigger.tooltip, testId line-action-tax-sif, and the shared warning-color token', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
 
     const button = await screen.findByTestId('line-action-tax-sif');
     expect(button).toHaveAttribute('aria-label', 'taxSif.trigger.tooltip');
@@ -611,7 +654,7 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
 
     function WrappedHarness() {
       const { cellBadges, modal } = useTaxSifLineRowActions({
-        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+        apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
       });
       return (
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
@@ -632,14 +675,14 @@ describe('useTaxSifLineRowActions — cellBadges.tax shape (InlineLinesPanel ext
 describe('useTaxSifLineRowActions — modal wiring', () => {
   it('modal is null before the badge is clicked', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
     await screen.findByTestId('line-action-tax-sif');
     expect(screen.queryByTestId('tax-sif-modal-stub')).not.toBeInTheDocument();
   });
 
   it('clicking the badge opens the modal with taxId taken from the row (row.tax)', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
     const button = await screen.findByTestId('line-action-tax-sif');
 
     await act(async () => { button.click(); });
@@ -647,12 +690,13 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     const modal = screen.getByTestId('tax-sif-modal-stub');
     expect(modal).toHaveAttribute('data-tax-id', 'tax-1');
     expect(taxSifModalProps.mock.calls.at(-1)[0].apiBaseUrl).toBe(API_BASE_URL);
-    expect(taxSifModalProps.mock.calls.at(-1)[0].token).toBe(TOKEN);
+    // ETP-4576: the modal takes no `token` prop — it reads the active scheme.
+    expect(taxSifModalProps.mock.calls.at(-1)[0]).not.toHaveProperty('token');
   });
 
   it('onClose from the modal clears modalTaxId — the modal unmounts', async () => {
     installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
-    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
     const button = await screen.findByTestId('line-action-tax-sif');
     await act(async () => { button.click(); });
     expect(screen.getByTestId('tax-sif-modal-stub')).toBeInTheDocument();
@@ -666,7 +710,7 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
 
     function FullHarness() {
       const { cellBadges, modal } = useTaxSifLineRowActions({
-        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+        apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
       });
       const badge = cellBadges.tax?.({ tax: 'tax-1' });
       return (
@@ -708,7 +752,7 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
 
     function TwoLinesHarness() {
       const { cellBadges, modal } = useTaxSifLineRowActions({
-        apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+        apiBaseUrl: API_BASE_URL, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
       });
       const badge1 = cellBadges.tax?.({ tax: 'tax-shared' });
       const badge2 = cellBadges.tax?.({ tax: 'tax-shared' });

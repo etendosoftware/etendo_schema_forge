@@ -378,8 +378,8 @@ describe('InvoicePreviewModal', () => {
       fetchById.mockResolvedValue(orderRecord);
       renderPreview({ invoice: invoiceWithOrder });
       const specs = capturedRelatedSpecs.current;
-      const result = await specs[0].fetch('inv-1', 'tok', '/api/sales-invoice');
-      expect(fetchById).toHaveBeenCalledWith('sales-order', 'header', 'so-42', 'tok', '/api/sales-invoice');
+      const result = await specs[0].fetch('inv-1', '/api/sales-invoice');
+      expect(fetchById).toHaveBeenCalledWith('sales-order', 'header', 'so-42', '/api/sales-invoice');
       expect(result).toEqual([orderRecord]);
     });
 
@@ -387,7 +387,7 @@ describe('InvoicePreviewModal', () => {
       fetchById.mockResolvedValue(null);
       renderPreview({ invoice: invoiceWithOrder });
       const specs = capturedRelatedSpecs.current;
-      const result = await specs[0].fetch('inv-1', 'tok', '/api/sales-invoice');
+      const result = await specs[0].fetch('inv-1', '/api/sales-invoice');
       expect(result).toEqual([]);
     });
 
@@ -396,9 +396,9 @@ describe('InvoicePreviewModal', () => {
       fetchByCriteria.mockResolvedValue(shipmentRows);
       renderPreview({ invoice: invoiceWithOrder });
       const specs = capturedRelatedSpecs.current;
-      const result = await specs[1].fetch('inv-1', 'tok', '/api/sales-invoice');
+      const result = await specs[1].fetch('inv-1', '/api/sales-invoice');
       expect(fetchByCriteria).toHaveBeenCalledWith(
-        'goods-shipment', 'goodsShipment', 'salesOrder', 'so-42', 'tok', '/api/sales-invoice',
+        'goods-shipment', 'goodsShipment', 'salesOrder', 'so-42', '/api/sales-invoice',
       );
       expect(result).toEqual(shipmentRows);
     });

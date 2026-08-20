@@ -13,7 +13,7 @@ import {
 } from '@/components/related-documents';
 import { getArSubtype } from './invoiceSubtype';
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl }) {
   const [order, setOrder] = useState(null);
   const [shipments, setShipments] = useState([]);
   const [originalInvoices, setOriginalInvoices] = useState([]);
@@ -33,9 +33,9 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       promises.push(
         (async () => {
           // criteria queries apply the DocSubTypeSO='ON' WHERE that GET-by-ID bypasses
-          const quotations = await fetchByCriteria('sales-quotation', 'quotation', 'id', orderId, token, apiBaseUrl).catch(() => []);
+          const quotations = await fetchByCriteria('sales-quotation', 'quotation', 'id', orderId, apiBaseUrl).catch(() => []);
           if (quotations.length > 0) { setOrder({ ...quotations[0], _isQuotation: true }); return; }
-          const order = await fetchById('sales-order', 'header', orderId, token, apiBaseUrl).catch(() => null);
+          const order = await fetchById('sales-order', 'header', orderId, apiBaseUrl).catch(() => null);
           if (order) setOrder(order);
         })()
       );
@@ -49,7 +49,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       const isRectificativa = getArSubtype(data) === 'RECTIFICATIVA';
       if (isRectificativa) {
         promises.push(
-          fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, token, apiBaseUrl)
+          fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, apiBaseUrl)
             .then(d => setOriginalInvoices(d.filter(inv => inv.id !== recordId)))
         );
       }
@@ -77,7 +77,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     // Server injects just the id (+ _identifier), not the full record, so fetch it here.
     if (data.originInvoice) {
       promises.push(
-        fetchById('sales-invoice', 'header', data.originInvoice, token, apiBaseUrl)
+        fetchById('sales-invoice', 'header', data.originInvoice, apiBaseUrl)
           .then(inv => setOriginInvoice(inv))
       );
     } else {
@@ -86,7 +86,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
 
     if (promises.length === 0) { setLoading(false); return; }
     Promise.all(promises).then(() => setLoading(false));
-  }, [recordId, data, token, apiBaseUrl, refreshKey]);
+  }, [recordId, data, apiBaseUrl, refreshKey]);
 
   const chips = [];
 

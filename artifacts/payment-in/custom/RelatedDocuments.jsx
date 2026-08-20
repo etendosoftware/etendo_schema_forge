@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_ICONS, CHIP_COLORS, neoBase, fetchById } from '@/components/related-documents';
 import { useUI } from '@/i18n';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * RelatedDocuments for Payment In.
@@ -10,7 +11,7 @@ import { useUI } from '@/i18n';
  *   scheduleDetail.invoicePaymentSchedule → GET /sales-invoice/paymentPlan/{id} → invoice ID + identifier
  * Then fetches the invoice header for documentStatus badge.
  */
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -18,11 +19,11 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const ui = useUI();
 
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) { setLoading(false); return; }
+    if (!recordId || !apiBaseUrl) { setLoading(false); return; }
     setLoading(true);
 
     const base = neoBase(apiBaseUrl);
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = jsonHeaders();
 
     (async () => {
       try {
@@ -44,7 +45,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         // Step 2: Resolve each schedule ID to an invoice via paymentPlan getById
         const invoiceMap = new Map();
         await Promise.all(scheduleIds.map(async (schedId) => {
-          const row = await fetchById('sales-invoice', 'paymentPlan', schedId, token, apiBaseUrl);
+          const row = await fetchById('sales-invoice', 'paymentPlan', schedId, apiBaseUrl);
           if (row?.invoice && !invoiceMap.has(row.invoice)) {
             const ident = row['invoice$_identifier'] || '';
             const docNo = ident.split(' - ')[0] || '';
@@ -57,7 +58,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         // Step 3: Fetch invoice headers for status badge
         const invoices = [...invoiceMap.values()];
         await Promise.all(invoices.map(async (inv) => {
-          const row = await fetchById('sales-invoice', 'header', inv.id, token, apiBaseUrl);
+          const row = await fetchById('sales-invoice', 'header', inv.id, apiBaseUrl);
           if (row) {
             inv.documentStatus = row.documentStatus;
             inv.grandTotal = row.grandTotalAmount;
@@ -69,7 +70,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       } catch { /* silent */ }
       finally { setLoading(false); }
     })();
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apiBaseUrl, refreshKey]);
 
   return (
     <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>

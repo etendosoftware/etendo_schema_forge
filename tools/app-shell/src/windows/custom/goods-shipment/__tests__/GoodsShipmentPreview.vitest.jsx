@@ -1,4 +1,5 @@
 // Mocks must come before imports (Vitest hoisting)
+import { TEST_BEARER_TOKEN, declareBearerSession } from '@/test/sessionContract.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -271,7 +272,6 @@ describe('GoodsShipmentPreview', () => {
 
   describe('shipmentDocSpecs fetch functions', () => {
     const shipmentId = 'ship-1';
-    const token = 'tok';
     const base = '/api/goods-shipment';
 
     function mockDetailFetch(detail) {
@@ -285,6 +285,9 @@ describe('GoodsShipmentPreview', () => {
 
     beforeEach(() => {
       capturedSpecs.current = null;
+      // ETP-4576: the descriptor's `fetch(id, base)` no longer receives a token —
+      // its request reads the credential from the active scheme instead.
+      declareBearerSession();
     });
 
     it('orders spec fetches linkedOrders from the detail endpoint', async () => {
@@ -292,11 +295,14 @@ describe('GoodsShipmentPreview', () => {
       renderGSPreview();
       const specs = capturedSpecs.current;
       expect(specs).toHaveLength(3);
-      const result = await specs[0].fetch(shipmentId, token, base);
+      const result = await specs[0].fetch(shipmentId, base);
       expect(result).toEqual([{ id: 'ord-1' }]);
       expect(global.fetch).toHaveBeenCalledWith(
         `${base}/goodsShipment/${shipmentId}`,
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token}` }) }),
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` }),
+          credentials: 'include',
+        }),
       );
     });
 
@@ -304,7 +310,7 @@ describe('GoodsShipmentPreview', () => {
       mockDetailFetch({ linkedOrders: [], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
       renderGSPreview();
       const specs = capturedSpecs.current;
-      const result = await specs[1].fetch(shipmentId, token, base);
+      const result = await specs[1].fetch(shipmentId, base);
       expect(result).toEqual([{ id: 'inv-1' }]);
     });
 
@@ -312,7 +318,7 @@ describe('GoodsShipmentPreview', () => {
       mockDetailFetch({ linkedOrders: [], linkedInvoices: [], returnReceipts: [{ id: 'ret-1' }] });
       renderGSPreview();
       const specs = capturedSpecs.current;
-      const result = await specs[2].fetch(shipmentId, token, base);
+      const result = await specs[2].fetch(shipmentId, base);
       expect(result).toEqual([{ id: 'ret-1' }]);
     });
 
@@ -321,9 +327,9 @@ describe('GoodsShipmentPreview', () => {
       renderGSPreview();
       const specs = capturedSpecs.current;
       await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
+        specs[0].fetch(shipmentId, base),
+        specs[1].fetch(shipmentId, base),
+        specs[2].fetch(shipmentId, base),
       ]);
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
@@ -333,9 +339,9 @@ describe('GoodsShipmentPreview', () => {
       renderGSPreview();
       const specs = capturedSpecs.current;
       const [orders, invoices, returns] = await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
+        specs[0].fetch(shipmentId, base),
+        specs[1].fetch(shipmentId, base),
+        specs[2].fetch(shipmentId, base),
       ]);
       expect(orders).toEqual([]);
       expect(invoices).toEqual([]);
@@ -347,9 +353,9 @@ describe('GoodsShipmentPreview', () => {
       renderGSPreview();
       const specs = capturedSpecs.current;
       const [orders, invoices, returns] = await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
+        specs[0].fetch(shipmentId, base),
+        specs[1].fetch(shipmentId, base),
+        specs[2].fetch(shipmentId, base),
       ]);
       expect(orders).toEqual([]);
       expect(invoices).toEqual([]);
@@ -362,7 +368,7 @@ describe('GoodsShipmentPreview', () => {
       );
       renderGSPreview();
       const specs = capturedSpecs.current;
-      const result = await specs[0].fetch(shipmentId, token, base);
+      const result = await specs[0].fetch(shipmentId, base);
       expect(result).toEqual([]);
     });
 

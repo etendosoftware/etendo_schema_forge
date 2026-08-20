@@ -15,7 +15,7 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 // ── Quotation related-documents specs ────────────────────────────────────────
 
 const QUOTATION_SPECS = [
-  { key: 'sales-order', type: 'sales-order', fetch: (id, token, base) => fetchByCriteria('sales-order', 'header', 'quotation', id, token, base) },
+  { key: 'sales-order', type: 'sales-order', fetch: (id, base) => fetchByCriteria('sales-order', 'header', 'quotation', id, base) },
 ];
 
 // Statuses that mean the quotation is no longer editable
@@ -50,7 +50,6 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
       <EmailsCard onSend={onSend} data-testid="EmailsCard__7eb018" />
       <RelatedDocumentsCard
         documentId={quotation.id}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         specs={QUOTATION_SPECS}
         data-testid="RelatedDocumentsCard__7eb018" />

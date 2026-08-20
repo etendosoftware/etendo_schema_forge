@@ -7,6 +7,7 @@ import { buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { selectSifFields } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
 // LinesTable.jsx declares for both sales-invoice and purchase-invoice.
@@ -41,7 +42,6 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  *
  * @param {object} args
  * @param {string} args.apiBaseUrl the calling window's own NEO base
- * @param {string} args.token NEO bearer token
  * @param {object} args.selectorContext `buildLineSelectorContext()` output — required
  *   selector params (parentId, isSOTrx/IsSOTrx, priceList, DateInvoiced, etc.)
  * @param {string|null} args.currency optional `currency` param, merged in when present
@@ -54,7 +54,7 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  *   returned instead of discarding everything — degrading to a partial check rather
  *   than rendering no badges at all (ETP-4888 QA finding).
  */
-async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, isCancelled }) {
+async function fetchAllTaxPages({ apiBaseUrl, selectorContext, currency, isCancelled }) {
   const allItems = [];
   let offset = 0;
   let page = 0;
@@ -65,7 +65,7 @@ async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, 
       ...selectorContext,
       ...(currency ? { currency } : {}),
     });
-    const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const taxResponse = await fetch(url, { headers: jsonHeaders(), credentials: 'include' });
     const data = taxResponse.ok ? await taxResponse.json() : null;
     // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
     // state, since nothing is waiting for it any more.
@@ -156,7 +156,6 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  *
  * @param {object} args
  * @param {string} args.apiBaseUrl the CALLING window's own NEO base (e.g. `/sws/neo/sales-invoice`)
- * @param {string} args.token NEO bearer token
  * @param {boolean} [args.enabled=true] set false to disable entirely (returns `{ rowActions: [], modal: null }`)
  * @param {string|null} [args.recordId] the invoice's own header record id — needed to fetch
  *   the header record that supplies the selector's required context params. On a
@@ -167,7 +166,7 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  *   the same way `DetailView.jsx` does. Sales windows resolve to `Y`, purchase windows to `N`.
  * @returns {{ cellBadges: object, modal: import('react').ReactNode }}
  */
-export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null }) {
+export function useTaxSifLineRowActions({ apiBaseUrl, enabled = true, recordId = null, windowCategory = null }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -181,12 +180,13 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     // B's fetch resolves (ETP-4888 QA finding). The functional form keeps the already-empty
     // case referentially stable so the common mount path does not schedule a spare render.
     setTaxById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-    if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
+    if (!enabled || !apiBaseUrl || !recordId) return undefined;
     let cancelled = false;
 
     async function loadTaxCatalog() {
       const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: jsonHeaders(),
+        credentials: 'include',
       });
       const headerJson = headerResponse.ok ? await headerResponse.json() : null;
       // NEO envelopes single-record GETs as { response: { data: [ {...} ], status } } —
@@ -208,7 +208,6 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       // TAX_SELECTOR_PAGE_LIMIT's comment above and fetchAllTaxPages()'s own doc.
       const allItems = await fetchAllTaxPages({
         apiBaseUrl,
-        token,
         selectorContext,
         currency,
         isCancelled: () => cancelled,
@@ -219,7 +218,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
 
     loadTaxCatalog().catch(() => {});
     return () => { cancelled = true; };
-  }, [apiBaseUrl, token, enabled, recordId, windowCategory]);
+  }, [apiBaseUrl, enabled, recordId, windowCategory]);
 
   // ETP-4888 design-polish round — renders the trigger inline next to the "tax"
   // column's own value (InlineLinesPanel's `cellBadges` slot) instead of the
@@ -252,7 +251,6 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     <TaxSifModal
       taxId={modalTaxId}
       apiBaseUrl={apiBaseUrl}
-      token={token}
       onClose={() => setModalTaxId(null)}
       onSaved={(updatedTax) => {
         setTaxById((prev) => ({

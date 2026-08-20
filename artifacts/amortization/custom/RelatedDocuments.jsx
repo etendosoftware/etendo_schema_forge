@@ -14,7 +14,7 @@ const ASSET_ICON = (
   </svg>
 );
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl }) {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -28,7 +28,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     }
     setLoading(true);
 
-    fetchChild('amortization', 'lines', recordId, token, apiBaseUrl)
+    fetchChild('amortization', 'lines', recordId, apiBaseUrl)
       .then((lines) => {
         const ids = [];
         const seen = new Set();
@@ -45,14 +45,14 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
           return;
         }
         return Promise.all(
-          ids.map((id) => fetchById('assets', 'assets', id, token, apiBaseUrl)),
+          ids.map((id) => fetchById('assets', 'assets', id, apiBaseUrl)),
         ).then((results) => {
           setAssets(results.filter(Boolean));
           setLoading(false);
         });
       })
       .catch(() => setLoading(false));
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apiBaseUrl, refreshKey]);
 
   return (
     <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey((k) => k + 1)}>

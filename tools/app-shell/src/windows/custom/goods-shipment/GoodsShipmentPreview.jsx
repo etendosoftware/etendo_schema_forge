@@ -12,6 +12,7 @@ import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/consta
 import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryCard.jsx';
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // ── Tab content components ────────────────────────────────────────────────────
 
@@ -83,10 +84,11 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // Fetch the full header record once; all 3 specs share 1 HTTP call via the cached promise.
   const shipmentDocSpecs = useMemo(() => {
     let detailPromise = null;
-    const getDetail = (id, tok, base) => {
+    const getDetail = (id, base) => {
       if (!detailPromise) {
         detailPromise = fetch(`${base}/goodsShipment/${id}`, {
-          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+          headers: jsonHeaders(),
+          credentials: 'include',
         })
           .then(r => r.ok ? r.json() : null)
           .then(j => j?.response?.data?.[0] ?? {})
@@ -95,9 +97,9 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       return detailPromise;
     };
     return [
-      { key: 'orders',   type: 'sales-order',            fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedOrders   ?? []) },
-      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedInvoices ?? []) },
-      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.returnReceipts ?? []) },
+      { key: 'orders',   type: 'sales-order',            fetch: (id, base) => getDetail(id, base).then(r => r.linkedOrders   ?? []) },
+      { key: 'invoices', type: 'sales-invoice',           fetch: (id, base) => getDetail(id, base).then(r => r.linkedInvoices ?? []) },
+      { key: 'returns',  type: 'return-material-receipt', fetch: (id, base) => getDetail(id, base).then(r => r.returnReceipts ?? []) },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipment?.id]);
@@ -193,7 +195,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           <EmailsCard onSend={isSendable ? openEmailModal : undefined} data-testid="EmailsCard__5d626b" />
           <RelatedDocumentsCard
             documentId={shipment.id}
-            token={token}
             apiBaseUrl={apiBaseUrl}
             specs={shipmentDocSpecs}
             data-testid="RelatedDocumentsCard__5d626b" />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_ICONS, CHIP_COLORS, fetchByCriteria } from '@/components/related-documents';
 import { useUI } from '@/i18n';
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, apiBaseUrl }) {
   const [orders, setOrders] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,16 +27,16 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     if (!recordId) { setLoading(false); return; }
     setLoading(true);
     Promise.all([
-      fetchByCriteria('sales-order', 'header', 'quotation', recordId, token, apiBaseUrl)
+      fetchByCriteria('sales-order', 'header', 'quotation', recordId, apiBaseUrl)
         .catch(() => []),
-      fetchByCriteria('sales-invoice', 'header', 'salesOrder', recordId, token, apiBaseUrl)
+      fetchByCriteria('sales-invoice', 'header', 'salesOrder', recordId, apiBaseUrl)
         .catch(() => []),
     ]).then(([orderRows, invoiceRows]) => {
       setOrders(orderRows);
       setInvoices(invoiceRows);
       setLoading(false);
     });
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apiBaseUrl, refreshKey]);
 
   return (
     <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
