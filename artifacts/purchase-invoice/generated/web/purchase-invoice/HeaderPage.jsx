@@ -10,7 +10,7 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
-import SifErrorBanner from '@/windows/custom/shared/SifErrorBanner';
+import SifErrorBanner from '@/windows/custom/purchase-invoice/SifErrorBanner';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
