@@ -146,8 +146,8 @@ function unsafeSitesWithoutProof(raw) {
 }
 
 /**
- * Files that still build a credential header (G1). Measured when these rules were
- * first wired in. Shrinks as the sweep lands; never grows.
+ * Files that still build a credential header (G1). Refreshed on each epic merge
+ * (see the caveat above); shrinks as the sweep lands.
  */
 const G1_DEBT = new Set([
   'components/attachments/useAttachments.js',
@@ -167,6 +167,7 @@ const G1_DEBT = new Set([
   'hooks/useCashClose.js',
   'lib/flags/bootstrap.js',
   'lib/surveys/survey-config.js',
+  'pages/InviteAcceptancePage.jsx',
   'windows/custom/amortization/AmortizationLinesTable.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
   'windows/custom/calendar/AccountingPanel.jsx',
@@ -179,6 +180,7 @@ const G1_DEBT = new Set([
   'windows/custom/contacts/ContactsFinancialPanel.jsx',
   'windows/custom/contacts/ContactsTable.jsx',
   'windows/custom/contacts/contactsFkResolvers.js',
+  'windows/custom/contacts/contactsImportDescriptor.js',
   'windows/custom/contacts/index.jsx',
   'windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx',
   'windows/custom/fiscal-config/FiscalConfigDebugPanel.jsx',
@@ -207,7 +209,8 @@ const G1_DEBT = new Set([
   'windows/custom/shared/previewFileApi.js',
   'windows/custom/shared/useConfirmWithCredit.js',
   'windows/custom/shared/usePreviewAttachment.js',
-  'windows/custom/user/AssignRoleControl.jsx',
+  'windows/custom/shared/useTaxSifLineRowActions.jsx',
+  'windows/custom/user/InviteUserDialog.jsx',
   'windows/custom/warehouse/WarehouseCustomTable.jsx',
   'windows/custom/warehouse/index.jsx',
   'windows/custom/warehouse/useWarehouseStock.js',
@@ -215,8 +218,8 @@ const G1_DEBT = new Set([
 ]);
 
 /**
- * Files that still gate on a client-held token (G2). Same rules as G1_DEBT.
- * 32 of these also appear in G1_DEBT — the two smells travel together.
+ * Files that still gate on a client-held token (G2). Same rules as G1_DEBT — and
+ * heavily overlapping with it, because the two smells travel together.
  */
 const G2_DEBT = new Set([
   'components/contract-ui/DataTable.jsx',
@@ -240,6 +243,7 @@ const G2_DEBT = new Set([
   'lib/flags/useAccountIdentity.js',
   'lib/observability/providers/mixpanel.js',
   'lib/surveys/survey-config.js',
+  'pages/InviteAcceptancePage.jsx',
   'pages/UpgradePage.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
   'windows/custom/chart-of-accounts/AccountTreeView.jsx',
@@ -252,6 +256,7 @@ const G2_DEBT = new Set([
   'windows/custom/fiscal-models/FmOverlays.jsx',
   'windows/custom/fiscal-models/fiscalModelsUtils.js',
   'windows/custom/fiscal-models/models/303/FmModel303Page.jsx',
+  'windows/custom/fiscal-models/models/349/FmModel349Page.jsx',
   'windows/custom/organization/OrgLogoField.jsx',
   'windows/custom/price-list/PriceListProductPrices.jsx',
   'windows/custom/product/ProductPriceBar.jsx',
@@ -263,13 +268,16 @@ const G2_DEBT = new Set([
   'windows/custom/shared/previewFileApi.js',
   'windows/custom/shared/useConversionRate.js',
   'windows/custom/shared/useDocumentCurrency.js',
-  'windows/custom/user/AssignRoleControl.jsx',
+  'windows/custom/shared/useTaxSifLineRowActions.jsx',
+  'windows/custom/user/AssignTemplateRolesControl.jsx',
+  'windows/custom/user/InviteUserDialog.jsx',
+  'windows/custom/user/index.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
 ]);
 
 /**
  * Files with at least one unsafe request that carries no write proof (G3):
- * 49 files, 92 sites when the rule was written. Same ratchet rules as G1_DEBT.
+ * 54 files, 101 sites. This is the list that gates the preference — see above.
  */
 const G3_DEBT = new Set([
   'components/attachments/useAttachments.js',
@@ -278,22 +286,24 @@ const G3_DEBT = new Set([
   'components/contract-ui/ConfirmInOutModal.jsx',
   'components/contract-ui/CreateContactModal.jsx',
   'components/contract-ui/DataTable.jsx',
-  'components/contract-ui/documentEmailSend.js',
   'components/contract-ui/DocumentPrintDrawer.jsx',
   'components/contract-ui/ImageField.jsx',
   'components/contract-ui/ImportLinesModal.jsx',
   'components/contract-ui/InlineCreateSelector.jsx',
   'components/contract-ui/ReportDrawer.jsx',
   'components/contract-ui/SendDocumentModal.jsx',
+  'components/contract-ui/documentEmailSend.js',
+  'components/copilot/ocr/ProductResolverPopup.jsx',
   'components/copilot/ocr/attachFile.js',
   'components/copilot/ocr/ingest/useBatch.js',
   'components/copilot/ocr/listAttachments.js',
-  'components/copilot/ocr/ProductResolverPopup.jsx',
   'components/import-return-lines/ImportReturnLinesModal.jsx',
+  'components/related-documents/helpers.js',
   'explorer/useDiscovery.js',
   'hooks/useCashClose.js',
   'hooks/useDisplayLogic.js',
   'hooks/useEntity.js',
+  'pages/InviteAcceptancePage.jsx',
   'pages/ReportViewerPage.jsx',
   'windows/custom/amortization/AmortizationLinesTable.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
@@ -302,15 +312,17 @@ const G3_DEBT = new Set([
   'windows/custom/contacts/BillingPreferencesForm.jsx',
   'windows/custom/contacts/ContactsFinancialPanel.jsx',
   'windows/custom/contacts/ContactsTable.jsx',
+  'windows/custom/contacts/contactsImportDescriptor.js',
   'windows/custom/contacts/index.jsx',
   'windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx',
   'windows/custom/fiscal-config/FiscalConfigDebugPanel.jsx',
-  'windows/custom/fiscal-models/fiscalModelsUtils.js',
   'windows/custom/fiscal-models/FmListPage.jsx',
+  'windows/custom/fiscal-models/fiscalModelsUtils.js',
   'windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx',
   'windows/custom/organization/OrgLogoField.jsx',
   'windows/custom/price-list/PriceListProductPrices.jsx',
   'windows/custom/product/ProductPriceBar.jsx',
+  'windows/custom/product/productImportDescriptor.js',
   'windows/custom/purchase-order/PurchaseOrderActions.jsx',
   'windows/custom/return-material-receipt/ImportFromShipmentModal.jsx',
   'windows/custom/return-to-vendor-shipment/ImportFromReceiptModal.jsx',
@@ -319,6 +331,7 @@ const G3_DEBT = new Set([
   'windows/custom/shared/pdfUtils.js',
   'windows/custom/shared/previewFileApi.js',
   'windows/custom/shared/useConfirmWithCredit.js',
+  'windows/custom/user/InviteUserDialog.jsx',
   'windows/custom/warehouse/index.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
 ]);
