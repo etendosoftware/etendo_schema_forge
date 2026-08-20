@@ -13655,7 +13655,7 @@
       "label": "Matched Purchase Invoices"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Client": {
       "label": "Client"
@@ -14625,7 +14625,7 @@
       "label": "Window Translation"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Role": {
       "label": "Role"
@@ -16457,6 +16457,11 @@
     "importErrorValueTooLong": "A value is too long for one of its fields.",
     "importErrorGeneric": "This row could not be imported. Open the details for the technical report or contact support.",
     "importErrorCountryUnresolved": "The country \"{country}\" could not be resolved to an existing record.",
+    "importErrorCategoryUnresolved": "The category \"{category}\" could not be resolved or created.",
+    "importErrorDependentAmbiguous": "Multiple records match \"{value}\". Please specify an exact code.",
+    "importErrorDependentUnresolved": "Record \"{value}\" could not be resolved.",
+    "importErrorDependentInvalidName": "Cannot generate a valid identifier from \"{value}\".",
+    "importErrorDependentKeyConflict": "Derived code \"{key}\" conflicts with existing record \"{existing}\".",
     "importErrorInvalidPrice": "The price \"{value}\" is not a valid number.",
     "importErrorNoPriceList": "No sales price list is configured, so the price could not be imported. Import the product without a price, or set up a sales price list first.",
     "noAccessTitle": "No access",
@@ -17267,6 +17272,14 @@
     "helpOpenChat": "Chat with us",
     "assignedRole": "Assigned Role",
     "noRoleAssigned": "No role assigned",
+    "assignedRolesLabel": "Assigned roles",
+    "noRolesAssigned": "No roles assigned",
+    "saveUserFirstForRoles": "Save the user first to assign roles",
+    "roleAssignmentSaveFailed": "Couldn't save the assigned roles",
+    "roleAssignmentSaveFailedAfterUserSaved": "The user was saved, but the roles couldn't be updated: {detail}",
+    "removeRoleAria": "Remove role",
+    "roleFilterAllRoles": "All roles",
+    "roleFilterSearchPlaceholder": "Search roles...",
     "roleNameAdmin": "Administrator",
     "roleNameFinance": "Finance",
     "roleNameSales": "Sales",
@@ -17287,6 +17300,14 @@
     "rolesLoadError": "Couldn't load roles.",
     "accessTierFull": "Full",
     "accessTierReadOnly": "Read-only",
+    "userRolesTabLabel": "User roles",
+    "userRolesTabEmptyState": "Select a role to view permissions",
+    "userRolesTabWindowColumn": "Window",
+    "userRolesTabGeneralCategory": "General",
+    "userRolesTabDashboardRow": "Home (Dashboard)",
+    "userRolesTabFavoritesRow": "Favorites",
+    "userRolesTabCopilotRow": "Copilot (AI Assistant)",
+    "usersGridRolesColumn": "Roles",
     "supportTabChat": "Chat",
     "supportTabTickets": "My tickets",
     "supportNewConversation": "New conversation",
@@ -20632,6 +20653,46 @@
     "firstStepsConnectBank": "Connect your bank",
     "firstStepsSetupPayments": "Set up payment methods",
     "firstStepsInviteTeam": "Invite your team",
+    "inviteUser": "Invite user",
+    "inviteUserDescriptionTitle": "Company user invitations",
+    "inviteUserDescription": "Invite people to join your company by email. They can accept with an existing account or register a new one.",
+    "inviteUserModalTitle": "Invite user to company",
+    "inviteUserModalDescription": "Enter the email address of the person you want to invite. They will receive an email to join this company.",
+    "inviteUserEmailLabel": "Email address",
+    "inviteUserEmailPlaceholder": "colleague@example.com",
+    "inviteUserSubmit": "Send invitation",
+    "inviteUserSending": "Sending...",
+    "inviteUserSuccessTitle": "Invitation sent",
+    "inviteUserSuccessMessage": "An invitation was sent to {email}. Status is now pending.",
+    "inviteUserPendingBadge": "Pending",
+    "inviteUserStatusLabel": "Status",
+    "inviteUserAlreadyMember": "This user is already a member of this company.",
+    "inviteUserNotFound": "Create this user in the organization before sending the invitation.",
+    "inviteUserNoRole": "Assign at least one active role in the organization before sending the invitation.",
+    "inviteUserPendingExists": "An active invitation is already pending for this email.",
+    "invitePageLoading": "Verifying invitation...",
+    "invitePageInvalidTitle": "Invalid or expired link",
+    "invitePageInvalidDescription": "This invitation link is invalid, expired, or has already been used.",
+    "invitePageExistingTitle": "Accept company invitation",
+    "invitePageExistingDescription": "You have been invited to join {companyName}.",
+      "invitePageExistingAccountNotice": "You already have an Etendo Go account ({email}). Sign in first, then accept the invitation.",
+      "invitePageAuthenticatedNotice": "You are signed in with the invited Etendo Go account. Continue to join this company.",
+    "invitePageAcceptButton": "Accept invitation",
+    "invitePageAccepting": "Accepting...",
+    "invitePageNewAccountTitle": "Join {companyName}",
+    "invitePageNewAccountDescription": "Create your Etendo Go account to join {companyName}.",
+    "invitePageNameLabel": "Full name",
+    "invitePageNamePlaceholder": "Jane Doe",
+    "invitePagePasswordLabel": "Password",
+    "invitePagePasswordPlaceholder": "Enter a strong password",
+    "invitePageRegisterAndAcceptButton": "Create account & join",
+    "invitePageCreatingAccount": "Creating account...",
+    "invitePageSuccessTitle": "Welcome to {companyName}!",
+    "invitePageSuccessDescription": "You have joined the company successfully.",
+    "invitePageGoToApp": "Go to application",
+    "invitePageSignIn": "Sign in",
+    "invitePageAlreadyAcceptedTitle": "Invitation already accepted",
+    "invitePageAlreadyAcceptedDescription": "You are already a member of {companyName}.",
     "firstStepsFirstInvoice": "Create your first invoice",
     "employeeDirectory": "Employee Directory",
     "hrUpdates": "HR Updates",
@@ -24145,7 +24206,7 @@
       "label": "Language"
     },
     "User": {
-      "label": "User"
+      "label": "Users"
     },
     "Client": {
       "label": "Client"
