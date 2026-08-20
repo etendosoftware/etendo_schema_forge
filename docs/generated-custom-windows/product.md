@@ -376,3 +376,19 @@ They also stop appearing in the `Others` form (`ProductForm.jsx`). No generator 
 Regenerated with `make regen ONLY=product FROM_CACHE=1` (contract `0.26.0 → 0.26.1`;
 `FROM_CACHE=1` is required in this environment or the local DB's missing `es_ES` ref-list
 translations strip enum labels repo-wide). `sf-validate-pipeline --scope=product`: OK.
+
+## Product import category resolution and auto-creation — ETP-4905
+
+Extended the Products CSV/TXT import descriptor (`productImportDescriptor.js`) and contract (`artifacts/product/decisions.json`) so product categories can be supplied, matched to existing categories, or created automatically when absent:
+
+- **Supported Headers / Aliases:**
+  - `categoryCode` / `codigoCategoria` / `código categoría` / `codigo_categoria` / `category_code`
+  - `categoryName` / `nombreCategoria` / `nombre categoría` / `nombre_categoria` / `category_name`
+  - `category` / `categoria` / `categoría` (fallback column)
+- **Resolution semantics:**
+  1. Exact match on category `searchKey` / `code`.
+  2. Normalized match on category `name` (case, trim, diacritics / accent-insensitive).
+  3. If ambiguous (>1 match), rejects the row with a clear, localized ambiguity error.
+  4. If no match exists, automatically creates the category using `categoryCode` (or derived uppercase slug from `name`) and links it to the imported product.
+- **Reuse & Concurrency Protection:** In-flight resolutions are cached per import run (`getResolutionCache`), ensuring that multiple rows referencing the same new category create it exactly once and reuse its ID across concurrent workers.
+- **Backward Compatibility:** Files without category columns retain existing behavior (server-side default category injection). Composite product-and-price batch operations remain fully functional.
