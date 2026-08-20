@@ -31,6 +31,22 @@ afterEach(() => {
 });
 
 describe('product import descriptor', () => {
+  it('carries the configured product UOM default into batch product operations', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url.includes('/sws/neo/product/product/defaults')) {
+        return { ok: true, json: async () => ({ defaults: { uOM: 'configured-unit-id' } }) };
+      }
+      return { ok: true, json: async () => ({ items: SALES_ITEMS }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ops = await buildOperations({ ...baseRow }, productConfig('tok-uom-default'));
+
+    assert.equal(ops[0].body.uOM, 'configured-unit-id');
+    assert.equal(fetchMock.mock.calls.length, 1);
+    assert.ok(fetchMock.mock.calls[0][0].includes('/sws/neo/product/product/defaults'));
+  });
+
   it('builds a product op plus a parentRef-linked price op when the row has a valid price, resolving the sales PLV once', async () => {
     const fetchMock = stubFetch(SALES_ITEMS);
     const ops = await buildOperations({ ...baseRow, price: '1234.50' }, productConfig('tok-valid'));
@@ -50,8 +66,9 @@ describe('product import descriptor', () => {
     assert.equal(price.body.listPrice, '1234.5');
     assert.equal(price.body.priceLimit, '1234.5');
     // The selector endpoint was hit with the spec-scoped URL and the bearer token.
-    assert.equal(fetchMock.mock.calls.length, 1);
-    const [url, opts] = fetchMock.mock.calls[0];
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 1);
+    const [url, opts] = priceFetchCalls[0];
     assert.ok(url.includes('/sws/neo/product/price/selectors/M_PriceList_Version_ID'), `unexpected url: ${url}`);
     assert.equal(opts.headers.Authorization, 'Bearer tok-valid');
   });
@@ -75,7 +92,8 @@ describe('product import descriptor', () => {
     assert.equal(absent.length, 1);
     assert.equal(absent[0].id, 'product');
     // A product-only row must never touch the price-list selector.
-    assert.equal(fetchMock.mock.calls.length, 0);
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 0);
   });
 
   it('throws a classified invalid-price error for a non-numeric cell — localized via config.translate, English fallback without', async () => {
@@ -126,6 +144,106 @@ describe('product import descriptor', () => {
       assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-1');
     }
     // The PENDING promise is cached synchronously, so even concurrent rows fire the fetch once.
-    assert.equal(fetchMock.mock.calls.length, 1);
+    const priceFetchCalls = fetchMock.mock.calls.filter(([url]) => url.includes('/price/selectors/'));
+    assert.equal(priceFetchCalls.length, 1);
+  });
+
+  describe('category resolution and auto-creation', () => {
+    const existingCategories = [
+      { id: 'CAT-ELEC', searchKey: 'ELEC', name: 'Electrónica' },
+      { id: 'CAT-FOOD', searchKey: 'FOOD', name: 'Alimentos' },
+      { id: 'CAT-DUP-1', searchKey: 'SERV-1', name: 'Servicios' },
+      { id: 'CAT-DUP-2', searchKey: 'SERV-2', name: 'Servicios' },
+    ];
+
+    it('resolves existing category by explicit categoryCode', async () => {
+      stubFetch(SALES_ITEMS);
+      const ops = await buildOperations(
+        { ...baseRow, categoryCode: 'ELEC' },
+        productConfig('tok-cat-1', { existingCategories }),
+      );
+      assert.equal(ops[0].body.productCategory, 'CAT-ELEC');
+    });
+
+    it('resolves existing category by normalized name when categoryName is supplied', async () => {
+      stubFetch(SALES_ITEMS);
+      const ops = await buildOperations(
+        { ...baseRow, categoryName: '  electrónica  ' },
+        productConfig('tok-cat-2', { existingCategories }),
+      );
+      assert.equal(ops[0].body.productCategory, 'CAT-ELEC');
+    });
+
+    it('resolves existing category via fallback category column', async () => {
+      stubFetch(SALES_ITEMS);
+      const ops = await buildOperations(
+        { ...baseRow, category: 'Alimentos' },
+        productConfig('tok-cat-3', { existingCategories }),
+      );
+      assert.equal(ops[0].body.productCategory, 'CAT-FOOD');
+    });
+
+    it('auto-creates new category when no match exists and assigns the created id', async () => {
+      stubFetch(SALES_ITEMS);
+      let createdCalls = 0;
+      const createCategoryFn = vi.fn(async ({ searchKey, name }) => {
+        createdCalls += 1;
+        return { id: 'CAT-NEW-1', searchKey, name };
+      });
+
+      const ops = await buildOperations(
+        { ...baseRow, category: 'Muebles y Hogar' },
+        productConfig('tok-cat-4', { existingCategories: [...existingCategories], createCategoryFn }),
+      );
+      assert.equal(ops[0].body.productCategory, 'CAT-NEW-1');
+      assert.equal(createdCalls, 1);
+      assert.equal(createCategoryFn.mock.calls[0][0].searchKey, 'MUEBLES_Y_HOGAR');
+      assert.equal(createCategoryFn.mock.calls[0][0].name, 'Muebles y Hogar');
+    });
+
+    it('reuses auto-created category across concurrent rows in the same import run', async () => {
+      stubFetch(SALES_ITEMS);
+      let createdCalls = 0;
+      const createCategoryFn = vi.fn(async ({ searchKey, name }) => {
+        createdCalls += 1;
+        return { id: 'CAT-HERR', searchKey, name };
+      });
+
+      const rows = [
+        { searchKey: 'P-1', name: 'Martillo', category: 'Herramientas' },
+        { searchKey: 'P-2', name: 'Destornillador', category: 'Herramientas' },
+        { searchKey: 'P-3', name: 'Taladro', category: 'Herramientas' },
+      ];
+
+      const results = await Promise.all(
+        rows.map((r) => buildOperations(r, productConfig('tok-cat-concurrency', { existingCategories: [...existingCategories], createCategoryFn }))),
+      );
+
+      assert.equal(createdCalls, 1);
+      for (const ops of results) {
+        assert.equal(ops[0].body.productCategory, 'CAT-HERR');
+      }
+    });
+
+    it('throws an ambiguity error when categoryName matches multiple categories', async () => {
+      stubFetch(SALES_ITEMS);
+      await assert.rejects(
+        () => buildOperations(
+          { ...baseRow, categoryName: 'Servicios' },
+          productConfig('tok-cat-ambig', { existingCategories }),
+        ),
+        /Multiple records match "Servicios"/,
+      );
+    });
+
+    it('preserves legacy behavior (product-only without category field) when category fields are empty or absent', async () => {
+      stubFetch(SALES_ITEMS);
+      const ops = await buildOperations(
+        { ...baseRow, category: '', categoryCode: null, categoryName: undefined },
+        productConfig('tok-cat-legacy', { existingCategories }),
+      );
+      assert.equal(ops.length, 1);
+      assert.equal(ops[0].body.productCategory, undefined);
+    });
   });
 });

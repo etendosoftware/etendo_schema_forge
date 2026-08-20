@@ -1,17 +1,18 @@
 import { forwardRef } from 'react';
 import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
-// @sf-generated-start columns:userRoles
+// @sf-generated-start columns:serviceProject
 const columns = [
-  { key: 'role', column: 'AD_Role_ID', type: 'selector', label: 'Role', required: true },
-  { key: 'roleAdmin', column: 'Is_Role_Admin', type: 'boolean', label: 'Role Administrator', required: true },
+  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, required: true },
 ];
-// @sf-generated-end columns:userRoles
+// @sf-generated-end columns:serviceProject
 
-const filters = ['role'];
+const filters = ['searchKey', 'name'];
 
-// @sf-generated-start component:UserRolesTable
-const UserRolesTable = forwardRef(function UserRolesTable(props, ref) {
+// @sf-generated-start component:ServiceProjectTable
+const ServiceProjectTable = forwardRef(function ServiceProjectTable(props, ref) {
   // Inline-editable layout always uses InlineLinesPanel for existing rows so column
   // widths (flex layout) never shift when the add-row form opens. When addRow is
   // active we render a header-hidden, data-hidden DataTable below for just the
@@ -32,5 +33,5 @@ const UserRolesTable = forwardRef(function UserRolesTable(props, ref) {
   return <DataTable columns={columns} filters={filters} {...props} />;
 });
 
-export default UserRolesTable;
-// @sf-generated-end component:UserRolesTable
+export default ServiceProjectTable;
+// @sf-generated-end component:ServiceProjectTable

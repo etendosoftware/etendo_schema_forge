@@ -30,16 +30,28 @@ import { login } from '../helpers/auth.js';
 /**
  * Navigate to a Modelo 303 declaration by creating it through the real UI flow.
  *
- * Registers a specific mock for /fiscal303/declarations AFTER login so that
- * it takes priority over the sws/** catch-all registered by login()
- * (Playwright gives precedence to the last-registered route).
+ * Registers specific mocks for /fiscal-models-catalog and /fiscal303/declarations
+ * AFTER login so they take priority over the sws/** catch-all registered by
+ * login() (Playwright gives precedence to the last-registered route).
  * POST returns a declaration with the requested year/period so the detail view
  * renders the correct layout.
  */
 async function goToDeclaration(page, { year, period }) {
-  // login() registers a **/sws/** catch-all; our more-specific route must be
+  // login() registers a **/sws/** catch-all; our more-specific routes must be
   // added AFTER it so Playwright (last-registered wins) picks ours first.
   await login(page);
+
+  // FmListPage's activeModels state gates both the "Nueva declaración" button
+  // and the row-visibility filter (`activeDecls = decls.filter(d =>
+  // activeModels[d.model])`). login()'s generic /sws/** catch-all answers this
+  // URL with `{ data: [], totalRows: 0 }`, whose truthy-but-wrong-shape `data`
+  // key coincidentally satisfies `activeCount > 0` (so the button still
+  // renders) but leaves `activeModels['303']` undefined — silently hiding any
+  // newly created declaration from the table. Mock it explicitly so model 303
+  // is active and the created row is visible.
+  await page.route('**/fiscal-models-catalog', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ '303': true, '349': false }) });
+  });
 
   await page.route('**/fiscal303/declarations', (route) => {
     const method = route.request().method();
@@ -69,11 +81,32 @@ async function goToDeclaration(page, { year, period }) {
   // Open the "Nueva declaración" modal
   await page.getByText('+ Nueva declaración').click();
 
-  // The modal: first select = model (303/349), second select = year, third select = period
-  const modal = page.locator('.fm-present-modal');
-  await modal.locator('select').nth(1).selectOption(String(year));
-  await modal.locator('select').nth(2).selectOption(period);
-  await modal.getByRole('button', { name: /Crear/i }).click();
+  // NewDeclModal (post-restyle): Modelo defaults to the first active model
+  // (303), so we only need to drive Año → Frecuencia → Período. Año is a
+  // dropdown trigger button (`.fm-newdecl-year-trigger`) that opens a
+  // `role="listbox"` panel of `role="option"` rows — mirrors the Modelo
+  // trigger/`ModelSelectMenu` dropdown pattern. Frecuencia and Período
+  // remain plain pill buttons (unaffected by the restyle).
+  const modal = page.locator('.fm-config-modal.fm-newdecl-modal');
+  await expect(modal).toBeVisible();
+
+  // Año: open the year dropdown, then click the option matching the exact target year.
+  await modal.locator('.fm-newdecl-year-trigger').click();
+  await modal.getByRole('option', { name: String(year), exact: true }).click();
+
+  // Frecuencia: select quarterly/monthly so the matching Período grid renders
+  // before we try to click the period pill (a 2-digit month like "01" only
+  // exists in the monthly grid; "T1".."T4" only exist in the quarterly grid).
+  const isMonthly = /^\d{2}$/.test(period);
+  await modal
+    .getByRole('group', { name: 'Frecuencia' })
+    .getByRole('button', { name: isMonthly ? 'Mensual' : 'Trimestral', exact: true })
+    .click();
+
+  // Período: click the pill matching the exact target period.
+  await modal.getByRole('button', { name: period, exact: true }).click();
+
+  await modal.getByRole('button', { name: 'Crear declaración', exact: true }).click();
 
   // Click the new row to open the declaration detail
   const row = page.locator('tr').filter({ hasText: String(year) }).first();
@@ -371,13 +404,16 @@ test.describe('FM 303 — sin_actividad checkbox', () => {
   });
 });
 
-// ── Suite 7 — Year <select> in NewDeclModal shows only supported years ────────
-// The modal year selector must be a <select> (not a free-text input) and must
-// expose exactly the SUPPORTED_YEARS options (2021–2026).
+// ── Suite 7 — Año dropdown in NewDeclModal shows only supported years ───────
+// The Año selector is a trigger button (`.fm-newdecl-year-trigger`, not a
+// <select>) that opens a `role="listbox"` panel of `role="option"` rows, one
+// per SUPPORTED_YEARS value (2021–2026, from
+// tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
+// — keep this list in sync if PATCHES/BASE_YEAR ever change).
 // This suite uses its own beforeEach that stops after opening the modal so it
 // doesn't depend on a complete declaration creation flow.
 
-test.describe('FM 303 — NewDeclModal year select shows supported years only', () => {
+test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     // Mock declarations endpoint so the page loads cleanly
@@ -389,27 +425,31 @@ test.describe('FM 303 — NewDeclModal year select shows supported years only', 
     await page.getByText('+ Nueva declaración').click();
   });
 
-  test('year field is a <select> element, not a free-text input', async ({ page }) => {
-    const modal = page.locator('.fm-present-modal');
-    // nth(0) = model select (303/349), nth(1) = year select
-    const yearSelect = modal.locator('select').nth(1);
-    await expect(yearSelect).toBeVisible();
+  test('year field renders as a dropdown trigger button, not a <select> element', async ({ page }) => {
+    const modal = page.locator('.fm-config-modal.fm-newdecl-modal');
+    const yearTrigger = modal.locator('.fm-newdecl-year-trigger');
+    await expect(yearTrigger).toBeVisible();
+    await expect(modal.locator('select')).toHaveCount(0);
   });
 
-  test('year select has options for all supported years 2021 to 2026', async ({ page }) => {
-    const modal = page.locator('.fm-present-modal');
-    const yearSelect = modal.locator('select').nth(1);
+  test('Año dropdown lists an option for all supported years 2021 to 2026', async ({ page }) => {
+    const modal = page.locator('.fm-config-modal.fm-newdecl-modal');
+    await modal.locator('.fm-newdecl-year-trigger').click();
+    const listbox = modal.getByRole('listbox');
+    await expect(listbox).toBeVisible();
     for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
-      await expect(yearSelect.locator(`option[value="${year}"]`)).toHaveCount(1);
+      await expect(listbox.getByRole('option', { name: String(year), exact: true })).toHaveCount(1);
     }
   });
 
-  test('year select does not have options outside the supported range', async ({ page }) => {
-    const modal = page.locator('.fm-present-modal');
-    const yearSelect = modal.locator('select').nth(1);
+  test('Año dropdown does not list an option outside the supported range', async ({ page }) => {
+    const modal = page.locator('.fm-config-modal.fm-newdecl-modal');
+    await modal.locator('.fm-newdecl-year-trigger').click();
+    const listbox = modal.getByRole('listbox');
+    await expect(listbox).toBeVisible();
     // Years outside supported range must not appear
     for (const badYear of [2019, 2020, 2027, 2030]) {
-      await expect(yearSelect.locator(`option[value="${badYear}"]`)).toHaveCount(0);
+      await expect(listbox.getByRole('option', { name: String(badYear), exact: true })).toHaveCount(0);
     }
   });
 });

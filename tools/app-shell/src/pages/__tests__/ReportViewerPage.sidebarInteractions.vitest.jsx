@@ -142,6 +142,10 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     vi.restoreAllMocks();
   });
 
+  // ETP-4898: the `select` parameter type now renders a CreatableSearchSelect
+  // (input[role=combobox] + portalled option list + SelectorChip) instead of a
+  // native <select>, so the interaction is click-input -> click-option, and the
+  // resulting value is asserted on the collapsed chip.
   it('changes the select value via onChange', async () => {
     mockSearchParams = new URLSearchParams({ report: 'report-select' });
     const user = userEvent.setup();
@@ -153,9 +157,18 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Group By')).toBeInTheDocument());
 
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'category');
-    expect(select).toHaveValue('category');
+    // Open the selector for the `groupBy` parameter (scoped by testid, not by the
+    // generic combobox role — other comboboxes may coexist in the sidebar).
+    await user.click(screen.getByTestId('field-groupBy'));
+
+    // The dropdown is portalled to document.body -> query via `screen`.
+    const option = await screen.findByTestId('option-groupBy-category');
+    await user.click(option);
+
+    // Selecting collapses the input into a chip carrying the chosen option label.
+    const chip = await screen.findByTestId('field-groupBy-chip');
+    expect(chip).toHaveTextContent('Category');
+    expect(screen.queryByTestId('field-groupBy')).toBeNull();
   });
 
   it('toggles a boolean parameter by clicking the row container', async () => {

@@ -1022,9 +1022,9 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
   return true;
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
-  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {
@@ -1082,14 +1082,13 @@ function renderNewRecordSaveActions({
  */
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, blockSaveForBalance,
+  ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
     <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
     }}>
       {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
@@ -1289,7 +1288,7 @@ export function DetailView({
   requiredHeaderFields = null,
   showDetailFooterTotals = undefined,
   onAfterSave,
-  onAfterCreate,
+  onAfterCreate, onAfterExistingSave,
   additionalDirtyState = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
@@ -1315,8 +1314,7 @@ export function DetailView({
   showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
-  formScrollPaddingB = 'pb-6',
-  secondaryTabContentPaddingT = 'pt-3',
+  formScrollPaddingB = 'pb-6', secondaryTabContentPaddingT = 'pt-3',
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
@@ -1329,7 +1327,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [],
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
   // ETP-4576 — nothing in this component decides how a request authenticates, so
   // no credential is read here and none is threaded into the exported helpers
@@ -2919,7 +2917,7 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal,
   };
@@ -3513,7 +3511,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={lineHiddenColumns}
+                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, extractErrorMessage, ui, fields: allEntryFields })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{

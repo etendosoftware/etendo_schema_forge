@@ -251,3 +251,46 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
     });
   });
 });
+
+// ETP-4656 — additive coverage: `selectionBarRightActions` also receives a
+// `reselectFailed` field (the same `applyBulkDeleteOutcome` callback wired as
+// useBulkRowDelete's `onSuccess` above), so a host running its own delete
+// loop (e.g. Contacts) gets the exact same "reselect only the failed rows"
+// outcome handling for free. Reuses the same assertion mechanism the
+// "onSuccess outcome handling" block above uses (selection-count testid,
+// bulk-delete-selected's remaining count, deselectTrigger/deselectRowIds).
+describe('ListView — selectionBarRightActions.reselectFailed (ETP-4656)', () => {
+  it('passes a reselectFailed function to selectionBarRightActions, and calling it reproduces the partial-failure outcome handling', () => {
+    let capturedArgs = null;
+    const selectionBarRightActions = (args) => {
+      capturedArgs = args;
+      return <button data-testid="host-own-action">Host action</button>;
+    };
+    render(
+      <ListView
+        entity="testEntity"
+        Table={SelectableCapturingTable}
+        entityLabel="Test Entity"
+        windowName="test-entity"
+        token="fake-token"
+        apiBaseUrl="http://localhost/api"
+        selectionBarRightActions={selectionBarRightActions}
+      />
+    );
+    fireEvent.click(screen.getByTestId('trigger-select'));
+
+    expect(typeof capturedArgs.reselectFailed).toBe('function');
+
+    const succeeded = [{ id: 'r1' }];
+    const failed = [{ id: 'r2' }];
+    act(() => { capturedArgs.reselectFailed(succeeded, failed); });
+
+    expect(refreshMock).toHaveBeenCalled();
+    // Only the failed row remains selected -> selection count reflects 1, not 2.
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(1)');
+    // DataTable's deselect mechanism is told to drop the succeeded id.
+    expect(capturedDeselect.trigger).toBe(1);
+    expect(capturedDeselect.ids).toEqual(['r1']);
+  });
+});

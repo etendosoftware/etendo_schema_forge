@@ -6,6 +6,7 @@ import {
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
+import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { useUI } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
@@ -65,10 +66,31 @@ function CurrencyBadge({ iso }) {
   );
 }
 
-/** Field wrapper that doubles as the chip host and the search-input box (border + focus ring). */
-const FIELD_WRAPPER_CLS = 'relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] focus-within:border-[hsl(var(--foreground))] focus-within:ring-[3px] focus-within:ring-foreground/[0.08]';
+/**
+ * Field wrapper that doubles as the chip host and the search-input box.
+ *
+ * Same shell `CreatableSearchSelect` draws for the FK pickers of every generated window (and that
+ * `forms/fields.jsx`'s ChipSelect now draws too): shared FIELD_HEIGHT, rounded-lg, hover fill and a
+ * ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own focus
+ * treatment, which made both pickers of this modal 4px taller and differently rounded than the
+ * amount input sitting between them.
+ *
+ * `group` is load-bearing, not decoration: SelectorChip's clear (X) is `opacity-0
+ * group-hover:opacity-100 group-focus-within:opacity-100`, so without a `.group` ancestor it stays
+ * permanently invisible — the X was in the DOM here but never shown, so a chosen destination
+ * account or accounting concept could not be cleared at all.
+ */
+const FIELD_WRAPPER_CLS = `group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))] focus-within:ring-2 focus-within:ring-primary`;
 /** Borderless input used inside FIELD_WRAPPER_CLS. */
 const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--text-disabled))]';
+
+/**
+ * Shell for this modal's own plain inputs (amount, conversion rate, description). Carries the same
+ * height, radius and focus tokens as FIELD_WRAPPER_CLS, so the vertical stack of pickers and inputs
+ * lines up instead of mixing 36px and 40px rows — aligning only the pickers would just move the
+ * mismatch one field down.
+ */
+const PLAIN_FIELD_CLS = `${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] focus:outline-none focus:ring-2 focus:ring-primary`;
 
 /**
  * Floating list panel rendered inline (NOT portaled) so it scrolls with wheel/touchpad inside the
@@ -233,7 +255,7 @@ function AmountField({ value, onChange, currencyIso, testId }) {
   return (
     <div className="relative">
       <input
-        className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
+        className={`${PLAIN_FIELD_CLS} w-full bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
         inputMode="decimal"
         value={value}
@@ -426,14 +448,14 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <input
-                    className="h-10 min-w-0 flex-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
+                    className={`${PLAIN_FIELD_CLS} min-w-0 flex-1 bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
                     placeholder={ui('financeAccountTransferRatePlaceholder')}
                     inputMode="decimal"
                     value={conversionRate}
                     onChange={(e) => setConversionRate(sanitizeNumeric(e.target.value))}
                     data-testid="transfer-rate" />
                   <div
-                    className="flex h-10 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-md border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-2.5 text-sm leading-5 tabular-nums text-[hsl(var(--foreground))]"
+                    className={`flex ${FIELD_HEIGHT} min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-2.5 text-sm leading-5 tabular-nums text-[hsl(var(--foreground))]`}
                     title={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
                     aria-label={`${ui('financeAccountTransferReceiveAmount')}: ${formatCurrency(dest?.currencyIso, receiveAmount)}`}
                     data-testid="transfer-receive-amount"
@@ -500,7 +522,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           <div className="flex flex-col gap-1.5">
             <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
             <input
-              className="h-10 w-full rounded-md border border-[hsl(var(--border-control))] bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))] focus:outline-none focus:border-[hsl(var(--foreground))] focus:ring-[3px] focus:ring-foreground/[0.08]"
+              className={`${PLAIN_FIELD_CLS} w-full bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))]`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />

@@ -32,6 +32,8 @@ export default function ConfirmWithCreditButtonBase({
 
   if (status !== 'DR' && status !== 'CO') return null;
 
+  const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
+
   return (
     <>
       {status === 'DR' && (
@@ -57,8 +59,8 @@ export default function ConfirmWithCreditButtonBase({
           recordId={data?.id || recordId}
           specName={specName}
           entityName={entityName}
-          invoiceAction="createReturnInvoice"
-          defaultCreateInvoice={true}
+          invoiceAction={isFullyInvoiced ? undefined : 'createReturnInvoice'}
+          defaultCreateInvoice={!isFullyInvoiced}
           title={confirmModalTitle}
           docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
           infoRowPre={infoRowPre}

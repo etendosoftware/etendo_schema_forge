@@ -532,3 +532,37 @@ export function useSupportChat() {
   if (!ctx) throw new Error('useSupportChat must be used inside SupportChatProvider');
   return ctx;
 }
+
+// Same defensive-fallback shape as useFavorites() in FavoritesContext.jsx — for
+// callers (e.g. a page-level "help" menu item) that need to work whether or not
+// they're mounted under SupportChatProvider (unit tests that render a page in
+// isolation, Storybook, etc.), instead of hard-throwing like useSupportChat().
+// Real app usage always has the provider (see AppLayout.jsx), so production
+// behavior is unaffected — only the missing-provider case gets a safe no-op.
+export function useSupportChatSafe() {
+  const ctx = React.useContext(SupportChatContext);
+  if (!ctx) {
+    return {
+      state: { ...INITIAL_STATE, unreadCount: 0 },
+      actions: {
+        open: () => {},
+        close: () => {},
+        setTab: () => {},
+        loadConversations: () => {},
+        loadMessages: () => {},
+        startConversation: () => {},
+        sendMessage: () => {},
+        closeConversation: () => {},
+        reopenConversation: () => {},
+        submitRating: () => {},
+        dismissRating: () => {},
+        selectConversation: () => {},
+        setInput: () => {},
+        addPendingFile: () => {},
+        removePendingFile: () => {},
+        getLocalImageUrl: () => null,
+      },
+    };
+  }
+  return ctx;
+}

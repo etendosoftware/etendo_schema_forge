@@ -2,6 +2,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -9,9 +10,35 @@ vi.mock('@/i18n', () => ({
 vi.mock('./fiscal-models.css', () => ({}));
 vi.mock('../fiscal-models.css', () => ({}));
 
+// Radix dropdown — passthrough wrappers so menu items render immediately
+// without needing portal/pointer-event plumbing (mirrors MovementRowKebab.vitest.jsx).
+vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
+  DropdownMenu: ({ children }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick, 'data-testid': dtid, ...rest }) => (
+    <button role="menuitem" onClick={onClick} data-testid={dtid} {...rest}>
+      {children}
+    </button>
+  ),
+}));
+
+const toggleFavorite = vi.fn();
+let mockIsFavorite = vi.fn(() => false);
+vi.mock('@/components/layout/FavoritesContext', () => ({
+  useFavorites: () => ({ toggleFavorite, isFavorite: mockIsFavorite }),
+}));
+
+const supportSetTab = vi.fn();
+const supportOpen = vi.fn();
+vi.mock('@/components/support/SupportChatContext.jsx', () => ({
+  useSupportChatSafe: () => ({ actions: { setTab: supportSetTab, open: supportOpen } }),
+}));
+
 import {
-  KpiWidget, StatusPill, StatusPillMenu, Tabs, Banner,
+  KpiWidget, StatusPill, Tabs, Banner,
   EmptyState, Stepper, NumberedStepper, SectionCard, SidePanel,
+  MoreOptionsMenu,
 } from '../FmCommon.jsx';
 
 // ── KpiWidget ─────────────────────────────────────────────────────────────────
@@ -45,6 +72,68 @@ describe('KpiWidget', () => {
   });
 });
 
+// ── KpiWidget — click-to-filter (onClick/active, ETP-4755) ─────────────────────
+
+describe('KpiWidget — onClick/active (opt-in click-to-filter)', () => {
+  it('does not set role="button" when onClick is omitted (regression guard for 303/349 plain KPIs)', () => {
+    const { container } = render(<KpiWidget label="Test" value={1} />);
+    const card = container.firstChild;
+    expect(card.getAttribute('role')).toBeNull();
+    expect(card.getAttribute('tabindex')).toBeNull();
+    expect(card.getAttribute('aria-pressed')).toBeNull();
+  });
+
+  it('sets role="button" and tabIndex when onClick is provided', () => {
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={vi.fn()} />);
+    const card = container.firstChild;
+    expect(card.getAttribute('role')).toBe('button');
+    expect(card.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('sets aria-pressed="true" when active is true', () => {
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={vi.fn()} active />);
+    expect(container.firstChild.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('sets aria-pressed="false" when active is false/omitted but onClick is provided', () => {
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={vi.fn()} />);
+    expect(container.firstChild.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('calls onClick when clicked', () => {
+    const onClick = vi.fn();
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={onClick} />);
+    fireEvent.click(container.firstChild);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClick on Enter key press', () => {
+    const onClick = vi.fn();
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={onClick} />);
+    fireEvent.keyDown(container.firstChild, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClick on Space key press', () => {
+    const onClick = vi.fn();
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={onClick} />);
+    fireEvent.keyDown(container.firstChild, { key: ' ' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onClick on other key presses', () => {
+    const onClick = vi.fn();
+    const { container } = render(<KpiWidget label="Test" value={1} onClick={onClick} />);
+    fireEvent.keyDown(container.firstChild, { key: 'Tab' });
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when a key is pressed and onClick is omitted', () => {
+    const { container } = render(<KpiWidget label="Test" value={1} />);
+    expect(() => fireEvent.keyDown(container.firstChild, { key: 'Enter' })).not.toThrow();
+  });
+});
+
 // ── StatusPill ────────────────────────────────────────────────────────────────
 
 describe('StatusPill', () => {
@@ -64,49 +153,6 @@ describe('StatusPill', () => {
     const { container } = render(<StatusPill status="skipped" />);
     const pill = container.querySelector('.fm-status-pill');
     expect(pill.className).toContain('fm-status-pill--grey');
-  });
-});
-
-// ── StatusPillMenu ────────────────────────────────────────────────────────────
-
-describe('StatusPillMenu', () => {
-  it('renders a trigger button with the current status pill', () => {
-    const { container } = render(<StatusPillMenu status="pending" onStatusChange={vi.fn()} />);
-    const trigger = container.querySelector('.fm-status-pill-menu__trigger');
-    expect(trigger).toBeTruthy();
-  });
-
-  it('menu is hidden initially', () => {
-    const { container } = render(<StatusPillMenu status="draft" onStatusChange={vi.fn()} />);
-    expect(container.querySelector('.fm-status-menu')).toBeNull();
-  });
-
-  it('opens menu when trigger is clicked', () => {
-    const { container } = render(<StatusPillMenu status="draft" onStatusChange={vi.fn()} />);
-    const trigger = container.querySelector('.fm-status-pill-menu__trigger');
-    fireEvent.click(trigger);
-    expect(container.querySelector('.fm-status-menu')).toBeTruthy();
-  });
-
-  it('calls onStatusChange with selected status when menu item clicked', () => {
-    const onStatusChange = vi.fn();
-    const { container } = render(<StatusPillMenu status="pending" onStatusChange={onStatusChange} />);
-    fireEvent.click(container.querySelector('.fm-status-pill-menu__trigger'));
-    const options = container.querySelectorAll('[role="option"]');
-    // Click on "ready" option (look for it by text)
-    const readyOpt = Array.from(options).find(el => el.textContent.includes('fm.status.ready'));
-    if (readyOpt) {
-      fireEvent.click(readyOpt);
-      expect(onStatusChange).toHaveBeenCalledWith('ready');
-    }
-  });
-
-  it('closes menu after a status selection', () => {
-    const { container } = render(<StatusPillMenu status="pending" onStatusChange={vi.fn()} />);
-    fireEvent.click(container.querySelector('.fm-status-pill-menu__trigger'));
-    const options = container.querySelectorAll('[role="option"]');
-    fireEvent.click(options[0]);
-    expect(container.querySelector('.fm-status-menu')).toBeNull();
   });
 });
 
@@ -309,5 +355,79 @@ describe('SectionCard', () => {
   it('applies flush class when flush prop is true', () => {
     const { container } = render(<SectionCard flush>c</SectionCard>);
     expect(container.querySelector('.fm-section-card--flush')).toBeTruthy();
+  });
+});
+
+// ── MoreOptionsMenu ─────────────────────────────────────────────────────────
+// Real, functional kebab (favorites + help) — list header + 303/349 detail
+// headers (ETP-4755). Tested directly here since every page-level suite mocks
+// FmCommon.jsx wholesale and can't exercise the real component.
+
+describe('MoreOptionsMenu', () => {
+  beforeEach(() => {
+    toggleFavorite.mockClear();
+    supportSetTab.mockClear();
+    supportOpen.mockClear();
+    mockIsFavorite = vi.fn(() => false);
+  });
+
+  it('renders the trigger button', () => {
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    expect(screen.getByTestId('fm-more-options-trigger')).toBeTruthy();
+  });
+
+  it('renders a favorites item when favKey is provided', () => {
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    expect(screen.getByTestId('fm-more-options-favorite')).toBeTruthy();
+  });
+
+  it('does not render a favorites item when favKey is omitted', () => {
+    render(<MoreOptionsMenu />);
+    expect(screen.queryByTestId('fm-more-options-favorite')).toBeNull();
+  });
+
+  it('shows "add to favorites" wording when isFavorite is false', () => {
+    mockIsFavorite = vi.fn(() => false);
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    expect(document.body.textContent).toContain('addToFavorites');
+    expect(document.body.textContent).not.toContain('removeFromFavorites');
+  });
+
+  it('shows "remove from favorites" wording when isFavorite is true', () => {
+    mockIsFavorite = vi.fn(() => true);
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    expect(document.body.textContent).toContain('removeFromFavorites');
+    expect(document.body.textContent).not.toContain('addToFavorites');
+  });
+
+  it('calls toggleFavorite with favKey and favLabel when the favorites item is clicked', () => {
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    fireEvent.click(screen.getByTestId('fm-more-options-favorite'));
+    expect(toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Declaraciones');
+  });
+
+  it('calls isFavorite with favKey to decide the favActive state', () => {
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    expect(mockIsFavorite).toHaveBeenCalledWith('fiscal-models');
+  });
+
+  it('renders a help item', () => {
+    render(<MoreOptionsMenu />);
+    expect(screen.getByTestId('fm-more-options-help')).toBeTruthy();
+    expect(document.body.textContent).toContain('pageHelp');
+  });
+
+  it('calls setTab("ayuda") and open() when the help item is clicked', () => {
+    render(<MoreOptionsMenu />);
+    fireEvent.click(screen.getByTestId('fm-more-options-help'));
+    expect(supportSetTab).toHaveBeenCalledWith('ayuda');
+    expect(supportOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('works with userEvent click as well (favorites)', async () => {
+    const user = userEvent.setup();
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+    await user.click(screen.getByTestId('fm-more-options-favorite'));
+    expect(toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Declaraciones');
   });
 });
