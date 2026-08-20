@@ -68,7 +68,10 @@
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
         { "target": "name", "aliases": ["nombre"] },
         { "target": "description", "aliases": ["descripcion", "descripción"] },
-        { "target": "price", "aliases": ["precio"], "label": "Price" }
+        { "target": "price", "aliases": ["precio"], "label": "Price" },
+        { "target": "categoryCode", "aliases": ["codigocategoria", "códigocategoría", "codigo_categoria", "código_categoría", "category_code"], "label": "Category Code" },
+        { "target": "categoryName", "aliases": ["nombrecategoria", "nombrecategoría", "nombre_categoria", "nombre_categoría", "category_name"], "label": "Category Name" },
+        { "target": "category", "aliases": ["categoria", "categoría"], "label": "Category" }
       ]
     }
   },

@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-19T19:35:56.607Z",
-  "checksum": "c2925dc80561dbe8",
+  "updatedAt": "2026-08-14T12:37:37.912Z",
+  "checksum": "8a0c70cdd119dbf8",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -130,6 +130,42 @@
               "precio"
             ],
             "label": "Price"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigocategoria",
+              "códigocategoría",
+              "codigo_categoria",
+              "código_categoría",
+              "category_code"
+            ],
+            "label": "Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombrecategoria",
+              "nombrecategoría",
+              "nombre_categoria",
+              "nombre_categoría",
+              "category_name"
+            ],
+            "label": "Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "label": "Category"
           }
         ]
       },
@@ -2491,6 +2527,42 @@
               "precio"
             ],
             "label": "Price"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigocategoria",
+              "códigocategoría",
+              "codigo_categoria",
+              "código_categoría",
+              "category_code"
+            ],
+            "label": "Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombrecategoria",
+              "nombrecategoría",
+              "nombre_categoria",
+              "nombre_categoría",
+              "category_name"
+            ],
+            "label": "Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "label": "Category"
           }
         ]
       },

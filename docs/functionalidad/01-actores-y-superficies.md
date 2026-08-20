@@ -22,7 +22,7 @@
 | Upgrade / checkout de pago | `/upgrade` → `UpgradePage.jsx` | Cuenta con ≥1 tenant, flag `tenant-upgrade` |
 | Selector de entorno + badge Demo/Productive | `SideMenu.jsx` (header + dropdown "switch company") | Cualquier cuenta con ≥1 tenant, flag `tenant-upgrade` |
 | Resumen de roles del tenant | `/roles` → `RolesOverviewPage.jsx` | Admin / client-admin |
-| Asignación de rol a un usuario | Ventana `User` (`Configuración > Usuarios`) → `AssignRoleControl.jsx` (`headerExtra.customForm`) | Quien tenga acceso de escritura a la ventana `User` (AD_Window_Access) |
+| Asignación de roles a un usuario | Ventana `User` (`Configuración > Usuarios`) → `AssignTemplateRolesControl.jsx` (`headerExtra.customForm`) + tab "Roles del usuario" (`UserRolesTab.jsx`) | Quien tenga acceso de escritura a la ventana `User` (AD_Window_Access) |
 | Menú de navegación filtrado por rol | `AppLayout.jsx` + `useRoleMenu.js` + `registry.js` | Todo usuario autenticado |
 | Ajustes (rol/org de solo lectura) | `SettingsPage.jsx` | Todo usuario autenticado — ya no permite cambiar de rol (ETP-3690) |
 | Acción "Demo" (no relacionada con tenants) | Ventana Fiscal Models → `FmListPage.jsx` kebab menu | Cualquier usuario con la ventana abierta, sin gate |
