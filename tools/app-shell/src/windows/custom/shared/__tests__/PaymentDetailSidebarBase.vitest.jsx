@@ -75,6 +75,28 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     expect(reactivatedItems).toHaveLength(1);
   });
 
+  it('says "confirmado · en progreso" while the transfer is only authorized (ETP-4895)', async () => {
+    // The plain key reads "Cobro confirmado · depositado", with the word baked into the
+    // translation — three centimetres under a header that now says "Pago en progreso".
+    const data = baseData({ status: 'PPM', processed: true });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    dispatchProcessSuccess({ recordId: 'pay-1', columnName: 'aPRMProcessPayment' });
+
+    await screen.findAllByText('pagoConfirmadoEnProgreso');
+    expect(screen.queryByText('pagoConfirmado')).toBeNull();
+  });
+
+  it('says plain "confirmado · depositado" once the withdrawal is recorded', async () => {
+    const data = baseData({ status: 'PWNC', processed: true });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    dispatchProcessSuccess({ recordId: 'pay-1', columnName: 'aPRMProcessPayment' });
+
+    await screen.findAllByText('pagoConfirmado');
+    expect(screen.queryByText('pagoConfirmadoEnProgreso')).toBeNull();
+  });
+
   it('persists the full event history in localStorage keyed by record id', () => {
     const data = baseData();
     render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);

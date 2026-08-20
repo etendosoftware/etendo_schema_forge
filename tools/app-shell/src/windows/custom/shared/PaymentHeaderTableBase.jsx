@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import ConfirmPaymentModal from './ConfirmPaymentModal';
-import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST } from './paymentStatuses';
+import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
@@ -19,14 +19,33 @@ function buildColumns(dir, ui, locale) {
   // "Conciliado" wording plus a link to that transaction. Bucketing it under the generic
   // depositedKey here made the grid say "Cobro depositado" for a row that, once opened, showed
   // "Conciliado" instead — same underlying fact under two different labels (ETP-4797).
+  // PPM ("Payment Made") is likewise excluded, but only for payments out: it means confirmed and
+  // not yet withdrawn from the account, which for a Salt Edge transfer is the wait between the bank
+  // authorizing it and the money moving. Labelling it "depositado" contradicted the invoice modal,
+  // which already reads the very same payment as "Pago en progreso" (ETP-4895). PPM is an outbound
+  // status — a receipt confirms to RPR/RDNC — so the collections grid is deliberately left alone.
+  const isOut = dir === 'out';
   const depositedEnum = Object.fromEntries(
-    DEPOSITED_STATUSES_LIST.filter(s => s !== 'RPPC').map(s => [s, depositedKey]));
+    DEPOSITED_STATUSES_LIST
+      .filter(s => s !== 'RPPC' && !(isOut && s === STATUS_PAYMENT_MADE))
+      .map(s => [s, depositedKey]));
   return [
     { key: 'documentNo', column: 'DocumentNo', type: 'string', label: ui('docNo'), required: true },
     { key: 'paymentDate', column: 'PaymentDate', type: 'date', label: ui('date'), dot: false },
     { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: ui('businessPartner') },
     { key: 'status', column: 'Status', type: 'status', label: ui('statusColumnLabel'), required: true,
-      enumLabels: { ...depositedEnum, RPPC: 'conciliado', RPAP: 'statusDraft', DR: 'statusDraft' } },
+      enumLabels: {
+        ...depositedEnum,
+        RPPC: 'conciliado',
+        ...(isOut ? {
+          [STATUS_PAYMENT_MADE]: 'cpPaymentStateInProgress',
+          // Without this the grid printed the raw code: ETGOERR is this module's own status and
+          // Core's dictionary has no name for it.
+          [PAYMENT_STATUS_ERROR]: 'cpPaymentStateError',
+        } : {}),
+        RPAP: 'statusDraft',
+        DR: 'statusDraft',
+      } },
     {
       key: 'amount', column: 'Amount', type: 'amount', label: ui('amount'), required: true,
       // `labels` (priority 1 in resolveColumnLabel) must be set so this header
@@ -34,7 +53,9 @@ function buildColumns(dir, ui, locale) {
       // otherwise resolves to "Importe cobrado/pagado".
       labels: { [locale]: ui('amount') },
       render: (row) => {
-        const isDeposited = DEPOSITED_STATUSES.has(row.status || '');
+        const isDeposited = isOut
+          ? paymentDisplayState(row) === 'deposited'
+          : DEPOSITED_STATUSES.has(row.status || '');
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
         let sign = '';
@@ -439,6 +460,13 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
         icon: Check,
         onClick: () => { setConfirmRow(row); return Promise.resolve(); },
       }];
+    }
+    // A payment whose bank transfer is live is not the user's to reactivate: Salt Edge would be left
+    // holding an order for a payment that no longer exists, and once executed, money that moved with
+    // nothing recording it. Only a rejected transfer (ETGOERR) hands it back (ETP-4895). Non-PIS
+    // payments never carry the flag, so their kebab is unchanged.
+    if (row.pisLocked === true) {
+      return [];
     }
     if (DEPOSITED_STATUSES.has(status)) {
       return [{

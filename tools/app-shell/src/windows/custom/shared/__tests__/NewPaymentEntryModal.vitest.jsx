@@ -2476,6 +2476,32 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
       }, 12000);
 
+      it('locks the form while the bank window is open, and frees it after (ETP-4895)', async () => {
+        // The values are already on their way to the bank, so editing them here could only make the
+        // modal disagree with the transfer being authorized on the other side. The lock lifts as
+        // soon as the wait ends — on a rejection the form has to be usable again to try again.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['failed'],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        expect(screen.getByTestId('cp-modal-body')).not.toHaveAttribute('inert');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-modal-body')).toHaveAttribute('inert');
+        // The footer sits outside the lock, so the wait can still be cancelled from here.
+        expect(screen.getByTestId('cp-pis-cancel-wait')).toBeInTheDocument();
+
+        await waitFor(() => expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument(),
+          { timeout: 4500 });
+        expect(screen.getByTestId('cp-modal-body')).not.toHaveAttribute('inert');
+      }, 8000);
+
       it('reopening starts a NEW bank order, because the old session is dead (ETP-4895)', async () => {
         // A Salt Edge widget session is single-use: reopening the original pisPaymentUrl after its
         // window was closed only ever renders "Sesión perdida". Reopen therefore asks the backend

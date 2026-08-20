@@ -276,6 +276,44 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(statusCol.enumLabels.RPAE).toBe('pagoDepositado');
   });
 
+  it('labels PPM as in progress, not deposited (ETP-4895)', () => {
+    // PPM is confirmed-but-not-withdrawn. Calling it "depositado" here contradicted the invoice
+    // modal, which reads the very same payment as "Pago en progreso" — and the payment window,
+    // whose status pill maps PPM to the same key via decisions.json.
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={[]} onDataMutated={vi.fn()} />);
+    const statusCol = dataTableSpy.current.columns.find((c) => c.key === 'status');
+    expect(statusCol.enumLabels.PPM).toBe('cpPaymentStateInProgress');
+    expect(statusCol.enumLabels.PWNC).toBe('pagoDepositado');
+  });
+
+  it('offers no Reactivar for a payment whose bank transfer is live (ETP-4895)', () => {
+    // Reactivating behind the bank's back would desync Salt Edge from Etendo Go. The rule has to
+    // hold in the grid too — enforcing it only on the form leaves a way around it.
+    const rows = [{ id: 'p20', status: 'PPM', pisLocked: true }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    expect(dataTableSpy.current.rowQuickActions.menuActions({ row: rows[0] })).toEqual([]);
+  });
+
+  it('hands the payment back once the transfer was rejected', () => {
+    const rows = [{ id: 'p21', status: 'PWNC', pisLocked: false }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    expect(dataTableSpy.current.rowQuickActions.menuActions({ row: rows[0] })[0].key).toBe('etprReactivatePayment');
+  });
+
+  it('names ETGOERR instead of printing the raw status code (ETP-4895)', () => {
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={[]} onDataMutated={vi.fn()} />);
+    const statusCol = dataTableSpy.current.columns.find((c) => c.key === 'status');
+    expect(statusCol.enumLabels.ETGOERR).toBe('cpPaymentStateError');
+  });
+
+  it('does not paint a PPM amount as deposited-green (dir="out")', () => {
+    // The green amount says "this money moved"; for PPM it has not left the account yet.
+    const rows = [{ id: 'p13', status: 'PPM', amount: '50', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p13');
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
+  });
+
   it('renders the amount column with a + sign and semantic success color for a deposited row (dir="in")', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);

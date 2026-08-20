@@ -1358,6 +1358,14 @@ export default function NewPaymentEntryModal({
   const title = modalTitleFor(isEdit, isReceipt, ui);
   const deltaLabel = deltaLabelFor(balance, ui);
 
+  // Once the bank window is open the form is a read-only record of what was already sent: those
+  // values are travelling to the bank, and changing them here could only make the modal disagree
+  // with the transfer being authorized on the other side. `inert` locks the whole body in one go —
+  // clicks, typing and focus — while leaving it readable and scrollable, which matters because the
+  // user is comparing it against the bank's own confirmation screen. The footer stays outside the
+  // lock, so the wait can still be cancelled and the window reopened (ETP-4895).
+  const formLocked = Boolean(pisPolling);
+
   // Floppy + check icons for the footer actions (Figma).
   const floppy = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={FG4} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
@@ -1383,7 +1391,12 @@ export default function NewPaymentEntryModal({
         >×</button>
 
         {/* body */}
-        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div
+          data-testid="cp-modal-body"
+          inert={formLocked ? '' : undefined}
+          aria-disabled={formLocked || undefined}
+          style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto', opacity: formLocked ? 0.6 : 1, transition: 'opacity .15s ease' }}
+        >
 
           {/* invoice-context widget */}
           <div style={{ padding: '0 20px' }}>

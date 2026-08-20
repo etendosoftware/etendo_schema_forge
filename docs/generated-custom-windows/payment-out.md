@@ -180,3 +180,107 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 (`artifacts/payment-in/custom/PaymentBottomPanel.jsx`, fixed identically). The existing
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
+
+## `PPM` reads as "Pago en progreso", not "Pago depositado" — ETP-4895
+
+`PPM` ("Payment Made") is Core's status for a payment that is **confirmed but not yet withdrawn**
+from its financial account, so no `FIN_Finacc_Transaction` exists for it. Core moves it on to `PWNC`
+once the withdrawal is recorded. Labelling it "Pago depositado" was therefore wrong in every case —
+the money has not left the account — and visibly wrong for a Salt Edge transfer, which sits in `PPM`
+for the whole wait between the bank authorizing it and the funds actually moving.
+
+The accounts Etendo Go pays from over PIS are configured **without Automatic Withdrawn** precisely so
+the transaction only appears on execution, which is what makes `PPM` a reliable "in progress" signal
+here rather than an edge case.
+
+Three places in this window changed:
+
+| Surface | Before | Now |
+| --- | --- | --- |
+| Header status pill | "Pago depositado" (green) | "Pago en progreso" (amber) |
+| Pagos grid, Estado column | "Pago depositado" | "Pago en progreso" |
+| Activity timeline | "Pago confirmado · depositado" | "Pago confirmado · en progreso" |
+
+The pill and the grid come from `statusEnumLabels` (`decisions.json` → contract → `HeaderPage.jsx`),
+now mapping `PPM` to `cpPaymentStateInProgress`. The amber tone comes from `getStatusTone` in
+`lib/statusBadge.js`, where `ppm` moved out of the success bucket — a green pill under the words
+"en progreso" would contradict itself.
+
+The four surfaces that show a payment (this window, the Pagos grid, the invoice payment modal and
+the invoice preview card) now share one rule, `paymentDisplayState` in
+`windows/custom/shared/paymentStatuses.js`. Each previously carried its own copy of the status list,
+which is how the same transfer read "Pago en progreso" in the invoice modal and "Pago depositado"
+here at the same time. `PaymentDetailSidebarBase`'s copy was also missing `RPAE`, so an
+"Awaiting Execution" payment showed as a draft in the timeline while every other surface showed it
+as confirmed; adopting the shared rule fixes that too.
+
+**Scope:** payments out only. `PPM` is an outbound status — a receipt confirms to `RPR`/`RDNC` — so
+Payment In keeps its previous labels and its previous `RPAE` reading, and the two direction-scoped
+guards live in `PaymentHeaderTableBase` (`isOut`) and `PaymentDetailSidebarBase` (`isIn`). The
+`RPAE`-in-the-timeline inconsistency therefore still stands on the collections side, deliberately
+left for its own task.
+
+Nothing about *processing* changed: a `PPM` payment is still processed, so it keeps its **Reactivar**
+action, is not offered for deletion, and still counts toward the sidebar's confirmed totals.
+
+## Retrying a rejected bank transfer — ETP-4895
+
+A Salt Edge transfer that reaches `authorized` creates the payment (status `PPM`, "Pago en
+progreso"). If the bank later refuses it, the payment is flagged **`ETGOERR`** and this window
+offers **"Reintentar transferencia"** in the topbar, next to where the "Conciliado" badge appears.
+
+The button (`PaymentRetryTransferButton`, reached through the `PaymentTopbarActions` topbar slot)
+renders only when the payment is `ETGOERR` **and** the backend sent a `pisPaymentId` — the rejected
+attempt to replay, injected into the single-record GET by `ReactivatePaymentHandler`. A payment
+that is merely in progress must never offer it: a second order there would pay the invoice twice.
+
+The retry reuses this payment rather than registering a second one, so it posts against the payment
+record itself (`/payment-out/header/{id}/action/retryPisPayment`) and needs no invoice context. The
+payment returns to `PPM` while the new attempt is in flight.
+
+Opening this window also reconciles the payment against whatever Salt Edge status is already
+stored (`reconcileAttemptsFor`), which is how a rejection that arrived after the payment modal had
+closed gets noticed at all — the SPA's poll is long gone by then, and the PSD2 refresh that saw it
+does not touch Etendo Go's payment. No Salt Edge call is made on that path.
+
+**Known gap:** an `ETGOERR` payment is deliberately not reactivated, so it stays applied and its
+invoice keeps reading as paid until the retry succeeds.
+
+## Reactivar y Eliminar quedan fuera mientras la transferencia está viva — ETP-4895
+
+A payment produced by a Salt Edge transfer belongs to that transfer, not to the user: reactivating or
+deleting it behind the bank's back would leave Salt Edge holding an order for a payment that no
+longer exists and — once executed — money that moved with nothing recording it. So both actions are
+withdrawn while the transfer is live.
+
+The single exception is **`ETGOERR`**: there the bank refused the transfer, no money moved and
+nothing is in flight, so the payment is the user's again to retry or discard.
+
+Payments that never went through PIS are **never** locked, so cash and manual transfers behave
+exactly as before.
+
+### How it is enforced
+
+The backend answers the question once, as a derived boolean `pisLocked`
+(`PisDeferredPaymentService.isLifecycleLockedByTransfer`), and `ReactivatePaymentHandler` emits it on
+**both** the single-record GET and every list row. Two surfaces offer these actions, and a rule
+enforced in only one of them is a rule the user can walk around.
+
+| Surface | Action | Gate |
+| --- | --- | --- |
+| Detail toolbar | Reactivar | `processOverrides.etprReactivatePayment.displayLogicRaw` → `@status@ != 'RPAP' & @pisLocked@ = 'N'` |
+| Detail toolbar | Eliminar | `isDeleteButtonVisible` — checked **ahead of** the `deleteAction` bypass |
+| Grid kebab | Reactivar | `PaymentHeaderTableBase.menuActions` returns `[]` |
+| Grid row actions | Eliminar | `isDeleteVisibleForRecord`, shared with the detail form |
+
+Two details worth keeping in mind:
+
+**The flag is read off the record, not the window config.** It is a per-record fact the backend owns,
+and no other window emits it, so the shared components are inert unless a backend opts in.
+
+**The delete check had to jump ahead of the `deleteAction` bypass.** That bypass (ETP-4479) exists
+because such a delete reactivates server-side before removing — which is exactly what must not
+happen here.
+
+**The list injection is batched.** One query resolves which payments of the page have a transfer;
+asking per row turned a grid page into fifty round trips.

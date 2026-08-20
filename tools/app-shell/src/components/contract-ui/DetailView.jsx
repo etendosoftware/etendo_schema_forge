@@ -922,6 +922,11 @@ export function isDeleteButtonVisible({
   // signal (e.g. Amortization) — it wins over everything else, including the
   // deleteAction lifecycle bypass below.
   if (hideDeleteButton) return false;
+  // Checked ahead of the deleteAction bypass below: that bypass exists because such a delete
+  // reactivates server-side first, which is exactly what must NOT happen to a payment whose bank
+  // transfer is live (ETP-4895). Same record-level flag RowQuickActions honours, so the grid and
+  // the form agree.
+  if (data?.pisLocked === true) return false;
   // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
   // (the action reactivates server-side before removing), so it ignores
   // hideDeleteWhenComplete/isProcessed and only hides for the voided status.

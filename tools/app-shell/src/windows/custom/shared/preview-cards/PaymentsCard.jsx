@@ -2,10 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { paymentDisplayState } from '../paymentStatuses';
 
-// Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
-// Execution") are the processed states for payments-out / deferred accounts.
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 function fmtPayDate(raw) {
   return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -54,22 +52,25 @@ function resolveMethodKey(name) {
   return 'transfer';
 }
 
-function StateTag({ status, processed, ui }) {
-  // The backend `processed` flag is the source of truth; the status whitelist
-  // is a fallback for rows that don't carry it.
-  const isDeposited = processed === true || PAID_STATUSES.has(status);
-  if (isDeposited) {
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-success-fg)', flexShrink: 0 }} />
-        {ui('statusDeposited')}
-      </span>
-    );
-  }
+// Tone + copy per display state; the pill shape itself never changes.
+const STATE_TAGS = {
+  error: { testid: 'payments-card-state-error', bg: 'var(--status-destructive-bg)', fg: 'var(--status-destructive-fg)', labelKey: 'cpPaymentStateError' },
+  inProgress: { testid: 'payments-card-state-in-progress', bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)', labelKey: 'cpPaymentStateInProgress' },
+  deposited: { testid: 'payments-card-state-deposited', bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', labelKey: 'statusDeposited' },
+  draft: { testid: 'payments-card-state-draft', bg: 'hsl(var(--muted))', fg: 'hsl(var(--muted-foreground))', dot: 'hsl(var(--text-disabled))', labelKey: 'statusDraft' },
+};
+
+function StateTag({ payment, ui }) {
+  // Same helper the invoice's payment modal uses, so a transfer the bank has only authorized reads
+  // the same on both — it used to say "Depositado" here and "Pago en progreso" there (ETP-4895).
+  const tag = STATE_TAGS[paymentDisplayState(payment)];
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'hsl(var(--text-disabled))', flexShrink: 0 }} />
-      {ui('statusDraft')}
+    <span
+      data-testid={tag.testid}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: tag.bg, color: tag.fg, fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag.dot || tag.fg, flexShrink: 0 }} />
+      {ui(tag.labelKey)}
     </span>
   );
 }
@@ -198,7 +199,7 @@ export default function PaymentsCard({
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
                   {amtSign}{formatCurrency(currency, p.amount)}
                 </span>
-                <StateTag status={p.status || ''} processed={p.processed} ui={ui} data-testid="StateTag__c6fe34" />
+                <StateTag payment={p} ui={ui} data-testid="StateTag__c6fe34" />
               </div>
             </div>
           );

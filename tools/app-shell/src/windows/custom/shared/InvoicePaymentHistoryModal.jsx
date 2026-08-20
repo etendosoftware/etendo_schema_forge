@@ -6,6 +6,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { isPaymentProcessed, paymentDisplayState } from './paymentStatuses';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
 function fmtDate(raw) {
@@ -22,39 +23,15 @@ function fmtAmount(val, currency) {
   return formatCurrency(currency, n);
 }
 
-// Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
-// Execution") are the processed states for payments-out / deferred accounts —
-// without them a confirmed purchase payment was mislabeled as "Borrador".
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
-
-// FIN_Payment status added by com.etendoerp.go for a bank transfer the bank rejected. It is only
-// ever set on an unprocessed payment: no money moved, so the invoice is still owed.
-//
-// Currently unreachable, on purpose. A rejection is only observed while the payment modal is open,
-// and there it is reported in place with no payment recorded at all — so no row ever reaches this
-// status today. This branch (and the retry action below) is kept for the case that design does not
-// cover: a rejection arriving with nobody watching, which has no modal to report it in and would
-// have to surface on the invoice instead. See PisDeferredPaymentService's class javadoc.
-const PAYMENT_STATUS_ERROR = 'ETGOERR';
-
-/** True when a listed payment is processed/deposited (backend flag is source of truth). */
-function isProcessed(p) {
-  return p?.processed === true || PAID_STATUSES.has(p?.status || '');
-}
-
-/** True when the payment's bank transfer failed and can be retried. */
-function isFailedTransfer(p) {
-  return p?.status === PAYMENT_STATUS_ERROR;
-}
-
 /**
- * True while a bank transfer has been authorized but the funds have not landed yet: the payment is
- * processed, was initiated through PIS, and has no bank transaction attached. Reported by the
- * backend as `pisPending`; the local derivation is a fallback for older backends.
+ * True for the one rejection that leaves a payment behind: the bank committed to the transfer — so
+ * the payment was created — and then refused it. A rejection before that point creates nothing at
+ * all and is reported in the payment modal in place, so it never reaches a row here.
+ *
+ * The same state drives the retry action below, and its twin on the payment window (ETP-4895).
  */
-function isTransferInProgress(p) {
-  if (p?.pisPending === true) return true;
-  return isProcessed(p) && p?.viaPis === true && p?.hasTransaction === false;
+function isFailedTransfer(p) {
+  return paymentDisplayState(p) === 'error';
 }
 
 /** Shared pill shape; only the tone and copy differ between states. */
@@ -76,9 +53,10 @@ function StatePill({ testid, bg, fg, dot, children }) {
 }
 
 function PaymentStateTag({ status, processed, isSales, ui, payment }) {
+  const state = paymentDisplayState(payment ?? { status, processed });
   // A rejected bank transfer wins over everything else: the row is unprocessed, so without this it
   // would read as an ordinary editable draft and the user could not tell the transfer had failed.
-  if (isFailedTransfer(payment ?? { status })) {
+  if (state === 'error') {
     return (
       <StatePill
         testid="PaymentStateTag__error"
@@ -90,8 +68,9 @@ function PaymentStateTag({ status, processed, isSales, ui, payment }) {
       </StatePill>
     );
   }
-  // Authorized at the bank but the funds have not landed: processed, yet not settled.
-  if (payment && isTransferInProgress(payment)) {
+  // Confirmed but not withdrawn from the account yet — for a PIS transfer, authorized at the bank
+  // with the funds still to land.
+  if (state === 'inProgress') {
     return (
       <StatePill
         testid="PaymentStateTag__inProgress"
@@ -103,10 +82,7 @@ function PaymentStateTag({ status, processed, isSales, ui, payment }) {
       </StatePill>
     );
   }
-  // The `processed` flag from the backend is the source of truth; the status
-  // whitelist is a fallback for rows that don't carry it.
-  const isDeposited = processed === true || PAID_STATUSES.has(status);
-  if (isDeposited) {
+  if (state === 'deposited') {
     return (
       <span
         data-testid="PaymentStateTag__deposited"
@@ -413,7 +389,7 @@ function PaymentHistoryBody({
                 {isFailedTransfer(payment) && (
                   <RetryTransferButton onClick={(e) => handleRetryClick(e, payment)} ui={ui} />
                 )}
-                {!isProcessed(payment) && (
+                {!isPaymentProcessed(payment) && (
                   <DeleteDraftButton onClick={(e) => handleDeleteClick(e, payment)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />
                 )}
               </div>
@@ -459,7 +435,7 @@ export default function InvoicePaymentHistoryModal({
   // Draft rows re-open the editable modal (the payment/collection windows are
   // read-only); processed rows navigate to that read-only window to view them.
   const handleRowClick = useCallback((p) => {
-    if (!isProcessed(p)) {
+    if (!isPaymentProcessed(p)) {
       setEditingPayment(p);
       setShowPaymentModal(true);
       return;
@@ -611,7 +587,10 @@ export default function InvoicePaymentHistoryModal({
   // 760px modal − 48px side padding − 60px column gaps (5 gaps) = 652px to distribute.
   // Fixed columns: Fecha 110 + Método 170 + Estado 150 + Importe 110 + trash 28 = 568px.
   // 1fr (Nº documento) = 652 − 568 = 84px — enough for typical doc numbers.
-  const GRID = '1fr 110px 170px 150px 110px 28px';
+  // The actions column has to fit its WIDEST content, not its most common: two 26px icon buttons
+  // plus their 4px gap. At the old 28px — sized for the delete icon alone — a row that also offered
+  // Retry overflowed leftwards and covered the amount's currency symbol (ETP-4895).
+  const GRID = '1fr 110px 170px 150px 110px 56px';
   const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
   return (

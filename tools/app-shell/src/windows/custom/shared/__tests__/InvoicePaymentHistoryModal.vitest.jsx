@@ -984,8 +984,11 @@ describe('InvoicePaymentHistoryModal', () => {
     });
 
     it('still shows a settled transfer as deposited', async () => {
+      // PWNC ("Withdrawn not Cleared"), not PPM: once Salt Edge reports the transfer executed the
+      // bank transaction is created and Core moves the payment off PPM. A settled transfer sitting
+      // in PPM is not a state the backend can produce (ETP-4895).
       useApiFetch.mockReturnValue(makeApiFetch([
-        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PPM', processed: true, viaPis: true, pisPending: false, pisPaymentId: 'pis-1' },
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PWNC', processed: true, viaPis: true, pisPending: false, pisPaymentId: 'pis-1' },
       ]));
       render(<InvoicePaymentHistoryModal {...PROPS} />);
 
@@ -1002,6 +1005,12 @@ describe('InvoicePaymentHistoryModal', () => {
 
       await screen.findByTestId('PaymentStateTag__error');
       expect(screen.getAllByTestId('InvoicePaymentHistoryModal__retry-btn')).toHaveLength(1);
+      // The actions column must fit BOTH icon buttons (26px each + a 4px gap). Sized for the
+      // delete icon alone it overflowed leftwards and covered the amount's currency symbol.
+      const retryBtn = screen.getByTestId('InvoicePaymentHistoryModal__retry-btn');
+      const actionsCell = retryBtn.parentElement;
+      const gridRow = actionsCell.parentElement;
+      expect(gridRow.style.gridTemplateColumns.split(' ').pop()).toBe('56px');
     });
 
     it('retries against the PIS attempt and reopens the bank window', async () => {

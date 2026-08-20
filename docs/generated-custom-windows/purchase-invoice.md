@@ -398,36 +398,147 @@ The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButt
 
 ### Confirm behavior
 
-On confirm with `pis: true`, the `registerPayment` action creates and links the `FIN_Payment`
-and **processes it to status `PPM`** ("Payment Made") — applied to the invoice but with **no
-`FIN_Finacc_Transaction` yet**. The bank transaction is created only once Salt Edge confirms
-execution, by the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
+On confirm with `pis: true`, **no `FIN_Payment` is created** (ETP-4895). The intent — invoice,
+amount, credits, method, account, date, rate, write-off — is snapshotted as JSON into
+`PSD2_PIS_PAYMENT.EM_ETGO_Payment_Intent`, and only the Salt Edge order is placed. The payment is
+created from that snapshot once the bank commits to the transfer, so a transfer the user abandons
+or the bank rejects leaves the invoice untouched with nothing to undo.
+
+| Salt Edge status | Etendo Go |
+| --- | --- |
+| `requested`, `initiated`, `initiated_info_required`, `authorizing` | nothing exists yet |
+| `authorized` | payment created and processed to **`PPM`** — "Pago en progreso" |
+| `executed`, `settled` | payment created if needed + `FIN_Finacc_Transaction` → **`PWNC`**, "Pago depositado" |
+| `failed` **before** `authorized` | nothing is created; the modal reports it and the user retries |
+| `failed` **after** `authorized` | the payment already exists → flagged **`ETGOERR`** ("Error"), kept processed, offered for retry |
+
 To keep config and runtime aligned, connecting an account to its bank **from Etendo Go** clears the
 transfer method's **Automatic Withdrawn** flag (`FinancialAccountBankConnectionHandler`) — Payment OUT
-only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers.
+only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers. That flag is
+what makes `PPM` mean "confirmed but not withdrawn": the bank transaction appears only when Salt Edge
+reports execution, via the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
 
 The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
-in a popup and polls the `pisPaymentStatus` action every ~3s. The popup returns to Etendo Go's
-own auto-closing SPA callback route (`financial-account/pis-callback`, `PisCallbackPage.jsx`),
-which posts a `pis-completed` message to the opener and closes itself — the user never sees the
-Classic-styled shared bank-auth result page. On `executed` the modal shows a success toast and
-refreshes; on failure/cancel it returns to an editable draft (the `cancelPisPayment` action
-reactivates + removes the unauthorized payment). The non-PIS path is byte-for-byte unchanged.
+in a popup, locks its own form (`inert`) so the values in flight cannot be edited, and polls the
+`pisPaymentStatus` action every ~3s. The popup returns to Etendo Go's own auto-closing SPA callback
+route (`financial-account/pis-callback`, `PisCallbackPage.jsx`), which posts a `pis-completed`
+message to the opener and closes itself — the user never sees the Classic-styled shared bank-auth
+result page. Polling gives up after 10 minutes and **only** once the bank window is gone (a user
+mid-authentication legitimately takes minutes); giving up closes the modal with an "in progress"
+notice, never an error. "Reabrir ventana" starts a **new** order via `retryPisPayment`, because a
+Salt Edge widget session is single-use. The non-PIS path is byte-for-byte unchanged.
 
-### Payment history badge
+### A transfer rejected after the bank committed to it
 
-Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía banco"** badge
-(`cpPisViaLabel`) in the history modal. The flag comes from a direct `OBCriteria<PisPayment>`
-query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2-module method.
+`authorized` creates the payment, so a rejection arriving later — via the SPA poll, the PSD2
+module's periodic refresh or the Salt Edge webhook — finds one already there. Leaving it in `PPM`
+would show the transfer as still in progress for something the bank has definitively refused, so
+`reconcile` flags it **`ETGOERR`** instead (`markPaymentAsFailed`).
+
+It is deliberately **not reactivated**. Staying processed keeps it holding the invoice's
+installment and any credit it consumed, which is what lets the retry reuse this very payment rather
+than register a second one — the only shape that cannot pay the invoice twice.
+
+**Known gap:** while flagged, the payment is still applied, so the invoice keeps reading as paid
+(Pendiente 0) even though the money never moved. The errored row is the only signal. It resolves
+itself when the retry succeeds.
+
+**How the rejection is noticed.** The SPA's poll stops the moment the modal closes, which for this
+case is right after `authorized`. Every writer that can record the later rejection — PSD2's
+scheduled refresh, its manual "Refresh Payment Status" button, the Salt Edge webhook — lives in the
+PSD2 module and knows nothing about Etendo Go's payment.
+
+So the flag is applied by **`PisRejectedPaymentHandler`**, an `EntityUpdateEvent` observer on the
+`PSD2_PIS_PAYMENT` row those writers save. That inverts the dependency: PSD2 keeps doing exactly
+what it did, Etendo Go reacts, and no scheduled process of our own is needed. The observer only
+sets one field on an already-managed entity and never flushes — the difference from the
+payment-creating observer this design deliberately rejected, which would have recursed into PSD2's
+own flush.
+
+`reconcileAttemptsFor` repeats the same check when the invoice's payment list is fetched and when
+the payment window is opened, acting on the stored status with no Salt Edge call. It is the net for
+anything that changed outside a DAL flush, and it also closes the older gap where a transfer that
+resolved after the modal gave up waiting was never registered at all.
+
+Retrying is offered in two places — the invoice's payment list and the Payment Out window
+(`PaymentRetryTransferButton` in the topbar slot) — and both post the same `retryPisPayment`
+action. The payment-window route goes through `ReactivatePaymentHandler`, which also injects
+`pisPaymentId` into the payment's single-record GET so the button knows which attempt to replay.
+`handleRetryPisPayment` then places a fresh Salt Edge order against the existing payment and moves
+it back to `PPM` ("en progreso") while the new attempt is in flight. No intent snapshot is involved:
+it is cleared the moment the payment is created, and the payment itself carries everything the bank
+needs.
+
+Each attempt gets its own `end_to_end_id` (`documentNo-2`, `-3`, …). PSD2 keeps that reference only
+inside its payment-attributes JSON and leaves the column empty, so Etendo Go now persists it on
+`PSD2_PIS_PAYMENT.END_TO_END_ID` — without that the attempt counter never saw a previous try and
+every retry reused the same reference, which is exactly the duplicate the suffix exists to avoid.
+
+### The invoice list stops claiming to be paid — ETP-4895
+
+A payment that is in progress or was rejected is **applied** either way, so the invoice's
+outstanding is zero and the "Pendiente de pago" column read **"Pagada"** for money that never
+moved — while the payment itself read "Pago en progreso" or "Pago con error". Same fact, two
+screens, opposite answers.
+
+The column now shows the **state** instead, as a clickable pill:
+
+| Payment state on the invoice | Outstanding | Column shows | Tone |
+| --- | --- | --- | --- |
+| any payment in `ETGOERR` | any | **Pago con error** | destructive |
+| else any payment in `PPM` | 0 | **Pago en progreso** | warning |
+| else any payment in `PPM` | > 0 | the remaining amount + "+" | as before |
+| neither | any | Pagada / amount + "+", as before | as before |
+
+**The pill replaces the amount only when the amount would be a lie.** With a transfer in flight
+covering the whole invoice the outstanding is zero, so a figure would read "Pagada" for money that
+never moved. But a *partial* transfer leaves a real remainder — 6,05 invoiced with 3,00 in flight
+still owes 3,05 — and that figure is exactly what the user can act on, so it stays. The transfer's
+own state is one click away in the payments modal.
+
+**A rejection is announced either way.** Unlike an in-flight transfer, it is a problem that needs
+attention regardless of how much is still owed, so the pill wins even with a remainder. The amount
+is then visible inside the modal.
+
+Both pills open the payments modal, which carries the real figures (`Saldo pendiente`) and where
+each row navigates to its own payment — including the Retry action on a rejected one.
+
+**Worst-first when payments disagree.** A rejection asks the user to act; an in-flight transfer only
+asks them to wait. So an invoice paid in two attempts — one failed, one in progress — reports the
+failure, which is what gets it noticed instead of buried.
+
+**Where it comes from.** `PisDeferredPaymentService.transferStateByInvoice` resolves the whole page
+in one query and `PurchaseInvoiceHeaderHandler.afterHandle` emits `pisPaymentState` per row.
+Deliberately keyed on the payment's own `FIN_Payment.status`, not on whether it went through PIS, so
+the invoice cannot disagree with the payment badges by construction. `resolveInvoicePaymentBadge`
+reads the field and returns `transfer-error` / `transfer-in-progress` ahead of the amount branches;
+sales invoices never receive the field, so they are untouched.
+
+### Payment state across the four surfaces
+
+`PPM` ("Payment Made") means confirmed but **not yet withdrawn** from the account, so it reads
+**"Pago en progreso"** — never "depositado" — in the invoice payment modal, the invoice preview
+card, the Pagos grid and the Payment Out window's status pill and activity timeline. One shared rule
+(`paymentDisplayState` in `windows/custom/shared/paymentStatuses.js`) backs all four; each used to
+carry its own copy of the status list, which is how the same transfer once read "Pago en progreso"
+in the modal and "Pago depositado" in the payment window at the same time (ETP-4895).
+
+Where the backend serves it, `pisPending` is preferred over the status: the invoice payment-list
+action (`paymentListItem`) computes it exactly as processed + initiated over PIS + no bank
+transaction. Elsewhere the `PPM` status answers the same question on its own.
 
 ### Where the code lives
 
-- Frontend: `NewPaymentEntryModal.jsx` (PIS block + polling), `PisCallbackPage.jsx` (callback route),
-  `InvoicePaymentHistoryModal.jsx` (badge). All `cpPis*` keys are in both `es_ES.json` / `en_US.json`.
+- Frontend: `NewPaymentEntryModal.jsx` (PIS block, polling, form lock), `PisCallbackPage.jsx`
+  (callback route), `paymentStatuses.js` (shared state rule) and its four consumers —
+  `InvoicePaymentHistoryModal.jsx`, `preview-cards/PaymentsCard.jsx`, `PaymentHeaderTableBase.jsx`,
+  `PaymentDetailSidebarBase.jsx` — plus `statusEnumLabels` in `payment-out`'s `decisions.json`
+  (payments out only; `PPM` is an outbound status, so Payment In is untouched). All `cpPis*` keys are in both `es_ES.json` / `en_US.json`.
 - Backend (`com.etendoerp.go`): `PaymentRegistrationService` (enriched `invoiceAccounts`, PIS branch
-  of the advanced register flow), `PisPaymentService` (`pisPaymentStatus`, `cancelPisPayment`,
-  `pisTemplates`, `pisSupplierAccounts`, `applyOverpaymentAndInitiatePis`), `PisPaymentBridge`
-  (composes the public PSD2 `GenerateBankPayment` with Etendo Go's own `return_to`).
+  of the advanced register flow), `PisDeferredPaymentService` (deferred creation, status
+  reconciliation, `retryPisPayment`), `PisPaymentService` (`pisPaymentStatus`, `cancelPisPayment`,
+  `pisTemplates`, `pisSupplierAccounts`), `PisPaymentBridge` (composes the public PSD2
+  `GenerateBankPayment` with Etendo Go's own `return_to`).
 
 Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
 PIS, other currencies, scheduled payments.

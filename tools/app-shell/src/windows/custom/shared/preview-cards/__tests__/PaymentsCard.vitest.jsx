@@ -206,6 +206,30 @@ describe('PaymentsCard', () => {
       render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
       expect(screen.getByText('statusDraft')).toBeInTheDocument();
     });
+
+    it('shows a bank transfer the bank only authorized as in progress, not deposited (ETP-4895)', () => {
+      // This card and the invoice's payment modal are fed by the same invoicePayments action, so
+      // they see the identical row — yet this one used to read "Depositado" for a transfer the
+      // modal was already reporting as "Pago en progreso".
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'PPM', processed: true, viaPis: true, pisPending: true }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByTestId('payments-card-state-in-progress')).toHaveTextContent('cpPaymentStateInProgress');
+      expect(screen.queryByText('statusDeposited')).toBeNull();
+    });
+
+    it('goes back to deposited once the transfer is executed and the bank transaction exists', () => {
+      // Core moves the payment off PPM to PWNC when the withdrawal is recorded, so no extra
+      // signal is needed for the reverse direction.
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'PWNC', processed: true, viaPis: true, pisPending: false }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByText('statusDeposited')).toBeInTheDocument();
+    });
+
+    it('shows a rejected bank transfer as an error', () => {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'ETGOERR' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByTestId('payments-card-state-error')).toHaveTextContent('cpPaymentStateError');
+    });
   });
 
   describe('row click navigation', () => {

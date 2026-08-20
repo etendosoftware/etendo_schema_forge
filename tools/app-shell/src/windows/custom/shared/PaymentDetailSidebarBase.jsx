@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
+import { paymentDisplayState } from './paymentStatuses';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -18,7 +19,15 @@ function fmtRate(rate) {
   return rate.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
+/**
+ * The confirmed-event label. While the payment is only confirmed — not yet withdrawn from the
+ * account — the plain key's "· depositado" suffix would contradict the header, which reads
+ * "Pago en progreso" for that state (ETP-4895).
+ */
+function confirmedLabelKey(isIn, isInProgress) {
+  if (isInProgress) return isIn ? 'cobroConfirmadoEnProgreso' : 'pagoConfirmadoEnProgreso';
+  return isIn ? 'cobroConfirmado' : 'pagoConfirmado';
+}
 
 function fmtDate(raw) {
   if (!raw) return '';
@@ -116,8 +125,16 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const [postedAt, setPostedAt] = useState(null);
 
   const isIn = dir === 'in';
-  const status = data?.status || '';
-  const isDraft = !PAID_STATUSES.has(status);
+  // Shared with the grid, the invoice modal and the invoice preview so the four cannot disagree
+  // about the same payment (ETP-4895).
+  const paymentState = paymentDisplayState(data);
+  // The shared rule also folds in RPAE, which this file's own copy of the status list was missing:
+  // an "Awaiting Execution" payment read as a draft here while every other surface already counted
+  // it as confirmed. That correction is taken on the payments-out side only — ETP-4895 is scoped to
+  // purchase invoices and Payment Out — so collections keep the old reading until it is looked at
+  // on its own.
+  const isDraft = paymentState === 'draft' || (isIn && data?.status === 'RPAE');
+  const isInProgress = paymentState === 'inProgress';
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
   // Multi-currency readout (ETP-4841). When the money moved through a financial account whose
@@ -226,9 +243,12 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const hasConfirmedEvent = events.some(ev => ev.type === 'confirmed');
+  const confirmedKey = confirmedLabelKey(isIn, isInProgress);
+  // Amber while in progress, for the same reason the label changes: a green dot next to
+  // "Pago en progreso" would read as settled.
+  const confirmedDot = isInProgress ? 'var(--status-warning-fg)' : '#2DCA72';
   const eventLabelKey = (ev) => {
     const reactivatedKey = isIn ? 'cobroReactivado' : 'pagoReactivado';
-    const confirmedKey = isIn ? 'cobroConfirmado' : 'pagoConfirmado';
     return ev.type === 'reactivated' ? reactivatedKey : confirmedKey;
   };
   const activityItems = [
@@ -258,15 +278,15 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : '#2DCA72',
+      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : confirmedDot,
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
     ...(!isDraft && !hasConfirmedEvent ? [{
-      label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
+      label: ui(confirmedKey),
       confirmedAt: null,
       date: paymentDate,
-      dot: '#2DCA72',
+      dot: confirmedDot,
     }] : []),
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),
