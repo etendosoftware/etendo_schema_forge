@@ -1275,7 +1275,6 @@ export function ListView({
             apiBaseUrl={apiBaseUrl}
             documentId={emailRow.id}
             windowName={windowName}
-            token={token}
             allowEmail={allowEmail}
             sendPolicy={effectiveSendDocument}
             onClose={() => setEmailRow(null)}

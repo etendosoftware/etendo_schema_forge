@@ -234,7 +234,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           apiBaseUrl={apiBaseUrl}
           documentId={recordId}
           windowName="purchase-order"
-          token={token}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}

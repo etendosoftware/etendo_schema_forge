@@ -397,7 +397,6 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           apiBaseUrl={apiBaseUrl}
           documentId={p.displayInvoice?.id}
           windowName={specName}
-          token={token}
           pdfBlobUrl={p.pdfUrl}
           isClosing={p.sendModalClosing}
           onClose={p.closeEmailModal}

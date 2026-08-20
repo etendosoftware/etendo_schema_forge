@@ -6,12 +6,14 @@
  * SonarQube new-code duplication gate failure across those two files).
  *
  * This module owns only the MECHANICAL fetch/parse/unwrap logic that every one of
- * these webhooks shares — same-origin base URL, token lookup, and the
+ * these webhooks shares — same-origin base URL, credential lookup, and the
  * `{result: "<json-string>"}` / `{error: "<message>"}` response envelope. It does
  * NOT own any domain-specific behavior (auth semantics, "deny silently" shapes,
  * etc.) — that documentation stays in each caller's own file, next to the function
  * that actually implements it.
  */
+import { jsonHeaders } from './sessionHeaders.js';
+
 
 /**
  * Detects the app's own base path so NEO webhook URLs stay same-origin in every
@@ -28,14 +30,30 @@ function detectBase() {
 export const NEO_BASE = `${detectBase()}/sws/neo`;
 
 /**
- * Reads `sf_auth_token` fresh from `localStorage` on every call (never cached at
- * module scope — the token can change after login/logout without a page reload).
- * This must be the CURRENT logged-in user's own role token, not an admin token,
- * since the backend itself decides admin/client-admin access
- * (`NeoAccessHelper.isAdminOrClientAdmin`) from that same role.
+ * The credential header for these webhooks, WITHOUT a `Content-Type`.
+ *
+ * ETP-4576 — this used to read `sf_auth_token` out of `localStorage` on every
+ * call. That key is deleted by `purgeLegacyAuthStorage()`, so it had become an
+ * unconditional null and every webhook in this family went out unauthenticated.
+ * `SFSystemRoleTemplates` then answered with its documented "denied" shape
+ * (`{roles: []}`), which callers correctly render as an empty state rather than
+ * an error — so the role controls came up blank with nothing logged anywhere.
+ *
+ * The Content-Type is stripped on purpose, preserving this module's existing
+ * convention: these are GETs with no body, and `application/json` is not a
+ * CORS-safelisted value, so sending it would trigger a preflight OPTIONS on
+ * every call whenever `VITE_API_BASE` points at another origin. `jsonHeaders()`
+ * always sets it, so the credential is taken and the rest dropped.
+ *
+ * Still read at request time, never cached at module scope — a login, a logout
+ * or a preference flip takes effect without a reload, which is exactly what the
+ * fresh localStorage read used to guarantee. The backend still decides
+ * admin/client-admin access (`NeoAccessHelper.isAdminOrClientAdmin`) from the
+ * caller's own role, whichever scheme carried the session here.
  */
-export function getToken() {
-  return localStorage.getItem('sf_auth_token');
+export function credentialHeaders() {
+  const { 'Content-Type': _contentType, ...credential } = jsonHeaders();
+  return credential;
 }
 
 /**
@@ -44,7 +62,8 @@ export function getToken() {
  * (a GET with no body — `application/json` isn't a CORS-safelisted value, so
  * setting it unnecessarily triggers a preflight OPTIONS request, and risks it
  * failing, whenever `VITE_API_BASE` points at a different origin than the SPA),
- * `sf_auth_token` read fresh via `getToken()` on every call.
+ * and the credential taken from the active session scheme via
+ * `credentialHeaders()` on every call.
  *
  * Unwrap order:
  * 1. Non-ok HTTP status → throws `data.error` / `data.message` / a generic
@@ -77,11 +96,9 @@ export function getToken() {
  * @returns {Promise<object>} the unwrapped payload.
  */
 export async function fetchNeoWebhookJson(url, webhookName, resolveFallback) {
-  const token = getToken();
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(url, { headers });
+  // `credentials: 'include'` is what lets the `__Host-` session cookie reach a
+  // cross-origin backend; same-origin sends it either way.
+  const res = await fetch(url, { headers: credentialHeaders(), credentials: 'include' });
   const text = await res.text();
   let data;
   let parsed = true;

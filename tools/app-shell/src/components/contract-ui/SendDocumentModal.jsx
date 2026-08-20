@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // ETP-4226 — default send policy: editable To/CC recipients everywhere unless
 // the window's `decisions.json → window.sendDocument` override says otherwise.
@@ -50,7 +51,6 @@ function resolveEmailSendExceptionMessage(ui, documentType) {
 
 async function sendDocumentFromModal({
   apiBaseUrl,
-  token,
   documentId,
   windowName,
   documentNo,
@@ -66,7 +66,6 @@ async function sendDocumentFromModal({
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
-    token,
     documentId,
     windowName,
     documentNo,
@@ -89,13 +88,14 @@ async function sendDocumentFromModal({
   toast.error(errorMessage);
 }
 
-async function renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError) {
+async function renderPdfIntoIframe(node, reportId, documentId, setPdfLoading, setPdfError) {
   setPdfLoading(true);
   setPdfError(null);
   try {
     const res = await fetch(`/api/reports/${reportId}/render`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: writeHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ format: 'html', params: { documentId } }),
     });
     if (!res.ok) throw new Error(`Preview failed (${res.status})`);
@@ -201,10 +201,11 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChang
   );
 }
 
-async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token) {
+async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo) {
   const res = await fetch(`/api/reports/${reportId}/render`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: writeHeaders(),
+    credentials: 'include',
     body: JSON.stringify({ format: 'html', params: { documentId } }),
   });
   if (!res.ok) throw new Error('Failed to render');
@@ -232,10 +233,11 @@ function resolveContactsBaseUrl(apiBaseUrl) {
   return apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
 }
 
-async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmail, setTo, isCancelled }) {
+async function loadBusinessPartnerEmail({ apiBaseUrl, bPartnerId, hasEmail, setTo, isCancelled }) {
   const contactsBaseUrl = resolveContactsBaseUrl(apiBaseUrl);
   const response = await fetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
+    credentials: 'include',
   });
   const data = response.ok ? await response.json() : null;
   if (isCancelled()) return;
@@ -244,7 +246,7 @@ async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmai
   if (!hasEmail && withEmail.length > 0) setTo(withEmail[0].etgoEmail);
 }
 
-function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, token, reportId, setPdfError, setPdfLoading }) {
+function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, reportId, setPdfError, setPdfLoading }) {
   if (pdfBlobUrl) {
     node.src = `${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=1`;
     setPdfError(null);
@@ -258,8 +260,10 @@ function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, to
     return;
   }
 
-  if (documentId && token) {
-    renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError);
+  // ETP-4576 — `token` was part of this condition, and it is structurally
+  // undefined under a cookie session, so the PDF preview never rendered.
+  if (documentId) {
+    renderPdfIntoIframe(node, reportId, documentId, setPdfLoading, setPdfError);
   }
 }
 
@@ -322,7 +326,6 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  * - apiBaseUrl: NEO Headless API base URL (required if bPartnerId is provided)
  * - documentId: record ID for PDF rendering
  * - windowName: for report ID resolution (e.g. "sales-invoice")
- * - token: auth token
  * - onClose: callback to close modal
  *
  * Optional PDF preview support:
@@ -338,7 +341,7 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  *   `{ editableRecipients: true, cc: true, maxRecipients: 10 }`. Pass the
  *   window's `sendDocument` config verbatim (one opaque prop).
  */
-export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
+export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
   const policy = useMemo(() => ({ ...DEFAULT_SEND_POLICY, ...(sendPolicy || {}) }), [sendPolicy]);
   const editableRecipients = policy.editableRecipients !== false;
@@ -354,12 +357,11 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
 
   // Fetch trusted contact data to seed the server-resolved recipient proposal.
   useEffect(() => {
-    if (!bPartnerId || !apiBaseUrl || !token) return;
+    if (!bPartnerId || !apiBaseUrl) return;
     let cancelled = false;
     setEmailLoading(true);
     loadBusinessPartnerEmail({
       apiBaseUrl,
-      token,
       bPartnerId,
       hasEmail,
       setTo: (email) => {
@@ -372,7 +374,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       .catch(() => {})
       .finally(() => { if (!cancelled) setEmailLoading(false); });
     return () => { cancelled = true; };
-  }, [hasEmail, bPartnerId, apiBaseUrl, token]);
+  }, [hasEmail, bPartnerId, apiBaseUrl]);
 
   // Cross-channel precedence mirror (backend `to > cc`): an address present in
   // To is silently dropped from CC, and adding it to CC merges into To.
@@ -423,12 +425,11 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       pdfBlobUrl,
       pdfBlobLoading,
       documentId,
-      token,
       reportId,
       setPdfError,
       setPdfLoading,
     });
-  }, [documentId, token, reportId, pdfBlobUrl, pdfBlobLoading]);
+  }, [documentId, reportId, pdfBlobUrl, pdfBlobLoading]);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -441,7 +442,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
 
     setDownloading(true);
     try {
-      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token);
+      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo);
     } catch (err) {
       toast.error(err.message);
     }
@@ -465,7 +466,6 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         : null;
       await sendDocumentFromModal({
         apiBaseUrl,
-        token,
         documentId,
         windowName,
         documentNo,

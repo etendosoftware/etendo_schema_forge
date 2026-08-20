@@ -1,4 +1,9 @@
 import { fetchRolesOverview } from '../rolesApi.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 // ETP-4513 — fetchRolesOverview() mirrors menuTree.js's fetchMenuTree()
 // conventions almost exactly (same-origin GET, `{result: "<json-string>"}`
@@ -140,8 +145,11 @@ describe('rolesApi', () => {
       expect(url).toContain('/sws/neo/rolesoverview');
     });
 
-    it('wires the Authorization header from sf_auth_token when a token is present', async () => {
-      localStorage.setItem('sf_auth_token', 'test-token-123');
+    // ETP-4576: the credential comes from the active session scheme, not from
+    // `localStorage.sf_auth_token` — a key `purgeLegacyAuthStorage()` deletes,
+    // so reading it meant these webhooks went out unauthenticated.
+    it('wires the Authorization header from the bearer scheme', async () => {
+      declareBearerSession();
       globalThis.fetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -151,10 +159,32 @@ describe('rolesApi', () => {
       await fetchRolesOverview();
 
       const [, options] = globalThis.fetch.mock.calls[0];
-      expect(options.headers.Authorization).toBe('Bearer test-token-123');
+      expect(options.headers.Authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+      expect(options.credentials).toBe('include');
     });
 
-    it('sends no Authorization header when no token is stored', async () => {
+    // These are GETs with no body, so the cookie scheme sends no credential
+    // header at all — and deliberately no `Content-Type` either: it is not a
+    // CORS-safelisted value, so setting it would force a preflight on every
+    // call against a cross-origin backend.
+    it('sends no credential header and no Content-Type under the cookie scheme', async () => {
+      declareCookieSession();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ roles: [] }),
+      });
+
+      await fetchRolesOverview();
+
+      const [, options] = globalThis.fetch.mock.calls[0];
+      expect(options.headers).not.toHaveProperty('Authorization');
+      expect(options.headers).not.toHaveProperty('X-Go-CSRF');
+      expect(options.headers).not.toHaveProperty('Content-Type');
+      expect(options.credentials).toBe('include');
+    });
+
+    it('sends no Authorization header when no credential is published', async () => {
       globalThis.fetch.mockResolvedValue({
         ok: true,
         status: 200,

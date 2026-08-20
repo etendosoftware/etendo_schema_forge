@@ -378,7 +378,6 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           apiBaseUrl={apiBaseUrl}
           documentId={data?.id}
           windowName="sales-invoice"
-          token={token}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}

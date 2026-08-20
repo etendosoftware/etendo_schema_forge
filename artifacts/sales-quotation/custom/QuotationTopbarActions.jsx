@@ -140,7 +140,6 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           apiBaseUrl={apiBaseUrl}
           documentId={recordId}
           windowName="sales-quotation"
-          token={token}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}

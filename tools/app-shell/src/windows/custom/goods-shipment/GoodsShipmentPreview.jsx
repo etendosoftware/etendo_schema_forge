@@ -226,7 +226,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           apiBaseUrl={apiBaseUrl}
           documentId={shipment.id}
           windowName="goods-shipment"
-          token={token}
           pdfBlobUrl={pdfUrl}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}

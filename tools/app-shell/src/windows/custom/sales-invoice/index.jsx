@@ -268,7 +268,6 @@ export default function SalesInvoiceWindow(props) {
           apiBaseUrl={apiBaseUrl}
           documentId={emailRow.id}
           windowName={windowName}
-          token={token}
           pdfBlobUrl={emailPdfUrl}
           pdfBlobLoading={emailPdfLoading}
           onClose={() => setEmailRow(null)}

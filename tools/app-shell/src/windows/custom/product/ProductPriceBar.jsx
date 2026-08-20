@@ -8,6 +8,7 @@ import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchS
 import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
@@ -124,7 +125,12 @@ function FieldLabel({ children }) {
   );
 }
 
-export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange }) {
+// ETP-4576 — no `token` prop: the credential comes from the active session
+// scheme, read at request time by the shared header builders. The two `!token`
+// gates below were the reason the price list and its tariff selector came up
+// empty under a cookie session — `token` is structurally undefined there, so
+// neither request was ever issued and nothing was logged.
+export default function ProductPriceBar({ data, apiBaseUrl, catalogs, api, onCountChange }) {
   const ui = useUI();
   const recordId = data?.id;
 
@@ -156,14 +162,15 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   ), [catalogs, priceSelector]);
 
   const refreshPrices = useCallback(async () => {
-    if (!recordId || !token) {
+    if (!recordId) {
       setPriceRows([]);
       return;
     }
     setLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/price?parentId=${recordId}&_startRow=0&_endRow=200`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: jsonHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error();
       const payload = await res.json();
@@ -173,7 +180,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setLoading(false);
     }
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, apiBaseUrl]);
 
   useEffect(() => { refreshPrices(); }, [refreshPrices]);
 
@@ -193,11 +200,12 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       setOptionsLoaded(true);
       return undefined;
     }
-    if (!apiBaseUrl || !token) return undefined;
+    if (!apiBaseUrl) return undefined;
 
     let aborted = false;
     fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}?limit=200`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(res => (res.ok ? res.json() : null))
       .then(payload => {
@@ -219,7 +227,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       });
 
     return () => { aborted = true; };
-  }, [adding, eagerOptions, apiBaseUrl, token, selectorColumn]);
+  }, [adding, eagerOptions, apiBaseUrl, selectorColumn]);
 
   // Reset the draft prices whenever we leave "adding" mode (cancel, Escape, outside
   // click, section toggle, or a successful add), so reopening starts clean.
@@ -303,7 +311,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     try {
       const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ [field]: String(value) }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
@@ -314,14 +323,15 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, ui, refreshPrices]);
+  }, [apiBaseUrl, ui, refreshPrices]);
 
   const handleDelete = useCallback(async (row) => {
     setSavingId(row.id);
     try {
       const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
       await refreshPrices();
@@ -330,7 +340,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, ui, refreshPrices]);
+  }, [apiBaseUrl, ui, refreshPrices]);
 
   const handleAdd = useCallback(async (plvId, unitPrice = 0, listPrice = 0) => {
     if (!plvId) return;
@@ -340,7 +350,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     try {
       const res = await fetch(`${apiBaseUrl}/price`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({
           parentId: recordId,
           product: recordId,
@@ -361,7 +372,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, recordId, ui, refreshPrices]);
+  }, [apiBaseUrl, recordId, ui, refreshPrices]);
 
   // CreatableSearchSelect asks us to open a creation UI. We link the new tariff to
   // the product ourselves (see submitCreateTariff), so we don't need its `onCreated`
@@ -382,7 +393,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   const submitCreateTariff = useCallback(async (name) => {
     const res = await fetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: writeHeaders(),
+      credentials: 'include',
       body: JSON.stringify({
         name,
         salesPriceList: isSales,
@@ -398,7 +410,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (!versionId) throw new Error(ui('priceUnableToSave'));
     setCreateOpen(false);
     await handleAdd(versionId, draftUnitPrice, draftListPrice);
-  }, [apiBaseUrl, token, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
+  }, [apiBaseUrl, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
 
   if (!recordId) {
     return (

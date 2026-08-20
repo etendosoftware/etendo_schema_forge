@@ -27,7 +27,7 @@ const MAX_COLLAPSED_CHIPS = 3;
  * when `data?.id` is absent (a brand-new, not-yet-persisted user).
  */
 export default function AssignTemplateRolesControl(props) {
-  const { data, token, apiBaseUrl } = props;
+  const { data, apiBaseUrl } = props;
   const ui = useUI();
   const { selectedRoleIds, setSelectedRoleIds } = useRoleSelection();
 
@@ -39,7 +39,10 @@ export default function AssignTemplateRolesControl(props) {
   const hasPersistedUser = !!data?.id;
 
   useEffect(() => {
-    if (!hasPersistedUser || !token || !apiBaseUrl) {
+    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
+    // structurally undefined, so the role list was never fetched and the control
+    // rendered empty forever: no error, just a missing affordance.
+    if (!hasPersistedUser || !apiBaseUrl) {
       setLoading(false);
       return undefined;
     }
@@ -60,7 +63,7 @@ export default function AssignTemplateRolesControl(props) {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPersistedUser, token, apiBaseUrl]);
+  }, [hasPersistedUser, apiBaseUrl]);
 
   // Collapse the expanded editor on outside click — mirrors any other inline
   // popover/dropdown in this codebase (click-away to close, no explicit "Done" button).

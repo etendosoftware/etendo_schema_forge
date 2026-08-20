@@ -87,7 +87,6 @@ export function PreviewSendModal({ show, closing, documentType, documentNo, bpNa
       apiBaseUrl={apiBaseUrl}
       documentId={documentId}
       windowName={windowName}
-      token={token}
       pdfBlobUrl={pdfBlobUrl}
       pdfBlobLoading={pdfBlobLoading}
       isClosing={closing}

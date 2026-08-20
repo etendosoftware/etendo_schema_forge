@@ -17,8 +17,11 @@ describe('SendDocumentModal', () => {
     assert.match(src, /export function SendDocumentButton/);
   });
 
-  it('accepts documentType, documentNo, bpName, bpEmail, documentId, windowName, token, and onClose props', () => {
-    assert.match(src, /documentType.*documentNo.*bpName.*bpEmail.*documentId.*windowName.*token.*onClose/);
+  // ETP-4576 dropped the `token` prop: the credential comes from the active
+  // session scheme, so the modal no longer receives or threads one.
+  it('accepts documentType, documentNo, bpName, bpEmail, documentId, windowName, and onClose props', () => {
+    assert.match(src, /documentType.*documentNo.*bpName.*bpEmail.*documentId.*windowName.*onClose/);
+    assert.doesNotMatch(src.replace(/\/\/.*$/gm, ''), /\btoken\b/);
   });
 
   it('builds reportId from windowName', () => {

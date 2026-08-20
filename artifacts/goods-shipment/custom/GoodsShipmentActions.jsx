@@ -266,7 +266,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           apiBaseUrl={apiBaseUrl}
           documentId={recordId}
           windowName="goods-shipment"
-          token={token}
           pdfBlobUrl={shipmentPdfUrl}
           pdfBlobLoading={shipmentPdfLoading}
           onClose={() => setShowSend(false)}

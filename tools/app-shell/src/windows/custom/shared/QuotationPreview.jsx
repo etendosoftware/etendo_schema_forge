@@ -227,7 +227,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
           apiBaseUrl={apiBaseUrl}
           documentId={quotation.id}
           windowName={windowName}
-          token={token}
           pdfBlobUrl={pdfUrl}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}

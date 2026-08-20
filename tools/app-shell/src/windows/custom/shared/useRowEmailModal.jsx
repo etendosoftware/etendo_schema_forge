@@ -62,7 +62,6 @@ export function useRowEmailModal({ usePdf, apiBaseUrl, token, windowName, docume
           apiBaseUrl={apiBaseUrl}
           documentId={emailRow.id}
           windowName={windowName}
-          token={token}
           allowEmail={allowEmail}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={loading}

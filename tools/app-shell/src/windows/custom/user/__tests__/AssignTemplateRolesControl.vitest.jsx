@@ -95,11 +95,9 @@ describe('AssignTemplateRolesControl', () => {
       }
     });
 
-    it('does not fetch when token is missing', () => {
-      renderControl({ token: null });
-      expect(fetchTemplateRoles).not.toHaveBeenCalled();
-    });
-
+    // ETP-4576 removed the `token` half of this gate: under a cookie session it
+    // is structurally undefined, so the control fetched nothing and rendered
+    // blank forever. `apiBaseUrl` is the only precondition left.
     it('does not fetch when apiBaseUrl is missing', () => {
       renderControl({ apiBaseUrl: null });
       expect(fetchTemplateRoles).not.toHaveBeenCalled();

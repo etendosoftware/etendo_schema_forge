@@ -249,7 +249,6 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           apiBaseUrl={apiBaseUrl}
           documentId={recordId}
           windowName="sales-order"
-          token={token}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}

@@ -1,3 +1,12 @@
+// ETP-4576 — both POSTs here take their credential from the active session
+// scheme instead of a `token` threaded down from the modal. Unsafe methods, so
+// the cookie scheme attaches the CSRF proof; `credentials: 'include'` is what
+// lets the `__Host-` cookie reach a cross-origin backend.
+// Relative, NOT `@/`: this module is imported by a `node --test` file and plain
+// Node cannot resolve the Vite alias — it fails the whole file with
+// ERR_MODULE_NOT_FOUND before any assertion runs.
+import { writeHeaders } from '../../lib/sessionHeaders.js';
+
 export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }
@@ -89,7 +98,6 @@ function trimDashes(value) {
 
 export async function cacheDocumentPreviewFile({
   apiBaseUrl,
-  token,
   specName,
   documentId,
   documentNo,
@@ -101,10 +109,8 @@ export async function cacheDocumentPreviewFile({
   const fileData = await blobToBase64(previewBlob);
   const res = await fetch(`${resolveNeoBaseUrl(apiBaseUrl)}/preview-file`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: writeHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       specName,
       recordId: documentId,
@@ -131,7 +137,6 @@ async function resolvePreviewBlob(pdfBlob, pdfBlobUrl) {
 
 export async function sendDocumentEmail({
   apiBaseUrl,
-  token,
   documentId,
   windowName,
   documentNo,
@@ -143,7 +148,6 @@ export async function sendDocumentEmail({
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
     apiBaseUrl,
-    token,
     specName: windowName,
     documentId,
     documentNo,
@@ -152,10 +156,8 @@ export async function sendDocumentEmail({
   });
   const res = await fetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: writeHeaders(),
+    credentials: 'include',
     body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
   });
   return readEmailContractResponse(res);

@@ -1,4 +1,9 @@
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '../userRoleAssignmentsApi.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
 
 // ETP-4906 — userRoleAssignmentsApi.js wraps two NEO Headless endpoints
 // (`SFUserRoleAssignments` read, `SFAssignUserRoles` write) using the exact same
@@ -47,8 +52,10 @@ describe('userRoleAssignmentsApi', () => {
       expect(url).toContain('/sws/neo/userroleassignments?UserId=user-1');
     });
 
-    it('wires the Authorization header from sf_auth_token when present', async () => {
-      localStorage.setItem('sf_auth_token', 'tok-123');
+    // ETP-4576: the credential comes from the active session scheme, not from
+    // `localStorage.sf_auth_token` — that key is purged on mount.
+    it('wires the Authorization header from the bearer scheme', async () => {
+      declareBearerSession();
       globalThis.fetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -58,7 +65,23 @@ describe('userRoleAssignmentsApi', () => {
       await fetchUserRoleAssignments();
 
       const [, options] = globalThis.fetch.mock.calls[0];
-      expect(options.headers.Authorization).toBe('Bearer tok-123');
+      expect(options.headers.Authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+      expect(options.credentials).toBe('include');
+    });
+
+    it('sends no credential header under the cookie scheme', async () => {
+      declareCookieSession();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ assignments: {} }),
+      });
+
+      await fetchUserRoleAssignments();
+
+      const [, options] = globalThis.fetch.mock.calls[0];
+      expect(options.headers).not.toHaveProperty('Authorization');
+      expect(options.credentials).toBe('include');
     });
 
     it('sends no Authorization header when no token is stored', async () => {
