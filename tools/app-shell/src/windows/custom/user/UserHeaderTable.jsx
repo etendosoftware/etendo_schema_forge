@@ -5,6 +5,7 @@ import RoleChipsCell, { resolveDefaultRoleId, resolveUserId, useUserRoleGridData
 import { RoleFilterControl } from './RoleFilterControl.jsx';
 import { useUserDebugMode } from './useUserDebugMode.js';
 import UserDebugPanel from './UserDebugPanel.jsx';
+import PendingInvitationPill from './PendingInvitationPill.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -32,15 +33,27 @@ import UserDebugPanel from './UserDebugPanel.jsx';
  *
  * **Column list mirrors the generated `UserTable.jsx` verbatim** (see
  * `artifacts/user/generated/web/user/UserTable.jsx`'s `@sf-generated-start
- * columns:user` block) for every column except `defaultRole` — same `key`/`column`/
- * `type`/`required`, so headers, AD-dictionary label resolution and the
- * advanced-filter builder behave identically. No `label:` literal is declared here —
- * `DataTable`'s own header resolution (`t(col.column) ?? col.label ?? col.key`) always
- * resolves these 4 columns through the native AD dictionary lookup (`t(col.column)`)
- * before ever falling back to `col.label`, so a hardcoded literal here would be dead
- * fallback text that the `sfqg` i18n check flags regardless of whether it renders.
- * Re-verify this list against that file whenever `artifacts/user/decisions.json`'s
- * `user` entity's grid fields change.
+ * columns:user` block) for every column except `defaultRole` and `invitationStatus`
+ * (see below) — same `key`/`column`/`type`/`required`, so headers, AD-dictionary
+ * label resolution and the advanced-filter builder behave identically. No `label:`
+ * literal is declared here for those 4 columns — `DataTable`'s own header resolution
+ * (`t(col.column) ?? col.label ?? col.key`) always resolves them through the native AD
+ * dictionary lookup (`t(col.column)`) before ever falling back to `col.label`, so a
+ * hardcoded literal here would be dead fallback text that the `sfqg` i18n check flags
+ * regardless of whether it renders. Re-verify this list against that file whenever
+ * `artifacts/user/decisions.json`'s `user` entity's grid fields change.
+ *
+ * **`invitationStatus` (ETP-4830 scope addition) has no generated-table equivalent at
+ * all** — it is not an `AD_User` column, just a backend-contract-only field NEO adds
+ * to every `user` GET response (list rows included), so there is nothing for
+ * `generate-frontend.js` to ever emit for it. It renders the exact same
+ * `PendingInvitationPill` (`./PendingInvitationPill.jsx`) already shown in the detail
+ * form's toolbar — extracted into its own file specifically so this grid column and
+ * that toolbar pill share ONE status→style mapping instead of two. Declared via
+ * `invitationColumn` below (not the static `columns` array), because building its
+ * `label` needs the `ui()` hook, which — unlike the 5 columns above, which never call
+ * `ui()` for their headers — is only available inside the component render, not at
+ * module scope.
  */
 const columns = [
   { key: 'name', column: 'Name', type: 'string', required: true },
@@ -108,7 +121,29 @@ export default function UserHeaderTable(props) {
     ),
   }), [rolesById, adminRoleId, assignments, loading]);
 
-  const tableColumns = useMemo(() => [...columns, roleColumn], [roleColumn]);
+  // ETP-4830 scope addition — "Invitation" column, placed immediately before the
+  // "Rol" column: both are administrative/onboarding-state indicators about the
+  // user's account, a sensible visual grouping at the end of the row (same rationale
+  // `roleColumn` above already established for putting role state last). No AD
+  // `column:` value exists for this field (see the file's own doc comment above), so
+  // the header label comes from `labelOverrides`-free direct `ui()` translation —
+  // unlike `roleColumn`'s `Default_Ad_Role_ID` override, there is no shared native
+  // dictionary entry this could collide with.
+  const invitationColumn = useMemo(() => ({
+    key: 'invitationStatus',
+    type: 'custom',
+    label: ui('usersGridInvitationColumn'),
+    render: (row) => (
+      <PendingInvitationPill
+        status={row?.invitationStatus}
+        data-testid="PendingInvitationPill__grid" />
+    ),
+  }), [ui]);
+
+  const tableColumns = useMemo(
+    () => [...columns, invitationColumn, roleColumn],
+    [invitationColumn, roleColumn],
+  );
 
   // Client-side role filter, applied over the rows already loaded for this page —
   // there is no backend query param for "has this composed template role" today

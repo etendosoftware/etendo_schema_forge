@@ -25,6 +25,12 @@ vi.mock('@/i18n', () => ({
   // ETP-4906 Round 4 (DEV wave 9) — UserHeaderTable now calls useLocaleSwitch() to build
   // its labelOverrides memo keyed by the current locale.
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+  // ETP-4830 scope addition — the new `invitationStatus` column's cell renders the
+  // real (unmocked) `PendingInvitationPill`, which renders the real `DocumentStatusPill`,
+  // which imports `useLocale` from `@/i18n` — stub it so that import doesn't crash.
+  // Its own `label` is always explicit in `PendingInvitationPill`, so `dictionary` is
+  // never actually read down `statusLabel`'s fallback path.
+  useLocale: () => ({}),
 }));
 
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
@@ -126,13 +132,13 @@ describe('UserHeaderTable — layout', () => {
     expect(await screen.findByTestId('stub-role-filter-count')).toHaveTextContent('3');
   });
 
-  it('appends exactly one extra column (defaultRole → custom) after the hand-mirrored base columns', async () => {
+  it('appends invitationStatus and defaultRole (both custom) after the hand-mirrored base columns', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
     await screen.findByTestId('data-table');
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'businessPartner', 'email', 'locked', 'active', 'defaultRole',
+      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'defaultRole',
     ]);
   });
 
@@ -159,6 +165,17 @@ describe('UserHeaderTable — layout', () => {
     const col = tableProps.columns.find((c) => c.key === 'defaultRole');
     expect(col.type).toBe('custom');
     expect(col.filterMode).toBe('identifier');
+    expect(typeof col.render).toBe('function');
+  });
+
+  it('marks the invitationStatus column as type "custom" with a translated label and a render function', async () => {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    await screen.findByTestId('data-table');
+    const col = tableProps.columns.find((c) => c.key === 'invitationStatus');
+    expect(col.type).toBe('custom');
+    expect(col.label).toBe('usersGridInvitationColumn');
     expect(typeof col.render).toBe('function');
   });
 
@@ -287,5 +304,55 @@ describe('UserHeaderTable — debug panel (ETP-4830, item #4)', () => {
 
     expect(screen.getByTestId('stub-user-debug-panel')).toBeInTheDocument();
     expect(screen.getByTestId('stub-user-debug-panel-count')).toHaveTextContent(String(ROWS.length));
+  });
+});
+
+/**
+ * ETP-4830 scope addition — the invitationStatus grid column's cell render. The
+ * exhaustive status → visual-treatment matrix already has its own dedicated,
+ * comprehensive suite (`PendingInvitationPill.vitest.jsx`) — the shared mapping this
+ * grid column and the detail-header toolbar pill both reuse. These tests only confirm
+ * this column genuinely wires that shared component in per-row (reads
+ * `row.invitationStatus`, renders a blank cell for null/unrecognized/missing without
+ * crashing), NOT the full state matrix again.
+ */
+describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scope addition)', () => {
+  async function getInvitationColumn() {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+    return tableProps.columns.find((c) => c.key === 'invitationStatus');
+  }
+
+  it.each(['PENDING', 'SENT'])('renders the amber pill for invitationStatus %s', async (status) => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: status }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', status);
+  });
+
+  it('renders the red pill for invitationStatus DELIVERY_FAILED', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'DELIVERY_FAILED' }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'destructive');
+  });
+
+  it.each(['ACCEPTED', 'EXPIRED', 'REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
+    'renders a blank cell (no crash) for invitationStatus %s',
+    async (status) => {
+      const col = await getInvitationColumn();
+      const { container } = render(col.render({ id: 'row-1', invitationStatus: status }));
+
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
+
+  it('renders a blank cell (no crash) when the row itself is undefined', async () => {
+    const col = await getInvitationColumn();
+    expect(() => render(col.render(undefined))).not.toThrow();
   });
 });

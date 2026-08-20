@@ -7,61 +7,14 @@ import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
-import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
+import PendingInvitationPill from './PendingInvitationPill.jsx';
 
 function sameIdSet(a, b) {
   if (a.length !== b.length) return false;
   const setA = new Set(a);
   return b.every((id) => setA.has(id));
-}
-
-/**
- * ETP-4830 — pending/failed invitation pill, wired as `UserPage`'s/`DetailView`'s
- * `topbarExtra` slot: a plain pass-through prop (not a `decisions.json`-declared
- * extension point), rendered in the SAME toolbar row as the Cancel button —
- * `DetailView.jsx`'s "Action bar: Cancel + status" row renders, in order, the Cancel
- * button, the `statusField` pill, `extraBadges`, then `topbarExtra`, all inside one
- * flex group. Reusing this existing generic slot (rather than
- * `window.extraBadges`/`statusPills`, whose `renderStatusPillBadge` only compiles a
- * boolean field into a 2-state true/false pill) means no `schema_forge_core`
- * generator change was needed for this ticket — `invitationStatus` is the confirmed
- * backend contract's 6-state enum (`"PENDING" | "SENT" | "ACCEPTED" | "EXPIRED" |
- * "REVOKED" | "DELIVERY_FAILED" | null`), a shape `extraBadges` cannot express today.
- *
- * `PENDING` is only a transient pre-send state within the request that creates the
- * invitation — the persisted status after a successful send is `SENT`, so both render
- * the same amber pill (an invite is outstanding either way). `DELIVERY_FAILED` gets its
- * own red pill so the admin notices the email never went out. Every other value
- * (`ACCEPTED`, `EXPIRED`, `REVOKED`, `null`) renders nothing.
- *
- * Purely reactive to `data` — renders nothing once the backend flips `invitationStatus`
- * to a terminal state (e.g. once the invitee accepts), no local state or polling needed
- * here.
- */
-function PendingInvitationPill({ data }) {
-  const ui = useUI();
-  const status = data?.invitationStatus;
-  if (status === 'PENDING' || status === 'SENT') {
-    return (
-      <DocumentStatusPill
-        status={status}
-        tone="warning"
-        label={ui('pendingInvitationBadge')}
-        data-testid="PendingInvitationPill__toolbar" />
-    );
-  }
-  if (status === 'DELIVERY_FAILED') {
-    return (
-      <DocumentStatusPill
-        status={status}
-        tone="destructive"
-        label={ui('invitationDeliveryFailedBadge')}
-        data-testid="PendingInvitationPill__toolbar" />
-    );
-  }
-  return null;
 }
 
 /**
@@ -129,15 +82,20 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
 /**
  * ETP-4830 — composite `topbarExtra` component: pending-invitation pill first, then
  * the active/inactive toggle, matching the reference screenshot's visual order
- * (pill-then-toggle is the reasonable default absent a pixel-exact mockup). Both
- * children read from the same props `DetailView.jsx` passes into `topbarExtra`
- * (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread straight
- * through to each.
+ * (pill-then-toggle is the reasonable default absent a pixel-exact mockup).
+ * `ActiveStatusToggle` reads straight off the same props `DetailView.jsx` passes into
+ * `topbarExtra` (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread
+ * straight through. `PendingInvitationPill` (`./PendingInvitationPill.jsx`, extracted
+ * so the Users LIST GRID can render the identical pill per row — see that file's own
+ * doc comment) only needs the raw status value, so only `data?.invitationStatus` is
+ * pulled out of `props` for it, rather than spreading the whole prop bag.
  */
 function TopbarExtra(props) {
   return (
     <div className="flex items-center gap-3" data-testid="UserTopbarExtra">
-      <PendingInvitationPill {...props} />
+      <PendingInvitationPill
+        status={props.data?.invitationStatus}
+        data-testid="PendingInvitationPill__toolbar" />
       <ActiveStatusToggle {...props} />
     </div>
   );
