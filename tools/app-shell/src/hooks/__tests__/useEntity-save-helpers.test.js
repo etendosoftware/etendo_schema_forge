@@ -929,7 +929,15 @@ describe('resolveSavedRecordAfterSave', () => {
     try {
       await resolveSavedRecordAfterSave({ id: '1' }, opts());
       assert.equal(seen[0][0], '/api/header/1');
-      assert.deepEqual(seen[0][1], { headers: { Authorization: 'Bearer t' } });
+      // ETP-4576 — `credentials: 'include'` is now unconditional on this refetch, so
+      // the session cookie travels cross-origin too (the dev setup, :3100 → :8080,
+      // and any split-origin deploy; same-origin sends it by default anyway). The
+      // Authorization header here is supplied BY THIS TEST through opts() — the
+      // helper forwards whatever headers it is handed and builds none itself.
+      assert.deepEqual(seen[0][1], {
+        headers: { Authorization: 'Bearer t' },
+        credentials: 'include',
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
