@@ -523,6 +523,7 @@ export const api = {
   "actions": [
     {
       "entity": "header",
+      "field": "generateTemplate",
       "column": "Generatetemplate",
       "url": "/sws/neo/purchase-order/header/{id}/action/generateTemplate",
       "processId": "800022",
@@ -530,6 +531,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "rMPickFromShipment",
       "column": "RM_PickFromShipment",
       "url": "/sws/neo/purchase-order/header/{id}/action/rMPickFromShipment",
       "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
@@ -537,11 +539,13 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "rMReceiveMaterials",
       "column": "RM_ReceiveMaterials",
       "url": "/sws/neo/purchase-order/header/{id}/action/rMReceiveMaterials"
     },
     {
       "entity": "header",
+      "field": "rMCreateInvoice",
       "column": "RM_CreateInvoice",
       "url": "/sws/neo/purchase-order/header/{id}/action/rMCreateInvoice",
       "processId": "FF80808133362F6A013336781FCE0066",
@@ -549,6 +553,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "aPRMAddPayment",
       "column": "EM_APRM_AddPayment",
       "url": "/sws/neo/purchase-order/header/{id}/action/aPRMAddPayment",
       "processId": "9BED7889E1034FE68BD85D5D16857320",
@@ -556,6 +561,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "documentAction",
       "column": "DocAction",
       "url": "/sws/neo/purchase-order/header/{id}/action/documentAction",
       "processId": "104",
@@ -563,6 +569,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "copyFrom",
       "column": "CopyFrom",
       "url": "/sws/neo/purchase-order/header/{id}/action/copyFrom",
       "processId": "211",
@@ -570,6 +577,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "copyFromPO",
       "column": "CopyFromPO",
       "url": "/sws/neo/purchase-order/header/{id}/action/copyFromPO",
       "processId": "8B81D80B06364566B87853FEECAB5DE0",
@@ -577,6 +585,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "rMAddOrphanLine",
       "column": "RM_AddOrphanLine",
       "url": "/sws/neo/purchase-order/header/{id}/action/rMAddOrphanLine",
       "processId": "23D1B163EC0B41F790CE39BF01DA320E",
@@ -584,6 +593,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "createOrder",
       "column": "Convertquotation",
       "url": "/sws/neo/purchase-order/header/{id}/action/createOrder",
       "processId": "A3FE1F9892394386A49FB707AA50A0FA",
@@ -591,6 +601,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "calculatePromotions",
       "column": "Calculate_Promotions",
       "url": "/sws/neo/purchase-order/header/{id}/action/calculatePromotions",
       "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
@@ -598,6 +609,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "createPOLines",
       "column": "Create_POLines",
       "url": "/sws/neo/purchase-order/header/{id}/action/createPOLines",
       "processId": "6995A4C2592D434A9E16B71E1694CBCA",
@@ -605,6 +617,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/purchase-order/header/{id}/action/processNow",
       "processId": "104",
@@ -612,6 +625,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/purchase-order/header/{id}/action/posted",
       "processId": "57496FB9CF9E4E8F847224017941570E",
@@ -619,6 +633,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "cancelandreplace",
       "column": "Cancelandreplace",
       "url": "/sws/neo/purchase-order/header/{id}/action/cancelandreplace",
       "processId": "A2FAF49712D1445ABE750315CE1B473A",
@@ -626,6 +641,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "confirmcancelandreplace",
       "column": "Confirmcancelandreplace",
       "url": "/sws/neo/purchase-order/header/{id}/action/confirmcancelandreplace",
       "processId": "0C2AFAEFB67B4CB8A1429195EB119A49",
@@ -633,6 +649,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "rMPickfromreceipt",
       "column": "RM_Pickfromreceipt",
       "url": "/sws/neo/purchase-order/header/{id}/action/rMPickfromreceipt",
       "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
@@ -640,6 +657,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "psd2GenerateBankPayment",
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
       "processId": "0661406A983B4D8EA611F8596F114D52",
@@ -647,6 +665,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "eTPRRemovePayment",
       "column": "EM_Etpr_Remove_Payment",
       "url": "/sws/neo/purchase-order/header/{id}/action/eTPRRemovePayment",
       "processId": "D2923463223C4F1EADE335D22B9D8FE8",
@@ -654,6 +673,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "managePrereservation",
       "column": "Manage_Prereservation",
       "url": "/sws/neo/purchase-order/lines/{id}/action/managePrereservation",
       "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
@@ -661,6 +681,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "explode",
       "column": "Explode",
       "url": "/sws/neo/purchase-order/lines/{id}/action/explode",
       "processId": "DFC78024B1F54CBB95DC73425BA6687F",
@@ -668,6 +689,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "manageReservation",
       "column": "Manage_Reservation",
       "url": "/sws/neo/purchase-order/lines/{id}/action/manageReservation",
       "processId": "5F547560D3DE401AA0B570F22E2C6C06",
@@ -675,6 +697,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "selectOrderLine",
       "column": "Relate_Orderline",
       "url": "/sws/neo/purchase-order/lines/{id}/action/selectOrderLine",
       "processId": "C4265E27C8134096B49DFBF69369DFC6",
