@@ -8,6 +8,7 @@
 {{{css}}}
 .tree-row td { border-bottom: 1px solid #eef2f7 !important; }
 .tree-row.heading td { font-weight: 700; background: #f8fafc; }
+.group-header td { background: #1a1a2e; color: #ffffff; font-weight: 600; padding: 2mm 4mm; font-size: 11pt; }
 /* Indentation is a per-depth left pad on the element cell — mirrors Classic,
    which prepends spaces to the label rather than using nested tables. */
 .ind-0 { padding-left: 2mm !important; }
@@ -42,6 +43,11 @@
     </thead>
     <tbody>
       {{#each rows}}
+      {{#if this.isGroupStart}}
+      <tr class="group-header">
+        <td colspan="{{#ifCond @root.meta.params.compareTo '===' 'true'}}3{{else}}2{{/ifCond}}">{{this.group}}</td>
+      </tr>
+      {{/if}}
       <tr class="tree-row {{#if this.isHeading}}heading{{/if}}">
         <td class="{{this.indentClass}}">{{this.element}}</td>
         <td class="cell-amount">{{formatCurrency this.amount}}</td>

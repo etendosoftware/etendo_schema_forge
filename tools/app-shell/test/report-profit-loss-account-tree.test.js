@@ -250,6 +250,10 @@ describe('profit-loss SQL — returns the flat tree-node list buildAccountReport
     'isalwaysshown',
     'own_amt',
     'own_amt_ref',
+    // ETP-4899 — the two columns the generalized (P&L + Balance Sheet) engine
+    // added: the branch's inherited sign and its c_acct_rpt_group.
+    'accountsign',
+    'group_name',
   ]) {
     it(`projects ${column}`, () => {
       assert.match(SQL, new RegExp(`\\b${column}\\b`), `expected the SQL to return a "${column}" column`);
@@ -295,11 +299,24 @@ describe('profit-loss SQL — walks the accounting report tree, not a bare chart
   });
 });
 
-describe('profit-loss SQL — amounts are credit MINUS debit (Classic\'s P&L sign convention)', () => {
-  it('both own_amt and own_amt_ref sum fa.amtacctcr - fa.amtacctdr', () => {
-    const matches = [...SQL.matchAll(/fa\.amtacctcr\s*-\s*fa\.amtacctdr/g)];
-    assert.equal(matches.length, 2, 'expected exactly two credit-minus-debit expressions (main + reference period)');
-    assert.doesNotMatch(SQL, /fa\.amtacctdr\s*-\s*fa\.amtacctcr/, 'the sign must never be flipped to debit-minus-credit');
+describe('profit-loss SQL — amounts are RAW debit minus credit (the sign flip lives in JS)', () => {
+  // ETP-4899 — the SQL no longer bakes in P&L's `cr - dr` polarity. It returns
+  // the raw `dr - cr` and buildAccountReportTree() applies the branch's
+  // inherited `accountsign` (Classic's applySignAsPerParent), which is what
+  // lets the SAME engine drive Balance Sheet's two oppositely-signed roots.
+  // P&L's single root is credit-normal, so the rendered output is unchanged.
+  it('both own_amt and own_amt_ref sum fa.amtacctdr - fa.amtacctcr', () => {
+    const matches = [...SQL.matchAll(/fa\.amtacctdr\s*-\s*fa\.amtacctcr/g)];
+    assert.equal(matches.length, 2, 'expected exactly two debit-minus-credit expressions (main + reference period)');
+    assert.doesNotMatch(
+      SQL,
+      /fa\.amtacctcr\s*-\s*fa\.amtacctdr/,
+      'the SQL must not pre-flip the sign — accountSignMultiplier() owns that now'
+    );
+  });
+
+  it('projects ev.accountsign so the JS engine can inherit the branch polarity', () => {
+    assert.match(SQL, /ev\.accountsign/);
   });
 
   it('the reference-period amount is gated by \'__COMPARETO__\' = \'true\'', () => {
@@ -382,11 +399,17 @@ const META_BASE = {
 // Shaped exactly like buildAccountReportTree()'s output, with the real amounts
 // from the verified GOClient 2026 run (P.G.4 / 600 / 6000, plus a comma-and-
 // quote-bearing name to exercise the CSV escaping).
+//
+// ETP-4899 — every row also carries `group`/`isGroupStart`. Profit & Loss has
+// exactly ONE c_acct_rpt_group, so `isGroupStart` is false on every row
+// INCLUDING the first: the shared .group-header band must never render here
+// (Balance Sheet, with two roots, is the report that lights it up).
+const GROUP = 'Pérdidas y Ganancias';
 const ROWS = [
-  { node_id: 'n1', value: 'P.G.1', name: 'Importe neto de la cifra de negocios', element: 'P.G.1 - Importe neto de la cifra de negocios', elementlevel: 'E', amount: 8716.16, amount_ref: 8000, indent: 0, indentClass: 'ind-0', isHeading: true },
-  { node_id: 'n2', value: '700', name: 'Ventas de mercaderías', element: '700 - Ventas de mercaderías', elementlevel: 'C', amount: 8716.16, amount_ref: 8000, indent: 1, indentClass: 'ind-1', isHeading: false },
-  { node_id: 'n3', value: '600', name: 'Compras, netas de "rappels"', element: '600 - Compras, netas de "rappels"', elementlevel: 'C', amount: -22.48, amount_ref: 0, indent: 1, indentClass: 'ind-1', isHeading: false },
-  { node_id: 'n4', value: '6000', name: 'Compras de mercaderías', element: '6000 - Compras de mercaderías', elementlevel: 'D', amount: -22.48, amount_ref: 0, indent: 2, indentClass: 'ind-2', isHeading: false },
+  { node_id: 'n1', value: 'P.G.1', name: 'Importe neto de la cifra de negocios', element: 'P.G.1 - Importe neto de la cifra de negocios', elementlevel: 'E', amount: 8716.16, amount_ref: 8000, indent: 0, indentClass: 'ind-0', isHeading: true, group: GROUP, isGroupStart: false },
+  { node_id: 'n2', value: '700', name: 'Ventas de mercaderías', element: '700 - Ventas de mercaderías', elementlevel: 'C', amount: 8716.16, amount_ref: 8000, indent: 1, indentClass: 'ind-1', isHeading: false, group: GROUP, isGroupStart: false },
+  { node_id: 'n3', value: '600', name: 'Compras, netas de "rappels"', element: '600 - Compras, netas de "rappels"', elementlevel: 'C', amount: -22.48, amount_ref: 0, indent: 1, indentClass: 'ind-1', isHeading: false, group: GROUP, isGroupStart: false },
+  { node_id: 'n4', value: '6000', name: 'Compras de mercaderías', element: '6000 - Compras de mercaderías', elementlevel: 'D', amount: -22.48, amount_ref: 0, indent: 2, indentClass: 'ind-2', isHeading: false, group: GROUP, isGroupStart: false },
 ];
 
 function renderHtml({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
@@ -434,6 +457,15 @@ describe('profit-loss template.hbs — tree rendering', () => {
     for (let i = 0; i <= 6; i += 1) {
       assert.match(html, new RegExp(`\\.ind-${i}\\s*\\{`), `missing CSS rule for .ind-${i}`);
     }
+  });
+
+  it('renders ZERO group-header bands — P&L has a single c_acct_rpt_group', () => {
+    // The band markup is shared with Balance Sheet (same engine, same
+    // template shape); it must stay invisible here because
+    // buildAccountReportTree() never flips isGroupStart on a one-group report.
+    const html = renderHtml({ compareTo: false });
+    assert.equal([...html.matchAll(/class="group-header"/g)].length, 0);
+    assert.doesNotMatch(html.slice(html.indexOf('<tbody>')), new RegExp(GROUP));
   });
 
   it('formats amounts through formatCurrency (es-ES grouping, negatives preserved)', () => {
@@ -497,9 +529,16 @@ describe('profit-loss template-excel.hbs', () => {
   it('flattens the tree: depth becomes a numeric "Level" column plus separate Code/Name columns', () => {
     const html = renderExcel({ compareTo: false });
     assert.doesNotMatch(html, /Missing helper/);
+    assert.match(html, /<th>Group<\/th>/);
     assert.match(html, /<th>Level<\/th>/);
     assert.match(html, /<th>Code<\/th>/);
     assert.match(html, /<th>Name<\/th>/);
+    // ETP-4899 — Group is the LEADING column, ahead of Level/Code/Name.
+    const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+    assert.deepEqual(
+      [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
+      ['Group', 'Level', 'Code', 'Name', 'Amount']
+    );
     // No indentation classes leak into the calculation-friendly grid.
     assert.doesNotMatch(html, /ind-\d/);
     assert.equal([...html.matchAll(/<tr>/g)].length, ROWS.length + 1); // + header row
@@ -512,6 +551,11 @@ describe('profit-loss template-excel.hbs', () => {
     assert.match(row, /<td data-cell-type="number">2<\/td>/, 'the "6000" row sits at indent 2');
     assert.match(row, /<td>6000<\/td>/);
     assert.match(row, /<td>Compras de mercaderías<\/td>/);
+    // The row's own cells, in order: Group first, then Level/Code/Name/Amount.
+    assert.deepEqual(
+      [...row.matchAll(/<td(?: data-cell-type="number")?>([^<]*)<\/td>/g)].map((m) => m[1]),
+      [GROUP, '2', '6000', 'Compras de mercaderías', '-22.48']
+    );
   });
 
   it('amount cells are numeric (data-cell-type="number") with RAW unformatted values', () => {
@@ -567,15 +611,19 @@ describe('profit-loss template-csv.hbs', () => {
     assert.doesNotMatch(csv, /</, 'the CSV export must contain no markup at all');
     const lines = csv.trim().split('\n');
     assert.equal(lines.length, ROWS.length + 1);
-    assert.equal(lines[0], 'Level,Code,Element,Amount');
+    // ETP-4899 — a leading Group column (the c_acct_rpt_group name) now
+    // precedes Level/Code/Element/Amount, mirroring template-excel.hbs.
+    assert.equal(lines[0], 'Group,Level,Code,Element,Amount');
   });
 
-  it('writes the tree depth as the Level column and the raw dot-decimal amount', () => {
+  it('writes the group, the tree depth as the Level column and the raw dot-decimal amount', () => {
     const csv = renderCsv({ compareTo: false });
     const lines = csv.trim().split('\n');
-    assert.equal(lines[1], '0,P.G.1,Importe neto de la cifra de negocios,8716.16');
-    assert.equal(lines[4], '2,6000,Compras de mercaderías,-22.48');
+    assert.equal(lines[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16`);
+    assert.equal(lines[4], `${GROUP},2,6000,Compras de mercaderías,-22.48`);
     assert.doesNotMatch(csv, /8\.716,16/, 'amounts must never go through formatCurrency in the CSV export');
+    // Every data line carries its group, not just the first of each band.
+    for (const line of lines.slice(1)) assert.ok(line.startsWith(`${GROUP},`), `missing group prefix: ${line}`);
   });
 
   it('quotes a name containing a comma and doubles embedded quotes (no &quot; leak)', () => {
@@ -586,16 +634,24 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('appends the reference-amount column only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Level,Code,Element,Amount,Reference Amount');
-    assert.equal(on[1], '0,P.G.1,Importe neto de la cifra de negocios,8716.16,8000');
+    assert.equal(on[0], 'Group,Level,Code,Element,Amount,Reference Amount');
+    assert.equal(on[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16,8000`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
-    assert.equal(off[0], 'Level,Code,Element,Amount');
-    assert.equal(off[1], '0,P.G.1,Importe neto de la cifra de negocios,8716.16');
+    assert.equal(off[0], 'Group,Level,Code,Element,Amount');
+    assert.equal(off[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16`);
   });
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Level,Code,Elemento,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Group,Level,Code,Elemento,Importe,Importe de Referencia');
+  });
+
+  it('quotes a group name containing a comma through csvField', () => {
+    const rows = ROWS.map((r) => ({ ...r, group: 'Activo, corriente' }));
+    const csv = renderCsv({ compareTo: false, rows });
+    for (const line of csv.trim().split('\n').slice(1)) {
+      assert.ok(line.startsWith('"Activo, corriente",'), `group must be quoted: ${line}`);
+    }
   });
 });
