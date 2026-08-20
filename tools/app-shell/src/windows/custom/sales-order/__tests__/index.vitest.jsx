@@ -22,10 +22,25 @@ vi.mock('@/i18n', () => ({
 }));
 
 // ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
+// ETP-4888 — index.jsx also wires useTaxSifLineRowActions(), which reads selectedOrg
+// from useAuth(). Mirrors the convention in sales-invoice/purchase-invoice's own
+// index.vitest.jsx for the same @/auth/AuthContext.jsx mock.
 let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
   useWindowAccess: () => currentWindowAccessTier,
   WindowAccessGuard: (props) => <div data-testid="window-access-guard" data-window-id={props.windowId} />,
+}));
+
+// useTaxSifLineRowActions() also calls useFiscalConfig(), whose own useApiFetch()
+// resolves to the package-internal AuthContext (a different module instance than the
+// '@/auth/AuthContext.jsx' alias above), so mocking useAuth alone isn't enough — it
+// still throws "useAuth must be used within AuthProvider". Mocking useFiscalConfig.js
+// itself sidesteps that mismatch entirely, same as sales-invoice/purchase-invoice's
+// own index.vitest.jsx does for the same pair.
+let fiscalProfile = null;
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
 }));
 
 let lastUseOrderWindowArgs;
