@@ -693,6 +693,26 @@ const SIDEBAR_SECTIONS = [
   { key: 'options', labelKey: 'displayOptions' },
 ];
 
+// A parameter can be required outright (`p.required`) or only conditionally,
+// when another parameter currently holds a given value (`p.requiredIf: {param,
+// equals}` — e.g. Profit & Loss's "Reference Year", only mandatory while
+// "Compare To" is toggled on, ETP-4899). Both the sidebar's live asterisk and
+// the shared `validateRequired()` (sidebar submit + top-bar format buttons)
+// read this same helper, so they never drift apart.
+function isParamRequired(p, params) {
+  return !!p.required || !!(p.requiredIf && params[p.requiredIf.param] === p.requiredIf.equals);
+}
+
+// Same conditional idea as `isParamRequired`, but for visibility: a param with
+// `visibleIf: {param, equals}` only renders while that other param currently
+// holds the given value (e.g. Profit & Loss's Reference Year/From/To Reference
+// Date only make sense — and only show — once "Compare To" is toggled on,
+// ETP-4899). A param with no `visibleIf` is always visible (subject to the
+// existing static `hidden` flag, checked separately).
+function isParamVisible(p, params) {
+  return !p.visibleIf || params[p.visibleIf.param] === p.visibleIf.equals;
+}
+
 // Reports whose contract declares its own `sections` (id + label) use the
 // collapsible accordion below. Reports without one keep the legacy flat
 // primary/dimensions/options layout untouched — migrate them one at a time
@@ -723,7 +743,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
   const grouped = {};
   for (const p of report.parameters || []) {
-    if (p.hidden) continue;
+    if (p.hidden || !isParamVisible(p, params)) continue;
     const sec = p.section || 'primary';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push(p);
@@ -918,7 +938,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     const hasError = !!errors[p.name];
     const labelEl = (
       <label className="block text-xs font-medium text-foreground mb-1.5">
-        {label}{p.required && <span className="text-destructive ml-0.5">*</span>}
+        {label}{isParamRequired(p, params) && <span className="text-destructive ml-0.5">*</span>}
       </label>
     );
     const errorBorder = hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border';
@@ -932,19 +952,33 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     return renderTextParam(p, ctx);
   };
 
+  // Renders params in the exact order the contract declares them (ETP-4899 —
+  // previously every date param was hoisted to the top of the section
+  // regardless of declared order, e.g. Profit & Loss's "Year" always landed
+  // BELOW "Starting/Ending Date" even though the contract lists it first).
+  // Adjacent date params still pair up into the 2-column grid — just wherever
+  // that run actually falls in the declared order, not forced to the front.
   const renderSection = (sec, sectionParams) => {
-    const dateParams = sectionParams.filter(p => p.type === 'date');
-    const otherParams = sectionParams.filter(p => p.type !== 'date');
-    return (
-      <div className="space-y-3">
-        {dateParams.length > 0 && (
-          <div className={dateParams.length >= 2 ? 'grid grid-cols-2 gap-2' : ''}>
-            {dateParams.map(renderParam)}
+    const blocks = [];
+    let i = 0;
+    while (i < sectionParams.length) {
+      if (sectionParams[i].type === 'date') {
+        const run = [];
+        while (i < sectionParams.length && sectionParams[i].type === 'date') {
+          run.push(sectionParams[i]);
+          i++;
+        }
+        blocks.push(
+          <div key={`date-run-${run[0].name}`} className={run.length >= 2 ? 'grid grid-cols-2 gap-2' : ''}>
+            {run.map(renderParam)}
           </div>
-        )}
-        {otherParams.map(renderParam)}
-      </div>
-    );
+        );
+      } else {
+        blocks.push(renderParam(sectionParams[i]));
+        i++;
+      }
+    }
+    return <div className="space-y-3">{blocks}</div>;
   };
 
   return (
@@ -1174,7 +1208,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     const newErrors = {};
     for (const p of report.parameters || []) {
       if (p.hidden) continue;
-      if (p.required && !params[p.name]) newErrors[p.name] = true;
+      if (isParamRequired(p, params) && !params[p.name]) newErrors[p.name] = true;
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

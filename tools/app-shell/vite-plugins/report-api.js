@@ -259,6 +259,141 @@ function groupAggregateRowsByDimension(rows) {
   return groups;
 }
 
+// Chart-of-accounts depth ranking (ETP-4899). Etendo's `C_ElementValue.ELEMENTLEVEL`
+// list — Heading, Account, Breakdown, Subaccount — is a hierarchy, coarsest first:
+// e.g. P.G.1 (E) -> 700 (C) -> 7000 (D) -> 70000000 (S).
+const ELEMENT_LEVEL_RANK = { E: 0, C: 1, D: 2, S: 3 };
+
+/**
+ * Builds the indented account-report tree Profit & Loss renders (ETP-4899),
+ * mirroring Classic's `AccountTree` engine (`GeneralAccountingReports`).
+ *
+ * `nodeRows` is the flat tree the contract's `sql.query` returns — one row per
+ * node reachable from the accounting report's root, carrying `node_id`,
+ * `parent_id`, `sort_path` (zero-padded seqno chain, so plain string sort gives
+ * document order), `elementlevel`, and its OWN posted amount for the main and
+ * reference periods. `operandRows` is `sql.operandsQuery`'s output: the formula
+ * edges from `C_ELEMENTVALUE_OPERAND` (`owner_id`, `operand_id`, `sign`).
+ *
+ * Three Classic behaviours this reproduces, all verified against real PDFs:
+ *  - A node's value is the roll-up of its children; a node with NO children but
+ *    WITH operands is a *formula* node instead (Classic's `hasOperand` ->
+ *    `operandsCalculate`), e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)".
+ *    Formulas nest (C = A+B), hence the recursion + cycle guard.
+ *  - `accountLevel` is a CUMULATIVE DEPTH CUTOFF, not an equality filter:
+ *    everything from the root down to and including that level is shown, and
+ *    the walk stops there (Classic's `levelFilter` sticky `found` flag).
+ *  - `showOnlyWithValue` keeps a node when EITHER period is non-zero (Classic
+ *    ORs `qty`/`qtyRef`), and never hides an `isalwaysshown='Y'` node.
+ *
+ * Returns the flattened, document-ordered rows the template renders, with
+ * `indent`/`indentClass`/`isHeading` precomputed here rather than in Handlebars
+ * (which has no arithmetic, and where every new helper must be hand-duplicated
+ * into JSREPORT_HELPER_SOURCES — see report-html-helpers.js).
+ */
+export function buildAccountReportTree(nodeRows, operandRows, options = {}) {
+  const { accountLevel = 'S', showOnlyWithValue = false } = options;
+  const byId = new Map();
+  for (const r of nodeRows || []) {
+    byId.set(r.node_id, {
+      ...r,
+      children: [],
+      amount: null,
+      amount_ref: null,
+    });
+  }
+  for (const node of byId.values()) {
+    const parent = node.parent_id && byId.get(node.parent_id);
+    if (parent) parent.children.push(node);
+  }
+
+  const operandsByOwner = new Map();
+  for (const o of operandRows || []) {
+    if (!operandsByOwner.has(o.owner_id)) operandsByOwner.set(o.owner_id, []);
+    operandsByOwner.get(o.owner_id).push(o);
+  }
+
+  const inProgress = new Set();
+  const resolve = (node) => {
+    if (node.amount !== null) return node;
+    if (inProgress.has(node.node_id)) { // malformed data: a formula referencing itself
+      node.amount = 0;
+      node.amount_ref = 0;
+      return node;
+    }
+    inProgress.add(node.node_id);
+    const own = Number(node.own_amt) || 0;
+    const ownRef = Number(node.own_amt_ref) || 0;
+    if (!node.children.length && operandsByOwner.has(node.node_id)) {
+      let sum = 0;
+      let sumRef = 0;
+      for (const o of operandsByOwner.get(node.node_id)) {
+        const target = byId.get(o.operand_id);
+        if (!target) continue;
+        const sign = Number(o.sign) || 0;
+        resolve(target);
+        sum += sign * target.amount;
+        sumRef += sign * target.amount_ref;
+      }
+      node.amount = sum;
+      node.amount_ref = sumRef;
+    } else if (node.children.length) {
+      let sum = own;
+      let sumRef = ownRef;
+      for (const child of node.children) {
+        resolve(child);
+        sum += child.amount;
+        sumRef += child.amount_ref;
+      }
+      node.amount = sum;
+      node.amount_ref = sumRef;
+    } else {
+      node.amount = own;
+      node.amount_ref = ownRef;
+    }
+    inProgress.delete(node.node_id);
+    return node;
+  };
+  for (const node of byId.values()) resolve(node);
+
+  const byPath = (a, b) => (a.sort_path < b.sort_path ? -1 : a.sort_path > b.sort_path ? 1 : 0);
+  const cutoffRank = ELEMENT_LEVEL_RANK[accountLevel] ?? ELEMENT_LEVEL_RANK.S;
+  const out = [];
+  const visit = (node, indent, isRoot) => {
+    let withinCutoff = true;
+    if (!isRoot) {
+      // An unknown/blank elementlevel is never a reason to drop a row.
+      const rank = ELEMENT_LEVEL_RANK[node.elementlevel];
+      withinCutoff = rank === undefined || rank <= cutoffRank;
+      const hasValue = Math.abs(node.amount) > 0.005 || Math.abs(node.amount_ref) > 0.005;
+      const alwaysShown = node.isalwaysshown === 'Y';
+      if (withinCutoff && (!showOnlyWithValue || hasValue || alwaysShown)) {
+        out.push({
+          node_id: node.node_id,
+          value: node.value,
+          name: node.name,
+          element: `${node.value} - ${node.name}`,
+          elementlevel: node.elementlevel,
+          amount: node.amount,
+          amount_ref: node.amount_ref,
+          indent,
+          indentClass: `ind-${Math.min(indent, 6)}`,
+          isHeading: node.elementlevel === 'E',
+        });
+      }
+      if (!withinCutoff) return; // cutoff reached: do not descend further
+    }
+    // The report's root node is a container (the accounting report's own node),
+    // never a row — so its children start the visible tree at indent 0.
+    for (const child of [...node.children].sort(byPath)) {
+      visit(child, isRoot ? 0 : indent + 1, false);
+    }
+  };
+  const roots = [...byId.values()].filter((n) => !n.parent_id || !byId.has(n.parent_id));
+  for (const root of roots.sort(byPath)) visit(root, 0, true);
+  return out;
+}
+
 /**
  * Flat map of every translatable label a contract declares, keyed by the name a
  * template refers to it by: column/group/headerField labels by `field`,
@@ -473,6 +608,45 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
   // per-param values with comma→IN rewriting, contract defaults, optional-clause stripping,
   // AD_CLIENT_ID/AD_ORG_ID/AD_LANGUAGE rewrites). Extracted so a report's optional secondary
   // queries (e.g. `sql.openingQuery`) can reuse it identically instead of duplicating it.
+  // Deletes every `AND ('__X__' = '' OR ...)` optional-filter clause whose
+  // placeholder was left blank (never substituted above, so the literal
+  // `'__X__' = ''` text still sits in the query). A plain regex can't do this
+  // safely on its own: it has to find the clause's OWN matching close-paren,
+  // and once a report's optional clause contains a nested subquery/function
+  // call — e.g. Profit & Loss's reference-period BETWEEN, which repeats its
+  // placeholder inside two `(SELECT MIN/MAX ...)` subqueries (ETP-4899) — a
+  // naive `[^)]*\)` stops at the FIRST inner `)` it meets, truncating the
+  // match and leaving a dangling fragment behind (`syntax error at or near
+  // ")"`). This walks real paren depth from the clause's own opening `(` to
+  // find its true matching close, so it's correct regardless of how much
+  // nesting or how many repeated placeholder occurrences the clause has.
+  function stripBlankOptionalClauses(q) {
+    const startRe = /AND\s*\(\s*'__(\w+)__'\s*=\s*''\s*OR\s*/gi;
+    let result = '';
+    let lastEnd = 0;
+    let m;
+    while ((m = startRe.exec(q))) {
+      if (m.index < lastEnd) continue; // already consumed by a previous match
+      const clauseStart = m.index;
+      const openParenIdx = q.indexOf('(', m.index);
+      let depth = 0;
+      let closeIdx = -1;
+      for (let i = openParenIdx; i < q.length; i++) {
+        if (q[i] === '(') depth++;
+        else if (q[i] === ')') {
+          depth--;
+          if (depth === 0) { closeIdx = i; break; }
+        }
+      }
+      if (closeIdx === -1) continue; // unbalanced — leave untouched rather than corrupt it
+      result += q.slice(lastEnd, clauseStart);
+      lastEnd = closeIdx + 1;
+      startRe.lastIndex = lastEnd;
+    }
+    result += q.slice(lastEnd);
+    return result;
+  }
+
   function applyPlaceholders(rawSql, clientId) {
     let q = rawSql.replace(/__CLIENT_ID__/g, clientId);
     for (const [key, value] of Object.entries(params)) {
@@ -491,7 +665,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       const inList = ids.split(',').map(id => `'${id.trim()}'`).join(',');
       return `IN (${inList})`;
     });
-    q = q.replace(/AND\s*\('__\w+__'\s*=\s*''\s*OR\s*[\s\S]*?'__\w+__'[^)]*\)/gi, '');
+    q = stripBlankOptionalClauses(q);
     q = q.replace(/AD_CLIENT_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi, `AD_CLIENT_ID IN ('${clientId}')`);
     q = q.replace(/AD_ORG_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi,
       `AD_ORG_ID IN (SELECT AD_ORG_ID FROM AD_ORG WHERE AD_CLIENT_ID = '${clientId}' AND ISACTIVE = 'Y')`);
@@ -550,7 +724,16 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       openingRows = (await pool.query(openingSql)).rows;
     }
 
-    return { rows, contract, openingRows };
+    // Optional formula-operand query (ETP-4899 — Profit & Loss's computed nodes,
+    // e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)"). Same placeholder rules;
+    // consumed by buildAccountReportTree(), never rendered directly.
+    let operandRows = null;
+    if (contract.sql?.operandsQuery) {
+      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, clientId);
+      operandRows = (await pool.query(operandsSql)).rows;
+    }
+
+    return { rows, contract, openingRows, operandRows };
   } finally {
     await pool.end();
   }
@@ -795,7 +978,18 @@ export default function reportApiPlugin() {
           try {
             const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
             const result = await fetchReportData(reportId, { limit, authToken, params });
-            let { rows, contract, documentData, neoMeta = {}, openingRows } = result;
+            let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows } = result;
+
+            // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
+            // the FLAT node list, and the indented tree (roll-up, formula nodes,
+            // account-level cutoff) is assembled here, replacing `rows` so
+            // recordCount/totals and the Excel/CSV templates keep working unchanged.
+            if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
+              rows = buildAccountReportTree(rows, operandRows, {
+                accountLevel: params.accountLevel || 'S',
+                showOnlyWithValue: params.showOnlyAccountsWithValue === 'true',
+              });
+            }
 
             // Handle groupBy parameter: find the dimension param whose groupByValue matches and
             // re-sort rows by that field. `groupLabel` ("Account"/"Cuenta") and `descriptionLabel`

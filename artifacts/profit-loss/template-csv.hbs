@@ -1,0 +1,10 @@
+{{!-- CSV-only template (ETP-4899) — genuine comma-separated text, not the HTML/PDF page
+      dumped verbatim. Same flat shape as template-excel.hbs: the tree's depth becomes a
+      plain "Level" column since CSV cannot express indentation. Amounts print the raw
+      dot-decimal value (no formatCurrency). Every text field goes through csvField (this
+      report's helpers.js) to quote values containing a comma/quote/newline — and every
+      csvField call MUST be triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes
+      double-stash output by default, which turns csvField's own escaped `""` into
+      `&quot;&quot;`, corrupting the CSV. --}}{{#with meta}}Level,Code,{{{csvField labels.element}}},{{{csvField labels.amount}}}{{#ifCond params.compareTo '===' 'true'}},{{{csvField labels.amount_ref}}}{{/ifCond}}
+{{/with}}{{#each rows}}{{this.indent}},{{{csvField this.value}}},{{{csvField this.name}}},{{this.amount}}{{#ifCond @root.meta.params.compareTo '===' 'true'}},{{this.amount_ref}}{{/ifCond}}
+{{/each}}
