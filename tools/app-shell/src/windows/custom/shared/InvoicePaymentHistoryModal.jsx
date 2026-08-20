@@ -580,8 +580,30 @@ export default function InvoicePaymentHistoryModal({
 
   const title = isSales ? ui('invoiceReceipts') : ui('invoicePaymentsTitle');
   const partyLabel = isSales ? ui('customer') : ui('vendor');
+  /**
+   * What is left to allocate once the drafts already sitting on this invoice are taken into account.
+   *
+   * A draft does not reduce the invoice's outstanding — it is not applied until it is confirmed — so
+   * an invoice fully covered by one still reads "Saldo pendiente 26,62". Adding a second payment
+   * there would over-cover it the moment both are confirmed. Drafts are reserved instead: the
+   * amount they hold is not offered again.
+   *
+   * `excludeId` is the draft being edited, whose own amount must not count against itself.
+   */
+  const freeToAllocate = useCallback((excludeId) => {
+    const reserved = payments
+      .filter((p) => !isPaymentProcessed(p) && p.id !== excludeId)
+      .reduce((sum, p) => sum + Math.abs(Number(p.amount) || 0), 0);
+    return outstandingAmt - reserved;
+  }, [payments, outstandingAmt]);
+
   // A credit note's remaining balance is consumed FROM other payments, never paid into.
-  const canAddPayment = !isCreditInstrument && outstandingAmt > 0 && isCompleted;
+  const invoiceTakesPayments = !isCreditInstrument && isCompleted && outstandingAmt > 0;
+  const canAddPayment = invoiceTakesPayments && freeToAllocate(null) > 0;
+  // Shown but disabled, rather than hidden, when the only thing in the way is a draft already
+  // covering the invoice: the user needs to know the button exists and what unblocks it. An invoice
+  // that genuinely takes no payment (settled, a credit note, still in draft) keeps hiding it.
+  const addPaymentBlockedByDraft = invoiceTakesPayments && !canAddPayment;
 
   // Table layout: Nº documento · Fecha · Método · Estado · Importe (right) · trash (draft-only).
   // 760px modal − 48px side padding − 60px column gaps (5 gaps) = 652px to distribute.
@@ -590,7 +612,12 @@ export default function InvoicePaymentHistoryModal({
   // The actions column has to fit its WIDEST content, not its most common: two 26px icon buttons
   // plus their 4px gap. At the old 28px — sized for the delete icon alone — a row that also offered
   // Retry overflowed leftwards and covered the amount's currency symbol (ETP-4895).
-  const GRID = '1fr 110px 170px 150px 110px 56px';
+  //
+  // The document number gets a floor rather than plain `1fr`: as the leftover column it absorbed
+  // every widening of the others, and at 760px of modal it had collapsed to ~56px — enough to
+  // ellipsize both the value AND its own "Nº documento" header. A minmax keeps it readable no
+  // matter what the fixed columns do, and the modal is wide enough that the floor never binds.
+  const GRID = 'minmax(120px, 1fr) 110px 170px 150px 110px 56px';
   const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
   return (
@@ -602,7 +629,7 @@ export default function InvoicePaymentHistoryModal({
     >
       <div
         className="bg-card flex flex-col"
-        style={{ width: 760, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px hsl(var(--foreground) / 0.1), 0 24px 48px hsl(var(--foreground) / 0.03), 0 10px 18px hsl(var(--foreground) / 0.03), 0 5px 8px hsl(var(--foreground) / 0.04), 0 2px 4px hsl(var(--foreground) / 0.04)', overflow: 'hidden' }}
+        style={{ width: 900, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px hsl(var(--foreground) / 0.1), 0 24px 48px hsl(var(--foreground) / 0.03), 0 10px 18px hsl(var(--foreground) / 0.03), 0 5px 8px hsl(var(--foreground) / 0.04), 0 2px 4px hsl(var(--foreground) / 0.04)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__panel"
       >
@@ -695,13 +722,17 @@ export default function InvoicePaymentHistoryModal({
             >
               {ui('cancel')}
             </button>
-            {canAddPayment && (
+            {(canAddPayment || addPaymentBlockedByDraft) && (
               <button
                 type="button"
+                disabled={addPaymentBlockedByDraft}
+                title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
                 onClick={() => { setEditingPayment(null); setShowPaymentModal(true); }}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
+                className={addPaymentBlockedByDraft
+                  ? 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+                  : 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors'}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: addPaymentBlockedByDraft ? 'not-allowed' : 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 {isSales ? ui('addCobro') : ui('addPago')}
@@ -717,7 +748,7 @@ export default function InvoicePaymentHistoryModal({
           specName={specName}
           invoiceId={invoiceId}
           invoiceData={invoiceData}
-          outstanding={outstandingAmt}
+          outstanding={freeToAllocate(editingPayment?.id || null)}
           apiBaseUrl={apiBaseUrl}
           payment={editingPayment}
           onClose={() => { setShowPaymentModal(false); setEditingPayment(null); }}

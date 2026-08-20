@@ -67,6 +67,12 @@ vi.mock('../PaymentLifecycleConfirmModal', () => ({
   ),
 }));
 
+// The Confirmar kebab now mounts PaymentEditModalLauncher, which reaches for `useApiFetch` — and
+// that resolves `useAuth` from the app-shell-core package, so it throws outside an AuthProvider.
+// The launcher never fetches for these rows (they carry no invoiceId, so it falls straight through
+// to the confirm dialog below), this stub only keeps the hook from exploding at mount.
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => vi.fn() }));
+
 vi.mock('../ConfirmPaymentModal', () => ({
   default: ({ dir, onConfirm, onClose }) => (
     <div data-testid="ConfirmPaymentModal__stub" data-dir={dir}>

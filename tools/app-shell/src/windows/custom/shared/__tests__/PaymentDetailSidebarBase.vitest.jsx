@@ -8,6 +8,7 @@ vi.mock('@/i18n', () => ({
 
 import { render, screen, within, act } from '@testing-library/react';
 import PaymentDetailSidebarBase from '../PaymentDetailSidebarBase.jsx';
+import { notifyRecordUpdated } from '../useRecordRefreshSignal';
 
 function baseData(overrides = {}) {
   return {
@@ -95,6 +96,32 @@ describe('PaymentDetailSidebarBase — activity history', () => {
 
     await screen.findAllByText('pagoConfirmado');
     expect(screen.queryByText('pagoConfirmadoEnProgreso')).toBeNull();
+  });
+
+  it('refetches the applied lines when the payment is announced as changed', async () => {
+    // Editing a payment does not change its id, and `Updated` is not a NEO field on this entity, so
+    // nothing in the payload moves. "Aplicado a facturas" kept showing the pre-save amount until the
+    // whole window was reloaded; the editor now announces the write instead.
+    const data = baseData({ status: 'RPAP' });
+    render(
+      <PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+    await act(async () => {});
+    const before = globalThis.fetch.mock.calls.length;
+
+    await act(async () => { notifyRecordUpdated('pay-1'); });
+
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it('ignores a write announced for a different payment', async () => {
+    render(
+      <PaymentDetailSidebarBase dir="in" specName="payment-in" data={baseData()} token="t" apiBaseUrl="http://x" />);
+    await act(async () => {});
+    const before = globalThis.fetch.mock.calls.length;
+
+    await act(async () => { notifyRecordUpdated('some-other-payment'); });
+
+    expect(globalThis.fetch.mock.calls.length).toBe(before);
   });
 
   it('persists the full event history in localStorage keyed by record id', () => {

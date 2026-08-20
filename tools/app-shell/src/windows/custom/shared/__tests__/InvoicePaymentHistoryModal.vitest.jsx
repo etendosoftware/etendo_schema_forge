@@ -23,8 +23,9 @@ vi.mock('lucide-react', async (importOriginal) => {
 });
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({
-  default: ({ onClose, onSaved }) => (
-    <div data-testid="new-payment-entry-modal" onClick={e => e.stopPropagation()}>
+  default: ({ onClose, onSaved, outstanding }) => (
+    <div data-testid="new-payment-entry-modal" data-outstanding={String(outstanding)}
+      onClick={e => e.stopPropagation()}>
       <button onClick={onClose}>Close entry</button>
       <button onClick={() => onSaved({}, 'deposited')}>Save entry</button>
     </div>
@@ -56,6 +57,20 @@ function makeApiFetch(payments = []) {
     ok: true,
     json: () => Promise.resolve({ response: { data: payments } }),
   });
+}
+
+/**
+ * Like `makeApiFetch`, but answers `/paymentPlan` with an empty list so the outstanding amount
+ * keeps coming from `invoiceData.outstandingAmount`. The shared mock replies with the payments
+ * array on every URL, which the modal would read as installments carrying no outstanding at all.
+ */
+function makeApiFetchWithoutPlan(payments = []) {
+  return vi.fn((url) => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({
+      response: { data: String(url).includes('/paymentPlan') ? [] : payments },
+    }),
+  }));
 }
 
 /**
@@ -208,6 +223,59 @@ describe('InvoicePaymentHistoryModal', () => {
       expect(screen.getByTestId('InvoicePaymentHistoryModal__empty')).toBeInTheDocument(),
     );
     expect(screen.getByTestId('InvoicePaymentHistoryModal__add-btn')).toBeInTheDocument();
+  });
+
+  it('disables add-btn when a draft already covers the whole outstanding amount', async () => {
+    // A draft does not reduce the invoice's outstanding, so the invoice still reads "pendiente 500"
+    // while a 500 draft sits on it. Offering a second payment there over-covers the invoice the
+    // moment both are confirmed.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '500.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    const addBtn = screen.getByTestId('InvoicePaymentHistoryModal__add-btn');
+    // Disabled rather than hidden: the user has to see what unblocks it.
+    expect(addBtn).toBeDisabled();
+    expect(addBtn).toHaveAttribute('title', 'cpAddPaymentBlockedByDraft');
+  });
+
+  it('keeps add-btn usable when the draft only covers part of the invoice', async () => {
+    // 500 outstanding with a 200 draft still leaves 300 to allocate.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '200.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__add-btn')).not.toBeDisabled();
+  });
+
+  it('offers the new payment only what the drafts left free', async () => {
+    // Seeding it with the raw outstanding would default the second payment to 500 on an invoice
+    // that only has 300 left.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '200.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__add-btn'));
+    expect(await screen.findByTestId('new-payment-entry-modal'))
+      .toHaveAttribute('data-outstanding', '300');
   });
 
   it('hides add-btn when outstandingAmt is 0', async () => {
@@ -1010,7 +1078,11 @@ describe('InvoicePaymentHistoryModal', () => {
       const retryBtn = screen.getByTestId('InvoicePaymentHistoryModal__retry-btn');
       const actionsCell = retryBtn.parentElement;
       const gridRow = actionsCell.parentElement;
-      expect(gridRow.style.gridTemplateColumns.split(' ').pop()).toBe('56px');
+      const columns = gridRow.style.gridTemplateColumns;
+      expect(columns.split(' ').pop()).toBe('56px');
+      // And the document number keeps a floor instead of absorbing every widening of the others:
+      // as the leftover `1fr` column it had collapsed far enough to ellipsize its own header.
+      expect(columns.startsWith('minmax(120px, 1fr)')).toBe(true);
     });
 
     it('retries against the PIS attempt and reopens the bank window', async () => {

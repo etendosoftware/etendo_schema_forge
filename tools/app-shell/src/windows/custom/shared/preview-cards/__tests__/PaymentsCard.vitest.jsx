@@ -47,6 +47,22 @@ describe('PaymentsCard', () => {
     expect(onAddPayment).toHaveBeenCalledTimes(1);
   });
 
+  it('shows an inert add-payment label when the drafts already reserve the outstanding', () => {
+    const onAddPayment = vi.fn();
+    render(
+      <PaymentsCard
+        addPaymentBlockedByDraft
+        onAddPayment={onAddPayment}
+        payments={[]}
+        totalOutstanding={100}
+      />,
+    );
+    const label = screen.getByText('previewCardAddPayment');
+    expect(label).toHaveAttribute('title', 'cpAddPaymentBlockedByDraft');
+    fireEvent.click(label);
+    expect(onAddPayment).not.toHaveBeenCalled();
+  });
+
   it('shows check icon when isFullyPaid=true and canAddPayment=false', () => {
     const { container } = render(<PaymentsCard isFullyPaid payments={[]} totalOutstanding={0} />);
     // Check icon from lucide renders as svg

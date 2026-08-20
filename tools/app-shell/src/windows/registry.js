@@ -207,6 +207,7 @@ const customLoaders = {
   'physical-inventory': () => import('./custom/physical-inventory/index.jsx'),
   'goods-movements': () => import('./custom/goods-movements/index.jsx'),
   'payment-out': () => import('./custom/payment-out/index.jsx'),
+  'payment-in': () => import('./custom/payment-in/index.jsx'),
   'sales-invoice': () => import('./custom/sales-invoice/index.jsx'),
   'sales-quotation': () => import('./custom/sales-quotation/index.jsx'),
   'warehouse': () => import('./custom/warehouse/index.jsx'),

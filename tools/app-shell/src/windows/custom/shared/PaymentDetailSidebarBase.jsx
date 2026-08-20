@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 import { paymentDisplayState } from './paymentStatuses';
+import { useRecordRefreshSignal } from './useRecordRefreshSignal';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -122,6 +123,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const ui = useUI();
   const [lines, setLines] = useState(null);
   const [events, setEvents] = useState([]);
+  const refreshSignal = useRecordRefreshSignal(data?.id);
   const [postedAt, setPostedAt] = useState(null);
 
   const isIn = dir === 'in';
@@ -230,7 +232,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       } catch { if (!cancelled) setLines([]); }
     })();
     return () => { cancelled = true; };
-  }, [data?.id, token, apiBaseUrl, isIn, specName]);
+  // The refresh signal is in the deps on purpose: the record id never changes when the payment
+  // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload moves
+  // for this effect to react to. Without it "Aplicado a facturas" kept showing the amount from
+  // before the save until the whole window was reloaded.
+  }, [data?.id, refreshSignal, token, apiBaseUrl, isIn, specName]);
 
   const appliedLines = lines ?? [];
   const applied = appliedLines.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);

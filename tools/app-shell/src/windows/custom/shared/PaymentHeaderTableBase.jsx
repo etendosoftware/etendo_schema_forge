@@ -5,7 +5,7 @@ import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
-import ConfirmPaymentModal from './ConfirmPaymentModal';
+import PaymentEditModalLauncher from './PaymentEditModalLauncher';
 import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
@@ -538,11 +538,17 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
         />
       )}
       {confirmRow && (
-        <ConfirmPaymentModal
+        // Same editor the payment window opens, so Confirmar means the same thing from either
+        // surface. It falls back to the plain confirm dialog on its own when the row's invoice
+        // cannot be resolved, which is why ConfirmPaymentModal is no longer referenced here.
+        <PaymentEditModalLauncher
           dir={dir}
-          onClose={() => setConfirmRow(null)}
+          record={confirmRow}
+          apiBaseUrl={apiBaseUrl}
           onConfirm={() => handleConfirmPayment(confirmRow)}
-          data-testid="ConfirmPaymentModal__743b1b"
+          onClose={() => setConfirmRow(null)}
+          onRefresh={() => { setConfirmRow(null); props.onDataMutated?.(); }}
+          data-testid="PaymentEditModalLauncher__743b1b"
         />
       )}
     </div>

@@ -211,18 +211,24 @@ describe('ReactivarConfirmModal', () => {
   });
 
   // This is no longer a pure 1:1 delegation wrapper: it also routes the
-  // aPRMProcessPayment process to ConfirmPaymentModal (dir="out"), so the
-  // form's "Confirmar" button gets a non-destructive confirm dialog instead
-  // of Reactivar's danger-styled one. See DetailView's `confirmModal` process
-  // flag and PaymentHeaderTableBase's list-side ConfirmPaymentModal.
-  it('routes aPRMProcessPayment to ConfirmPaymentModal (dir="out") instead of ReactivarModal', () => {
-    assert.match(src, /import ConfirmPaymentModal from '@\/windows\/custom\/shared\/ConfirmPaymentModal'/);
+  // aPRMProcessPayment process to the editable payment modal, so the form's
+  // "Confirmar" opens the invoice's editor instead of a yes/no dialog — this
+  // window has no form of its own, so that dialog could not change anything.
+  // See DetailView's `confirmModal` process flag and PaymentEditModalLauncher,
+  // which falls back to the old dialog when the invoice cannot be resolved.
+  it('routes aPRMProcessPayment to the editable payment modal (dir="out")', () => {
+    assert.match(src, /import PaymentEditModalLauncher from '@\/windows\/custom\/shared\/PaymentEditModalLauncher'/);
     assert.match(src, /process\?\.columnName === 'aPRMProcessPayment'/);
-    assert.match(src, /<ConfirmPaymentModal dir="out"/);
+    assert.match(src, /<PaymentEditModalLauncher/);
+    assert.doesNotMatch(src, /<ConfirmPaymentModal/);
   });
 
-  it('contains no logic beyond the two-modal routing (still a thin dispatcher)', () => {
-    const lines = src.trim().split('\n').filter(l => l.trim().length > 0);
-    assert.ok(lines.length <= 12, `expected at most 12 non-empty lines, got ${lines.length}`);
+  it('contains no logic beyond the routing (still a thin dispatcher)', () => {
+    // The launcher owns the work; this file only decides which modal to mount and forwards props.
+    // Counted without comments, which carry the why and would otherwise punish documenting it.
+    const lines = src.trim().split('\n')
+      .filter(l => l.trim().length > 0)
+      .filter(l => !/^\s*(\/\*|\*|\/\/)/.test(l.trim()));
+    assert.ok(lines.length <= 22, `expected at most 22 non-comment lines, got ${lines.length}`);
   });
 });

@@ -83,6 +83,8 @@ function StateTag({ payment, ui }) {
  *   currencyCode    string
  *   totalOutstanding number
  *   canAddPayment   boolean
+ *   addPaymentBlockedByDraft boolean — invoice takes payments, but the drafts on it already
+ *                            reserve the whole outstanding
  *   isFullyPaid     boolean
  *   loading         boolean
  *   onAddPayment    function
@@ -93,6 +95,7 @@ export default function PaymentsCard({
   currencyCode = '',
   totalOutstanding = 0,
   canAddPayment = false,
+  addPaymentBlockedByDraft = false,
   isFullyPaid = false,
   isCreditNote = false,
   loading = false,
@@ -120,6 +123,16 @@ export default function PaymentsCard({
       >
         {ui('previewCardAddPayment')}
       </button>
+    );
+  } else if (addPaymentBlockedByDraft) {
+    // Shown, but inert: the reason it is unavailable is what the user needs to act on.
+    titleRight = (
+      <span
+        className="text-xs font-medium text-muted-foreground"
+        title={ui('cpAddPaymentBlockedByDraft')}
+      >
+        {ui('previewCardAddPayment')}
+      </span>
     );
   } else if (isFullyPaid) {
     titleRight = (

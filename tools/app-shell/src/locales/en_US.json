@@ -17976,6 +17976,7 @@
     "cpPisHint": "Your bank may request verification via mobile app, SMS, or a security device.",
     "cpPaymentStateError": "Payment Error",
     "cpPaymentStateInProgress": "In progress",
+    "cpAddPaymentBlockedByDraft": "A draft already covers the outstanding amount. Confirm or delete it to register another.",
     "cpRetryTransfer": "Retry payment",
     "cpRetryTransferFailed": "The transfer could not be retried. Please try again.",
     "cpPisConfirmButton": "Continue to bank",

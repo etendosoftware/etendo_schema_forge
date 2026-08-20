@@ -18222,6 +18222,7 @@
     "cpPisHint": "Tu banco puede solicitar verificación mediante app móvil, SMS o dispositivo de seguridad.",
     "cpPaymentStateError": "Pago con error",
     "cpPaymentStateInProgress": "Pago en progreso",
+    "cpAddPaymentBlockedByDraft": "Ya hay un borrador que cubre el total pendiente. Confirmalo o eliminalo para registrar otro.",
     "cpRetryTransfer": "Reintentar pago",
     "cpRetryTransferFailed": "No se pudo reintentar la transferencia. Intenta nuevamente.",
     "cpPisConfirmButton": "Continuar al banco",
