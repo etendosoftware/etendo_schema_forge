@@ -801,9 +801,13 @@ name is already a proper Spanish display string and needs no translation).
     above) — satisfies the acceptance criterion "Importar desde Factura origen muestra solo
     facturas de Tipo Factura". Imported lines also default to a **negative** quantity
     (modeling a correction/reversal of the source). After import, the modal best-effort
-    PATCHes the header's `originInvoice` field so the rectificative invoice is linked back to
-    its source via `C_Invoice_Reverse` — independent of, and does not interfere with, the
-    separate "Reversed Invoices" / 349-boxes tab on the same table.
+    PATCHes the header's `originInvoices` field (a JSON array, one id per imported document —
+    ETP-4919; the field used to be singular `originInvoice` and, combined with a backend
+    delete-then-single-create, silently dropped every previously-imported source but the most
+    recent one) so the rectificative invoice stays linked to EVERY source invoice it was
+    imported from via `C_Invoice_Reverse` — independent of, and does not interfere with, the
+    separate "Reversed Invoices" / 349-boxes tab on the same table. `RelatedDocuments.jsx`
+    renders one chip per linked origin.
   - Both modals are wired into all three surfaces FAC's own import options use: the empty-state
     buttons (`PurchaseInvoiceLinesEmptyState`), the ongoing "+ Añadir línea" dropdown trigger
     (`PurchaseInvoiceLineActions`/`detailExtraActions`), and the line kebab menu
@@ -854,7 +858,10 @@ window now owns a distinct key for this string.
    quantity/total.
 5. Open the "Import from Source Invoice" modal: confirm it lists only completed, plain
    "Factura" (FAC) invoices for the same supplier — no other rectificative invoice should
-   ever appear as a candidate source.
+   ever appear as a candidate source. Import from a first source invoice, then reopen the
+   modal and import from a SECOND, different source invoice — confirm `RelatedDocuments`
+   shows TWO origin-invoice chips (both survive; ETP-4919 — this used to collapse to only the
+   most recently imported one).
 6. Manually add a line to a RECTIFICATIVA invoice (not via import) and confirm both a
    positive and a negative quantity/price are accepted.
 

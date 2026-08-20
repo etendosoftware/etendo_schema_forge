@@ -30,10 +30,15 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * choice in the popup by design — if a positive correction is intended, the
  * user edits the line by hand after import.
  *
- * After import, this modal PATCHes the header's `originInvoice` virtual
- * field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`) so the
- * rectificativa is linked back to its source via `C_Invoice_Reverse` — same
- * mechanism as purchase-invoice, surfaced back on GET via `enrichOriginInvoice`.
+ * After import, this modal PATCHes the header's `originInvoices` virtual
+ * field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`) with the FULL
+ * set of ids imported in this run, so the rectificativa stays linked to
+ * EVERY source invoice it was imported from — not just the last one
+ * (ETP-4919: importing from a second source invoice used to silently drop
+ * the link to the first, both because of the `size !== 1` guard removed
+ * below and because the backend used to delete-then-single-create). Same
+ * mechanism as purchase-invoice, surfaced back on GET via
+ * `enrichOriginInvoice`/`originInvoices`.
  *
  * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
  * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
@@ -132,13 +137,14 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
 };
 
 const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
-  if (importedDocIds.size !== 1) return;
-  const [sourceInvoiceId] = importedDocIds;
+  // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
+  // the ones already imported — send the FULL set, not just guard on exactly one.
+  if (importedDocIds.size === 0) return;
   try {
     await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ originInvoice: sourceInvoiceId }),
+      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
     });
   } catch {
     // best-effort — the lines are already imported regardless of this link.
