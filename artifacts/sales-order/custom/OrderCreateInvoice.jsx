@@ -353,7 +353,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${processRes.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`);
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
@@ -378,7 +378,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -397,7 +397,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -646,7 +646,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -658,7 +658,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -801,7 +801,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
       const res  = await fetch(`${apiBaseUrl}/header/${orderId}/action/cloneRecord`, { method: 'POST', headers });
       const json = await res.json();
       if (!res.ok) {
-        setError(json?.response?.error?.message || ui('cloneOrderError'));
+        setError(json?.response?.error?.message || json?.response?.message || json?.message || ui('cloneOrderError'));
         return;
       }
       const newId = json?.response?.data?.id;
