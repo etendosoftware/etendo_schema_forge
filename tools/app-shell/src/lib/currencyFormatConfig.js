@@ -1,5 +1,6 @@
 /**
- * Instance-wide currency number-formatting configuration (thousands/decimal separators).
+ * Instance-wide currency number-formatting configuration (thousands/decimal separators,
+ * and the per-currency symbol side).
  *
  * Part of the CANONICAL currency-formatting path (see `formatCurrency.js`'s banner
  * comment / CLAUDE.md § Currency & Amount Formatting). Never fetch this endpoint or
@@ -11,9 +12,14 @@
  * before building a jsreport payload. Both sides read from the same instance-level config
  * instead of hardcoding the separators independently.
  *
+ * The response also carries `symbolRightSide`, a `{ [isoCode]: boolean }` map sourced from
+ * Etendo Classic's own `C_CURRENCY.ISSYMBOLRIGHTSIDE` column — the app doesn't hardcode which
+ * currencies go left vs. right (ETP-4314 follow-up: EUR is the only currency shipped with
+ * `Y`; every other currency, USD/GBP/ARS/etc. included, ships `N`).
+ *
  * Fetch is fire-and-forget and fails soft: if the endpoint is unreachable, callers keep
- * using the default es-ES-style separators (`.`/`,`) — a config outage must never break
- * currency rendering.
+ * using the default es-ES-style separators (`.`/`,`) and every currency renders symbol-after
+ * (the pre-fix behavior) — a config outage must never break currency rendering.
  *
  * Deliberately does NOT import `detectBaseUrl` from `@/auth/api.js` — that module
  * transitively re-exports `.jsx` files, which plain `node --test` (used by
@@ -32,6 +38,11 @@ function detectBaseUrl() {
 const DEFAULT_SEPARATORS = Object.freeze({ thousandsSeparator: '.', decimalSeparator: ',' });
 
 let cachedSeparators = DEFAULT_SEPARATORS;
+// Empty until a fetch resolves — absence of a code here means "unknown", which
+// isCurrencySymbolRightSide() below treats as right-side (today's behavior),
+// never as an assumed left-side, to avoid flashing the wrong side for EUR
+// (the overwhelmingly common case in this instance) before hydration.
+let cachedSymbolRightSide = {};
 let fetchPromise = null;
 
 /**
@@ -42,6 +53,22 @@ let fetchPromise = null;
  */
 export function getCurrencyFormatConfig() {
   return cachedSeparators;
+}
+
+/**
+ * Whether a currency's symbol should render on the right of the amount (e.g. `1,00 €`)
+ * rather than the left (e.g. `$1,00`), per `C_CURRENCY.ISSYMBOLRIGHTSIDE`.
+ *
+ * Defaults to `true` (right side) for any code not yet loaded or absent from the
+ * fetched map — same reasoning as `DEFAULT_SEPARATORS`: never assume a config we
+ * don't have yet.
+ *
+ * @param {string} currencyCode - ISO 4217 currency code (e.g. "USD", "EUR").
+ * @returns {boolean}
+ */
+export function isCurrencySymbolRightSide(currencyCode) {
+  const value = cachedSymbolRightSide[currencyCode];
+  return value !== false;
 }
 
 /**
@@ -64,11 +91,13 @@ export function fetchCurrencyFormatConfig() {
         thousandsSeparator: typeof data?.thousandsSeparator === 'string' ? data.thousandsSeparator : DEFAULT_SEPARATORS.thousandsSeparator,
         decimalSeparator: typeof data?.decimalSeparator === 'string' ? data.decimalSeparator : DEFAULT_SEPARATORS.decimalSeparator,
       };
+      cachedSymbolRightSide = (data?.symbolRightSide && typeof data.symbolRightSide === 'object') ? data.symbolRightSide : {};
       return cachedSeparators;
     })
     .catch(() => {
       // Fails soft — keep defaults, never throw into a fire-and-forget caller.
       cachedSeparators = DEFAULT_SEPARATORS;
+      cachedSymbolRightSide = {};
       return cachedSeparators;
     });
 
