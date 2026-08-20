@@ -50,13 +50,15 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it."
+          "readOnlyLogicJs": "!!record.id",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it. ETP-4830: locked read-only once the record is persisted (readOnlyLogicJs, same 'locks after first save' pattern as sales-invoice/purchase-invoice's transactionDocument) — email seeds username and the linked etgo_account row at creation time only; editing it afterward would desync the two."
         },
         "password": {
           "visibility": "editable",
           "section": "security",
           "displayLogic": null,
-          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4829: on create, this same field doubles as an optional temporary workaround — if an admin types a password here, com.etendoerp.go's UserRoleAssignmentHandler also uses it (hashed, validated against PasswordPolicy.isStrong) to create the linked etgo_account already active, instead of pending on ETP-4830's invite-email flow. AD_User.Password itself is unaffected (unrelated password store)."
+          "displayLogicJs": "!record.id",
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4830: the create-time 'admin types a password, skips the invite email' bypass this field used to double as (ETP-4829) was removed server-side — com.etendoerp.go no longer reads a submitted password at creation, every new user now always goes through the invite-email flow. The input is hidden on the CREATE form via displayLogicJs (only rendered once record.id exists, i.e. on an already-persisted user) rather than discarded outright, since resetting an existing user's password after creation is a separate, still-valid use of this same native AD_User.Password field."
         },
         "isPasswordExpired": {
           "visibility": "readOnly",

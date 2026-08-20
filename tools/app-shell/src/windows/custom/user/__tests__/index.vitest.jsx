@@ -1,30 +1,49 @@
 /**
- * Tests for windows/custom/user/index.jsx — covers both ETP-4906 (role assignment)
- * and ETP-4894 (invitation flow), which share the same `UserWindow` component. See
+ * Tests for windows/custom/user/index.jsx — covers ETP-4906 (role assignment) and
+ * ETP-4830 (invite-on-create: newLabel fix, pending-invitation `topbarExtra` pill,
+ * actionable "user created" toast), which share the same `UserWindow` component. See
  * the source file's own doc comment for the full contract of both flows: fetch
  * applied roles on load for an existing user, thread the live selection to
  * `AssignTemplateRolesControl`/`UserRolesTab` via `RoleSelectionProvider`, fire
  * `saveUserRoleAssignments` from `onAfterExistingSave` (only when the locally-selected
- * set actually differs from what was loaded — the `sameIdSet` no-op guard), and render
- * the invitation banner/dialog as an independent extension via `headerContent` and a
- * sibling `InviteUserDialog`.
+ * set actually differs from what was loaded — the `sameIdSet` no-op guard), and — as
+ * of ETP-4830 — show a single actionable toast on `onAfterCreate` whose action
+ * re-navigates with `location.state.openSecondaryTab` and focuses
+ * `AssignTemplateRolesControl`. The old ETP-4894 `InvitationInfoBanner`/
+ * `InviteUserDialog` wiring was removed from this file entirely (ETP-4830) — see
+ * `InviteUserDialog.vitest.jsx` for that component's own (now-unwired) coverage.
  *
  * Mirrors `windows/custom/warehouse/__tests__/index.vitest.jsx`'s convention of
  * capturing the generated page's props via a mock and driving its callbacks directly.
  */
 const toastError = vi.fn();
+const toastSuccess = vi.fn();
+const toastDismiss = vi.fn();
 
 vi.mock('sonner', () => ({
-  toast: { error: (...args) => toastError(...args) },
+  toast: {
+    error: (...args) => toastError(...args),
+    success: (...args) => toastSuccess(...args),
+    dismiss: (...args) => toastDismiss(...args),
+  },
+}));
+
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/i18n', () => ({
   // Interpolates params into the returned string (rather than the trivial `(key) => key`)
   // so tests asserting the toast call shape can distinguish between a `detail` sourced
   // from the rejection's domain message vs. the `roleAssignmentSaveFailed` i18n fallback
-  // key — both otherwise collapse to the same bare key under `(key) => key`. Plain
-  // (no-params) calls — e.g. the invitation banner's copy — still just return the key.
+  // key — both otherwise collapse to the same bare key under `(key) => key`.
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // The real (unmocked) `DocumentStatusPill` — rendered by `PendingInvitationPill` —
+  // also imports `useLocale` from `@/i18n`; stub it so that import doesn't crash.
+  // Its own `label` is always explicit in `PendingInvitationPill`, so `dictionary`
+  // is never actually read down `statusLabel`'s fallback path.
+  useLocale: () => ({}),
 }));
 
 vi.mock('@/components/attachments', () => ({
@@ -64,22 +83,23 @@ function SelectionProbe() {
 
 let lastUserPageProps;
 vi.mock('@generated/user/generated/web/user/UserPage', () => ({
-  // Captures every prop (needed by the ETP-4906 assertions below) AND renders
-  // `headerContent` (the real, unmocked `InvitationInfoBanner` markup, ETP-4894) next
-  // to the role-selection probe — the two extensions are independent, so both need to
-  // show up in this single mock's output.
+  // Captures every prop (needed by the ETP-4906/ETP-4830 assertions below) AND renders
+  // `topbarExtra` (the real, unmocked `PendingInvitationPill`, ETP-4830) — mirroring how
+  // `DetailView.jsx` itself instantiates it, passing `data` straight through — next to
+  // the role-selection probe.
   default: (props) => {
     lastUserPageProps = props;
+    const TopbarExtra = props.topbarExtra;
     return (
       <div data-testid="user-page">
-        {props.headerContent}
+        {TopbarExtra && <TopbarExtra data={props.data} />}
         <SelectionProbe />
       </div>
     );
   },
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 
@@ -345,32 +365,138 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
   });
 });
 
-describe('UserWindow — invitation entry point (ETP-4894)', () => {
-  it('renders the invitation info banner and invite button', () => {
+describe('UserWindow — newLabel fix (ETP-4830)', () => {
+  it('passes the generic "newUser" label, not the old "inviteUser" mislabel', () => {
     render(<UserWindow />);
+    expect(lastUserPageProps.newLabel).toBe('newUser');
+  });
+});
 
-    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
-      'inviteUserDescriptionTitle',
-    );
-    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
-      'inviteUserDescription',
-    );
-    expect(screen.getByTestId('action-open-invite')).toBeInTheDocument();
+describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => {
+  it('passes a topbarExtra component to the generated UserPage', () => {
+    render(<UserWindow />);
+    expect(typeof lastUserPageProps.topbarExtra).toBe('function');
   });
 
-  it('opens the InviteUserDialog when clicking the invite button', () => {
+  it('renders the amber pending-invitation pill when invitationStatus is PENDING', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'PENDING' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('pendingInvitationBadge');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', 'PENDING');
+  });
+
+  it('renders nothing when invitationStatus is not PENDING', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'ACCEPTED' }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when invitationStatus is absent (e.g. an existing pre-ETP-4830 user)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing on a brand-new, not-yet-saved record (no data yet)', () => {
+    render(<UserWindow recordId="new" />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+});
+
+describe('UserWindow — actionable "user created" toast (ETP-4830, onAfterCreate)', () => {
+  it('passes onAfterCreate to the generated UserPage', () => {
     render(<UserWindow />);
+    expect(typeof lastUserPageProps.onAfterCreate).toBe('function');
+  });
 
-    expect(screen.queryByTestId('invite-user-dialog')).not.toBeInTheDocument();
+  it('does nothing when the saved record has no id', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({});
+    expect(toastDismiss).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByTestId('action-open-invite'));
+  it('dismisses any prior toast, then shows exactly one actionable success toast', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
 
-    // `InviteUserDialog` is a real (unmocked) component — this asserts the actual
-    // DOM node its own `DialogContent` renders (`invite-user-dialog`, see
-    // `InviteUserDialog.jsx`), not the wrapper's `data-testid` prop passed by
-    // `index.jsx` (`InviteUserDialog__853799`), which the component never spreads
-    // onto its DOM since it only destructures `open`/`onOpenChange`/`onSuccess`/`apiBase`.
-    expect(screen.getByTestId('invite-user-dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('invite-user-email')).toBeInTheDocument();
+    expect(toastDismiss).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    const [message, options] = toastSuccess.mock.calls[0];
+    expect(message).toBe('userCreatedInvitationSentToast');
+    expect(options.action.label).toBe('configureRolesAction');
+    expect(typeof options.action.onClick).toBe('function');
+  });
+
+  it("the toast action navigates to the saved record with location.state.openSecondaryTab: 'custom:roles'", () => {
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    const { action } = toastSuccess.mock.calls[0][1];
+    action.onClick();
+
+    expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', {
+      replace: true,
+      state: { openSecondaryTab: 'custom:roles' },
+    });
+  });
+
+  it('the toast action scrolls/focuses AssignTemplateRolesControl once it is in the DOM', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-testid="AssignTemplateRolesControl__toggle-expand" tabindex="0"></div>';
+    const target = screen.getByTestId('AssignTemplateRolesControl__toggle-expand');
+    target.scrollIntoView = vi.fn();
+    const focusSpy = vi.spyOn(target, 'focus');
+
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    vi.advanceTimersByTime(50);
+
+    expect(target.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    expect(focusSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('falls back to the "save first" placeholder test-id when the expanded toggle is not in the DOM yet', () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-testid="AssignTemplateRolesControl__save-first" tabindex="0"></div>';
+    const target = screen.getByTestId('AssignTemplateRolesControl__save-first');
+    target.scrollIntoView = vi.fn();
+    const focusSpy = vi.spyOn(target, 'focus');
+
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    vi.advanceTimersByTime(50);
+
+    expect(target.scrollIntoView).toHaveBeenCalled();
+    expect(focusSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('does not throw when neither AssignTemplateRolesControl test-id is present', () => {
+    vi.useFakeTimers();
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    expect(() => {
+      toastSuccess.mock.calls[0][1].action.onClick();
+      vi.advanceTimersByTime(50);
+    }).not.toThrow();
+    vi.useRealTimers();
+  });
+
+  it('defaults the route to "/user/..." when windowName is not passed', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', expect.anything());
   });
 });

@@ -1,14 +1,13 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Mail, UserPlus } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { Button } from '@/components/ui/button';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
-import { InviteUserDialog } from './InviteUserDialog.jsx';
+import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx';
 
 function sameIdSet(a, b) {
   if (a.length !== b.length) return false;
@@ -16,50 +15,41 @@ function sameIdSet(a, b) {
   return b.every((id) => setA.has(id));
 }
 
-function InvitationInfoBanner({ onOpenInvite }) {
+/**
+ * ETP-4830 — amber "Invitación pendiente" pill, wired as `UserPage`'s/`DetailView`'s
+ * `topbarExtra` slot: a plain pass-through prop (not a `decisions.json`-declared
+ * extension point), rendered in the SAME toolbar row as the Cancel button —
+ * `DetailView.jsx`'s "Action bar: Cancel + status" row renders, in order, the Cancel
+ * button, the `statusField` pill, `extraBadges`, then `topbarExtra`, all inside one
+ * flex group. Reusing this existing generic slot (rather than
+ * `window.extraBadges`/`statusPills`, whose `renderStatusPillBadge` only compiles a
+ * boolean field into a 2-state true/false pill) means no `schema_forge_core`
+ * generator change was needed for this ticket — `invitationStatus` is a 3-state field
+ * ("PENDING" | "SENT" | "ACCEPTED" | null, see this file's own stubbing note below on
+ * `handleAfterCreate`) where only ONE state should ever render a pill, a shape
+ * `extraBadges` cannot express today.
+ *
+ * Purely reactive to `data` — renders nothing once the backend flips
+ * `invitationStatus` away from `'PENDING'` (e.g. once the invitee accepts), no local
+ * state or polling needed here.
+ */
+function PendingInvitationPill({ data }) {
   const ui = useUI();
-
+  if (data?.invitationStatus !== 'PENDING') return null;
   return (
-    <div
-      className="mx-2 mb-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center text-foreground"
-      data-testid="user-invitation-info"
-    >
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 font-medium">
-          <Mail className="h-4 w-4 text-primary" data-testid="Mail__853799" />
-          <span>{ui('inviteUserDescriptionTitle')}</span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {ui('inviteUserDescription')}
-        </p>
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        onClick={onOpenInvite}
-        className="shrink-0 gap-2"
-        data-testid="action-open-invite"
-      >
-        <UserPlus className="h-4 w-4" data-testid="UserPlus__853799" />
-        {ui('inviteUser')}
-      </Button>
-    </div>
+    <DocumentStatusPill
+      status="PENDING"
+      tone="warning"
+      label={ui('pendingInvitationBadge')}
+      data-testid="PendingInvitationPill__toolbar" />
   );
 }
 
 /**
- * Company user administration. Wraps the generated `UserPage` to combine two
- * independent extensions:
+ * Company user administration. Wraps the generated `UserPage` to wire the
+ * multi-role assignment flow (ETP-4906) plus the invite-on-create flow (ETP-4830):
  *
- * A) ETP-4894 — email-only invitation flow with pending confirmation. The AD_User
- *    and its organization roles must already exist; the invitation only links that
- *    prepared ERP user to an Etendo Go account after acceptance. Rendered via
- *    `headerContent` (the `InvitationInfoBanner` below, shown above the generated
- *    page's own header) plus a sibling `InviteUserDialog` controlled by local
- *    `inviteOpen` state. `newLabel` overrides the generic "new record" label with
- *    "Invite user" copy, since this window never creates an AD_User directly.
- *
- * B) ETP-4906 — wraps the generated `UserPage` to wire the multi-role assignment flow:
+ * B) ETP-4906 — wires the multi-role assignment flow:
  *
  * 1. On loading an EXISTING user, fetches the currently-applied template role ids
  *    (`fetchUserRoleAssignments`, ETP-4906) and seeds both the shared selection state
@@ -86,17 +76,23 @@ function InvitationInfoBanner({ onOpenInvite }) {
  *    ref mutation alone doesn't trigger a re-render, so without it this prop would
  *    stay stuck at `true` after Guardar instead of flipping back to `false`).
  *
- * Both flows are independent — the invitation banner/dialog has no dependency on
- * role-selection context — but they share the same generated `UserPage` instance,
- * so all props from both are passed into the single call below.
+ * C) ETP-4830 — on successful creation of a brand-new user, `onAfterCreate` (below)
+ *    shows a single actionable toast ("Usuario creado. Invitación enviada por
+ *    correo.") whose action jumps straight into role configuration. Independent of
+ *    A/B above — it only touches the create path, never an existing-record save —
+ *    but reuses the SAME `customTabs`/`AssignTemplateRolesControl` wiring B already
+ *    set up, so it is documented here rather than as a third separate concern.
+ *
+ * All three share the same generated `UserPage` instance, so every prop from each
+ * is passed into the single call below.
  */
 export default function UserWindow(props) {
-  const { recordId, token, apiBaseUrl } = props;
+  const { recordId, token, apiBaseUrl, windowName = 'user' } = props;
   const ui = useUI();
+  const navigate = useNavigate();
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const appliedRoleIdsRef = useRef([]);
   const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
-  const [inviteOpen, setInviteOpen] = useState(false);
 
   useEffect(() => {
     if (!recordId || recordId === 'new' || !token || !apiBaseUrl) return undefined;
@@ -162,17 +158,73 @@ export default function UserWindow(props) {
     { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'AD_User', config: {} } },
   ], [selectedRoleIds]);
 
+  /**
+   * ETP-4830 — actionable "user created" toast, replacing the standalone
+   * `InviteRolesSnackbar.jsx` this ticket originally planned as its own component
+   * (never built — consolidated into this single `sonner` toast instead). Fires from
+   * `onAfterCreate`, `DetailView.jsx`'s hook invoked exactly once per NEW-record Save
+   * click, strictly AFTER `hook.handleSave` has already resolved and shown ITS OWN
+   * generic "Record created" toast (`useEntity.js`'s `getSaveSuccessMessage`) —
+   * `toast.dismiss()` clears that one first so only ONE toast is ever visible at a
+   * time, per this ticket's decision to show a single toast (there is no generic
+   * "silent create" opt-out on the shared Save button that wouldn't also affect
+   * every other window using `onAfterCreate`, so dismiss+replace is the
+   * window-scoped fix instead of a `DetailView.jsx` behavior change).
+   *
+   * The action button does two things `DetailView.jsx` treats as separate surfaces:
+   *  (a) re-navigates to the just-created record with `location.state.openSecondaryTab`
+   *      set to the "roles" custom tab's key (`custom:roles` — `customTabKey()`'s
+   *      `custom:` prefix convention, `detailViewHelpers.jsx`) — the SAME mechanism
+   *      `DetailView.jsx` already uses internally for "save header first, then land on
+   *      a specific tab" (see its own `openSecondaryTab` effect). No ref/imperative
+   *      tab-switch API exists on `DetailView`/`UserPage` — this location-state
+   *      mechanism is the only documented one, used unmodified.
+   *  (b) scrolls/focuses `AssignTemplateRolesControl` — a SEPARATE surface from the
+   *      "roles" tab (it's the `formFooter`, inlined in the header card, always
+   *      visible regardless of the active tab — see that component's own doc
+   *      comment), so switching tabs alone would not bring it into view.
+   *
+   * Stub note: `saved.invitationStatus` (read by `PendingInvitationPill` above) is
+   * shaped against the backend contract as PLANNED at hand-off time
+   * ("PENDING" | "SENT" | "ACCEPTED" | null) — developer-1's `com.etendoerp.go` work
+   * (auto-sending the invite email on create) was still in flight when this was
+   * written. Re-verify the field name/shape once that lands.
+   */
+  const handleAfterCreate = useCallback((saved) => {
+    if (!saved?.id) return;
+    toast.dismiss();
+    toast.success(ui('userCreatedInvitationSentToast'), {
+      action: {
+        label: ui('configureRolesAction'),
+        onClick: () => {
+          navigate(`/${windowName}/${saved.id}`, {
+            replace: true,
+            state: { openSecondaryTab: 'custom:roles' },
+          });
+          // Deferred: `openSecondaryTab` is picked up by a `DetailView.jsx` effect on
+          // the next render tick, and `AssignTemplateRolesControl` (formFooter) may
+          // not have painted its expanded toggle yet on the very first render after
+          // create. Best-effort — if neither test-id is present (e.g. slow data load)
+          // this silently no-ops rather than throwing.
+          setTimeout(() => {
+            const target = document.querySelector('[data-testid="AssignTemplateRolesControl__toggle-expand"]')
+              ?? document.querySelector('[data-testid="AssignTemplateRolesControl__save-first"]');
+            target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+            target?.focus?.();
+          }, 50);
+        },
+      },
+    });
+  }, [navigate, ui, windowName]);
+
   return (
     <RoleSelectionProvider
       value={{ selectedRoleIds, setSelectedRoleIds }}>
       <UserPage
         {...props}
-        newLabel={ui('inviteUser')}
-        headerContent={
-          <InvitationInfoBanner
-            onOpenInvite={() => setInviteOpen(true)}
-            data-testid="InvitationInfoBanner__853799" />
-        }
+        newLabel={ui('newUser')}
+        topbarExtra={PendingInvitationPill}
+        onAfterCreate={handleAfterCreate}
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}
         customTabs={customTabs}
@@ -191,10 +243,6 @@ export default function UserWindow(props) {
         // electrónico, Adjuntos.
         detailTabOrder={1}
         data-testid="UserPage__853799" />
-      <InviteUserDialog
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        data-testid="InviteUserDialog__853799" />
     </RoleSelectionProvider>
   );
 }
