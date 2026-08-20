@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
+import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
 
 /**
  * Inline secondary line under the account name.
@@ -35,6 +36,14 @@ export function SyncStatusInline({ account, onConnect }) {
         {ui('financeAccountsSyncedJustNow')}
       </span>
     );
+  }
+
+  // ETP-4896: Salt Edge is contracted for Spain only. A non-ES account shows no connect link at
+  // all — this cell is a bare inline affordance with nowhere to explain a disabled state, so the
+  // rule is surfaced (with its reason) in the edit modal instead, next to the Country field.
+  // Rule owned by saltEdgeEligibility.js.
+  if (!canConnectToSaltEdge(account)) {
+    return null;
   }
 
   return (

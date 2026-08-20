@@ -27,7 +27,7 @@ body {
 }
 
 .report-container {
-  padding: 20mm 15mm;
+  padding: 40px;
 }
 
 /* Header */
@@ -105,6 +105,14 @@ body {
   text-align: right;
   font-family: var(--font-mono);
   font-size: 8.5pt;
+}
+
+/* Numeric column headers right-align to match their cells below (same idea as
+   DataTable.jsx's NUMERIC_FIELD_TYPES check applying text-right to both header
+   and cell) — scoped to thead so it doesn't inherit the body cell's mono font/size. */
+.report-table thead th.cell-amount,
+.report-table thead th.cell-number {
+  text-align: right;
 }
 
 .cell-boolean {

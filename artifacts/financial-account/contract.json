@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
+  "version": "0.28.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-11T22:41:00.513Z",
-  "checksum": "0ec1af3e8cd9a13c",
+  "updatedAt": "2026-08-19T12:24:01.114Z",
+  "checksum": "2c0bd53da5b3c050",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -206,7 +206,7 @@
             "defaultValue": "0",
             "cellType": "accountBalance",
             "gridLabelKey": "financeAccountsColBalance",
-            "gridOrder": 3,
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 12
@@ -265,6 +265,27 @@
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "country",
+            "apiKey": "country",
+            "column": "C_Country_ID",
+            "label": "Country",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Country",
+            "inputMode": "selector",
+            "cellType": "accountCountry",
+            "gridLabelKey": "financeAccountsColCountry",
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -822,7 +843,7 @@
             "grid": true,
             "form": false,
             "section": "other",
-            "gridOrder": 4
+            "gridOrder": 5
           }
         ],
         "searchableFields": [],
@@ -1365,6 +1386,36 @@
             }
           },
           {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "selector",
+            "seq": 30,
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
+              "evaluable": true,
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+            }
+          },
+          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
@@ -1377,6 +1428,8 @@
             "form": true,
             "reference": "Project",
             "inputMode": "selector",
+            "seq": 10,
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },
@@ -1405,6 +1458,8 @@
             "form": true,
             "reference": "Costcenter",
             "inputMode": "selector",
+            "seq": 20,
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
             },
@@ -1761,6 +1816,29 @@
             },
             "displayLogic": {
               "raw": "@processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "eTGOFinaccTransDest",
+            "apiKey": "eTGOFinaccTransDest",
+            "column": "EM_ETGO_Finacc_Trans_Dest",
+            "label": "Destination Financial Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Finacc_Transaction",
+            "inputMode": "selector",
+            "seq": 5,
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@EM_ETGO_Finacc_Trans_Dest@!''",
               "evaluable": true
             }
           }
@@ -3326,8 +3404,8 @@
             "apiKey": "country",
             "column": "C_Country_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": false
+            "visibility": "editable",
+            "required": true
           },
           {
             "name": "bankFormat",
@@ -3878,7 +3956,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -4024,6 +4102,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOFinaccTransDest",
+            "apiKey": "eTGOFinaccTransDest",
+            "column": "EM_ETGO_Finacc_Trans_Dest",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "document-posting"
@@ -5540,6 +5626,14 @@
       },
       {
         "entity": "account",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/country"
+      },
+      {
+        "entity": "account",
         "field": "psd2Provider",
         "column": "EM_Psd2_Provider_ID",
         "reference": "PSD2_Provider",
@@ -5569,6 +5663,14 @@
         "reference": "BPartner",
         "inputMode": "search",
         "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
+      },
+      {
+        "entity": "transaction",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/product"
       },
       {
         "entity": "transaction",
@@ -5625,6 +5727,14 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "column": "EM_ETGO_Finacc_Trans_Dest",
+        "reference": "Finacc_Transaction",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
       },
       {
         "entity": "accountingConfiguration",
@@ -6808,6 +6918,14 @@
         "description": "Display logic for 'etblkpBulkposting' in transaction should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-transaction-eTGOFinaccTransDest",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "runner": "node",
+        "description": "Display logic for 'eTGOFinaccTransDest' in transaction should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-transaction-etprReactivateTransaction",
         "category": "displaylogic-evaluable",
         "entity": "transaction",
@@ -6862,6 +6980,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in transaction should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-transaction-product",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Display logic for 'product' in transaction should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-transaction-project",
@@ -7208,6 +7334,14 @@
         "description": "Display logic for 'etblkpBulkposting' in transaction should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-transaction-eTGOFinaccTransDest",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "runner": "node",
+        "description": "Display logic for 'eTGOFinaccTransDest' in transaction should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-transaction-etprReactivateTransaction",
         "category": "displaylogic-valid",
         "entity": "transaction",
@@ -7262,6 +7396,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in transaction should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transaction-product",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Display logic for 'product' in transaction should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-project",
@@ -7414,6 +7556,14 @@
         "field": "branchCode",
         "runner": "node",
         "description": "Field 'branchCode' should be present in account"
+      },
+      {
+        "id": "t-field-presence-account-country",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Field 'country' should be present in account"
       },
       {
         "id": "t-field-presence-account-currency",
@@ -7992,6 +8142,14 @@
         "description": "Field 'etblkpBulkposting' should be present in transaction"
       },
       {
+        "id": "t-field-presence-transaction-eTGOFinaccTransDest",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "runner": "node",
+        "description": "Field 'eTGOFinaccTransDest' should be present in transaction"
+      },
+      {
         "id": "t-field-presence-transaction-etprReactivateTransaction",
         "category": "field-presence",
         "entity": "transaction",
@@ -8046,6 +8204,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Field 'posted' should be present in transaction"
+      },
+      {
+        "id": "t-field-presence-transaction-product",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in transaction"
       },
       {
         "id": "t-field-presence-transaction-project",
@@ -8206,6 +8372,14 @@
         "field": "branchCode",
         "runner": "node",
         "description": "Field 'branchCode' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-country",
+        "category": "field-type",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Field 'country' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-currency",
@@ -8784,6 +8958,14 @@
         "description": "Field 'etblkpBulkposting' should have type 'string' in transaction"
       },
       {
+        "id": "t-field-type-transaction-eTGOFinaccTransDest",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "runner": "node",
+        "description": "Field 'eTGOFinaccTransDest' should have type 'string' in transaction"
+      },
+      {
         "id": "t-field-type-transaction-etprReactivateTransaction",
         "category": "field-type",
         "entity": "transaction",
@@ -8838,6 +9020,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Field 'posted' should have type 'boolean' in transaction"
+      },
+      {
+        "id": "t-field-type-transaction-product",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in transaction"
       },
       {
         "id": "t-field-type-transaction-project",
@@ -9104,6 +9294,14 @@
         "description": "Read-only logic for 'paymentAmount' in transaction should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-transaction-product",
+        "category": "readonlylogic-evaluable",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Read-only logic for 'product' in transaction should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-transaction-project",
         "category": "readonlylogic-evaluable",
         "entity": "transaction",
@@ -9358,6 +9556,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Read-only logic for 'paymentAmount' in transaction should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-transaction-product",
+        "category": "readonlylogic-valid",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Read-only logic for 'product' in transaction should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-transaction-project",
@@ -10661,6 +10867,13 @@
         "description": "Rule 'financial-account-Transaction-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-financial-account-Transaction-EM-ETGO-Finacc-Trans-Dest-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Transaction-EM_ETGO_Finacc_Trans_Dest-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Transaction-EM_ETGO_Finacc_Trans_Dest-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-financial-account-Transaction-EM-Etpr-Reactivate-Transaction-displayLogic",
         "category": "rule-declared",
         "rule": "financial-account-Transaction-EM_Etpr_Reactivate_Transaction-displayLogic",
@@ -10991,6 +11204,14 @@
         "description": "Selector endpoint for 'aprmGlitemDiff' in account should exist"
       },
       {
+        "id": "t-selector-endpoint-account-country",
+        "category": "selector-endpoint",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Selector endpoint for 'country' in account should exist"
+      },
+      {
         "id": "t-selector-endpoint-account-currency",
         "category": "selector-endpoint",
         "entity": "account",
@@ -11127,6 +11348,14 @@
         "description": "Selector endpoint for 'costCenter' in transaction should exist"
       },
       {
+        "id": "t-selector-endpoint-transaction-eTGOFinaccTransDest",
+        "category": "selector-endpoint",
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "runner": "node",
+        "description": "Selector endpoint for 'eTGOFinaccTransDest' in transaction should exist"
+      },
+      {
         "id": "t-selector-endpoint-transaction-gLItem",
         "category": "selector-endpoint",
         "entity": "transaction",
@@ -11149,6 +11378,14 @@
         "field": "organization",
         "runner": "node",
         "description": "Selector endpoint for 'organization' in transaction should exist"
+      },
+      {
+        "id": "t-selector-endpoint-transaction-product",
+        "category": "selector-endpoint",
+        "entity": "transaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in transaction should exist"
       },
       {
         "id": "t-selector-endpoint-transaction-project",
@@ -11229,14 +11466,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for account"
-      },
-      {
-        "id": "t-system-field-account-country",
-        "category": "system-field",
-        "entity": "account",
-        "field": "country",
-        "runner": "node",
-        "description": "System field 'country' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-createdBy",
@@ -12367,14 +12596,6 @@
         "description": "System field 'processNow' should exist in backend but not frontend for transaction"
       },
       {
-        "id": "t-system-field-transaction-product",
-        "category": "system-field",
-        "entity": "transaction",
-        "field": "product",
-        "runner": "node",
-        "description": "System field 'product' should exist in backend but not frontend for transaction"
-      },
-      {
         "id": "t-system-field-transaction-reconciliation",
         "category": "system-field",
         "entity": "transaction",
@@ -12449,24 +12670,24 @@
       }
     ],
     "summary": {
-      "total": 839,
+      "total": 853,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
-        "displaylogic-evaluable": 50,
-        "displaylogic-valid": 50,
-        "field-presence": 99,
-        "field-type": 99,
-        "readonlylogic-evaluable": 32,
-        "readonlylogic-valid": 32,
-        "rule-declared": 225,
-        "selector-endpoint": 25,
-        "system-field": 152,
+        "displaylogic-evaluable": 52,
+        "displaylogic-valid": 52,
+        "field-presence": 102,
+        "field-type": 102,
+        "readonlylogic-evaluable": 33,
+        "readonlylogic-valid": 33,
+        "rule-declared": 226,
+        "selector-endpoint": 28,
+        "system-field": 150,
         "visibility": 7
       },
       "byRunner": {
-        "node": 839,
+        "node": 853,
         "junit": 0
       }
     }

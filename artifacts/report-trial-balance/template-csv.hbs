@@ -1,0 +1,10 @@
+{{!-- CSV-only template (ETP-4898) — genuine comma-separated text, not the HTML/PDF page
+      dumped verbatim. Same flat, one-row-per-account shape as template-excel.hbs (this
+      report's HTML is already flat). Amounts print the raw dot-decimal value (no
+      formatCurrency). Every field goes through csvField (this report's helpers.js) to quote
+      values containing a comma/quote/newline — and every csvField call MUST be
+      triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes double-stash output by
+      default, which turns csvField's own escaped `""` into `&quot;&quot;`, corrupting the
+      CSV. --}}{{#with meta}}{{{csvField labels.account_no}}},{{{csvField labels.account_name}}},{{{csvField labels.opening_balance}}},{{{csvField labels.activity_debit}}},{{{csvField labels.activity_credit}}},{{{csvField labels.closing_balance}}}
+{{/with}}{{#each rows}}{{{csvField (lookup this 'account_no')}}},{{{csvField (lookup this 'account_name')}}},{{lookup this 'opening_balance'}},{{lookup this 'activity_debit'}},{{lookup this 'activity_credit'}},{{lookup this 'closing_balance'}}
+{{/each}}

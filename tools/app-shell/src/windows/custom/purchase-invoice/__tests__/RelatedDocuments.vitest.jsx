@@ -328,11 +328,15 @@ describe('RelatedDocuments — Return Invoice (Factura de Devolución)', () => {
   });
 });
 
-// ETP-4737 — data.originInvoice: set when this rectificativa was created via the
+// ETP-4737 — data.originInvoices: set when this rectificativa was created via the
 // "Import from Source Invoice" popup (manual correction). Independent from
 // sourceInvoice/sourceReturnDeliveries above, which cover the auto-generated-
 // from-return case.
-describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)', () => {
+//
+// ETP-4919: originInvoices is a JSON array of {id, documentNo} — a rectificativa can be
+// linked to MORE THAN ONE source invoice across separate import runs. The legacy singular
+// data.originInvoice (a bare id string) is still accepted as a fallback.
+describe('RelatedDocuments (purchase-invoice) — originInvoices chip (ETP-4737, plural since ETP-4919)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetchByCriteria.mockResolvedValue([]);
@@ -340,7 +344,51 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
     mockFetchById.mockResolvedValue(null);
   });
 
-  it('fetches and renders an invoice chip when data.originInvoice is present', async () => {
+  it('fetches and renders an invoice chip when data.originInvoices has one entry', async () => {
+    mockFetchById.mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' });
+
+    render(
+      <RelatedDocuments
+        {...DEFAULT_PROPS}
+        data={{ originInvoices: [{ id: 'origin-1', documentNo: 'FC-100' }] }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', 'tok', '/api');
+    expect(screen.getAllByTestId('chip-invoice')).toHaveLength(1);
+  });
+
+  // ETP-4919 regression: importing from two source invoices across two separate popup runs
+  // used to silently drop the first link — both the persisted C_Invoice_Reverse row and, even
+  // when it did survive, the GET-response enrichment. This proves BOTH origins render as
+  // separate chips, uniquely keyed.
+  it('fetches and renders ONE chip PER entry when data.originInvoices has two entries', async () => {
+    mockFetchById
+      .mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' })
+      .mockResolvedValueOnce({ id: 'origin-2', documentNo: 'FC-200' });
+
+    render(
+      <RelatedDocuments
+        {...DEFAULT_PROPS}
+        data={{
+          originInvoices: [
+            { id: 'origin-1', documentNo: 'FC-100' },
+            { id: 'origin-2', documentNo: 'FC-200' },
+          ],
+        }}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', 'tok', '/api');
+    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-2', 'tok', '/api');
+    expect(screen.getAllByTestId('chip-invoice')).toHaveLength(2);
+  });
+
+  it('falls back to the legacy singular data.originInvoice when originInvoices is absent', async () => {
     mockFetchById.mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' });
 
     render(<RelatedDocuments {...DEFAULT_PROPS} data={{ originInvoice: 'origin-1' }} />);
@@ -348,10 +396,10 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
     expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', 'tok', '/api');
-    expect(screen.getByTestId('chip-invoice')).toBeInTheDocument();
+    expect(screen.getAllByTestId('chip-invoice')).toHaveLength(1);
   });
 
-  it('does not render an invoice chip when data.originInvoice is absent', async () => {
+  it('does not render an invoice chip when neither originInvoices nor originInvoice is present', async () => {
     render(<RelatedDocuments {...DEFAULT_PROPS} data={{}} />);
     await waitFor(() =>
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
@@ -359,10 +407,15 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
     expect(screen.queryByTestId('chip-invoice')).not.toBeInTheDocument();
   });
 
-  it('does not render an invoice chip when the fetch fails (caught, resolves null)', async () => {
+  it('does not render a chip for an origin whose fetch fails (caught, resolves null, filtered out)', async () => {
     mockFetchById.mockRejectedValueOnce(new Error('not found'));
 
-    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ originInvoice: 'origin-1' }} />);
+    render(
+      <RelatedDocuments
+        {...DEFAULT_PROPS}
+        data={{ originInvoices: [{ id: 'origin-1', documentNo: 'FC-100' }] }}
+      />
+    );
     await waitFor(() =>
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
@@ -370,14 +423,17 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
   });
 
   it('is additive: renders alongside pre-existing return-to-vendor chips, without hiding them', async () => {
-    const RETURN_DATA = { apInvoiceSubtype: 'RECTIFICATIVA', originInvoice: 'origin-1' };
+    const RETURN_DATA = {
+      apInvoiceSubtype: 'RECTIFICATIVA',
+      originInvoices: [{ id: 'origin-1', documentNo: 'FC-100' }],
+    };
     mockFetchChild
       .mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]) // lines
       .mockResolvedValueOnce([]); // paymentPlan
-    // Call order matters: the originInvoice fetchById is invoked synchronously in the
-    // effect body right after the isReturn Promise.all is kicked off, which resolves
-    // BEFORE the async continuation inside fetchLinkedReturnDeliveries (itself gated
-    // behind an earlier `await fetchChild(...)`) reaches its own fetchById calls.
+    // Call order matters: the originInvoices fetchById calls are invoked synchronously in the
+    // effect body right after the isReturn Promise.all is kicked off, which resolves BEFORE the
+    // async continuation inside fetchLinkedReturnDeliveries (itself gated behind an earlier
+    // `await fetchChild(...)`) reaches its own fetchById calls.
     mockFetchById
       .mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' }) // origin invoice
       .mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' }) // shipment line lookup
@@ -388,6 +444,6 @@ describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)'
       expect(screen.getByTestId('shell').dataset.loading).toBe('false')
     );
     expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
-    expect(screen.getByTestId('chip-invoice')).toBeInTheDocument();
+    expect(screen.getAllByTestId('chip-invoice')).toHaveLength(1);
   });
 });

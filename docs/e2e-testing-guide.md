@@ -26,6 +26,20 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 | `make test-e2e-record` | Open recorder — you click, it generates code |
 | `make test-e2e-onboarding-integration` | Run the live onboarding integration spec only (requires a live backend, see below) |
 
+### Screenshot capture
+
+Playwright runs do not write functional screenshots by default. This keeps normal
+test runs from modifying delivery evidence or producing PNG artifacts. To capture
+screenshots explicitly, opt in for that invocation:
+
+```bash
+E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
+```
+
+`E2E_CAPTURE_SCREENSHOTS` accepts `1`, `true`, or `yes`. When enabled, both the
+explicit evidence screenshots and Playwright's automatic failure screenshots are
+available. The default is disabled; `0` and any other value also leave capture off.
+
 ---
 
 ## Etendo GO Contextual Selector Smoke
@@ -50,9 +64,26 @@ If this smoke fails because generated field-name selector URLs return `404 Field
 
 ---
 
+## Purchase/Sales Full-Flow Integration Specs — Accounting Period Precondition
+
+`purchase-order-full-flow.integration.spec.js` and `sales-quotation-full-flow.integration.spec.js` (both gated by `E2E_SALES_INTEGRATION=1`, real backend, no mocks) drive a document all the way through confirm/receipt/shipment/invoice actions for the test org (`GOOrg`, client `GOClient`). Those confirm calls require the current month's `c_periodcontrol` row to be **open** (`periodstatus='O'`) for the relevant doc base types (`SOO`, `POO`, `ARI`, `API`, `MMS`, `MMR`). `c_periodcontrol` rows default to `periodstatus='N'` (Never Opened) until manually opened from the Etendo UI — see `docs/etendo-ad/onboarding-gaps.md` §C2 for the full provisioning-gap background.
+
+Without a guard, a closed period makes the backend silently reject the confirm call with `"The Period does not exist or it is not opened"`, and the test doesn't surface that at all — it just times out ~10s later waiting for an unrelated element (e.g. "Ver factura"), producing a confusing generic Playwright timeout instead of the real cause. This is exactly what happened while debugging ETP-4567 in a fresh environment. It also recurs on a seeded environment once the calendar rolls into a period nobody has opened yet (e.g. next year), so a guard that only fails fast would keep failing forever instead of just working.
+
+Each of the 3 tests across those two spec files now calls `ensureOpenPeriod()` (from `e2e/tests/helpers/period-helpers.js`) as the very first statement in the test body, before any page navigation. It queries `c_periodcontrol`/`c_period`/`ad_org` (resolving `GOOrg` by name, never a hardcoded `AD_Org_ID`, reusing the same gradle.properties/env-var DB credential resolution as `cli/src/db.js`) and:
+
+- **No-ops** for any requested doc base type that is already open for the period covering today.
+- **Opens the period** for every requested doc base type that is not open (`periodstatus <> 'O'`): it flips `c_periodcontrol.periodstatus` to `'O'` (and `periodaction`/`openclose` accordingly) for exactly those doc base types, plus `c_period.openclose`, then lets the test proceed. This mirrors the Java-side `PeriodTestUtils.ensureOpenPeriod(Date)` used by the equivalent OBBaseTest integration coverage.
+- **Throws a clear `Error`** — failing the test in well under a second — when a requested doc base type has **no `c_periodcontrol` row at all** for the current period. That's a genuine data-setup gap (see `docs/etendo-ad/onboarding-gaps.md` §C2) this helper will not paper over by inventing a row.
+- **Skips with a `console.warn`** (does not fail the suite) when the DB query itself fails — e.g. running against a remote/deployed environment with no local Postgres access. This guard is a local-dev convenience, not a hard requirement.
+
+See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own unit tests (already-open no-op case, opens-closed-types case, missing-row throw case, DB-unreachable skip case).
+
+---
+
 ## Onboarding Register Integration Smoke
 
-`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
+`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). The successful registration test is repeatable: `e2e/onboarding-accounts.json` contains a JSON count (`2` by default), and the test runs that same happy path sequentially for each account, writing `.auth-credentials-1.json`, `.auth-credentials-2.json`, and so on for downstream cross-tenant E2E setup. Set `E2E_ONBOARDING_ACCOUNT_COUNT` or `E2E_ONBOARDING_ACCOUNTS_FILE` to override it. It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
 
 Run it explicitly:
 
@@ -67,6 +98,57 @@ BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e-onboard
 ```
 
 Each run creates a unique user (random suffix), so the test is repeatable without manual cleanup.
+
+---
+
+## Financial Account Integration Specs (`E2E_FINANCE_INTEGRATION`)
+
+Financial-account flows that need a live backend are gated by the **domain-level** flag
+`E2E_FINANCE_INTEGRATION=1` (same shape as `E2E_SALES_INTEGRATION`, which covers five
+sales/purchase document specs). `scripts/run-e2e-full.sh` exports it for the integration suite, so
+`make test-e2e-headless` and `.githooks/pre-push` pick these specs up automatically. New
+financial-account integration specs should reuse this flag rather than adding a per-feature one.
+
+Current spec:
+
+| Spec | Covers |
+|---|---|
+| `financial-account-cash-close.integration.spec.js` | Cash close (ETP-4795). **Case 1: happy path** — create a cash account → create and confirm a sales invoice → collect it in cash into that account → tick the resulting movement, declare the calculated balance, confirm the close → verify the reconciliation is processed and the balance carried forward |
+
+Cash close cases are numbered (`test('Case N: …')`, same convention as `assets.integration.spec.js`)
+and live in that one file. The number is a stable reference used in review and QA notes, so add new
+cases at the end and **never renumber an existing one**. The spec's own docblock lists the cases
+worth adding next.
+
+Run only this spec against local Etendo:
+
+```bash
+E2E_SUITE=integration E2E_FILES=tests/flows/financial-account-cash-close.integration.spec.js make test-e2e-headless
+```
+
+`E2E_FILES` implies `--no-deps` — the `onboarding-setup` project does **not** run, so it needs either
+an existing `e2e/.auth-credentials.json` or `E2E_USER` + `E2E_PASSWORD`.
+
+**The cash close spec creates its own account (`Caja E2E <timestamp>`) rather than using the seeded
+`Caja`**, and is therefore repeatable against the same tenant — it never consumes shared seed data.
+That is also what makes its arithmetic exact: a brand-new drawer opens at 0 with zero movements, so
+after collecting one invoice the pending list holds exactly one movement of a known amount. The
+chain through the invoice is deliberate — it is the real way a movement lands in a cash drawer (Core
+writes the `FIN_FinaccTransaction` when the payment is processed), and it exercises the account
+wizard's own contract on the way: `FinancialAccountSupport` auto-assigns the Efectivo payment method
+to every type-`C` account on creation, which is what makes the account collectable in cash at all.
+A **sales** invoice specifically, so the collection is money coming IN and the drawer ends on a
+positive counted balance — a purchase payment would leave the only movement as an outflow and the
+balanced close would have to declare a negative balance.
+
+Because it spans four windows, its timeout is 600s (not the 300s the other integration specs use).
+
+The spec asserts on the **backend payloads captured from the app's own requests**
+(`waitForResponse` → `response.data`), never on formatted currency read out of the DOM: the money
+formatting is already covered by `cashCloseMath.test.js`, and re-parsing `1.234,56 €` in an E2E spec
+only buys locale brittleness. The two UI-level assertions about the arithmetic are deliberately
+boolean — `cash-close-unbalanced-note` before declaring, `cash-close-balanced-pill` after — which is
+what proves the live recalculation without pinning a number to a locale.
 
 ---
 

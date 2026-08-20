@@ -265,6 +265,18 @@
           "windowId": "118"
         },
         {
+          "name": "cost-center",
+          "label": "Cost Center",
+          "favname": "Cost Center",
+          "windowId": "79FC23AB84F04384B4B7CCCADCDD2942"
+        },
+        {
+          "name": "service-project",
+          "label": "Service Project",
+          "favname": "Service Project",
+          "windowId": "800001"
+        },
+        {
           "name": "general-ledger-configuration",
           "label": "General Ledger Configuration",
           "favname": "General Ledger Configuration",
