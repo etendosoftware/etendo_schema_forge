@@ -3,6 +3,8 @@ import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import RoleChipsCell, { resolveDefaultRoleId, resolveUserId, useUserRoleGridData } from './RoleChipsCell.jsx';
 import { RoleFilterControl } from './RoleFilterControl.jsx';
+import { useUserDebugMode } from './useUserDebugMode.js';
+import UserDebugPanel from './UserDebugPanel.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -62,6 +64,11 @@ export default function UserHeaderTable(props) {
   const [roleFilter, setRoleFilter] = useState(null);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
+  // ETP-4830 (item #4) — dev/QA-only debug panel, activated by typing `debuguser` anywhere in
+  // the app. Mounted on the Users LIST page specifically (not the detail page alone) so it's
+  // reachable without already knowing a specific user's route — see useUserDebugMode.js/
+  // UserDebugPanel.jsx for the full mechanism.
+  const userDebugModeActive = useUserDebugMode();
 
   // ETP-4906 Round 4 — `t('Default_Ad_Role_ID')` (the shared native AD dictionary
   // entry) always wins over this column's own `label` in `DataTable`'s header
@@ -123,6 +130,12 @@ export default function UserHeaderTable(props) {
 
   return (
     <>
+      {userDebugModeActive && (
+        <UserDebugPanel
+          users={props.data ?? []}
+          onDataMutated={props.onDataMutated}
+          data-testid="UserDebugPanel__grid" />
+      )}
       <div className="flex items-center gap-2 px-6 pb-2 pt-3" data-testid="UserHeaderTable__toolbar">
         <RoleFilterControl
           value={roleFilter}

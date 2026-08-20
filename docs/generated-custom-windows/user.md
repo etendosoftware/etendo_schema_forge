@@ -79,6 +79,45 @@ Users should be able to:
 6. Confirm Expired Password, Locked, and Last Password Update are displayed as review state rather than normal editable business fields.
 7. Confirm the current page surfaces an Email Configuration child pane (`DetailTable={EmailConfigurationTable}`/`DetailForm={EmailConfigurationForm}`) with a "Test SMTP Connection" action available from it. Confirm it does NOT surface a Process Now action or a Grant Portal Access action (both remain unexposed gaps — see Gap assessment).
 8. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+9. (Dev/QA only, requires the backend flag on — see "Debug mode" below.) On `/user`, type `debuguser`; confirm a dark panel appears top-right. Enter an email and click "Force-accept invitation"; confirm a success toast appears (with a temporary password if a new account was created) and, if that email had an open invitation, its pill/status updates on next load. Pick a status from the dropdown and click "Force status"; confirm `PendingInvitationPill` reflects the new state after reopening that user's record. With the backend flag left at its default (off), confirm both actions fail with a clear error instead of silently succeeding. Type `debuguser` again to hide the panel.
+
+## Debug mode (ETP-4830, item #4 — dev/QA-only)
+
+Typing the sequence `debuguser` anywhere in the app (any page) activates a debug panel for
+exercising the invite-email flow and the pending-invitation pill's states without a real email
+round-trip. State persists in `localStorage` under key `etendo-debug-user` and survives page
+refresh. Typing the sequence again deactivates it. Same shape as `fiscal-monitor`'s own
+`debugfiscal`/`useDebugMode.js` convention (see that window's own "Debug mode" section) but a
+fully independent module — `useUserDebugMode.js` — with its own localStorage key and keystroke
+sequence; the two never interact.
+
+The keydown listener itself only registers in a dev build (`import.meta.env.DEV`) — the panel
+cannot be discovered by typing the sequence at all in a production build. This is a
+discoverability nicety only: the real security boundary is server-side (see below), since a dev
+build gate says nothing about which *backend* the SPA happens to be pointed at.
+
+When active, `UserDebugPanel` appears as a fixed dark panel (top-right, z-index 9999), mounted on
+the `/user` LIST page (`UserHeaderTable.jsx`) so it is reachable without already knowing a
+specific user's route:
+- **Email input** (with a `<datalist>` seeded from the grid's currently-loaded rows) plus a
+  **"Force-accept invitation"** button — calls the backend to find-or-create an active
+  `etgo_account` for that email and, if a matching `ETGO_INVITATION` row exists, flip it to
+  `ACCEPTED`, skipping the real token/email round-trip entirely. A newly created account's
+  temporary password is surfaced in the success toast.
+- **Invitation status dropdown** (`PENDING`/`SENT`/`ACCEPTED`/`EXPIRED`/`REVOKED`/
+  `DELIVERY_FAILED`) plus a **"Force status"** button — directly sets `ETGO_INVITATION.STATUS`
+  for the given email, for visually exercising every `PendingInvitationPill` state (see
+  "Invite-on-create flow" above) without waiting on real email delivery.
+
+**The real security boundary is entirely server-side, not this panel.** Both actions call
+`com.etendoerp.go`'s `SFDebugInvitationBypass` webhook (reached through the NEO pseudo-spec
+bridge — `docs/neo-headless.md` §4.10–4.11, "Debug invitation bypass" subsection), which is gated
+OFF by default via `GoRuntimeProperties.readBoolean("etendo.go.debug.invitationBypass",
+"ETGO_DEBUG_INVITATION_BYPASS", false)` — checked in `NeoPseudoSpecDispatcher` BEFORE the webhook
+is even constructed. Any environment that hasn't explicitly opted in (its own local
+`Openbravo.properties`/env var) gets a plain 404 for this endpoint, zero DB access — so the panel
+rendering behind a keystroke sequence is a UI-side discoverability gate on top of a real backend
+boundary, never a substitute for it.
 
 ## Automated evidence
 - Route visibility is grounded in `tools/app-shell/src/menu.json` and `tools/app-shell/src/windows/registry.js`.
@@ -91,6 +130,7 @@ Users should be able to:
 - The `username = email` enforcement and pending `etgo_account` provisioning on create (ETP-4829) are implemented and unit-tested in the same `UserRoleAssignmentHandler`/`UserRoleAssignmentHandlerTest`, plus `EtendoGoAccountProvisioning`/`EtendoGoAccountProvisioningTest` and `EtendoGoJwtDalHelper#createPendingAccount`/`EtendoGoJwtDalHelperTest` (all `com.etendoerp.go`).
 - The standalone company-invitation webhook and its dialog (ETP-4894) — `InviteUserDialog.jsx`, covered by `tools/app-shell/src/windows/custom/user/__tests__/InviteUserDialog.vitest.jsx` — is no longer wired into `windows/custom/user/index.jsx` as of ETP-4830 (kept intact, unwired, for a distinct future case — see "Invite-on-create flow" above); the public acceptance page is `tools/app-shell/src/pages/InviteAcceptancePage.jsx`, covered by `tools/app-shell/src/pages/__tests__/InviteAcceptancePage.vitest.jsx`. Both call the `com.etendoerp.go` `CompanyInvitationService` endpoints (`POST /sws/go/company-invitations`, `GET /sws/go/company-invitations/resolve`, `POST /sws/go/company-invitations/accept`, `POST /sws/go/company-invitations/register-and-accept`, `GET /sws/go/company-invitations/mine`), persisted in `ETGO_INVITATION` with SHA-256 hashed tokens and lifecycle status (`PENDING`, `SENT`, `ACCEPTED`, `EXPIRED`, `REVOKED`) — see `docs/specs/ETP-4894-company-invitations-handoff.md` for the endpoint contracts. End-to-end coverage is `e2e/tests/flows/user-invitation.mocked.spec.js` and `e2e/tests/flows/user-invitation.email.integration.spec.js` — see `docs/etendo-go-invitation-e2e-learnings.md` for known cross-client/timing gotchas.
 - The invite-on-create flow (ETP-4830) — the pending-invitation `topbarExtra` pill (`PendingInvitationPill`), the actionable "user created" toast (`handleAfterCreate`, `onAfterCreate`), and the `newUser`/`newLabel` fix — is grounded in `tools/app-shell/src/windows/custom/user/index.jsx`, covered by `tools/app-shell/src/windows/custom/user/__tests__/index.vitest.jsx`. Email's locks-after-first-save `readOnlyLogicJs` and Password's create-form-only `displayLogicJs` are declared in `artifacts/user/decisions.json` and grounded in the regenerated `artifacts/user/generated/web/user/UserForm.jsx`.
+- The dev/QA-only debug mode (ETP-4830 item #4) — `useUserDebugMode.js` (keystroke sequence + localStorage persistence, mirroring `fiscal-monitor`'s own `useDebugMode.js` shape as an independent module), `UserDebugPanel.jsx` (the panel itself, mounted from `UserHeaderTable.jsx`), and `lib/debugInvitationBypassApi.js` (the `SFDebugInvitationBypass` client) — are covered by `tools/app-shell/src/windows/custom/user/__tests__/useUserDebugMode.vitest.jsx`, `__tests__/UserDebugPanel.vitest.jsx`, the "debug panel" describe block in `__tests__/UserHeaderTable.vitest.jsx`, and `tools/app-shell/src/lib/__tests__/debugInvitationBypassApi.vitest.js`. On the backend, the flag-off 404 path (the security-critical case), both actions, and the account-provisioning reuse are unit-tested in `com.etendoerp.go`'s `NeoPseudoSpecDispatcherTest`, `SFDebugInvitationBypassTest`, and `DebugInvitationBypassServiceTest` — see `docs/neo-headless.md`'s "Debug invitation bypass" subsection for the endpoint contract.
 - The "Activo" active/inactive toggle (ETP-4830) — the `active` field's `visibility: "editable"` + `"derivation": null` + `inlineToggle: true` override is declared in `artifacts/user/decisions.json` and grounded in the regenerated `artifacts/user/generated/web/user/UserTable.jsx` (`toggle: true`) and `contract.json`. The grid's hand-mirrored column is grounded in `tools/app-shell/src/windows/custom/user/UserHeaderTable.jsx`, covered by its own `active`-column assertion in `tools/app-shell/src/windows/custom/user/__tests__/UserHeaderTable.vitest.jsx`. The detail-header `ActiveStatusToggle` and the composite `TopbarExtra` (pill + toggle) are grounded in `tools/app-shell/src/windows/custom/user/index.jsx`, covered by the `"Activo" active/inactive toggle` describe block in `tools/app-shell/src/windows/custom/user/__tests__/index.vitest.jsx` (checked/unchecked rendering, hidden on a new record, PATCH request shape, and the error-toast/rollback path). Both surfaces reuse `runInlineToggleRequest`, exported from `tools/app-shell/src/components/contract-ui/DataTable.jsx` for this purpose — the grid's own inline-toggle PATCH/optimistic-update/error-toast behavior is unaffected and already covered by `DataTable.coveragePaths.vitest.jsx`.
 - Contract evidence for callouts, selectors, child entities, and declared actions is grounded in `artifacts/user/contract.json`.
 - Email-configuration UI (`artifacts/user/generated/web/user/EmailConfigurationTable.jsx` and `EmailConfigurationForm.jsx`) is mounted on the detail page — see Gap assessment and Manual verification step 7.

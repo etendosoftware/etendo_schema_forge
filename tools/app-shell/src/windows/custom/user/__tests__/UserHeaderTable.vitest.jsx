@@ -56,6 +56,21 @@ vi.mock('../RoleFilterControl.jsx', () => ({
   ),
 }));
 
+// ETP-4830 (item #4) — UserHeaderTable mounts UserDebugPanel only while useUserDebugMode() is
+// active. Mocked here so tests control activation directly rather than driving the real
+// `debuguser` keystroke sequence.
+let debugModeActive = false;
+vi.mock('../useUserDebugMode.js', () => ({
+  useUserDebugMode: () => debugModeActive,
+}));
+vi.mock('../UserDebugPanel.jsx', () => ({
+  default: (props) => (
+    <div data-testid="stub-user-debug-panel">
+      <div data-testid="stub-user-debug-panel-count">{(props.users ?? []).length}</div>
+    </div>
+  ),
+}));
+
 import UserHeaderTable from '../UserHeaderTable.jsx';
 
 // ETP-4906 DEV wave 7 — `useUserRoleGridData` (RoleChipsCell.jsx) now combines the 4
@@ -92,6 +107,7 @@ function mockDataOk({
 beforeEach(() => {
   vi.clearAllMocks();
   tableProps = null;
+  debugModeActive = false;
 });
 
 describe('UserHeaderTable — layout', () => {
@@ -250,5 +266,26 @@ describe('UserHeaderTable — role filter (client-side row filtering)', () => {
 
     fireEvent.click(screen.getByTestId('stub-select-role-fin'));
     expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
+  });
+});
+
+describe('UserHeaderTable — debug panel (ETP-4830, item #4)', () => {
+  it('does not render the debug panel when debug mode is inactive', async () => {
+    debugModeActive = false;
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+
+    expect(screen.queryByTestId('stub-user-debug-panel')).not.toBeInTheDocument();
+  });
+
+  it('renders the debug panel, seeded with the grid rows, when debug mode is active', async () => {
+    debugModeActive = true;
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+
+    expect(screen.getByTestId('stub-user-debug-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('stub-user-debug-panel-count')).toHaveTextContent(String(ROWS.length));
   });
 });
