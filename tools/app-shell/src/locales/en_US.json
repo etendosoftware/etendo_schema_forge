@@ -16404,6 +16404,17 @@
     }
   },
   "genericLabels": {
+    "onboardingVerifyEmailTitle": "Confirm your email",
+    "onboardingVerifyEmailSent": "We sent you a link to confirm your email address. Open it to start setting up your environment.",
+    "onboardingVerifyEmailSentToAddress": "We sent a link to {email}. Open it to start setting up your environment.",
+    "onboardingVerifyEmailHint": "Can't find it? Check your spam folder, or send the link again.",
+    "onboardingEmailVerifyResend": "Resend link",
+    "onboardingEmailVerifyResending": "Sending…",
+    "onboardingEmailVerifyResent": "Link sent. Check your inbox.",
+    "onboardingEmailVerifyResendFailed": "We couldn't send the link. Please try again in a moment.",
+    "onboardingEmailNotVerified": "Confirm your email address before creating your environment. Check your inbox for the link we sent you.",
+    "onboardingEmailVerifyInvalid": "That confirmation link is no longer valid. Request a new one.",
+    "onboardingEmailVerifyFailed": "We couldn't confirm your email address. Please try again.",
     "computedFreshnessQueued": "This value is computed in the background and may take a few minutes to refresh.",
     "computedFreshnessManual": "This value is computed and is refreshed manually.",
     "computedFreshnessAria": "Computed value — may be delayed",
