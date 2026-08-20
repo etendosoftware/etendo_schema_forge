@@ -86,6 +86,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
 
   const vfInvTypeDefaultedRef = useRef(null);
   const vfReverseTypeRef = useRef(null);
+  const siiRectifTypeRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -112,6 +113,23 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
     onChange?.('etvfacInvType', 'F1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+
+  // ETP-4783: When SII is configured and the selected document type is rectificative
+  // (isRectificative injected by AbstractInvoiceHeaderHandler.enrichIsRectificative),
+  // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
+  // rectificativa). Keyed on recordId+isRectificative so a document-type change
+  // mid-session re-fires. Never clobbers a value that is already 'R'.
+  useEffect(() => {
+    if (!showSii || !isDraft || !recordId) return;
+    if (!data?.isRectificative) return;
+    const currentVal = data?.[siiTypeField];
+    if (currentVal === 'R') return; // already correct — no-op
+    const key = `${recordId}:rectif`;
+    if (siiRectifTypeRef.current === key) return;
+    siiRectifTypeRef.current = key;
+    onChange?.(siiTypeField, 'R');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
