@@ -378,7 +378,7 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
     expect(typeof lastUserPageProps.topbarExtra).toBe('function');
   });
 
-  it('renders the amber pending-invitation pill when invitationStatus is PENDING', () => {
+  it('renders the amber pending-invitation pill when invitationStatus is PENDING (transient pre-send state)', () => {
     render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'PENDING' }} />);
 
     const pill = screen.getByTestId('document-status-pill');
@@ -387,8 +387,26 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
     expect(pill).toHaveAttribute('data-status', 'PENDING');
   });
 
-  it('renders nothing when invitationStatus is not PENDING', () => {
-    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'ACCEPTED' }} />);
+  it('renders the amber pending-invitation pill when invitationStatus is SENT (the real persisted post-send state)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'SENT' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('pendingInvitationBadge');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', 'SENT');
+  });
+
+  it('renders a red delivery-failed pill when invitationStatus is DELIVERY_FAILED', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'DELIVERY_FAILED' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationDeliveryFailedBadge');
+    expect(pill).toHaveAttribute('data-tone', 'destructive');
+    expect(pill).toHaveAttribute('data-status', 'DELIVERY_FAILED');
+  });
+
+  it.each(['ACCEPTED', 'EXPIRED', 'REVOKED'])('renders nothing when invitationStatus is %s (terminal, non-actionable state)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
   });
 

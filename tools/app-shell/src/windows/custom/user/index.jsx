@@ -16,7 +16,7 @@ function sameIdSet(a, b) {
 }
 
 /**
- * ETP-4830 — amber "Invitación pendiente" pill, wired as `UserPage`'s/`DetailView`'s
+ * ETP-4830 — pending/failed invitation pill, wired as `UserPage`'s/`DetailView`'s
  * `topbarExtra` slot: a plain pass-through prop (not a `decisions.json`-declared
  * extension point), rendered in the SAME toolbar row as the Cancel button —
  * `DetailView.jsx`'s "Action bar: Cancel + status" row renders, in order, the Cancel
@@ -24,25 +24,42 @@ function sameIdSet(a, b) {
  * flex group. Reusing this existing generic slot (rather than
  * `window.extraBadges`/`statusPills`, whose `renderStatusPillBadge` only compiles a
  * boolean field into a 2-state true/false pill) means no `schema_forge_core`
- * generator change was needed for this ticket — `invitationStatus` is a 3-state field
- * ("PENDING" | "SENT" | "ACCEPTED" | null, see this file's own stubbing note below on
- * `handleAfterCreate`) where only ONE state should ever render a pill, a shape
- * `extraBadges` cannot express today.
+ * generator change was needed for this ticket — `invitationStatus` is the confirmed
+ * backend contract's 6-state enum (`"PENDING" | "SENT" | "ACCEPTED" | "EXPIRED" |
+ * "REVOKED" | "DELIVERY_FAILED" | null`), a shape `extraBadges` cannot express today.
  *
- * Purely reactive to `data` — renders nothing once the backend flips
- * `invitationStatus` away from `'PENDING'` (e.g. once the invitee accepts), no local
- * state or polling needed here.
+ * `PENDING` is only a transient pre-send state within the request that creates the
+ * invitation — the persisted status after a successful send is `SENT`, so both render
+ * the same amber pill (an invite is outstanding either way). `DELIVERY_FAILED` gets its
+ * own red pill so the admin notices the email never went out. Every other value
+ * (`ACCEPTED`, `EXPIRED`, `REVOKED`, `null`) renders nothing.
+ *
+ * Purely reactive to `data` — renders nothing once the backend flips `invitationStatus`
+ * to a terminal state (e.g. once the invitee accepts), no local state or polling needed
+ * here.
  */
 function PendingInvitationPill({ data }) {
   const ui = useUI();
-  if (data?.invitationStatus !== 'PENDING') return null;
-  return (
-    <DocumentStatusPill
-      status="PENDING"
-      tone="warning"
-      label={ui('pendingInvitationBadge')}
-      data-testid="PendingInvitationPill__toolbar" />
-  );
+  const status = data?.invitationStatus;
+  if (status === 'PENDING' || status === 'SENT') {
+    return (
+      <DocumentStatusPill
+        status={status}
+        tone="warning"
+        label={ui('pendingInvitationBadge')}
+        data-testid="PendingInvitationPill__toolbar" />
+    );
+  }
+  if (status === 'DELIVERY_FAILED') {
+    return (
+      <DocumentStatusPill
+        status={status}
+        tone="destructive"
+        label={ui('invitationDeliveryFailedBadge')}
+        data-testid="PendingInvitationPill__toolbar" />
+    );
+  }
+  return null;
 }
 
 /**
@@ -184,11 +201,10 @@ export default function UserWindow(props) {
    *      visible regardless of the active tab — see that component's own doc
    *      comment), so switching tabs alone would not bring it into view.
    *
-   * Stub note: `saved.invitationStatus` (read by `PendingInvitationPill` above) is
-   * shaped against the backend contract as PLANNED at hand-off time
-   * ("PENDING" | "SENT" | "ACCEPTED" | null) — developer-1's `com.etendoerp.go` work
-   * (auto-sending the invite email on create) was still in flight when this was
-   * written. Re-verify the field name/shape once that lands.
+   * `saved.invitationStatus` (read by `PendingInvitationPill` above) matches the
+   * confirmed `com.etendoerp.go` contract: `"PENDING" | "SENT" | "ACCEPTED" |
+   * "EXPIRED" | "REVOKED" | "DELIVERY_FAILED" | null`, present on every `user` GET
+   * response.
    */
   const handleAfterCreate = useCallback((saved) => {
     if (!saved?.id) return;

@@ -17527,6 +17527,7 @@
     "removeRoleAria": "Quitar rol",
     "newUser": "Nuevo usuario",
     "pendingInvitationBadge": "Invitación pendiente",
+    "invitationDeliveryFailedBadge": "Error al enviar la invitación",
     "userCreatedInvitationSentToast": "Usuario creado. Invitación enviada por correo.",
     "configureRolesAction": "Configurar roles",
     "roleFilterAllRoles": "Todos los roles",
