@@ -13,6 +13,7 @@ import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { PIS_FAILURE_STATUSES, pisOutcome } from './paymentStatuses';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
 const INK = 'hsl(var(--foreground))';
@@ -68,13 +69,9 @@ const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
 // including a status this list does not know yet — as "still running". Defaulting an unknown
 // status to failure is what caused the bug; defaulting it to "keep polling" is self-healing if
 // Salt Edge ever adds a value.
-const PIS_SUCCESS_STATUSES = ['executed', 'settled'];
-// The user approved the transfer at the bank, so the payment is registered — but the funds have
-// not moved yet. It is a resolutive status ("AUTHORIZED → create payment" in the spec), so the
-// modal must close on it too: leaving it open while the payment already exists desynchronizes what
-// the user sees from what was recorded, and invites a duplicate submit.
-const PIS_REGISTERED_STATUSES = ['authorized'];
-const PIS_FAILURE_STATUSES = ['failed'];
+// The lists and the classifier moved to paymentStatuses.js when the payment window's retry button
+// needed the same reading of a Salt Edge status; a second copy here is what the shared module
+// exists to prevent. The reasoning above still applies verbatim — see the comments over there.
 const PIS_STATUS_KEYS = {
   requested: 'cpPisStatusRequested',
   initiated: 'cpPisStatusRequested',
@@ -95,18 +92,6 @@ const PIS_POLL_INTERVAL_MS = 3000;
 // on any fetch error, which was indistinguishable from a real rejection.
 const PIS_MAX_TRANSPORT_ERRORS = 5;
 
-/**
- * Classifies a Salt Edge PIS status into the outcomes the modal reacts to. Every status the spec
- * calls resolutive — authorized / executed / settled / failed — closes the modal, because each one
- * produces a payment. Only the genuinely in-flight ones (and any status this list does not know)
- * keep the user waiting.
- */
-function pisOutcome(status) {
-  if (PIS_SUCCESS_STATUSES.includes(status)) return 'success';
-  if (PIS_REGISTERED_STATUSES.includes(status)) return 'registered';
-  if (PIS_FAILURE_STATUSES.includes(status)) return 'failure';
-  return 'pending';
-}
 // Template search-keys (match the AD "Template List for Bank Payments" ref-list values).
 const PIS_TEMPLATE_SEPA = 'SEPA';
 const PIS_TEMPLATE_DOMESTIC = 'DOMESTIC';

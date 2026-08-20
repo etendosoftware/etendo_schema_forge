@@ -164,6 +164,14 @@ plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Ch
 added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
 already used by the `draftMode` Confirm button elsewhere in the app.
 
+**Draft banner gating (ETP-4895).** `PaymentDraftBanner.jsx` no longer keeps its own copy of the
+deposited-status list and no longer reasons by elimination ("not deposited, therefore a draft"),
+which announced "Borrador — sin impacto en caja" on a rejected `ETGOERR` payment. It gates on the
+shared `paymentDisplayState` rule instead, with `RPAE` kept as a draft here — as it already was, and
+as `PaymentDetailSidebarBase` reads it for collections. Collections cannot reach `ETGOERR` today
+(PIS is payments-out only), so this is alignment rather than a visible fix on this window; the
+behavior it corrects is documented in `payment-out.md`.
+
 **Toolbar order actually shipped (ETP-4895).** The `saveBeforeProcesses` key above never reached the
 UI: the published `schema_forge_core` still drops it in `resolve-curated.js`'s window-key whitelist,
 so it is absent from `contract.json` and from the generated page, and the toolbar kept rendering

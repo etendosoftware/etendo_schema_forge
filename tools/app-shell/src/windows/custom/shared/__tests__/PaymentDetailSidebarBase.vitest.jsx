@@ -76,6 +76,20 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     expect(reactivatedItems).toHaveLength(1);
   });
 
+  it('logs a retry as a retried transfer, not as one more confirmation (ETP-4895)', async () => {
+    // Retrying sends the SAME payment to the bank again; nothing is confirmed a second time, so a
+    // second "Pago confirmado" row described an event that never happened.
+    const data = baseData({ status: 'PPM', processed: true });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    dispatchProcessSuccess({ recordId: 'pay-1', columnName: 'aPRMProcessPayment' });
+    dispatchProcessSuccess({ recordId: 'pay-1', columnName: 'retryPisPayment' });
+
+    await screen.findByText('pagoTransferenciaReintentada');
+    // The original confirmation stays: both happened, in order.
+    expect(screen.getAllByText('pagoConfirmadoEnProgreso')).toHaveLength(1);
+  });
+
   it('says "confirmado · en progreso" while the transfer is only authorized (ETP-4895)', async () => {
     // The plain key reads "Cobro confirmado · depositado", with the word baked into the
     // translation — three centimetres under a header that now says "Pago en progreso".
@@ -86,6 +100,19 @@ describe('PaymentDetailSidebarBase — activity history', () => {
 
     await screen.findAllByText('pagoConfirmadoEnProgreso');
     expect(screen.queryByText('pagoConfirmado')).toBeNull();
+  });
+
+  it('says "confirmado · rechazado" once the bank refused the transfer (ETP-4895)', async () => {
+    // A rejected transfer left this row reading "Pago confirmado · depositado" in green, directly
+    // under a "Pago con error" pill — the opposite of what happened to the money.
+    const data = baseData({ status: 'ETGOERR', processed: true });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    dispatchProcessSuccess({ recordId: 'pay-1', columnName: 'aPRMProcessPayment' });
+
+    await screen.findAllByText('pagoConfirmadoRechazado');
+    expect(screen.queryByText('pagoConfirmado')).toBeNull();
+    expect(screen.queryByText('pagoConfirmadoEnProgreso')).toBeNull();
   });
 
   it('says plain "confirmado · depositado" once the withdrawal is recorded', async () => {

@@ -122,8 +122,13 @@ describe('PaymentDraftBanner', () => {
     assert.match(src, /return null/);
   });
 
-  it('defines the DEPOSITED status set that gates draft display', () => {
-    assert.match(src, /const DEPOSITED\s*=\s*new Set/);
+  // ETP-4895: the banner used to keep its own copy of the deposited-status list and reason by
+  // elimination, which announced "no impact on cash" on an ETGOERR payment — processed, rejected,
+  // and anything but a draft.
+  it('gates draft display through the shared payment-state rule, not a local status list', () => {
+    assert.match(src, /import \{ paymentDisplayState \} from '@\/windows\/custom\/shared\/paymentStatuses'/);
+    assert.match(src, /paymentDisplayState\(data\)\s*!==\s*'draft'/);
+    assert.doesNotMatch(src, /const DEPOSITED\s*=\s*new Set/);
   });
 });
 

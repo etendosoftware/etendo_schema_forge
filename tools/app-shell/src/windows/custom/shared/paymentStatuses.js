@@ -62,3 +62,29 @@ export function paymentDisplayState(payment) {
   if (isPaymentProcessed(payment)) return 'deposited';
   return 'draft';
 }
+
+// ── Salt Edge PIS transfer statuses ─────────────────────────────────────────
+// The 8 values of AD reference D5483E7D91134499B42BBD963BC2F9CC (Bank Integration module).
+// Classification is explicit on success and failure and treats EVERYTHING else — including a
+// status this list does not know yet — as still running: defaulting an unknown status to failure
+// once reported a healthy 'initiated_info_required' transfer as failed (ETP-4895), while
+// defaulting it to "keep polling" is self-healing if Salt Edge ever adds a value.
+export const PIS_SUCCESS_STATUSES = ['executed', 'settled'];
+// The user approved the transfer at the bank, so the payment is registered — but the funds have
+// not moved yet. Resolutive all the same ("AUTHORIZED → create payment" in the spec): whoever is
+// watching must stop waiting on it, because the payment already exists.
+export const PIS_REGISTERED_STATUSES = ['authorized'];
+export const PIS_FAILURE_STATUSES = ['failed'];
+
+/**
+ * Classifies a Salt Edge PIS status into the outcomes a watcher reacts to.
+ *
+ * @param {string} status the Salt Edge status
+ * @returns {'success'|'registered'|'failure'|'pending'} what the caller should do about it
+ */
+export function pisOutcome(status) {
+  if (PIS_SUCCESS_STATUSES.includes(status)) return 'success';
+  if (PIS_REGISTERED_STATUSES.includes(status)) return 'registered';
+  if (PIS_FAILURE_STATUSES.includes(status)) return 'failure';
+  return 'pending';
+}

@@ -252,10 +252,62 @@ The retry reuses this payment rather than registering a second one, so it posts 
 record itself (`/payment-out/header/{id}/action/retryPisPayment`) and needs no invoice context. The
 payment returns to `PPM` while the new attempt is in flight.
 
+**The retry follows its own attempt.** It used to end at `window.open`: nothing watched the new
+transfer, because the invoice modal's poll belongs to the modal, Salt Edge's webhook cannot reach a
+server that is not publicly addressable, and PSD2's `Refresh Pending Payments` is not scheduled by
+default. The attempt sat at `requested` and the payment read as "en progreso" long after the bank
+had executed it — and the PSD2 row's `description`, which is only written when the Salt Edge
+response is read back, stayed empty for the same reason. `PaymentRetryTransferButton` now polls
+`pisPaymentStatus` every 3s (10 min ceiling) for the attempt the retry returned, and on a resolutive
+status closes the bank popup, announces the record and toasts the outcome. Reaching the ceiling is
+not an error: whoever opens the payment next reconciles it. The action is routed on the payment
+entity by `ReactivatePaymentHandler` (it reads the transfer from the body and ignores the record it
+is posted to, so no invoice is involved), and the Salt Edge status lists plus the `pisOutcome`
+classifier moved to `paymentStatuses.js` so the modal and the button read a status the same way.
+Only a status recognized as resolutive stops the poll — an unknown one, or no answer at all, keeps
+waiting, so a network blip is never reported as a rejection.
+
+**A retry is logged as a retry.** `PaymentDetailSidebarBase` mapped every `neo:processSuccess` that
+was not a reactivation to a confirmation, so retrying added a second "Pago confirmado" for an event
+that confirmed nothing. `EVENT_TYPE_BY_PROCESS` now maps `retryPisPayment` to its own `retried`
+event — "Transferencia reintentada", amber dot, the same reading the in-progress confirmation gets.
+
 Opening this window also reconciles the payment against whatever Salt Edge status is already
 stored (`reconcileAttemptsFor`), which is how a rejection that arrived after the payment modal had
 closed gets noticed at all — the SPA's poll is long gone by then, and the PSD2 refresh that saw it
 does not touch Etendo Go's payment. No Salt Edge call is made on that path.
+
+A rejection only flags the payment while it still describes it (`isStaleAttempt`). Both writers that
+can set `ETGOERR` — the `PisRejectedPaymentHandler` observer and `markPaymentAsFailed` — skip a
+rejected row in three cases: a **newer attempt exists** (a retry is in flight and the rejected row is
+just its audit trail), the payment is **no longer processed** (the user reactivated it: a draft is
+not a payment whose transfer failed), or the payment **changed after the attempt last did** (it was
+reactivated and confirmed again, possibly by another method). Without these,
+`reconcileAttemptsFor` — which walks *every* attempt each time a screen opens — kept dragging the
+payment back: a retry read as failed again on the next window load, and a reactivated payment came
+back from the server still flagged, half draft (`processed = N`) and half errored. PSD2's refresh
+makes it worse by firing an update event even when the status it rewrites is unchanged. If a newer
+attempt is refused in turn, that one flags the payment.
+
+**Reactivating clears the flag first (`clearTransferErrorFlag`).** Core decides whether to give the
+invoice its outstanding back by comparing the payment's status against the one its payment method
+implies — `seqnumberpaymentstatus(payment.getStatus()) == seqnumberpaymentstatus(invoicePaymentStatus(payment))`
+in `FIN_PaymentProcess`. `ETGOERR` is not in that sequence (`aprm_seqnumberpaymentstatus` answers 70
+for anything unknown, against 40 for `PPM`), so the comparison never held and reactivating left the
+payment in draft with its invoice still reading as fully paid. `ReactivatePaymentHandler` now
+restores `FIN_Utility.invoicePaymentStatus(payment)` — the value Core is about to compare against,
+which is also correct for an account with automatic withdrawal on, where the flagged payment had
+been `PWNC` and not `PPM` — before delegating. Nothing is lost: the user is explicitly abandoning
+that transfer, and the rejected `PSD2_PIS_PAYMENT` row stays as the audit trail.
+
+**How an `ETGOERR` payment reads.** The draft banner and the activity timeline both used to
+describe it as something else: the banner announced "Borrador — sin impacto en caja" (it kept its
+own copy of the deposited-status list and reasoned by elimination, so anything not deposited was a
+draft), and the timeline showed a green "Pago confirmado · depositado" under a red "Pago con error"
+pill. The banner now gates on the shared `paymentDisplayState` rule, and the timeline has an error
+branch of its own — `pagoConfirmadoRechazado` / `cobroConfirmadoRechazado` ("Pago confirmado ·
+rechazado por el banco") with a `--destructive` dot, mirroring how the in-progress state already
+overrides that label.
 
 **Known gap:** an `ETGOERR` payment is deliberately not reactivated, so it stays applied and its
 invoice keeps reading as paid until the retry succeeds.

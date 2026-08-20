@@ -21,12 +21,19 @@ function fmtRate(rate) {
 }
 
 /**
- * The confirmed-event label. While the payment is only confirmed — not yet withdrawn from the
- * account — the plain key's "· depositado" suffix would contradict the header, which reads
- * "Pago en progreso" for that state (ETP-4895).
+ * The confirmed-event label, which has to agree with the header pill (ETP-4895).
+ *
+ * The plain key's "· depositado" suffix contradicts both of the states a PIS transfer can leave the
+ * payment in: while it is only confirmed and not yet withdrawn the header reads "Pago en progreso",
+ * and once the bank refuses it after committing it reads "Pago con error" — a green
+ * "confirmado · depositado" under that is the opposite of what happened.
+ *
+ * @param isIn true for collections (payment-in), false for payments out
+ * @param state the payment's display state from `paymentDisplayState`
  */
-function confirmedLabelKey(isIn, isInProgress) {
-  if (isInProgress) return isIn ? 'cobroConfirmadoEnProgreso' : 'pagoConfirmadoEnProgreso';
+function confirmedLabelKey(isIn, state) {
+  if (state === 'error') return isIn ? 'cobroConfirmadoRechazado' : 'pagoConfirmadoRechazado';
+  if (state === 'inProgress') return isIn ? 'cobroConfirmadoEnProgreso' : 'pagoConfirmadoEnProgreso';
   return isIn ? 'cobroConfirmado' : 'pagoConfirmado';
 }
 
@@ -91,6 +98,22 @@ function writeEventAt(id, kind, date) {
   } catch { /* storage unavailable (privacy mode, quota) — non-fatal */ }
 }
 
+/**
+ * Which activity event each process button records. Anything not listed is a confirmation, which
+ * is what every other payment process amounts to from the history's point of view.
+ */
+const EVENT_TYPE_BY_PROCESS = {
+  etprReactivatePayment: 'reactivated',
+  retryPisPayment: 'retried',
+};
+
+/** Dots for the event types that are neither a confirmation nor a rejection. */
+const EVENT_DOT = {
+  reactivated: 'hsl(var(--muted-foreground))',
+  // Amber: a retry is a transfer in flight, the same reading the in-progress confirmation gets.
+  retried: 'var(--status-warning-fg)',
+};
+
 // Full confirm/reactivate history — every occurrence gets its own timeline
 // row (not just the latest one), so a confirm→reactivate→confirm cycle shows
 // all three events instead of collapsing to whichever happened most recently.
@@ -137,6 +160,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   // on its own.
   const isDraft = paymentState === 'draft' || (isIn && data?.status === 'RPAE');
   const isInProgress = paymentState === 'inProgress';
+  const isError = paymentState === 'error';
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
   // Multi-currency readout (ETP-4841). When the money moved through a financial account whose
@@ -204,8 +228,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     if (!data?.id) return;
     const handler = (e) => {
       if (e.detail?.recordId !== data.id) return;
-      const isReactivate = e.detail?.process?.columnName === 'etprReactivatePayment';
-      setEvents(appendEvent(data.id, isReactivate ? 'reactivated' : 'confirmed', new Date()));
+      // A retry is neither: nothing was confirmed again — the same payment was sent to the bank a
+      // second time. Recording it as 'confirmed' put a second "Pago confirmado" in the history for
+      // an event that confirmed nothing (ETP-4895).
+      setEvents(appendEvent(data.id, EVENT_TYPE_BY_PROCESS[e.detail?.process?.columnName] || 'confirmed',
+        new Date()));
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
@@ -249,13 +276,19 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const hasConfirmedEvent = events.some(ev => ev.type === 'confirmed');
-  const confirmedKey = confirmedLabelKey(isIn, isInProgress);
-  // Amber while in progress, for the same reason the label changes: a green dot next to
-  // "Pago en progreso" would read as settled.
-  const confirmedDot = isInProgress ? 'var(--status-warning-fg)' : '#2DCA72';
+  const confirmedKey = confirmedLabelKey(isIn, paymentState);
+  // The dot follows the label for the same reason: a green one next to "Pago en progreso" reads as
+  // settled, and next to "Pago con error" it reads as money that moved.
+  let confirmedDot = '#2DCA72';
+  if (isError) {
+    confirmedDot = 'hsl(var(--destructive))';
+  } else if (isInProgress) {
+    confirmedDot = 'var(--status-warning-fg)';
+  }
   const eventLabelKey = (ev) => {
-    const reactivatedKey = isIn ? 'cobroReactivado' : 'pagoReactivado';
-    return ev.type === 'reactivated' ? reactivatedKey : confirmedKey;
+    if (ev.type === 'reactivated') return isIn ? 'cobroReactivado' : 'pagoReactivado';
+    if (ev.type === 'retried') return isIn ? 'cobroTransferenciaReintentada' : 'pagoTransferenciaReintentada';
+    return confirmedKey;
   };
   const activityItems = [
     {
@@ -284,7 +317,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : confirmedDot,
+      dot: EVENT_DOT[ev.type] ?? confirmedDot,
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
