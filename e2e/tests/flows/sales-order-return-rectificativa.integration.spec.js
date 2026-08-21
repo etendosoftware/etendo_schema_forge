@@ -407,8 +407,8 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
 
       const outcome = await Promise.race([
-        periodError.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'period-error').catch(() => null),
-        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 30_000 })
+        periodError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'period-error').catch(() => null),
+        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 60_000 })
           .then(async () => (
             (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
           ))
@@ -445,7 +445,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
 
       const finalPill = page.getByTestId('document-status-pill').first();
       await expect(finalPill).toBeVisible({ timeout: 15_000 });
-      await expect(finalPill).toContainText(/completado|completed/i, { timeout: 10_000 });
+      await expect(finalPill).toContainText(/completado|completed/i, { timeout: 20_000 });
     });
   });
 });

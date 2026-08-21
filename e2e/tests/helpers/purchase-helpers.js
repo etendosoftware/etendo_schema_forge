@@ -890,9 +890,9 @@ export async function clickConfirmButton(page) {
 /**
  * Verify a document's status pill contains the expected text.
  */
-export async function expectStatusPill(page, pattern, message) {
+export async function expectStatusPill(page, pattern, message, timeout = 10_000) {
   const pill = page.getByTestId('document-status-pill').first();
-  await expect(pill, message).toContainText(pattern, { timeout: 10_000 });
+  await expect(pill, message).toContainText(pattern, { timeout });
 }
 
 // ── Price / totals utilities ─────────────────────────────────────────────────

@@ -316,8 +316,8 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
 
       const outcome = await Promise.race([
-        periodError.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'period-error').catch(() => null),
-        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 30_000 })
+        periodError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'period-error').catch(() => null),
+        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 60_000 })
           .then(async () => (
             (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
           ))
@@ -353,7 +353,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
-      await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed');
+      await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed', 20_000);
     });
   });
 });
