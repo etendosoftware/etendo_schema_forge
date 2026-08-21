@@ -3912,7 +3912,7 @@ export function DetailView({
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
                               onRefresh={() => { hook.fetchChildren?.(data?.id || recordId); hook.fetchById?.(data?.id || recordId); }}
-                              isNew={isNew}
+                              isNew={isNew} isDirty={isDirty}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
                                 if (saved?.id && isNew) {
