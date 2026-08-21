@@ -922,6 +922,11 @@ export function isDeleteButtonVisible({
   // signal (e.g. Amortization) — it wins over everything else, including the
   // deleteAction lifecycle bypass below.
   if (hideDeleteButton) return false;
+  // Checked ahead of the deleteAction bypass below: that bypass exists because such a delete
+  // reactivates server-side first, which is exactly what must NOT happen to a payment whose bank
+  // transfer is live (ETP-4895). Same record-level flag RowQuickActions honours, so the grid and
+  // the form agree.
+  if (data?.pisLocked === true) return false;
   // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
   // (the action reactivates server-side before removing), so it ignores
   // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
@@ -1305,6 +1310,11 @@ export function DetailView({
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
   saveBeforeProcesses = false,
+  // Toolbar order only: when true, Save renders to the LEFT of the process buttons, so the
+  // primary action (Confirm) is the right-most button. `saveBeforeProcesses` implies it — that
+  // flag has always reordered as a side effect — but a window can ask for the order alone,
+  // without opting into the save-before-process behavior.
+  saveActionsFirst = saveBeforeProcesses,
   // ETP-4542: opt-in per window. When true, a header process button whose action is
   // currently running shows a spinner + "Generating..." label and is disabled to
   // prevent duplicate executions. Windows that don't pass it keep the current behavior
@@ -3046,8 +3056,8 @@ export function DetailView({
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
-              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
-              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
+              {saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
@@ -3133,7 +3143,7 @@ export function DetailView({
                   );
                 })}
 
-              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
             </div>
           </div>
@@ -3165,6 +3175,8 @@ export function DetailView({
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
+          apiBaseUrl,
+          () => hook.fetchById?.(data?.id || recordId),
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}

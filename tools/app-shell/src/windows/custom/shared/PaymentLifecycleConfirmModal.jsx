@@ -18,6 +18,11 @@ const RECONCILED_REACTIVATE_SUB_KEY = { in: 'reactivarInSub', out: 'reactivarOut
 const DEPOSITED_DELETE_SUB_KEY = { in: 'paymentConfirmDeleteSubIn', out: 'paymentConfirmDeleteSubOut' };
 const DEPOSITED_REACTIVATE_SUB_KEY = { in: 'paymentConfirmReactivateSubIn', out: 'paymentConfirmReactivateSubOut' };
 const DRAFT_DELETE_SUB_KEY = { in: 'paymentConfirmDeleteSubInDraft', out: 'paymentConfirmDeleteSubOutDraft' };
+// A processed payment with no bank movement behind it. Only ETGOERR reaches this today: the bank
+// refused the transfer after committing, so the payment stays processed but nothing was ever
+// withdrawn — there is no transaction or journal entry for the reactivation to undo, and saying
+// there is (the 'deposited' copy) describes the wrong document (ETP-4895).
+const DRAFT_REACTIVATE_SUB_KEY = { in: 'paymentConfirmReactivateSubInDraft', out: 'paymentConfirmReactivateSubOutDraft' };
 const RECONCILED_WARNING_KEY = { in: 'reactivarWarningIn', out: 'reactivarWarningOut' };
 const DEPOSITED_WARNING_KEY = { in: 'paymentConfirmWarningPostedIn', out: 'paymentConfirmWarningPostedOut' };
 const RECONCILED_REACTIVATE_TITLE_KEY = { in: 'paymentConfirmReactivateTitleInReconciled', out: 'paymentConfirmReactivateTitleOutReconciled' };
@@ -32,6 +37,7 @@ const SUB_KEY_BY_ACTION_AND_STATE = {
   reactivate: {
     reconciled: RECONCILED_REACTIVATE_SUB_KEY,
     deposited: DEPOSITED_REACTIVATE_SUB_KEY,
+    draft: DRAFT_REACTIVATE_SUB_KEY,
   },
 };
 const CONFIRM_LABEL_KEY_BY_ACTION = {
@@ -63,7 +69,11 @@ function resolvePaymentStateKey(reconciled, hasTransaction) {
  */
 function resolveSubKey(action, dir, reconciled, hasTransaction) {
   const stateKey = resolvePaymentStateKey(reconciled, hasTransaction);
-  return SUB_KEY_BY_ACTION_AND_STATE[action][stateKey][dir];
+  // Falling through a missing combination used to throw and blank the whole window — the reactivate
+  // map had no 'draft' entry, and ETGOERR (reactivable, yet not a deposited status) landed exactly
+  // there. The generic warning is a poor subtitle but an honest one, and a missing string must
+  // never cost the user the screen.
+  return SUB_KEY_BY_ACTION_AND_STATE[action]?.[stateKey]?.[dir] ?? 'paymentConfirmWarning';
 }
 
 /** Same tiering as {@link resolveSubKey} for the yellow warning box. */
@@ -112,10 +122,12 @@ export default function PaymentLifecycleConfirmModal({ dir, action, data, onConf
 
   const title = ui(resolveTitleKey(dir, action, reconciled));
   const sub = ui(resolveSubKey(action, dir, reconciled, hasTransaction));
-  const confirmLabel = ui(CONFIRM_LABEL_KEY_BY_ACTION[action]);
+  const confirmLabel = ui(CONFIRM_LABEL_KEY_BY_ACTION[action] ?? 'confirm');
   const warning = ui(resolveWarningKey(dir, reconciled, hasTransaction));
   // Matches the pre-refactor ReactivarModal, which always paired its confirm button with
   // this rotate icon; Eliminar gets the analogous Trash2 (new — delete had no cartel before).
+  // Optional for the same reason the subtitle falls back: an action nobody mapped would render
+  // `<undefined />`, and a missing icon must not cost the user the whole window.
   const ConfirmIconComponent = CONFIRM_ICON_BY_ACTION[action];
 
   return (
@@ -128,11 +140,13 @@ export default function PaymentLifecycleConfirmModal({ dir, action, data, onConf
       confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
       warning={warning}
-      confirmIcon={<ConfirmIconComponent
-        width={15}
-        height={15}
-        strokeWidth={2.2}
-        data-testid="ConfirmIconComponent__5f76e8" />}
+      confirmIcon={ConfirmIconComponent ? (
+        <ConfirmIconComponent
+          width={15}
+          height={15}
+          strokeWidth={2.2}
+          data-testid="ConfirmIconComponent__5f76e8" />
+      ) : null}
       itemConciliacion={[ui('reactivarItem1Title'), ui('reactivarItem1Desc')]}
       itemTransaccion={[ui('reactivarItem2Title'), ui('reactivarItem2Desc')]}
       itemAsiento={[ui('reactivarItem3Title'), ui('reactivarItem3Desc')]}

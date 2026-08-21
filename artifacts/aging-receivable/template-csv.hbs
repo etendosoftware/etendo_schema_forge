@@ -1,0 +1,20 @@
+{{!-- CSV-only template — genuine comma-separated text, not the HTML/PDF page dumped
+      verbatim (recipe 'text' streams whatever this template compiles to, byte for
+      byte). Two shapes, mirroring template-excel.hbs (see its header comment for
+      why): one row per document (contact repeated, plus a per-contact subtotal
+      row) when meta.showDetails is true — the drill-down modal's own Excel/CSV
+      buttons hit this same template with showDetails=true — otherwise the
+      existing flat one-row-per-contact shape. Amounts go through round2 (this
+      report's helpers.js, max 2 decimals — never formatCurrency, CSV is
+      locale-independent by convention, like the Excel export): the backend's
+      unscaled BigDecimal amounts can otherwise carry more than 2 decimal digits.
+      Every text field goes through csvField (this report's helpers.js) so a
+      value containing a comma/quote/newline gets quoted correctly — and every
+      csvField call MUST be triple-stashed ({{{ }}}), never {{ }}: Handlebars
+      HTML-escapes double-stash output by default, which turns csvField's own
+      escaped `""` into `&quot;&quot;`, corrupting the CSV. --}}{{#if meta.showDetails}}{{#with meta}}{{{csvField labels.bPartner}}},{{{csvField labels.documentNo}}},{{{csvField labels.documentDate}}},{{{csvField labels.current}}},1-{{column1}},{{#if showBucket2}}{{column1}}-{{column2}},{{/if}}{{#if showBucket3}}{{column2}}-{{column3}},{{/if}}{{#if showBucket4}}{{column3}}-{{column4}},{{/if}}{{{csvField lastBucketLabel}}},{{{csvField labels.credits}}},{{{csvField labels.net}}}
+{{/with}}{{#each rows}}{{#each docs}}{{{csvField ../bPartner}}},{{{csvField docNo}}},{{{csvField (formatDateDisplay dateInvoiced)}}},{{round2 current}},{{round2 days30}},{{#if @root.meta.showBucket2}}{{round2 days60}},{{/if}}{{#if @root.meta.showBucket3}}{{round2 days90}},{{/if}}{{#if @root.meta.showBucket4}}{{round2 days120}},{{/if}}{{round2 days150plus}},,
+{{/each}}{{{csvField bPartner}}},,,{{round2 current}},{{round2 days30}},{{#if @root.meta.showBucket2}}{{round2 days60}},{{/if}}{{#if @root.meta.showBucket3}}{{round2 days90}},{{/if}}{{#if @root.meta.showBucket4}}{{round2 days120}},{{/if}}{{round2 days150plus}},{{round2 credits}},{{round2 net}}
+{{/each}}{{else}}{{#with meta}}{{{csvField labels.bPartner}}},{{{csvField labels.current}}},1-{{column1}},{{#if showBucket2}}{{column1}}-{{column2}},{{/if}}{{#if showBucket3}}{{column2}}-{{column3}},{{/if}}{{#if showBucket4}}{{column3}}-{{column4}},{{/if}}{{{csvField lastBucketLabel}}},{{{csvField labels.total}}},{{{csvField labels.credits}}},{{{csvField labels.net}}}
+{{/with}}{{#each rows}}{{{csvField (lookup this 'bPartner')}}},{{round2 (lookup this 'current')}},{{round2 (lookup this 'days30')}},{{#if @root.meta.showBucket2}}{{round2 (lookup this 'days60')}},{{/if}}{{#if @root.meta.showBucket3}}{{round2 (lookup this 'days90')}},{{/if}}{{#if @root.meta.showBucket4}}{{round2 (lookup this 'days120')}},{{/if}}{{round2 (lookup this 'days150plus')}},{{round2 (lookup this 'total')}},{{round2 (lookup this 'credits')}},{{round2 (lookup this 'net')}}
+{{/each}}{{/if}}

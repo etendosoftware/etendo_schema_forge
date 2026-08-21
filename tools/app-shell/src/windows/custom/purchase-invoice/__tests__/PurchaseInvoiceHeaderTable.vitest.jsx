@@ -85,6 +85,8 @@ vi.mock('@/lib/formatCurrency.js', () => ({
 // resolveInvoicePaymentBadge appears exactly once, and the two rows that used to
 // render wrong (rows 2 and 3 below) are pinned explicitly.
 const MOCK_ROWS = [
+  // 8/9 appended below — kept at the end so the existing row indices stay valid.
+
   // 0 — ordinary invoice, partially paid → amber pending badge "500:EUR"
   {
     eTGODueDate: '2026-01-01',
@@ -182,7 +184,28 @@ const MOCK_ROWS = [
     'currency$_identifier': 'CHF',
     'transactionDocument$_identifier': 'Return Material Purchase Invoice',
     aeatsiiEstado: null,
+  },,
+  // 8 — ETP-4895: a rejected bank transfer. Applied, so the outstanding is 0 and this used to
+  // render "pagada" for money that never moved.
+  {
+    eTGODueDate: '2026-02-01',
+    outstandingAmount: '0',
+    grandTotalAmount: '1000',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'AP Invoice',
+    pisPaymentState: 'error',
   },
+  // 9 — ETP-4895: a transfer still in flight.
+  {
+    eTGODueDate: '2026-02-02',
+    outstandingAmount: '0',
+    grandTotalAmount: '1000',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'AP Invoice',
+    pisPaymentState: 'inProgress',
+  }
 ];
 
 // Hoisted holder so the DataTable mock (below) can stash the `columns` prop it
@@ -209,7 +232,7 @@ vi.mock('@/components/contract-ui', () => ({
   },
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
@@ -985,5 +1008,52 @@ describe('PurchaseInvoiceHeaderTable — badge/button nowrap styling (ETP-4833)'
     const el = renderColStyle('outstandingAmount', AP_INVOICE_ROW);
     expect(el.style.whiteSpace).toBe('nowrap');
     expect(el.style.flexShrink).toBe('0');
+  });
+});
+
+describe('PurchaseInvoiceHeaderTable — bank-transfer state on the payment column (ETP-4895)', () => {
+  // Scoped to the cell's own container: the mounted table also renders rows carrying these
+  // states, so an unscoped query matches twice.
+  function renderPaymentCell(row) {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const col = capturedColumnsHolder.value.find((c) => c.key === 'outstandingAmount');
+    const { container } = render(<>{col.render(row)}</>);
+    return { container, ...within(container) };
+  }
+
+  it('shows the rejected state instead of "pagada" for a settled-looking invoice', () => {
+    // The failed payment is applied, so outstandingAmount is 0 — this row used to read as paid
+    // for money that never left the account.
+    const { getByTestId, queryByText } = renderPaymentCell({ ...PAID_ROW, pisPaymentState: 'error' });
+    expect(getByTestId('invoice-transfer-error')).toHaveTextContent('cpPaymentStateError');
+    expect(queryByText('pagada')).toBeNull();
+  });
+
+  it('shows the in-flight state instead of "pagada"', () => {
+    const { getByTestId } = renderPaymentCell({ ...PAID_ROW, pisPaymentState: 'inProgress' });
+    expect(getByTestId('invoice-transfer-in-progress')).toHaveTextContent('cpPaymentStateInProgress');
+  });
+
+  it('opens the payments modal on click, which is where the amounts and each payment live', () => {
+    // Deliberately not an amount and not an "Añadir pago" shortcut: the way out of both states is
+    // to look at the payments themselves, and from there navigate to the one that needs attention.
+    const { getByTestId } = renderPaymentCell({ ...PAID_ROW, id: 'inv-1', pisPaymentState: 'error' });
+    expect(getByTestId('invoice-transfer-error').tagName).toBe('BUTTON');
+  });
+
+  it('shows the remaining amount, not the state, when a partial transfer is in flight', () => {
+    // 6,05 invoiced with a 3,00 transfer in progress → 3,05 still owed. The pill would hide a real
+    // amount the user has to pay.
+    const { container, queryByTestId } = renderPaymentCell({
+      ...AP_INVOICE_ROW, grandTotalAmount: '6.05', outstandingAmount: '3.05',
+      pisPaymentState: 'inProgress',
+    });
+    expect(queryByTestId('invoice-transfer-in-progress')).toBeNull();
+    expect(container.textContent).toContain('3.05');
+  });
+
+  it('leaves an invoice with no reported state exactly as before', () => {
+    const { container } = renderPaymentCell(PAID_ROW);
+    expect(container.querySelector('[data-testid^="invoice-transfer-"]')).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { useUI } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
@@ -252,17 +253,20 @@ function GlSelect({ value, onChange, placeholder }) {
 /** Amount input with a trailing currency suffix (right-aligned, tabular). */
 function AmountField({ value, onChange, currencyIso, testId }) {
   const ui = useUI();
+  // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
+  const rightSide = isCurrencySymbolRightSide(currencyIso);
   return (
     <div className="relative">
       <input
-        className={`${PLAIN_FIELD_CLS} w-full bg-card pr-9 pl-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
+        className={`${PLAIN_FIELD_CLS} w-full bg-card ${rightSide ? 'pr-9 pl-3' : 'pl-9 pr-3'} text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(sanitizeNumeric(e.target.value))}
         data-testid={testId}
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[hsl(var(--text-disabled))]">
+      <span
+        className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-[hsl(var(--text-disabled))]`}>
         {getCurrencySymbol(currencyIso)}
       </span>
     </div>

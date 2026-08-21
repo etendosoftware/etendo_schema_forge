@@ -28,24 +28,38 @@ import {
 describe('ProductSalePriceCell', () => {
   it('renders eTGOSalePrice formatted with two decimals and euro sign', () => {
     render(<ProductSalePriceCell row={{ eTGOSalePrice: 9.99 }} />);
-    expect(screen.getByText('9.99 €')).toBeInTheDocument();
+    expect(screen.getByText('9,99 €')).toBeInTheDocument();
   });
 
   it('formats an integer value to two decimals', () => {
     render(<ProductSalePriceCell row={{ eTGOSalePrice: 15 }} />);
-    expect(screen.getByText('15.00 €')).toBeInTheDocument();
+    expect(screen.getByText('15,00 €')).toBeInTheDocument();
   });
 
   it('coerces a numeric string to a number and formats it', () => {
     render(<ProductSalePriceCell row={{ eTGOSalePrice: '12.5' }} />);
-    expect(screen.getByText('12.50 €')).toBeInTheDocument();
+    expect(screen.getByText('12,50 €')).toBeInTheDocument();
+  });
+
+  it('ETP-4314 regression: uses the Spanish decimal separator, not a period', () => {
+    // Was `value.toFixed(2)` (always period-decimal, e.g. "46.00 €") before this
+    // cell was routed through the canonical formatCurrency() — QA reported this
+    // exact symptom on the Product List.
+    render(<ProductSalePriceCell row={{ eTGOSalePrice: 46 }} />);
+    expect(screen.getByText('46,00 €')).toBeInTheDocument();
+    expect(screen.queryByText('46.00 €')).not.toBeInTheDocument();
+  });
+
+  it('ETP-4314 regression: groups thousands for a price >= 1000', () => {
+    render(<ProductSalePriceCell row={{ eTGOSalePrice: 1234.5 }} />);
+    expect(screen.getByText('1.234,50 €')).toBeInTheDocument();
   });
 
   it('applies font-semibold (bold) to the price span', () => {
     const { container } = render(<ProductSalePriceCell row={{ eTGOSalePrice: 15 }} />);
     const span = container.querySelector('span.font-semibold');
     expect(span).toBeInTheDocument();
-    expect(span).toHaveTextContent('15.00 €');
+    expect(span).toHaveTextContent('15,00 €');
   });
 
   it('renders dash when eTGOSalePrice is null', () => {
@@ -81,17 +95,17 @@ describe('ProductSalePriceCell', () => {
 describe('ProductPurchasePriceCell', () => {
   it('renders eTGOPurchasePrice formatted with two decimals and euro sign', () => {
     render(<ProductPurchasePriceCell row={{ eTGOPurchasePrice: 4.5 }} />);
-    expect(screen.getByText('4.50 €')).toBeInTheDocument();
+    expect(screen.getByText('4,50 €')).toBeInTheDocument();
   });
 
   it('coerces a numeric string to a number and formats it', () => {
     render(<ProductPurchasePriceCell row={{ eTGOPurchasePrice: '8' }} />);
-    expect(screen.getByText('8.00 €')).toBeInTheDocument();
+    expect(screen.getByText('8,00 €')).toBeInTheDocument();
   });
 
   it('does NOT apply font-semibold (normal weight)', () => {
     const { container } = render(<ProductPurchasePriceCell row={{ eTGOPurchasePrice: 3 }} />);
-    expect(screen.getByText('3.00 €')).toBeInTheDocument();
+    expect(screen.getByText('3,00 €')).toBeInTheDocument();
     expect(container.querySelector('span.font-semibold')).not.toBeInTheDocument();
   });
 
