@@ -1,27 +1,123 @@
 /**
- * useInvoicePreview — how much of an invoice is still free to pay.
+ * Hook-level tests for useInvoicePreview.
  *
- * A draft payment does not lower the invoice's outstanding amount, so the raw outstanding
- * over-states what a new payment may take: confirming both drafts would over-pay the invoice.
- * These cover the arithmetic the preview's "Registrar pago" button and the payment modal's
- * default amount are both driven by.
+ * Two independent concerns share this file because both live in the hook and neither is reachable
+ * from InvoicePreview.vitest.jsx, which mocks useInvoicePreview.js wholesale:
+ *
+ *   1. pdfCacheConfig, computed here and handed to useInvoicePdf (ETP-4315 follow-up).
+ *   2. How much of the invoice is still free to pay (ETP-4895). A draft payment does not lower the
+ *      invoice's outstanding, so the raw outstanding over-states what a new payment may take:
+ *      confirming both drafts would over-pay the invoice. This is the arithmetic behind the
+ *      preview's "Registrar pago" button and the payment modal's default amount.
+ *
+ * Mocks must come before imports (Vitest hoisting).
  */
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
-vi.mock('../useInvoicePdf.js', () => ({
-  useInvoicePdf: () => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null }),
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
 }));
+
+vi.mock('../useInvoicePdf.js', () => ({
+  useInvoicePdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
+}));
+
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
   useFiscalConfig: () => ({ profile: null }),
 }));
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 't', selectedOrg: { id: 'org-1' } }),
+  useAuth: () => ({ token: 'tok', selectedOrg: { id: 'org-1' } }),
 }));
 
+// Shared by both suites: the pdf tests only need it not to blow up, the free-to-allocate ones
+// drive it per case through stubApi.
 const apiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetch }));
 
+vi.mock('../sifSending.js', () => ({
+  getPendingSifTargets: () => ({ sendSii: false, sendTbai: false }),
+  getSifBodyKey: () => null,
+}));
+
+vi.mock('@/lib/statusBadge.js', () => ({
+  getStatusBadgeProps: () => ({}),
+  statusLabel: (status) => status,
+}));
+
 import { renderHook, waitFor } from '@testing-library/react';
 import { useInvoicePreview } from '../useInvoicePreview.js';
+import { useInvoicePdf } from '../useInvoicePdf.js';
+
+/** Every endpoint answers with an empty list unless a test says otherwise. */
+function emptyResponse() {
+  return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+}
+
+beforeEach(() => {
+  apiFetch.mockReset();
+  apiFetch.mockImplementation(() => emptyResponse());
+});
+
+// ─── pdfCacheConfig wiring ───────────────────────────────────────────────────
+//
+// ETP-4315 follow-up (2026-08-18) — pdfCacheConfig ({ tableName: 'C_Invoice',
+// storeCondition: invoiceData?.documentStatus !== 'DR' }) is computed and passed
+// to useInvoicePdf INSIDE useInvoicePreview.js, not inside InvoicePreview.jsx
+// (which only calls useInvoicePreview and never sees the cache config itself).
+
+const defaultInvoice = {
+  id: 'inv-1',
+  documentNo: 'INV-001',
+  documentStatus: 'CO',
+  grandTotalAmount: 1000,
+  'businessPartner$_identifier': 'Acme Corp',
+};
+
+function renderUseInvoicePreview(overrides = {}) {
+  const props = {
+    invoice: defaultInvoice,
+    apiBaseUrl: '/api/sales-invoice',
+    specName: 'sales-invoice',
+    ...overrides,
+  };
+  return renderHook(() => useInvoicePreview(props));
+}
+
+describe('useInvoicePreview — pdfCacheConfig wiring into useInvoicePdf (ETP-4315 follow-up)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiFetch.mockImplementation(() => emptyResponse());
+    useInvoicePdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  function lastCacheConfig() {
+    const calls = vi.mocked(useInvoicePdf).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    return calls[calls.length - 1][3];
+  }
+
+  it('passes { tableName: "C_Invoice", storeCondition: false } when the invoice is DR (draft)', () => {
+    renderUseInvoicePreview({ invoice: { ...defaultInvoice, documentStatus: 'DR' } });
+    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: false });
+  });
+
+  it('passes { tableName: "C_Invoice", storeCondition: true } when the invoice is CO (non-draft)', () => {
+    renderUseInvoicePreview({ invoice: { ...defaultInvoice, documentStatus: 'CO' } });
+    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: true });
+  });
+
+  it('passes recordId/apiBaseUrl as null to useInvoicePdf for the purchase-invoice branch (hook never renders a sales PDF)', () => {
+    renderUseInvoicePreview({ specName: 'purchase-invoice', invoice: { ...defaultInvoice, documentStatus: 'CO' } });
+    const calls = vi.mocked(useInvoicePdf).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[0]).toBeNull();
+    expect(lastCall[1]).toBeNull();
+    // cacheConfig is still computed unconditionally (harmless — usePdfGenerator
+    // never fires its effect without a recordId/apiBaseUrl anyway).
+    expect(lastCall[3]).toEqual({ tableName: 'C_Invoice', storeCondition: true });
+  });
+});
+
+// ─── free-to-allocate gating (ETP-4895) ──────────────────────────────────────
 
 const INVOICE = { id: 'inv-1', documentStatus: 'CO', grandTotalAmount: '500.00' };
 
@@ -46,8 +142,6 @@ function renderPreview() {
 }
 
 describe('useInvoicePreview — free-to-allocate gating', () => {
-  beforeEach(() => { apiFetch.mockReset(); });
-
   it('offers the whole outstanding when no draft reserves any of it', async () => {
     stubApi({ outstanding: '500.00', payments: [] });
     const { result } = renderPreview();

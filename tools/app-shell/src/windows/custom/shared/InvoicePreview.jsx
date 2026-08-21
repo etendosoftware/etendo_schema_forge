@@ -36,7 +36,7 @@ function isCreditNote(invoice) {
  * File persistence (drop zone + PDF caching) is delegated to GenericPreviewModal
  * via attachmentConfig. The left panel is:
  *   - sales invoice, draft:     PDF viewer (regenerated on every open)
- *   - sales invoice, completed: managed by GenericPreviewModal (cached via ETGO_PREVIEW_FILE)
+ *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
 function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
@@ -246,9 +246,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // matching the Grid row quick-action and Form-view topbar gates. The
   // existing purchase-invoice exclusion stays: this window never sends email.
   const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  // ETP-4315 — real, marked Attachment (C_Invoice, shared with purchase-invoice
+  // below). Draft gate unchanged.
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
     storeCondition: !isDraft,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
@@ -256,16 +258,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
   } : {
+    // ETP-4315 — real, marked Attachment shared with OcrSidePanel/"Adjuntos".
+    // C_Invoice is the physical table for both sales and purchase invoices;
+    // this branch only runs for purchase. A purchase invoice has no generated
+    // report, so its document slot holds the supplier's own document (the OCR
+    // source) — unlike the sales branch above, which caches something we
+    // generated ourselves and nobody attached.
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
     storeCondition: true,
     autoFetch: false,
-    // ETP-4855 — a purchase invoice has no generated report, so its document slot
-    // holds the supplier's own document (the OCR source). Declaring the table
-    // mirrors that file into the record's attachments as well, so it shows up in
-    // the Attachments tab. The sales branch above deliberately omits it: that PDF
-    // is a cache of something we generated and nobody attached it.
-    tableName: 'C_Invoice',
     token,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
