@@ -261,12 +261,11 @@ describe('ReturnToVendorShipmentPreview', () => {
       expect(mockCapturedSendModalProps.current.pdfBlobUrl).toBe('blob:fake-url');
     });
 
-    it('calls useReturnToVendorPdf with the shipment id, apiBaseUrl, token and pdfCacheConfig', () => {
+    it('calls useReturnToVendorPdf with the shipment id and apiBaseUrl and pdfCacheConfig', () => {
       renderPreview();
       expect(mockUseReturnToVendorPdf).toHaveBeenCalledWith(
         'rtvs-1',
         '/api/return-to-vendor-shipment',
-        'tok',
         { tableName: 'M_InOut', storeCondition: true },
       );
     });

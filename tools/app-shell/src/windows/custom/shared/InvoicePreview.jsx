@@ -207,7 +207,6 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     docCurrencyCode: p.displayInvoice?.['currency$_identifier'],
     orderDate: p.displayInvoice?.invoiceDate,
     apiBaseUrl,
-    token,
   });
   const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
     record: p.displayInvoice,

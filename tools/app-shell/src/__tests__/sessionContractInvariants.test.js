@@ -195,7 +195,6 @@ const G1_DEBT = new Set([
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
   'windows/custom/shared/PaymentHeaderTableBase.jsx',
   'windows/custom/shared/ReturnWindowShell.jsx',
-  'windows/custom/shared/pdfUtils.js',
   'windows/custom/shared/useConfirmWithCredit.js',
   'windows/custom/user/InviteUserDialog.jsx',
   'windows/custom/warehouse/WarehouseCustomTable.jsx',
@@ -245,9 +244,7 @@ const G2_DEBT = new Set([
   'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
   'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
-  'windows/custom/shared/pdfUtils.js',
   'windows/custom/shared/useConversionRate.js',
-  'windows/custom/shared/useDocumentCurrency.js',
   'windows/custom/user/InviteUserDialog.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
   // Arrived with the epic (ETP-4783). Absorbed, not migrated: nothing the merge

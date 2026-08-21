@@ -40,7 +40,7 @@ export default function GoodsShipmentMoreMenu({ data, recordId, token, apiBaseUr
     downloadingRef.current = true;
     setDownloading(true);
     try {
-      const blob = await generateShipmentPdf(recordId, apiBaseUrl, token, pdfLabels);
+      const blob = await generateShipmentPdf(recordId, apiBaseUrl, pdfLabels);
       const a = document.createElement('a');
       const url = URL.createObjectURL(blob);
       a.href = url;

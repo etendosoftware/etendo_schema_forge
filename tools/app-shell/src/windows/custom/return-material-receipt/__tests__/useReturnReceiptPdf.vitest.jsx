@@ -93,7 +93,7 @@ describe('useReturnReceiptPdf', () => {
   });
 
   it('returns initial state with nulls and loading false when receiptId is null', () => {
-    const { result } = renderHook(() => useReturnReceiptPdf(null, '/api/return-material-receipt', 'tok'));
+    const { result } = renderHook(() => useReturnReceiptPdf(null, '/api/return-material-receipt'));
     expect(result.current.pdfUrl).toBeNull();
     expect(result.current.pdfBlob).toBeNull();
     expect(result.current.loading).toBe(false);
@@ -102,7 +102,7 @@ describe('useReturnReceiptPdf', () => {
 
   it('sets loading to true immediately when receiptId is provided', () => {
     const { result } = renderHook(() =>
-      useReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok'),
+      useReturnReceiptPdf('rmr-1', '/api/return-material-receipt'),
     );
     expect(result.current.loading).toBe(true);
   });
@@ -112,7 +112,7 @@ describe('useReturnReceiptPdf', () => {
     global.URL.revokeObjectURL = vi.fn();
 
     const { result } = renderHook(() =>
-      useReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok'),
+      useReturnReceiptPdf('rmr-1', '/api/return-material-receipt'),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);

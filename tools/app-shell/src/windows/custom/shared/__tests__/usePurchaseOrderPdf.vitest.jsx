@@ -21,12 +21,11 @@ describe('usePurchaseOrderPdf', () => {
     buildDocumentPdfLabels.mockImplementation((ui, overrides) => ({ ...overrides, taxId: 'invoicePdfTaxId' }));
   });
 
-  it('calls useDocumentPdf with the passed orderId, apiBaseUrl, and token', () => {
-    renderHook(() => usePurchaseOrderPdf('po-1', '/api', 'tok'));
+  it('calls useDocumentPdf with the passed orderId and apiBaseUrl', () => {
+    renderHook(() => usePurchaseOrderPdf('po-1', '/api'));
     expect(useDocumentPdf).toHaveBeenCalledWith(
       'po-1',
       '/api',
-      'tok',
       expect.any(Function),
       expect.any(Object),
       null,
@@ -34,7 +33,7 @@ describe('usePurchaseOrderPdf', () => {
   });
 
   it('calls buildDocumentPdfLabels with purchase-order-specific i18n keys', () => {
-    renderHook(() => usePurchaseOrderPdf('po-1', '/api', 'tok'));
+    renderHook(() => usePurchaseOrderPdf('po-1', '/api'));
     expect(buildDocumentPdfLabels).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({
@@ -49,7 +48,7 @@ describe('usePurchaseOrderPdf', () => {
 
   it('returns the result of useDocumentPdf', () => {
     useDocumentPdf.mockReturnValue({ pdfUrl: 'blob:po-test', pdfBlob: new Blob(), loading: false, error: null });
-    const { result } = renderHook(() => usePurchaseOrderPdf('po-1', '/api', 'tok'));
+    const { result } = renderHook(() => usePurchaseOrderPdf('po-1', '/api'));
     expect(result.current.pdfUrl).toBe('blob:po-test');
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.loading).toBe(false);
@@ -57,11 +56,10 @@ describe('usePurchaseOrderPdf', () => {
   });
 
   it('passes null orderId through to useDocumentPdf when orderId is null', () => {
-    renderHook(() => usePurchaseOrderPdf(null, '/api', 'tok'));
+    renderHook(() => usePurchaseOrderPdf(null, '/api'));
     expect(useDocumentPdf).toHaveBeenCalledWith(
       null,
       '/api',
-      'tok',
       expect.any(Function),
       expect.any(Object),
       null,

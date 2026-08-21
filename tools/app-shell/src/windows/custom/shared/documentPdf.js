@@ -234,10 +234,10 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
 // ---------------------------------------------------------------------------
 
 /** Fetches the company logo (as data URL) and the customer's location address in parallel. */
-export async function fetchDocumentAssets(session, header, base, token) {
+export async function fetchDocumentAssets(session, header, base) {
   const [companyLogoDataUrl, partnerLocation] = await Promise.all([
-    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token),
-    fetchLocationAddress(header.partnerAddress, base, token),
+    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base),
+    fetchLocationAddress(header.partnerAddress, base),
   ]);
   return { companyLogoDataUrl, partnerLocation };
 }
@@ -273,13 +273,13 @@ export function buildCompanyFields(session, header, companyLogoDataUrl, partnerL
 // ---------------------------------------------------------------------------
 // Shared order data builder — used by both sales-order and purchase-order
 // ---------------------------------------------------------------------------
-export async function buildOrderData(spec, orderId, base, token, currencyData = null) {
+export async function buildOrderData(spec, orderId, base, currencyData = null) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/${spec}/header/${orderId}`, token),
-    fetchAll(`${base}/${spec}/lines?parentId=${orderId}`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/${spec}/header/${orderId}`),
+    fetchAll(`${base}/${spec}/lines?parentId=${orderId}`),
+    fetchOptionalJson(`${base}/session`),
   ]);
-  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base, token);
+  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base);
 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
@@ -399,11 +399,11 @@ export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLi
 // Generic PDF hook — shared by all document-type hooks
 // labels are kept in a ref so they never re-trigger the effect on locale change
 // ---------------------------------------------------------------------------
-export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels, cacheConfig) {
+export function useDocumentPdf(recordId, apiBaseUrl, buildDataFn, labels, cacheConfig) {
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
-  return usePdfGenerator(recordId, apiBaseUrl, token, (id, base, tok) =>
-    buildDataFn(id, base, tok).then((data) => renderDocumentPdf({ ...data, labels: labelsRef.current }))
+  return usePdfGenerator(recordId, apiBaseUrl, (id, base) =>
+    buildDataFn(id, base).then((data) => renderDocumentPdf({ ...data, labels: labelsRef.current }))
   , cacheConfig);
 }
 

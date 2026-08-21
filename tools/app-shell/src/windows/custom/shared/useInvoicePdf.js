@@ -14,13 +14,13 @@ import {
 // ---------------------------------------------------------------------------
 // Build invoice data for the template
 // ---------------------------------------------------------------------------
-async function buildInvoiceData(invoiceId, base, token) {
+async function buildInvoiceData(invoiceId, base) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/sales-invoice/header/${invoiceId}`, token),
-    fetchAll(`${base}/sales-invoice/lines?parentId=${invoiceId}`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/sales-invoice/header/${invoiceId}`),
+    fetchAll(`${base}/sales-invoice/lines?parentId=${invoiceId}`),
+    fetchOptionalJson(`${base}/session`),
   ]);
-  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base, token);
+  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base);
 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
@@ -79,7 +79,7 @@ async function buildInvoiceData(invoiceId, base, token) {
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {
+export function useInvoicePdf(invoiceId, apiBaseUrl, cacheConfig = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('invoicePdfTitle'),
@@ -88,5 +88,5 @@ export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) 
     date:            ui('invoicePdfDate'),
     colQty:          ui('invoicePdfColQty'),
   });
-  return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels, cacheConfig);
+  return useDocumentPdf(invoiceId, apiBaseUrl, buildInvoiceData, labels, cacheConfig);
 }

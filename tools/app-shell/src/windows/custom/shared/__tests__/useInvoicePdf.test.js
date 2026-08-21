@@ -17,9 +17,9 @@ describe('useInvoicePdf', () => {
     assert.match(src, /export function useInvoicePdf/);
   });
 
-  it('accepts invoiceId, apiBaseUrl, token and optional cacheConfig parameters', () => {
+  it('accepts invoiceId, apiBaseUrl and optional cacheConfig parameters', () => {
     // Signature updated in ETP-4315 to include cacheConfig for jsreport-regeneration-skip caching
-    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*token,\s*cacheConfig\s*=\s*null\)/);
+    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*cacheConfig\s*=\s*null\)/);
   });
 
   it('returns pdfUrl, pdfBlob, loading and error', () => {
@@ -50,9 +50,10 @@ describe('useInvoicePdf', () => {
     assert.match(src, /useDocumentPdf/, 'hook delegates PDF lifecycle to useDocumentPdf');
   });
 
-  it('sends Bearer token in all API requests', () => {
+  it('takes its credential from the shared header builders, not a threaded token', () => {
     // fetch helpers live in pdfUtils.js (shared), re-exported via documentPdf.js
-    assert.match(pdfUtilsSrc, /Authorization.*Bearer.*token/);
+    assert.match(pdfUtilsSrc, /headers: jsonHeaders\(\)/);
+    assert.doesNotMatch(pdfUtilsSrc.replace(/\/\/.*$/gm, ''), /Authorization.*Bearer/);
   });
 
   // ── PDF rendering ─────────────────────────────────────────────────────────

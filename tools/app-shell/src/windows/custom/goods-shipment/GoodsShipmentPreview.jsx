@@ -82,7 +82,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useShipmentPdf(
     shipment?.id ?? null,
     apiBaseUrl,
-    token,
     pdfCacheConfig,
   );
 

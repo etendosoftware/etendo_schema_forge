@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
+// Relative, not `@/`: keeps this loadable from `node --test`, which cannot
+// resolve the Vite alias.
+import { jsonHeaders, readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
@@ -105,41 +108,42 @@ function fmt(v) {
 // ---------------------------------------------------------------------------
 // Shared fetch helpers
 // ---------------------------------------------------------------------------
-export async function fetchJson(url, token) {
+export async function fetchJson(url) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   const d = await res.json();
   return d?.response?.data?.[0] ?? d?.response?.data ?? d;
 }
 
-export async function fetchAll(url, token) {
+export async function fetchAll(url) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) return [];
   const d = await res.json();
   return d?.response?.data ?? (Array.isArray(d) ? d : []);
 }
 
-export async function fetchOptionalJson(url, token) {
-  try { return await fetchJson(url, token); } catch { return null; }
+export async function fetchOptionalJson(url) {
+  try { return await fetchJson(url); } catch { return null; }
 }
 
-export async function fetchExchangeRate(fromCurrencyId, toCurrencyId, date, base, token) {
+export async function fetchExchangeRate(fromCurrencyId, toCurrencyId, date, base) {
   if (!fromCurrencyId || !toCurrencyId || !date) return null;
   if (fromCurrencyId === toCurrencyId) return null;
   return fetchOptionalJson(
     `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrencyId)}&toCurrency=${encodeURIComponent(toCurrencyId)}&date=${encodeURIComponent(date)}`,
-    token,
   );
 }
 
-export async function fetchLocationAddress(locationId, base, token) {
+export async function fetchLocationAddress(locationId, base) {
   if (!locationId) return null;
   try {
-    return await fetchJson(`${base}/contacts/locationAddress/${locationId}`, token);
+    return await fetchJson(`${base}/contacts/locationAddress/${locationId}`);
   } catch { return null; }
 }
 
@@ -154,11 +158,13 @@ export function blobToDataUrl(blob) {
   });
 }
 
-export async function fetchImageDataUrl(imageId, base, token) {
+export async function fetchImageDataUrl(imageId, base) {
   if (!imageId) return null;
   try {
+    // An image GET with no body: no Content-Type, so no needless CORS preflight.
     const res = await fetch(`${base}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
+      credentials: 'include',
     });
     if (!res.ok) return null;
     return await blobToDataUrl(await res.blob());
@@ -301,7 +307,7 @@ async function fetchCachedBlob({ tableName, recordId, apiBaseUrl, isCancelled })
  *   - cacheConfig.tableName: AD_Table.name, e.g. 'C_Order' (must match attachmentConfig.tableName)
  *   - cacheConfig.storeCondition: false (e.g. Draft) → always render live, same as omitting cacheConfig
  */
-export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheConfig = null) {
+export function usePdfGenerator(recordId, apiBaseUrl, buildBlobFn, cacheConfig = null) {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfBlob, setPdfBlob] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -314,7 +320,10 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
   const cacheStoreCondition = !!cacheConfig?.storeCondition;
 
   useEffect(() => {
-    if (!recordId || !apiBaseUrl || !token) return;
+    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
+    // structurally undefined, so no PDF was ever generated: the preview opened
+    // and jsreport was never called, with nothing logged.
+    if (!recordId || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     let cancelled = false;
     setLoading(true);
@@ -333,7 +342,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
           if (cancelled) return;
         }
         if (!blob) {
-          blob = await buildRef.current(recordId, base, token);
+          blob = await buildRef.current(recordId, base);
           if (cancelled) return;
         }
         const url = URL.createObjectURL(blob);
@@ -355,7 +364,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
         prevUrlRef.current = null;
       }
     };
-  }, [recordId, apiBaseUrl, token, cacheTableName, cacheStoreCondition]);
+  }, [recordId, apiBaseUrl, cacheTableName, cacheStoreCondition]);
 
   return { pdfUrl, pdfBlob, loading, error };
 }

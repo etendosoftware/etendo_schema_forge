@@ -15,13 +15,13 @@ import {
 // ---------------------------------------------------------------------------
 // Build quotation data for the template
 // ---------------------------------------------------------------------------
-async function buildQuotationData(quotationId, base, token, currencyData = null) {
+async function buildQuotationData(quotationId, base, currencyData = null) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/sales-quotation/quotation/${quotationId}`, token),
-    fetchAll(`${base}/sales-quotation/quotationLine?parentId=${quotationId}`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/sales-quotation/quotation/${quotationId}`),
+    fetchAll(`${base}/sales-quotation/quotationLine?parentId=${quotationId}`),
+    fetchOptionalJson(`${base}/session`),
   ]);
-  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base, token);
+  const { companyLogoDataUrl, partnerLocation } = await fetchDocumentAssets(session, header, base);
 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
@@ -79,7 +79,7 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
+export function useQuotationPdf(quotationId, apiBaseUrl, currencyData = null, cacheConfig = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('quotationPdfTitle'),
@@ -94,5 +94,5 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig);
+  return useDocumentPdf(quotationId, apiBaseUrl, buildData, labels, cacheConfig);
 }

@@ -64,7 +64,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
   // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
-  const { pdfUrl, loading: pdfLoading } = usePurchaseOrderPdf(recordId, apiBaseUrl, token);
+  const { pdfUrl, loading: pdfLoading } = usePurchaseOrderPdf(recordId, apiBaseUrl);
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
   useEffect(() => {

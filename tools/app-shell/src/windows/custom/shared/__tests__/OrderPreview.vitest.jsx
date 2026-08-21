@@ -403,13 +403,15 @@ describe('OrderPreview', () => {
     function lastOrderPdfCacheConfig() {
       const calls = vi.mocked(useOrderPdf).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      return calls[calls.length - 1][4];
+      // ETP-4576: the credential argument is gone, so cacheConfig moved from the
+      // fifth position to the fourth.
+      return calls[calls.length - 1][3];
     }
 
     function lastPurchaseOrderPdfCacheConfig() {
       const calls = vi.mocked(usePurchaseOrderPdf).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      return calls[calls.length - 1][4];
+      return calls[calls.length - 1][3];
     }
 
     it('sales-order: passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {

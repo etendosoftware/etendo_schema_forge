@@ -426,7 +426,9 @@ describe('GoodsShipmentPreview', () => {
     function lastShipmentPdfCacheConfig() {
       const calls = vi.mocked(useShipmentPdf).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      return calls[calls.length - 1][3];
+      // ETP-4576: the pdf hooks no longer take a credential, so cacheConfig
+      // moved from the fourth argument to the third.
+      return calls[calls.length - 1][2];
     }
 
     it('passes { tableName: "M_InOut", storeCondition: false } when shipment.documentStatus is DR (draft)', () => {

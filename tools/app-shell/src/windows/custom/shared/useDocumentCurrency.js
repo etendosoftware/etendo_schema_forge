@@ -15,9 +15,8 @@ import { fetchOptionalJson } from './pdfUtils.js';
  *                                          typically order['currency$_identifier']
  * @param {string} params.orderDate       - Document date (ISO string, e.g. "2026-01-15")
  * @param {string} params.apiBaseUrl      - Window API base (e.g. /sws/neo/sales-order)
- * @param {string} params.token           - Bearer token
  */
-export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, token }) {
+export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl }) {
   const [state, setState] = useState({
     orgCurrencyCode: null,
     exchangeRate: null,
@@ -26,7 +25,10 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
   });
 
   useEffect(() => {
-    if (!docCurrencyCode || !apiBaseUrl || !token) {
+    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
+    // structurally undefined, so the org currency was never resolved and every
+    // document silently behaved as same-currency: no conversion, no rate.
+    if (!docCurrencyCode || !apiBaseUrl) {
       setState(s => ({ ...s, loading: false }));
       return;
     }
@@ -36,7 +38,7 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
     (async () => {
       try {
         // /session returns { currencyCode: "EUR", ... } — ISO 4217 code of the org currency
-        const session = await fetchOptionalJson(`${base}/session`, token);
+        const session = await fetchOptionalJson(`${base}/session`);
         const orgCurrencyCode = session?.currencyCode ?? null;
 
         if (!orgCurrencyCode || cancelled) {
@@ -54,7 +56,6 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
         // Currencies differ — both values are ISO codes; server resolves them to DB IDs
         const rateData = await fetchOptionalJson(
           `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(docCurrencyCode)}&toCurrency=${encodeURIComponent(orgCurrencyCode)}&date=${encodeURIComponent(orderDate)}`,
-          token,
         );
 
         if (!cancelled) {
@@ -71,7 +72,7 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
     })();
 
     return () => { cancelled = true; };
-  }, [docCurrencyCode, orderDate, apiBaseUrl, token]);
+  }, [docCurrencyCode, orderDate, apiBaseUrl]);
 
   const convertAmount = (amount) => {
     if (!amount || state.isSameCurrency) return amount;

@@ -69,15 +69,15 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 // ---------------------------------------------------------------------------
 // Build shipment data for the template
 // ---------------------------------------------------------------------------
-async function buildShipmentData(shipmentId, base, token) {
+async function buildShipmentData(shipmentId, base) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/goods-shipment/goodsShipment/${shipmentId}`, token),
-    fetchAll(`${base}/goods-shipment/goodsShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
+    fetchAll(`${base}/goods-shipment/goodsShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`),
+    fetchOptionalJson(`${base}/session`),
   ]);
   const [companyLogoDataUrl, partnerLocation] = await Promise.all([
-    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token),
-    fetchLocationAddress(header.partnerAddress, base, token),
+    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base),
+    fetchLocationAddress(header.partnerAddress, base),
   ]);
 
   const linesSorted = [...linesRaw].sort(
@@ -126,15 +126,14 @@ async function buildShipmentData(shipmentId, base, token) {
  *
  * @param {string|null} shipmentId — the shipment record ID
  * @param {string}      apiBaseUrl — e.g. "/sws/neo/goods-shipment"
- * @param {string}      token      — Bearer token
  * @param {Object}      [cacheConfig] — see usePdfGenerator's cacheConfig doc (pdfUtils.js)
  * @returns {{ pdfUrl, pdfBlob, loading, error }}
  */
-export function useShipmentPdf(shipmentId, apiBaseUrl, token, cacheConfig = null) {
+export function useShipmentPdf(shipmentId, apiBaseUrl, cacheConfig = null) {
   const ui = useUI();
-  return usePdfGenerator(shipmentId, apiBaseUrl, token, (id, base, tok) => {
+  return usePdfGenerator(shipmentId, apiBaseUrl, (id, base) => {
     const labels = getShipmentPdfLabels(ui);
-    return buildShipmentData(id, base, tok).then((data) =>
+    return buildShipmentData(id, base).then((data) =>
       renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels }),
     );
   }, cacheConfig);
@@ -162,8 +161,8 @@ export function getShipmentPdfLabels(ui) {
 
 // ETP-4702 — kept for GoodsShipmentMoreMenu.jsx's "Download PDF" kebab-menu item,
 // which generates the PDF on demand instead of via the useShipmentPdf hook above.
-export async function generateShipmentPdf(shipmentId, apiBaseUrl, token, labels) {
+export async function generateShipmentPdf(shipmentId, apiBaseUrl, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-  const data = await buildShipmentData(shipmentId, base, token);
+  const data = await buildShipmentData(shipmentId, base);
   return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
 }

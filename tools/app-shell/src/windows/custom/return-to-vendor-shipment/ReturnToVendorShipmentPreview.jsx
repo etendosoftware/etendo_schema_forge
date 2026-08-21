@@ -25,7 +25,6 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnToVendorPdf(
     shipment?.id ?? null,
     apiBaseUrl,
-    token,
     pdfCacheConfig,
   );
 

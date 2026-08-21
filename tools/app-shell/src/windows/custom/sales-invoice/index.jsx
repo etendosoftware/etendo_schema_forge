@@ -137,7 +137,7 @@ export default function SalesInvoiceWindow(props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
-  const { pdfUrl: emailPdfUrl, loading: emailPdfLoading } = useInvoicePdf(emailRow?.id ?? null, apiBaseUrl, token);
+  const { pdfUrl: emailPdfUrl, loading: emailPdfLoading } = useInvoicePdf(emailRow?.id ?? null, apiBaseUrl);
   const breadcrumb = 'Sales / Sales Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({

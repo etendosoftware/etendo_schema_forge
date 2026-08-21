@@ -83,7 +83,7 @@ describe('useShipmentPdf', () => {
   });
 
   it('returns initial state with all nulls and loading false when shipmentId is null', () => {
-    const { result } = renderHook(() => useShipmentPdf(null, '/api/goods-shipment', 'tok'));
+    const { result } = renderHook(() => useShipmentPdf(null, '/api/goods-shipment'));
     expect(result.current.pdfUrl).toBeNull();
     expect(result.current.pdfBlob).toBeNull();
     expect(result.current.loading).toBe(false);
@@ -91,13 +91,13 @@ describe('useShipmentPdf', () => {
   });
 
   it('does not start loading when shipmentId is null', () => {
-    const { result } = renderHook(() => useShipmentPdf(null, '/api/goods-shipment', 'tok'));
+    const { result } = renderHook(() => useShipmentPdf(null, '/api/goods-shipment'));
     expect(result.current.loading).toBe(false);
   });
 
   it('sets loading to true immediately when shipmentId is provided', () => {
     const { result } = renderHook(() =>
-      useShipmentPdf('ship-1', '/api/goods-shipment', 'tok'),
+      useShipmentPdf('ship-1', '/api/goods-shipment'),
     );
     expect(result.current.loading).toBe(true);
   });
@@ -107,7 +107,7 @@ describe('useShipmentPdf', () => {
     global.URL.revokeObjectURL = vi.fn();
 
     const { result } = renderHook(() =>
-      useShipmentPdf('ship-1', '/api/goods-shipment', 'tok'),
+      useShipmentPdf('ship-1', '/api/goods-shipment'),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);

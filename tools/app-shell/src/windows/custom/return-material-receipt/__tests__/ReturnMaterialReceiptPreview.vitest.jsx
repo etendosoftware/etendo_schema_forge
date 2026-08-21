@@ -152,9 +152,9 @@ describe('ReturnMaterialReceiptPreview', () => {
   });
 
   describe('system-generated PDF still wired for send/download actions', () => {
-    it('calls useReturnReceiptPdf with the receipt id, apiBaseUrl and token', () => {
+    it('calls useReturnReceiptPdf with the receipt id and apiBaseUrl', () => {
       renderPreview();
-      expect(mockUseReturnReceiptPdf).toHaveBeenCalledWith('rmr-1', '/api/return-material-receipt', 'tok');
+      expect(mockUseReturnReceiptPdf).toHaveBeenCalledWith('rmr-1', '/api/return-material-receipt');
     });
 
     it('forwards pdfBlob from useReturnReceiptPdf into buildReturnPreviewContent', () => {

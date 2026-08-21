@@ -92,7 +92,7 @@ describe('useReturnToVendorPdf', () => {
   });
 
   it('returns initial state with nulls and loading false when shipmentId is null', () => {
-    const { result } = renderHook(() => useReturnToVendorPdf(null, '/api/return-to-vendor', 'tok'));
+    const { result } = renderHook(() => useReturnToVendorPdf(null, '/api/return-to-vendor'));
     expect(result.current.pdfUrl).toBeNull();
     expect(result.current.pdfBlob).toBeNull();
     expect(result.current.loading).toBe(false);
@@ -101,7 +101,7 @@ describe('useReturnToVendorPdf', () => {
 
   it('sets loading to true immediately when shipmentId is provided', () => {
     const { result } = renderHook(() =>
-      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor'),
     );
     expect(result.current.loading).toBe(true);
   });
@@ -111,7 +111,7 @@ describe('useReturnToVendorPdf', () => {
     global.URL.revokeObjectURL = vi.fn();
 
     const { result } = renderHook(() =>
-      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor'),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);

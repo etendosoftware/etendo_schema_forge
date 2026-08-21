@@ -41,7 +41,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
   // document instead of the "PDF not configured" fallback. Hook is called
   // unconditionally at top level (rules of hooks).
-  const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading } = useShipmentPdf(recordId, apiBaseUrl, token);
+  const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading } = useShipmentPdf(recordId, apiBaseUrl);
 
   useEffect(() => {
     const handler = () => setShowConfirmModal(true);

@@ -27,12 +27,11 @@ describe('useQuotationPdf', () => {
     buildDocumentPdfLabels.mockImplementation((ui, overrides) => ({ ...overrides, taxId: 'invoicePdfTaxId' }));
   });
 
-  it('calls useDocumentPdf with the passed quotationId, apiBaseUrl, and token', () => {
-    renderHook(() => useQuotationPdf('q-1', '/api', 'tok'));
+  it('calls useDocumentPdf with the passed quotationId and apiBaseUrl', () => {
+    renderHook(() => useQuotationPdf('q-1', '/api'));
     expect(useDocumentPdf).toHaveBeenCalledWith(
       'q-1',
       '/api',
-      'tok',
       expect.any(Function),
       expect.any(Object),
       null,
@@ -40,7 +39,7 @@ describe('useQuotationPdf', () => {
   });
 
   it('calls buildDocumentPdfLabels with quotation-specific i18n keys', () => {
-    renderHook(() => useQuotationPdf('q-1', '/api', 'tok'));
+    renderHook(() => useQuotationPdf('q-1', '/api'));
     expect(buildDocumentPdfLabels).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({
@@ -54,7 +53,7 @@ describe('useQuotationPdf', () => {
   });
 
   it('includes validUntil label in the overrides passed to buildDocumentPdfLabels', () => {
-    renderHook(() => useQuotationPdf('q-1', '/api', 'tok'));
+    renderHook(() => useQuotationPdf('q-1', '/api'));
     expect(buildDocumentPdfLabels).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({
@@ -65,7 +64,7 @@ describe('useQuotationPdf', () => {
 
   it('returns the result of useDocumentPdf', () => {
     useDocumentPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob: new Blob(), loading: false, error: null });
-    const { result } = renderHook(() => useQuotationPdf('q-1', '/api', 'tok'));
+    const { result } = renderHook(() => useQuotationPdf('q-1', '/api'));
     expect(result.current.pdfUrl).toBe('blob:q-test');
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.loading).toBe(false);
@@ -73,11 +72,10 @@ describe('useQuotationPdf', () => {
   });
 
   it('passes null quotationId through to useDocumentPdf when quotationId is null', () => {
-    renderHook(() => useQuotationPdf(null, '/api', 'tok'));
+    renderHook(() => useQuotationPdf(null, '/api'));
     expect(useDocumentPdf).toHaveBeenCalledWith(
       null,
       '/api',
-      'tok',
       expect.any(Function),
       expect.any(Object),
       null,

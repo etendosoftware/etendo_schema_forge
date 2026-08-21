@@ -104,7 +104,7 @@ export function useOrderWindow({
             const docCurrency = r['currency$_identifier'] || r.currency;
             if (docCurrency && r.orderDate) {
               try {
-                const session = await fetchOptionalJson(`${base}/session`, token);
+                const session = await fetchOptionalJson(`${base}/session`);
                 const orgCurrency = session?.organization?.['currency$_identifier'];
                 const orgCurrencyId = session?.organization?.currency;
                 if (orgCurrency && docCurrency !== orgCurrency) {

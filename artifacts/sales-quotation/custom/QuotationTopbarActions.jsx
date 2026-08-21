@@ -53,7 +53,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   // ETP-4372 — source the same client-rendered PDF the QuotationPreview panel
   // uses, so the form-view topbar Send modal shows the document instead of the
   // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
-  const { pdfUrl, loading: pdfLoading } = useQuotationPdf(recordId, apiBaseUrl, token);
+  const { pdfUrl, loading: pdfLoading } = useQuotationPdf(recordId, apiBaseUrl);
 
   // The framework's draftMode renders a "Confirmar" primary button after Save.
   // The wrapper at tools/app-shell/src/windows/custom/sales-quotation/index.jsx

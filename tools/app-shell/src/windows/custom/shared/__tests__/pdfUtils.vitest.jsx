@@ -189,7 +189,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
 
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, {
         tableName: 'C_Order',
         storeCondition: true,
       }),
@@ -213,7 +213,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     mockFetchMainAttachment.mockResolvedValue(null);
 
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, {
         tableName: 'C_Order',
         storeCondition: true,
       }),
@@ -225,7 +225,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
     // buildBlobFn receives the trimmed base (apiBaseUrl with the last path
     // segment stripped), not the raw apiBaseUrl — see usePdfGenerator's `base` local.
-    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api');
     expect(result.current.pdfBlob).toBe(builtBlob);
   });
 
@@ -233,7 +233,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     mockFetchMainAttachment.mockResolvedValue({});
 
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, {
         tableName: 'C_Order',
         storeCondition: true,
       }),
@@ -248,20 +248,20 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
 
   it('cacheConfig omitted (backward-compat): calls buildBlobFn and never attempts a cache lookup', async () => {
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn),
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn),
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(mockFetchMainAttachment).not.toHaveBeenCalled();
     expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
-    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api');
     expect(result.current.pdfBlob).toBe(builtBlob);
   });
 
   it('cacheConfig null (backward-compat): calls buildBlobFn and never attempts a cache lookup', async () => {
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, null),
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, null),
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -274,7 +274,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
 
   it('storeCondition: false skips the cache lookup even with a tableName present', async () => {
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, {
         tableName: 'C_Order',
         storeCondition: false,
       }),
@@ -290,7 +290,7 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
 
   it('storeCondition: true but no tableName skips the cache lookup', async () => {
     const { result } = renderHook(() =>
-      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+      usePdfGenerator('rec-1', '/api/sales-order', buildBlobFn, {
         storeCondition: true,
       }),
     );

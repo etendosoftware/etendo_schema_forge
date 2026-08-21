@@ -70,7 +70,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   // "PDF not configured" fallback. Hook is called unconditionally at top level
   // (before the early returns below) to respect the rules of hooks. Keyed on the
   // same id the modal passes as documentId (data?.id).
-  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl, token);
+  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl);
 
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = data?.grandTotalAmount ?? 0;

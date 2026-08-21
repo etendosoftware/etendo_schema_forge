@@ -153,9 +153,13 @@ describe('useDocumentCurrency', () => {
       expect(fetchOptionalJson).not.toHaveBeenCalled();
     });
 
-    it('sets loading: false immediately when token is absent', async () => {
+    // ETP-4576 removed the `token` half of this gate: under a cookie session it is
+    // structurally undefined, so it made every document silently behave as
+    // same-currency — no conversion, no rate, no error. `apiBaseUrl` is the only
+    // precondition a caller can actually fail to meet.
+    it('sets loading: false immediately when apiBaseUrl is absent', async () => {
       const { result } = renderHook(() =>
-        useDocumentCurrency({ ...BASE_PARAMS, token: undefined }),
+        useDocumentCurrency({ ...BASE_PARAMS, apiBaseUrl: undefined }),
       );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
@@ -223,14 +227,16 @@ describe('useDocumentCurrency', () => {
       expect(sessionUrl).toBe('/sws/neo/session');
     });
 
-    it('passes the token as the second argument to fetchOptionalJson', async () => {
+    // ETP-4576 — `fetchOptionalJson` takes only a URL now: the credential comes
+    // from the active session scheme, so there is no second argument to pass.
+    it('calls fetchOptionalJson with just the URL, no credential argument', async () => {
       fetchOptionalJson.mockResolvedValue({ currencyCode: 'USD' });
 
-      renderHook(() => useDocumentCurrency({ ...BASE_PARAMS, token: 'my-token' }));
+      renderHook(() => useDocumentCurrency({ ...BASE_PARAMS }));
 
       await waitFor(() => expect(fetchOptionalJson).toHaveBeenCalled());
 
-      expect(fetchOptionalJson.mock.calls[0][1]).toBe('my-token');
+      expect(fetchOptionalJson.mock.calls[0]).toHaveLength(1);
     });
   });
 });

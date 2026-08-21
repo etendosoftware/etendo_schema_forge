@@ -20,7 +20,6 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   const { pdfUrl, pdfBlob } = useReturnReceiptPdf(
     receipt?.id ?? null,
     apiBaseUrl,
-    token,
   );
 
   if (!receipt) return null;

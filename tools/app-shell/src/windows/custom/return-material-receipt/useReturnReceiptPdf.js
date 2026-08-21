@@ -61,15 +61,15 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
 
-async function buildReceiptData(receiptId, base, token) {
+async function buildReceiptData(receiptId, base) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/return-material-receipt/returnMaterialReceipt/${receiptId}`, token),
-    fetchAll(`${base}/return-material-receipt/returnMaterialReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=200`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/return-material-receipt/returnMaterialReceipt/${receiptId}`),
+    fetchAll(`${base}/return-material-receipt/returnMaterialReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=200`),
+    fetchOptionalJson(`${base}/session`),
   ]);
   const [companyLogoDataUrl, partnerLocation] = await Promise.all([
-    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token),
-    fetchLocationAddress(header.partnerAddress, base, token),
+    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base),
+    fetchLocationAddress(header.partnerAddress, base),
   ]);
 
   const lines = sortLinesByLineNo(linesRaw).map((l, idx) => ({
@@ -95,11 +95,11 @@ async function buildReceiptData(receiptId, base, token) {
   };
 }
 
-export function useReturnReceiptPdf(receiptId, apiBaseUrl, token) {
+export function useReturnReceiptPdf(receiptId, apiBaseUrl) {
   const ui = useUI();
-  return usePdfGenerator(receiptId, apiBaseUrl, token, (id, base, tok) => {
+  return usePdfGenerator(receiptId, apiBaseUrl, (id, base) => {
     const labels = getReturnReceiptPdfLabels(ui);
-    return buildReceiptData(id, base, tok).then((data) => renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels }));
+    return buildReceiptData(id, base).then((data) => renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels }));
   });
 }
 

@@ -61,15 +61,15 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
 
-async function buildReturnToVendorData(shipmentId, base, token) {
+async function buildReturnToVendorData(shipmentId, base) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/return-to-vendor-shipment/returnToVendorShipment/${shipmentId}`, token),
-    fetchAll(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`, token),
-    fetchOptionalJson(`${base}/session`, token),
+    fetchJson(`${base}/return-to-vendor-shipment/returnToVendorShipment/${shipmentId}`),
+    fetchAll(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`),
+    fetchOptionalJson(`${base}/session`),
   ]);
   const [companyLogoDataUrl, partnerLocation] = await Promise.all([
-    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token),
-    fetchLocationAddress(header.partnerAddress, base, token),
+    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base),
+    fetchLocationAddress(header.partnerAddress, base),
   ]);
 
   const lines = sortLinesByLineNo(linesRaw).map((l, idx) => ({
@@ -96,11 +96,11 @@ async function buildReturnToVendorData(shipmentId, base, token) {
   };
 }
 
-export function useReturnToVendorPdf(shipmentId, apiBaseUrl, token, cacheConfig = null) {
+export function useReturnToVendorPdf(shipmentId, apiBaseUrl, cacheConfig = null) {
   const ui = useUI();
-  return usePdfGenerator(shipmentId, apiBaseUrl, token, (id, base, tok) => {
+  return usePdfGenerator(shipmentId, apiBaseUrl, (id, base) => {
     const labels = getReturnToVendorPdfLabels(ui);
-    return buildReturnToVendorData(id, base, tok).then((data) => renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels }));
+    return buildReturnToVendorData(id, base).then((data) => renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels }));
   }, cacheConfig);
 }
 

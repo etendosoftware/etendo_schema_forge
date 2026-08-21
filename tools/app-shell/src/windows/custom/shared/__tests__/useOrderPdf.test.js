@@ -17,9 +17,9 @@ describe('useOrderPdf', () => {
     assert.match(src, /export function useOrderPdf/);
   });
 
-  it('accepts orderId, apiBaseUrl, token and optional currencyData parameters', () => {
+  it('accepts orderId, apiBaseUrl and optional currencyData parameters', () => {
     // Signature updated in ETP-4027 to include currencyData for dual-currency PDF generation
-    assert.match(src, /useOrderPdf\(orderId,\s*apiBaseUrl,\s*token,\s*currencyData/);
+    assert.match(src, /useOrderPdf\(orderId,\s*apiBaseUrl,\s*currencyData/);
   });
 
   it('returns pdfUrl, pdfBlob, loading and error', () => {

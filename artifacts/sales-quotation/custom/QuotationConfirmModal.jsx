@@ -100,7 +100,7 @@ export default function QuotationConfirmModal({
       const docDate = d.orderDate;
       if (docCurrency && docDate) {
         try {
-          const session = await fetchOptionalJson(`${baseNeoUrl}/session`, token);
+          const session = await fetchOptionalJson(`${baseNeoUrl}/session`);
           const orgCurrency = session?.organization?.['currency$_identifier'];
           const orgCurrencyId = session?.organization?.currency;
           if (orgCurrency && docCurrency !== orgCurrency) {

@@ -79,7 +79,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     docCurrencyCode: quotation?.['currency$_identifier'],
     orderDate: quotation?.orderDate,
     apiBaseUrl,
-    token,
   });
   const etgoRate = (!isSameCurrency && quotation?.eTGOCurrencyRate)
     ? parseFloat(quotation.eTGOCurrencyRate)

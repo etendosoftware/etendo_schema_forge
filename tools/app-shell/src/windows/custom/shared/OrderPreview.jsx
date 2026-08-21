@@ -114,7 +114,6 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     docCurrencyCode: order?.['currency$_identifier'],
     orderDate: order?.orderDate,
     apiBaseUrl,
-    token,
   });
   const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
     record: order,
@@ -127,8 +126,8 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // useOrderPdf/usePurchaseOrderPdf skip the jsreport round-trip and serve the marked
   // attachment directly when one already exists, instead of regenerating on every open.
   const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft };
-  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
-  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
+  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, currencyData, pdfCacheConfig);
+  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, currencyData, pdfCacheConfig);
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = isSalesOrder ? soResult : poResult;
 
   if (!order) return null;
