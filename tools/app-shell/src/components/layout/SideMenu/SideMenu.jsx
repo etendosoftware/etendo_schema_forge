@@ -66,11 +66,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import {
-  useFeatureFlag,
-  PROOF_OF_CONCEPT_MENU,
-  TENANT_UPGRADE,
-} from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
@@ -500,16 +496,14 @@ export default function SideMenu({
   const location = useLocation();
   const currentPath = location.pathname.replace(/^\//, '');
   const { favorites } = useFavorites();
-  // Switching between tenants only means something once an account can own more
-  // than one, so the switcher rides the same flag as the upgrade flow. With the
-  // flag off this renders exactly what it did before: the current company alone.
-  const multiTenantEnabled = useFeatureFlag(TENANT_UPGRADE);
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
-  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
-    enabled: multiTenantEnabled,
-  });
+  // Unconditional since ETP-4966: owning more than one environment is a shipped
+  // capability, so the switcher is always available. The hook already returns an
+  // empty list for a session that cannot list environments, which is what keeps
+  // an account with a single company showing that company alone.
+  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
   const currentEnvironment = environments.find(env => env.clientId === currentClientId);
 
   const favNameMap = useMemo(() => {
@@ -598,7 +592,11 @@ export default function SideMenu({
                   <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
                     {selectedOrg?.name || ui('yourCompany')}
                   </span>
-                  {multiTenantEnabled && (
+                  {/* Guarded on having resolved the environment, not on a flag: a session that
+                      cannot list environments (no platform token) has no plan to report, and
+                      environmentPlanLabelKey would otherwise label it "Demo" from a missing value
+                      rather than from a known free plan. */}
+                  {currentEnvironment && (
                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
