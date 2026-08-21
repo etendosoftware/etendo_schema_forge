@@ -39,7 +39,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
   const ui = useUI();
   return (
     <>
@@ -70,6 +70,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!canAddPayment}
         onClick={canAddPayment ? onAddPayment : undefined}
+        title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
         data-testid="Button__cf88e6">
         <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
         {ui('invoicePreviewAddPayment')}
@@ -101,7 +102,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -168,6 +169,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         currencyCode={currencyCode}
         totalOutstanding={totalOutstanding}
         canAddPayment={canAddPayment}
+        addPaymentBlockedByDraft={addPaymentBlockedByDraft}
         isFullyPaid={isFullyPaid}
         isCreditNote={isNC}
         loading={loadingPayments}
@@ -302,6 +304,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           loadingPayments={p.loadingPayments}
           totalOutstanding={p.totalOutstanding}
           canAddPayment={p.canAddPayment}
+          addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
           isCreditNote={isCreditNote(p.displayInvoice)}
@@ -332,6 +335,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       canSendToSif={p.canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={p.canAddPayment}
+      addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
@@ -358,7 +362,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           specName={specName}
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
-          outstanding={p.totalOutstanding}
+          outstanding={p.freeToAllocate}
           apiBaseUrl={apiBaseUrl}
           onClose={() => p.setShowPaymentModal(false)}
           onSaved={async () => {

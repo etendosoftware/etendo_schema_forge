@@ -54,13 +54,40 @@ describe('statusBadge', () => {
 
   describe('getStatusTone (extended)', () => {
     it.each([
-      ['ca', 'success'], ['etgo_ci', 'success'], ['rppc', 'success'], ['ppm', 'success'],
+      ['ca', 'success'], ['etgo_ci', 'success'], ['rppc', 'success'],
       ['pwnc', 'success'], ['rdnc', 'success'], ['confirmed', 'success'], ['booked', 'success'],
       ['paid', 'success'], ['processed', 'success'], ['yes', 'success'],
       ['rpae', 'success'], ['rpr', 'success'], ['ue', 'warning'], ['under evaluation', 'warning'],
       ['rpvoid', 'destructive'], ['rpvd', 'destructive'], ['cancelled', 'destructive'], ['void', 'destructive'],
     ])('maps %s to %s', (status, expected) => {
       expect(getStatusTone(status)).toBe(expected);
+    });
+
+    it('classifies ETGOERR as destructive and gives it a name, not the raw code', () => {
+      // This module's own status for a bank transfer the bank refused after committing to it.
+      // Core's dictionary has no entry for it, so without the MAP fallback every surface that does
+      // not declare enumLabels printed the literal "ETGOERR" in neutral grey (ETP-4895).
+      expect(getStatusTone('ETGOERR')).toBe('destructive');
+      expect(getStatusGridPillClass('etgoerr')).toContain('bg-destructive');
+      expect(getStatusPillClass('etgoerr')).toContain('text-destructive');
+      expect(getStatusDotColor('etgoerr')).toBe('bg-destructive');
+      expect(getStatusBadgeProps('etgoerr').variant).toBe('destructive');
+      expect(statusLabel('ETGOERR', { genericLabels: { cpPaymentStateError: 'Pago con error' } }))
+        .toBe('Pago con error');
+    });
+
+    it('classifies PPM (Payment Made) as warning, not success — confirmed but not withdrawn', () => {
+      // PPM means the payment is confirmed but has NOT been withdrawn from its financial account,
+      // so no bank transaction exists yet; Core moves it on to PWNC once the withdrawal is
+      // recorded. For a Salt Edge transfer that is the wait between the bank authorizing and the
+      // money moving, which every surface now labels "Pago en progreso" — a green tone here would
+      // contradict that text (ETP-4895). See STATUS_PAYMENT_MADE in paymentStatuses.js.
+      expect(getStatusTone('PPM')).toBe('warning');
+      expect(getStatusTone('ppm')).toBe('warning');
+      expect(getStatusPillClass('ppm')).toContain('bg-status-warning');
+      expect(getStatusGridPillClass('ppm')).toContain('bg-status-warning');
+      expect(getStatusDotColor('ppm')).toBe('bg-status-warning-foreground');
+      expect(getStatusBadgeProps('ppm').className).toContain('status-warning');
     });
 
     it('classifies RPAE (Awaiting Execution) as success/deposited, matching PAID_STATUSES elsewhere (case-insensitive)', () => {
@@ -74,7 +101,7 @@ describe('statusBadge', () => {
   });
 
   describe('extended semantic status coverage', () => {
-    it.each(['true', 'processed', 'ca', 'etgo_ci', 'rppc', 'ppm', 'pwnc', 'rdnc'])('maps %s to success roles', (status) => {
+    it.each(['true', 'processed', 'ca', 'etgo_ci', 'rppc', 'pwnc', 'rdnc'])('maps %s to success roles', (status) => {
       expect(getStatusBadgeProps(status).className).toContain('status-success');
       expect(getStatusDotColor(status)).toBe('bg-status-success-foreground');
       expect(getStatusPillClass(status)).toContain('bg-status-success');

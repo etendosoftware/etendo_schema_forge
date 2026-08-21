@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-22T10:47:48.420Z",
-  "contractChecksum": "3cb3e09676655071",
+  "updatedAt": "2026-08-13T16:50:51.856Z",
+  "contractChecksum": "f2a01a2be5960d95",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -38,35 +38,47 @@
       "lineTax": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/lineTax",
         "detailUrl": "/sws/neo/purchase-order/lineTax/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "reservedStock": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/reservedStock",
         "detailUrl": "/sws/neo/purchase-order/reservedStock/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "paymentDetails": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/paymentDetails",
         "detailUrl": "/sws/neo/purchase-order/paymentDetails/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -1654,5 +1666,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "144e611cb49c001c"
+  "checksum": "3348a38e09a00e43"
 }

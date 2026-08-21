@@ -449,9 +449,17 @@ export function normalizeDefaultValue(val, normalized, key) {
     }
 }
 
-// Normalize a creation-defaults response (already id-stripped) from Etendo format:
+// Normalize a creation-defaults response (already id-stripped) from Etendo format,
+// per normalizeDefaultValue:
 // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
-// - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
+// - Quoted SQL literals: 'foo' → foo
+// - Integers → strings (list/enum columns are VARCHAR in the DB)
+// Booleans are NOT normalized here. The comment this replaces claimed they were
+// ("Y" → true), and they never have been — normalizeDefaultValue has no boolean
+// branch. NEO canonicalizes them server-side since ETP-4793, and every consumer
+// additionally tolerates the raw "Y"/"N" storage encoding — see
+// EntityForm.renderCheckboxField and
+// e2e/tests/flows/boolean-defaults-tolerance.mocked.spec.js.
 // Plus the contacts-window backstop: oBTIKTaxIDKey falls back to '1' (NIF) when
 // the backend sends none. Pure — returns a normalized copy, touches no state.
 export function normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl }) {

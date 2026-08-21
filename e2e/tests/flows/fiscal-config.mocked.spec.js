@@ -110,7 +110,7 @@ test.describe('Fiscal Config — SII profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
   });
 
   test('shows the Navarra SII section when the SII record has navarra=Y', async ({ page }) => {
@@ -118,7 +118,7 @@ test.describe('Fiscal Config — SII profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_NAVARRA_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -128,7 +128,7 @@ test.describe('Fiscal Config — TBAI profile', () => {
     await installFiscalConfigMocks(page, { tbai: TBAI_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -148,11 +148,11 @@ test.describe('Fiscal Config — SII+TBAI combined profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD, tbai: TBAI_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
 
     // SII+TBAI uses tabs — switch to TBAI tab to verify it renders
     await page.getByRole('button', { name: t('fiscal.tab.tbai') }).click();
-    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -422,14 +422,14 @@ const CHANGE_SIF_CASES = [
   {
     label: 'SII',
     spec: 'sii-config',
-    detailFieldLabel: t('fiscal.sii.field.enrolled'),
+    detailFieldLabel: t('fiscal.sii.legend.special'),
     record: { id: 'e2e-csif-sii-001', acogidaAlSII: 'N', navarra: 'N', guipuzcoa: 'N' },
     noticeKey: 'fiscal.changeSif.notice.sii',
   },
   {
     label: 'TBAI',
     spec: 'tbai-config',
-    detailFieldLabel: t('fiscal.tbai.field.enrollDate'),
+    detailFieldLabel: t('fiscal.tbai.field.autoSend'),
     record: { id: 'e2e-csif-tbai-001', etsgSifTerritory: 'ARABA' },
     noticeKey: 'fiscal.changeSif.notice.tbai',
   },
@@ -559,7 +559,7 @@ const ONBOARDING_SAVE_CASES = [
     territoryLabel: t('fiscal.territory.alava'),
     hasSubquestion: true,
     subquestionPickLabel: t('fiscal.onboarding.subq.tbai.label'), // "TicketBAI only" → alsoNational=false
-    detailFieldLabel: t('fiscal.tbai.field.enrollDate'),
+    detailFieldLabel: t('fiscal.tbai.field.autoSend'),
     record: {
       id: 'e2e-onb-tbai-001',
       etsgSifTerritory: 'ARABA',
@@ -577,7 +577,7 @@ const ONBOARDING_SAVE_CASES = [
     spec: 'sii-config',
     territoryLabel: t('fiscal.territory.navarra'),
     hasSubquestion: false,
-    detailFieldLabel: t('fiscal.sii.field.enrolled'),
+    detailFieldLabel: t('fiscal.sii.legend.special'),
     record: {
       id: 'e2e-onb-sii-001',
       navarra: 'Y',
@@ -692,7 +692,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     await navigateTo(page, 'fiscal-config');
 
     // TBAI section must load first
-    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
 
     // The "Add SII" item is in the kebab because canAddComplementary is true (tbai-only profile).
     // Open the actions menu first, then assert the item is present and contains the right text.
@@ -708,7 +708,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
 
     // canAddComplementary is false for sii-only profile — open the kebab and verify
     // addComplementary is absent from its items.
@@ -783,7 +783,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     await navigateTo(page, 'fiscal-config');
 
     // TBAI section loads and the "Add SII" item is in the kebab.
-    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
     await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
 

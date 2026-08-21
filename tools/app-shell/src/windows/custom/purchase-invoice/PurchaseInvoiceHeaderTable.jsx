@@ -185,6 +185,26 @@ export default function PurchaseInvoiceHeaderTable(props) {
               </button>
             );
           }
+          // A payment in progress or rejected leaves the invoice with a zero outstanding, so an
+          // amount here would be a lie in both directions: "Pagada" for money that never moved, or
+          // a figure the user must not pay again. Show the state and make it open the payments
+          // modal, where the amounts and the per-payment states live and each row navigates to its
+          // payment (ETP-4895).
+          if (badge.kind === 'transfer-error' || badge.kind === 'transfer-in-progress') {
+            const failed = badge.kind === 'transfer-error';
+            const tone = failed ? 'destructive' : 'warning';
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+                data-testid={failed ? 'invoice-transfer-error' : 'invoice-transfer-in-progress'}
+                style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:`var(--status-${tone}-bg)`,border:'none',color:`var(--status-${tone}-fg)`,cursor:'pointer'}}
+              >
+                <span style={{width:8,height:8,borderRadius:'50%',background:`var(--status-${tone}-fg)`,flexShrink:0,display:'inline-block'}}/>
+                {ui(failed ? 'cpPaymentStateError' : 'cpPaymentStateInProgress')}
+              </button>
+            );
+          }
           if (badge.kind === 'paid') {
             return (
               <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>

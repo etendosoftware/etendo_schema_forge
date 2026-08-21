@@ -700,7 +700,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `name` | string | Entity key | Override display name. |
-| `exclude` | boolean | `false` | Omit entire entity from schema. |
+| `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
@@ -1358,6 +1358,34 @@ Rule keys use **extended names** (including trigger column suffix for multi-trig
   }
 }
 ```
+
+**What it does (ETP-4793).** The entity is dropped from the curated schema, and so
+from `contract.json`. Both write paths then close it in NEO:
+
+| Row | Column | Value |
+|---|---|---|
+| `ETGO_SF_ENTITY` (the excluded entity) | `ISINCLUDED` | `N` |
+| `ETGO_SF_FIELD` (every field of it) | `ISINCLUDED` | `N` |
+
+`ISINCLUDED = 'N'` on the entity is what actually removes it from the served
+surface — every REST and MCP reader filters on it before resolving an entity, so
+neither `GET /{entity}` nor an MCP `neo_list` can reach it. The field rows are
+closed too: it is redundant for behaviour, but a closed entity whose 15 field rows
+still claim `ISINCLUDED = 'Y'` misreports the size of the agent surface, which is
+exactly how the gap went unnoticed for 90 entities / 386 fields.
+
+Two deliberate non-changes:
+
+- **The six HTTP method flags are left at the window default, not zeroed.** They
+  are unreachable once the entity is closed, and an all-`N` set would break the
+  "GET and GETBYID are always granted" invariant that `cli/src/lib/entity-methods.js`
+  enforces. Leaving them alone also keeps the XML diff to one column per entity.
+- **`VISIBILITY` is not written on the closed field rows.** The offline XML delta
+  does not model that column, and NULL beside `ISINCLUDED='N'` / `ISREADONLY='N'`
+  is already the pair `mapVisibility('discarded')` produces.
+
+Excluding an entity changes `ETGO_SF_*`, so it needs a re-push and an export:
+`make regen ONLY=<window> PUSH_TO_NEO=1` then `./gradlew export.database`.
 
 ### Custom NeoHandler for an entity
 ```json
