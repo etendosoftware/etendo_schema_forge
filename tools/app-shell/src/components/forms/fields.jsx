@@ -12,6 +12,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -123,6 +124,12 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setBuffer(value); }, [value, focused]);
 
+  // ETP-4314 follow-up: the symbol side (left for USD/GBP/etc., right for EUR)
+  // isn't hardcoded — read from C_CURRENCY.ISSYMBOLRIGHTSIDE via
+  // isCurrencySymbolRightSide(), same source formatCurrency() uses for the
+  // read-only display of this same amount elsewhere in the app.
+  const rightSide = isCurrencySymbolRightSide(currency);
+
   return (
     <Field
       label={label}
@@ -131,7 +138,7 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
       data-testid="Field__7183e9">
       <div className="relative">
         <Input
-          className={`pr-8 text-right tabular-nums ${readOnly ? '' : 'bg-card'}`}
+          className={`${rightSide ? 'pr-8' : 'pl-8'} text-right tabular-nums ${readOnly ? '' : 'bg-card'}`}
           value={focused ? buffer : value}
           onChange={(e) => { setBuffer(e.target.value); onChange?.(e); }}
           onFocus={() => setFocused(true)}
@@ -139,7 +146,10 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
           placeholder={placeholder}
           disabled={readOnly}
           data-testid={name ? `field-number-${name}` : 'field-number'} />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">{getCurrencySymbol(currency) || '€'}</span>
+        <span
+          className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
+          {getCurrencySymbol(currency) || '€'}
+        </span>
       </div>
     </Field>
   );

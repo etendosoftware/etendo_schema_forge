@@ -221,6 +221,7 @@
       }
     },
     "clearedItems": {
+      "readOnly": true,
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "accountingDate": {

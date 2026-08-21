@@ -1,8 +1,7 @@
 {
   "version": "0.29.0",
-  "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-21T15:28:19.701Z",
-  "checksum": "fde14277c469590f",
+  "generatedAt": "2026-08-21T16:17:27.627Z",
+  "checksum": "df876b76cb22c1da",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -3664,6 +3663,14 @@
             "required": false
           },
           {
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -3718,14 +3725,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOPendingCount",
-            "apiKey": "eTGOPendingCount",
-            "column": "EM_ETGO_Pending_Count",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -4040,6 +4039,14 @@
             "required": true
           },
           {
+            "name": "eTGOFinaccTransDest",
+            "apiKey": "eTGOFinaccTransDest",
+            "column": "EM_ETGO_Finacc_Trans_Dest",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4094,14 +4101,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOFinaccTransDest",
-            "apiKey": "eTGOFinaccTransDest",
-            "column": "EM_ETGO_Finacc_Trans_Dest",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "document-posting"
@@ -5590,13 +5589,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [

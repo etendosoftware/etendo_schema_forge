@@ -10,6 +10,7 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
+import SifErrorBanner from '@/windows/custom/sales-invoice/SifErrorBanner';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
@@ -277,14 +278,6 @@ export const api = {
       "reference": "Costcenter",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-    },
-    {
-      "entity": "header",
-      "field": "aeatsiiDescription",
-      "column": "EM_Aeatsii_Description_ID",
-      "reference": "aeatsii_description",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
     },
     {
       "entity": "header",
@@ -665,6 +658,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
+        formFooter={SifErrorBanner}
         hideDeleteWhenComplete
         hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder

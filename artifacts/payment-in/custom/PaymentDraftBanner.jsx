@@ -1,8 +1,7 @@
 import { useUI } from '@/i18n';
+import { paymentDisplayState } from '@/windows/custom/shared/paymentStatuses';
 
 /* eslint-disable react/prop-types */
-
-const DEPOSITED = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
 
 const InfoIcon = () => (
   <svg width={24} height={24} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -14,8 +13,15 @@ const InfoIcon = () => (
 
 export default function PaymentDraftBanner({ data }) {
   const ui = useUI();
-  const isDraft = data?.status && !DEPOSITED.has(data.status);
-  if (!isDraft) return null;
+  // Reasoning by elimination ("not deposited, therefore a draft") put this banner on ETGOERR
+  // payments, which are processed and rejected, not drafts — telling the user the payment has "no
+  // impact on cash" right under a "Payment error" pill (ETP-4895). The shared state rule is the one
+  // that knows every status; the local copy of the deposited list is gone with it.
+  //
+  // RPAE stays a draft here, as it already was and as PaymentDetailSidebarBase reads it for
+  // collections: awaiting execution has moved no money either.
+  const isDraft = paymentDisplayState(data) === 'draft' || data?.status === 'RPAE';
+  if (!data?.status || !isDraft) return null;
 
   return (
     <div style={{ padding: '8px 8px 0' }}>

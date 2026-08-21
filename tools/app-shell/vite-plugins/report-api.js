@@ -259,6 +259,194 @@ function groupAggregateRowsByDimension(rows) {
   return groups;
 }
 
+// Chart-of-accounts depth ranking (ETP-4899). Etendo's `C_ElementValue.ELEMENTLEVEL`
+// list — Heading, Account, Breakdown, Subaccount — is a hierarchy, coarsest first:
+// e.g. P.G.1 (E) -> 700 (C) -> 7000 (D) -> 70000000 (S).
+const ELEMENT_LEVEL_RANK = { E: 0, C: 1, D: 2, S: 3 };
+
+// Classic's ACCOUNTSIGN convention: 'C' (credit-normal) displays credit - debit,
+// 'D' (debit-normal, the default when unset/unknown) displays debit - credit as-is.
+// `own_amt` is always the raw debit - credit; this multiplier is what flips it.
+function accountSignMultiplier(sign) {
+  return sign === 'C' ? -1 : 1;
+}
+
+/**
+ * Builds the indented account-report tree Profit & Loss AND Balance Sheet render
+ * (ETP-4899), mirroring Classic's `AccountTree` engine (`GeneralAccountingReports`) —
+ * the SAME Java class drives both reports, differing only in which `C_ACCT_RPT`
+ * (REPORTTYPE 'N' vs 'Y') feeds the SQL, exactly like this one function now does.
+ *
+ * `nodeRows` is the flat tree the contract's `sql.query` returns — one row per
+ * node reachable from the accounting report's root(s), carrying `node_id`,
+ * `parent_id`, `sort_path` (zero-padded seqno chain, so plain string sort gives
+ * document order), `elementlevel`, `accountsign`, `group_name` (which
+ * `c_acct_rpt_group`/root this node's branch belongs to), and its OWN raw
+ * debit-credit posted amount for the main and reference periods. `operandRows`
+ * is `sql.operandsQuery`'s output: the formula edges from
+ * `C_ELEMENTVALUE_OPERAND` (`owner_id`, `operand_id`, `sign`).
+ *
+ * Four Classic behaviours this reproduces, all verified against real PDFs:
+ *  - A node's value is the roll-up of its children; a node with NO children but
+ *    WITH operands is a *formula* node instead (Classic's `hasOperand` ->
+ *    `operandsCalculate`), e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)".
+ *    Formulas nest (C = A+B), hence the recursion + cycle guard.
+ *  - Every node's OWN amount is displayed in its branch's inherited sign, not a
+ *    fixed per-report rule (Classic's `applySignAsPerParent`): a node's sign is
+ *    forced to match its root's `accountsign`, regardless of what its own row
+ *    carries — e.g. Balance Sheet's `A` (Activo) root is debit-normal while `P`
+ *    (Patrimonio Neto y Pasivo) is credit-normal, so the SAME `600`-style
+ *    account would print with opposite polarity depending which branch it's
+ *    filed under. Profit & Loss happens to have a single credit-normal root, so
+ *    this generalization must reproduce its previous hardcoded `cr - dr` output
+ *    byte-for-byte (verified by a dedicated regression test).
+ *  - `accountLevel` is a CUMULATIVE DEPTH CUTOFF, not an equality filter:
+ *    everything from the root down to and including that level is shown, and
+ *    the walk stops there (Classic's `levelFilter` sticky `found` flag).
+ *  - `showOnlyWithValue` keeps a node when EITHER period is non-zero (Classic
+ *    ORs `qty`/`qtyRef`), and never hides an `isalwaysshown='Y'` node.
+ *
+ * Returns the flattened, document-ordered rows the template renders, with
+ * `indent`/`indentClass`/`isHeading`/`group`/`isGroupStart` precomputed here
+ * rather than in Handlebars (which has no arithmetic, and where every new
+ * helper must be hand-duplicated into JSREPORT_HELPER_SOURCES — see
+ * report-html-helpers.js). `isGroupStart` only ever flips to true beyond the
+ * very first row when the report has more than one `c_acct_rpt_group` (Balance
+ * Sheet's "Activo"/"Patrimonio Neto y Pasivo") — a single-group report like
+ * Profit & Loss never sees it turn true past the first row, so its template
+ * output is unaffected by this addition.
+ */
+export function buildAccountReportTree(nodeRows, operandRows, options = {}) {
+  const { accountLevel = 'S', showOnlyWithValue = false } = options;
+  const byId = new Map();
+  for (const r of nodeRows || []) {
+    byId.set(r.node_id, {
+      ...r,
+      children: [],
+      amount: null,
+      amount_ref: null,
+      sign: null,
+    });
+  }
+  for (const node of byId.values()) {
+    const parent = node.parent_id && byId.get(node.parent_id);
+    if (parent) parent.children.push(node);
+  }
+
+  const byPath = (a, b) => (a.sort_path < b.sort_path ? -1 : a.sort_path > b.sort_path ? 1 : 0);
+  const roots = [...byId.values()].filter((n) => !n.parent_id || !byId.has(n.parent_id));
+
+  // applySignAsPerParent: every node in a branch inherits its ROOT's sign,
+  // overriding whatever its own row carries.
+  const propagateSign = (node, sign) => {
+    node.sign = sign;
+    for (const child of node.children) propagateSign(child, sign);
+  };
+  for (const root of roots) propagateSign(root, root.accountsign);
+
+  const operandsByOwner = new Map();
+  for (const o of operandRows || []) {
+    if (!operandsByOwner.has(o.owner_id)) operandsByOwner.set(o.owner_id, []);
+    operandsByOwner.get(o.owner_id).push(o);
+  }
+
+  const inProgress = new Set();
+  const resolve = (node) => {
+    if (node.amount !== null) return node;
+    if (inProgress.has(node.node_id)) { // malformed data: a formula referencing itself
+      node.amount = 0;
+      node.amount_ref = 0;
+      return node;
+    }
+    inProgress.add(node.node_id);
+    const multiplier = accountSignMultiplier(node.sign);
+    const own = (Number(node.own_amt) || 0) * multiplier;
+    const ownRef = (Number(node.own_amt_ref) || 0) * multiplier;
+    if (!node.children.length && operandsByOwner.has(node.node_id)) {
+      // Formula nodes sum their operands' already sign-adjusted values
+      // directly — Classic's operandsCalculate never re-flips by the owner's
+      // own accountsign, only the operands contribute their own polarity.
+      let sum = 0;
+      let sumRef = 0;
+      for (const o of operandsByOwner.get(node.node_id)) {
+        const target = byId.get(o.operand_id);
+        if (!target) continue;
+        const sign = Number(o.sign) || 0;
+        resolve(target);
+        sum += sign * target.amount;
+        sumRef += sign * target.amount_ref;
+      }
+      node.amount = sum;
+      node.amount_ref = sumRef;
+    } else if (node.children.length) {
+      let sum = own;
+      let sumRef = ownRef;
+      for (const child of node.children) {
+        resolve(child);
+        sum += child.amount;
+        sumRef += child.amount_ref;
+      }
+      node.amount = sum;
+      node.amount_ref = sumRef;
+    } else {
+      node.amount = own;
+      node.amount_ref = ownRef;
+    }
+    inProgress.delete(node.node_id);
+    return node;
+  };
+  for (const node of byId.values()) resolve(node);
+
+  const cutoffRank = ELEMENT_LEVEL_RANK[accountLevel] ?? ELEMENT_LEVEL_RANK.S;
+  const out = [];
+  let lastGroup;
+  const visit = (node, indent, isRoot) => {
+    let withinCutoff = true;
+    if (!isRoot) {
+      // An unknown/blank elementlevel is never a reason to drop a row.
+      const rank = ELEMENT_LEVEL_RANK[node.elementlevel];
+      withinCutoff = rank === undefined || rank <= cutoffRank;
+      const hasValue = Math.abs(node.amount) > 0.005 || Math.abs(node.amount_ref) > 0.005;
+      const alwaysShown = node.isalwaysshown === 'Y';
+      if (withinCutoff && (!showOnlyWithValue || hasValue || alwaysShown)) {
+        const isGroupStart = out.length > 0 && node.group_name !== lastGroup;
+        lastGroup = node.group_name;
+        out.push({
+          node_id: node.node_id,
+          value: node.value,
+          name: node.name,
+          element: `${node.value} - ${node.name}`,
+          elementlevel: node.elementlevel,
+          amount: node.amount,
+          amount_ref: node.amount_ref,
+          indent,
+          indentClass: `ind-${Math.min(indent, 6)}`,
+          isHeading: node.elementlevel === 'E',
+          group: node.group_name,
+          isGroupStart,
+        });
+      }
+      if (!withinCutoff) return; // cutoff reached: do not descend further
+    }
+    // The report's root node is a container (the accounting report's own node),
+    // never a row — so its children start the visible tree at indent 0.
+    for (const child of [...node.children].sort(byPath)) {
+      visit(child, isRoot ? 0 : indent + 1, false);
+    }
+  };
+  for (const root of roots.sort(byPath)) visit(root, 0, true);
+  // The first row never flips `isGroupStart` (there's no previous row to
+  // differ from) — but a report with more than one `c_acct_rpt_group` (Balance
+  // Sheet's "Activo"/"Patrimonio Neto y Pasivo") still needs its very first
+  // group's header rendered, so force it on iff the report actually has more
+  // than one group. A single-group report (Profit & Loss) never has more than
+  // one distinct `group` value here, so this is a no-op for it.
+  if (out.length && new Set(out.map((r) => r.group)).size > 1) {
+    out[0].isGroupStart = true;
+  }
+  return out;
+}
+
 /**
  * Flat map of every translatable label a contract declares, keyed by the name a
  * template refers to it by: column/group/headerField labels by `field`,
@@ -473,6 +661,45 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
   // per-param values with comma→IN rewriting, contract defaults, optional-clause stripping,
   // AD_CLIENT_ID/AD_ORG_ID/AD_LANGUAGE rewrites). Extracted so a report's optional secondary
   // queries (e.g. `sql.openingQuery`) can reuse it identically instead of duplicating it.
+  // Deletes every `AND ('__X__' = '' OR ...)` optional-filter clause whose
+  // placeholder was left blank (never substituted above, so the literal
+  // `'__X__' = ''` text still sits in the query). A plain regex can't do this
+  // safely on its own: it has to find the clause's OWN matching close-paren,
+  // and once a report's optional clause contains a nested subquery/function
+  // call — e.g. Profit & Loss's reference-period BETWEEN, which repeats its
+  // placeholder inside two `(SELECT MIN/MAX ...)` subqueries (ETP-4899) — a
+  // naive `[^)]*\)` stops at the FIRST inner `)` it meets, truncating the
+  // match and leaving a dangling fragment behind (`syntax error at or near
+  // ")"`). This walks real paren depth from the clause's own opening `(` to
+  // find its true matching close, so it's correct regardless of how much
+  // nesting or how many repeated placeholder occurrences the clause has.
+  function stripBlankOptionalClauses(q) {
+    const startRe = /AND\s*\(\s*'__(\w+)__'\s*=\s*''\s*OR\s*/gi;
+    let result = '';
+    let lastEnd = 0;
+    let m;
+    while ((m = startRe.exec(q))) {
+      if (m.index < lastEnd) continue; // already consumed by a previous match
+      const clauseStart = m.index;
+      const openParenIdx = q.indexOf('(', m.index);
+      let depth = 0;
+      let closeIdx = -1;
+      for (let i = openParenIdx; i < q.length; i++) {
+        if (q[i] === '(') depth++;
+        else if (q[i] === ')') {
+          depth--;
+          if (depth === 0) { closeIdx = i; break; }
+        }
+      }
+      if (closeIdx === -1) continue; // unbalanced — leave untouched rather than corrupt it
+      result += q.slice(lastEnd, clauseStart);
+      lastEnd = closeIdx + 1;
+      startRe.lastIndex = lastEnd;
+    }
+    result += q.slice(lastEnd);
+    return result;
+  }
+
   function applyPlaceholders(rawSql, clientId) {
     let q = rawSql.replace(/__CLIENT_ID__/g, clientId);
     for (const [key, value] of Object.entries(params)) {
@@ -491,7 +718,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       const inList = ids.split(',').map(id => `'${id.trim()}'`).join(',');
       return `IN (${inList})`;
     });
-    q = q.replace(/AND\s*\('__\w+__'\s*=\s*''\s*OR\s*[\s\S]*?'__\w+__'[^)]*\)/gi, '');
+    q = stripBlankOptionalClauses(q);
     q = q.replace(/AD_CLIENT_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi, `AD_CLIENT_ID IN ('${clientId}')`);
     q = q.replace(/AD_ORG_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi,
       `AD_ORG_ID IN (SELECT AD_ORG_ID FROM AD_ORG WHERE AD_CLIENT_ID = '${clientId}' AND ISACTIVE = 'Y')`);
@@ -550,7 +777,16 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       openingRows = (await pool.query(openingSql)).rows;
     }
 
-    return { rows, contract, openingRows };
+    // Optional formula-operand query (ETP-4899 — Profit & Loss's computed nodes,
+    // e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)"). Same placeholder rules;
+    // consumed by buildAccountReportTree(), never rendered directly.
+    let operandRows = null;
+    if (contract.sql?.operandsQuery) {
+      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, clientId);
+      operandRows = (await pool.query(operandsSql)).rows;
+    }
+
+    return { rows, contract, openingRows, operandRows };
   } finally {
     await pool.end();
   }
@@ -638,9 +874,35 @@ export default function reportApiPlugin() {
                   select: `SELECT y.c_year_id AS id, y.year || ' (' || c.name || ')' AS name, y.year || ' (' || c.name || ')' AS label`
                 },
                 'currency': {
-                  fromWhere: `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
+                  // Unlike every other selector above, this used to skip byClient(...) entirely
+                  // and return the full ~150-row ISO currency table. Scoped down to mirror
+                  // /sales-order's CurrencyRatePicker (client's base currency + anything with an
+                  // active C_Conversion_Rate row for this client, either direction) — without its
+                  // date-validity check, since a report has a dateFrom/dateTo range, not one single
+                  // document date to convert against.
+                  //
+                  // The DEFAULT/first-choice currency prefers the ACTIVE ORGANIZATION's own
+                  // currency (ad_org.c_currency_id — the same field /organization's "Moneda" shows),
+                  // not just the client's base currency: a multi-org client can have organizations
+                  // in different currencies. Falls back to the client's base currency when no
+                  // selectedOrgId is passed (matches every other org-scoped selector's fallback).
+                  fromWhere: clientId
+                    ? `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)
+                        AND (
+                          c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}')
+                          ${selectedOrgId ? `OR c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}')` : ''}
+                          OR EXISTS (
+                            SELECT 1 FROM c_conversion_rate cr
+                             WHERE cr.isactive = 'Y'
+                               AND cr.ad_client_id IN ('${clientId}', '0')
+                               AND (cr.c_currency_id = c_currency.c_currency_id OR cr.c_currency_id_to = c_currency.c_currency_id)
+                          )
+                        )`
+                    : `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
                   orderBy: clientId
-                    ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`
+                    ? (selectedOrgId
+                        ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}') THEN 0 ELSE 1 END), iso_code`
+                        : `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`)
                     : 'ORDER BY iso_code',
                   select: `SELECT c_currency_id AS id, iso_code AS name, iso_code || ' - ' || description AS label`
                 },
@@ -769,7 +1031,18 @@ export default function reportApiPlugin() {
           try {
             const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
             const result = await fetchReportData(reportId, { limit, authToken, params });
-            let { rows, contract, documentData, neoMeta = {}, openingRows } = result;
+            let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows } = result;
+
+            // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
+            // the FLAT node list, and the indented tree (roll-up, formula nodes,
+            // account-level cutoff) is assembled here, replacing `rows` so
+            // recordCount/totals and the Excel/CSV templates keep working unchanged.
+            if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
+              rows = buildAccountReportTree(rows, operandRows, {
+                accountLevel: params.accountLevel || 'S',
+                showOnlyWithValue: params.showOnlyAccountsWithValue === 'true',
+              });
+            }
 
             // Handle groupBy parameter: find the dimension param whose groupByValue matches and
             // re-sort rows by that field. `groupLabel` ("Account"/"Cuenta") and `descriptionLabel`

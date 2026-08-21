@@ -107,9 +107,67 @@ describe('useFiscalStatus', () => {
       const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
 
       await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.verifactu).toBe('ER');
+      // ETP-4783: raw DB code 'ER' is mapped to 'rejected' via VF_STATUS_MAP to avoid
+      // collision with SII's own 'IN' code ("Rechazado" vs "Inválido").
+      expect(result.current.verifactu).toBe('rejected');
       expect(result.current.sii).toBeNull();
       expect(result.current.tbai).toBeNull();
+    });
+
+    it('maps VF_STATUS_MAP code CO to "accepted"', async () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      globalThis.fetch = makeFetchMock([
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'CO' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // CO (completado) maps to 'accepted' — distinct from 'AC' which passes through raw
+      expect(result.current.verifactu).toBe('accepted');
+    });
+
+    it('maps VF_STATUS_MAP code AE to "partiallyAccepted"', async () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      globalThis.fetch = makeFetchMock([
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([])],
+        ['monitor-verifactu/facturasParcialmenteAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'AE' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // AE (aceptado con errores) maps to 'partiallyAccepted' — ETP-4783
+      expect(result.current.verifactu).toBe('partiallyAccepted');
+    });
+
+    it('maps VF_STATUS_MAP code IN to "invalid"', async () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      globalThis.fetch = makeFetchMock([
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([])],
+        ['monitor-verifactu/facturasParcialmenteAceptadas', () => jsonResponse([])],
+        ['monitor-verifactu/facturasRechazadas', () => jsonResponse([])],
+        ['monitor-verifactu/facturasInv%C3%A1lidas', () => jsonResponse([{ verifactuSendingStatus: 'IN' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // IN maps to 'invalid' — without VF_STATUS_MAP this would collide with SII's 'IN' code ("Rechazado") — ETP-4783
+      expect(result.current.verifactu).toBe('invalid');
+    });
+
+    it('maps VF_STATUS_MAP code PE to "pending"', async () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      globalThis.fetch = makeFetchMock([
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'PE' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // PE (pendiente) maps to 'pending' — ETP-4783
+      expect(result.current.verifactu).toBe('pending');
     });
   });
 
