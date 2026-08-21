@@ -249,7 +249,6 @@ const G2_DEBT = new Set([
   'windows/custom/shared/useConversionRate.js',
   'windows/custom/shared/useDocumentCurrency.js',
   'windows/custom/user/InviteUserDialog.jsx',
-  'windows/custom/user/index.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
   // Arrived with the epic (ETP-4783). Absorbed, not migrated: nothing the merge
   // did breaks it, and fresh foreign code is its author's to move.

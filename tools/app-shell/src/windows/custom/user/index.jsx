@@ -91,7 +91,7 @@ function InvitationInfoBanner({ onOpenInvite }) {
  * so all props from both are passed into the single call below.
  */
 export default function UserWindow(props) {
-  const { recordId, token, apiBaseUrl } = props;
+  const { recordId, apiBaseUrl } = props;
   const ui = useUI();
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const appliedRoleIdsRef = useRef([]);
@@ -99,7 +99,12 @@ export default function UserWindow(props) {
   const [inviteOpen, setInviteOpen] = useState(false);
 
   useEffect(() => {
-    if (!recordId || recordId === 'new' || !token || !apiBaseUrl) return undefined;
+    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
+    // structurally undefined, so this effect returned early forever: the saved
+    // template roles were never seeded into the selection, so a user who already
+    // had roles opened with an empty control and "Guardar" looked clean while the
+    // real assignment was invisible.
+    if (!recordId || recordId === 'new' || !apiBaseUrl) return undefined;
     let cancelled = false;
     fetchUserRoleAssignments(recordId)
       .then((res) => {
@@ -115,7 +120,7 @@ export default function UserWindow(props) {
         }
       });
     return () => { cancelled = true; };
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, apiBaseUrl]);
 
   const handleRoleAssignmentSave = useCallback(async (saved) => {
     if (!saved?.id) return;

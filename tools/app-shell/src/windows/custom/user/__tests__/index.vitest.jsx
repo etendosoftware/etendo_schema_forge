@@ -91,35 +91,40 @@ beforeEach(() => {
 describe('UserWindow — fetching applied roles on load', () => {
   it('fetches the currently-applied template roles for an existing user', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalledWith('user-1'));
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
   });
 
   it('does not fetch when recordId is "new"', () => {
-    render(<UserWindow recordId="new" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="new" apiBaseUrl="/api" />);
     expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
   });
 
   it('does not fetch when recordId is absent', () => {
-    render(<UserWindow token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow apiBaseUrl="/api" />);
     expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', () => {
-    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
-    expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
-  });
-
+  // ETP-4576 removed the `token` half of this gate. It was the reason a user who
+  // already had template roles opened with an empty control under a cookie
+  // session: the seeding effect returned early forever, so "Guardar" looked
+  // clean while the real assignment was invisible. Only the two preconditions a
+  // caller can actually control remain.
   it('does not fetch when apiBaseUrl is missing', () => {
-    render(<UserWindow recordId="user-1" token="tok" />);
+    render(<UserWindow recordId="user-1" />);
     expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
+  });
+
+  it('fetches with only recordId and apiBaseUrl, taking the credential from the scheme', () => {
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
+    expect(fetchUserRoleAssignments).toHaveBeenCalledWith('user-1');
   });
 
   it('resets to an empty selection (does not crash) when the fetch rejects', async () => {
     fetchUserRoleAssignments.mockRejectedValue(new Error('boom'));
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
@@ -130,7 +135,7 @@ describe('UserWindow — fetching applied roles on load', () => {
     fetchUserRoleAssignments.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const { unmount } = render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    const { unmount } = render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     unmount();
     resolveFetch({ userId: 'user-1', templateRoleIds: ['role-fin'] });
     await new Promise((r) => setTimeout(r, 0));
@@ -143,7 +148,7 @@ describe('UserWindow — fetching applied roles on load', () => {
 describe('UserWindow — customTabs wiring', () => {
   it('overrides customTabs with a "roles" tab and an "attachments" tab, in that order', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await screen.findByTestId('user-page');
     expect(lastUserPageProps.customTabs.map((t) => t.key)).toEqual(['roles', 'attachments']);
@@ -163,7 +168,7 @@ describe('UserWindow — customTabs wiring', () => {
   // it must keep sorting after both `roles` and the native tab).
   it('pins tabOrder: 0 on the roles tab and leaves attachments at its implicit default weight', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await screen.findByTestId('user-page');
     const [rolesTab, attachmentsTab] = lastUserPageProps.customTabs;
@@ -173,7 +178,7 @@ describe('UserWindow — customTabs wiring', () => {
 
   it('passes onAfterExistingSave through to the generated UserPage', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await screen.findByTestId('user-page');
     expect(typeof lastUserPageProps.onAfterExistingSave).toBe('function');
@@ -183,7 +188,7 @@ describe('UserWindow — customTabs wiring', () => {
 describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave)', () => {
   it('does nothing when the saved record has no id', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await screen.findByTestId('user-page');
 
     await lastUserPageProps.onAfterExistingSave({});
@@ -193,7 +198,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 
   it('is a no-op when the local selection is unchanged from what was loaded', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
 
     await lastUserPageProps.onAfterExistingSave({ id: 'user-1' });
@@ -203,7 +208,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 
   it('is a no-op when the selection is merely reordered (set-equality, not array-equality)', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin', 'role-sales'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
 
     screen.getByTestId('select-sales-fin-reordered').click();
@@ -219,7 +224,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
     saveUserRoleAssignments.mockResolvedValue({
       success: true, userId: 'user-1', personalRoleId: 'p-1', templateRoleIds: ['role-fin', 'role-sales'], added: 1, removed: 0,
     });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
 
     screen.getByTestId('select-fin-sales').click();
@@ -235,7 +240,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
     saveUserRoleAssignments.mockResolvedValue({
       success: true, userId: 'user-1', personalRoleId: 'p-1', templateRoleIds: ['role-fin', 'role-sales'], added: 1, removed: 0,
     });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
 
     screen.getByTestId('select-fin-sales').click();
@@ -252,7 +257,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
   it('shows an error toast (and does not throw) when saveUserRoleAssignments rejects with a domain message', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
     saveUserRoleAssignments.mockRejectedValue(new Error('Admin role cannot be assigned'));
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
 
     screen.getByTestId('select-fin-sales').click();
@@ -273,7 +278,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
   it('falls back to the generic i18n error key when the rejection has no message', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
     saveUserRoleAssignments.mockRejectedValue(new Error());
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
 
     screen.getByTestId('select-fin-sales').click();
@@ -293,7 +298,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 describe('UserWindow — additionalDirtyState (the "extra dirty source" prop DetailView.jsx reads to enable Guardar)', () => {
   it('is false on initial load, once the local selection matches the fetched applied set', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
     expect(lastUserPageProps.additionalDirtyState).toBe(false);
@@ -301,7 +306,7 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
 
   it('becomes true after toggling a role away from the applied snapshot', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
 
     screen.getByTestId('select-fin-sales').click();
@@ -311,7 +316,7 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
 
   it('returns to false after toggling back to the originally-applied (empty) set', async () => {
     fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
     expect(lastUserPageProps.additionalDirtyState).toBe(false);
 
@@ -329,7 +334,7 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
     saveUserRoleAssignments.mockResolvedValue({
       success: true, userId: 'user-1', personalRoleId: 'p-1', templateRoleIds: ['role-fin', 'role-sales'], added: 1, removed: 0,
     });
-    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
     expect(lastUserPageProps.additionalDirtyState).toBe(false);
 
