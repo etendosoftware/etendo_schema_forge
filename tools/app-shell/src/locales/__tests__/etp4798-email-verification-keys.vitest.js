@@ -16,6 +16,7 @@ const ETP_4798_KEYS = [
   'onboardingVerifyEmailSentToAddress',
   'onboardingVerifyEmailHint',
   'onboardingEmailVerifyResend',
+  'onboardingEmailVerifyResendCooldown',
   'onboardingEmailVerifyResending',
   'onboardingEmailVerifyResent',
   'onboardingEmailVerifyResendFailed',
@@ -42,6 +43,13 @@ describe('ETP-4798 — email confirmation UI key coverage', () => {
     for (const key of ETP_4798_KEYS) {
       expect(dictionaries.es_ES.genericLabels[key], key).not.toBe(dictionaries.en_US.genericLabels[key]);
       expect(dictionaries.es_AR.genericLabels[key], key).not.toBe(dictionaries.en_US.genericLabels[key]);
+    }
+  });
+
+  it('keeps the {seconds} placeholder the resend cooldown counts down with', () => {
+    for (const locale of LOCALES) {
+      expect(dictionaries[locale].genericLabels.onboardingEmailVerifyResendCooldown)
+        .toContain('{seconds}');
     }
   });
 

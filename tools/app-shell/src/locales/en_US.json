@@ -16404,6 +16404,7 @@
     }
   },
   "genericLabels": {
+    "onboardingEmailVerifyResendCooldown": "Resend in {seconds} s",
     "onboardingVerifyEmailTitle": "Confirm your email",
     "onboardingVerifyEmailSent": "We sent you a link to confirm your email address. Open it to start setting up your environment.",
     "onboardingVerifyEmailSentToAddress": "We sent a link to {email}. Open it to start setting up your environment.",
