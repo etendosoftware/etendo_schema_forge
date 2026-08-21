@@ -12,28 +12,12 @@
     "hideCreate": true,
     "hidePrint": true,
     "hideMoreMenu": true,
-    "hideListFilters": true,
-    "labelOverrides": {
-      "en_US": { "pendingCount": "Pending" },
-      "es_ES": { "pendingCount": "Por conciliar" }
-    }
+    "hideListFilters": true
   },
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
       "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
-      "virtualFields": [
-        {
-          "name": "pendingCount",
-          "column": "pendingCount",
-          "label": "Pending",
-          "type": "integer",
-          "visibility": "readOnly",
-          "form": false,
-          "grid": true,
-          "gridOrder": 5
-        }
-      ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
         "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
@@ -66,7 +50,8 @@
         "aprmIsfundstransEnabled": { "visibility": "discarded" },
         "aprmGlitemDiff": { "visibility": "editable", "grid": false },
         "eTGODateTolerance": { "visibility": "editable" },
-        "eTGOAmountTolerance": { "visibility": "editable" }
+        "eTGOAmountTolerance": { "visibility": "editable" },
+        "eTGOPendingCount": { "visibility": "readOnly", "form": false, "grid": true, "gridOrder": 5, "gridLabelKey": "financeAccountsColPending", "cellType": "reconcilePill", "reason": "\"Por conciliar\". Was an entities.account.virtualFields[] entry injected by FinancialAccountHandler.afterHandle; became the EM_ETGO_Pending_Count stored computed column (EPL-1807 engine) so the column can be sorted and filtered server-side — a value injected in afterHandle can only be reordered inside the page the SQL already selected. Being a real field also retires the two workarounds the virtual one needed: cellType no longer goes through VIRTUAL_FIELD_CELL_TYPES and the header no longer needs window.labelOverrides, because appendVirtualFields' closed whitelist excluded both keys." }
       }
     },
     "transaction": {

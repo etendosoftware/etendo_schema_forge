@@ -15,7 +15,7 @@
 //
 // DATA: rows arrive as `data` from ListView's own useEntity fetch of the `account`
 // entity. The W spec now returns the derived fields the list needs
-// (`pendingCount`, `bankConnected`, `currencyIso`, `iban`, `active`, …), injected
+// (`bankConnected`, `currencyIso`, `iban`, `active`, …), injected
 // by FinancialAccountHandler.afterHandle, and the sidebar aggregates come from
 // `meta.summary` — a sibling of `response.data` on that same request. One fetch
 // feeds both, so the bespoke `financial-accounts-page` R spec is no longer needed.
@@ -61,20 +61,22 @@ const COLUMN_CHROME = {
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
   country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
-  pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
+  eTGOPendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
 };
 
 // DataTable right-aligns any column whose `type` is in its NUMERIC_FIELD_TYPES set
-// (header AND cell, independent of `render`). `pendingCount` is typed "integer" in
+// (header AND cell, independent of `render`). `eTGOPendingCount` is typed "integer" in
 // the contract because it IS a count, but it never displays that count as a number —
 // it always renders through `reconcilePill` (the "Conciliado" / "Conciliar (N)" pill),
 // so the numeric right-align only pushed the two pill variants to inconsistent left
 // edges instead of the plain left-aligned column every other status cell uses.
-// Overriding the type here is presentation-only: the column stays non-sortable and
-// non-form (`grid`-only), so nothing about validation, editing, or the underlying
-// contract type is affected — see DataTable.jsx's NUMERIC_FIELD_TYPES / `col.type`.
+// Overriding the type here is presentation-only: nothing about validation, editing or
+// the underlying contract type is affected — see DataTable.jsx's NUMERIC_FIELD_TYPES /
+// `col.type`. Sorting is unaffected too: gridQuery's `inferSortMode` maps both "string"
+// and "integer" to 'raw', so `_sortBy` is the column key either way, and the backend
+// still orders by the real integer.
 const GRID_TYPE_OVERRIDE = {
-  pendingCount: 'string',
+  eTGOPendingCount: 'string',
 };
 
 /**
@@ -84,8 +86,9 @@ const GRID_TYPE_OVERRIDE = {
  * `artifacts/financial-account/decisions.json` and read back off the contract:
  * which ones appear (`grid`), their order (`gridOrder`), their header
  * (`gridLabelKey`) and their renderer (`cellType`, resolved through
- * ACCOUNT_CELL_TYPES). "Por conciliar" is a `virtualFields[]` entry — the handler
- * injects `pendingCount` in afterHandle, there is no AD column behind it.
+ * ACCOUNT_CELL_TYPES). That includes "Por conciliar": it used to be a
+ * `virtualFields[]` entry injected in afterHandle, and is now the
+ * `EM_ETGO_Pending_Count` stored computed column, so it needs no special case.
  *
  * Only the trailing actions column is appended here: its declarative equivalent
  * (`rowQuickActions`) renders an absolute hover overlay rather than a column, and

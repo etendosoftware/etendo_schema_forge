@@ -120,7 +120,7 @@ const BASE_ACCOUNTS = [
     currentBalance: 1000,
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
-    pendingCount: 3,
+    eTGOPendingCount: 3,
     bankConnected: true,
     active: true,
   },
@@ -130,7 +130,7 @@ const BASE_ACCOUNTS = [
     type: 'C',
     currentBalance: 50,
     currencyIso: 'EUR',
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     active: true,
   },
   {
@@ -140,7 +140,7 @@ const BASE_ACCOUNTS = [
     currentBalance: -120,
     currencyIso: 'USD',
     maskedPan: '**** 4321',
-    pendingCount: 1,
+    eTGOPendingCount: 1,
     bankConnected: false,
     active: true,
   },
@@ -149,8 +149,8 @@ const BASE_ACCOUNTS = [
 // A mix that includes archived (inactive) accounts of different types.
 const MIXED_ACCOUNTS = [
   ...BASE_ACCOUNTS,
-  { id: 'acc-4', name: 'Santander Cerrada', type: 'B', currentBalance: 0, currencyIso: 'EUR', pendingCount: 0, active: false },
-  { id: 'acc-5', name: 'Caja Antigua', type: 'C', currentBalance: 0, currencyIso: 'EUR', pendingCount: 0, active: false },
+  { id: 'acc-4', name: 'Santander Cerrada', type: 'B', currentBalance: 0, currencyIso: 'EUR', eTGOPendingCount: 0, active: false },
+  { id: 'acc-5', name: 'Caja Antigua', type: 'C', currentBalance: 0, currencyIso: 'EUR', eTGOPendingCount: 0, active: false },
 ];
 
 const SUMMARY = {
@@ -337,9 +337,9 @@ describe('AccountsHeaderTable — columns', () => {
     renderTable();
 
     // contract.json → entities.account: name(1), type(2), country(3, ETP-4896),
-    // currentBalance(4) and the `virtualFields[]` entry pendingCount(5).
+    // currentBalance(4) and the stored computed column eTGOPendingCount(5).
     const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 5);
-    expect(dataKeys).toEqual(['name', 'type', 'country', 'currentBalance', 'pendingCount']);
+    expect(dataKeys).toEqual(['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']);
   });
 
   it('appends exactly one synthetic column after the contract ones', () => {
@@ -348,7 +348,7 @@ describe('AccountsHeaderTable — columns', () => {
     // Only `_rowActions` is hand-written: its declarative equivalent
     // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'type', 'country', 'currentBalance', 'pendingCount', '_rowActions',
+      'name', 'type', 'country', 'currentBalance', 'eTGOPendingCount', '_rowActions',
     ]);
   });
 
@@ -377,16 +377,31 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey._rowActions.labels).toEqual({ es_ES: '' });
   });
 
-  // The other branch: a virtual field cannot declare `gridLabelKey` (appendVirtualFields
-  // copies a closed whitelist), so it must NOT get a `labels` override — an empty one
-  // would blank the header. It falls back to `label` / `column`, i.e. the AD dictionary.
-  it('leaves a column without a gridLabelKey to the label / column fallbacks', () => {
+  // The pending column is the one that used to take the other branch. As a virtual field it
+  // could not declare `gridLabelKey` (appendVirtualFields copies a closed whitelist), so it
+  // got no `labels` override and its header had to be forced through
+  // `window.labelOverrides`. Now that it is the EM_ETGO_Pending_Count stored computed column
+  // it declares the key like every other field, and that override is gone.
+  it('labels the pending column from its declared gridLabelKey, not an override', () => {
     renderTable();
 
-    const pending = tableProps.columns.find((c) => c.key === 'pendingCount');
-    expect(pending.labels).toBeUndefined();
-    expect(pending.label).toBeTruthy();
-    expect(pending.column).toBe('pendingCount');
+    const pending = tableProps.columns.find((c) => c.key === 'eTGOPendingCount');
+    expect(pending.labels).toEqual({ es_ES: 'financeAccountsColPending' });
+    expect(pending.column).toBe('EM_ETGO_Pending_Count');
+  });
+
+  // The `labels` object only exists when a column declares a gridLabelKey. An empty one
+  // would blank the header instead of falling back to `label` / `column` (the AD
+  // dictionary), so the builder must omit the key rather than emit `{}`.
+  it('omits labels entirely for a column with no gridLabelKey', () => {
+    renderTable();
+
+    const actions = tableProps.columns.find((c) => c.key === '_rowActions');
+    // The actions column is the deliberate exception: it declares an EMPTY label on purpose.
+    expect(actions.labels).toEqual({ es_ES: '' });
+    expect(
+      tableProps.columns.every((c) => c.labels === undefined || typeof c.labels === 'object'),
+    ).toBe(true);
   });
 
   // The binding column → renderer is what `cellType` makes declarative; the cell
@@ -418,8 +433,8 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey.type.headClass).toContain('w-[340px]');
     expect(byKey.currentBalance.headClass).toContain('w-[200px]');
     expect(byKey.currentBalance.cellClass).toContain('w-[200px]');
-    expect(byKey.pendingCount.headClass).toContain('w-[280px]');
-    expect(byKey.pendingCount.cellClass).toContain('w-[280px]');
+    expect(byKey.eTGOPendingCount.headClass).toContain('w-[280px]');
+    expect(byKey.eTGOPendingCount.cellClass).toContain('w-[280px]');
     expect(byKey._rowActions.cellClass).toContain('min-w-[90px]');
   });
 
@@ -454,9 +469,9 @@ describe('AccountsHeaderTable — "Por conciliar" pill column', () => {
   it('renders the pending pill with the count and the reconciled pill at zero', () => {
     renderTable();
 
-    const pending = screen.getByTestId('cell-pendingCount-acc-1');
+    const pending = screen.getByTestId('cell-eTGOPendingCount-acc-1');
     expect(pending).toHaveTextContent('Conciliar (3)');
-    expect(screen.getByTestId('cell-pendingCount-acc-2'))
+    expect(screen.getByTestId('cell-eTGOPendingCount-acc-2'))
       .toContainElement(screen.getByTestId('reconcile-status-reconciled'));
   });
 
@@ -464,7 +479,7 @@ describe('AccountsHeaderTable — "Por conciliar" pill column', () => {
     renderTable();
 
     fireEvent.click(
-      screen.getByTestId('cell-pendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
+      screen.getByTestId('cell-eTGOPendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
     );
 
     expect(mockNavigate).toHaveBeenCalledWith(
@@ -476,7 +491,7 @@ describe('AccountsHeaderTable — "Por conciliar" pill column', () => {
     renderTable();
 
     fireEvent.click(
-      screen.getByTestId('cell-pendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
+      screen.getByTestId('cell-eTGOPendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
     );
 
     expect(mockNavigate).toHaveBeenCalledTimes(1);
@@ -618,7 +633,7 @@ describe('AccountsHeaderTable — toolbar filtering', () => {
 
   it('treats an account with no active flag as active', () => {
     renderTable({
-      data: [{ id: 'acc-x', name: 'Sin Flag', type: 'B', currentBalance: 10, currencyIso: 'EUR', pendingCount: 0 }],
+      data: [{ id: 'acc-x', name: 'Sin Flag', type: 'B', currentBalance: 10, currencyIso: 'EUR', eTGOPendingCount: 0 }],
     });
 
     expect(screen.getByTestId('row-acc-x')).toBeInTheDocument();

@@ -7,7 +7,7 @@ const columns = [
   { key: 'type', column: 'Type', type: 'enum', label: 'Type', enumLabels: { 'B': 'typeB', 'CA': 'typeCa', 'C': 'typeC' }, required: true },
   { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', required: true },
   { key: 'currentBalance', column: 'Currentbalance', type: 'amount', label: 'Current Balance', required: true },
-  { key: 'pendingCount', column: 'pendingCount', type: 'number', label: 'Pending' },
+  { key: 'eTGOPendingCount', column: 'EM_ETGO_Pending_Count', type: 'number', label: 'Pending Count', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:account
 

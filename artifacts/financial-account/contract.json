@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-19T12:24:01.114Z",
-  "checksum": "2c0bd53da5b3c050",
+  "updatedAt": "2026-08-21T15:28:19.701Z",
+  "checksum": "fde14277c469590f",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -18,14 +18,6 @@
         "headerTable": "AccountsHeaderTable"
       },
       "detailEntity": null,
-      "labelOverrides": {
-        "en_US": {
-          "pendingCount": "Pending"
-        },
-        "es_ES": {
-          "pendingCount": "Por conciliar"
-        }
-      },
       "rowQuickActions": {
         "enabled": false
       },
@@ -832,18 +824,26 @@
             }
           },
           {
-            "name": "pendingCount",
-            "apiKey": "pendingCount",
-            "column": "pendingCount",
-            "label": "Pending",
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
+            "label": "Pending Count",
             "type": "integer",
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": false,
-            "section": "other",
-            "gridOrder": 5
+            "cellType": "reconcilePill",
+            "gridLabelKey": "financeAccountsColPending",
+            "gridOrder": 5,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -3229,14 +3229,6 @@
         "headerTable": "AccountsHeaderTable"
       },
       "detailEntity": null,
-      "labelOverrides": {
-        "en_US": {
-          "pendingCount": "Pending"
-        },
-        "es_ES": {
-          "pendingCount": "Por conciliar"
-        }
-      },
       "rowQuickActions": {
         "enabled": false
       }
@@ -3728,9 +3720,9 @@
             "required": true
           },
           {
-            "name": "pendingCount",
-            "apiKey": "pendingCount",
-            "column": "pendingCount",
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
             "type": "integer",
             "visibility": "readOnly",
             "required": false
@@ -6072,14 +6064,6 @@
     },
     "window": {
       "category": "finance"
-    },
-    "labelOverrides": {
-      "en_US": {
-        "pendingCount": "Pending"
-      },
-      "es_ES": {
-        "pendingCount": "Por conciliar"
-      }
     }
   },
   "testManifest": {
@@ -7614,6 +7598,14 @@
         "description": "Field 'eTGODateTolerance' should be present in account"
       },
       {
+        "id": "t-field-presence-account-eTGOPendingCount",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "eTGOPendingCount",
+        "runner": "node",
+        "description": "Field 'eTGOPendingCount' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-iBAN",
         "category": "field-presence",
         "entity": "account",
@@ -7636,14 +7628,6 @@
         "field": "partialAccountNo",
         "runner": "node",
         "description": "Field 'partialAccountNo' should be present in account"
-      },
-      {
-        "id": "t-field-presence-account-pendingCount",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "pendingCount",
-        "runner": "node",
-        "description": "Field 'pendingCount' should be present in account"
       },
       {
         "id": "t-field-presence-account-pSD2CardNumber",
@@ -8430,6 +8414,14 @@
         "description": "Field 'eTGODateTolerance' should have type 'number' in account"
       },
       {
+        "id": "t-field-type-account-eTGOPendingCount",
+        "category": "field-type",
+        "entity": "account",
+        "field": "eTGOPendingCount",
+        "runner": "node",
+        "description": "Field 'eTGOPendingCount' should have type 'number' in account"
+      },
+      {
         "id": "t-field-type-account-iBAN",
         "category": "field-type",
         "entity": "account",
@@ -8452,14 +8444,6 @@
         "field": "partialAccountNo",
         "runner": "node",
         "description": "Field 'partialAccountNo' should have type 'string' in account"
-      },
-      {
-        "id": "t-field-type-account-pendingCount",
-        "category": "field-type",
-        "entity": "account",
-        "field": "pendingCount",
-        "runner": "node",
-        "description": "Field 'pendingCount' should have type 'number' in account"
       },
       {
         "id": "t-field-type-account-pSD2CardNumber",
