@@ -141,8 +141,12 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
     });
 
+    // The pair moved into its own ConversionFields component when the modal was brought under its
+    // cognitive-complexity limit (ETP-4895); the gate is now the `visible` prop it returns null on.
     it('renders the conversion fields only in the foreign case', () => {
-      assert.match(src, /\{isForeign && \(/);
+      assert.match(src, /<ConversionFields\s+visible=\{isForeign\}/);
+      assert.match(src, /function ConversionFields\(\{/);
+      assert.match(src, /if \(!visible\) return null;/);
       assert.match(src, /data-testid="cp-conversion-fields"/);
       assert.match(src, /data-testid="cp-conversion-rate-input"/);
       assert.match(src, /data-testid="cp-amount-in-account-input"/);

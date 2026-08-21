@@ -406,6 +406,58 @@ function Field({ label, required = false, children }) {
   );
 }
 
+/**
+ * The rate + converted-amount pair, shown only when the invoice currency differs from the selected
+ * account's (ETP-4504). Its own component for the same reason as PisTransferSection below: it is a
+ * self-contained block of the form, and leaving it inline pushed the modal past its
+ * cognitive-complexity limit. Both fields are editable and each recomputes the other, so they share
+ * the same error line.
+ */
+function ConversionFields({
+  visible, ui, rateStr, amountStr, accountCurrency, rateMissing, rateIsOne,
+  onRateChange, onAmountChange,
+}) {
+  if (!visible) return null;
+  const invalid = rateMissing || rateIsOne;
+  const errorText = ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired');
+  const boxStyle = { display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 };
+  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' };
+  const errorStyle = { font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
+      <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
+        <div style={boxStyle}>
+          <input
+            type="text" inputMode="decimal" value={rateStr}
+            onChange={onRateChange}
+            data-testid="cp-conversion-rate-input"
+            style={inputStyle}
+          />
+        </div>
+        {invalid && (
+          <p style={errorStyle} data-testid="cp-conversion-rate-error">{errorText}</p>
+        )}
+      </Field>
+      {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
+      <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
+        <div style={boxStyle}>
+          <input
+            type="text" inputMode="decimal" value={amountStr}
+            onChange={onAmountChange}
+            data-testid="cp-amount-in-account-input"
+            style={inputStyle}
+          />
+          <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
+        </div>
+        {invalid && (
+          <p style={errorStyle} data-testid="cp-amount-in-account-error">{errorText}</p>
+        )}
+      </Field>
+    </div>
+  );
+}
+
 /** A single cell in the invoice-context widget (label on top, value below). */
 function WidgetCell({ label, children, valueColor = INK, valueWeight = 500 }) {
   return (
@@ -1469,42 +1521,17 @@ export default function NewPaymentEntryModal({
           </div>
 
           {/* multi-currency conversion (ETP-4504) — only when invoice currency ≠ account currency */}
-          {isForeign && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
-              <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                  <input
-                    type="text" inputMode="decimal" value={rateStr}
-                    onChange={onRateChange}
-                    data-testid="cp-conversion-rate-input"
-                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                  />
-                </div>
-                {(rateMissing || rateIsOne) && (
-                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-conversion-rate-error">
-                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
-                  </p>
-                )}
-              </Field>
-              {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
-              <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                  <input
-                    type="text" inputMode="decimal" value={amountStr}
-                    onChange={onAmountChange}
-                    data-testid="cp-amount-in-account-input"
-                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                  />
-                  <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
-                </div>
-                {(rateMissing || rateIsOne) && (
-                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
-                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
-                  </p>
-                )}
-              </Field>
-            </div>
-          )}
+          <ConversionFields
+            visible={isForeign}
+            ui={ui}
+            rateStr={rateStr}
+            amountStr={amountStr}
+            accountCurrency={accountCurrency}
+            rateMissing={rateMissing}
+            rateIsOne={rateIsOne}
+            onRateChange={onRateChange}
+            onAmountChange={onAmountChange}
+            data-testid="ConversionFields__b085c9" />
 
           {/* unified credit / saldo a favor — credit (purple) + abono (green) rows */}
           {balance.lines.length > 0 && (
