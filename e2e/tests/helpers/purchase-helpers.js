@@ -143,7 +143,7 @@ export async function waitForLinesSettled(page, count, message) {
 // Fixed (never timestamped) name so ensureVendorSetup is idempotent across runs:
 // find the SAME dedicated fixture every time instead of creating a fresh one
 // each run or mutating an arbitrary real contact.
-const VENDOR_FIXTURE_NAME = 'E2E Vendor Fixture';
+export const VENDOR_FIXTURE_NAME = 'E2E Vendor Fixture';
 const VENDOR_FIXTURE_ADDRESS_LINE = 'E2E Vendor Fixture Address';
 const VENDOR_FIXTURE_CITY = 'E2E City';
 
@@ -355,6 +355,91 @@ async function ensureVendorFlagChecked(page) {
 }
 
 /**
+ * Select the first available option of a CreatableSearchSelect-backed combo
+ * field (`field-<key>` trigger, `option-<key>-<id>` items — same shape as
+ * `selectVendorBP`'s businessPartner picker), but ONLY if the field does not
+ * already hold a value (i.e. its `-chip` variant is not showing). Idempotent:
+ * safe to call on a fixture that already has the value set from a prior run.
+ */
+async function ensureComboFieldSelected(page, fieldKey) {
+  const chip = page.getByTestId(`field-${fieldKey}-chip`);
+  const alreadySet = await chip.isVisible({ timeout: 2_000 }).catch(() => false);
+  if (alreadySet) return;
+
+  const trigger = page.getByTestId(`field-${fieldKey}`);
+  await expect(trigger, `"${fieldKey}" field should be visible on the vendor fixture`).toBeVisible({ timeout: 10_000 });
+
+  const firstOption = page.locator(`[data-testid^="option-${fieldKey}-"]`).first();
+  await expect(async () => {
+    await trigger.click({ timeout: 3_000 });
+    await expect(firstOption).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 15_000 });
+
+  await firstOption.click();
+  await slow(page);
+}
+
+/**
+ * Ensure the vendor fixture's "Purchase Pricelist" (`purchasePricelist`), "PO
+ * Payment Terms" (`pOPaymentTerms`) and "PO Payment Method"
+ * (`pOPaymentMethod`) fields — all rendered by VendorForm.jsx under the
+ * "Financiero" tab once `vendor` is checked (`displayLogic: record.vendor`)
+ * — hold a value.
+ *
+ * PO Payment Terms/Method are required by
+ * `ReturnShipmentUtils.applyBusinessPartnerFinancials` (com.etendoerp.go):
+ * generating a purchase rectificative invoice via `createReturnInvoice`
+ * throws "Business Partner is missing mandatory PO Payment Terms or PO
+ * Payment Method" when either is null on the vendor BP record.
+ *
+ * Purchase Pricelist is required for a DIFFERENT, non-obvious reason: that
+ * same `applyBusinessPartnerFinancials` path only runs when the return has no
+ * traceable source invoice (`findSourceInvoice()` returns null — true for
+ * this fixture's flow, since the PO is confirmed as receipt-only, no invoice
+ * at PO- or receipt-confirm time). In that path it sets
+ * `invoice.setCurrency(bp.getPurchasePricelist().getCurrency())` ONLY inside
+ * an `if (bp.getPurchasePricelist() != null)` guard — with no pricelist, the
+ * invoice's `Currency` column is silently left null, and `OBDal.save()`/
+ * `flush()` then fails with a raw (non-`OBException`) constraint-violation
+ * exception, which `createReturnInvoice`'s generic catch turns into an opaque
+ * "An internal error occurred while creating the return invoice" (HTTP 500)
+ * — a much harder failure to diagnose than the explicit payment-terms
+ * `OBException` (HTTP 400) above it, since none of the mandatory-field logic
+ * ever runs.
+ *
+ * None of the three were covered by `ensureVendorFlagChecked()` (isVendor +
+ * address only).
+ *
+ * Assumes the caller is already on the vendor fixture's "Financiero" tab
+ * (true right after `ensureVendorFlagChecked()`, which leaves that tab
+ * active) and that the `vendor` checkbox is checked, so all three fields are
+ * already rendered in the DOM. Picks whichever option comes first for each —
+ * this fixture only needs a NON-NULL value to satisfy the mandatory checks
+ * above, not a specific one.
+ */
+async function ensureVendorPaymentFieldsSet(page) {
+  const fieldKeys = ['purchasePricelist', 'pOPaymentTerms', 'pOPaymentMethod'];
+  const chipVisibility = await Promise.all(
+    fieldKeys.map((key) => page.getByTestId(`field-${key}-chip`).isVisible({ timeout: 2_000 }).catch(() => false)),
+  );
+  if (chipVisibility.every(Boolean)) return;
+
+  for (const key of fieldKeys) {
+    // eslint-disable-next-line no-await-in-loop -- each selection depends on the previous field's dropdown having closed
+    await ensureComboFieldSelected(page, key);
+  }
+
+  const saveBtn = page.getByTestId('action-save').or(
+    page.getByRole('button', { name: /guardar|save/i }),
+  ).first();
+  await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+  const savePromise = expectSaveResponse(page);
+  await saveBtn.click();
+  await savePromise;
+  await slow(page);
+}
+
+/**
  * Read-only lookup of how many C_BPartner_Location rows the vendor fixture
  * already has, via the same `parentId={id}` child-entity filter the
  * secondaryTabs machinery itself documents (see
@@ -521,6 +606,12 @@ export async function ensureVendorSetup(page, { navigateTo }) {
   // idempotent (mirrors ensureVendorAddress()'s own "already has one" guard).
   await ensureVendorFlagChecked(page);
 
+  // Same idempotent "check state, only act if missing" pattern as the vendor
+  // flag above — PO Payment Terms/Method are mandatory for createReturnInvoice
+  // (see ensureVendorPaymentFieldsSet's doc comment). Still on the
+  // "Financiero" tab here, where both fields render once vendor is checked.
+  await ensureVendorPaymentFieldsSet(page);
+
   // ensureVendorFlagChecked() leaves the "Financiero" tab active, but the
   // address tab lives under "General" — reload the detail view fresh
   // (same idiom as contacts-integration.spec.js's PART 5c comment: "sub-tab
@@ -612,9 +703,21 @@ export async function waitForDerivedFieldValue(page, fieldKey, { timeout = 30_00
 }
 
 /**
- * Select the first vendor BP in a selector field and wait for callout.
+ * Select a vendor BP in a selector field and wait for callout.
+ *
+ * By default (no `name`) selects whichever vendor happens to be FIRST in the
+ * dropdown — the original behavior, unchanged, since most PO-flow specs only
+ * need ANY valid vendor for basic CRUD and don't care which one.
+ *
+ * Pass `{ name }` to instead type it into the field's server-search input
+ * (CreatableSearchSelect `serverSearch` mode — same `?q=` filter the field
+ * already supports) and select the matching option — needed by flows that
+ * require a SPECIFIC, pre-configured vendor (e.g. the `VENDOR_FIXTURE_NAME`
+ * fixture set up by `ensureVendorSetup`, which has PO Payment Terms/Method
+ * set — required by `createReturnInvoice` — where "whichever is first" is
+ * not good enough).
  */
-export async function selectVendorBP(page) {
+export async function selectVendorBP(page, { name } = {}) {
   const bpInput = page.getByTestId('field-businessPartner');
   await expect(bpInput).toBeVisible({ timeout: 10_000 });
 
@@ -625,10 +728,17 @@ export async function selectVendorBP(page) {
       .toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 15_000 });
 
-  const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-    .filter({ hasNotText: /crear|create/i }).first();
+  if (name) {
+    await bpInput.fill(name);
+    // Debounced server-search fetch — give it time to settle before reading options.
+    await page.waitForTimeout(800);
+  }
+
+  const bpOption = name
+    ? page.locator('[data-testid^="option-businessPartner-"]').filter({ hasText: name }).first()
+    : page.locator('[data-testid^="option-businessPartner-"]').filter({ hasNotText: /crear|create/i }).first();
   await expect(bpOption,
-    'At least one vendor option should appear',
+    name ? `Vendor option matching "${name}" should appear` : 'At least one vendor option should appear',
   ).toBeVisible({ timeout: 15_000 });
   await bpOption.click();
 

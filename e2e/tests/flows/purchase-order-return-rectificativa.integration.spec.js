@@ -4,7 +4,7 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
-  expectStatusPill, safeReload,
+  expectStatusPill, safeReload, VENDOR_FIXTURE_NAME,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -97,7 +97,10 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await waitForDetailReady(page);
       await slow(page);
 
-      await selectVendorBP(page);
+      // Select the SAME vendor fixture ensureVendorSetup() just configured — it has
+      // PO Payment Terms/Method set, required later by createReturnInvoice. Selecting
+      // "whichever vendor is first" (selectVendorBP's default) offers no such guarantee.
+      await selectVendorBP(page, { name: VENDOR_FIXTURE_NAME });
       await saveDraft(page);
 
       await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
@@ -105,7 +108,11 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
 
       await addProductLine(page, { isFirst: true, productIndex: 0 });
 
-      await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
+      // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
+      // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
+      // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
+      // panel, so a bare 'tbody tr' locator always resolves to that invisible element.
+      await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
     });
 
     await test.step('Confirm the order with receipt generation only', async () => {
@@ -273,11 +280,20 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await waitForDetailReady(page);
       await slow(page);
 
-      // Verify: doc type reads as rectificativa
-      await expect(page.getByText(/rectificativ/i).first()).toBeVisible({ timeout: 15_000 });
+      // Verify: doc type reads as rectificativa. "Tipo de documento" (transactionDocument)
+      // renders as a disabled <input> (EntityForm's renderReadOnlyFk), so its value must be
+      // read via toHaveValue — getByText only matches rendered text content, never an
+      // input's value, so it can never see this field regardless of backend correctness.
+      await expect(page.getByTestId('field-transactionDocument').locator('input'))
+        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
 
-      // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression)
-      const invoiceLineRow = page.locator('tbody tr').first();
+      // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression). This
+      // window's line grid is not a semantic <table> — rows render as
+      // data-testid="line-row-<ID>" divs. The only literal <table>/<tbody>/<tr> on the
+      // page belongs to the hidden (display:none) attachments panel
+      // (data-testid="attachments-table"), so a bare 'tbody tr' locator always resolves
+      // to that invisible element instead of the actual line row.
+      const invoiceLineRow = page.locator('[data-testid^="line-row-"]').first();
       await expect(invoiceLineRow).toBeVisible({ timeout: 10_000 });
       await expect(invoiceLineRow).toContainText(/-\s?\d/, { timeout: 5_000 });
 

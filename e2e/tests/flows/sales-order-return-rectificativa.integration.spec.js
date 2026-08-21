@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
+import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -138,6 +139,15 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         await slow(page);
       }
 
+      // Capture the resolved warehouse name (via callout or the manual selection just
+      // above) — read back from the field itself rather than assumed, so
+      // ensureStockOnHand() below provisions stock at the SAME warehouse this order's
+      // shipment will actually draw from.
+      const warehouseChip = page.getByTestId('field-warehouse-chip');
+      await expect(warehouseChip, 'Warehouse should resolve to a value (callout or manual selection)')
+        .toBeVisible({ timeout: 10_000 });
+      const warehouseName = (await warehouseChip.textContent())?.trim();
+
       // Save as draft
       const saveDraftBtn = page.getByTestId('action-save-draft')
         .or(page.getByRole('button', { name: /guardar|save/i }));
@@ -189,7 +199,26 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await lineAddPromise;
       await slow(page);
 
-      await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
+      // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
+      // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
+      // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
+      // panel, so a bare 'tbody tr' locator always resolves to that invisible element
+      // instead of this order's actual line row.
+      await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
+
+      // Guarantee enough on-hand stock for "Queso Sardo" at this order's warehouse
+      // BEFORE the shipment gets confirmed later in this flow — confirming a shipment
+      // whose line quantity exceeds on-hand stock fails Etendo's M_CHECK_STOCK
+      // validation with "No hay suficiente en stock". Repeated suite runs drain a
+      // shared dev-DB warehouse over time, so this is provisioned via a real, audited
+      // Physical Inventory count (ensureStockOnHand) rather than assumed present.
+      // minQty is 5x the line's own ordered quantity (defaultValue: 1 on
+      // sales-order's orderedQuantity field) — a comfortable buffer for several runs.
+      await ensureStockOnHand(page, {
+        productName: 'Queso Sardo',
+        warehouseName,
+        minQty: 5,
+      });
     });
 
     await test.step('Confirm the order with shipment generation only', async () => {
@@ -338,11 +367,20 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await waitForDetailReady(page);
       await slow(page);
 
-      // Verify: doc type shows "Factura rectificativa"
-      await expect(page.getByText(/rectificativ/i).first()).toBeVisible({ timeout: 15_000 });
+      // Verify: doc type shows "Factura rectificativa". "Tipo de documento"
+      // (transactionDocument) renders as a disabled <input> (EntityForm's renderReadOnlyFk),
+      // so its value must be read via toHaveValue — getByText only matches rendered text
+      // content, never an input's value, so it can never see this field regardless of
+      // backend correctness.
+      await expect(page.getByTestId('field-transactionDocument').locator('input'))
+        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
 
-      // Verify: line quantity is NEGATIVE
-      const invoiceLineRow = page.locator('tbody tr').first();
+      // Verify: line quantity is NEGATIVE. This window's line grid is not a semantic
+      // <table> — rows render as data-testid="line-row-<ID>" divs. The only literal
+      // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
+      // panel (data-testid="attachments-table"), so a bare 'tbody tr' locator always
+      // resolves to that invisible element instead of the actual line row.
+      const invoiceLineRow = page.locator('[data-testid^="line-row-"]').first();
       await expect(invoiceLineRow).toBeVisible({ timeout: 10_000 });
       await expect(invoiceLineRow).toContainText(/-\s?\d/, { timeout: 5_000 });
 
