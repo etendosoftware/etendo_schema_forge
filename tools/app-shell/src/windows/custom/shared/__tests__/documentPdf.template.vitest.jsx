@@ -33,7 +33,7 @@ vi.mock('../pdfUtils.js', () => ({
 }));
 
 import Handlebars from 'handlebars';
-import { DOCUMENT_TEMPLATE } from '../documentPdf.js';
+import { DOCUMENT_TEMPLATE, resolveProductCode } from '../documentPdf.js';
 
 // jsreport registers formatCurrency/fmtDate/formatNumber server-side via the
 // generated helpers string (buildJsreportHelpersString + COMMON_HANDLEBARS_HELPERS).
@@ -83,5 +83,16 @@ describe('DOCUMENT_TEMPLATE — lines table CÓD. column (ETP-4941)', () => {
     ]);
     expect(html).toContain('<td class="code">CCC-3</td>');
     expect(html).toContain('<td class="desc">Gizmo</td>');
+  });
+
+  // ETP-4941 AC: "Presupuesto de Venta con un producto sin SKU → la columna
+  // CÓD. queda vacía o muestra '—', no el número de línea."
+  it('renders "—" in the code cell when the line has no SKU — never the line number', () => {
+    const rawLine = { lineNo: 7, productName: 'No-SKU Product', quantity: 1, unitPrice: 1, taxName: '', lineTotal: 1 };
+    const html = renderRows([
+      { ...rawLine, productCode: resolveProductCode(rawLine) },
+    ]);
+    expect(html).toContain('<td class="code">—</td>');
+    expect(html).not.toContain('<td class="code">7</td>');
   });
 });

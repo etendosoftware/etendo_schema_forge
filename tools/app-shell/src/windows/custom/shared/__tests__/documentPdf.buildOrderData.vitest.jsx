@@ -106,12 +106,16 @@ describe('buildOrderData — ETP-4941 (CÓD. column shows product SKU, not line 
     expect(result.lines[0].productCode).toBe('DIRECT-CODE');
   });
 
-  it('falls back to the 1-based index when neither productCode nor product$_value is present', async () => {
+  it('falls back to "—" (never the line number) when neither productCode nor product$_value is present — AC: product with no SKU', async () => {
     mockFetchAll.mockResolvedValue([
       { lineNo: 5, orderedQuantity: 1, listPrice: 70, discount: 0, lineGrossAmount: 70 },
     ]);
     const result = await buildOrderData('sales-order', 'REC123', 'https://api.example', 'tok');
-    expect(result.lines[0].productCode).toBe('1');
+    expect(result.lines[0].productCode).toBe('—');
+    // Must not be indistinguishable from the original bug (line number shown as code).
+    expect(result.lines[0].productCode).not.toBe(String(result.lines[0].lineNo));
+    expect(result.lines[0].productCode).not.toBe('5');
+    expect(result.lines[0].productCode).not.toBe('1');
   });
 
   it('applies the same productCode resolution to Purchase Order lines', async () => {

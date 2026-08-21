@@ -80,8 +80,15 @@ describe('useOrderPdf', () => {
 
   // ETP-4941 — the printed "CÓD." column must show the product SKU
   // (product$_value), not the line number. Shared buildOrderData/template.
-  it('ETP-4941: maps productCode from product$_value with lineNo/index fallback', () => {
-    assert.match(sharedSrc, /productCode: l\.productCode \|\| l\['product\$_value'\] \|\| String\(idx \+ 1\)/);
+  it('ETP-4941: maps productCode via the shared resolveProductCode helper', () => {
+    assert.match(sharedSrc, /productCode: resolveProductCode\(l\)/);
+  });
+
+  it('ETP-4941: resolveProductCode falls back to "—" (never the line index) when no SKU is available', () => {
+    // AC: a product with no SKU must render an empty/em-dash cell, not a digit
+    // indistinguishable from the original line-number bug.
+    assert.match(sharedSrc, /function resolveProductCode\(line\)\s*\{\s*return line\.productCode \|\| line\['product\$_value'\] \|\| '—';/);
+    assert.doesNotMatch(sharedSrc, /resolveProductCode[\s\S]{0,120}String\(idx/);
   });
 
   it('ETP-4941: renders productCode (not lineNo) in the code column', () => {
