@@ -1,8 +1,8 @@
 {
-  "version": "0.85.0",
+  "version": "0.86.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-19T23:35:39.708Z",
-  "checksum": "48f383d474c5ecf2",
+  "updatedAt": "2026-08-21T13:40:22.244Z",
+  "checksum": "2bc1ba41ea421614",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -3644,6 +3644,10 @@
                 "labels": {
                   "es_ES": "Conciliado"
                 }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error"
               }
             ],
             "validation": {
@@ -9695,13 +9699,17 @@
       "tax": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/tax",
         "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "basicDiscounts": {
         "get": true,
@@ -9772,13 +9780,17 @@
       "accounting": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/accounting",
         "detailUrl": "/sws/neo/purchase-invoice/accounting/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "siiData": {
         "get": true,
@@ -9794,13 +9806,17 @@
       "batuz": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/batuz",
         "detailUrl": "/sws/neo/purchase-invoice/batuz/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
