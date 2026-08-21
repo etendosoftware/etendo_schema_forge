@@ -19,7 +19,9 @@ Holded and Etendo GO expose two fundamentally different MCP philosophies:
 - The biggest Etendo GO wins are on **agent/developer experience of features it already has** — cleaner naming, leaner responses, richer query semantics, friendlier value resolution and clearer errors (§7). Broader operational domains (CRM pipeline, projects, HR) are a **roadmap item**, not a current gap (§8).
 - **Easiest wins for "simpler to use":** most of the friction is already solved by assets that just aren't surfaced — a `docs` recipe tool the agent doesn't know to call, a `neo_defaults` that pre-fills everything but drowns it in compliance noise, and small argument/entity-naming inconsistencies that cost a guaranteed first-try failure (§7.8–§7.9). None require ERP work.
 
-> **Delivery status (2026-08-03):** 7 of the 10 improvements in §12 shipped under **ETP-4601** — Wave 1 (IMP-1, IMP-5, IMP-8, IMP-10) and Wave 2 (IMP-2, IMP-3, IMP-7). Only **Wave 3** (IMP-4 FK-by-name, IMP-6 actions-only view, IMP-9 `primaryEntity`) remains. See §12 for per-item detail.
+> **Delivery status → [`mcp-improvements-registry.md`](mcp-improvements-registry.md).** That registry is the single source of truth for which IMP-* items are resolved, partial or open, and carries the M5 open-item metric plus a per-run changelog. The status marks below (§1, §10, §12 headings, `Done when:` strikethroughs, wave tables) are **historical** — as of 2026-08-05 several were over-credited, and the registry supersedes them. This document remains canonical for each item's *specification* (`BEFORE`/`AFTER`/`Done when:`) and for the architecture contrast, inventories and coverage matrix.
+>
+> Superseded line, kept for the record — *"Delivery status (2026-08-03): 7 of the 10 improvements in §12 shipped under ETP-4601 — Wave 1 (IMP-1, IMP-5, IMP-8, IMP-10) and Wave 2 (IMP-2, IMP-3, IMP-7). Only Wave 3 (IMP-4 FK-by-name, IMP-6 actions-only view, IMP-9 `primaryEntity`) remains."* Wave 3's code shipped in `bbfce9db`; five of the seven "shipped" items were later downgraded to ⚠️ partial.
 
 ---
 
@@ -31,6 +33,19 @@ Both servers were connected in Claude Code and driven with live calls:
 - **Etendo GO** (`etendo-go-local`): `neo_discover` (56 specs), `neo_list` on `tax/tax` and `sales-invoice/header`, `neo_schema` on `sales-order/header` (97 fields + action discovery), `neo_get` (bad id → error path), `neo_defaults`/`neo_selectors` semantics on `sales-invoice`, and the `docs` recipe tool.
 
 14 live calls back the findings (full log in §11). Out of scope: latency benchmarking, and any evaluation of the underlying products beyond what each MCP surfaces. No records were mutated in either tenant — every call was read-only or an intentional error probe.
+
+### 2.1 Context cost — measured from the first run after 2026-08-10
+
+This benchmark originally counted **calls** and scored **field ratios**, and neither sees how much of the agent's context a server consumes. That was a gap, not a scoping decision: a response can be 100 % signal by the §7.2 measure and still be the 61,963-char `neo_schema` dump, and a payload that does not fit the context window is a failed call whatever its status code. Context cost is therefore **in scope**, measured as **ACE** (registry §2.6) and reported beside MARI, never inside it — verbosity is not monotonic with quality, so an index that penalised bytes would penalise IMP-5's richer error envelopes and IMP-18's added warning.
+
+What is measured, per run, on both servers:
+
+- **ACE-p** — bytes of tool catalog (names, descriptions, input schemas) entering the context before the agent acts. A fixed, unavoidable, once-per-session cost. Structurally favours Etendo GO's ~14 generic verbs over Holded's ~180 explicit tools (§3).
+- **ACE-v** — bytes exchanged (request + response) to complete each frozen-suite task from a cold start, counting the same calls M1 counts. Reported per task plus the **median** ratio, so a single full dump cannot decide the index. Structurally favours Holded, which pre-paid in ACE-p the introspection Etendo GO performs at runtime.
+
+The two are **never summed**: they point in opposite directions, and that asymmetry is the finding. The pair's actual output is the **break-even task count** — how many tasks a session must run before the generic-verb model stops being the cheaper one — together with a statement of which side of it a realistic session falls on.
+
+Measurement discipline, because the failure mode here is fabricated precision: bytes come from `wc -c` on a payload saved verbatim, never from a count recalled from memory. **Token figures are estimates and are always labelled as such**, with the divisor stated (`bytes ÷ 4` as a floor for JSON) — this harness exposes no per-call token usage, and a number presented as measured when it was derived would be worse than no number. The 2026-08-05, 08-06 and 08-10 runs saved no payloads and therefore carry **no ACE figure ever**; reconstructing them would be invention.
 
 ---
 
@@ -315,7 +330,8 @@ This substantially neutralizes §7.1 (naming), §7.6 (action discovery) and §7.
 7. **EU/Spanish fiscal compliance.** SII, VeriFactu, TicketBAI/Batuz, Modelo tax report, real tax engine (intracomunitarias, retenciones, bienes de inversión). Holded taxes are flat percentages — disqualifying for regulated ES/EU use.
 8. **Advanced inventory / costing / manufacturing**, **fixed assets & amortization**, **banking reconciliation / PSD2 / matching**, **structured returns/RMA** both directions.
 9. **Generic batch & action** (`neo_batch`, `neo_action`) and **8 dedicated report generators** — extensibility and analytics without growing the tool surface.
-10. **Semantic recipe retrieval (`docs`).** A Context7-style `docs(topic:…)` tool returns ready-to-run recipes (atomic batch header+lines, FK resolution, confirm-gated actions) from `etendo-go-docs`. Holded has no queryable recipe layer — its guidance is frozen into each tool's static description. (Caveat: today it's under-surfaced and the recipes use `etendo_neo_*` names vs the registered `neo_*` — see §7.9.)
+10. **Read-only entities are gated at the method level, with an error an agent can act on.** A CRUD write to an entity configured read-only returns **405** — not a silent 200, and not a generic refusal: *"Entity 'stock' of spec 'product' does not enable PUT. Enabled methods: GET. This entity is read-only by configuration — use `neo_list` or `neo_get` to read it. CRUD writes to it are not allowed; a separately configured `neo_action` may still be available. **Do not retry this CRUD operation.**"* It names the entity and spec, lists what *is* allowed, explains why, points at the two verbs that would work, flags the one escape hatch that might exist, and tells the agent not to burn a retry. Verified live 2026-08-13 (job A run §5 A8); it also *refutes* IMP-28 §8.4, which predicted a silent success here. Holded has no method-level contract to gate on. **Scope note:** this protects read-only *entities*. Read-only *fields on writable entities* are a different mechanism and currently have no equivalent protection — see IMP-30 / IMP-31.
+11. **Semantic recipe retrieval (`docs`).** A Context7-style `docs(topic:…)` tool returns ready-to-run recipes (atomic batch header+lines, FK resolution, confirm-gated actions) from `etendo-go-docs`. Holded has no queryable recipe layer — its guidance is frozen into each tool's static description. (Caveat: today it's under-surfaced and the recipes use `etendo_neo_*` names vs the registered `neo_*` — see §7.9.)
 
 **Example — read parity (where Holded has no tool at all):**
 ```jsonc
@@ -335,6 +351,13 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 //        key dates) — you MUST confirm these values with the user before creating or modifying records."
 // Holded has no equivalent signal; the agent decides on its own what is safe to write.
 ```
+
+> ⚠️ **Read this example as a signal, not a barrier.** The 2026-08-13 job A run wrote
+> `grandTotalAmount: 9999` — this exact field — through `neo_create` and the server persisted it, on a
+> zero-line draft order, together with `documentStatus: "CO"`. `businessCritical` is advice to a
+> cooperative agent; it stops nothing. The enforcement that *should* have stopped it is IMP-28
+> clause 2, and it never runs on the MCP path — see **IMP-30** and **IMP-31**. The strength above is
+> real and still the better design than having no signal at all; it is not yet a guarantee.
 
 ---
 
@@ -371,6 +394,23 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 - **Convenience lookups** (find-by-document-number) and **per-verb permission/role** in the schema.
 - **Cursor pagination** alongside offset.
 
+### P1 — registered after ETP-4601 (see the registry for the full, current list)
+
+> The three lists above cover the original §7 wave only, and their ✅/⏳ marks are **historical** — the
+> registry supersedes them, per the note in §1. Items IMP-11 … IMP-31 were registered by later runs
+> and are not enumerated here; the registry's §3 master table is the list. The two below are called
+> out because they are P1 defects in *shipped* behaviour rather than missing features, and because
+> they must be worked as a pair.
+
+- **Enforce read-only fields on the MCP create path.** The rejection (IMP-28 clause 2) is implemented
+  and unit-tested but has **zero call sites in `src/com/etendoerp/go/mcp/`**, so `neo_create` accepts
+  and persists any curated read-only field — verified live 2026-08-13 with `grandTotalAmount: 9999`
+  and `documentStatus: "CO"` on a zero-line draft. — **IMP-30**
+- **Make the read-only exemption per-field instead of per-entity.** A single `Java_Qualifier` on an
+  entity today exempts *every* field on it, so the fix above would still not close the hole on the
+  entity it was found on. Three handlers legitimately rely on the current blanket, so the per-field
+  signal must be backfilled before the code change. — **IMP-31**
+
 ### P3 — Roadmap (expose as the ERP functionality ships — §9)
 - CRM leads/funnels · projects & time tracking · HR/employees · recurring documents & cashflow forecast · usage metering.
 
@@ -400,6 +440,8 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 ## 12. Improvement Backlog for Etendo GO — Before / After
 
 Concrete, implementable improvements ordered by impact. Each item shows the **current** call + real response and the **proposed** call + target response, states explicitly whether the tool signature changes, **and names the repo(s) it touches.**
+
+> **Status lives in [`mcp-improvements-registry.md`](mcp-improvements-registry.md), not here.** This section is each item's *specification*; the `— ✅ DONE` marks in the headings below are historical and several are known to be over-credited. The registry also holds IMP-11…IMP-15, raised after this document was written. Never change a status here — change it there.
 
 > **Repo picture:** the MCP is the Java servlet in **`com.etendoerp.go`** (`src/com/etendoerp/go/mcp/`), which serves responses from the `ETGO_SF_*` tables. Because every improvement here is about how that servlet *shapes requests/responses*, **8 of 10 are servlet-only in `com.etendoerp.go`.** Two are not: **IMP-10** also touches the recipe corpus in **`etendo-go-docs`**, and **IMP-1** *may* also need **`schema_forge_core`** (`push-to-neo`) if the curated label/description is not already stored in `ETGO_SF_FIELD`. No change here touches this `schema_forge` repo.
  `BEFORE` blocks are verbatim from the live calls in §11; `AFTER` blocks are the target we are proposing. Tick them off as they land.

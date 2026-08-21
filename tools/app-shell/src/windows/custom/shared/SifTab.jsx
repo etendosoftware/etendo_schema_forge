@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,8 @@ import { SelectorInput } from '@/components/contract-ui/SelectorInput.jsx';
 import {
   useSifFieldPatcher,
   VERIFACTU_INV_TYPE_OPTIONS,
-  VERIFACTU_REVERSE_TYPE_OPTIONS,
+  SII_MOTIVO_RECTIF_OPTIONS,
+  TBAI_REVERSEINVOICECODE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
 
@@ -275,23 +276,29 @@ function shouldShowNoRecipientIdArt61d(invType) {
   return invType === 'R5' || invType === 'F2';
 }
 
-// Classic displayLogic (verbatim, operator-precedence quirk intentional — `&` binds tighter than `|`
-// in the raw AD string with no parens): `@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1'
-// | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'`
-// Only R1 is gated by showVerifactu/config; R2–R5 show regardless. Mirrors Classic exactly.
-function shouldShowReverseInvType(showVerifactu, invType) {
-  return (showVerifactu && invType === 'R1')
-    || invType === 'R2'
-    || invType === 'R3'
-    || invType === 'R4'
-    || invType === 'R5';
+/**
+ * Processes SII authorization callout messages (toasts) and returns true if any
+ * ERROR-type message was found (signals that the optimistic update must be reverted).
+ * Extracted from handleAuthorizationToggle to reduce its cognitive complexity (S3776).
+ */
+function applyCalloutMessages(messages) {
+  let hasError = false;
+  for (const msg of messages) {
+    const text = msg.text || msg.message || '';
+    if (!text) continue;
+    const type = (msg.type || '').toUpperCase();
+    if (type === 'ERROR') { toast.error(text); hasError = true; }
+    else if (type === 'WARNING') toast.warning(text);
+    else toast.info(text);
+  }
+  return hasError;
 }
+
 
 export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {
     ui,
     siiTypeField,
-    siiDescriptionMasterIdentifier,
     siiTypeOptions,
     showSii,
     showVerifactu,
@@ -310,6 +317,45 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // read-only when the invoice no longer carries any exempt tax.
   const hasExemptTaxes = data?.hasExemptTaxes === true || data?.hasExemptTaxes === 'Y';
   const exemptionCauseEditable = hasExemptTaxes && isDraft && !siiFieldReadOnly;
+
+  // ETP-4783: Replicates SiiAuthorizationCallout for the Go frontend (ETP-4783).
+  // fireCallout in DetailView filters out 'Y'/'N' values (only UUIDs/numbers/dates pass),
+  // so we fire the callout manually here when the authorization checkbox changes.
+  // The backend's afterCallout → applySiiAuthorizationCallout validates AEATSIIConfig and
+  // either returns the authorization number (injected into updates) or an ERROR message.
+  const handleAuthorizationToggle = useCallback(async (val) => {
+    onChange?.('aeatsiiIsauthorization', val); // optimistic update
+    if (!apiBaseUrl || !token) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/header/callout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: 'aeatsiiIsauthorization', value: val ? 'Y' : 'N', formState: data ?? {} }),
+      });
+      if (!res.ok) return;
+      const result = await res.json();
+      const hasError = applyCalloutMessages(result.messages ?? []);
+      if (hasError) {
+        onChange?.('aeatsiiIsauthorization', !val); // revert on error
+      } else {
+        for (const [field, entry] of Object.entries(result.updates ?? {})) {
+          // Backend update entries are { value: "..." } objects — unwrap like applyCalloutFieldUpdates.
+          onChange?.(field, entry?.value ?? entry);
+        }
+      }
+    } catch { /* network error — keep optimistic state */ }
+  }, [apiBaseUrl, token, data, onChange]);
+
+  // ETP-4783: Per-field lock conditions that differ from the general siiFieldReadOnly gate.
+  // Classic parity: SII desc and accounting-register date are editable even on completed
+  // invoices — they only lock once the invoice has been sent to SII (aeatsiiIssent = 'Y').
+  // aeatsiiIssent has type=boolean in the contract, so the server returns true/false;
+  // handle both boolean and legacy string serializations.
+  const siiSentReadOnly = data?.aeatsiiIssent === true || data?.aeatsiiIssent === 'Y';
+  // Modificada-error-registral follows AD readOnly logic: editable only when SII estado
+  // is CO (Correcto) or AE (Aceptado con errores) and the invoice is not voided.
+  const errorRegistralReadOnly =
+    !['CO', 'AE'].includes(data?.aeatsiiEstado ?? '') || data?.documentStatus === 'VO';
 
   // ETP-4751 (Block B/F): Classic parity for the SII module's ExemptTaxes line-save behaviour.
   // The invoice-LINE NeoHandler (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave) stamps
@@ -437,12 +483,27 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 </SelectContent>
               </Select>
             </Field>
-            <ReadOnlyField
-              id="sif-masterDesc"
-              labelKey="sifDataTabs.field.masterDescription"
-              value={siiDescriptionMasterIdentifier}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
+            {getVal(siiTypeField) === 'R' && (
+              <Field
+                label={ui('sifDataTabs.field.rectificationReason')}
+                htmlFor="sif-siiMotivoRectif"
+                data-testid="Field__b99c8b">
+                <Select
+                  value={getVal('aeatsiiMotivoRectif') || undefined}
+                  onValueChange={val => onChange?.('aeatsiiMotivoRectif', val)}
+                  disabled={siiFieldReadOnly}
+                  data-testid="Select__b99c8b">
+                  <SelectTrigger id="sif-siiMotivoRectif" data-testid="SelectTrigger__b99c8b">
+                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__b99c8b">
+                    {SII_MOTIVO_RECTIF_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field
               label={ui('sifDataTabs.field.siiDescription')}
               htmlFor="sif-siiDesc"
@@ -452,7 +513,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 type="text"
                 value={getVal('aeatsiiDescripcionSii')}
                 onChange={e => onChange?.('aeatsiiDescripcionSii', e.target.value)}
-                disabled={siiFieldReadOnly}
+                disabled={siiSentReadOnly}
+                className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
             <ExemptionCauseField
@@ -471,21 +533,41 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 id="sif-auth"
                 checked={Boolean(getVal('aeatsiiIsauthorization'))}
                 disabled={siiFieldReadOnly}
-                onToggle={val => onChange?.('aeatsiiIsauthorization', val)}
+                onToggle={handleAuthorizationToggle}
                 data-testid="CheckboxField__b99c8b" />
             </Field>
-            <ReadOnlyField
-              id="sif-siiYear"
-              labelKey="sifDataTabs.field.siiYear"
-              value={data?.aeatsiiEjercicio}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
-            <ReadOnlyField
-              id="sif-siiPeriod"
-              labelKey="sifDataTabs.field.siiPeriod"
-              value={data?.aeatsiiPeriodo}
-              ui={ui}
-              data-testid="ReadOnlyField__b99c8b" />
+            {getVal('aeatsiiIsauthorization') && (
+              <ReadOnlyField
+                id="sif-authorizationNo"
+                labelKey="sifDataTabs.field.authorizationNo"
+                value={getVal('aeatsiiAuthorizationno')}
+                ui={ui}
+                data-testid="ReadOnlyField__b99c8b" />
+            )}
+            <Field
+              label={ui('sifDataTabs.field.accountingRegDate')}
+              htmlFor="sif-accountingRegDate"
+              data-testid="Field__b99c8b">
+              <DateField
+                id="sif-accountingRegDate"
+                value={getDateVal('aeatsiiFechaRegCont')}
+                onChange={iso => onChange?.('aeatsiiFechaRegCont', iso)}
+                disabled={siiSentReadOnly}
+                data-testid="DateField__b99c8b" />
+            </Field>
+            {siiSentReadOnly && (
+              <Field
+                label={ui('sifDataTabs.field.registerError')}
+                htmlFor="sif-registerError"
+                data-testid="Field__b99c8b">
+                <CheckboxField
+                  id="sif-registerError"
+                  checked={Boolean(getVal('aeatsiiErrorRegistral'))}
+                  disabled={errorRegistralReadOnly}
+                  onToggle={val => onChange?.('aeatsiiErrorRegistral', val)}
+                  data-testid="CheckboxField__b99c8b" />
+              </Field>
+            )}
             <SifAttachmentsSection
               tableName="aeatsii_facturas"
               recordId={data?.aeatsiiFacturaId}
@@ -541,6 +623,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 value={getVal('etvfacVerifacDesc')}
                 onChange={e => onChange?.('etvfacVerifacDesc', e.target.value)}
                 disabled={dateReadOnly}
+                className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
             {shouldShowSimplifiedArt7273(vfInvType) && (
@@ -569,27 +652,9 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                   data-testid="CheckboxField__b99c8b" />
               </Field>
             )}
-            {shouldShowReverseInvType(showVerifactu, vfInvType) && (
-              <Field
-                label={ui('sifDataTabs.field.correctiveInvoiceType')}
-                htmlFor="sif-vfReverseType"
-                data-testid="Field__b99c8b">
-                <Select
-                  value={getVal('etvfacReverseinvtype') || undefined}
-                  onValueChange={val => onChange?.('etvfacReverseinvtype', val)}
-                  disabled={dateReadOnly}
-                  data-testid="Select__b99c8b">
-                  <SelectTrigger id="sif-vfReverseType" data-testid="SelectTrigger__b99c8b">
-                    <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
-                  </SelectTrigger>
-                  <SelectContent data-testid="SelectContent__b99c8b">
-                    {VERIFACTU_REVERSE_TYPE_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
+            {/* ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) removed from UI.
+                Always saved as 'I' (Por Diferencias) automatically via useSifFieldPatcher
+                when vfInvType is rectificative (R1-R5). */}
             <SifAttachmentsSection
               tableName="etvfac_c_invoice_verifactu"
               recordId={data?.invoiceVerifactuId}
@@ -605,6 +670,33 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
             subtitleKey={PANEL_META.tbai.subtitleKey}
             ui={ui}
             data-testid="Panel__b99c8b">
+            {/* ETP-4783: "Código de Factura Rectificativa" — only visible when the
+                transaction document type is marked as rectificative (isRectificative
+                is injected by AbstractInvoiceHeaderHandler.enrichIsRectificative).
+                Moved here from the header form so it appears in the fiscal context. */}
+            {data?.isRectificative && (
+              <Field
+                label={ui('sifDataTabs.field.tbaiReverseinvoicecode')}
+                htmlFor="tbai-reverseinvoicecode"
+                data-testid="Field__tbai_reversecode">
+                <Select
+                  value={getVal('tbaiReverseinvoicecode') || undefined}
+                  onValueChange={val => onChange?.('tbaiReverseinvoicecode', val)}
+                  disabled={data?.processed === true}
+                  data-testid="Select__tbai_reversecode">
+                  <SelectTrigger id="tbai-reverseinvoicecode" data-testid="SelectTrigger__tbai_reversecode">
+                    <SelectValue placeholder="—" data-testid="SelectValue__tbai_reversecode" />
+                  </SelectTrigger>
+                  <SelectContent data-testid="SelectContent__tbai_reversecode">
+                    {TBAI_REVERSEINVOICECODE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value} data-testid="SelectItem__tbai_reversecode">
+                        {o.value} — {ui(o.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             {/* ETP-4888: minimal TBAI rail — Adjuntos only. No date/type/checkbox fields here
                 (that per-invoice field panel was intentionally removed in ETP-4401, since TBAI
                 chaining sequences are now generated automatically per fiscal configuration). */}

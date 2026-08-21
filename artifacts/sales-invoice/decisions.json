@@ -9,13 +9,22 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
-    "listViewOptions": { "hidePrint": true },
+    "hidePrintWhen": {
+      "documentStatus": {
+        "notEquals": "CO"
+      }
+    },
+    "listViewOptions": {
+      "hidePrint": true
+    },
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"
+    },
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
     },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
@@ -429,9 +438,32 @@
           "visibility": "editable",
           "form": false
         },
-        "aeatsiiDescription": {
+        "aeatsiiTipoRectif": {
+          "visibility": "editable",
+          "form": false,
+          "defaultValue": "I"
+        },
+        "aeatsiiMotivoRectif": {
           "visibility": "editable",
           "form": false
+        },
+        "tbaiIsreverseinvoice": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicetype": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicecode": {
+          "visibility": "editable",
+          "form": false,
+          "defaultExpr": "\"\"",
+          "displayLogic": "@tbaiConfigActive@='Y'",
+          "displayLogicJs": "record['tbaiConfigActive'] === 'Y'"
+        },
+        "aeatsiiDescription": {
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
@@ -445,6 +477,18 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiFechaRegCont": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
+          "form": false
+        },
         "aeatsiiIssent": {
           "visibility": "readOnly",
           "form": false
@@ -454,8 +498,16 @@
           "form": false,
           "grid": true
         },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "tbaiIssent": {
-          "visibility": "discarded",
+          "visibility": "system",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -476,16 +528,14 @@
           "form": false
         },
         "etvfacSimpinvart7273": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacInvNoIDArt61d": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacReverseinvtype": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "system",
+          "derivation": { "type": "hardcoded", "value": "I" }
         },
         "etvfacDateIssue": {
           "visibility": "discarded"
@@ -497,15 +547,14 @@
           "visibility": "discarded"
         },
         "etvfacIssueDescription": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiSequence": {
           "visibility": "discarded",
