@@ -2454,7 +2454,13 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+    // ETP-4576 — `token` was a POSITIVE conjunct here, not a `!token` guard, so it
+    // read as a normal precondition rather than a credential gate. Under a cookie
+    // session it is undefined, so the whole rate validation was skipped and a
+    // currency with no conversion rate was silently accepted — the opposite of
+    // what this block exists to prevent. The request below is already
+    // scheme-driven.
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
