@@ -187,22 +187,6 @@ async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
 }
 
 test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
-  // Skipped: passes in schema-forge-tests (and locally) but fails under the
-  // etendo-go-tests pipeline, where the /sws/go/* onboarding mocks are not
-  // honored (the app is served against the live go backend), so the auto-login
-  // never stores `sf_auth_token` and the assertion reads null. This is an
-  // environment/config difference in that job, not a product or test defect.
-  // Re-enable once etendo-go-tests runs this boundary spec against the mocked
-  // backend (or excludes it); coverage is retained via schema-forge-tests. (ETP-4448)
-  test.skip('registers, creates environment, verifies readiness, and redirects to dashboard', async ({ page }) => {
-    await installOnboardingMocks(page);
-    await completeOnboardingForm(page, 'qa-onboarding');
-
-    await page.waitForURL('**/dashboard');
-    await expect.poll(async () => page.evaluate(() => localStorage.getItem('sf_auth_token'))).toBe('env-token');
-    await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem('sf_auth_selected_org')).id)).toBe('ORG_1');
-  });
-
   test('lets the user switch onboarding language to English before registration', async ({ page }) => {
     const labels = labelsFor('en_US');
     const suffix = Date.now();
