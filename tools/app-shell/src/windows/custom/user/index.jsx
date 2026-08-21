@@ -113,7 +113,13 @@ function TopbarExtra(props) {
  *    (`RoleSelectionProvider` — read/written by `AssignTemplateRolesControl` and, on
  *    the sibling "Roles del usuario" tab, `UserRolesTab`) and `appliedRoleIdsRef`, a
  *    frozen snapshot of what was actually loaded, used only for the changed/unchanged
- *    comparison below.
+ *    comparison below. Conversely, whenever `recordId` is falsy/`'new'` the SAME effect
+ *    explicitly resets both to `[]` — this `UserWindow` instance is not guaranteed to
+ *    remount when navigating from viewing an existing user straight to "New user" (same
+ *    route pattern, `recordId` prop just changes), so without this reset the previous
+ *    user's roles would linger in state and render as already-selected chips on the
+ *    blank create form (ETP-4830 regression fix — confirmed via `ad_user_roles` that
+ *    nothing was actually persisted; purely stale client state, never a real assignment).
  * 2. Passes `onAfterExistingSave={handleRoleAssignmentSave}` to `UserPage` — a NEW prop
  *    `DetailView.jsx` invokes exactly once per Guardar click, only for an
  *    already-persisted record (never on creation — see this ticket's Global
@@ -152,7 +158,20 @@ export default function UserWindow(props) {
   const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
 
   useEffect(() => {
-    if (!recordId || recordId === 'new' || !token || !apiBaseUrl) return undefined;
+    // A genuinely new/blank record must always start with zero roles selected. Without
+    // this explicit reset, navigating from an EXISTING user (whose roles were already
+    // fetched into `selectedRoleIds`/`appliedRoleIdsRef`) straight to "New user" — same
+    // `UserWindow` component instance, `recordId` prop just changes from a real id to
+    // `'new'`/undefined, no remount — left the previous user's role selection in state,
+    // so the blank create form rendered someone else's roles as already-selected,
+    // removable chips. Confirmed via DB (`ad_user_roles`) that nothing was actually
+    // persisted for these brand-new users — purely a stale client-side state bug.
+    if (!recordId || recordId === 'new') {
+      appliedRoleIdsRef.current = [];
+      setSelectedRoleIds([]);
+      return undefined;
+    }
+    if (!token || !apiBaseUrl) return undefined;
     let cancelled = false;
     fetchUserRoleAssignments(recordId)
       .then((res) => {

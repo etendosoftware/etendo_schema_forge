@@ -155,6 +155,30 @@ describe('UserWindow — fetching applied roles on load', () => {
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
   });
 
+  it('regression: clears a previously-loaded user\'s role selection when recordId changes to "new" without a remount (ETP-4830 stale-state bug)', async () => {
+    // Reproduces the confirmed manual-test bug: viewing an existing user with roles
+    // already applied, then navigating to "New user" WITHOUT the component instance
+    // remounting (same `UserWindow` element, `recordId` prop just changes) must NOT
+    // leave the previous user's roles pre-selected on the blank create form.
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin', 'role-sales'] });
+    const { rerender } = render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+
+    rerender(<UserWindow recordId="new" token="tok" apiBaseUrl="/api" />);
+
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
+  });
+
+  it('regression: clears the selection when recordId becomes absent without a remount', async () => {
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
+    const { rerender } = render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
+
+    rerender(<UserWindow token="tok" apiBaseUrl="/api" />);
+
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
+  });
+
   it('does not update state after unmount while the fetch is still in flight', async () => {
     let resolveFetch;
     fetchUserRoleAssignments.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
