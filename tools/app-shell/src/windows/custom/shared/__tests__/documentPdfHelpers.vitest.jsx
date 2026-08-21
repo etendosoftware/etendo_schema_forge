@@ -297,4 +297,22 @@ describe('resolveProductCode', () => {
   it('treats an empty-string productCode as absent and falls through the chain', () => {
     expect(resolveProductCode({ productCode: '', 'product$_value': 'SKU-2' })).toBe('SKU-2');
   });
+
+  it('treats an empty-string product$_value (falsy but present, distinct from null/undefined) the same as absent — falls back to "—"', () => {
+    expect(resolveProductCode({ 'product$_value': '' })).toBe('—');
+    expect(resolveProductCode({ productCode: '', 'product$_value': '' })).toBe('—');
+  });
+
+  it('resolves multiple lines independently — no shared/leaked state across calls', () => {
+    const lineA = { productCode: 'A-1' };
+    const lineB = {}; // no SKU at all
+    const lineC = { 'product$_value': 'C-3' };
+    expect(resolveProductCode(lineA)).toBe('A-1');
+    expect(resolveProductCode(lineB)).toBe('—');
+    expect(resolveProductCode(lineC)).toBe('C-3');
+    // Re-resolving in a different order must yield the same results (pure function).
+    expect(resolveProductCode(lineC)).toBe('C-3');
+    expect(resolveProductCode(lineB)).toBe('—');
+    expect(resolveProductCode(lineA)).toBe('A-1');
+  });
 });
