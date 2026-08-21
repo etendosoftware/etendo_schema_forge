@@ -1096,6 +1096,12 @@ export default function reportApiPlugin() {
                 if (k === 'groupBy') {
                   const dimParam = (contract.parameters || []).find(p => p.groupByValue === v);
                   displayValue = pickLabel(dimParam?.label, locale, v);
+                } else if (paramDef?.options) {
+                  // Any select with a literal `options` list stores the raw option value
+                  // ('S', 'acct', 'B'…). Resolve it to the human label so the filter chip
+                  // reads "Account Level: Heading", not "Account Level: E".
+                  const opt = paramDef.options.find(o => String(o.value) === String(v));
+                  if (opt) displayValue = pickLabel(opt.label, locale, v);
                 }
                 if (typeof displayValue === 'string' && displayValue.includes(' | ')) {
                   displayValue = displayValue.split(' | ').filter(Boolean).join(', ');

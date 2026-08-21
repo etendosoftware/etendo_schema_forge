@@ -79,7 +79,7 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null) {
+export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('quotationPdfTitle'),
@@ -94,5 +94,5 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels);
+  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig);
 }

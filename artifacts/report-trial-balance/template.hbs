@@ -49,7 +49,7 @@
           <tbody>
             {{#each this.accounts}}
             <tr>
-              <td><span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{lookup this 'account_id'}}',accountValue:'{{lookup this 'account_no'}}',accountName:'{{lookup this 'account_name'}}'},'*')">{{lookup this 'account_no'}}</span></td>
+              <td>{{#ifCond @root.meta.params.accountLevel '===' 'S'}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{lookup this 'account_id'}}',accountValue:'{{lookup this 'account_no'}}',accountName:'{{lookup this 'account_name'}}'},'*')">{{lookup this 'account_no'}}</span>{{else}}{{lookup this 'account_no'}}{{/ifCond}}</td>
               <td>{{lookup this 'account_name'}}</td>
               <td class="cell-amount">{{formatCurrency (lookup this 'opening_balance')}}</td>
               <td class="cell-amount">{{formatCurrency (lookup this 'activity_debit')}}</td>
@@ -89,7 +89,7 @@
     <tbody>
       {{#each rows}}
       <tr>
-        <td><span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{lookup this 'account_id'}}',accountValue:'{{lookup this 'account_no'}}',accountName:'{{lookup this 'account_name'}}'},'*')">{{lookup this 'account_no'}}</span></td>
+        <td>{{#ifCond @root.meta.params.accountLevel '===' 'S'}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{lookup this 'account_id'}}',accountValue:'{{lookup this 'account_no'}}',accountName:'{{lookup this 'account_name'}}'},'*')">{{lookup this 'account_no'}}</span>{{else}}{{lookup this 'account_no'}}{{/ifCond}}</td>
         <td>{{lookup this 'account_name'}}</td>
         <td class="cell-amount">{{formatCurrency (lookup this 'opening_balance')}}</td>
         <td class="cell-amount">{{formatCurrency (lookup this 'activity_debit')}}</td>

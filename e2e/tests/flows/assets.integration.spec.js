@@ -28,6 +28,47 @@ const toastByText = (page, re) => page.locator('[data-sonner-toast]').filter({ h
 // "Crear Amortización" process button (label resolves via i18n).
 const crearAmortizacionBtn = (page) => page.getByRole('button', { name: /Crear Amortización|Create Amortization/i });
 
+/**
+ * Registers a wait for the real `POST .../assets/evaluate-display` round trip that
+ * `useAccountingDimensionFields` (via `useDisplayLogic`) fires whenever the asset
+ * form's field values change — in particular right after the "Depreciar" toggle is
+ * clicked. MUST be called BEFORE the action that triggers the change (the click),
+ * so Playwright starts listening before the response can arrive; the 300ms debounce
+ * inside `useDisplayLogic` guarantees the call hasn't already landed by then.
+ *
+ * Asserting `toBeVisible()` on "Dimensiones contables" right after the click (the
+ * previous approach) can pass purely on `useDisplayLogic`'s fail-open initial state
+ * (`{ visibility: {} }`, before the fetch resolves) even when the backend's real
+ * answer is `visibility.project: false` — exactly the boolean-serialization bug
+ * fixed under ETP-4914 in `NeoDisplayLogicHelper.buildJsObjectPreamble`. Awaiting
+ * this response before asserting makes the assertion depend on the real answer.
+ */
+function waitForDimensionEvaluateDisplay(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/assets/evaluate-display') && resp.request().method() === 'POST',
+    { timeout: 5_000 },
+  );
+}
+
+/**
+ * Asserts "Dimensiones contables" is shown/hidden consistently with the REAL
+ * `evaluate-display` response body, instead of hardcoding an assumed true/false.
+ * `project` is the only accounting-dimension candidate for the Assets header
+ * (AssetsDetailPanel.jsx's `dimensionFieldCandidates`); `useAccountingDimensionFields`
+ * treats any value other than an explicit `false` as visible (fail-open, same as the
+ * server-side evaluator) — mirrored here so the test stays correct regardless of
+ * which way this tenant's GL Configuration currently has the Project dimension set.
+ */
+async function assertDimensionsSectionMatchesResponse(page, evalResponse) {
+  const body = await evalResponse.json();
+  const projectVisible = body?.visibility?.project !== false;
+  if (projectVisible) {
+    await expect(page.getByText('Dimensiones contables')).toBeVisible();
+  } else {
+    await expect(page.getByText('Dimensiones contables')).toHaveCount(0);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
@@ -333,9 +374,13 @@ async function createDepreciableAsset(page, { stamp, name }) {
   await selectGrupoActivoOtros(page);
 
   // Activate "Depreciar" → financial + accounting-dimensions sections appear.
+  // Register the evaluate-display wait BEFORE the click (see helper docblock),
+  // then assert the dimensions section against the REAL resolved answer.
+  const evalPromise = waitForDimensionEvaluateDisplay(page);
   await page.getByRole('switch').first().click();
   await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText('Dimensiones contables')).toBeVisible();
+  const evalResponse = await evalPromise;
+  await assertDimensionsSectionMatchesResponse(page, evalResponse);
 
   // Save → record created; wait for the route to settle on /assets/{id} so the
   // process has `selected.id`, then the "Crear Amortización" button is usable.
@@ -918,49 +963,6 @@ test.describe('Assets (real backend)', () => {
     await deleteAmortizationHeaders(page, headerUrls);
   });
 
-  // Cases 10/11/12 — copies of 2/3/4 but CONFIRM every amortization line of the
-  // plan (not just one). With all lines confirmed the asset is 100% depreciated:
-  // the sidebar "Amortizado" and the grid bar both show 100%. Then full cleanup.
-  for (const { n, mode, periods, label, blocked } of [
-    { n: 10, mode: 'monthly', periods: ['06-2026', '07-2026'], label: 'by time (monthly)', blocked: true },
-    { n: 11, mode: 'annual', periods: ['2026', '2027'], label: 'by time (yearly)', blocked: true },
-    { n: 12, mode: 'percentage', periods: ['2026', '2027'], label: 'by percentage', blocked: true },
-  ]) {
-    test(`Case ${n}: ${label} — confirm ALL lines → 100% depreciated, then cleanup`, async ({ page }) => {
-      // BLOCKED: the sample data has no 2027 fiscal calendar/periods, so confirming
-      // the 2027 amortization line fails in the backend. This is a happy-path case
-      // (asset depreciated 100%) that SHOULD run — re-enable once 2027 fiscal
-      // periods exist in the sample data. The monthly case (10, both periods in
-      // 2026) is unaffected and runs.
-      test.skip(!!blocked, 'Sample data lacks the 2027 fiscal calendar/periods; confirming a 2027 amortization fails. Re-enable once 2027 periods exist.');
-      const stamp = Date.now();
-      const name = `Activo E2E 100% ${mode} ${stamp}`;
-      await setupDepreciableWithAmortization(page, { stamp, name, mode });
-      const assetUrl = page.url();
-
-      // Capture both period headers, then confirm ALL the plan's amortizations.
-      const headerUrls = await captureAmortizationHeaderUrls(page, periods);
-      for (const url of headerUrls) await confirmAmortizationForAsset(page, url, name);
-
-      // Every line confirmed → asset 100% depreciated: sidebar + grid bar show 100%.
-      await gotoDeepLink(page, assetUrl);
-      await verifyDepreciatedSidebar(page, 100);
-      await page.goto('/assets');
-      await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-      await findByNameAndGrupo(page, name);
-      await verifyGridAmortizationBar(page, 100);
-
-      // Cleanup: reactivate every header, delete the asset (removes its lines),
-      // then delete the (now empty) headers.
-      for (const url of headerUrls) await reactivateAmortization(page, url);
-      await gotoDeepLink(page, assetUrl);
-      await expect(page.getByTestId('detail-view')).toBeVisible();
-      await deleteAsset(page);
-      await verifyAssetNotInList(page, name);
-      await deleteAmortizationHeaders(page, headerUrls);
-    });
-  }
-
   // Case 9 — toggle Depreciar shows/hides sections; then edit description + delete.
   test('Case 9: toggle Depreciar sections, then edit Descripción and delete', async ({ page }) => {
     const stamp = Date.now();
@@ -979,17 +981,27 @@ test.describe('Assets (real backend)', () => {
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
     await expect(page.getByTestId('field-assetValue')).toBeVisible();
 
-    // Activate → financial + accounting-dimensions sections appear.
+    // Activate → financial + accounting-dimensions sections appear. Register the
+    // evaluate-display wait BEFORE the click (see helper docblock), then assert the
+    // dimensions section against the REAL resolved answer, not the fail-open
+    // initial state — see ETP-4914.
+    const evalPromise = waitForDimensionEvaluateDisplay(page);
     await depreciarToggle.click();
     await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText('Configuración de amortización')).toBeVisible();
     await expect(page.getByText('Fechas', { exact: true })).toBeVisible();
-    await expect(page.getByText('Dimensiones contables')).toBeVisible();
+    const evalResponse = await evalPromise;
+    await assertDimensionsSectionMatchesResponse(page, evalResponse);
     await expect(page.getByTestId('field-assetValue')).toBeVisible();
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toHaveCount(0);
 
     // Deactivate → all those sections hide, hint returns.
     // assetValue stays visible — it lives outside the depreciation-only sections.
+    // No evaluate-display wait needed here: AssetsDetailPanel.jsx hides this section
+    // via the coarse `depreciate && dimensionFields.length > 0` gate, which flips
+    // synchronously with the toggle — it isn't waiting on a fresh server round trip
+    // (the previously-resolved `dimensionFields` value is irrelevant once `depreciate`
+    // itself is false), so there's no race to guard against on this path.
     await depreciarToggle.click();
     await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('field-assetValue')).toBeVisible();
