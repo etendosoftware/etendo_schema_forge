@@ -183,7 +183,7 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
     <tbody>
       {{#each lines}}
       <tr>
-        <td class="code">{{this.lineNo}}</td>
+        <td class="code">{{this.productCode}}</td>
         <td class="desc">{{this.productName}}</td>
         <td class="num">{{formatCurrency this.quantity}}</td>
         <td class="num">{{formatCurrency this.unitPrice}}</td>
@@ -284,6 +284,7 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: l.productCode || l['product$_value'] || String(idx + 1),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.orderedQuantity ?? l.qtyOrdered ?? 0,
     unitPrice: l.listPrice ?? l.unitPrice ?? l.priceActual ?? 0,

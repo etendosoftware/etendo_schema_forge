@@ -206,6 +206,12 @@ describe('useInvoicePdf', () => {
       assert.doesNotMatch(src, /l\.orderedQuantity/);
     });
 
+    // ETP-4941 — the printed "CÓD." column must show the product SKU
+    // (product$_value), not the line number.
+    it('ETP-4941: maps productCode from product$_value with lineNo/index fallback', () => {
+      assert.match(src, /productCode: l\.productCode \|\| l\['product\$_value'\] \|\| String\(idx \+ 1\)/);
+    });
+
     it('includes subtotalWithoutDiscount label key in labels object', () => {
       assert.match(src, /buildDocumentPdfLabels/, 'hook delegates base labels to buildDocumentPdfLabels');
       assert.match(sharedSrc, /subtotalWithoutDiscount/);

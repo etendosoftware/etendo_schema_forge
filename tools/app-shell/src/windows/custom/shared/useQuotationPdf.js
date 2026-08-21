@@ -26,6 +26,7 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: l.productCode || l['product$_value'] || String(idx + 1),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.orderedQuantity ?? 0,
     unitPrice: l.unitPrice ?? 0,

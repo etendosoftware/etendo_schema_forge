@@ -61,6 +61,12 @@ describe('useQuotationPdf', () => {
     assert.match(src, /l\.lineNetAmount \?\? 0/);
   });
 
+  // ETP-4941 — the printed "CÓD." column must show the product SKU
+  // (product$_value), not the line number.
+  it('ETP-4941: maps productCode from product$_value with lineNo/index fallback', () => {
+    assert.match(src, /productCode: l\.productCode \|\| l\['product\$_value'\] \|\| String\(idx \+ 1\)/);
+  });
+
   it('includes validUntil in the returned data derived from header.validUntil', () => {
     assert.match(src, /validUntil: header\.validUntil/);
   });

@@ -78,6 +78,17 @@ describe('usePurchaseOrderPdf', () => {
     assert.match(sharedSrc, /linesSorted.*sort|sort.*lineNo/s);
   });
 
+  // ETP-4941 — the printed "CÓD." column must show the product SKU
+  // (product$_value), not the line number. Shared buildOrderData/template.
+  it('ETP-4941: maps productCode from product$_value with lineNo/index fallback', () => {
+    assert.match(sharedSrc, /productCode: l\.productCode \|\| l\['product\$_value'\] \|\| String\(idx \+ 1\)/);
+  });
+
+  it('ETP-4941: renders productCode (not lineNo) in the code column', () => {
+    assert.match(sharedSrc, /<td class="code">\{\{this\.productCode\}\}<\/td>/);
+    assert.doesNotMatch(sharedSrc, /<td class="code">\{\{this\.lineNo\}\}<\/td>/);
+  });
+
   it('imports computeDocumentTotals to derive printed totals', () => {
     assert.match(sharedSrc, /import \{ computeDocumentTotals \} from '@\/lib\/documentTotals';/);
   });

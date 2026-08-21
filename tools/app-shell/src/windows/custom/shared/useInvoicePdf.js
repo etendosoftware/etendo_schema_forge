@@ -25,6 +25,7 @@ async function buildInvoiceData(invoiceId, base, token) {
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: l.productCode || l['product$_value'] || String(idx + 1),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.invoicedQuantity ?? l.qtyInvoiced ?? 0,
     unitPrice: l.unitPrice ?? l.priceActual ?? 0,
