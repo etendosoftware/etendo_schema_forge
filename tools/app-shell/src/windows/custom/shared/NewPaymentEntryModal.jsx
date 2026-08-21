@@ -11,6 +11,7 @@ import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
 
@@ -399,14 +400,21 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
           <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
-            <input
-              type="text" inputMode="decimal" value={l.useStr}
-              onChange={e => onUseChange(e.target.value)}
-              onBlur={onUseBlur}
-              data-testid={`cp-credit-use-${l.id}`}
-              style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-            />
-            <span style={{ font: '400 14px/24px Inter', color: FG3, flexShrink: 0 }}>{curSuffix(currency)}</span>
+            {(() => {
+              // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE — this
+              // flex row renders input-then-symbol for EUR/right-side, symbol-then-input for USD/left-side.
+              const amountInput = (
+                <input
+                  type="text" inputMode="decimal" value={l.useStr}
+                  onChange={e => onUseChange(e.target.value)}
+                  onBlur={onUseBlur}
+                  data-testid={`cp-credit-use-${l.id}`}
+                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                />
+              );
+              const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3, flexShrink: 0 }}>{curSuffix(currency)}</span>;
+              return isCurrencySymbolRightSide(currency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+            })()}
           </div>
         ) : <span style={{ font: '400 14px/20px Inter', color: FG3 }}>{ui('cpUnused')}</span>}
       </div>
@@ -1270,14 +1278,19 @@ export default function NewPaymentEntryModal({
           <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
             <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
               <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                <input
-                  type="text" inputMode="decimal" value={balance.amountStr}
-                  onChange={e => balance.onAmountChange(e.target.value)}
-                  onBlur={balance.onAmountBlur}
-                  data-testid="cp-amount-input"
-                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                />
-                <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>
+                {(() => {
+                  const amountInput = (
+                    <input
+                      type="text" inputMode="decimal" value={balance.amountStr}
+                      onChange={e => balance.onAmountChange(e.target.value)}
+                      onBlur={balance.onAmountBlur}
+                      data-testid="cp-amount-input"
+                      style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                    />
+                  );
+                  const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>;
+                  return isCurrencySymbolRightSide(currency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+                })()}
               </div>
             </Field>
             <Field label={ui('date')} required data-testid="Field__7727b3">
@@ -1340,13 +1353,18 @@ export default function NewPaymentEntryModal({
               {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
               <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
                 <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                  <input
-                    type="text" inputMode="decimal" value={amountStr}
-                    onChange={onAmountChange}
-                    data-testid="cp-amount-in-account-input"
-                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                  />
-                  <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
+                  {(() => {
+                    const amountInput = (
+                      <input
+                        type="text" inputMode="decimal" value={amountStr}
+                        onChange={onAmountChange}
+                        data-testid="cp-amount-in-account-input"
+                        style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                      />
+                    );
+                    const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
+                    return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+                  })()}
                 </div>
                 {(rateMissing || rateIsOne) && (
                   <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
