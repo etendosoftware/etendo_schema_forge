@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   listAttachments,
+  fetchAttachmentBlob,
   fetchAttachmentBlobUrl,
 } from '../listAttachments.js';
 
@@ -106,6 +107,79 @@ describe('listAttachments', () => {
   });
 });
 
+// ETP-4315 follow-up (2026-08-18) — new export used by usePdfGenerator's
+// cache-gating branch to serve a marked Attachment's PDF blob directly,
+// skipping jsreport regeneration entirely on a cache hit.
+describe('fetchAttachmentBlob', () => {
+  let originalFetch;
+  let originalWindow;
+  let lastUrl;
+  let lastOptions;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    originalWindow = globalThis.window;
+    globalThis.window = { location: { pathname: '/web/com.etendoerp.go/index.html' } };
+    lastUrl = null;
+    lastOptions = null;
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+
+  it('returns null when required params are missing', async () => {
+    assert.equal(await fetchAttachmentBlob({}), null);
+    assert.equal(await fetchAttachmentBlob({ token: 'tok' }), null);
+    assert.equal(await fetchAttachmentBlob({ attachmentId: 'A1' }), null);
+  });
+
+  it('GETs /sws/neo/attachments/file/{id} with the bearer token and returns the raw Blob on success', async () => {
+    const fakeBlob = new Blob(['x'], { type: 'application/pdf' });
+    globalThis.fetch = async (url, options) => {
+      lastUrl = String(url);
+      lastOptions = options;
+      return { ok: true, blob: async () => fakeBlob };
+    };
+    const result = await fetchAttachmentBlob({
+      token: 'tok',
+      attachmentId: 'A1',
+      apiBaseUrl: 'http://host/sws/neo/purchase-invoice',
+    });
+    assert.match(lastUrl, /^http:\/\/host\/sws\/neo\/attachments\/file\/A1$/);
+    assert.equal(lastOptions.headers.Authorization, 'Bearer tok');
+    assert.equal(result, fakeBlob);
+  });
+
+  it('detects the attachments base from window.location when apiBaseUrl is omitted', async () => {
+    globalThis.fetch = async (url) => {
+      lastUrl = String(url);
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await fetchAttachmentBlob({ token: 'tok', attachmentId: 'A1' });
+    // window.location.pathname is '/web/com.etendoerp.go/index.html' (set in beforeEach);
+    // detectAttachmentsBase() takes everything before '/web/', which is '' here.
+    assert.equal(lastUrl, '/sws/neo/attachments/file/A1');
+  });
+
+  it('returns null (not a throw) on a failed/non-ok response', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 404 });
+    assert.equal(
+      await fetchAttachmentBlob({ token: 'tok', attachmentId: 'A1' }),
+      null,
+    );
+  });
+
+  it('returns null on fetch throw (network error)', async () => {
+    globalThis.fetch = async () => { throw new Error('offline'); };
+    assert.equal(
+      await fetchAttachmentBlob({ token: 'tok', attachmentId: 'A1' }),
+      null,
+    );
+  });
+});
+
 describe('fetchAttachmentBlobUrl', () => {
   let originalFetch;
   let originalURL;
@@ -168,5 +242,23 @@ describe('fetchAttachmentBlobUrl', () => {
       await fetchAttachmentBlobUrl({ token: 'tok', attachmentId: 'A1' }),
       null,
     );
+  });
+
+  // ETP-4315 follow-up (2026-08-18) — fetchAttachmentBlobUrl was refactored to
+  // delegate to fetchAttachmentBlob then wrap the result in URL.createObjectURL,
+  // instead of duplicating the fetch/URL-building logic. Assert both functions
+  // hit the exact same endpoint for the same inputs (same delegation target),
+  // and that a null Blob from the shared code path still yields null here too.
+  it('hits the same endpoint as fetchAttachmentBlob for the same inputs (post-refactor delegation)', async () => {
+    const urls = [];
+    globalThis.fetch = async (url) => {
+      urls.push(String(url));
+      return { ok: true, blob: async () => new globalThis.Blob(['x'], { type: 'application/pdf' }) };
+    };
+    const params = { token: 'tok', attachmentId: 'A9', apiBaseUrl: 'http://host/sws/neo/sales-order' };
+    await fetchAttachmentBlob(params);
+    await fetchAttachmentBlobUrl(params);
+    assert.equal(urls.length, 2);
+    assert.equal(urls[0], urls[1]);
   });
 });
