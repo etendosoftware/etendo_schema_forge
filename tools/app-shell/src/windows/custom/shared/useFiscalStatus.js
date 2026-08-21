@@ -45,6 +45,17 @@ async function fetchTbaiStatus(apiFetch, orgId, invoiceId) {
   return fetchFirstStatus(apiFetch, TBAI_SPEC, 'sincronización', { organization: orgId }, { fkField: 'invoice', statusField: 'estado' }, invoiceId);
 }
 
+// Maps em_etvfac_invoice_status DB codes to the StatusPill keys defined in FmPrimitives.jsx.
+// Without this mapping, codes like 'IN' are misread as the SII 'IN' code ("Rechazado")
+// instead of the Verifactu 'invalid' code ("Inválido") — ETP-4783.
+const VF_STATUS_MAP = {
+  CO: 'accepted',
+  AE: 'partiallyAccepted',
+  ER: 'rejected',
+  IN: 'invalid',
+  PE: 'pending',
+};
+
 async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   const entities = [
     'facturasAceptadas',
@@ -53,8 +64,8 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
     'facturasInválidas',
   ];
   for (const entity of entities) {
-    const status = await fetchFirstStatus(apiFetch, VF_SPEC, entity, { organization: orgId }, { fkField: 'invoice', statusField: 'verifactuSendingStatus' }, invoiceId);
-    if (status !== null) return status;
+    const raw = await fetchFirstStatus(apiFetch, VF_SPEC, entity, { organization: orgId }, { fkField: 'invoice', statusField: 'verifactuSendingStatus' }, invoiceId);
+    if (raw !== null) return VF_STATUS_MAP[raw] ?? raw;
   }
   return null;
 }

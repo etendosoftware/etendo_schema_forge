@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-07-13T13:35:37.405Z",
-  "updatedAt": "2026-07-21T12:35:25.423Z",
-  "checksum": "db9b2ce7708db6da",
+  "updatedAt": "2026-08-13T16:50:52.525Z",
+  "checksum": "5fd57421bef877f7",
   "frontendContract": {
     "window": {
       "id": "B5673F73F613496C8BEA22FB55E4E1E4",
@@ -332,13 +332,17 @@
       "accounting": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/end-year-close/accounting",
         "detailUrl": "/sws/neo/end-year-close/accounting/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [],

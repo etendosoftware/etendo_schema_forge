@@ -938,9 +938,20 @@ export function resolveProcessLabel(p, data) {
   return p.label;
 }
 
-export function renderProcessConfirmModal(process, Modal, onConfirm, onClose, record) {
+/**
+ * Renders the window's `processConfirmModal` for the process awaiting confirmation.
+ *
+ * The slot is just "render this component" — nothing forces a modal to call `onConfirm`. A window
+ * can therefore replace a process button's behaviour outright by rendering something that does its
+ * own work and closes, which is how the payment windows swap the yes/no Confirmar dialog for the
+ * editable payment modal. `apiBaseUrl` and `onRefresh` exist for exactly that case: a modal that
+ * acts on its own needs to reach the API and to refresh the record afterwards, since it never goes
+ * through `handleProcess`. Modals that only confirm ignore both.
+ */
+export function renderProcessConfirmModal(
+  process, Modal, onConfirm, onClose, record, apiBaseUrl, onRefresh) {
   if (!process || !Modal) return null;
-  return React.createElement(Modal, { process, onConfirm, onClose, record });
+  return React.createElement(Modal, { process, onConfirm, onClose, record, apiBaseUrl, onRefresh });
 }
 
 export function resolveStatusPrefix(key, translate) {

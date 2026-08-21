@@ -25,6 +25,65 @@ const ETENDO_BASE = getEtendoBase();
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
 const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
 
+// Purely decorative mini report-page preview shown above each card — a
+// NARROWER "page" (card surface, shadowed), horizontally centered with
+// visible margin on both sides, sitting inside a muted frame — so it reads
+// as "a document floating in a preview area", not content stretched edge to
+// edge. Left/right insets are deliberately much bigger than top/bottom (a
+// portrait-ish page inside a landscape frame), unlike a plain `inset-*` on
+// all sides. Inside: two stacked title bars + a couple of short metadata
+// lines top-right, a thin divider, then a handful of lines of varying width
+// (a couple bolder ones standing in for section bands) laid out with
+// `justify-between` — so, unlike a plain `space-y-*` stack of fixed-height
+// bars, they spread across whatever height the body actually gets and keep
+// reaching toward the bottom of the page instead of clumping at the top with
+// blank space below. Colors are the same semantic tokens the file's own
+// "report ready" loading skeleton further down already uses for this exact
+// two-tone bar pattern (`border-subtle` for the darker tone, `muted` for the
+// lighter one) — see semanticThemeUsage.test.js, which forbids raw palette
+// literals in application UI outside its documented exceptions. Proportions
+// otherwise match the Figma "Card With Image Tags" component's Imagen layer
+// (313:180 aspect). It never reflects a report's real columns/content.
+function ReportCardPreview() {
+  return (
+    <div
+      className="relative w-full aspect-[313/180] rounded-lg bg-muted overflow-hidden pointer-events-none select-none"
+      aria-hidden="true"
+    >
+      <div className="absolute left-[16%] right-[16%] top-3 bottom-3 rounded bg-card shadow-sm p-2.5 overflow-hidden flex flex-col">
+        <div className="flex items-start justify-between gap-3 shrink-0">
+          <div className="space-y-1">
+            <div className="h-2 w-16 rounded bg-border-subtle" />
+            <div className="h-1.5 w-11 rounded bg-border-subtle" />
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+            <div className="h-1 w-7 rounded bg-muted" />
+            <div className="h-1 w-5 rounded bg-muted" />
+          </div>
+        </div>
+        <div className="border-t border-border-subtle mt-1.5 mb-1.5 shrink-0" />
+        <div className="flex-1 flex flex-col justify-between">
+          <div className="h-1.5 w-full rounded bg-border-subtle" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1 w-[92%] rounded bg-muted" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1.5 w-full rounded bg-border-subtle" />
+          <div className="h-1 w-[88%] rounded bg-muted" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1 w-[95%] rounded bg-muted" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Matches the Figma "Card With Image Tags" component's proportions (radii,
+// spacing, type scale) — see the CSS the design handed off for every layer —
+// but through this app's semantic theme tokens rather than the design's raw
+// hex values, per semanticThemeUsage.test.js (no undocumented palette
+// literals in application UI): card surface + border, muted frame, and
+// foreground/muted-foreground text, all resolved from the current theme
+// instead of Figma's light-mode-only colors.
 function ReportCard({ report, onRun }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -32,20 +91,23 @@ function ReportCard({ report, onRun }) {
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
+      className="flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
     >
-      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        <FileText className="h-5 w-5 text-primary" data-testid="FileText__3c998a" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground">{reportTitle}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+      <ReportCardPreview data-testid="ReportCardPreview__3c998a" />
+      <div className="flex flex-col items-stretch gap-1 p-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-card border border-input shadow-sm">
+            <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__3c998a" />
+          </div>
+          <h3 className="text-base font-medium text-foreground min-w-0 truncate">{reportTitle}</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
           {report.type === 'grouped-listing' ? ui('Grouped Report') : ui('Listing Report')}
           {report.orientation === 'landscape' ? ` — ${ui('Landscape')}` : ''}
         </p>
-        <div className="flex gap-1 mt-2">
+        <div className="flex gap-2 flex-wrap pt-1">
           {(report.outputs || []).map(o => (
-            <span key={o} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-medium">{o}</span>
+            <span key={o} className="inline-flex items-center px-2 py-1 rounded-lg bg-muted text-xs font-normal text-muted-foreground uppercase">{o}</span>
           ))}
         </div>
       </div>
@@ -704,15 +766,34 @@ const SIDEBAR_SECTIONS = [
   { key: 'options', labelKey: 'displayOptions' },
 ];
 
+// A parameter can be required outright (`p.required`) or only conditionally,
+// when another parameter currently holds a given value (`p.requiredIf: {param,
+// equals}` — e.g. Profit & Loss's "Reference Year", only mandatory while
+// "Compare To" is toggled on, ETP-4899). Both the sidebar's live asterisk and
+// the shared `validateRequired()` (sidebar submit + top-bar format buttons)
+// read this same helper, so they never drift apart.
+function isParamRequired(p, params) {
+  return !!p.required || !!(p.requiredIf && params[p.requiredIf.param] === p.requiredIf.equals);
+}
+
+// Same conditional idea as `isParamRequired`, but for visibility: a param with
+// `visibleIf: {param, equals}` only renders while that other param currently
+// holds the given value (e.g. Profit & Loss's Reference Year/From/To Reference
+// Date only make sense — and only show — once "Compare To" is toggled on,
+// ETP-4899). A param with no `visibleIf` is always visible (subject to the
+// existing static `hidden` flag, checked separately).
+function isParamVisible(p, params) {
+  return !p.visibleIf || params[p.visibleIf.param] === p.visibleIf.equals;
+}
+
 // Reports whose contract declares its own `sections` (id + label) use the
 // collapsible accordion below. Reports without one keep the legacy flat
 // primary/dimensions/options layout untouched — migrate them one at a time
 // by adding a `sections` array to their report-contract.json (ETP-4898).
-function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds }) {
+function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds, errors, setErrors }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [displayValues, setDisplayValues] = useState({});
-  const [errors, setErrors] = useState({});
   const [popup, setPopup] = useState(null); // { name, selector, label } for popup-single
   const useAccordion = Array.isArray(report.sections) && report.sections.length > 0;
   // Independent open/closed state per section — several can be expanded at once,
@@ -733,19 +814,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     onChange(name, value);
   };
 
-  const handleSubmit = () => {
-    const newErrors = {};
-    for (const p of report.parameters || []) {
-      if (p.hidden) continue;
-      if (p.required && !params[p.name]) newErrors[p.name] = true;
-    }
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) onSubmit();
-  };
-
   const grouped = {};
   for (const p of report.parameters || []) {
-    if (p.hidden) continue;
+    if (p.hidden || !isParamVisible(p, params)) continue;
     const sec = p.section || 'primary';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push(p);
@@ -942,7 +1013,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     const hasError = !!errors[p.name];
     const labelEl = (
       <label className="block text-xs font-medium text-foreground mb-1.5">
-        {label}{p.required && <span className="text-destructive ml-0.5">*</span>}
+        {label}{isParamRequired(p, params) && <span className="text-destructive ml-0.5">*</span>}
       </label>
     );
     const errorBorder = hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border';
@@ -956,19 +1027,33 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     return renderTextParam(p, ctx);
   };
 
+  // Renders params in the exact order the contract declares them (ETP-4899 —
+  // previously every date param was hoisted to the top of the section
+  // regardless of declared order, e.g. Profit & Loss's "Year" always landed
+  // BELOW "Starting/Ending Date" even though the contract lists it first).
+  // Adjacent date params still pair up into the 2-column grid — just wherever
+  // that run actually falls in the declared order, not forced to the front.
   const renderSection = (sec, sectionParams) => {
-    const dateParams = sectionParams.filter(p => p.type === 'date');
-    const otherParams = sectionParams.filter(p => p.type !== 'date');
-    return (
-      <div className="space-y-3">
-        {dateParams.length > 0 && (
-          <div className={dateParams.length >= 2 ? 'grid grid-cols-2 gap-2' : ''}>
-            {dateParams.map(renderParam)}
+    const blocks = [];
+    let i = 0;
+    while (i < sectionParams.length) {
+      if (sectionParams[i].type === 'date') {
+        const run = [];
+        while (i < sectionParams.length && sectionParams[i].type === 'date') {
+          run.push(sectionParams[i]);
+          i++;
+        }
+        blocks.push(
+          <div key={`date-run-${run[0].name}`} className={run.length >= 2 ? 'grid grid-cols-2 gap-2' : ''}>
+            {run.map(renderParam)}
           </div>
-        )}
-        {otherParams.map(renderParam)}
-      </div>
-    );
+        );
+      } else {
+        blocks.push(renderParam(sectionParams[i]));
+        i++;
+      }
+    }
+    return <div className="space-y-3">{blocks}</div>;
   };
 
   return (
@@ -1044,7 +1129,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           {ui('resetFilters')}
         </button>
         <button
-          onClick={handleSubmit}
+          onClick={onSubmit}
           disabled={loading}
           className="flex-1 h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
@@ -1134,7 +1219,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
         ))}
         <button onClick={openFullReport}
           className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
-          <ExternalLink className="h-3.5 w-3.5" />{ui('openFullReport')}
+          <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__3c998a" />{ui('openFullReport')}
         </button>
       </div>
       <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
@@ -1168,7 +1253,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
-  const [invoicePopup, setInvoicePopup] = useState(null);
   const { locale } = useLocaleSwitch();
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1185,7 +1269,13 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else if (e.data?.type === 'trial-balance-drilldown' && e.data.accountId) {
         setDrillDownAccount({ id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '' });
       } else if (e.data?.type === 'navigate-invoice' && e.data.invoiceId) {
-        setInvoicePopup({ id: e.data.invoiceId });
+        // Opens the invoice in a real new tab instead of an embedded modal —
+        // the document window (sales-invoice/purchase-invoice) is decided by
+        // the report's own template.hbs (docWindow in the postMessage), never
+        // hardcoded here, since this handler is shared by every report.
+        const docWindow = e.data.docWindow || 'sales-invoice';
+        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}`, '_blank');
       }
     };
     window.addEventListener('message', handler);
@@ -1200,6 +1290,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
         const now = new Date();
         defaults[p.name] = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      } else if (p.default === '__FIRST_OF_YEAR__') {
+        defaults[p.name] = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
       } else if (p.default !== undefined && p.default !== null && p.default !== false) {
         defaults[p.name] = String(p.default);
       } else {
@@ -1229,6 +1321,22 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   }, [report, selectedOrgId, searchParams]);
 
   const [params, setParams] = useState(getDefaultParams);
+  // Lifted from ReportSidebar (ETP-4899): the top bar's PDF/Excel/CSV buttons call
+  // renderReport() directly, bypassing ReportSidebar's own "Generate Report" button —
+  // so validation has to live here too, shared by both entry points, or the top bar
+  // buttons silently send an incomplete request straight to the backend (which then
+  // fails server-side, e.g. NEO 400 "dateFrom and dateTo are required", instead of the
+  // sidebar showing its usual red "Required" boxes).
+  const [errors, setErrors] = useState({});
+  const validateRequired = useCallback(() => {
+    const newErrors = {};
+    for (const p of report.parameters || []) {
+      if (p.hidden) continue;
+      if (isParamRequired(p, params) && !params[p.name]) newErrors[p.name] = true;
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [report, params]);
 
   useEffect(() => {
     if (!(report.parameters || []).some(p => p.name === 'orgId')) return;
@@ -1241,16 +1349,28 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
 
   // Auto-load defaults for params marked with autoDefault: true.
   // Params with dependsOn are loaded in a second pass, after their dependency is resolved.
-  useEffect(() => {
+  // Extracted so "Limpiar filtros" can re-run it too — getDefaultParams() has no literal
+  // default for these (that's the whole point of autoDefault), so a plain reset blanked
+  // them out (e.g. Moneda) instead of restoring the auto-loaded value.
+  const loadAutoDefaults = useCallback(() => {
     const autoParams = (report.parameters || []).filter(p => p.autoDefault && p.selector && p.name !== 'orgId');
     if (!autoParams.length) return;
     Promise.all(
-      autoParams.map(p =>
-        fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+      autoParams.map(p => {
+        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency
+        // (ad_org.c_currency_id, same field /organization shows as "Moneda"), not just
+        // the client's base currency — a multi-org client can have orgs in different
+        // currencies. report-api.js's 'currency' selector already prefers the org's
+        // currency in its ORDER BY when selectedOrgId is passed; without it, it falls
+        // back to the client's base currency.
+        const orgParam = (p.selector === 'currency' && selectedOrgId)
+          ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
+          : '';
+        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
           .then(r => r.json())
           .then(data => { const rows = Array.isArray(data) ? data : (data.items || []); return rows[0] ? { name: p.name, id: rows[0].id, display: rows[0].name } : null; })
-          .catch(() => null)
-      )
+          .catch(() => null);
+      })
     ).then(results => {
       const updates = {};
       for (const r of results) {
@@ -1260,7 +1380,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       }
       if (Object.keys(updates).length) setParams(prev => ({ ...prev, ...updates }));
     });
-  }, [report]);
+  }, [report, selectedOrgId]);
+
+  useEffect(() => { loadAutoDefaults(); }, [loadAutoDefaults]);
 
   const writeToIframe = (html) => {
     const iframe = iframeRef.current;
@@ -1346,6 +1468,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const handleReset = () => {
     setParams(getDefaultParams());
     setResetKey(k => k + 1);
+    loadAutoDefaults();
   };
 
   const { toggleFavorite, isFavorite } = useFavorites();
@@ -1386,7 +1509,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             {DOWNLOAD_FORMATS.map(fmt => {
               const Icon = fmt.icon;
               return (
-                <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
+                <button key={fmt.id} onClick={() => { if (validateRequired()) renderReport(fmt.id); }} disabled={loading}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
                   <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
                 </button>
@@ -1408,13 +1531,15 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               report={report}
               params={params}
               onChange={(name, value) => setParams(prev => ({ ...prev, [name]: value }))}
-              onSubmit={() => renderReport('html')}
+              onSubmit={() => { if (validateRequired()) renderReport('html'); }}
               onReset={handleReset}
               loading={loading}
               resetKey={resetKey}
               token={token}
               selectedOrgId={selectedOrgId}
               roleOrgIds={roleOrgIds}
+              errors={errors}
+              setErrors={setErrors}
               data-testid="ReportSidebar__3c998a" />
           </div>
 
@@ -1517,22 +1642,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
           )}
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={!!invoicePopup}
-        onOpenChange={(o) => !o && setInvoicePopup(null)}
-        data-testid="Dialog__3c998a">
-        <DialogContent
-          className="max-w-5xl w-[85vw] h-[80vh] p-0 overflow-hidden"
-          data-testid="DialogContent__3c998a">
-          {invoicePopup && (
-            <iframe
-              src={`${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/purchase-invoice/${invoicePopup.id}?embedded=1`}
-              title={ui('invoice')}
-              className="w-full h-full border-0"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
@@ -1598,7 +1707,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
     );
   } else {
     reportListContent = (
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6">
         {Object.entries(grouped).map(([cat, catReports]) => (
           <div key={cat}>
             {!categoryFilter && Object.keys(grouped).length > 1 && (
@@ -1606,7 +1715,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
               </h2>
             )}
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {catReports.map(r => (
                 <ReportCard
                   key={r.id}

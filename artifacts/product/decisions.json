@@ -392,6 +392,7 @@
       }
     },
     "stock": {
+      "readOnly": true,
       "javaQualifier": "productStockWarehouseHandler",
       "fields": {
         "storageBin": {
@@ -507,6 +508,7 @@
       "exclude": true
     },
     "costing": {
+      "readOnly": true,
       "fields": {
         "costType": {
           "visibility": "readOnly",
@@ -575,6 +577,7 @@
       "exclude": true
     },
     "transactions": {
+      "readOnly": true,
       "fields": {
         "movementDate": {
           "visibility": "readOnly",

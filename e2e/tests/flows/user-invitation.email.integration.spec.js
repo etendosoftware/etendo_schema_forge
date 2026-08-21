@@ -23,9 +23,19 @@ function loadCredentials(accountNumber = 1) {
 
 const onboardingCredentials = loadCredentials();
 const secondAdminCredentials = loadCredentials(2);
+// The email sink is an opt-in dependency: playwright.config.js only starts
+// `support/email-sink.mjs` when E2E_EMAIL_SINK=1, and the backend additionally
+// has to be pointed at its POST /send endpoint. Without it every test here dies
+// in setup on `clearEmailSink` with ECONNREFUSED 127.0.0.1:8025 — which is what
+// the pre-push integration leg hit, since the gate never sets the flag. Declare
+// it as a precondition so an absent optional dependency skips instead of
+// failing the gate for everyone.
+const RUN_EMAIL_SINK = process.env.E2E_EMAIL_SINK === '1'
+  || Boolean(process.env.E2E_EMAIL_SINK_URL);
 const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0'
   && Boolean(process.env.BASE_URL)
-  && Boolean(process.env.E2E_PASSWORD || onboardingCredentials);
+  && Boolean(process.env.E2E_PASSWORD || onboardingCredentials)
+  && RUN_EMAIL_SINK;
 const RUN_CROSS_CLIENT = RUN_INTEGRATION && Boolean(secondAdminCredentials);
 const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025';
 const invitationCredential = process.env.E2E_INVITATION_PASSWORD
@@ -241,7 +251,7 @@ async function acceptNewInvitation(browser, inviteLink, email) {
 }
 
 test.describe('Company User Invitations — email integration E2E — ETP-4894', () => {
-  test.skip(!RUN_INTEGRATION, 'Requires real Etendo Go, E2E_USE_MOCK=0, BASE_URL, and credentials.');
+  test.skip(!RUN_INTEGRATION, 'Requires real Etendo Go, E2E_USE_MOCK=0, BASE_URL, credentials, and the email sink (E2E_EMAIL_SINK=1).');
   test.describe.configure({ mode: 'serial' });
   test.setTimeout(180_000);
 

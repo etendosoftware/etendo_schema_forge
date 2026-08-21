@@ -1264,7 +1264,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
       siiRef={siiRef}
       tbaiRef={tbaiRef}
       verifactuRef={verifactuRef}
-      onBack={() => goTo('confirm')}
+      onBack={() => goTo('applied')}
       onApplied={() => goTo('applied')}
       onComplete={onComplete}
       data-testid="DetailScreen__e9ef3f" />
