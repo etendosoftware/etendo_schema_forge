@@ -14,6 +14,7 @@ import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { PIS_FAILURE_STATUSES, pisOutcome } from './paymentStatuses';
 
 // ─── design tokens (Etendo Design System — cobros/pagos Figma handoff) ────────
 const INK = 'hsl(var(--foreground))';
@@ -57,18 +58,41 @@ const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: tr
 const PIS_AMBER_TEXT = 'var(--status-warning-fg)';
 const PIS_ALERT_BG = 'var(--status-warning-bg)';
 const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
-// 'initiated' is a real Salt Edge PIS status (seen for "connect"-flow payments) that isn't in the
-// PSD2_PIS_PAYMENT ref-list's documented set (requested/authorizing/authorized/processing/executed/
-// settled/failed) but does get returned/persisted — without it here, a payment sitting in that
-// state gets misread as a terminal failure and the modal wrongly shows "transfer failed".
-const PIS_NON_TERMINAL_STATUSES = ['requested', 'initiated', 'authorizing', 'authorized', 'processing'];
+// The authoritative status vocabulary is the AD ref-list "PIS Payment Status"
+// (AD_REFERENCE_ID D5483E7D91134499B42BBD963BC2F9CC, Bank Integration module), which has exactly
+// these 8 values. An earlier version of this list was transcribed wrong: it carried an invented
+// 'processing' value that is not in the ref-list, and omitted the real 'initiated_info_required'.
+// Confirmed live against Salt Edge — a payment landed in 'initiated_info_required', fell through
+// to the terminal branch and was reported to the user as a failed transfer while it was still in
+// progress (ETP-4895).
+//
+// Classification is deliberately explicit on success and failure, and treats EVERYTHING else —
+// including a status this list does not know yet — as "still running". Defaulting an unknown
+// status to failure is what caused the bug; defaulting it to "keep polling" is self-healing if
+// Salt Edge ever adds a value.
+// The lists and the classifier moved to paymentStatuses.js when the payment window's retry button
+// needed the same reading of a Salt Edge status; a second copy here is what the shared module
+// exists to prevent. The reasoning above still applies verbatim — see the comments over there.
 const PIS_STATUS_KEYS = {
   requested: 'cpPisStatusRequested',
+  initiated: 'cpPisStatusRequested',
+  initiated_info_required: 'cpPisStatusInfoRequired',
   authorizing: 'cpPisStatusAuthorizing',
   authorized: 'cpPisStatusAuthorized',
-  processing: 'cpPisStatusProcessing',
   executed: 'cpPisStatusExecuted',
+  settled: 'cpPisStatusExecuted',
 };
+// Stop polling after ~10 minutes, and only once the bank window is gone (see the poll effect).
+// Generous on purpose: waiting too long costs nothing — the user has "Cancel wait" — while giving
+// up too early risks the transfer completing after we stopped looking, which is how a payment ends
+// up made at the bank and never recorded here. Reaching this is NOT an error.
+const PIS_MAX_POLL_MS = 600000;
+const PIS_POLL_INTERVAL_MS = 3000;
+// Consecutive transport failures tolerated before telling the user we lost contact. A network or
+// HTTP blip is NOT a bank-side failure — the previous code synthesized a literal 'failed' status
+// on any fetch error, which was indistinguishable from a real rejection.
+const PIS_MAX_TRANSPORT_ERRORS = 5;
+
 // Template search-keys (match the AD "Template List for Bank Payments" ref-list values).
 const PIS_TEMPLATE_SEPA = 'SEPA';
 const PIS_TEMPLATE_DOMESTIC = 'DOMESTIC';
@@ -218,9 +242,26 @@ function openPisPopup(url) {
   return window.open(url, 'saltEdgePisWidget', features);
 }
 
-/** i18n key for a PIS payment status; any terminal status other than "executed" reads as a failure. */
+/**
+ * i18n key for a PIS payment status. Only the documented failure status reads as a failure — an
+ * unmapped/unknown value is shown with the neutral "in progress" label, because the poll treats it
+ * as still-running (see pisOutcome). Previously anything unmapped fell back to the failure label,
+ * so a perfectly healthy 'initiated_info_required' told the user the authorization had failed.
+ */
 function pisStatusKey(status) {
-  return PIS_STATUS_KEYS[status] || 'cpPisStatusFailed';
+  if (PIS_STATUS_KEYS[status]) return PIS_STATUS_KEYS[status];
+  return PIS_FAILURE_STATUSES.includes(status) ? 'cpPisStatusFailed' : 'cpPisStatusRequested';
+}
+
+/**
+ * Text shown in the waiting footer: the closed-window warning wins, then a soft "lost contact"
+ * notice after repeated transport errors, otherwise the current status label. The lost-contact
+ * notice deliberately does not claim the transfer failed — we simply cannot reach our own backend.
+ */
+function pisWaitingLabel(pisPolling, pisWindowClosed, ui) {
+  if (pisWindowClosed) return ui('cpPisWindowClosed');
+  if ((pisPolling.transportErrors || 0) >= PIS_MAX_TRANSPORT_ERRORS) return ui('cpPisConnectionLost');
+  return ui(pisStatusKey(pisPolling.status));
 }
 /** True when `account` supports `methodId` (or the account's methods are unknown/legacy). */
 function accountSupportsMethod(account, methodId) {
@@ -362,6 +403,65 @@ function Field({ label, required = false, children }) {
         {label}{required && <span style={{ color: RED_FG }}> *</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * The rate + converted-amount pair, shown only when the invoice currency differs from the selected
+ * account's (ETP-4504). Its own component for the same reason as PisTransferSection below: it is a
+ * self-contained block of the form, and leaving it inline pushed the modal past its
+ * cognitive-complexity limit. Both fields are editable and each recomputes the other, so they share
+ * the same error line.
+ */
+function ConversionFields({
+  visible, ui, rateStr, amountStr, accountCurrency, rateMissing, rateIsOne,
+  onRateChange, onAmountChange,
+}) {
+  if (!visible) return null;
+  const invalid = rateMissing || rateIsOne;
+  const errorText = ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired');
+  const boxStyle = { display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 };
+  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' };
+  const errorStyle = { font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
+      <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
+        <div style={boxStyle}>
+          <input
+            type="text" inputMode="decimal" value={rateStr}
+            onChange={onRateChange}
+            data-testid="cp-conversion-rate-input"
+            style={inputStyle}
+          />
+        </div>
+        {invalid && (
+          <p style={errorStyle} data-testid="cp-conversion-rate-error">{errorText}</p>
+        )}
+      </Field>
+      {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
+      <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
+        <div style={boxStyle}>
+          {(() => {
+            // ETP-4314: the currency symbol sits on whichever side the instance-wide
+            // currency format declares — never hardcoded after the amount.
+            const amountInput = (
+              <input
+                type="text" inputMode="decimal" value={amountStr}
+                onChange={onAmountChange}
+                data-testid="cp-amount-in-account-input"
+                style={inputStyle}
+              />
+            );
+            const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
+            return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+          })()}
+        </div>
+        {invalid && (
+          <p style={errorStyle} data-testid="cp-amount-in-account-error">{errorText}</p>
+        )}
+      </Field>
     </div>
   );
 }
@@ -670,7 +770,7 @@ function PaymentModalFooter({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
-            {pisWindowClosed ? ui('cpPisWindowClosed') : ui(pisStatusKey(pisPolling.status))}
+            {pisWaitingLabel(pisPolling, pisWindowClosed, ui)}
           </span>
           {pisWindowClosed && (
             <button
@@ -735,6 +835,27 @@ function matchMethodIdByName(methods, name) {
   if (!name) return '';
   const hit = methods.find(m => m.name === name);
   return hit ? hit.id : '';
+}
+
+/**
+ * Seeds method and account once the catalogs are in: an edit prefills from the draft it is
+ * correcting, a new payment takes the defaults. Outside the component so the loading effect stays
+ * a fetch rather than a fetch plus a decision tree.
+ */
+function seedMethodAndAccount({
+  isEdit, payment, accJson, accList, methList, bpPreferredAccountId,
+  setMethodId, setAccountId, onAmountChange,
+}) {
+  if (!isEdit) {
+    const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
+    setMethodId(defaultMethodId);
+    setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountId));
+    return;
+  }
+  setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
+    || pickDefaultMethodId(accJson, accList, methList));
+  setAccountId(payment.accountId || pickDefaultAccountId(accList, '', bpPreferredAccountId));
+  onAmountChange(formatPlain(Number(payment.amount) || 0));
 }
 
 export default function NewPaymentEntryModal({
@@ -840,18 +961,12 @@ export default function NewPaymentEntryModal({
         setMethods(methList);
         setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        if (isEdit) {
-          // Edit mode: prefill from the draft instead of picking defaults.
-          setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
-            || pickDefaultMethodId(accJson, accList, methList));
-          setAccountId(payment.accountId
-            || pickDefaultAccountId(accList, '', bpPreferredAccountIdRef.current));
-          balance.onAmountChange(formatPlain(Number(payment.amount) || 0));
-        } else {
-          const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
-          setMethodId(defaultMethodId);
-          setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
-        }
+        // Edit mode prefills from the draft instead of picking defaults.
+        seedMethodAndAccount({
+          isEdit, payment, accJson, accList, methList,
+          bpPreferredAccountId: bpPreferredAccountIdRef.current,
+          setMethodId, setAccountId, onAmountChange: balance.onAmountChange,
+        });
 
         if (!scheduleIdProp) {
           const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
@@ -1072,18 +1187,27 @@ export default function NewPaymentEntryModal({
       if (event.data?.type === 'pis-completed') {
         pisReturnedRef.current = true;
         setPisWindowClosed(false);
+        // The user is back from the bank, so the status has almost certainly just moved. Re-arm
+        // the poll immediately (new object identity re-runs the effect, which schedules the next
+        // tick) instead of leaving the user waiting out the remainder of the 3s interval — this
+        // is what makes the modal close promptly on return.
+        setPisPolling(prev => (prev ? { ...prev, transportErrors: 0 } : prev));
       }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA
-  // authorization. Re-runs on every status change (new object identity),
-  // scheduling the next poll or reacting to a terminal status inline.
+  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA authorization. Re-runs on
+  // every status change (new object identity), scheduling the next poll or reacting to a resolved
+  // outcome inline. `pisOutcome` collapses the 8 ref-list statuses into success/failure/pending;
+  // pending covers unknown statuses too, so an unrecognized value keeps the transfer alive rather
+  // than reporting a failure that never happened.
   useEffect(() => {
     if (!pisPolling) return undefined;
-    if (pisPolling.status === 'executed') {
+    const outcome = pisOutcome(pisPolling.status);
+
+    if (outcome === 'success') {
       // Force-close the Salt Edge popup from the opener side rather than waiting on its own
       // return page to close itself — that page is a shared Classic-styled static resource
       // and self-close can be delayed/blocked, leaving the user staring at it needlessly.
@@ -1094,15 +1218,45 @@ export default function NewPaymentEntryModal({
       setPisPolling(null);
       return undefined;
     }
-    if (!PIS_NON_TERMINAL_STATUSES.includes(pisPolling.status)) {
-      // Terminal, non-executed status (or an unrecognized one) — stop polling,
-      // surface an inline error, and let the user retry from the editable form.
+    if (outcome === 'registered') {
+      // Authorized at the bank: the payment exists but the money has not landed. Close showing that
+      // it is registered and still in progress — the history row carries the "in progress" state
+      // and will settle on its own once the bank executes.
       pisPopupRef.current?.close();
       pisPopupRef.current = null;
-      setError(ui('cpPisFailedError'));
+      toast.info(ui('cpPisAuthorizedRegistered'));
+      onSaved?.(pisResultRef.current || {}, 'pending');
       setPisPolling(null);
       return undefined;
     }
+    if (outcome === 'failure') {
+      // The bank rejected the transfer and NO payment was created — the money never moved, so
+      // recording the attempt would only leave a row to clean up. The user is already here, so the
+      // modal stays open with its data intact and they just try again; the toast says what
+      // happened. This is why there is no onSaved call: there is nothing new to show.
+      pisPopupRef.current?.close();
+      pisPopupRef.current = null;
+      toast.error(ui('cpPisRejectedNoPayment'));
+      setPisPolling(null);
+      return undefined;
+    }
+    // Still running. Stop watching after PIS_MAX_POLL_MS — but only once the user has left the
+    // bank window. While it is still open they are mid-authentication (logging in, waiting for an
+    // SMS, approving on their phone), which legitimately takes minutes; timing out there would
+    // yank the bank's own window away and abort the transfer they are in the middle of
+    // authorizing. The countdown only applies to a transfer nobody is attending to any more.
+    //
+    // Giving up is NOT a failure either: the transfer can still complete at the bank, so the modal
+    // closes with an "in progress" notice instead of an error, and the bank window is left alone.
+    const bankWindowGone = !pisPopupRef.current || pisPopupRef.current.closed;
+    if (bankWindowGone && (pisPolling.elapsedMs || 0) >= PIS_MAX_POLL_MS) {
+      pisPopupRef.current = null;
+      toast.info(ui('cpPisStillInProgress'));
+      onSaved?.(pisResultRef.current || {}, 'pending');
+      setPisPolling(null);
+      return undefined;
+    }
+
     let cancelled = false;
     const timer = setTimeout(async () => {
       // Surface whether the user closed the Salt Edge window before authorizing. We keep polling
@@ -1120,11 +1274,28 @@ export default function NewPaymentEntryModal({
         });
         const json = await readJson(res);
         if (cancelled) return;
-        setPisPolling(prev => (prev ? { ...prev, status: json?.status || 'failed' } : prev));
+        // A transport-level problem (non-ok response → readJson null, or a thrown fetch) is NOT a
+        // bank rejection: keep the last known status and try again. Only after
+        // PIS_MAX_TRANSPORT_ERRORS consecutive failures do we tell the user we lost contact —
+        // still without claiming the transfer failed.
+        setPisPolling(prev => {
+          if (!prev) return prev;
+          const elapsedMs = (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS;
+          if (!json?.status) {
+            return { ...prev, elapsedMs, transportErrors: (prev.transportErrors || 0) + 1 };
+          }
+          return { ...prev, status: json.status, elapsedMs, transportErrors: 0 };
+        });
       } catch {
-        if (!cancelled) setPisPolling(prev => (prev ? { ...prev, status: 'failed' } : prev));
+        if (!cancelled) {
+          setPisPolling(prev => prev ? {
+            ...prev,
+            elapsedMs: (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS,
+            transportErrors: (prev.transportErrors || 0) + 1,
+          } : prev);
+        }
       }
-    }, 3000);
+    }, PIS_POLL_INTERVAL_MS);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pisPolling]);
@@ -1212,13 +1383,37 @@ export default function NewPaymentEntryModal({
     onSaved?.({ cancelled: true }, 'reverted');
   }, [apiFetch, specName, invoiceId, pisPolling, onSaved]);
 
-  // Reopens the Salt Edge popup after the user closed it before authorizing — reuses the
-  // last registerPayment result (which carries the pisPaymentUrl) rather than re-requesting it.
-  const onReopenPis = useCallback(() => {
-    pisPopupRef.current = openPisPopup(pisResultRef.current?.pisPaymentUrl);
-    pisReturnedRef.current = false;
+  /**
+   * Starts a fresh bank window after the user closed the previous one before authorizing.
+   *
+   * A Salt Edge widget session is single-use: once its window is closed the session is gone, and
+   * reopening the same pisPaymentUrl only ever renders "Sesión perdida". So this asks the backend
+   * to abandon the current attempt and start a new order — new URL, new end-to-end id — and opens
+   * that instead (ETP-4895).
+   */
+  const onReopenPis = useCallback(async () => {
+    const pid = pisPolling?.pisPaymentId;
+    if (!pid) return;
     setPisWindowClosed(false);
-  }, []);
+    try {
+      const res = await apiFetch(`/${specName}/header/${invoiceId}/action/retryPisPayment`, {
+        method: 'POST', body: JSON.stringify({ pisPaymentId: pid }),
+      });
+      const json = await readJson(res);
+      const data = json?.response?.data || json?.data || json;
+      if (!res?.ok || !data?.pisPaymentUrl || !data?.pisPaymentId) {
+        setError(ui('cpPisReopenFailed'));
+        return;
+      }
+      pisResultRef.current = data;
+      pisPopupRef.current = openPisPopup(data.pisPaymentUrl);
+      pisReturnedRef.current = false;
+      // Track the NEW attempt: the old one was abandoned server-side and will never resolve.
+      setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
+    } catch {
+      setError(ui('cpPisReopenFailed'));
+    }
+  }, [apiFetch, specName, invoiceId, pisPolling, ui]);
 
   // Closing the modal while a PIS transfer is still pending must also undo the PPM payment,
   // otherwise the invoice is left looking paid for a transfer that never happened.
@@ -1229,6 +1424,14 @@ export default function NewPaymentEntryModal({
 
   const title = modalTitleFor(isEdit, isReceipt, ui);
   const deltaLabel = deltaLabelFor(balance, ui);
+
+  // Once the bank window is open the form is a read-only record of what was already sent: those
+  // values are travelling to the bank, and changing them here could only make the modal disagree
+  // with the transfer being authorized on the other side. `inert` locks the whole body in one go —
+  // clicks, typing and focus — while leaving it readable and scrollable, which matters because the
+  // user is comparing it against the bank's own confirmation screen. The footer stays outside the
+  // lock, so the wait can still be cancelled and the window reopened (ETP-4895).
+  const formLocked = Boolean(pisPolling);
 
   // Floppy + check icons for the footer actions (Figma).
   const floppy = (
@@ -1255,7 +1458,12 @@ export default function NewPaymentEntryModal({
         >×</button>
 
         {/* body */}
-        <div style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div
+          data-testid="cp-modal-body"
+          inert={formLocked ? '' : undefined}
+          aria-disabled={formLocked || undefined}
+          style={{ padding: '0 0 8px', display: 'flex', flexDirection: 'column', gap: 12, background: 'hsl(var(--card))', flex: 1, minHeight: 0, overflow: 'auto', opacity: formLocked ? 0.6 : 1, transition: 'opacity .15s ease' }}
+        >
 
           {/* invoice-context widget */}
           <div style={{ padding: '0 20px' }}>
@@ -1333,47 +1541,17 @@ export default function NewPaymentEntryModal({
           </div>
 
           {/* multi-currency conversion (ETP-4504) — only when invoice currency ≠ account currency */}
-          {isForeign && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
-              <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                  <input
-                    type="text" inputMode="decimal" value={rateStr}
-                    onChange={onRateChange}
-                    data-testid="cp-conversion-rate-input"
-                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                  />
-                </div>
-                {(rateMissing || rateIsOne) && (
-                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-conversion-rate-error">
-                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
-                  </p>
-                )}
-              </Field>
-              {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
-              <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
-                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
-                  {(() => {
-                    const amountInput = (
-                      <input
-                        type="text" inputMode="decimal" value={amountStr}
-                        onChange={onAmountChange}
-                        data-testid="cp-amount-in-account-input"
-                        style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
-                      />
-                    );
-                    const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
-                    return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
-                  })()}
-                </div>
-                {(rateMissing || rateIsOne) && (
-                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
-                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
-                  </p>
-                )}
-              </Field>
-            </div>
-          )}
+          <ConversionFields
+            visible={isForeign}
+            ui={ui}
+            rateStr={rateStr}
+            amountStr={amountStr}
+            accountCurrency={accountCurrency}
+            rateMissing={rateMissing}
+            rateIsOne={rateIsOne}
+            onRateChange={onRateChange}
+            onAmountChange={onAmountChange}
+            data-testid="ConversionFields__b085c9" />
 
           {/* unified credit / saldo a favor — credit (purple) + abono (green) rows */}
           {balance.lines.length > 0 && (
