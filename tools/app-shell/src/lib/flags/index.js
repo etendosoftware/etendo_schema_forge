@@ -1,5 +1,4 @@
 export {
-  TENANT_UPGRADE,
   PROOF_OF_CONCEPT_MENU,
   FLAG_DEFAULTS,
   defaultForFlag,
