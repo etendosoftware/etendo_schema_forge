@@ -192,6 +192,55 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     expect(mockHook.handleSaveAndProcess).not.toHaveBeenCalled();
   });
 
+  // ETP-4940 — draftMode windows whose Confirm button uses a custom `onConfirm`
+  // callback (sales-order, purchase-order, sales-quotation, goods-receipt,
+  // goods-shipment all dispatch a DOM event here to open their own confirm
+  // modal) fully bypass `handleSaveAndProcess`, which is the only place that
+  // otherwise calls `handleSave` first. Without the maybeSaveBeforeConfirm gate
+  // in `renderDraftModeSaveActions`, a header edit made right before clicking
+  // Confirm — without clicking Save first — was silently discarded: the
+  // document confirmed with the previously-persisted value.
+  describe('draftMode with onConfirm: save-before-confirm guard (ETP-4940)', () => {
+    it('dirty header + click Confirm → saves silently BEFORE the custom onConfirm fires', async () => {
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // BASE_PROPS.additionalDirtyState=true → isDirty is true.
+      render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
+
+    it('dirty header + save fails → the custom onConfirm does NOT fire', async () => {
+      // handleSave returns null on validation/required/numeric/backend
+      // failure — it has already surfaced the error itself.
+      mockHook.handleSave = vi.fn(() => Promise.resolve(null));
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+      expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('no pending changes → the custom onConfirm fires without an extra save call', async () => {
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // Override additionalDirtyState so isDirty is false (mockHook.isDirtyHeader
+      // is already false via resetHook, and there are no pending line edits).
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).not.toHaveBeenCalled();
+    });
+  });
+
   it('new record: Save persists then navigates to the created record', async () => {
     mockHook.handleSave = vi.fn(() => Promise.resolve({ id: 'new-999' }));
     render(<DetailView {...BASE_PROPS} recordId="new" />);

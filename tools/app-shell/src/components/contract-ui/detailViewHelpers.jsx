@@ -1053,3 +1053,47 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
         : gross;
   }
 }
+
+/**
+ * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
+ * `saveBeforeProcesses` participate; every other window keeps the previous behavior
+ * (returns true immediately, no save). When the form has pending changes (`isDirty`,
+ * the same signal that drives the Save button), the changes are persisted silently
+ * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
+ * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
+ * violation, or a backend error — `handleSave` has already surfaced the error and returns
+ * a record without an id; this returns false so the caller aborts without opening the
+ * confirm modal, param dialog, or firing the process POST.
+ *
+ * Originally defined in DetailView.jsx; moved here (R1: no test was edited — DetailView.jsx
+ * re-exports it) because that file is growth-guarded (see .claude/hooks/check-detailview-growth.mjs).
+ *
+ * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
+ */
+export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
+  if (!saveBeforeProcesses || !isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
+/**
+ * ETP-4940: unconditional (no per-window opt-in — unlike maybeSaveBeforeProcess above)
+ * "save before confirm" gate for draftMode windows whose `draftMode.onConfirm` is a
+ * custom callback (e.g. dispatches a DOM event that opens the window's own confirm
+ * modal — sales-order, purchase-order, sales-quotation, goods-receipt, goods-shipment
+ * all do this). That callback fully bypasses `hook.handleSaveAndProcess` (which already
+ * calls `handleSave` first for the non-custom draftMode path), so without this gate a
+ * header edit made right before clicking Confirm — without clicking Save first — was
+ * silently discarded: the document confirmed with the previously-persisted value.
+ * No-op when there is nothing pending (`isDirty` false, the same signal that drives the
+ * Save Draft button). On save failure, `handleSave` has already surfaced the error
+ * (toast / field errors) — this returns false so the caller aborts instead of opening
+ * the confirm modal on stale data.
+ *
+ * @returns {Promise<boolean>} true → proceed to draftMode.onConfirm(); false → abort.
+ */
+export async function maybeSaveBeforeConfirm({ isDirty, handleSave }) {
+  if (!isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
