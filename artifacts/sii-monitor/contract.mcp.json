@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-08-04T14:03:25.379Z",
-  "contractChecksum": "d43ccec2d3f8430f",
+  "updatedAt": "2026-08-20T19:10:32.557Z",
+  "contractChecksum": "6a0d049bec62429d",
   "apiPrediction": {
     "specName": "sii-monitor",
     "baseUrl": "/sws/neo/sii-monitor",
@@ -2887,11 +2887,11 @@
           "aeatsiiEstado": {
             "readOnly": true,
             "readOnlyLogic": "true",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
           },
           "invoiceDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
             "defaultValue": "@#Date@"
           },
           "etsgDateOperation": {
@@ -2900,7 +2900,7 @@
           },
           "accountingDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
+            "readOnlyLogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
             "defaultValue": "@#Date@"
           },
           "documentStatus": {
@@ -2918,7 +2918,7 @@
           },
           "aeatsiiClaveTipo": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
           },
           "aeatsiiMotivoRectif": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'"
@@ -3002,16 +3002,16 @@
           "aeatsiiEstado": {
             "readOnly": true,
             "readOnlyLogic": "true",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
           },
           "invoiceDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
             "defaultValue": "@#Date@"
           },
           "aeatsiiFechaRegCont": {
             "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
           },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
@@ -3019,7 +3019,7 @@
           },
           "accountingDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
+            "readOnlyLogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
             "defaultValue": "@#Date@"
           },
           "documentStatus": {
@@ -3027,7 +3027,9 @@
             "required": true,
             "defaultValue": "DR"
           },
-          "orderReference": {},
+          "orderReference": {
+            "readOnlyLogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+          },
           "businessPartner": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
@@ -3038,7 +3040,7 @@
           },
           "aeatsiiClaveTipoFc": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
           },
           "totalPaid": {
             "readOnly": true,
@@ -3158,11 +3160,11 @@
           "aeatsiiEstado": {
             "readOnly": true,
             "readOnlyLogic": "true",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
           },
           "invoiceDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
             "defaultValue": "@#Date@"
           },
           "etsgDateOperation": {
@@ -3171,7 +3173,7 @@
           },
           "accountingDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
+            "readOnlyLogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
             "defaultValue": "@#Date@"
           },
           "documentStatus": {
@@ -3189,7 +3191,7 @@
           },
           "aeatsiiClaveTipo": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
           },
           "totalPaid": {
             "readOnly": true,
@@ -3270,11 +3272,11 @@
           "aeatsiiEstado": {
             "readOnly": true,
             "readOnlyLogic": "true",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
           },
           "invoiceDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
             "defaultValue": "@#Date@"
           },
           "etsgDateOperation": {
@@ -3283,7 +3285,7 @@
           },
           "accountingDate": {
             "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
+            "readOnlyLogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
             "defaultValue": "@#Date@"
           },
           "documentStatus": {
@@ -3291,7 +3293,9 @@
             "required": true,
             "defaultValue": "DR"
           },
-          "orderReference": {},
+          "orderReference": {
+            "readOnlyLogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+          },
           "businessPartner": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
@@ -3302,7 +3306,7 @@
           },
           "aeatsiiClaveTipo": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
           },
           "totalPaid": {
             "readOnly": true,
@@ -3560,5 +3564,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "78b08344a0c337b1"
+  "checksum": "e11f2d160225f80e"
 }

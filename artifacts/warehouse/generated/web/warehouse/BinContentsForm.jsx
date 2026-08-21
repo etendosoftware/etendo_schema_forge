@@ -19,5 +19,6 @@ const fields = [
 export default function BinContentsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BinContentsForm.fields = fields;
 
 // @sf-generated-end component:BinContentsForm

@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-08-04T14:03:25.379Z",
-  "checksum": "d43ccec2d3f8430f",
+  "updatedAt": "2026-08-20T19:10:32.557Z",
+  "checksum": "6a0d049bec62429d",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -297,7 +297,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -357,7 +357,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -392,9 +392,9 @@
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -447,9 +447,9 @@
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -565,7 +565,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
+              "className": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'",
@@ -604,7 +604,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -636,7 +636,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -808,9 +808,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -977,7 +976,7 @@
             "name": "aeatsiiEstado",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             }
           },
           {
@@ -1012,7 +1011,7 @@
             "name": "aeatsiiClaveTipo",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             }
           },
           {
@@ -1424,7 +1423,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -1484,7 +1483,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -1519,9 +1518,9 @@
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -1537,9 +1536,9 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
             },
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual",
             "validation": {
               "maxLength": 19
             },
@@ -1599,9 +1598,9 @@
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -1711,6 +1710,11 @@
             "form": true,
             "validation": {
               "maxLength": 20
+            },
+            "readOnlyLogic": {
+              "raw": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
+              "evaluable": true,
+              "js": "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true"
             }
           },
           {
@@ -1732,7 +1736,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
+              "className": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'",
@@ -1771,7 +1775,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -1803,7 +1807,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -1918,9 +1922,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -2087,7 +2090,7 @@
             "name": "aeatsiiEstado",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             }
           },
           {
@@ -2101,7 +2104,7 @@
             "name": "aeatsiiFechaRegCont",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
             }
           },
           {
@@ -2129,7 +2132,7 @@
             "name": "aeatsiiClaveTipoFc",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             }
           },
           {
@@ -3120,7 +3123,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -3180,7 +3183,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -3215,9 +3218,9 @@
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -3270,9 +3273,9 @@
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -3388,7 +3391,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
+              "className": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'",
@@ -3427,7 +3430,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -3459,7 +3462,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -3574,9 +3577,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -3743,7 +3745,7 @@
             "name": "aeatsiiEstado",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             }
           },
           {
@@ -3778,7 +3780,7 @@
             "name": "aeatsiiClaveTipo",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             }
           },
           {
@@ -4190,7 +4192,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -4250,7 +4252,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -4285,9 +4287,9 @@
               "className": "com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -4340,9 +4342,9 @@
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -4452,6 +4454,11 @@
             "form": true,
             "validation": {
               "maxLength": 20
+            },
+            "readOnlyLogic": {
+              "raw": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
+              "evaluable": true,
+              "js": "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true"
             }
           },
           {
@@ -4473,7 +4480,7 @@
               "maxLength": 60
             },
             "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner"
+              "className": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'",
@@ -4512,7 +4519,7 @@
             "form": true,
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             },
             "enumValues": [
               {
@@ -4544,7 +4551,7 @@
                 }
               }
             ],
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
             },
@@ -4659,9 +4666,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -4828,7 +4834,7 @@
             "name": "aeatsiiEstado",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
             }
           },
           {
@@ -4863,7 +4869,7 @@
             "name": "aeatsiiClaveTipo",
             "derivation": {
               "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
             }
           },
           {
@@ -17595,6 +17601,14 @@
         "description": "Read-only logic for 'invoiceDate' in receivedInvoices should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-receivedInvoices-orderReference",
+        "category": "readonlylogic-evaluable",
+        "entity": "receivedInvoices",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Read-only logic for 'orderReference' in receivedInvoices should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-receivedInvoices-paymentMethod",
         "category": "readonlylogic-evaluable",
         "entity": "receivedInvoices",
@@ -17705,6 +17719,14 @@
         "field": "invoiceDate",
         "runner": "node",
         "description": "Read-only logic for 'invoiceDate' in receivedInvoices(previousPeriod) should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-receivedInvoices-previousPeriod-orderReference",
+        "category": "readonlylogic-evaluable",
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Read-only logic for 'orderReference' in receivedInvoices(previousPeriod) should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-receivedInvoices-previousPeriod-paymentMethod",
@@ -18067,6 +18089,14 @@
         "description": "Read-only logic for 'invoiceDate' in receivedInvoices should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-receivedInvoices-orderReference",
+        "category": "readonlylogic-valid",
+        "entity": "receivedInvoices",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Read-only logic for 'orderReference' in receivedInvoices should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-receivedInvoices-paymentMethod",
         "category": "readonlylogic-valid",
         "entity": "receivedInvoices",
@@ -18177,6 +18207,14 @@
         "field": "invoiceDate",
         "runner": "node",
         "description": "Read-only logic for 'invoiceDate' in receivedInvoices(previousPeriod) should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-receivedInvoices-previousPeriod-orderReference",
+        "category": "readonlylogic-valid",
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "Read-only logic for 'orderReference' in receivedInvoices(previousPeriod) should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-receivedInvoices-previousPeriod-paymentMethod",
@@ -18397,6 +18435,13 @@
         "description": "Rule 'C_Invoice-FIN_Paymentmethod_ID-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-C-Invoice-POReference-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Invoice-POReference-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Invoice-POReference-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-C-Project-based-on-status-and-bpartner",
         "category": "rule-declared",
         "rule": "C_Project based on status and bpartner",
@@ -18530,13 +18575,6 @@
         "description": "Rule 'Remove Payments from Invoice' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-SE-Invoice-BPartner-C-BPartner-ID",
-        "category": "rule-declared",
-        "rule": "SE_Invoice_BPartner_C_BPartner_ID",
-        "runner": "node",
-        "description": "Rule 'SE_Invoice_BPartner_C_BPartner_ID' (callout) should be declared"
-      },
-      {
         "id": "t-rule-declared-SE-Invoice-BPartner-FIN-Paymentmethod-ID",
         "category": "rule-declared",
         "rule": "SE_Invoice_BPartner_FIN_Paymentmethod_ID",
@@ -18549,13 +18587,6 @@
         "rule": "SE_Invoice_BPartnerLocation_C_BPartner_Location_ID",
         "runner": "node",
         "description": "Rule 'SE_Invoice_BPartnerLocation_C_BPartner_Location_ID' (callout) should be declared"
-      },
-      {
-        "id": "t-rule-declared-SE-Invoice-Organization-AD-Org-ID",
-        "category": "rule-declared",
-        "rule": "SE_Invoice_Organization_AD_Org_ID",
-        "runner": "node",
-        "description": "Rule 'SE_Invoice_Organization_AD_Org_ID' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-SE-Invoice-Project-C-Project-ID",
@@ -18789,6 +18820,13 @@
         "description": "Rule 'SiiAutoinvoiceCallout_EM_Aeatsii_Autofactura' (callout) should be declared"
       },
       {
+        "id": "t-rule-declared-SiiAutoSetSIIKEYByDefault-C-BPartner-ID",
+        "category": "rule-declared",
+        "rule": "SiiAutoSetSIIKEYByDefault_C_BPartner_ID",
+        "runner": "node",
+        "description": "Rule 'SiiAutoSetSIIKEYByDefault_C_BPartner_ID' (callout) should be declared"
+      },
+      {
         "id": "t-rule-declared-SiiDescriptionCallout-EM-Aeatsii-Description-ID",
         "category": "rule-declared",
         "rule": "SiiDescriptionCallout_EM_Aeatsii_Description_ID",
@@ -18808,6 +18846,13 @@
         "rule": "SiiIgicTaxTypeCallout_Taxtype",
         "runner": "node",
         "description": "Rule 'SiiIgicTaxTypeCallout_Taxtype' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SiiInvoiceOrganizationCallout-AD-Org-ID",
+        "category": "rule-declared",
+        "rule": "SiiInvoiceOrganizationCallout_AD_Org_ID",
+        "runner": "node",
+        "description": "Rule 'SiiInvoiceOrganizationCallout_AD_Org_ID' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-SL-Invoice-PriceList-M-PriceList-ID",
@@ -24254,7 +24299,7 @@
       }
     ],
     "summary": {
-      "total": 1406,
+      "total": 1411,
       "byCategory": {
         "action-endpoint": 93,
         "crud-flags": 11,
@@ -24263,15 +24308,15 @@
         "displaylogic-valid": 20,
         "field-presence": 156,
         "field-type": 156,
-        "readonlylogic-evaluable": 59,
-        "readonlylogic-valid": 59,
-        "rule-declared": 91,
+        "readonlylogic-evaluable": 61,
+        "readonlylogic-valid": 61,
+        "rule-declared": 92,
         "selector-endpoint": 28,
         "system-field": 641,
         "visibility": 11
       },
       "byRunner": {
-        "node": 1406,
+        "node": 1411,
         "junit": 0
       }
     }

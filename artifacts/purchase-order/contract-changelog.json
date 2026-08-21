@@ -1959,5 +1959,15 @@
     ],
     "author": "pipeline",
     "date": "2026-07-30"
+  },
+  {
+    "from": "0.44.0",
+    "to": "0.45.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"orderedQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-20"
   }
 ]

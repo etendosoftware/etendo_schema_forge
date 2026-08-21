@@ -15,5 +15,6 @@ const fields = [
 export default function ReturnMaterialReceiptForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReturnMaterialReceiptForm.fields = fields;
 
 // @sf-generated-end component:ReturnMaterialReceiptForm

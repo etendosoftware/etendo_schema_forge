@@ -26,5 +26,6 @@ const fields = [
 export default function CashCriterionPaymentsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CashCriterionPaymentsForm.fields = fields;
 
 // @sf-generated-end component:CashCriterionPaymentsForm

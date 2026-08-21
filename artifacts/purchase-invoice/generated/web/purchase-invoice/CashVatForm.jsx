@@ -18,5 +18,6 @@ const fields = [
 export default function CashVatForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CashVatForm.fields = fields;
 
 // @sf-generated-end component:CashVatForm
