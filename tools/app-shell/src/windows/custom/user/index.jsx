@@ -7,6 +7,7 @@ import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
@@ -221,11 +222,25 @@ export default function UserWindow(props) {
    * `onAfterCreate`, `DetailView.jsx`'s hook invoked exactly once per NEW-record Save
    * click, strictly AFTER `hook.handleSave` has already resolved and shown ITS OWN
    * generic "Record created" toast (`useEntity.js`'s `getSaveSuccessMessage`) —
-   * `toast.dismiss()` clears that one first so only ONE toast is ever visible at a
-   * time, per this ticket's decision to show a single toast (there is no generic
-   * "silent create" opt-out on the shared Save button that wouldn't also affect
-   * every other window using `onAfterCreate`, so dismiss+replace is the
-   * window-scoped fix instead of a `DetailView.jsx` behavior change).
+   * Passing the SAME `RECORD_SAVE_TOAST_ID` id that `showSaveSuccessToast`
+   * (`useEntity.js`) used for that toast makes sonner UPDATE it in place instead of
+   * creating a second one, so only ONE toast is ever visible at a time, per this
+   * ticket's decision to show a single toast (there is no generic "silent create"
+   * opt-out on the shared Save button that wouldn't also affect every other window
+   * using `onAfterCreate`, so an id-based replace is the window-scoped fix instead
+   * of a `DetailView.jsx` behavior change).
+   *
+   * ETP-4830 regression fix: this used to call `toast.dismiss()` (no id — dismiss
+   * ALL toasts) immediately followed by `toast.success(...)`. That is a real race —
+   * sonner schedules a dismiss via `requestAnimationFrame` and a new toast's mount
+   * via `setTimeout`, two independently-scheduled callbacks with no ordering
+   * guarantee between them — and on a real click (save → navigate → re-render of
+   * the freshly-loaded record, all happening immediately after), the add could lose
+   * the race and the toast would never appear at all. Passing a shared id turns the
+   * two-step "dismiss then create" into one atomic `toast.success(msg, { id })`
+   * call — sonner's own `ToastState.create()` updates an existing id in place via a
+   * single synchronous `publish()`, the exact same code path a normal single toast
+   * call uses, so there is no dismiss/add race left to lose.
    *
    * The action button does two things `DetailView.jsx` treats as separate surfaces:
    *  (a) re-navigates to the just-created record with `location.state.openSecondaryTab`
@@ -247,8 +262,8 @@ export default function UserWindow(props) {
    */
   const handleAfterCreate = useCallback((saved) => {
     if (!saved?.id) return;
-    toast.dismiss();
     toast.success(ui('userCreatedInvitationSentToast'), {
+      id: RECORD_SAVE_TOAST_ID,
       action: {
         label: ui('configureRolesAction'),
         onClick: () => {

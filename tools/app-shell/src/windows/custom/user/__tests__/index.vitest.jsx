@@ -111,6 +111,7 @@ vi.mock('@generated/user/generated/web/user/UserPage', () => ({
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -498,14 +499,20 @@ describe('UserWindow — actionable "user created" toast (ETP-4830, onAfterCreat
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
-  it('dismisses any prior toast, then shows exactly one actionable success toast', () => {
+  it('replaces the generic save toast in place (same id, no dismiss race) with exactly one actionable success toast', () => {
     render(<UserWindow />);
     lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
 
-    expect(toastDismiss).toHaveBeenCalledTimes(1);
+    // ETP-4830 regression fix — this used to call toast.dismiss() (no id) immediately
+    // before toast.success(), racing sonner's independently-scheduled dismiss
+    // (requestAnimationFrame) against the new toast's mount (setTimeout) — see
+    // useEntity.js's RECORD_SAVE_TOAST_ID doc comment. It now instead passes the SAME
+    // id the generic "record created" toast used, so sonner updates it in place.
+    expect(toastDismiss).not.toHaveBeenCalled();
     expect(toastSuccess).toHaveBeenCalledTimes(1);
     const [message, options] = toastSuccess.mock.calls[0];
     expect(message).toBe('userCreatedInvitationSentToast');
+    expect(options.id).toBe(RECORD_SAVE_TOAST_ID);
     expect(options.action.label).toBe('configureRolesAction');
     expect(typeof options.action.onClick).toBe('function');
   });
