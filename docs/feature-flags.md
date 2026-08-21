@@ -72,7 +72,7 @@ Hiding the route would imply the flag was protecting something, which it is not.
    export const MY_FEATURE = 'my-feature';
 
    export const FLAG_DEFAULTS = Object.freeze({
-     [TENANT_UPGRADE]: false,
+     [PROOF_OF_CONCEPT_MENU]: false,
      [MY_FEATURE]: false,
    });
    ```
@@ -100,8 +100,9 @@ over unchanged when the control plane moves.
 Where flagged code lives is a rule, not a preference.
 
 **1. Each flag owns its files.** All logic a flag gates lives in modules and
-directories belonging to that flag. For `tenant-upgrade` that is `lib/upgrade/`
-and `pages/UpgradePage.jsx`.
+directories belonging to that flag. The retired `tenant-upgrade` flag is the worked example: it
+owned `lib/upgrade/` and `pages/UpgradePage.jsx`, which is why retiring it in ETP-4966 was
+unwrapping two toggle points rather than an archaeology exercise across shared files.
 
 **2. Shared files hold toggle points only.** A shared file may contain the
 minimum needed to reach the flag's own code — a route registration, a menu
@@ -136,10 +137,12 @@ list here. Restating paths in prose would create a second copy that drifts
 silently, and a scorecard measuring stale paths produces numbers that look
 plausible and are wrong.
 
-*Illustrative snapshot, not a source — read the registry for current values.* At
-the time of writing, `tenant-upgrade` owns `tools/app-shell/src/lib/upgrade/` and
+*Illustrative snapshot, not a source — read the registry for current values.* The
+`paid-second-tenant` feature owns `tools/app-shell/src/lib/upgrade/` and
 `tools/app-shell/src/pages/UpgradePage.jsx`, with `tools/app-shell/src/lib/flags/`
-excluded as framework.
+excluded as framework. It no longer carries a flag — see *Retiring a flag* in
+`docs/technical-debt-playbook.md`, and the worked example in
+`com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md`.
 
 Its two frontend touch points, `runtime-routes.jsx` and `UserAvatarButton.jsx`,
 carry no business logic: the route only registers a lazily-loaded page, and the
@@ -157,8 +160,8 @@ that is the floor for rendering a menu item, and it stays greppable through the
 | `VITE_CONFIGCAT_POLL_SECONDS` | Auto-poll interval in seconds. Defaults to 60; a non-positive or non-numeric value warns and falls back. |
 
 ```bash
-# Turn the upgrade flow on locally, without any remote control plane
-VITE_FEATURE_FLAGS='{"tenant-upgrade":true}' make dev
+# Turn a flag on locally, without any remote control plane
+VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
 ```
 
 `VITE_FEATURE_FLAGS` holds every flag in one variable, so adding a flag needs no
@@ -180,14 +183,18 @@ environment whose key ships to a browser.
 |-------|-------------------|
 | Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
 | Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
-| Backend | Its own configuration, resolved by `ConfigPropertyReader`: `etendo.go.configcat.sdk-key` or `ETGO_CONFIGCAT_SDK_KEY`. Not under the `etendo.go.flags.` prefix, which is the flag namespace. See the module's `docs/feature-flags-and-tenant-upgrade.md`. |
+| Backend | **Nowhere — the backend does not read ConfigCat.** `com.etendoerp.go` contains no ConfigCat code at all: `GoFeatureFlags.createProvider()` returns `PropertiesFeatureProvider` unconditionally, and the deployed runtime confirms it (`feature flags installed using provider 'etendo-go-properties'`). Backend flags come only from `etendo.go.flags.<key>` / `ETGO_FLAG_<KEY>`. |
 
-One SDK key addresses exactly one ConfigCat environment, and both ends must use
-the **same** one or the frontend and the backend evaluate different config and
-bucket the same user differently.
+> **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was
+> never true.** The secret is provisioned in the experimental task definition, which made the claim
+> look confirmed, but nothing consumes it server-side. ETP-4966 is the cost of that: `tenant-upgrade`
+> was on in ConfigCat and unset in the backend's properties, so the browser offered a Stripe checkout
+> the backend then ignored, and paying accounts received Demo environments. **The two ends do not share
+> a control plane.** Until they do, a flag that gates anything a user can pay for must be evaluated by
+> the backend alone, with the browser asking it.
 
-Rotating the key therefore means updating every row above plus the local
-backend configuration — four places, none of which observe the others.
+One SDK key addresses exactly one ConfigCat environment. Rotating the key means updating every
+frontend row above — none of which observe each other.
 
 ### Provider precedence
 
@@ -352,40 +359,41 @@ booleans passed under that name. The targeting key travels as `username`, a
 property the payload policy already sanctions, rather than widening that policy
 with a second identity-bearing key.
 
-## The tenant upgrade flow (`tenant-upgrade`)
+## The paid productive-environment flow (no flag)
 
-Gates the paid path where a user keeps their free tenant and creates a second,
-productive one.
+The paid path where a user keeps their free environment and creates a productive one, or converts
+the one they are already in. **Not gated** — the `tenant-upgrade` flag retired in ETP-4966.
 
 | Piece | Location |
 |-------|----------|
-| Entry point (flag-gated) | User menu item in `components/UserAvatarButton.jsx` |
-| Route (always registered) | `/upgrade` in `runtime-routes.jsx` |
+| Entry point (unconditional) | User menu item in `components/UserAvatarButton.jsx` |
+| Route | `/upgrade` in `runtime-routes.jsx` |
 | Page | `pages/UpgradePage.jsx` |
-| Mock payment | `lib/upgrade/mockPayment.js` |
-| API call | `lib/upgrade/api.js` |
+| Checkout + onboarding API calls | `lib/upgrade/api.js` |
 
-**Flow.** The page shows a Free vs Productive comparison, a tenant name input,
-and a mock checkout. The card is validated in the browser; `4000000000000002`
-always simulates a decline and never reaches the network. Any other valid
-16-digit card mints a `mock-paid-<hex>` token.
+**Flow.** The page shows a Free vs Productive comparison and a choice between converting the current
+environment (`convert-demo`, preselected) and creating a new one (`create-productive`). It then asks
+the backend for a Stripe hosted-checkout session and redirects to it — **the browser never handles
+card details.** `lib/upgrade/mockPayment.js` is gone; so is the locally simulated decline.
 
-That token is sent as `paymentToken` to `POST /sws/go/onboarding`, which streams
-NDJSON progress messages. On success the user is routed to `/logout`, because
-tenant selection happens at sign-in and there is no in-app tenant switcher in v1.
+On return, the page polls `GET /sws/go/checkout/sessions/{requestId}` until the webhook has recorded
+the payment, then calls `POST /sws/go/onboarding` with that `requestId` as `paymentToken` and renders
+the NDJSON progress stream. That confirmed payment is also what marks the resulting environment
+productive.
 
 ### Backend contract (confirmed with the Etendo Go side)
 
 | Rule | Consequence for the frontend |
 |------|------------------------------|
-| Accepted token shape is `/^mock-paid-[0-9a-f]+$/` — **lowercase** hex. Shape only: the backend does not confirm a charge occurred, so any well-formed token is provisioned | `createMockPaymentToken()` builds it with `toString(16)`, which is lowercase. Uppercase or non-hex would be declined. The gate is a placeholder for the flow, not a payment control. |
+| The only accepted token is a `requestId` from `POST /sws/go/checkout/sessions` that the Stripe webhook recorded as paid, **for this account and this environment name**. A token merely *shaped* like the retired `mock-paid-<hex>` is declined | The browser cannot mint a token. It must obtain one from the backend and wait for the webhook, which is what stops a successful return URL from being treated as payment. |
 | Refusal is **HTTP 402** with a plain JSON body, *not* the NDJSON stream — the gate runs before the stream opens | `lib/upgrade/api.js` checks the status before touching `response.body`, so a 402 never reaches the stream reader. |
 | Missing token and declined token both return `error: "payment_required"` and differ only in `message` | The UI does not branch on the code. A decline is caught client-side before any request; a 402 is reported as a generic payment-required error. |
-| An account's **first tenant is never charged**, even with the flag on | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
+| An account's **first environment is never charged** | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
 | Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
-| The backend re-evaluates `tenant-upgrade` and is **authoritative** | The frontend flag is presentation only, consistent with rule 3 above. |
+| There is no flag left to evaluate; the backend is **authoritative** on both the paywall and the plan | Nothing in the browser can enable, disable or shortcut the paid path. |
+| Converting the current environment is charged like a purchase, not treated as a free resume | The page sends `upgradeAction=convert-demo`, which the backend uses to skip the free resume path. |
 | Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
-| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Consumed by the app-shell company selector; missing values render as `Demo`. |
+| `GET /sws/go/environments` items carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Consumed by the company selector, which badges each environment and sorts productive first. The badge is withheld entirely when the current environment cannot be resolved, so a missing lookup is never rendered as `Demo`. |
 
 **Closed (ETP-4693): both ends target the same identity.** The backend buckets on
 the account, and the frontend now reads that same account from

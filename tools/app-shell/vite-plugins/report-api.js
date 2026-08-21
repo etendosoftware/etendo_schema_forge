@@ -483,7 +483,11 @@ function listReports() {
     if (existsSync(contractPath)) {
       try {
         const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
-        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
+        // 'custom' contracts (ETP-4901) are internal NEO endpoints backing a specific
+        // page's own data needs (e.g. financial-accounts-page powers the Cuentas
+        // landing page's sidebar widgets) — real, still-served endpoints, just never
+        // meant to show up as a runnable report a user picks from this catalog.
+        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && contract.type !== 'custom' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
           reports.push({
             id: contract.reportId,
             title: contract.title,
@@ -842,6 +846,11 @@ export default function reportApiPlugin() {
                   fromWhere: `FROM m_warehouse WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
                   orderBy: 'ORDER BY name',
                   select: `SELECT m_warehouse_id AS id, name, name AS label`
+                },
+                'product-category': {
+                  fromWhere: `FROM m_product_category WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
+                  orderBy: 'ORDER BY name',
+                  select: `SELECT m_product_category_id AS id, name, name AS label`
                 },
                 'project': {
                   fromWhere: `FROM c_project WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
