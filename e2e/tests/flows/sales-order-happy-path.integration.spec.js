@@ -189,8 +189,15 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await lineAddPromise;
       await slow(page);
 
-      // Verify line appeared
+      // Verify line appeared AND fully rendered (prevents race with second line add)
       await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
+
+      // Wait for the saved line to render with the product name in the lines list
+      await expect(page.getByText('Queso Sardo').first()).toBeVisible({ timeout: 15_000 });
+
+      // Wait for any inline-add-row to disappear (save fully committed to table)
+      await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
+        .catch(() => {}); // OK if already gone
     });
 
     await test.step('Add second line — different product, quantity 3', async () => {

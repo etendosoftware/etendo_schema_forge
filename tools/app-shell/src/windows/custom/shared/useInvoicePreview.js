@@ -14,7 +14,7 @@ import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
  * and its overlay modals (payment, email, SIF). Contains no JSX.
  *
  * Drop zone state has been removed — GenericPreviewModal manages file persistence
- * via the attachmentConfig prop and usePreviewAttachment internally.
+ * via the attachmentConfig prop and useMainAttachment internally.
  */
 export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-invoice', onInvoiceUpdated = null }) {
   const ui = useUI();
@@ -29,10 +29,17 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const updateEventName = `${specName}:invoice-updated`;
 
   const isSalesInvoice = specName === 'sales-invoice';
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig in
+  // InvoicePreview.jsx; lets useInvoicePdf skip the jsreport round-trip and serve
+  // the marked attachment directly when one already exists, instead of
+  // regenerating on every open. Only relevant for the sales branch (purchase
+  // never calls this hook at all — its documentId/apiBaseUrl are null above).
+  const pdfCacheConfig = { tableName: 'C_Invoice', storeCondition: invoiceData?.documentStatus !== 'DR' };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useInvoicePdf(
     isSalesInvoice ? invoiceData?.id : null,
     isSalesInvoice ? apiBaseUrl : null,
     token,
+    pdfCacheConfig,
   );
 
   const [installments, setInstallments] = useState([]);
