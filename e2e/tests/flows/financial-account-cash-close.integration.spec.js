@@ -65,11 +65,18 @@ import { ensureOpenPeriod } from '../helpers/period-helpers.js';
  * `cash-close-balanced-pill` after), which is what proves the live recalculation without pinning a
  * number to a locale.
  *
- * Requires a live Etendo backend + a provisioned tenant. Gated by E2E_FINANCE_INTEGRATION=1
- * (domain-level flag, same shape as E2E_SALES_INTEGRATION), exported by scripts/run-e2e-full.sh.
+ * Requires a live Etendo backend + a provisioned tenant, like every other spec in the
+ * `integration` Playwright project — and nothing more, which is why it carries no opt-in flag of
+ * its own. It used to be gated on E2E_FINANCE_INTEGRATION=1, a flag only this file read and only
+ * scripts/run-e2e-full.sh ever set, so the gate never actually gated anything: it was always on
+ * wherever the suite ran, and skipping it silently anywhere else (`make test-e2e`) was the only
+ * thing it achieved. Eleven of the twenty integration specs declare no flag; this is now one of
+ * them.
+ *
+ * Ordering is unaffected: it comes from the `integration` project's `dependencies` on
+ * `onboarding-setup` in playwright.config.js, not from any env var, so this still runs after
+ * onboarding has produced its credentials.
  */
-
-const RUN_INTEGRATION = process.env.E2E_FINANCE_INTEGRATION === '1';
 
 /** Same tolerance the frontend (cashCloseMath) and the backend (CashCloseHandler) use. */
 const TOLERANCE = 0.005;
@@ -174,11 +181,6 @@ async function pickSelectorOption(page, fieldKey, pattern, description) {
 
 test.describe('Cash close (real backend)', () => {
   test.describe.configure({ timeout: 600_000 });
-
-  test.skip(
-    !RUN_INTEGRATION,
-    'Set E2E_FINANCE_INTEGRATION=1 to run the live financial-account integration tests.',
-  );
 
   test('Case 1: happy path — sales invoice collected in cash, drawer balances, close completes', async ({ page }) => {
     // ETP-4567 — open the accounting period for the doc types this flow
