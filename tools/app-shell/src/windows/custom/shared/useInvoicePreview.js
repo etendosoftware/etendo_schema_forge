@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
+import { isPaymentProcessed } from './paymentStatuses.js';
 
 /**
  * useInvoicePreview — all data-fetching, state, and handlers for an invoice preview.
@@ -134,7 +135,18 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const isDraft = status === 'DR' || status === 'draft';
   const isFullyPaid = totalOutstanding <= 0 && installments.length > 0;
   const isCompleted = status === 'CO' || status === 'complete' || status === 'completed';
-  const canAddPayment = isCompleted && !isFullyPaid;
+  // A draft payment does not lower the invoice's outstanding, but it is already earmarked against
+  // it. Offering the whole outstanding again over-pays the invoice the moment both drafts are
+  // confirmed, so what is really free is the outstanding minus everything the drafts reserve.
+  const reservedByDrafts = payments
+    .filter((payment) => !isPaymentProcessed(payment))
+    .reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0);
+  const freeToAllocate = totalOutstanding - reservedByDrafts;
+  const invoiceTakesPayments = isCompleted && !isFullyPaid;
+  const canAddPayment = invoiceTakesPayments && freeToAllocate > 0;
+  // Kept apart from `canAddPayment` so the button can be shown disabled — with a reason — instead
+  // of vanishing, which reads as "this invoice takes no payments at all".
+  const addPaymentBlockedByDraft = invoiceTakesPayments && !canAddPayment;
 
   return {
     displayInvoice,
@@ -145,7 +157,8 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     pdfUrl, pdfBlob, pdfLoading, pdfError, handleDownloadPdf,
     // payments
     installments, payments, loadingPayments,
-    totalOutstanding, canAddPayment, isFullyPaid, fetchPayments,
+    totalOutstanding, canAddPayment, addPaymentBlockedByDraft, freeToAllocate,
+    isFullyPaid, fetchPayments,
     // display
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)

@@ -51,6 +51,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   AuthProvider: ({ children }) => children,
 }));
 
+// The payment topbar now also carries the PIS retry action (ETP-4895), which reaches for
+// `useApiFetch` — and that resolves `useAuth` from the app-shell-core package, not the aliased
+// path mocked above, so it throws outside an AuthProvider. Stubbed for the same reason: this suite
+// is about the reactivate-confirm chain, and the retry button renders nothing for these payments.
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => vi.fn() }));
+
 // One shared, mutable hook double per test file — mirrors the convention in
 // DetailView.processesAndBadges.vitest.jsx. `handleProcess` is the spy we
 // assert on: if it fires before the modal's confirm button is clicked, the
