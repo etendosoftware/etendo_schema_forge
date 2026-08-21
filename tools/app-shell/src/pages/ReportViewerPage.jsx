@@ -1168,7 +1168,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
-  const [invoicePopup, setInvoicePopup] = useState(null);
   const { locale } = useLocaleSwitch();
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1185,7 +1184,13 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else if (e.data?.type === 'trial-balance-drilldown' && e.data.accountId) {
         setDrillDownAccount({ id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '' });
       } else if (e.data?.type === 'navigate-invoice' && e.data.invoiceId) {
-        setInvoicePopup({ id: e.data.invoiceId });
+        // Opens the invoice in a real new tab instead of an embedded modal —
+        // the document window (sales-invoice/purchase-invoice) is decided by
+        // the report's own template.hbs (docWindow in the postMessage), never
+        // hardcoded here, since this handler is shared by every report.
+        const docWindow = e.data.docWindow || 'sales-invoice';
+        const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}`, '_blank');
       }
     };
     window.addEventListener('message', handler);
@@ -1514,22 +1519,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                 _display_toAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
               }}
               data-testid="DrillDownViewer__3c998a" />
-          )}
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={!!invoicePopup}
-        onOpenChange={(o) => !o && setInvoicePopup(null)}
-        data-testid="Dialog__3c998a">
-        <DialogContent
-          className="max-w-5xl w-[85vw] h-[80vh] p-0 overflow-hidden"
-          data-testid="DialogContent__3c998a">
-          {invoicePopup && (
-            <iframe
-              src={`${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/purchase-invoice/${invoicePopup.id}?embedded=1`}
-              title={ui('invoice')}
-              className="w-full h-full border-0"
-            />
           )}
         </DialogContent>
       </Dialog>
