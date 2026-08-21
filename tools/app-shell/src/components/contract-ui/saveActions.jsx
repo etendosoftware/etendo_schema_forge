@@ -77,6 +77,12 @@ async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook
 }
 
 /**
+ * The secondary (outline) look for a Save button, identical to the one the draftMode
+ * renderer has always used for Save Draft. Extracted so the two renderers cannot drift.
+ */
+const SECONDARY_SAVE_CLS = 'bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]';
+
+/**
  * ETP-4933 follow-up: a `title` on a DISABLED button is never shown. The shared Button
  * carries `disabled:pointer-events-none`, so the element receives no hover and the
  * native tooltip never fires — which silently defeated the whole "explain why Save is
@@ -103,7 +109,7 @@ function renderDraftModeSaveActions({
 }) {
   return (
     <>
-      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -164,10 +170,18 @@ function renderNewRecordSaveActions({
   hook, flushPendingLines, data, isNew, navigate, windowName,
   ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
   isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance, saveGate = {},
+  hasExternalPrimaryAction = false,
 }) {
+  // ETP-4933: on a new record Save is normally THE primary action, so the default
+  // (blue) variant is right. Windows that render their own primary action beside it
+  // — the return windows put a Confirm button in the topbarRight slot — opt in via
+  // `hasExternalPrimaryAction` so Save drops to the same outline look the draftMode
+  // renderer already gives Save Draft. Named for the reason, not the window: any
+  // window that grows a competing primary action wants the same thing.
+  const saveCls = hasExternalPrimaryAction ? `${saveBtnCls} ${SECONDARY_SAVE_CLS}` : saveBtnCls;
   return (
     <>
-      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(hasExternalPrimaryAction ? { variant: 'outline' } : {})} size="default" className={saveCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -205,7 +219,7 @@ function renderExistingRecordSaveAction({
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
 }) {
   return (
-    <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });

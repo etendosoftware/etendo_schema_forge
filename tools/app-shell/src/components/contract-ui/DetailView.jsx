@@ -1100,6 +1100,10 @@ export function DetailView({
   linesEmptyState = null,
   topbarExtra = null,
   topbarRight = null,
+  // ETP-4933: opt-in for windows that render their own primary action next to Save
+  // (the return windows put a Confirm button in the topbarRight slot). Save then takes
+  // the secondary/outline look instead of competing as a second primary button.
+  hasExternalPrimaryAction = false,
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
@@ -2782,7 +2786,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate,
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction,
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 

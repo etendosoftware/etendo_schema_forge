@@ -182,3 +182,25 @@ describe('saveActions.jsx — saveGate wiring on every primary persist button (E
     assert.equal(count, 3);
   });
 });
+
+// ETP-4933: purely visual, so nothing else would catch a regression here.
+describe('saveActions.jsx — secondary Save when a window has its own primary action', () => {
+  it('new-record Save is primary (blue) by default — it IS the main action there', () => {
+    const decl = srcSave.match(/const saveCls = .*/)[0];
+    assert.match(decl, /hasExternalPrimaryAction \? `\$\{saveBtnCls\} \$\{SECONDARY_SAVE_CLS\}` : saveBtnCls/);
+  });
+
+  it('opts into variant="outline" only when the window declares a competing primary', () => {
+    assert.match(srcSave, /\{\.\.\.\(hasExternalPrimaryAction \? \{ variant: 'outline' \} : \{\}\)\}/);
+  });
+
+  it('both renderers share one style constant so the secondary look cannot drift', () => {
+    const uses = srcSave.match(/\$\{SECONDARY_SAVE_CLS\}/g) || [];
+    assert.ok(uses.length >= 3, `expected the constant reused, saw ${uses.length}`);
+    assert.equal(
+      (srcSave.match(/bg-card border-\[hsl\(var\(--border-control\)\)\]/g) || []).length,
+      1,
+      'the literal class string must exist once (in the constant), never inlined again'
+    );
+  });
+});
