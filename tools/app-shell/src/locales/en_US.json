@@ -16470,6 +16470,7 @@
     "balanced": "Balanced",
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",
+    "saveMissingRequired": "Complete the required fields first: {fields}",
     "journalUnbalancedCompleteBlocked": "Debit and credit must be equal and non-zero before completing",
     "totalCredit": "Total credit",
     "totalDebit": "Total debit",

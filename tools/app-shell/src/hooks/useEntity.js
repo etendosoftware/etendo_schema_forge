@@ -18,6 +18,8 @@ import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { getReadOnly, getVisible, getMissingRequiredFields } from '@/lib/requiredFields.js';
+import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
@@ -522,41 +524,12 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
 
 }
 
-export function getReadOnly(editing) {
-    return (f) => {
-        if (f.readOnly === true) return true;
-        try {
-            return typeof f.readOnlyLogic === 'function'
-                ? Boolean(f.readOnlyLogic(editing))
-                : false;
-        } catch {
-            return false;
-        }
-    };
-}
-
-export function getVisible(editing) {
-    return (f) => {
-        if (typeof f.displayLogic !== 'function') return true;
-        try {
-            return !!f.displayLogic(editing ?? {});
-        } catch {
-            return true;
-        }
-    };
-}
-
-export function getMissingRequiredFields(fields, editing) {
-    const isReadOnly = getReadOnly(editing);
-    const isVisible = getVisible(editing);
-    return fields
-        .filter(f => f.required && !isReadOnly(f) && isVisible(f) && f.type !== 'checkbox' && f.section !== 'summary')
-        .filter(f => {
-            const v = editing?.[f.key];
-            return v == null || v === '' || (typeof v === 'string' && v.trim() === '');
-        })
-        .map(f => f.key);
-}
+// ETP-4933: getReadOnly / getVisible / getMissingRequiredFields moved to
+// lib/requiredFields.js so useFormValidity can reuse the predicate without importing
+// this module (that would be a cycle, since we import useFormValidity below).
+// Re-exported here because ten call sites across components/, windows/ and __tests__/
+// still import them from useEntity — moving them outright would be a needless break.
+export { getReadOnly, getVisible, getMissingRequiredFields };
 
 // Returns the keys of visible, editable fields whose non-empty value fails the
 // given format check (getError returns an i18n key, or null when valid/empty/not
@@ -799,6 +772,12 @@ export function useEntity(entity, childEntity, {
     specName = null,
     initialSortColumn = 'creationDate',
     initialSortDirection = 'desc',
+    // ETP-4933: the contract-declared descriptor set (`Form.fields`, emitted as a
+    // static by the generator). When supplied it REPLACES the mounted-form registry
+    // for validity, because the registry only knows what is currently rendered and
+    // the "Others" tab mounts only while it is the active tab. Optional: surfaces
+    // whose form predates the static fall back to the registry (see below).
+    contractFields = null,
 }) {
     const logout = useLogout();
     const ui = useUI();
@@ -850,6 +829,20 @@ export function useEntity(entity, childEntity, {
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
     const formFieldsRef = useRef(new Map());
+    // ETP-4933: reactive mirror of the registry above, so the Save button can gate on
+    // required-field completeness instead of only reporting it after the click.
+    //
+    // We mirror a SIGNATURE, not the field arrays. The registering effect in
+    // EntityForm re-runs on every visibility change (its `displayFields` are
+    // recomputed each render), so a state write on that path would re-render →
+    // recompute → re-fire the effect → loop. The guard is the identity return in the
+    // updater below: when the signature is unchanged React bails out of the re-render
+    // entirely, so a re-registration carrying the same fields costs nothing.
+    const [registeredFieldsKey, setRegisteredFieldsKey] = useState('');
+    const syncRegisteredFields = useCallback(() => {
+        const next = fieldsSignature([...formFieldsRef.current.values()].flat());
+        setRegisteredFieldsKey(prev => (prev === next ? prev : next));
+    }, []);
 
     // True when editing has diverged from the last-saved selected state.
     // For new records (selected === null): dirty as soon as any non-id field has a value.
@@ -1260,7 +1253,9 @@ export function useEntity(entity, childEntity, {
         } else {
             formFieldsRef.current.set(formId, Array.isArray(fields) ? fields : []);
         }
-    }, []);
+        // ETP-4933: keep the reactive mirror in step. Guarded — see syncRegisteredFields.
+        syncRegisteredFields();
+    }, [syncRegisteredFields]);
 
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
@@ -1608,10 +1603,37 @@ export function useEntity(entity, childEntity, {
         setEditing({ ...saved });
     }, []);
 
+    // ETP-4933: the registered fields, re-read whenever the mirrored signature moves.
+    // Reading the ref during render is safe precisely because the signature is what
+    // gates this memo — and any VALUE change re-renders anyway (via `editing`), so
+    // validity stays live per keystroke without the fields themselves being state.
+    const registeredFields = useMemo(
+        () => [...formFieldsRef.current.values()].flat(),
+        [registeredFieldsKey],
+    );
+
+    // `skipUnchangedInvalid` is on only for existing records (ETP-4933 §3.2): a legacy
+    // row with an empty required column must stay saveable, or the user cannot correct
+    // an unrelated field. New records validate everything, matching handleSave.
+    // ETP-4933: contract set wins when present. It is complete and mount-independent,
+    // so it also closes the `section: 'other'` blind spot the registry has (24 required
+    // fields across 10 windows were invisible to validation). The registry stays as the
+    // fallback for any surface that does not (yet) pass its descriptors.
+    const validationFields = Array.isArray(contractFields) && contractFields.length > 0
+        ? contractFields
+        : registeredFields;
+    const { isValid, missingRequired, missingRequiredFields } = useFormValidity({
+        fields: validationFields,
+        values: editing,
+        changedKeys: userChangedKeysRef.current,
+        skipUnchangedInvalid: Boolean(editing?.id),
+    });
+
     return {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
+        isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,

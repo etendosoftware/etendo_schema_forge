@@ -58,7 +58,8 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLabel, useMenuLabel, useUI } from '@/i18n';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate } from './saveActions.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -949,159 +950,6 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
  * All identifiers are destructured with the SAME names used inside the component
  * so closure-equivalent logic and the dirty-state regression substrings stay intact.
  */
-function renderDraftModeSaveActions({
-  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal,
-}) {
-  return (
-    <>
-      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        const saved = await hook.handleSave(data);
-        if (saved?.id && isNew) {
-          hook.primeSaved?.(saved);
-          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-        } else {
-          reportUnnavigableSave({ saved, isNew, windowName, ui });
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
-        {ui('save')}
-      </Button>
-      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const showProcessing = Boolean(draftMode.processingModal);
-        if (showProcessing) setShowProcessingModal(true);
-        try {
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          if (saved) {
-            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-            if (onAfterSave) {
-              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-            } else if (saved.id && isNew) {
-              hook.primeSaved?.(saved);
-              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-            } else if (saved.id) {
-              hook.fetchById?.(saved.id);
-            } else {
-              reportUnnavigableSave({ saved, isNew, windowName, ui });
-            }
-          }
-        } finally {
-          if (showProcessing) setShowProcessingModal(false);
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-        {ui(draftMode.label) || draftMode.label || ui('process')}
-      </Button>
-    </>
-  );
-}
-
-const UNNAVIGABLE_SAVE_MESSAGE_KEY = 'savedButCannotOpenRecord';
-
-/**
- * A NEW record that saves OK but whose response yields no derivable id (see
- * deriveRecordId in useEntity) used to skip the redirect with no signal at all,
- * leaving the user on /window/new. Surface it instead of failing silently.
- * Returns true when the failure was reported.
- */
-export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
-  if (!isNew || !saved || saved.id) return false;
-  console.error(
-    `[DetailView] Save succeeded for '${windowName}' but the response has no derivable record id — redirect skipped`,
-    saved,
-  );
-  toast.error(ui?.(UNNAVIGABLE_SAVE_MESSAGE_KEY) || UNNAVIGABLE_SAVE_MESSAGE_KEY);
-  return true;
-}
-
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
-  if (!saved) return;
-  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
-  if (onAfterSave) {
-    navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-  } else if (saved.id && isNew) {
-    hook.primeSaved?.(saved);
-    navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-  } else {
-    reportUnnavigableSave({ saved, isNew, windowName, ui });
-  }
-}
-
-/**
- * Save (+ optional Confirm) toolbar buttons for a brand-new (unsaved) record.
- * Extracted from the DetailView footer IIFE. New-record Save is never gated by
- * !isDirty — only by isDocumentReadOnly, isSaving and blockSaveForBalance.
- */
-function renderNewRecordSaveActions({
-  hook, flushPendingLines, data, isNew, navigate, windowName,
-  ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-}) {
-  return (
-    <>
-      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        const saved = await hook.handleSave(data);
-        if (saved?.id && isNew) {
-          if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-          hook.primeSaved?.(saved);
-          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-        } else {
-          reportUnnavigableSave({ saved, isNew, windowName, ui });
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
-        {ui('save')}
-      </Button>
-      {!isProcessed && hook.children.length > 0 && (
-        <Button size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
-          if (!(await flushPendingLines())) return;
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
-        }}>
-          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-          {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
-        </Button>
-      )}
-    </>
-  );
-}
-
-/**
- * Single Save toolbar button for an existing (already-persisted) record.
- * Extracted from the DetailView footer IIFE. Gated by isDocumentReadOnly,
- * isSaving, !isDirty and blockSaveForBalance.
- */
-function renderExistingRecordSaveAction({
-  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance,
-}) {
-  return (
-    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-      if (!(await flushPendingLines())) return;
-      const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
-    }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
-      {ui('save')}
-    </Button>
-  );
-}
-
-/**
- * Dispatches the footer Save/Confirm action block by record state. Extracted to
- * module level so the branch logic does not count toward DetailView's cognitive
- * complexity. All values arrive via the `params` object built in DetailView.
- */
-function renderSaveActions(params) {
-  if (params.draftMode?.enabled) return renderDraftModeSaveActions(params);
-  if (params.isNew) return renderNewRecordSaveActions(params);
-  return renderExistingRecordSaveAction(params);
-}
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
@@ -1332,7 +1180,10 @@ export function DetailView({
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
   // the effect falls through to fetchById. Skipping the list fetch unconditionally drops one
   // wasted GET per direct-URL navigation.
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName });
+  // ETP-4933: contractFields comes from the generator's `Form.fields` static, so the
+  // required-field gate sees the whole header form — including the "Others" tab, which
+  // is only mounted while active and therefore invisible to the registry.
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: Form?.fields });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1540,6 +1391,9 @@ export function DetailView({
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
+  // ETP-4933: AD-column label resolver, for naming the missing fields in the
+  // Save tooltip. Same override chain EntityForm uses for its own field labels.
+  const tField = useLabel(labelOverrides ?? api?.labelOverrides);
   const ui = useUI();
   // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
   const capabilities = useCapabilitiesSafe();
@@ -2914,11 +2768,16 @@ export function DetailView({
     );
   }
 
+  // ETP-4933: the required-field gate every primary persist button honours.
+  const saveGate = useMemo(
+    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
+    [hook.isValid, hook.missingRequiredFields, tField, ui],
+  );
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal,
+    setShowProcessingModal, saveGate,
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 

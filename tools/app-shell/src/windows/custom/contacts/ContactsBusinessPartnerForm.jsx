@@ -18,3 +18,6 @@ export default function ContactsBusinessPartnerForm(props) {
 }
 
 ContactsBusinessPartnerForm.hasCollapsedFields = BusinessPartnerForm.hasCollapsedFields;
+// ETP-4933: forward the descriptor static too, or DetailView's required-field gate
+// loses this window (it reads `Form.fields` off whatever component it was given).
+ContactsBusinessPartnerForm.fields = BusinessPartnerForm.fields;
