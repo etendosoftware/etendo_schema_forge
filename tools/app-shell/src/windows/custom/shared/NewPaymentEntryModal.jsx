@@ -770,6 +770,27 @@ function matchMethodIdByName(methods, name) {
   return hit ? hit.id : '';
 }
 
+/**
+ * Seeds method and account once the catalogs are in: an edit prefills from the draft it is
+ * correcting, a new payment takes the defaults. Outside the component so the loading effect stays
+ * a fetch rather than a fetch plus a decision tree.
+ */
+function seedMethodAndAccount({
+  isEdit, payment, accJson, accList, methList, bpPreferredAccountId,
+  setMethodId, setAccountId, onAmountChange,
+}) {
+  if (!isEdit) {
+    const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
+    setMethodId(defaultMethodId);
+    setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountId));
+    return;
+  }
+  setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
+    || pickDefaultMethodId(accJson, accList, methList));
+  setAccountId(payment.accountId || pickDefaultAccountId(accList, '', bpPreferredAccountId));
+  onAmountChange(formatPlain(Number(payment.amount) || 0));
+}
+
 export default function NewPaymentEntryModal({
   dir = 'in',
   specName,
@@ -873,18 +894,12 @@ export default function NewPaymentEntryModal({
         setMethods(methList);
         setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        if (isEdit) {
-          // Edit mode: prefill from the draft instead of picking defaults.
-          setMethodId(matchMethodIdByName(methList, payment.paymentMethod)
-            || pickDefaultMethodId(accJson, accList, methList));
-          setAccountId(payment.accountId
-            || pickDefaultAccountId(accList, '', bpPreferredAccountIdRef.current));
-          balance.onAmountChange(formatPlain(Number(payment.amount) || 0));
-        } else {
-          const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
-          setMethodId(defaultMethodId);
-          setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
-        }
+        // Edit mode prefills from the draft instead of picking defaults.
+        seedMethodAndAccount({
+          isEdit, payment, accJson, accList, methList,
+          bpPreferredAccountId: bpPreferredAccountIdRef.current,
+          setMethodId, setAccountId, onAmountChange: balance.onAmountChange,
+        });
 
         if (!scheduleIdProp) {
           const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);

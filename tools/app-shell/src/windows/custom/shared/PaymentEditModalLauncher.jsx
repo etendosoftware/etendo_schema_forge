@@ -89,7 +89,13 @@ export default function PaymentEditModalLauncher({
 
   // Anything we could not resolve keeps the dialog it had before, so confirming is never blocked.
   if (failed) {
-    return <ConfirmPaymentModal dir={dir} onConfirm={onConfirm} onClose={onClose} />;
+    return (
+      <ConfirmPaymentModal
+        dir={dir}
+        onConfirm={onConfirm}
+        onClose={onClose}
+        data-testid="ConfirmPaymentModal__b085c9" />
+    );
   }
   // Resolving is two requests against a record the user just clicked; rendering nothing for that
   // moment reads as a slow button, whereas a spinner over the whole window reads as a hang.

@@ -541,7 +541,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
         // Same editor the payment window opens, so Confirmar means the same thing from either
         // surface. It falls back to the plain confirm dialog on its own when the row's invoice
         // cannot be resolved, which is why ConfirmPaymentModal is no longer referenced here.
-        <PaymentEditModalLauncher
+        (<PaymentEditModalLauncher
           dir={dir}
           record={confirmRow}
           apiBaseUrl={apiBaseUrl}
@@ -549,7 +549,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
           onClose={() => setConfirmRow(null)}
           onRefresh={() => { setConfirmRow(null); props.onDataMutated?.(); }}
           data-testid="PaymentEditModalLauncher__743b1b"
-        />
+        />)
       )}
     </div>
   );

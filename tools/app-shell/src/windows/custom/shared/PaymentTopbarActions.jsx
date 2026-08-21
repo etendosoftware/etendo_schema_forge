@@ -10,9 +10,13 @@ import PaymentRetryTransferButton from './PaymentRetryTransferButton';
 export default function PaymentTopbarActions({ specName, entity, ...props }) {
   return (
     <>
-      <PaymentConciliadoBadge {...props} />
+      <PaymentConciliadoBadge {...props} data-testid="PaymentConciliadoBadge__f8cfae" />
       {/* `props` carries DetailView's apiBaseUrl, which the retry needs to reach NEO. */}
-      <PaymentRetryTransferButton specName={specName} entity={entity} {...props} />
+      <PaymentRetryTransferButton
+        specName={specName}
+        entity={entity}
+        {...props}
+        data-testid="PaymentRetryTransferButton__f8cfae" />
     </>
   );
 }

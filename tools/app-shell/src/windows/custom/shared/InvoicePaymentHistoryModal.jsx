@@ -63,7 +63,7 @@ function PaymentStateTag({ status, processed, isSales, ui, payment }) {
         bg="var(--status-destructive-bg)"
         fg="var(--status-destructive-fg)"
         dot="var(--status-destructive-fg)"
-      >
+        data-testid="StatePill__b82d4f">
         {ui('cpPaymentStateError')}
       </StatePill>
     );
@@ -77,7 +77,7 @@ function PaymentStateTag({ status, processed, isSales, ui, payment }) {
         bg="var(--status-warning-bg)"
         fg="var(--status-warning-fg)"
         dot="var(--status-warning-fg)"
-      >
+        data-testid="StatePill__b82d4f">
         {ui('cpPaymentStateInProgress')}
       </StatePill>
     );
@@ -387,7 +387,10 @@ function PaymentHistoryBody({
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                 {isFailedTransfer(payment) && (
-                  <RetryTransferButton onClick={(e) => handleRetryClick(e, payment)} ui={ui} />
+                  <RetryTransferButton
+                    onClick={(e) => handleRetryClick(e, payment)}
+                    ui={ui}
+                    data-testid="RetryTransferButton__b82d4f" />
                 )}
                 {!isPaymentProcessed(payment) && (
                   <DeleteDraftButton onClick={(e) => handleDeleteClick(e, payment)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />

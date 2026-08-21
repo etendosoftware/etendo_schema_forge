@@ -144,7 +144,11 @@ export default function PaymentRetryTransferButton({
         whiteSpace: 'nowrap', cursor: retrying ? 'default' : 'pointer',
       }}
     >
-      <RotateCcw size={15} strokeWidth={2.5} aria-hidden="true" />
+      <RotateCcw
+        size={15}
+        strokeWidth={2.5}
+        aria-hidden="true"
+        data-testid="RotateCcw__8d4aeb" />
       {ui('cpRetryTransfer')}
     </button>
   );
