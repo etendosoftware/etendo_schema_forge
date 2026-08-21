@@ -19,6 +19,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
+  // ListSortPopover (rendered in the toolbar since ETP-4921) resolves each menu entry
+  // through resolveColumnLabel, which needs the AD dictionary translator.
+  useLabel: () => (key) => key,
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));

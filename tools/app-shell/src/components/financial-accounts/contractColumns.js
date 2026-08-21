@@ -29,7 +29,7 @@ import contract from '@generated/financial-account/contract.json';
  *
  * @param {string} entityName - contract entity key (e.g. 'transaction')
  * @returns {Array<{ name: string, column?: string, label: string, type?: string,
- *   gridLabelKey?: string, cellType?: string, columnType?: string }>}
+ *   gridLabelKey?: string, cellType?: string, columnType?: string, multiField?: object }>}
  */
 export function getContractGridColumns(entityName) {
   const fields = contract?.frontendContract?.entities?.[entityName]?.fields ?? [];
@@ -44,6 +44,10 @@ export function getContractGridColumns(entityName) {
       gridLabelKey: f.gridLabelKey,
       cellType: f.cellType,
       columnType: f.columnType,
+      // ETP-4921 — the multiField decorator, forwarded so a host column can turn its
+      // header into N independently sortable segments. Only the Tipo column uses it here
+      // (type + iBAN); every other column leaves it undefined.
+      multiField: f.multiField,
     }));
 }
 

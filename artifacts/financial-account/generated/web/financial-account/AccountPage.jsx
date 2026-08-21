@@ -81,7 +81,10 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/accounts/account",
       "detailUrl": "/sws/neo/accounts/account/{id}",
-      "supportedFilters": []
+      "supportedFilters": [
+        "type",
+        "iBAN"
+      ]
     },
     "transaction": {
       "get": true,
@@ -673,6 +676,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       hideListFilters
+      listSortBy="name asc"
       {...props} window={effectiveWindow}
     />
   );

@@ -12,7 +12,8 @@
     "hideCreate": true,
     "hidePrint": true,
     "hideMoreMenu": true,
-    "hideListFilters": true
+    "hideListFilters": true,
+    "listSortBy": "name asc"
   },
   "entities": {
     "account": {
@@ -20,11 +21,26 @@
       "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
+        "type": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 2,
+          "gridLabelKey": "financeAccountsColType",
+          "cellType": "accountType",
+          "searchable": true,
+          "multiField": {
+            "parts": [
+              { "field": "type", "labelKey": "financeAccountsColType" },
+              { "field": "iBAN", "labelKey": "financeAccountsColIban" }
+            ]
+          },
+          "reason": "The Tipo cell shows TWO values — the account type and, under it, the IBAN — so a single header could only ever sort by one of them. The multiField decorator splits the header into two independently sortable segments (\"Tipo & IBAN\"), the same mechanism the Product list uses for \"Identificador & Nombre\". The cell body is untouched: cellType accountType still renders TypeCell, because DataTable's col.render wins over the multiField cell renderer. Both parts carry searchable:true because F18 blocks a sort-enabled part that is not queryable.",
+          "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md"
+        },
         "currency": { "visibility": "editable", "grid": false, "required": true },
         "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
-        "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
+        "iBAN": { "visibility": "editable", "grid": false, "searchable": true, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
         "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
         "bankCode": { "visibility": "editable", "grid": false },
         "branchCode": { "visibility": "editable", "grid": false },

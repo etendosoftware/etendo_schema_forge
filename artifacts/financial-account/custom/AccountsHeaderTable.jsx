@@ -36,6 +36,7 @@ import {
   resolveCellType,
 } from '@/components/financial-accounts/accountCellTypes.jsx';
 import { AccountRowActions } from '@/components/financial-accounts/AccountRowActions.jsx';
+import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns.js';
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
 import { EditAccountModal } from '@/windows/custom/financial-account/EditAccountModal.jsx';
@@ -49,15 +50,17 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 /* eslint-disable react/prop-types */
 
 // Per-column presentation the contract cannot express: the Figma layout pins these
-// widths, and `pl-[84px]` aligns the "Cuenta" header with the row avatar. Consumed
-// through DataTable's `col.headClass` / `col.cellClass`.
+// widths, and the "Cuenta" header's left padding aligns it with the row avatar.
+// Consumed through DataTable's `col.headClass` / `col.cellClass`.
 // Stays in code, not in decisions.json, for three reasons: decisions is a semantic
 // contract rather than a stylesheet; Tailwind arbitrary values must be static in
-// source, so a runtime `w-[${n}px]` would never be compiled; and `pl-[84px]` is not
-// a width at all — it mirrors NameCell's 44px grip + 32px avatar + 8px padding, so
-// it is coupled to that cell body and has to move with it.
+// source, so a runtime `w-[${n}px]` would never be compiled; and that padding is not
+// a width at all — it mirrors NameCell's leading offset, so it is coupled to that
+// cell body and has to move with it. It was `pl-[84px]` while NameCell opened with a
+// 44px drag-grip slot (44 + 32px avatar + 8px padding); the grip is gone, so it is
+// now just the avatar plus its padding.
 const COLUMN_CHROME = {
-  name: { headClass: 'w-[480px] pl-[84px] pr-2', cellClass: 'w-[480px] p-0' },
+  name: { headClass: 'w-[480px] pl-[40px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
   country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
@@ -94,6 +97,29 @@ const GRID_TYPE_OVERRIDE = {
  * (`rowQuickActions`) renders an absolute hover overlay rather than a column, and
  * every action opens a local modal.
  */
+/**
+ * A `multiField` decorator's `parts` turned into DataTable header segments.
+ *
+ * DataTable renders a multi-segment header for any column carrying `parts`, independently of
+ * `col.type` — and `col.render` still wins for the CELL. So the Tipo column keeps rendering
+ * through `TypeCell` (type label + chunked IBAN underneath) and only its header splits into
+ * "Tipo & IBAN", each segment sorting on its own field.
+ *
+ * `part.key` is the contract field name, which is what `resolveBackendSort` puts in `_sortBy`,
+ * so the segment orders the whole dataset server-side rather than the loaded page.
+ *
+ * Labels go through `labelKey` → `ui()` rather than the literal `labels` map Product declares
+ * inline, so no user-visible string lands in decisions.json.
+ */
+function buildHeaderParts(multiField, ui, locale) {
+  const parts = multiField?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) return undefined;
+  return parts.map((part) => ({
+    key: part.field,
+    labels: part.labelKey ? { [locale]: ui(part.labelKey) } : undefined,
+  }));
+}
+
 function buildColumns(ui, locale, handlers) {
   const cellCtx = {
     ui,
@@ -112,7 +138,13 @@ function buildColumns(ui, locale, handlers) {
       // dictionary resolve it rather than falling through to the raw field name.
       labels: col.gridLabelKey ? { [locale]: ui(col.gridLabelKey) } : undefined,
       label: col.label,
-      sortable: false,
+      parts: buildHeaderParts(col.multiField, ui, locale),
+      // DataTable treats `sortable` as opt-OUT (`col.sortable !== false`), so this line is
+      // only here to be explicit: every data column of this list sorts. It is server-side —
+      // ListView owns the state and useEntity turns it into NEO's `_sortBy` — which is why
+      // "Por conciliar" had to become a real AD column first (EM_ETGO_Pending_Count): a value
+      // injected in afterHandle can only be reordered inside the page the SQL already picked.
+      sortable: true,
       ...(COLUMN_CHROME[col.name] ?? {}),
       render: renderer ? (row) => renderer(row, cellCtx) : undefined,
     };
@@ -144,9 +176,18 @@ function buildColumns(ui, locale, handlers) {
 }
 
 /**
+ * The sort state this list starts in, mirroring `window.listSortBy` in
+ * `artifacts/financial-account/decisions.json`. Kept as a constant because the slot has to
+ * recognise "the user has not sorted anything yet" to decide whether `sortAccounts` applies.
+ * Must stay in step with that decisions value — `accountsListDeclarations.test.js` pins both.
+ */
+export const RESTING_SORT = { column: 'name', direction: 'asc' };
+
+/**
  * Default account first, then alphabetical — the ordering the accounts-page SQL used
  * (`ORDER BY fa.isdefault DESC, fa.name ASC`). The generic CRUD does not guarantee a
- * stable order, so without this the rows visibly reshuffle between loads.
+ * stable order, so without this the rows visibly reshuffle between loads. Applied ONLY
+ * while the sort state is still {@link RESTING_SORT}; see `visibleAccounts`.
  */
 export function sortAccounts(accounts) {
   return [...accounts].sort((a, b) => {
@@ -315,9 +356,20 @@ export default function AccountsHeaderTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ui, locale],
   );
+  // Resting order only. `sortAccounts` reproduces the retired page's
+  // `ORDER BY fa.isdefault DESC, fa.name ASC`, which `listSortBy` cannot express — it parses
+  // a SINGLE column (ListView.parseListSortBy). So the two-key default stays here, and the
+  // moment the user picks a column the server's order is passed through untouched. Without
+  // this gate the header arrows would render and appear to do nothing, because the local sort
+  // used to re-order every render unconditionally.
+  const isRestingSort = props.sortColumn === RESTING_SORT.column
+    && props.sortDirection === RESTING_SORT.direction;
   const visibleAccounts = useMemo(
-    () => sortAccounts(filterAccounts(data, typeFilter, search)),
-    [data, typeFilter, search],
+    () => {
+      const rows = filterAccounts(data, typeFilter, search);
+      return isRestingSort ? sortAccounts(rows) : rows;
+    },
+    [data, typeFilter, search, isRestingSort],
   );
 
   return (
@@ -347,6 +399,20 @@ export default function AccountsHeaderTable({
             onSearchChange={setSearch}
             onNewAccount={() => setWizardOpen(true)}
             onMatchingRules={() => navigate('/match-rule')}
+            // The "Ordenar por" control every other list gets from ListView's idle bar. This
+            // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
+            // here the clickable headers would be the only sort affordance. Same component
+            // ListView uses, driven by the same state it forwards through `props`.
+            sortControl={(
+              <ListSortPopover
+                columns={columns}
+                sortColumn={props.sortColumn}
+                sortDirection={props.sortDirection}
+                onSelect={props.onSortSelect}
+                onClear={props.onClearSort}
+                isDefaultSort={props.isDefaultSort}
+                data-testid="ListSortPopover__accthdr" />
+            )}
             data-testid="AccountsToolbar__accthdr" />
         </div>
       )}

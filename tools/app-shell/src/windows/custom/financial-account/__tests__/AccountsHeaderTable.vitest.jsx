@@ -23,6 +23,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
+  // ListSortPopover (rendered in the toolbar since ETP-4921) resolves each menu entry
+  // through resolveColumnLabel, which needs the AD dictionary translator.
+  useLabel: () => (key) => key,
   useUI: () => (key, params = {}) => {
     if (key === 'financeAccountsReconcilePending') return `Conciliar (${params.count})`;
     return key;
@@ -415,11 +418,48 @@ describe('AccountsHeaderTable — columns', () => {
     }
   });
 
-  it('marks every column as non-sortable (the grid is filtered client-side)', () => {
+  // ETP-4921 inverted this: the list used to hardcode `sortable: false` on every column.
+  // Sorting is server-side (ListView owns the state, useEntity turns it into NEO's `_sortBy`),
+  // which is why "Por conciliar" first had to become a real AD column — a value injected in
+  // afterHandle can only be reordered inside the page the SQL already picked.
+  it('marks every data column sortable, and only the actions column not', () => {
     renderTable();
 
     for (const col of tableProps.columns) {
-      expect(col.sortable).toBe(false);
+      if (col.key === '_rowActions') {
+        expect(col.sortable, 'the actions column must never sort').toBe(false);
+      } else {
+        expect(col.sortable, `${col.key} must be sortable`).toBe(true);
+      }
+    }
+  });
+
+  // The Tipo cell shows TWO values (account type, and the IBAN under it), so one header could
+  // only ever sort by one of them. The multiField decorator in decisions.json splits it into
+  // two independently sortable segments — the same mechanism the Product list uses for
+  // "Identificador & Nombre". `part.key` is the contract field name, so each segment's
+  // `_sortBy` orders the whole dataset, not the loaded page.
+  it('splits the Tipo header into independently sortable type and IBAN segments', () => {
+    renderTable();
+
+    const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
+    expect(byKey.type.parts).toEqual([
+      { key: 'type', labels: { es_ES: 'financeAccountsColType' } },
+      { key: 'iBAN', labels: { es_ES: 'financeAccountsColIban' } },
+    ]);
+    // The cell body is untouched: DataTable's `col.render` wins over the multiField cell
+    // renderer, so TypeCell still draws the type label plus the chunked IBAN.
+    expect(typeof byKey.type.render).toBe('function');
+  });
+
+  // Only Tipo carries a multiField decorator; a stray `parts` on any other column would
+  // silently replace its header with segments.
+  it('leaves every other column with a single-label header', () => {
+    renderTable();
+
+    for (const col of tableProps.columns) {
+      if (col.key === 'type') continue;
+      expect(col.parts, `${col.key} must not declare header parts`).toBeUndefined();
     }
   });
 
@@ -428,7 +468,9 @@ describe('AccountsHeaderTable — columns', () => {
 
     const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
     expect(byKey.name.headClass).toContain('w-[480px]');
-    expect(byKey.name.headClass).toContain('pl-[84px]');
+    // 40px, not the old 84px: NameCell's 44px drag-grip slot was removed in ETP-4921 and
+    // this padding mirrors that cell's leading offset.
+    expect(byKey.name.headClass).toContain('pl-[40px]');
     expect(byKey.name.cellClass).toContain('w-[480px]');
     expect(byKey.type.headClass).toContain('w-[340px]');
     expect(byKey.currentBalance.headClass).toContain('w-[200px]');
@@ -703,5 +745,49 @@ describe('filterAccounts', () => {
     const bare = [{ id: 'acc-bare', type: 'B' }];
     expect(filterAccounts(bare, null, 'anything')).toEqual([]);
     expect(filterAccounts(bare, null, '')).toHaveLength(1);
+  });
+});
+
+describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
+  // This window sets `hideListBar: true` and draws its own toolbar, which silently took
+  // ListView's sort popover away — clickable headers were the only sort affordance left. The
+  // control is the SAME component ListView renders, driven by the handlers ListView forwards.
+  it('renders the shared sort popover inside its own toolbar', () => {
+    renderTable();
+
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    expect(toolbar).toContainElement(screen.getByTestId('list-sort-toggle'));
+  });
+
+  it('lists every sortable column, and not the actions column', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('list-sort-toggle'));
+
+    for (const key of ['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']) {
+      expect(screen.getByTestId(`list-sort-option-${key}`), key).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId('list-sort-option-_rowActions')).not.toBeInTheDocument();
+  });
+
+  // The popover must NOT reuse the header's none→asc→desc→default cycle: a menu entry that can
+  // silently clear the sort reads as a no-op. ListView hands it a separate `onSortSelect`.
+  it('reports a pick through onSortSelect, not through the header cycle', () => {
+    const onSortSelect = vi.fn();
+    const onSort = vi.fn();
+    renderTable({ onSortSelect, onSort });
+
+    fireEvent.click(screen.getByTestId('list-sort-toggle'));
+    fireEvent.click(screen.getByTestId('list-sort-option-type'));
+
+    expect(onSortSelect).toHaveBeenCalledWith('type');
+    expect(onSort).not.toHaveBeenCalled();
+  });
+
+  it('goes away with the toolbar while rows are selected', () => {
+    renderTable({ selectedRows: [{ id: 'acc-1' }] });
+
+    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
   });
 });

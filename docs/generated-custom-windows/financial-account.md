@@ -1345,6 +1345,119 @@ have no AD backing) and consumes real NEO endpoints directly.
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
 
+## Column sorting (ETP-4921)
+
+Two different mechanisms, because the LIST and the DETAIL tabs are two different kinds of grid.
+
+### The Cuentas list — server-side
+
+The list is a generic `DataTable` inside the `AccountsHeaderTable` slot, so it sorts the way
+every other window does: `ListView` owns the state, `useEntity` turns it into NEO's `_sortBy`
+(`resolveBackendSort`, `lib/gridQuery.js`), and the whole dataset is ordered — not just the
+loaded page. `DataTable` treats `sortable` as **opt-out** (`col.sortable !== false`), and the
+slot now declares `sortable: true` on every data column; only the trailing `_rowActions` column
+stays `false`.
+
+This is why "Por conciliar" had to become the `EM_ETGO_Pending_Count` stored computed column
+first. A value injected in `afterHandle` can only ever be reordered *inside the page the SQL
+already selected* (`BATCH_SIZE = 75` + infinite-scroll `loadMore`), which is not the same as
+ordering the dataset — so the column was unsortable by construction.
+
+**Two sort affordances, both present:**
+
+- **Clickable column headers**, cycling none → asc → desc → back to the list's default.
+- **The toolbar "Ordenar por" popover** (`components/contract-ui/ListSortPopover.jsx`). Every
+  other list gets this from `ListView`'s idle bar, which this window suppresses
+  (`hideListBar: true`) in favour of its own toolbar — so the control was silently missing here.
+  It was extracted out of `ListView`'s inline JSX rather than copied, and `AccountsToolbar` takes
+  it through a `sortControl` node prop so the toolbar stays presentational. `ListView` forwards
+  `onSortSelect` / `onClearSort` / `isDefaultSort` in `tableProps` alongside `onSort` for exactly
+  this: the popover must NOT reuse the header's cycle, since a menu entry that can silently clear
+  the sort reads as a no-op.
+
+**The resting order stays in code.** `sortAccounts` reproduces the retired page's
+`ORDER BY fa.isdefault DESC, fa.name ASC`, which `listSortBy` cannot express —
+`ListView.parseListSortBy` parses a SINGLE column. So `decisions.json` declares
+`window.listSortBy: "name asc"` and the slot applies its two-key sort **only while the sort state
+still equals that default** (`RESTING_SORT`). Without that gate the arrows would render and
+appear to do nothing, because the local sort used to re-order unconditionally on every render.
+
+Related generic fix: `ListView.handleColumnSort`'s reset arm used to hardcode
+`creationDate desc`, so for any window declaring its own `listSortBy` the third click switched to
+a *different* order than the one the list opened in — and a slot keying off "is the sort at rest"
+could never get back to it. It now resets to `initialSortColumn` / `initialSortDirection`.
+
+### The Tipo column — two sortable segments
+
+The Tipo cell shows **two** values (the account type, and the IBAN under it), so one header could
+only ever sort by one of them. `decisions.json` declares a `multiField` decorator on the `type`
+field with `parts: [type, iBAN]`, which is the same mechanism the Product list uses for
+"Identificador & Nombre" — `DataTable.renderMultiFieldHeaderCell` renders N independently
+sortable segments, each issuing `_sortBy` on its own field.
+
+- The **cell body is untouched**: `DataTable`'s `col.render` wins over the multiField cell
+  renderer, so `cellType: accountType` still draws `TypeCell` (type label + chunked IBAN).
+- Part labels go through a `labelKey` resolved via `ui()`, not the literal `labels` map Product
+  declares inline, so no user-visible string is versioned in `decisions.json`.
+- Both parts carry `searchable: true`. Validator rule **F18** blocks a sort-enabled part that is
+  not queryable, and it reads queryability off `searchableFields` / `supportedFilters` — which
+  were empty for this entity. Neither list is consumed by the frontend, so this has no visible
+  side effect; it documents that NEO accepts a filter/sort on those columns.
+- Generic fix this needed: `renderMultiFieldHeaderCell` built its own `<th>` and **dropped
+  `col.headClass`**, which the single-label branch honours. This window pins column widths, so
+  its Tipo column collapsed to auto width the moment its header gained segments. No Product test
+  caught it because Product declares no `headClass`.
+
+### The Movimientos / Reconciliaciones / Extractos tabs — client-side
+
+These three are **not** `DataTable` grids: Movimientos is a hand-rolled `<table>`, the other two
+are CSS-grid `div role="table"` layouts, and each is fed by a single unpaged `useNeoResource`
+fetch whose filtering is already a client-side `useMemo`. Two of the three go through bespoke
+Java handlers that accept no sort parameter at all, so sorting belongs in the same place the
+filtering already does.
+
+| Piece | Where |
+|---|---|
+| Pure comparator | `lib/clientSort.js` — `compareCellValues`, `sortRows` |
+| State + none→asc→desc→none cycle | `hooks/useClientSort.js`, mirroring `ListView.handleColumnSort` |
+| The clickable label | `components/financial-accounts/SortableHeaderLabel.jsx` |
+
+`SortableHeaderLabel` renders only the label + arrow, never the cell — one consumer has
+`<TableHead>` cells and two have `<span>` cells, so a component owning the cell could not serve
+both. Returning to "none" on the third click (rather than to a default column) is what keeps the
+backend's own order reachable: movements arrive newest-first, reconciliations `transactionDate
+desc`.
+
+**Sort values are co-located with the cell renderers**, as an optional `sortValue(row, ctx)` on
+each registry entry. That is deliberate: the contract field name and the payload key routinely
+differ (`transactionDate` renders from `row.date`, `businessPartner` from `row.contact`), and the
+translated pills must sort by what the reader sees, not by the raw code — every non-`RPPC`
+payment status collapses into "Sin conciliar" on screen, so sorting by code would scatter them.
+Dates sort on the raw ISO string, since `formatDate` yields `dd/mm/yyyy`, which would order by
+day-of-month.
+
+**Movimientos → Tipo also has two segments.** That cell stacks the transaction type over the
+posting status, so like the Cuentas list's Tipo it splits into "Tipo & Contabilizado". The
+`multiField` decorator is not available here — it is a contract decorator consumed by
+`DataTable` — so the hand-rolled equivalent is `SortableHeaderSegments`, fed by an optional
+`parts` array on the registry entry. `posted` is not a contract grid column of its own; it only
+ever appears inside that cell, which is why it contributes an accessor but no column.
+
+**Two deliberate exclusions:**
+
+- **Movimientos → Balance has no sort control at all.** It is a *running* balance, anchored to
+  `FIN_Financial_Account.currentbalance` and computed as `currentbalance − SUM(subsequent)` over
+  `statementdate ASC, line ASC`. It is order-dependent by construction, so reordering the grid by
+  anything else turns that column into a meaningless number. `Amount` sorts fine.
+- **Extractos → Lines / Out / In / Status ARE sortable** even though no AD field backs them:
+  they are computed aggregates, but they travel *with* the row, so sorting them client-side is
+  exactly as correct as sorting a contract column.
+
+`lib/clientSort.js` deliberately does **not** use `parseCalendarDate`. Lexicographic order on
+ISO-8601 is chronological, so the comparator only ever orders two instants against each other —
+it never reads a local-time getter and never buckets by day, which are the two things that helper
+exists to protect. See the date-only section of `CLAUDE.md`, which calls out this exact non-case.
+
 ## Payment status mapping (two states)
 
 The movement status was reduced to **two user-facing states**: a payment is either reconciled against a bank statement (`RPPC`) or not. Every other backend `FIN_Payment.Status` code collapses into "Sin conciliar".

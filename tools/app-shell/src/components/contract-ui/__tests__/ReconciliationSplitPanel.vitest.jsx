@@ -217,7 +217,11 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-toolbar-back'));
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/financeReconcileFilterStatusPending/)).toBeInTheDocument();
-    expect(screen.getAllByText('dateRangeLast30Days').length).toBeGreaterThan(0);
+    // ETP-4921 — the default period is the last 12 months, not 30 days: a statement line is
+    // often matched against an invoice or payment months older than itself, and the 30-day
+    // window hid those candidates by default. It also makes the picker's own placeholder
+    // honest, which already read "Últimos 12 meses".
+    expect(screen.getAllByText('dateRangeLast12Months').length).toBeGreaterThan(0);
   });
 
   it('passes the selected source filter to the candidates hook', () => {

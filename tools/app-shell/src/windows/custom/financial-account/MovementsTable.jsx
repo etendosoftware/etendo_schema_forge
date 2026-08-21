@@ -19,6 +19,9 @@ import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
 import { MovementRowKebab } from './MovementRowKebab';
 import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
+import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import { useClientSort } from '@/hooks/useClientSort';
+import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
  * Formats an ISO date string using the user's locale. The movement date is a
@@ -59,6 +62,8 @@ const COL_COUNT = SKELETON_COL_KEYS.length;
 const MOVEMENT_CELL_RENDERERS = {
   transactionDate: {
     labelKey: 'financeAccountMovementsColDate',
+    // The ISO string, not the dd/mm/yyyy the cell shows — that would sort by day-of-month.
+    sortValue: (m) => m.date,
     renderCell: (m, ctx) => (
       <TableCell
         className="whitespace-nowrap text-sm leading-5 text-[hsl(var(--foreground))]"
@@ -69,6 +74,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   documentNo: {
     labelKey: 'financeAccountMovementsColDocument',
+    sortValue: (m) => m.documentNo,
     renderCell: (m, ctx) => (
       <TableCell
         className="whitespace-nowrap text-sm font-semibold leading-5"
@@ -90,6 +96,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   businessPartner: {
     labelKey: 'financeAccountMovementsColContact',
+    sortValue: (m) => m.contact,
     renderCell: (m) => (
       <TableCell
         className="text-sm leading-5 text-[hsl(var(--foreground))]"
@@ -98,6 +105,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   description: {
     labelKey: 'financeAccountMovementsColDescription',
+    sortValue: (m) => m.description,
     renderCell: (m) => (
       <TableCell
         className="max-w-[200px] truncate text-sm text-[hsl(var(--foreground))]"
@@ -106,6 +114,9 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   status: {
     labelKey: 'financeAccountMovementsColStatus',
+    // The translated badge text, so the two user-facing states group the way they read. The raw
+    // code would scatter them: every non-RPPC code collapses into "Sin conciliar" on screen.
+    sortValue: (m, ctx) => ctx.getStatusLabel(m),
     renderCell: (m) => (
       <TableCell data-testid="TableCell__ae5a16">
         <MovementStatusBadge status={m.paymentStatus} processed={m.processed} data-testid="MovementStatusBadge__ae5a16" />
@@ -114,6 +125,21 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   transactionType: {
     labelKey: 'financeAccountMovementsColType',
+    sortValue: (m, ctx) => ctx.getTrxTypeLabel(m),
+    // The cell stacks the transaction type over the posting status, so its header splits into
+    // two independently sortable segments ("Tipo & Contabilizado") — the hand-rolled equivalent
+    // of the `multiField` decorator the Cuentas list uses for "Tipo & IBAN". `posted` is not a
+    // contract grid column of its own; it only ever appears inside this cell.
+    parts: [
+      { key: 'transactionType', labelKey: 'financeAccountMovementsColType' },
+      {
+        key: 'posted',
+        labelKey: 'financeAccountMovementsColPosted',
+        // The translated PostingStatusDot text, so the two states group the way they read.
+        // Only 'Y' is posted; every other code renders as "Sin contabilizar".
+        sortValue: (m, ctx) => ctx.getPostedLabel(m),
+      },
+    ],
     renderCell: (m, ctx) => (
       <TableCell data-testid="TableCell__ae5a16">
         <div className="flex flex-col gap-0.5">
@@ -125,6 +151,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   gLItem: {
     labelKey: 'financeAccountMovementsColGlItem',
+    sortValue: (m) => m.glItem,
     renderCell: (m) => (
       <TableCell
         className="max-w-[180px] truncate text-sm text-[hsl(var(--foreground))]"
@@ -331,6 +358,43 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
   const [expandedId, setExpandedId] = useState(null);
+
+  // Client-side, because this list arrives whole from a bespoke Java handler that sends no sort
+  // parameter at all — see lib/clientSort.js. `Balance` is deliberately absent from the
+  // accessors and renders a plain, non-clickable header: it is a RUNNING balance, anchored to
+  // the account's current balance and computed as `currentbalance − SUM(subsequent)` over
+  // `statementdate ASC, line ASC`. It is order-dependent by construction, so reordering the
+  // grid by anything else turns that column into a meaningless number. `Amount` sorts fine.
+  const sortCtx = {
+    getTrxTypeLabel,
+    // Mirrors MovementStatusBadge: `processed === false` is a Draft whatever the raw code says,
+    // because a reactivated transaction keeps RPR/PPM but is a draft again.
+    getStatusLabel: (m) => {
+      const config = m.processed === false ? DRAFT : MOVEMENT_STATUS_CONFIG[m.paymentStatus];
+      return config ? ui(config.labelKey) : '';
+    },
+    // Mirrors PostingStatusDot: only 'Y' is posted.
+    getPostedLabel: (m) => (m.posted === 'Y'
+      ? ui('financeAccountMovementsPosted')
+      : ui('financeAccountMovementsNotPosted')),
+  };
+  const accessors = {
+    ...Object.fromEntries(
+      CONTRACT_COLUMNS
+        .filter((c) => MOVEMENT_CELL_RENDERERS[c.name]?.sortValue)
+        .map((c) => [c.name, (row) => MOVEMENT_CELL_RENDERERS[c.name].sortValue(row, sortCtx)]),
+    ),
+    // A multi-segment header contributes one accessor per segment, keyed by the segment — the
+    // host column's own key already came from the loop above.
+    ...Object.fromEntries(
+      CONTRACT_COLUMNS
+        .flatMap((c) => MOVEMENT_CELL_RENDERERS[c.name]?.parts ?? [])
+        .filter((part) => part.sortValue)
+        .map((part) => [part.key, (row) => part.sortValue(row, sortCtx)]),
+    ),
+    amount: (m) => Number(m.amount) || 0,
+  };
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(movements, { accessors });
   // The "more info" panel shows Proyecto / Centro de coste / Producto, but ONLY the ones actually
   // enabled in the chart of accounts (respects the org's accounting-dimension config).
   const displayedDims = DISPLAYED_DIMENSIONS.filter((k) => enabledDimensions.includes(k));
@@ -483,12 +547,40 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 onChange={handleSelectAll}
                 data-testid="Checkbox__ae5a16" />
             </TableHead>
-            {CONTRACT_COLUMNS.map((col) => (
-              <TableHead key={col.name} data-testid="TableHead__ae5a16">
-                {MOVEMENT_CELL_RENDERERS[col.name] ? ui(MOVEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
-              </TableHead>
-            ))}
-            <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColAmount')}</TableHead>
+            {CONTRACT_COLUMNS.map((col) => {
+              const renderer = MOVEMENT_CELL_RENDERERS[col.name];
+              return (
+                <TableHead key={col.name} data-testid="TableHead__ae5a16">
+                  {renderer?.parts ? (
+                    <SortableHeaderSegments
+                      parts={renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
+                      activeKey={sortKey}
+                      direction={sortDirection}
+                      onSort={toggleSort}
+                      data-testid="SortableHeaderSegments__ae5a16" />
+                  ) : (
+                    <SortableHeaderLabel
+                      label={renderer ? ui(renderer.labelKey) : col.label}
+                      sortKey={col.name}
+                      activeKey={sortKey}
+                      direction={sortDirection}
+                      onSort={toggleSort}
+                      data-testid="SortableHeaderLabel__ae5a16" />
+                  )}
+                </TableHead>
+              );
+            })}
+            <TableHead className="text-right" data-testid="TableHead__ae5a16">
+              <SortableHeaderLabel
+                label={ui('financeAccountMovementsColAmount')}
+                sortKey="amount"
+                activeKey={sortKey}
+                direction={sortDirection}
+                onSort={toggleSort}
+                align="right"
+                data-testid="SortableHeaderLabel__ae5a16" />
+            </TableHead>
+            {/* No onSort: the running balance only means anything in the backend's own order. */}
             <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
             <TableHead className="w-10" data-testid="TableHead__ae5a16" />
           </TableRow>
@@ -496,7 +588,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
         <TableBody data-testid="TableBody__ae5a16">
           {renderBody({
             loading,
-            movements,
+            movements: sorted,
             ui,
             renderRow,
           })}

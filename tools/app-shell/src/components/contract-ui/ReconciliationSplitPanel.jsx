@@ -211,7 +211,11 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
             loading,
             items,
             colSpan,
-            emptyTitle: ui('financeAccountMovementsEmpty'),
+            // Its own key rather than the Movimientos tab's `financeAccountMovementsEmpty`
+            // ("Aún no hay movimientos", paired there with a "+ Nuevo movimiento" hint):
+            // in the reconciliation panels the list is always the result of a filter, so
+            // "not found" is the accurate wording and the hint does not apply.
+            emptyTitle: ui('financeReconcileEmpty'),
             emptyHint: null,
             renderRow,
           })}
@@ -1111,10 +1115,16 @@ export function ReconciliationSplitPanel({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
 
   const [leftStatus, setLeftStatus] = useState('pending');
-  const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last30' });
+  // Last 12 months, not 30 days: a statement line often has to be matched against an
+  // invoice or payment months older than itself, and the 30-day window hid those
+  // candidates by default. It also makes the picker's own trigger honest — the
+  // `financeReconcileFilterDate` placeholder already read "Últimos 12 meses" while the
+  // state said last30. `last12m` is a preset dateRangeBounds and DateRangePopover both
+  // already support, so nothing else changes.
+  const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last12m' });
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSource, setRightSource] = useState('receipts');
-  const [rightDateRange, setRightDateRange] = useState({ presetId: 'last30' });
+  const [rightDateRange, setRightDateRange] = useState({ presetId: 'last12m' });
   const [rightSearch, setRightSearch] = useState('');
   const [selectedLineSel, setSelectedLineSel] = useState(null);
   const [selectedOpIds, setSelectedOpIds] = useState(() => new Set());
