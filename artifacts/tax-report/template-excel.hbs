@@ -1,0 +1,227 @@
+{{!-- Excel-only template (ETP-4899) — flat, calculation-friendly export, same pattern
+      already applied to report-journal-entries / report-general-ledger / report-trial-balance.
+      Unlike template.hbs (HTML/PDF: grouped bands per tax/category/rate/contact, blank
+      filler cells, indentation), this dumps one genuine row per data line, denormalizing
+      every parent group's fields (tax name, category, rate, contact) onto each row so
+      every sheet can be summed/pivoted directly in Excel.
+
+      Amount cells use data-cell-type="number" with the RAW value (no formatCurrency) —
+      html-to-xlsx does parseFloat(cell.innerText) for that type, so a formatted amount
+      would silently truncate at the thousands separator. Never format here.
+
+      html-to-xlsx turns each top-level <table> into its own sheet — the 3 tables below
+      mirror the report's 3 regions (Detail / Summary by Tax Category / Summary by Tax Rate).
+
+      No transactionType branching needed: the backend already returns an empty
+      rows.purchase/rows.sales array for whichever side wasn't requested, so unconditionally
+      walking both is equivalent and avoids duplicating this template 3x (P/S/B) like
+      template.hbs does. A literal "Transaction Type" column (Sales/Receipts vs
+      Purchases/Payments) keeps both sides distinguishable when transactionType='B' puts
+      them in the same flat sheet.
+
+      Detail rows are flattened regardless of "Agrupar por Contacto": every doc row already
+      carries its own bPartner field from the backend (TaxReportHandler.buildDocRows) whether
+      it arrived via taxGroup.docs (ungrouped) or taxGroup.bpGroups[].docs (grouped) — so
+      walking both paths unconditionally (only one is ever non-empty) covers both modes
+      without an ifCond. --}}
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  table { border-collapse: collapse; font-family: sans-serif; font-size: 10pt; }
+  th { font-weight: bold; text-align: left; background: #f1f5f9; }
+  th, td { padding: 1px 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+  {{!-- ================================================================ --}}
+  {{!-- SHEET 1: DETAIL                                                  --}}
+  {{!-- ================================================================ --}}
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.transactionType}}</th>
+      <th>{{meta.labels.taxName}}</th>
+      <th>{{meta.labels.docNo}}</th>
+      <th>{{meta.labels.docType}}</th>
+      <th>{{meta.labels.docDate}}</th>
+      <th>{{meta.labels.acctDate}}</th>
+      <th>{{meta.labels.bPartnerId}}</th>
+      <th>{{meta.labels.country}}</th>
+      <th>{{meta.labels.region}}</th>
+      <th>{{meta.labels.taxBaseAmt}}</th>
+      <th>{{meta.labels.taxAmt}}</th>
+      <th>{{meta.labels.totalAmt}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows.purchase.detail}}
+        {{#each this.docs}}
+        <tr>
+          <td>{{@root.meta.labels.purchasesPayments}}</td>
+          <td>{{../taxName}}</td>
+          <td>{{docNo}}</td>
+          <td>{{docType}}</td>
+          <td>{{docDate}}</td>
+          <td>{{acctDate}}</td>
+          <td>{{bPartner}}</td>
+          <td>{{bpCountry}}</td>
+          <td>{{bpRegion}}</td>
+          <td data-cell-type="number">{{taxBaseAmt}}</td>
+          <td data-cell-type="number">{{taxAmt}}</td>
+          <td data-cell-type="number">{{totalAmt}}</td>
+        </tr>
+        {{/each}}
+        {{#each this.bpGroups}}
+          {{#each this.docs}}
+          <tr>
+            <td>{{@root.meta.labels.purchasesPayments}}</td>
+            <td>{{../../taxName}}</td>
+            <td>{{docNo}}</td>
+            <td>{{docType}}</td>
+            <td>{{docDate}}</td>
+            <td>{{acctDate}}</td>
+            <td>{{bPartner}}</td>
+            <td>{{bpCountry}}</td>
+            <td>{{bpRegion}}</td>
+            <td data-cell-type="number">{{taxBaseAmt}}</td>
+            <td data-cell-type="number">{{taxAmt}}</td>
+            <td data-cell-type="number">{{totalAmt}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      {{/each}}
+      {{#each rows.sales.detail}}
+        {{#each this.docs}}
+        <tr>
+          <td>{{@root.meta.labels.salesReceipts}}</td>
+          <td>{{../taxName}}</td>
+          <td>{{docNo}}</td>
+          <td>{{docType}}</td>
+          <td>{{docDate}}</td>
+          <td>{{acctDate}}</td>
+          <td>{{bPartner}}</td>
+          <td>{{bpCountry}}</td>
+          <td>{{bpRegion}}</td>
+          <td data-cell-type="number">{{taxBaseAmt}}</td>
+          <td data-cell-type="number">{{taxAmt}}</td>
+          <td data-cell-type="number">{{totalAmt}}</td>
+        </tr>
+        {{/each}}
+        {{#each this.bpGroups}}
+          {{#each this.docs}}
+          <tr>
+            <td>{{@root.meta.labels.salesReceipts}}</td>
+            <td>{{../../taxName}}</td>
+            <td>{{docNo}}</td>
+            <td>{{docType}}</td>
+            <td>{{docDate}}</td>
+            <td>{{acctDate}}</td>
+            <td>{{bPartner}}</td>
+            <td>{{bpCountry}}</td>
+            <td>{{bpRegion}}</td>
+            <td data-cell-type="number">{{taxBaseAmt}}</td>
+            <td data-cell-type="number">{{taxAmt}}</td>
+            <td data-cell-type="number">{{totalAmt}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      {{/each}}
+    </tbody>
+  </table>
+
+  {{!-- ================================================================ --}}
+  {{!-- SHEET 2: SUMMARY BY TAX CATEGORY                                 --}}
+  {{!-- ================================================================ --}}
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.transactionType}}</th>
+      <th>{{meta.labels.taxCategory}}</th>
+      <th>{{meta.labels.taxName}}</th>
+      <th>{{meta.labels.rate}}</th>
+      <th>{{meta.labels.taxBaseAmt}}</th>
+      <th>{{meta.labels.taxAmt}}</th>
+      <th>{{meta.labels.totalAmt}}</th>
+      <th>{{meta.labels.noPartners}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows.purchase.summaryByCategory}}
+        {{#each this.taxes}}
+        <tr>
+          <td>{{@root.meta.labels.purchasesPayments}}</td>
+          <td>{{../taxCategoryName}}</td>
+          <td>{{taxName}}</td>
+          <td data-cell-type="number">{{rate}}</td>
+          <td data-cell-type="number">{{taxBaseAmt}}</td>
+          <td data-cell-type="number">{{taxAmt}}</td>
+          <td data-cell-type="number">{{totalAmt}}</td>
+          <td data-cell-type="number">{{bpCount}}</td>
+        </tr>
+        {{/each}}
+      {{/each}}
+      {{#each rows.sales.summaryByCategory}}
+        {{#each this.taxes}}
+        <tr>
+          <td>{{@root.meta.labels.salesReceipts}}</td>
+          <td>{{../taxCategoryName}}</td>
+          <td>{{taxName}}</td>
+          <td data-cell-type="number">{{rate}}</td>
+          <td data-cell-type="number">{{taxBaseAmt}}</td>
+          <td data-cell-type="number">{{taxAmt}}</td>
+          <td data-cell-type="number">{{totalAmt}}</td>
+          <td data-cell-type="number">{{bpCount}}</td>
+        </tr>
+        {{/each}}
+      {{/each}}
+    </tbody>
+  </table>
+
+  {{!-- ================================================================ --}}
+  {{!-- SHEET 3: SUMMARY BY TAX RATE                                     --}}
+  {{!-- ================================================================ --}}
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.transactionType}}</th>
+      <th>{{meta.labels.rate}}</th>
+      <th>{{meta.labels.bPartnerId}}</th>
+      <th>{{meta.labels.bpTaxId}}</th>
+      <th>{{meta.labels.taxName}}</th>
+      <th>{{meta.labels.taxBaseAmt}}</th>
+      <th>{{meta.labels.taxAmt}}</th>
+      <th>{{meta.labels.totalAmt}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows.purchase.summaryByRate}}
+        {{#each this.bpGroups}}
+          {{#each this.taxes}}
+          <tr>
+            <td>{{@root.meta.labels.purchasesPayments}}</td>
+            <td data-cell-type="number">{{../../rate}}</td>
+            <td>{{../bPartner}}</td>
+            <td>{{../bpTaxId}}</td>
+            <td>{{taxName}}</td>
+            <td data-cell-type="number">{{taxBaseAmt}}</td>
+            <td data-cell-type="number">{{taxAmt}}</td>
+            <td data-cell-type="number">{{totalAmt}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      {{/each}}
+      {{#each rows.sales.summaryByRate}}
+        {{#each this.bpGroups}}
+          {{#each this.taxes}}
+          <tr>
+            <td>{{@root.meta.labels.salesReceipts}}</td>
+            <td data-cell-type="number">{{../../rate}}</td>
+            <td>{{../bPartner}}</td>
+            <td>{{../bpTaxId}}</td>
+            <td>{{taxName}}</td>
+            <td data-cell-type="number">{{taxBaseAmt}}</td>
+            <td data-cell-type="number">{{taxAmt}}</td>
+            <td data-cell-type="number">{{totalAmt}}</td>
+          </tr>
+          {{/each}}
+        {{/each}}
+      {{/each}}
+    </tbody>
+  </table>
+
+</body></html>
