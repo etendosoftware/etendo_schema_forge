@@ -595,10 +595,61 @@ rule wins, and the two requirements coexist rather than conflict (editable after
 completion, locked after SII). Documented in
 `docs/generated-custom-windows/purchase-invoice.md` (5 places + a history block).
 
+### Second pass (2026-08-21) — found by walking the windows one by one
+
+The first pass shipped the gate; walking real windows found that gating *one* button
+is not the same as enforcing a rule. Four distinct defects, three of them classes
+rather than one-offs:
+
+**1. The field set was wrong in both directions.** The contract is neither a superset
+nor a subset of what a form renders — it is neither:
+
+| Window | Failure | Fix |
+|---|---|---|
+| `contacts` | Contract has MORE. `name` (person) / first+last name (company) are `required: true` but the form excludes them by person type, so Save demanded a field that is not on screen — unsatisfiable, no way to create a contact at all. | `registerGateExclusions`, a subtractive opt-in channel: a form declares what it did not render. |
+| `assets` | Contract has LESS. Its 10 required fields are `form: false`, rendered by a hand-written formFooter panel, so the gate saw 3 optional fields and left Save enabled on an empty new record. | `mergeValidationFields`: UNION the contract set with the runtime registry instead of picking one. No new channel needed — `buildHeaderFooter` already passed `registerFields` to the footer. |
+
+Both fixes are deliberately one-directional. Exclusions only subtract; the union only
+adds. So a surface nobody anticipated fails closed-and-visible, never silently open.
+
+**2. The explanation never appeared.** `title` on a disabled button does nothing: the
+shared Button carries `disabled:pointer-events-none`, so it receives no hover. The
+whole §3.6 mechanism was inert, and so were the pre-existing unbalanced-journal
+titles. Fixed with a hover-capable wrapper span, inserted only when there is a reason,
+so the normal-path DOM is untouched.
+
+**3. A gated button next to an ungated one that also persists.** The return windows put
+a Confirm button in the `topbarRight` slot; it calls `maybeSaveBeforeConfirm`, i.e. it
+SAVES. Save blocked, Confirm saved the incomplete record anyway — the gate was a no-op
+there. It now honours `saveGate.blocked`. **It inherits only the required-field verdict,
+never the rest of Save's disabled condition** — `!isDirty` must not block, or confirming
+an already-saved unmodified document (the normal path) becomes impossible. That
+distinction is the reusable part; a test asserts `confirmBlocked` does not read
+`isDirty`.
+
+**4. Two visual defects in the same toolbar.** Confirm rendered to the LEFT of Save
+(source order is visual order in that one flex row), and Save took the primary/blue
+variant so both looked primary. Orders never showed either problem because their slot
+content is gated on `isCompleted`. Fixed by moving the slot after the save actions
+(verified first: of the 8 windows using it, only the return windows render inline while
+in draft, and none sets `saveBeforeProcesses`) and by `hasExternalPrimaryAction`, an
+opt-in set once in `ReturnWindowShell`. Named for the reason, not the window.
+
+### Merge repair (ETP-4940)
+
+Resolving the `DetailView.jsx` conflict with `git checkout --ours` discarded ETP-4940's
+four cleanly-merged hunks along with the conflicted region — that flag takes the whole
+file, not the hunk. The costly one: `isDirty` stopped reaching the topbarRight slot, so
+`maybeSaveBeforeConfirm` read `undefined`, returned early, and silently reinstated the
+exact bug ETP-4940 fixed. No test caught it. Restored and verified by diffing against
+her branch. **Lesson worth keeping: when a conflict is delete-vs-modify because code
+moved, `--ours`/`--theirs` is the wrong tool — port the hunk.**
+
 ### What remains
 
 | # | Item | Size |
 |---|---|---|
+| 0 | **The gate is a rule, not a button.** Any action that persists must consult it — the return-window Confirm proved a gated Save next to an ungated persist action enforces nothing. Audit the remaining custom slots (`topbarRight`, `menuActions`, `extraActions`) for actions that save. | Unknown, likely the next real find |
 | 1 | **Phase 3** — ~11 modals: 5 ad-hoc implementations to migrate onto the pure core (`EntityCreationModal:465`, `ListModalWindow:352`, `ProcessParamDialog:50`, `InlineCreateModal:46`, `NewPaymentEntryModal:317`) and 6 with real forms and no gating at all (`NewAccountModal`, `LocationModalField`, `ChangePasswordDialog`, `OAuth2ClientDialog`, `OrganizationPage`, plus confirming `CreateContactModal`). Plus 9 windows with their own save path. | The bulk of what is left |
 | 2 | The `CLAUDE.md` mandate (Phase 5), gated on #1 | Small |
 | 3 | Raise §9 #1 (the `isDirty` divergence) with Valeria | Conversation |
