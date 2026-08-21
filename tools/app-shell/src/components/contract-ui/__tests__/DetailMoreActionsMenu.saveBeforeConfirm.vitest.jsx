@@ -129,4 +129,46 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
     expect(hook.handleSave).not.toHaveBeenCalled();
     expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
   });
+
+  // KNOWN GAP (W1, flagged in review — QA verified, non-blocking):
+  // runDocumentAction gates the save-before-confirm guard on `hook.isDirtyHeader`
+  // ONLY, unlike DetailView's draftMode Confirm button, which reads the fuller
+  // `isDirty` (header OR line-edit OR add-row state — see computeIsDirty and the
+  // paired "line-edit dirty only" test in DetailView.saveButtons.vitest.jsx). A
+  // pending LINE-row edit that hasn't touched the header (isDirtyHeader still
+  // false) is therefore NOT saved before a kebab documentAction fires — the same
+  // silent-discard bug ETP-4940 fixes, just reachable through a narrower door.
+  //
+  // Reachability today: every generated window's only kebab documentAction is
+  // 'reactivate' (RE) — grep `documentAction:` across artifacts/*/generated
+  // confirms no window routes 'confirm' (CO) through the kebab — and reactivate
+  // only shows once a document is already status=CO, where lines are normally
+  // read-only. So this gap is not known to be reachable via the STANDARD
+  // generated line-edit UI today; it stays open only in case a future kebab
+  // action is added for a non-completed status, or a custom component mutates
+  // line-edit state on a completed doc. Severity: Low (strictly better than the
+  // pre-fix baseline — the header case IS covered — and not reachable through
+  // any currently-shipped path). Pinned here so behavior doesn't silently widen
+  // and so a future fix (reading the fuller isDirty here too) has to touch this
+  // test rather than pass by accident.
+  it('[KNOWN GAP W1] line-only dirty (isDirtyHeader false) → the documentAction proceeds WITHOUT saving first', async () => {
+    // isDirtyHeader:false simulates "header clean, but a line-row edit is
+    // pending elsewhere in DetailView state" — DetailMoreActionsMenu is never
+    // given that fuller signal (no `isDirty`/`lineEdits` prop exists on this
+    // component), only `hook.isDirtyHeader`, so there is no way for this guard
+    // to see it even if it wanted to.
+    const hook = makeHook({ isDirtyHeader: false });
+    const docAction = makeDocAction();
+
+    renderMenu({ hook, docAction });
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(docAction.execute).toHaveBeenCalled());
+
+    // This is the gap, pinned: no save happens, the action runs straight
+    // through against whatever was last persisted — a pending line edit would
+    // be silently lost exactly like the original ETP-4940 bug.
+    expect(hook.handleSave).not.toHaveBeenCalled();
+    expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
+  });
 });

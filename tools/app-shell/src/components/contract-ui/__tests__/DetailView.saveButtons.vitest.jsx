@@ -239,6 +239,51 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
       await waitFor(() => expect(onConfirm).toHaveBeenCalled());
       expect(mockHook.handleSave).not.toHaveBeenCalled();
     });
+
+    // The two tests above drive isDirty via additionalDirtyState (BASE_PROPS'
+    // default true / the override false); neither actually sets
+    // mockHook.isDirtyHeader, so neither one pins the ticket's literal scenario
+    // (a HEADER field edited without clicking Save). The two tests below make
+    // the two distinct dirty sources explicit and mutually exclusive, so a
+    // future change that special-cases one of them (e.g. reading only
+    // hook.isDirtyHeader here, mirroring the DetailMoreActionsMenu W1 gap) would
+    // break one of these without the other masking it.
+    it('ETP-4940 ticket scenario — header field edited (isDirtyHeader), nothing else dirty → saves BEFORE onConfirm', async () => {
+      mockHook.isDirtyHeader = true;
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // additionalDirtyState=false isolates isDirtyHeader as the only dirty source.
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
+
+    it('line-edit dirty only (isDirtyHeader stays false) + click Confirm → still saves BEFORE onConfirm', async () => {
+      // computeIsDirty ORs in lineEdits/addingLine/addingSecondaryLine alongside
+      // isDirtyHeader (see computeIsDirty tests in DetailView.helpers.vitest.jsx).
+      // additionalDirtyState stands in here for "a pending line-row edit", the
+      // same OR branch a real inline line edit would set. The point: the
+      // draftMode Confirm button reads the FULL `isDirty` (not hook.isDirtyHeader
+      // alone), so a line edit with a clean header still gets saved first — this
+      // is exactly the coverage the kebab path is MISSING (see the paired "known
+      // gap W1" test in DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx).
+      expect(mockHook.isDirtyHeader).toBe(false); // sanity: header is clean
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} additionalDirtyState draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
   });
 
   it('new record: Save persists then navigates to the created record', async () => {
