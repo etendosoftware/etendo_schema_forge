@@ -110,53 +110,144 @@ function isRolesOverviewRequest(url) {
 // SFRolesOverview.java's class javadoc) — hoisted once instead of repeated per role literal.
 const ROLE_BOILERPLATE_DESCRIPTION = '*** Please, do not edit this role. Use Copy Record instead ***';
 
+// ETP-4907 follow-up: the real fixed role ids, reused below both for `roles[]` and as the
+// `matrix.categories[].windows[].access` keys — these must be THE SAME id values (the real
+// backend keys `access` by `roles[].id`), not a second synthetic id scheme.
+const ROLE_IDS = {
+  admin: '9B8D736190724807AB256DC95F20EC5E',
+  finance: '127AE77FE2994067B7FE6495FC21D51E',
+  sales: '2A159DF4F4B944A6AA903202AD35B545',
+  purchasing: 'A826430F723E4C1B9A53EBB0746A98C0',
+  inventory: '55E05A4B43514A029D6FB6B8D94B49D4',
+};
+
 // Builds one mock role entry. `windows` is a list of `[id, name, tier]` tuples rather than
 // object literals so the 5 roles below read as data, not 5 near-identical object shapes —
 // keeps this file's mock fixture from tripping SonarQube's copy-paste detector on structurally
-// repeated `{ id, name, tier }` / `{ id, name, rawDescription, userCount, windows }` blocks.
-function mockRole(id, name, rawDescription, userCount, windows) {
+// repeated `{ id, name, tier }` / `{ id, name, rawDescription, ... }` blocks.
+function mockRole({ id, name, rawDescription, isClientAdmin, roleSource, windowCount, userCount, windows }) {
   return {
     id,
     name,
     rawDescription,
+    isClientAdmin,
+    roleSource,
+    windowCount,
     userCount,
     windows: windows.map(([winId, winName, tier]) => ({ id: winId, name: winName, tier })),
   };
 }
 
-// Mirrors the real SFRolesOverview.java response shape for the 5 fixed GOClient roles, so
-// mock/demo mode and E2E tests can exercise the "Configuración > Roles" page without a live
-// Etendo backend. `rawDescription` intentionally mirrors the real boilerplate AD_Role text
-// (see SFRolesOverview.java's class javadoc) — the frontend never displays it directly.
+// ETP-4907 follow-up: builds one `matrix.categories[]` entry. `windows` is a list of
+// `[id, name, accessByRoleKind]` tuples — `accessByRoleKind` keyed by the SAME short kinds as
+// `ROLE_IDS` above (translated to real role ids below), not by role id directly, so this
+// fixture reads as data rather than a wall of UUIDs.
+function mockCategory(name, windows) {
+  return {
+    name,
+    windows: windows.map(([id, winName, accessByKind]) => ({
+      id,
+      name: winName,
+      access: Object.fromEntries(Object.entries(accessByKind).map(([kind, tier]) => [ROLE_IDS[kind], tier])),
+    })),
+  };
+}
+
+// Mirrors the real (ETP-4907-extended) SFRolesOverview.java response shape for the 5 fixed
+// GOClient roles, so mock/demo mode and E2E tests can exercise the redesigned
+// "Configuración > Roles" page without a live Etendo backend. `rawDescription` intentionally
+// mirrors the real boilerplate AD_Role text (see SFRolesOverview.java's class javadoc) — the
+// frontend never displays it directly. `windowCount` figures mirror the LIVE GOClient numbers
+// confirmed by the backend developer while building this (Admin 48, Finance 27, Sales 13,
+// Purchasing 11, Inventory 13) — NOT the earlier Figma reference screenshot's placeholder
+// numbers (17/17/17/18), which do not match production data. `userCount` figures are small,
+// plausible values consistent with GOClient's real total of 9 active users, not independently
+// verified per-role.
 function handleRolesOverviewRequest() {
   return makeResponse(200, {
     roles: [
-      mockRole('9B8D736190724807AB256DC95F20EC5E', 'GOClient Admin', 'GOClient Admin', 2, [
-        ['108', 'User', 'full'],
-        ['146', 'Price List', 'full'],
-        ['137', 'Tax', 'full'],
-      ]),
-      mockRole('127AE77FE2994067B7FE6495FC21D51E', 'Finance', ROLE_BOILERPLATE_DESCRIPTION, 2, [
-        ['mock-financial-account', 'Financial Account', 'full'],
-        ['mock-payment-in', 'Payment In', 'full'],
-        ['mock-payment-out', 'Payment Out', 'full'],
-        ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
-      ]),
-      mockRole('2A159DF4F4B944A6AA903202AD35B545', 'Sales', ROLE_BOILERPLATE_DESCRIPTION, 1, [
-        ['mock-business-partner', 'Business Partner', 'full'],
-        ['mock-sales-order', 'Sales Order', 'full'],
-        ['mock-sales-quotation', 'Sales Quotation', 'full'],
-      ]),
-      mockRole('A826430F723E4C1B9A53EBB0746A98C0', 'Purchasing', ROLE_BOILERPLATE_DESCRIPTION, 0, [
-        ['mock-purchase-order', 'Purchase Order', 'full'],
-        ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
-      ]),
-      mockRole('55E05A4B43514A029D6FB6B8D94B49D4', 'Inventory', ROLE_BOILERPLATE_DESCRIPTION, 0, [
-        ['mock-goods-receipt', 'Goods Receipt', 'full'],
-        ['mock-goods-shipment', 'Goods Shipment', 'full'],
-        ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
-      ]),
+      mockRole({
+        id: ROLE_IDS.admin, name: 'GOClient Admin', rawDescription: 'GOClient Admin',
+        isClientAdmin: true, roleSource: 'tenant', windowCount: 48, userCount: 2,
+        windows: [
+          ['108', 'User', 'full'],
+          ['146', 'Price List', 'full'],
+          ['137', 'Tax', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.finance, name: 'Finance', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 27, userCount: 2,
+        windows: [
+          ['mock-financial-account', 'Financial Account', 'full'],
+          ['mock-payment-in', 'Payment In', 'full'],
+          ['mock-payment-out', 'Payment Out', 'full'],
+          ['mock-sales-invoice', 'Sales Invoice', 'read-only'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.sales, name: 'Sales', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 13, userCount: 3,
+        windows: [
+          ['mock-business-partner', 'Business Partner', 'full'],
+          ['mock-sales-order', 'Sales Order', 'full'],
+          ['mock-sales-quotation', 'Sales Quotation', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.purchasing, name: 'Purchasing', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'systemTemplate', windowCount: 11, userCount: 1,
+        windows: [
+          ['mock-purchase-order', 'Purchase Order', 'full'],
+          ['mock-purchase-invoice', 'Purchase Invoice', 'full'],
+        ],
+      }),
+      mockRole({
+        id: ROLE_IDS.inventory, name: 'Inventory', rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+        isClientAdmin: false, roleSource: 'tenant', windowCount: 13, userCount: 1,
+        windows: [
+          ['mock-goods-receipt', 'Goods Receipt', 'full'],
+          ['mock-goods-shipment', 'Goods Shipment', 'full'],
+          ['mock-warehouse', 'Warehouse and Storage Bins', 'read-only'],
+        ],
+      }),
     ],
+    // ETP-4907 follow-up: illustrative only — a small representative slice, NOT verified
+    // against the live category/window breakdown (this session has no DB access). In
+    // particular this does NOT include General/Inicio/Favoritos/Copilot-style windowless
+    // rows (see `UserRolesTab.jsx`'s ETP-4906 `GENERAL_ROWS` precedent on the sibling,
+    // unmerged `feature/ETP-4906` branch) — open question for the backend dev on whether the
+    // real matrix includes those or the frontend must still overlay them itself.
+    matrix: {
+      categories: [
+        mockCategory('Commercial', [
+          [
+            'mock-contacts-commercial',
+            'Business Partner',
+            { admin: 'full', sales: 'full', purchasing: 'full', finance: 'full', inventory: 'read-only' },
+          ],
+        ]),
+        mockCategory('Sales', [
+          [
+            'mock-sales-quotation-row',
+            'Sales Quotation',
+            { admin: 'full', sales: 'full', purchasing: 'none', finance: 'read-only', inventory: 'none' },
+          ],
+          [
+            'mock-sales-order-row',
+            'Sales Order',
+            { admin: 'full', sales: 'full', purchasing: 'none', finance: 'read-only', inventory: 'read-only' },
+          ],
+        ]),
+        mockCategory('Inventory', [
+          [
+            'mock-contacts-inventory',
+            'Business Partner',
+            { admin: 'full', sales: 'full', purchasing: 'full', finance: 'full', inventory: 'full' },
+          ],
+        ]),
+      ],
+    },
   });
 }
 

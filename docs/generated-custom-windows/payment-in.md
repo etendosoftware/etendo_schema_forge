@@ -164,6 +164,28 @@ plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Ch
 added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
 already used by the `draftMode` Confirm button elsewhere in the app.
 
+**Draft banner gating (ETP-4895).** `PaymentDraftBanner.jsx` no longer keeps its own copy of the
+deposited-status list and no longer reasons by elimination ("not deposited, therefore a draft"),
+which announced "Borrador — sin impacto en caja" on a rejected `ETGOERR` payment. It gates on the
+shared `paymentDisplayState` rule instead, with `RPAE` kept as a draft here — as it already was, and
+as `PaymentDetailSidebarBase` reads it for collections. Collections cannot reach `ETGOERR` today
+(PIS is payments-out only), so this is alignment rather than a visible fix on this window; the
+behavior it corrects is documented in `payment-out.md`.
+
+**Toolbar order actually shipped (ETP-4895).** The `saveBeforeProcesses` key above never reached the
+UI: the published `schema_forge_core` still drops it in `resolve-curated.js`'s window-key whitelist,
+so it is absent from `contract.json` and from the generated page, and the toolbar kept rendering
+**Confirmar** to the left of **Guardar**. Rather than block on a core publish, `DetailView.jsx` now
+takes a presentational `saveActionsFirst` prop — order only, defaulting to `saveBeforeProcesses` so
+no existing window changes — and both payment windows pass it from a thin custom wrapper:
+`tools/app-shell/src/windows/custom/payment-out/index.jsx` and the new
+`tools/app-shell/src/windows/custom/payment-in/index.jsx` (registered in
+`tools/app-shell/src/windows/registry.js`; `payment-in` had no custom wrapper before). Save now
+renders to the left and **Confirmar** is the right-most button. The windows deliberately do NOT opt
+into `saveBeforeProcesses` itself — they only want the order, not the flush-pending-edits-before-
+running-the-process behavior. When the core key does land, it will imply the same order and the
+wrapper prop becomes redundant rather than conflicting.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the
@@ -239,3 +261,47 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 (`artifacts/payment-out/custom/PaymentOutBottomPanel.jsx`, fixed identically). The existing
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
+
+## Confirmar abre el editor del pago, no un diálogo
+
+A draft payment — typically one that was just reactivated — used to offer a yes/no dialog: *"El pago
+pasará a estado confirmado y depositado"*. That was the only thing this window could offer, because
+it has no form of its own: `hideFormCard` is on and all 31 header fields are `form: false`, so
+"Datos del pago" is read-only text and Guardar is permanently disabled. A user who reactivated a
+payment to fix its amount could only re-confirm it unchanged.
+
+Confirmar now opens the **invoice's own payment editor** (`NewPaymentEntryModal`), with the draft's
+amount, date, method, account and PIS block loaded — the same modal the invoice opens, so the user
+can correct the payment and then either **Guardar** (stays a draft) or **Confirmar**. Both surfaces
+that offer the action do it: the detail toolbar and the grid's kebab.
+
+### How it is wired
+
+`PaymentEditModalLauncher` sits in the window's `processConfirmModal` slot, routed by
+`ReactivarConfirmModal` on `columnName === 'aPRMProcessPayment'`. That slot only renders a
+component — nothing forces it to call `onConfirm` — so a window can replace a process button's
+behaviour outright without touching `generate-frontend.js` in `schema_forge_core`. The slot gained
+two props for this (`apiBaseUrl`, `onRefresh`): a modal that acts on its own never goes through
+`handleProcess`, so nothing else would reload the record.
+
+Everything the editor needs comes from endpoints that already exist:
+
+| Step | Source |
+| --- | --- |
+| which invoice | `invoiceId`, injected on the payment record by `ReactivatePaymentHandler` |
+| currency, document number, outstanding | `GET /sales-invoice/header/{invoiceId}` |
+| the payment, in the editor's own shape | `POST /sales-invoice/header/{invoiceId}/action/invoicePayments` |
+
+That last one matters: `invoicePayments` is the **only** endpoint that returns `creditSourcesUsed`,
+so rebuilding the object by hand would silently drop the credits the draft consumed.
+
+`PaymentRegistrationService.invoiceIdsByPayment` resolves the whole page in one query and counts
+**only positive applications**. A payment that spends a credit carries a negative application
+against the credit note's own installment; that is the credit being spent, not a second invoice, and
+the editor already models it as a source.
+
+### Fallback
+
+When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
+a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
+the editor never opens on a record it could not save correctly.
