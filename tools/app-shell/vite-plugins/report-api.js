@@ -295,7 +295,11 @@ function listReports() {
     if (existsSync(contractPath)) {
       try {
         const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
-        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
+        // 'custom' contracts (ETP-4901) are internal NEO endpoints backing a specific
+        // page's own data needs (e.g. financial-accounts-page powers the Cuentas
+        // landing page's sidebar widgets) — real, still-served endpoints, just never
+        // meant to show up as a runnable report a user picks from this catalog.
+        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && contract.type !== 'custom' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
           reports.push({
             id: contract.reportId,
             title: contract.title,
