@@ -34,6 +34,12 @@ export const DELETABLE_DOC_STATUSES = ['DR', 'RPAP', 'N'];
  */
 export function isDeleteVisibleForRecord({ record, statusField, hideDeleteWhenComplete, hideDeleteButton = false }) {
   if (hideDeleteButton) return false;
+  // The backend can declare that a record's lifecycle is not the user's to end — a payment whose
+  // bank transfer is live, for instance: deleting it would leave Salt Edge holding an order for a
+  // payment that no longer exists (ETP-4895). Read off the record rather than the window config on
+  // purpose, since it is a per-record fact the backend owns; it is absent for every other window,
+  // so this is inert unless a backend opts in by emitting it.
+  if (record?.pisLocked === true) return false;
   if (!hideDeleteWhenComplete) return true;
   if (!statusField) return true;
   const status = record?.[statusField];

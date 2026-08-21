@@ -720,11 +720,15 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     });
   });
 
-  it('opens the invoice popup dialog on postMessage("navigate-invoice")', async () => {
+  it('opens the invoice in a new tab on postMessage("navigate-invoice") defaulting to sales-invoice', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
       return Promise.resolve(makeSelectorResponse([]));
     });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
 
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
@@ -734,8 +738,45 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     }));
 
     await waitFor(() => {
-      expect(screen.getByTitle('invoice')).toBeInTheDocument();
+      expect(openSpy).toHaveBeenCalled();
     });
+    const [url, target] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/sales-invoice\/inv-99$/);
+    expect(target).toBe('_blank');
+
+    // No embedded modal opens anymore — the invoice navigates in a real new tab.
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    window.open = originalOpen;
+  });
+
+  it('opens the invoice in a new tab respecting an explicit docWindow from the postMessage', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'navigate-invoice', invoiceId: 'inv-88', docWindow: 'purchase-invoice' },
+    }));
+
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalled();
+    });
+    const [url, target] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/purchase-invoice\/inv-88$/);
+    expect(target).toBe('_blank');
+
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    window.open = originalOpen;
   });
 
   it('ignores unrelated postMessage payloads', async () => {
@@ -852,5 +893,378 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
 
     expect(openSpy).not.toHaveBeenCalled();
     window.open = originalOpen;
+  });
+});
+
+// New coverage (ETP-4898): the "Open in new tab" button added to
+// DrillDownViewer's format-selector row, and the URL-query-param override
+// getDefaultParams() gained so the standalone report page it opens can be
+// pre-filled from the drill-down's params.
+describe('ReportViewerPage — deep-link param overrides (getDefaultParams + searchParams)', () => {
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1' });
+    mockSetSearchParams.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const OVERRIDE_REPORT = {
+    ...BASE_REPORT,
+    parameters: [
+      { name: 'fromAccountId', type: 'text', default: '', label: { en_US: 'From Account' } },
+      { name: 'toAccountId', type: 'text', default: '99999', label: { en_US: 'To Account' } },
+      { name: 'reportMode', type: 'text', default: 'summary', label: { en_US: 'Mode' } },
+    ],
+  };
+
+  it('pre-fills sidebar params from matching URL query keys, leaving unmatched params at their contract default', async () => {
+    mockSearchParams = new URLSearchParams({
+      report: 'report-1',
+      fromAccountId: '43000000',
+      toAccountId: '43000000',
+    });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(OVERRIDE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // fromAccountId (contract default '') and toAccountId (contract default
+    // '99999') both get overridden by the matching URL query param.
+    expect(screen.getAllByDisplayValue('43000000')).toHaveLength(2);
+    // reportMode has no matching URL key, so it keeps its contract default.
+    expect(screen.getByDisplayValue('summary')).toBeInTheDocument();
+  });
+
+  it('keeps every param at its contract default when the URL carries no matching query keys', async () => {
+    // No overrides in mockSearchParams beyond `report` itself.
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(OVERRIDE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    expect(screen.getByDisplayValue('99999')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('summary')).toBeInTheDocument();
+    // fromAccountId's contract default is '' — nothing to assert a display
+    // value for, but it must NOT have picked up any of the other params.
+    expect(screen.queryByDisplayValue('43000000')).not.toBeInTheDocument();
+  });
+
+  // NOTE (real, settled behavior — verified by direct investigation, not
+  // assumed): a pre-existing, unrelated useEffect in ReportViewer
+  // (`if (!(report.parameters||[]).some(p => p.name === 'orgId')) return;
+  // setParams(prev => ({ ...prev, orgId: selectedOrgId||'' }))`, deps
+  // `[report, selectedOrgId]`) always re-syncs `orgId` to the `selectedOrgId`
+  // prop shortly after mount whenever the report declares an `orgId`
+  // parameter. This fires AFTER getDefaultParams' initial state (which does
+  // apply `searchParams.get('orgId') || selectedOrgId || ''`), so a URL
+  // `orgId` that DIFFERS from the current `selectedOrgId` is only visible
+  // for one transient render and is then clobbered back to `selectedOrgId`.
+  // The two only appear to agree in real usage because a drill-down's
+  // `baseParams` already carries the session's current `orgId` (kept in sync
+  // by this same effect while browsing), so this is not reachable as a user
+  // facing bug via the "open in new tab" flow — but it does mean the
+  // `searchParams.get('orgId') || selectedOrgId` precedence in
+  // getDefaultParams has no observable effect once a `selectedOrgId` is
+  // present. This test asserts the real, settled DOM state.
+  it('settles orgId to the selectedOrgId prop even when the URL carries a different orgId (pre-existing org-sync effect wins)', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1', orgId: 'org-99' });
+    const ORG_REPORT = {
+      ...BASE_REPORT,
+      parameters: [{ name: 'orgId', type: 'text', default: '', label: { en_US: 'Org' } }],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(ORG_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // selectedOrgId in this suite's AuthContext mock is 'org1'.
+    await waitFor(() => expect(screen.getByRole('textbox').value).toBe('org1'));
+  });
+
+  it('uses the URL orgId when it matches selectedOrgId (no conflicting resync)', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1', orgId: 'org1' });
+    const ORG_REPORT = {
+      ...BASE_REPORT,
+      parameters: [{ name: 'orgId', type: 'text', default: '', label: { en_US: 'Org' } }],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(ORG_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByRole('textbox').value).toBe('org1'));
+  });
+});
+
+describe('ReportViewerPage — DrillDownViewer "Open in new tab" button (ETP-4898)', () => {
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1' });
+    mockSetSearchParams.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const BUTTON_REPORT = {
+    ...BASE_REPORT,
+    parameters: [
+      { name: 'dateFrom', type: 'text', default: '2026-01-01', label: { en_US: 'Date From' } },
+      { name: 'costCenterId', type: 'text', default: '', label: { en_US: 'Cost Center' } },
+    ],
+  };
+
+  async function openTrialBalanceDrilldown() {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BUTTON_REPORT));
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>detail</body></html>') });
+      }
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'trial-balance-drilldown', accountId: 'acc-1', accountName: 'Cash', accountValue: '43000000' },
+      }));
+    });
+
+    let dialog;
+    await waitFor(() => {
+      dialog = screen.getByTestId('dialog');
+      expect(within(dialog).getByText('openFullReport')).toBeInTheDocument();
+    });
+    return dialog;
+  }
+
+  it('opens a new tab with the report id, category, and forwarded drill-down params in the query string', async () => {
+    const dialog = await openTrialBalanceDrilldown();
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByText('openFullReport'));
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [url, target] = openSpy.mock.calls[0];
+    expect(target).toBe('_blank');
+
+    const parsed = new URL(url);
+    expect(parsed.pathname.endsWith('/report-viewer')).toBe(true);
+    expect(parsed.searchParams.get('report')).toBe('report-general-ledger');
+    expect(parsed.searchParams.get('category')).toBe('finance');
+    // extraParams (the account drilled into) win as fromAccountId/toAccountId.
+    expect(parsed.searchParams.get('fromAccountId')).toBe('43000000');
+    expect(parsed.searchParams.get('toAccountId')).toBe('43000000');
+    // baseParams forwards the sidebar's current (contract-default) value too.
+    expect(parsed.searchParams.get('dateFrom')).toBe('2026-01-01');
+  });
+
+  it('omits params whose value is an empty string from the forwarded query string', async () => {
+    const dialog = await openTrialBalanceDrilldown();
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByText('openFullReport'));
+
+    const [url] = openSpy.mock.calls[0];
+    const parsed = new URL(url);
+    // costCenterId's contract default is '' — the filtering guard in
+    // openFullReport must drop it entirely, not forward the literal ''.
+    expect(parsed.searchParams.has('costCenterId')).toBe(false);
+  });
+
+  it('still triggers the PDF/Excel/CSV render fetch as before (regression check, not new coverage)', async () => {
+    const dialog = await openTrialBalanceDrilldown();
+    const user = userEvent.setup();
+    globalThis.fetch.mockClear();
+
+    await user.click(within(dialog).getByText('PDF'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch.mock.calls.some(([u]) => typeof u === 'string' && u.includes('/api/reports/report-general-ledger/render'))).toBe(true);
+    });
+  });
+
+  // ETP-4898 follow-up: the account drill-down's extraParams also carry the
+  // `_display_*` companion keys (same "code - name" shape the real account
+  // popup selector produces), so the new tab's sidebar shows a resolved
+  // label instead of an empty-looking placeholder for fromAccountId/toAccountId.
+  it('propagates _display_fromAccountId/_display_toAccountId in "code - name" shape to the new tab URL', async () => {
+    const dialog = await openTrialBalanceDrilldown();
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByText('openFullReport'));
+
+    const [url] = openSpy.mock.calls[0];
+    const parsed = new URL(url);
+    // openTrialBalanceDrilldown() dispatches accountValue: '43000000', accountName: 'Cash'.
+    expect(parsed.searchParams.get('_display_fromAccountId')).toBe('43000000 - Cash');
+    expect(parsed.searchParams.get('_display_toAccountId')).toBe('43000000 - Cash');
+  });
+});
+
+// New coverage (ETP-4898 follow-up): getDefaultParams() forwards the matching
+// `_display_<name>` query key alongside the raw value, so a deep-linked
+// popup-single or popup (multi) field resolves its human-readable label on
+// first render instead of showing an empty placeholder / no chips.
+describe('ReportViewerPage — getDefaultParams _display_* override for popup fields (ETP-4898)', () => {
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1' });
+    mockSetSearchParams.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const POPUP_SINGLE_DEEPLINK_REPORT = {
+    ...BASE_REPORT,
+    parameters: [
+      {
+        name: 'fromAccountId', type: 'search', selector: 'account', inputStyle: 'popup-single',
+        label: { en_US: 'From Account' }, section: 'primary',
+      },
+    ],
+  };
+
+  it('resolves the popup-single button label from _display_<name> instead of showing the placeholder', async () => {
+    mockSearchParams = new URLSearchParams({
+      report: 'report-1',
+      fromAccountId: '43000000',
+      _display_fromAccountId: '43000000 - Some Account',
+    });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(POPUP_SINGLE_DEEPLINK_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('From Account')).toBeInTheDocument());
+
+    expect(screen.getByText('43000000 - Some Account')).toBeInTheDocument();
+    expect(screen.queryByText('selectPlaceholder')).not.toBeInTheDocument();
+  });
+
+  const POPUP_MULTI_DEEPLINK_REPORT = {
+    ...BASE_REPORT,
+    parameters: [
+      {
+        name: 'bPartnerId', type: 'search', selector: 'businessPartner', inputStyle: 'popup',
+        label: { en_US: 'Partner' }, section: 'primary',
+      },
+    ],
+  };
+
+  it('resolves a popup (multi) field chip from _display_<name> instead of showing zero chips', async () => {
+    mockSearchParams = new URLSearchParams({
+      report: 'report-1',
+      bPartnerId: 'abc123',
+      _display_bPartnerId: 'Acme Corp',
+    });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(POPUP_MULTI_DEEPLINK_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+
+    // With a confirmed chip present, the open button switches its label to
+    // "editSelection" instead of the raw field label — confirming this is
+    // the seeded-chip path, not the empty/placeholder path.
+    expect(screen.getByText('editSelection')).toBeInTheDocument();
+  });
+});
+
+// New coverage (ETP-4898 follow-up): PopupMultiSelector previously never read
+// an initial selection from props — `confirmed` always started as `[]`. It
+// now seeds itself from `value`/`displayValue` on mount (the same shape
+// `confirm()` writes back out: ids comma-joined, names ", "-joined).
+describe('ReportViewerPage — PopupMultiSelector chip seeding from value/displayValue props (ETP-4898)', () => {
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1' });
+    mockSetSearchParams.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const MULTI_DEEPLINK_REPORT = {
+    ...BASE_REPORT,
+    parameters: [
+      {
+        name: 'bPartnerId', type: 'search', selector: 'businessPartner', inputStyle: 'popup',
+        label: { en_US: 'Partner' }, section: 'primary',
+      },
+    ],
+  };
+
+  it('seeds exactly two chips from a comma-joined value + ", "-joined displayValue pair', async () => {
+    mockSearchParams = new URLSearchParams({
+      report: 'report-1', bPartnerId: 'id1,id2', _display_bPartnerId: 'Name One, Name Two',
+    });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(MULTI_DEEPLINK_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Name One')).toBeInTheDocument();
+      expect(screen.getByText('Name Two')).toBeInTheDocument();
+    });
+    // Exactly two chips seeded — no "N more" indicator kicking in.
+    expect(screen.queryByText('andNMore')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the raw id as the chip label when displayValue has fewer names than ids', async () => {
+    mockSearchParams = new URLSearchParams({
+      report: 'report-1', bPartnerId: 'id1,id2', _display_bPartnerId: 'Name One',
+    });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(MULTI_DEEPLINK_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Name One')).toBeInTheDocument();
+      // names[1] is undefined -> falls back to the raw id, per `names[i] || id`.
+      expect(screen.getByText('id2')).toBeInTheDocument();
+    });
+  });
+
+  it('renders zero chips and keeps the plain label button when no value is deep-linked (no regression)', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(MULTI_DEEPLINK_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getAllByText('Partner').length).toBeGreaterThanOrEqual(1));
+
+    // Button still shows the plain label (not "editSelection"), meaning
+    // `confirmed` seeded to `[]` — the pre-existing empty-state behavior.
+    expect(screen.queryByText('editSelection')).not.toBeInTheDocument();
+    expect(screen.queryByText('clearAll')).not.toBeInTheDocument();
   });
 });
