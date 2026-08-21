@@ -1120,3 +1120,28 @@ scoped the way the create-POST listener now is in
 **Context:** surfaced while closing the `ensureVendorSetup` regression. Pre-existing — it is not
 caused by the vendor-fixture or derived-field changes, both of which were verified green in the same
 run (2 passed, 1 flaky, 0 failed).
+
+---
+
+## Mocking the Component Under Test (Invitation SSO Dead End)
+
+**Component:** `InviteAcceptancePage.vitest.jsx` — consumer test for the shared `LoginStep` (ETP-4960, follow-up to ETP-4958)
+
+**Symptom:** SSO login on the invitation page authenticated the user but never resumed the invitation acceptance flow — the login form stayed on screen and the token was never consumed. The whole test suite was green.
+
+**Root cause:** the page test replaced the entire `@etendosoftware/etendo-go-core/onboarding` barrel — including `LoginStep`, the component whose contract the page depends on — with hand-written stub forms:
+
+```js
+vi.mock('@etendosoftware/etendo-go-core/onboarding', () => ({
+  LoginStep: ({ initialEmail, onAuthenticated }) => (
+    <form onSubmit={…}>{/* always calls onAuthenticated(data) */}</form>
+  ),
+  …
+}));
+```
+
+The stub always invoked `onAuthenticated`, so the test asserted the page's reaction to a contract the real component was **not** honouring — its SSO branch never called the callback at all. Because the core package had no JSX test runner either, the real SSO branch was rendered in no test in either repo. Effective coverage of the flow was zero while it looked fully covered.
+
+**Fix:** render the real `LoginStep` / `RegisterStep` and stub only genuine external boundaries — the i18n dictionaries, the SSO provider SDK (no Google Identity script exists in jsdom), and `fetch`. Verified by reverting the ETP-4958 fix in the pinned core build and confirming the SSO test fails.
+
+**Lesson:** mock the *boundary*, never the collaborator whose contract the test exists to verify. A stub that hard-codes the happy path turns a consumer test into a test of the stub. The tell is a mock factory that reimplements behaviour (branching, callbacks, state) rather than returning canned data — if you find yourself writing an `onSubmit` handler inside `vi.mock`, the seam is in the wrong place.
