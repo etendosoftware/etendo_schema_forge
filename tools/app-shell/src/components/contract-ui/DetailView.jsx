@@ -95,6 +95,11 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 
+// ETP-4933: frozen empty default for the gate-exclusion channel. Module-level so the
+// "no exclusions" state keeps a stable identity across renders — an inline `[]` would
+// be a new array every time and re-fire the memo that derives the gated field list.
+const NO_GATE_EXCLUSIONS = Object.freeze([]);
+
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
@@ -1176,7 +1181,30 @@ export function DetailView({
   // ETP-4933: contractFields comes from the generator's `Form.fields` static, so the
   // required-field gate sees the whole header form — including the "Others" tab, which
   // is only mounted while active and therefore invisible to the registry.
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: Form?.fields });
+  //
+  // The contract is a SUPERSET of what a custom form may choose to render: `contacts`
+  // hides `name` for a person and first/last name for a company, all three required.
+  // Left unchecked, the gate demands a field that is not on screen and Save can never
+  // be enabled. `registerGateExclusions` is the opt-in channel for those windows —
+  // a form declares which of its own fields it did not render, and the gate ignores
+  // them. Subtractive only: the worst case is a briefly stricter gate, never a
+  // permissive one, so a window that forgets to declare still fails safe (blocked and
+  // visible) rather than silently letting an incomplete record through.
+  const [gateExclusions, setGateExclusions] = useState(NO_GATE_EXCLUSIONS);
+  const registerGateExclusions = useCallback((keys) => {
+    const next = Array.isArray(keys) && keys.length > 0 ? keys : NO_GATE_EXCLUSIONS;
+    // Identity-preserving update: several sections render the same Form and all report
+    // the same exclusions, so returning `prev` on an equal value is what stops the
+    // re-render loop (same guard as syncRegisteredFields in useEntity).
+    setGateExclusions(prev => (prev.length === next.length && prev.every((k, i) => k === next[i]) ? prev : next));
+  }, []);
+  const gateFields = useMemo(
+    () => (gateExclusions.length === 0
+      ? Form?.fields
+      : (Form?.fields ?? []).filter(f => !gateExclusions.includes(f.key))),
+    [Form, gateExclusions]
+  );
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -3180,6 +3208,7 @@ export function DetailView({
                               </div>
                             )}
                             <Form
+                              registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
                               data={data}
@@ -3206,6 +3235,7 @@ export function DetailView({
                             <CollapsibleSection title={ui('moreDetails')} data-testid="CollapsibleSection__fa3275">
                               <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
                                 <Form
+                                  registerGateExclusions={registerGateExclusions}
                                   entity={entity}
                                   windowName={windowName}
                                   data={data}
@@ -3907,6 +3937,7 @@ export function DetailView({
                         {tabs[activeTab]?.key === 'others' && (
                           <div className={getOthersTabClassName(embedded)}>
                             <Form
+                              registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
                               data={data}
@@ -3941,6 +3972,7 @@ export function DetailView({
                   {showOthers === null && (
                     <div ref={othersRef} className="hidden">
                       <Form
+                        registerGateExclusions={registerGateExclusions}
                         entity={entity}
                         windowName={windowName}
                         data={data}
