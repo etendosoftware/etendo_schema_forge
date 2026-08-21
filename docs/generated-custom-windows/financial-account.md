@@ -1345,6 +1345,23 @@ have no AD backing) and consumes real NEO endpoints directly.
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
 
+## Conciliación empty state (ETP-4921)
+
+Both panels' tables share `renderRows`, whose empty state is a circled icon + title + hint,
+deliberately mirroring the right panel's own "Selecciona un movimiento". One line of centered
+copy in a full-height table read as a rendering failure rather than an intentional state, and
+having two visually different empty states on one screen made it worse.
+
+| Key | Copy |
+|---|---|
+| `financeReconcileEmpty` | "No se han encontrado movimientos" |
+| `financeReconcileEmptyHint` | points at the date range / status filter |
+
+The hint names the way out rather than nudging the user to create something: the list in these
+panels is always a filter result (status + date range + search), so there is nothing to create.
+That is the opposite of the Movimientos tab, whose own empty copy is paired with a
+"+ Nuevo movimiento" hint — which is why these two tabs deliberately do not share a key.
+
 ## Column sorting (ETP-4921)
 
 Two different mechanisms, because the LIST and the DETAIL tabs are two different kinds of grid.

@@ -18475,6 +18475,7 @@
     "financeReconcileFilterDocTypePayments": "Payments",
     "financeReconcileFilterDocTypeSearchPlaceholder": "Search document type...",
     "financeReconcileEmpty": "No movements found",
+    "financeReconcileEmptyHint": "Try a different date range, or change the status filter.",
     "financeReconcileSearchPlaceholder": "Search...",
     "financeReconcileColDate": "Date",
     "financeReconcileColDescription": "Description",

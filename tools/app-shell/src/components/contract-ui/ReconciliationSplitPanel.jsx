@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, RotateCcw, SearchX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -162,6 +162,14 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
 }
 
 /** Renders skeleton / empty / data rows for either table body. */
+/**
+ * Skeleton / empty / data body for either panel.
+ *
+ * The empty state deliberately mirrors the right panel's own ("Selecciona un movimiento"):
+ * a circled icon, then the title, then a hint. Plain centered text in a table this tall read
+ * as a rendering failure rather than an intentional state — the panel is full height, so a
+ * single line of copy floating in it looks broken.
+ */
 function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow }) {
   if (loading) {
     return SKELETON_ROWS.map((n) => (
@@ -177,10 +185,17 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
   if (items.length === 0) {
     return (
       <TableRow className="hover:bg-transparent" data-testid="TableRow__d0f4d5">
-        <TableCell colSpan={colSpan} className="py-12" data-testid="TableCell__d0f4d5">
-          <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-sm font-medium text-[hsl(var(--foreground))]">{emptyTitle}</p>
-            {emptyHint ? <p className="max-w-sm text-sm text-[hsl(var(--muted-foreground))]">{emptyHint}</p> : null}
+        <TableCell colSpan={colSpan} className="py-16" data-testid="TableCell__d0f4d5">
+          <div className="flex flex-col items-center gap-1 text-center" data-testid="recon-rows-empty">
+            {/* Same 40px circled icon the right panel uses, so the two empty states in one
+                screen read as one design rather than two. */}
+            <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--text-disabled))]">
+              <SearchX className="h-6 w-6" data-testid="SearchX__d0f4d5" />
+            </div>
+            <p className="text-[20px] font-semibold leading-7 text-[hsl(var(--foreground))]">{emptyTitle}</p>
+            {emptyHint ? (
+              <p className="max-w-sm text-xs leading-4 text-[hsl(var(--foreground))]">{emptyHint}</p>
+            ) : null}
           </div>
         </TableCell>
       </TableRow>
@@ -216,7 +231,10 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
             // in the reconciliation panels the list is always the result of a filter, so
             // "not found" is the accurate wording and the hint does not apply.
             emptyTitle: ui('financeReconcileEmpty'),
-            emptyHint: null,
+            // The list here is ALWAYS a filter result (status + date range + search), so the
+            // hint names the way out instead of the "+ Nuevo movimiento" nudge the Movimientos
+            // tab pairs with its own empty copy.
+            emptyHint: ui('financeReconcileEmptyHint'),
             renderRow,
           })}
         </TableBody>

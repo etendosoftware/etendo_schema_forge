@@ -18045,6 +18045,7 @@
     "financeReconcileFilterDocTypePayments": "Pagos",
     "financeReconcileFilterDocTypeSearchPlaceholder": "Buscar tipo de documento...",
     "financeReconcileEmpty": "No se han encontrado movimientos",
+    "financeReconcileEmptyHint": "Probá con otro rango de fechas o cambiá el filtro de estado.",
     "financeReconcileSearchPlaceholder": "Buscar...",
     "financeReconcileColDate": "Fecha",
     "financeReconcileColDescription": "Descripción",

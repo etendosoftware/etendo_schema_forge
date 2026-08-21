@@ -210,6 +210,22 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByText('financeReconcileRightEmptyTitle')).toBeInTheDocument();
   });
 
+  // The left panel's empty state used to be one line of centered text in a full-height table,
+  // which read as a rendering failure rather than an intentional state. It now mirrors the right
+  // panel's own: circled icon, title, hint.
+  it('gives the rows empty state an icon and a hint, like the right panel', () => {
+    setLines([]);
+    renderPanel();
+
+    const empty = screen.getByTestId('recon-rows-empty');
+    expect(empty).toBeInTheDocument();
+    expect(empty).toContainElement(screen.getByTestId('SearchX__d0f4d5'));
+    expect(empty.textContent).toContain('financeReconcileEmpty');
+    // The hint points at the filters — the list here is always a filter result, so there is
+    // nothing for the user to create.
+    expect(empty.textContent).toContain('financeReconcileEmptyHint');
+  });
+
   it('renders a back button and movement-style filter controls on the left toolbar', () => {
     const onBack = vi.fn();
     setLines([LINE_A]);
