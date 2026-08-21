@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info } from 'lucide-react';
+import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -440,13 +440,24 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-function PopupMultiSelector({ selector, label, onChange }) {
+function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState([]);
   const [pending, setPending] = useState([]); // selection inside modal (not yet confirmed)
-  const [confirmed, setConfirmed] = useState([]); // [{id, name}] committed to the report
+  // [{id, name}] committed to the report. Seeded once from `value`/`displayValue`
+  // (the same comma / ", "-joined shape `confirm()` below writes into params/
+  // `_display_<name>`) — without this, a deep-linked report (ETP-4898's "Open in
+  // new tab" drill-down button, or any future one) renders correctly server-side
+  // but this field shows empty chips, because this component otherwise never
+  // reads its initial selection from props.
+  const [confirmed, setConfirmed] = useState(() => {
+    if (!value) return [];
+    const ids = value.split(',').filter(Boolean);
+    const names = displayValue ? displayValue.split(', ') : [];
+    return ids.map((id, i) => ({ id, name: names[i] || id }));
+  });
   // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
   // this snapshot float to the top of the list. Deliberately NOT derived from `pending`, so
   // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
@@ -755,6 +766,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
         key={`${p.name}-${resetKey}`}
         selector={p.selector}
         label={label}
+        value={params[p.name] || ''}
+        displayValue={params['_display_' + p.name] || ''}
         onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
         data-testid="PopupMultiSelector__3c998a" />
     </div>
@@ -1091,6 +1104,25 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
 
   useEffect(() => { fetchFormat('preview'); }, [fetchFormat]);
 
+  // Opens the same render, but as a standalone report page in a new tab —
+  // its own sidebar/toolbar, not the read-only modal preview (ETP-4898).
+  // Same-origin navigation: the JWT lives in localStorage, so the new tab is
+  // already authenticated on load, no token needs to travel through the URL.
+  const openFullReport = useCallback(() => {
+    const basePath = window.location.pathname.replace(/\/[^/]*$/, ''); // same pattern as the invoice iframe (below)
+    const qs = new URLSearchParams();
+    qs.set('report', reportId);
+    qs.set('category', 'finance');
+    // Only forward filled-in values — an empty/undefined one would otherwise
+    // stringify as the literal "undefined" and needlessly override the target
+    // report's own default for that parameter.
+    for (const [key, value] of Object.entries(drillParams)) {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+    }
+    window.open(`${window.location.origin}${basePath}/report-viewer?${qs.toString()}`, '_blank');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId, JSON.stringify(drillParams)]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center gap-2 px-1">
@@ -1100,6 +1132,10 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
             <f.icon className="h-3.5 w-3.5" />{ui(f.labelKey)}
           </button>
         ))}
+        <button onClick={openFullReport}
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
+          <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__3c998a" />{ui('openFullReport')}
+        </button>
       </div>
       <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
@@ -1136,6 +1172,11 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const { locale } = useLocaleSwitch();
   const tMenu = useMenuLabel();
   const ui = useUI();
+  // Same URL state ReportViewerPage already reads for `report`/`category` — a
+  // second useSearchParams() call is fine (React Router just re-reads the
+  // current URL), used here to let a deep-link pre-fill the sidebar's filter
+  // values (e.g. the "open in new tab" drill-down button, ETP-4898).
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const handler = (e) => {
@@ -1164,12 +1205,28 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else {
         defaults[p.name] = '';
       }
+      // A deep-link query-string value (e.g. the "open in new tab" drill-down
+      // button, ETP-4898) overrides the contract default for that same
+      // parameter name — this is what lets a new tab land pre-filled instead
+      // of resetting to the report's plain defaults.
+      if (searchParams.has(p.name)) {
+        defaults[p.name] = searchParams.get(p.name);
+      }
+      // Search/popup params (fromAccountId, bPartnerId, etc.) render their
+      // human label from `_display_<name>` (see renderSearchPopupSingleParam/
+      // renderSearchInlineParam/renderSearchPopupParam below), never from the
+      // raw id/code — carry that companion key too, or the field shows the
+      // right filter with an empty-looking "Seleccionar..." placeholder.
+      const displayKey = '_display_' + p.name;
+      if (searchParams.has(displayKey)) {
+        defaults[displayKey] = searchParams.get(displayKey);
+      }
     }
     if ('orgId' in defaults) {
-      defaults.orgId = selectedOrgId || '';
+      defaults.orgId = searchParams.get('orgId') || selectedOrgId || '';
     }
     return defaults;
-  }, [report, selectedOrgId]);
+  }, [report, selectedOrgId, searchParams]);
 
   const [params, setParams] = useState(getDefaultParams);
 
@@ -1254,7 +1311,27 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     setLoading(false);
   }, [report.id, token, params, locale]);
 
-  // No auto-render on mount — wait for user to click Run Report
+  // No auto-render on mount — wait for user to click Run Report... UNLESS the
+  // page was opened via a deep-link that carries real filter values (e.g. the
+  // drill-down modal's "Open in new tab" button, ETP-4898) rather than just
+  // `?report=`/`?category=` (the plain report-list/favorites navigation).
+  // Those already have a filled-in sidebar, so re-running "Generar informe"
+  // manually would be redundant friction. Fires once, and waits for any
+  // autoDefault-driven param (still loading async above) to land first.
+  const isDeepLinked = useMemo(() => {
+    for (const key of searchParams.keys()) {
+      if (key !== 'report' && key !== 'category') return true;
+    }
+    return false;
+  }, [searchParams]);
+  const autoRunFiredRef = useRef(false);
+  useEffect(() => {
+    if (!isDeepLinked || autoRunFiredRef.current) return;
+    const missingRequired = (report.parameters || []).some(p => p.required && !p.hidden && !params[p.name]);
+    if (missingRequired) return;
+    autoRunFiredRef.current = true;
+    renderReport('html');
+  }, [isDeepLinked, params, report.parameters, renderReport]);
 
   const handlePrint = () => {
     if (iframeRef.current?.contentDocument?.body?.innerHTML) {
@@ -1426,7 +1503,16 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               token={token}
               baseParams={params}
               targetReportId="report-general-ledger"
-              extraParams={{ fromAccountId: drillDownAccount.value, toAccountId: drillDownAccount.value }}
+              extraParams={{
+                fromAccountId: drillDownAccount.value,
+                toAccountId: drillDownAccount.value,
+                // Same "code - name" shape the account popup selector itself stores
+                // (report-api.js's `account` selector SELECTs `value || ' - ' || name`
+                // as its label) — without this, "Open in new tab" lands with the
+                // right filter values but an empty-looking "Desde/A la cuenta" field.
+                _display_fromAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+                _display_toAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+              }}
               data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>

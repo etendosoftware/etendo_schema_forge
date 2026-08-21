@@ -53,6 +53,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
 9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
+10. **ETP-4940 follow-up:** on a draft (`RPAP`) payment, edit the amount WITHOUT clicking Save, then go to the "Apply to Invoices" tab and click through to apply + process. Confirm the payment processes with the edited amount, not the original one.
 
 ## Automated evidence
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites A–D) provides browser-level E2E coverage for the Attachments tab: tab visibility in the `customTabsAfterBottom` strip, empty state, upload (valid file, file too large, invalid MIME, duplicate name), single delete with confirmation, Delete All, individual file download, and Download All (ZIP). All API calls are mocked; no real backend is required.
@@ -239,3 +240,21 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 (`artifacts/payment-out/custom/PaymentOutBottomPanel.jsx`, fixed identically). The existing
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
+
+## "Apply to invoices" tab silently discarded pending header edits — ETP-4940 follow-up
+
+The **Facturas Pendientes / Apply to Invoices** tab (`ApplyToInvoices.jsx`, the `customLines`
+component for this window) fires its own two-step request pair — `action/applyToInvoices` then
+`action/aPRMProcessPayment` — entirely bypassing `DetailView.jsx`'s guarded generic process button
+(the one the toolbar's "processConfirm" button uses, already protected since ETP-4542 via this
+window's `saveBeforeProcesses: true`). A header edit (e.g. `amount`, `currency`) made without
+clicking Save first was silently discarded: the apply/process calls ran server-side against the
+last-persisted value, and the client-side `totalAppliedExceedsPaymentAmount` validation even
+compared against the stale amount.
+
+Fixed the same way the sibling `topbarRight` fix did for `return-material-receipt`/
+`return-to-vendor-shipment`: `DetailView.jsx` now passes `isDirty` alongside its existing `onSave`
+prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
+`maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` at the top of `handleApplyAndProcess`,
+before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
+documentAction path is the already-guarded generic process button — so it needed no change.

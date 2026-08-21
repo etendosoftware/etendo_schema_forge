@@ -771,6 +771,8 @@ Enables a two-button save workflow: "Save Draft" (save only) + "Save & {label}" 
 **When disabled** (default): single "Save" button.
 **When enabled**: "Save draft" + "Save & {label}" buttons, plus process buttons from `processEndpoints`.
 
+**`draftMode.onConfirm` — custom confirm callback (not a `decisions.json` property).** A window's custom wrapper (`windows/custom/{window}/index.jsx`) can pass a `draftMode.onConfirm` function prop at the React level — instead of `processField`/`processValue` — to run its own logic (typically dispatching a `CustomEvent` that opens the window's own confirm modal) when the "Save & {label}" button is clicked, bypassing the generic `hook.handleSaveAndProcess` POST entirely. Because `onConfirm` fully bypasses `handleSaveAndProcess` (which already saves first), `DetailView.jsx`'s `renderDraftModeSaveActions` saves any pending change via `hook.handleSave` — gated on `isDirty` (header OR line-edit/add-row state) — immediately before invoking `draftMode.onConfirm()` (ETP-4940, `maybeSaveBeforeConfirm` in `tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`). This is part of the `draftMode.onConfirm` contract every window author can rely on: a pending header/line edit is never silently discarded when the user clicks Confirm without saving first. Currently used by `sales-order`, `purchase-order`, `sales-quotation`, `goods-receipt`, `goods-shipment`.
+
 ### Named Filters (`entities.{name}.namedFilters`)
 
 Hand-authored named business filters the NEO Headless **MCP** exposes to AI agents as a

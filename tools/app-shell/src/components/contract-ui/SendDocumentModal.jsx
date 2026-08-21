@@ -329,7 +329,8 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  * - pdfBlobUrl: object URL created from a pre-rendered PDF blob.
  * - pdfBlob: pre-rendered PDF blob to cache before sending.
  * - pdfBlobLoading: disables send while a cacheable preview is still loading.
- * - cachePreviewBeforeSend: caches pdfBlob/pdfBlobUrl through /preview-file before sending.
+ * - cachePreviewBeforeSend: uploads pdfBlob/pdfBlobUrl as the record's marked
+ *   "main" attachment (see documentEmailSend.js's WINDOW_ATTACHMENT_TABLE) before sending.
  * When pdfBlobUrl is provided, preview and download use it directly and bypass
  * the /api/reports render endpoint.
  *

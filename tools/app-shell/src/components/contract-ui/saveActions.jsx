@@ -14,6 +14,7 @@
 import { Button } from '@/components/ui/button.jsx';
 import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 
 /**
  * The required-field gate shared by every primary persist button.
@@ -41,6 +42,45 @@ export function buildSaveGate({ isValid, missingRequiredFields = [], labelFor, u
   };
 }
 
+/**
+ * ETP-4940: draftMode "Confirm" click extracted to module level (like its
+ * sibling renderers below) so this branch-heavy flow doesn't count toward
+ * renderDraftModeSaveActions's cognitive complexity.
+ *
+ * Ported here during the ETP-4933/ETP-4940 merge: ETP-4940 wrote this against
+ * DetailView.jsx while ETP-4933 was moving the same block into this file, so git
+ * saw a delete-vs-modify conflict with no common text. The logic below is
+ * ETP-4940's verbatim.
+ */
+async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal }) {
+  if (!(await flushPendingLines())) return;
+  if (typeof draftMode.onConfirm === 'function') {
+    // onConfirm fully bypasses handleSaveAndProcess (below), which already
+    // saves first. Persist any pending header edit before handing off.
+    if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: hook.handleSave }))) return;
+    draftMode.onConfirm();
+    return;
+  }
+  const showProcessing = Boolean(draftMode.processingModal);
+  if (showProcessing) setShowProcessingModal(true);
+  try {
+    const saved = await hook.handleSaveAndProcess(draftMode);
+    if (!saved) return;
+    if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+    if (onAfterSave) return navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+    if (saved.id && isNew) { hook.primeSaved?.(saved); return navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } }); }
+    if (saved.id) return hook.fetchById?.(saved.id);
+    reportUnnavigableSave({ saved, isNew, windowName, ui });
+  } finally {
+    if (showProcessing) setShowProcessingModal(false);
+  }
+}
+
+/**
+ * Save / Confirm toolbar buttons for draftMode windows (Save Draft + Confirm).
+ * All identifiers are destructured with the SAME names used inside DetailView
+ * so closure-equivalent logic and the dirty-state regression substrings stay intact.
+ */
 function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
@@ -61,30 +101,7 @@ function renderDraftModeSaveActions({
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button>
-      <Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const showProcessing = Boolean(draftMode.processingModal);
-        if (showProcessing) setShowProcessingModal(true);
-        try {
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          if (saved) {
-            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-            if (onAfterSave) {
-              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-            } else if (saved.id && isNew) {
-              hook.primeSaved?.(saved);
-              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-            } else if (saved.id) {
-              hook.fetchById?.(saved.id);
-            } else {
-              reportUnnavigableSave({ saved, isNew, windowName, ui });
-            }
-          }
-        } finally {
-          if (showProcessing) setShowProcessingModal(false);
-        }
-      }}>
+      <Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
         {ui(draftMode.label) || draftMode.label || ui('process')}
       </Button>

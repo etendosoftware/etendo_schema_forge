@@ -3,6 +3,7 @@ import { MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
+import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -73,6 +74,14 @@ export function DetailMoreActionsMenu({
         toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
         return false;
       }
+    }
+    // ETP-4940 — this kebab-menu documentAction path (Complete/Void/etc. for windows
+    // without draftMode) used to fire docAction.execute directly, with zero dirty-state
+    // check: an edit made without clicking Save first was silently discarded, the action
+    // running against the last-persisted value. Persist any pending header edit first;
+    // handleSave already surfaced the error on failure — abort without running the action.
+    if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
+      return false;
     }
     try {
       await docAction.execute(currentId, action.documentAction);

@@ -944,13 +944,6 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
   return hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && canAddLines;
 }
 
-/**
- * Save / Confirm toolbar buttons for draftMode windows (Save Draft + Confirm).
- * Extracted from the DetailView footer IIFE to keep cognitive complexity low.
- * All identifiers are destructured with the SAME names used inside the component
- * so closure-equivalent logic and the dirty-state regression substrings stay intact.
- */
-
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
   setSelectedChildRows, setExecutingDetailProcess,
