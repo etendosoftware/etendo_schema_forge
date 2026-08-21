@@ -81,10 +81,27 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
     const specPath = system === 'tbai'
       ? `/tbai-config/${TBAI_ENTITY}`
       : `/sii-config/${SII_ENTITY}`;
+
+    // For SII, include the same defaults the onboarding wizard sets so the record
+    // is fully operational from the start (ETP-4783: fix for "Añadir SII" button
+    // when TBAI is already configured — the wizard path sets these, but the
+    // complementary POST skipped them, leaving the record with empty/false defaults).
+    const today = new Date().toISOString().slice(0, 10);
+    const body = system === 'sii'
+      ? {
+          adOrgId,
+          acogidaAlSII:      'Y',   // In SII System
+          fechaAcogidaSII:   today, // In SII System Date
+          monitordate:       today, // From date display in SII Monitor
+          entornoDeProduccin: 'Y',  // Production Environment
+          adjuntarArchivosXML: 'Y', // Attach XML Files
+        }
+      : { adOrgId };
+
     const res = await apiFetch(specPath, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adOrgId }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
     const json = await res.json().catch(() => null);

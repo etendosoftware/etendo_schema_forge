@@ -100,6 +100,15 @@ body {
   background: var(--color-bg-stripe);
 }
 
+/* tfoot cells had no padding rule of their own, so they fell back to the
+   browser's default td padding (~1px) instead of tbody's 1.5mm/3mm — the
+   footer's numbers sat closer to the cell edge than the data rows above,
+   reading as "not aligned" even though it's the same table/columns. */
+.report-table tfoot td {
+  padding: 1.5mm 3mm;
+  vertical-align: top;
+}
+
 /* Type-specific cell styles */
 .cell-number, .cell-amount {
   text-align: right;

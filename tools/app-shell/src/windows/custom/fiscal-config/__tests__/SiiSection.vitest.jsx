@@ -38,6 +38,8 @@ vi.mock('../CertSection.jsx', () => ({ default: () => <div data-testid="cert-sec
 vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
+  normalizeDateInputValue: (v) => v ?? '',
+  parseApiError: async (res) => res.text().then(t => { try { return JSON.parse(t)?.error?.message ?? t; } catch { return t; } }),
   mapSiiRecordToForm: vi.fn((r) => ({
     acogidaAlSII: r?.acogidaAlSII ?? 'N',
     entornoDeProduccin: r?.entornoDeProduccin ?? 'N',
@@ -59,15 +61,21 @@ import SiiSection from '../SiiSection.jsx';
 
 // --- Tests ----------------------------------------------------------------
 
-const BASE_RECORD = { plazoLmiteDeEnvoASII: 4 };
+// ETP-4783: plazoLmiteDeEnvoASII was removed from mapSiiRecordToForm to avoid NOT-NULL ORM violations.
+// BASE_RECORD does not include it — the SiiSection no longer reads or sends that field.
+const BASE_RECORD = { acogidaAlSII: 'N', entornoDeProduccin: 'N', adjuntarArchivosXML: 'N' };
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('SiiSection — rendering', () => {
-  it('renders section labels', () => {
+  it('renders section labels (ETP-4783: status+env+sends sections removed)', () => {
     render(<SiiSection {...PROPS} />);
-    expect(screen.getByText('fiscal.sii.legend.status')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.sii.legend.env')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.sii.legend.sends')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.sii.legend.status')).not.toBeInTheDocument();
+    expect(screen.queryByText('fiscal.sii.legend.env')).not.toBeInTheDocument();
+    // ETP-4783: "Envíos" section removed from SiiSection
+    expect(screen.queryByText('fiscal.sii.legend.sends')).not.toBeInTheDocument();
+    // Remaining sections should still render
+    expect(screen.getByText('fiscal.sii.legend.special')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.sii.legend.specialAuth')).toBeInTheDocument();
   });
 
   it('renders the CertSection when hideCert is false', () => {
@@ -91,14 +99,15 @@ describe('SiiSection — rendering', () => {
   });
 });
 
+// ETP-4783: The "Envíos" section (plazo/cadencia/postedInvoices) was removed from the UI.
+// The plazoLmiteDeEnvoASII validation is no longer enforced — save proceeds even when empty.
 describe('SiiSection — validation', () => {
-  it('shows deadline error when plazo is empty and save is attempted', async () => {
+  it('save succeeds even when plazoLmiteDeEnvoASII is empty (Envíos section removed)', async () => {
+    const onSave = vi.fn();
     const ref = createRef();
-    render(<SiiSection {...PROPS} record={{ plazoLmiteDeEnvoASII: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.sii.err.deadline')).toBeInTheDocument();
-    });
+    render(<SiiSection {...PROPS} onSave={onSave} record={{ plazoLmiteDeEnvoASII: '' }} ref={ref} />);
+    await ref.current.save();
+    expect(onSave).toHaveBeenCalled();
   });
 });
 
@@ -122,5 +131,65 @@ describe('SiiSection — save', () => {
     await waitFor(() => {
       expect(screen.getByText('Server error')).toBeInTheDocument();
     });
+  });
+
+  // ETP-4783 (final design): acogidaAlSII / entornoDeProduccin / adjuntarArchivosXML are no
+  // longer hardcoded in the PUT body. They are read from the form (which maps the DB record
+  // via mapSiiRecordToForm), so a user who toggles them in Classic is not silently overridden
+  // on every Go save. The onboarding wizard sets correct defaults at creation time.
+  it('sends acogidaAlSII from the form (preserves the record value, no override)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, acogidaAlSII: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // The record value 'N' is preserved — no hardcoded override to 'Y'
+    expect(body.acogidaAlSII).toBe('N');
+  });
+
+  it('sends entornoDeProduccin from the form (preserves the record value, no override)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, entornoDeProduccin: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.entornoDeProduccin).toBe('N');
+  });
+
+  it('sends adjuntarArchivosXML from the form (preserves the record value, no override)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, adjuntarArchivosXML: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.adjuntarArchivosXML).toBe('N');
+  });
+
+  it('always sends a truthy fechaAcogidaSII in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, fechaAcogidaSII: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.fechaAcogidaSII).toBeTruthy();
+  });
+
+  it('always sends a truthy monitordate in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, monitordate: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.monitordate).toBeTruthy();
   });
 });

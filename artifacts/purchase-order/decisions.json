@@ -560,6 +560,7 @@
       }
     },
     "lineTax": {
+      "readOnly": true,
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
@@ -581,6 +582,7 @@
       }
     },
     "prereservedQty": {
+      "readOnly": true,
       "name": "reservedStock",
       "fields": {
         "reservation": {
@@ -625,6 +627,7 @@
       "exclude": true
     },
     "paymentDetails": {
+      "readOnly": true,
       "name": "paymentDetails",
       "fields": {
         "payment": {

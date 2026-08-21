@@ -987,6 +987,124 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
+  // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call
+  // renderReport(format) directly, bypassing the required-field validation
+  // that the sidebar's "Generate Report" button already ran — so an empty
+  // required field would still hit the backend and surface a raw NEO 400
+  // error instead of the sidebar's usual red "Required" state. validateRequired()
+  // must now gate all three top-bar buttons too, not just the sidebar submit.
+  it('blocks the top-bar PDF button and shows the required error when a required field is empty', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('PDF')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('PDF'));
+
+    // Validation must fire and block the request BEFORE any /render fetch happens.
+    await waitFor(() => {
+      expect(screen.getByText('required')).toBeInTheDocument();
+    });
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
+  });
+
+  it('blocks the top-bar Excel button when a required field is empty (not just PDF)', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Excel')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Excel'));
+
+    await waitFor(() => {
+      expect(screen.getByText('required')).toBeInTheDocument();
+    });
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
+  });
+
+  it('lets the top-bar PDF button through (no regression) once the required field is filled', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('<html><body>ok</body></html>'),
+          blob: () => Promise.resolve(new Blob(['pdf-data'], { type: 'application/pdf' })),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-pdf');
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Important Field')).toBeInTheDocument();
+      });
+
+      const input = screen.getByText('Important Field').closest('div').querySelector('input');
+      await user.type(input, 'some value');
+
+      await user.click(screen.getByText('PDF'));
+
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+        const pdfCall = renderCalls.find(([, opts]) => {
+          const body = JSON.parse(opts?.body || '{}');
+          return body.format === 'pdf';
+        });
+        expect(pdfCall).toBeTruthy();
+      });
+      expect(screen.queryByText('required')).not.toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+    }
+  });
+
   it('clicking reset clears parameters and increments resetKey', async () => {
     const user = userEvent.setup();
     render(<ReportViewerPage />);
