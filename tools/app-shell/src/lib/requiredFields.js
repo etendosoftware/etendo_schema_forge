@@ -76,3 +76,29 @@ export function getMissingRequiredDescriptors(fields, editing) {
 export function getMissingRequiredFields(fields, editing) {
     return getMissingRequiredDescriptors(fields, editing).map(f => f.key);
 }
+
+/**
+ * ETP-4933: the field set the required-field gate validates against — the UNION of the
+ * contract's descriptors and whatever actually registered at runtime.
+ *
+ * Neither source is sufficient alone, and choosing one loses required fields:
+ *  - contract only: it carries just the fields the generator emitted (`form: true`).
+ *    `assets` marks its 10 required fields `form: false` and renders them from a
+ *    hand-written formFooter panel, so the gate saw 3 optional fields, found nothing
+ *    missing, and left Save enabled on an empty new record.
+ *  - registry only: it is mount-dependent, so a section that never passes
+ *    `registerFields` (`section: 'other'`) is invisible to validation entirely.
+ *
+ * Union is the safe direction — it can only ADD a required field, never drop one, so a
+ * surface nobody thought about fails closed-and-visible rather than silently open.
+ * Deduped by key with the contract descriptor winning: it is the richer of the two,
+ * carrying readOnlyLogic / displayLogic straight from the AD.
+ */
+export function mergeValidationFields(contractFields, registeredFields) {
+    const contract = Array.isArray(contractFields) ? contractFields : [];
+    const registered = Array.isArray(registeredFields) ? registeredFields : [];
+    if (contract.length === 0) return registered;
+    if (registered.length === 0) return contract;
+    const seen = new Set(contract.map(f => f.key));
+    return [...contract, ...registered.filter(f => !seen.has(f.key))];
+}

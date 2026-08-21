@@ -5,6 +5,7 @@ import {
   getVisible,
   getMissingRequiredDescriptors,
   getMissingRequiredFields,
+  mergeValidationFields,
 } from '../requiredFields.js';
 
 // ---------------------------------------------------------------------------
@@ -178,5 +179,58 @@ describe('getMissingRequiredDescriptors — non-required fields never block', ()
   it('a non-required, empty field is never reported', () => {
     const fields = [{ key: 'paymentMethod', required: false }];
     assert.deepEqual(getMissingRequiredFields(fields, {}), []);
+  });
+});
+
+describe('mergeValidationFields — the field set the gate actually validates', () => {
+  // The `assets` regression: the contract only carries `form: true` fields, so the 10
+  // required fields that window marks `form: false` and renders from a hand-written
+  // formFooter panel were missing entirely — the gate saw 3 optional fields, found
+  // nothing missing, and left Save enabled on a brand-new empty record.
+  it('keeps required fields that only the runtime registry knows about (assets)', () => {
+    const contract = [
+      { key: 'product', required: false },
+      { key: 'project', required: false },
+      { key: 'eTADASCostCenter', required: false },
+    ];
+    const registered = [
+      { key: 'searchKey', required: true },
+      { key: 'name', required: true },
+      { key: 'assetCategory', required: true },
+    ];
+    const merged = mergeValidationFields(contract, registered);
+    assert.deepEqual(getMissingRequiredFields(merged, {}).sort(), ['assetCategory', 'name', 'searchKey']);
+  });
+
+  // The mirror case: the registry is mount-dependent, so a section that never passes
+  // registerFields is invisible to it. The contract must still contribute those.
+  it('keeps required fields only the contract knows about (unregistered sections)', () => {
+    const contract = [{ key: 'warehouse', required: true, section: 'other' }];
+    const merged = mergeValidationFields(contract, []);
+    assert.deepEqual(getMissingRequiredFields(merged, {}), ['warehouse']);
+  });
+
+  it('dedupes by key, contract descriptor winning (it carries the AD logic)', () => {
+    const contract = [{ key: 'businessPartner', required: true, readOnlyLogic: processedLock }];
+    const registered = [{ key: 'businessPartner', required: true }];
+    const merged = mergeValidationFields(contract, registered);
+    assert.equal(merged.length, 1);
+    assert.equal(typeof merged[0].readOnlyLogic, 'function', 'the richer contract descriptor must win');
+    // Proof the AD logic survived the merge: a processed record blocks on nothing.
+    assert.deepEqual(getMissingRequiredFields(merged, { processed: true }), []);
+  });
+
+  it('is additive only — merging can never drop a field either side reported', () => {
+    const contract = [{ key: 'a', required: true }];
+    const registered = [{ key: 'b', required: true }];
+    const merged = mergeValidationFields(contract, registered);
+    assert.deepEqual(getMissingRequiredFields(merged, {}).sort(), ['a', 'b']);
+  });
+
+  it('tolerates either side being absent or not an array', () => {
+    assert.deepEqual(mergeValidationFields(undefined, undefined), []);
+    assert.deepEqual(mergeValidationFields(null, [{ key: 'a' }]), [{ key: 'a' }]);
+    assert.deepEqual(mergeValidationFields([{ key: 'a' }], null), [{ key: 'a' }]);
+    assert.deepEqual(mergeValidationFields('nope', 'nope'), []);
   });
 });

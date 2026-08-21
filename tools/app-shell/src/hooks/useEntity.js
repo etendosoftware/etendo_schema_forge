@@ -18,7 +18,7 @@ import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
-import { getReadOnly, getVisible, getMissingRequiredFields } from '@/lib/requiredFields.js';
+import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
@@ -1615,13 +1615,23 @@ export function useEntity(entity, childEntity, {
     // `skipUnchangedInvalid` is on only for existing records (ETP-4933 §3.2): a legacy
     // row with an empty required column must stay saveable, or the user cannot correct
     // an unrelated field. New records validate everything, matching handleSave.
-    // ETP-4933: contract set wins when present. It is complete and mount-independent,
-    // so it also closes the `section: 'other'` blind spot the registry has (24 required
-    // fields across 10 windows were invisible to validation). The registry stays as the
-    // fallback for any surface that does not (yet) pass its descriptors.
-    const validationFields = Array.isArray(contractFields) && contractFields.length > 0
-        ? contractFields
-        : registeredFields;
+    // ETP-4933: UNION of the contract set and what actually got registered — neither is
+    // sufficient alone, and picking one loses required fields either way.
+    //
+    // The contract is mount-independent, so it covers sections the registry never sees
+    // (`section: 'other'` was entirely invisible to validation before). But it only
+    // carries fields the generator emitted, i.e. `form: true` in the contract: `assets`
+    // marks its 10 required fields `form: false` and renders them from a hand-written
+    // formFooter panel, so a contract-only gate saw 3 optional fields, found nothing
+    // missing, and left Save enabled on an empty new record.
+    //
+    // Union is the safe direction: it can only ever ADD a required field, never drop
+    // one. Deduped by key, contract descriptor winning — it is the richer one (carries
+    // readOnlyLogic / displayLogic straight from the AD).
+    const validationFields = useMemo(
+        () => mergeValidationFields(contractFields, registeredFields),
+        [contractFields, registeredFields]
+    );
     const { isValid, missingRequired, missingRequiredFields } = useFormValidity({
         fields: validationFields,
         values: editing,
