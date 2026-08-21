@@ -49,7 +49,6 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
 
 vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
-  TENANT_UPGRADE: 'tenant-upgrade',
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
 }));
 
@@ -236,8 +235,11 @@ describe('SideMenu', () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows the current environment plan in the selector when tenant upgrade is enabled', () => {
-    mockUseFeatureFlag.mockImplementation(key => key === 'tenant-upgrade');
+  // ETP-4966: the plan label is no longer gated on a feature flag. It is shown whenever the
+  // current environment is known, and withheld only when it is not — which is a different
+  // condition, not a weaker one. See the two specs below.
+  it('shows the current environment plan in the selector', () => {
+    mockUseFeatureFlag.mockReturnValue(false);
     mockUseEnvironmentSwitch.mockReturnValue({
       environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
       switchTo: vi.fn(),
@@ -250,10 +252,12 @@ describe('SideMenu', () => {
     expect(within(screen.getByLabelText('switchCompany')).getByText('environmentDemo')).toBeInTheDocument();
   });
 
-  it('does not show a plan label in the selector when tenant upgrade is disabled', () => {
-    mockUseFeatureFlag.mockReturnValue(false);
+  it('withholds the plan label when the current environment cannot be resolved', () => {
+    // A session without the platform token cannot list environments, so there is no plan to
+    // report. Labelling it "Demo" would state a plan derived from a missing value rather than
+    // from a known free one.
     mockUseEnvironmentSwitch.mockReturnValue({
-      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      environments: [],
       switchTo: vi.fn(),
       switching: null,
       currentClientId: 'demo-1',
