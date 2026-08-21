@@ -11,7 +11,7 @@ export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   specName, entityName,
-  onSave, isDirty,
+  onSave, isDirty, saveGate,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
@@ -34,6 +34,14 @@ export default function ConfirmWithCreditButtonBase({
 
   if (status !== 'DR' && status !== 'CO') return null;
 
+  // ETP-4933: this button PERSISTS before it confirms (maybeSaveBeforeConfirm below),
+  // so it must respect the same required-field rule as Save — otherwise Save being
+  // blocked means nothing: Confirm would save the incomplete record and advance the
+  // document. It inherits ONLY the required-field verdict, deliberately not the rest
+  // of Save's disabled condition: `!isDirty` must NOT block here, because confirming
+  // an already-saved, unmodified document is the normal path.
+  const confirmBlocked = confirmDisabled || Boolean(saveGate?.blocked);
+
   const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
 
   return (
@@ -41,7 +49,7 @@ export default function ConfirmWithCreditButtonBase({
       {status === 'DR' && (
         <button type="button" data-testid="action-confirm-with-credit"
           onClick={async () => {
-            if (confirmDisabled) return;
+            if (confirmBlocked) return;
             // ETP-4940 follow-up: this button fires its own documentAction POST
             // (inside ConfirmInOutModal) that never went through DetailView's
             // draftMode/kebab save-before-confirm guards — an edit made without
@@ -51,8 +59,12 @@ export default function ConfirmWithCreditButtonBase({
             if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: onSave }))) return;
             setShowModal(true);
           }}
-          disabled={confirmDisabled}
-          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
+          disabled={confirmBlocked}
+          // A blocked button that does not say why is the bug we already hit once. This
+          // is a plain <button>, not the shared one carrying `disabled:pointer-events-none`,
+          // so the native title fires on hover without needing a wrapper element.
+          title={saveGate?.blocked ? saveGate.title : undefined}
+          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmBlocked ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmBlocked ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmBlocked ? 0.6 : 1 }}>
           {confirmDrLabel}
         </button>
       )}
