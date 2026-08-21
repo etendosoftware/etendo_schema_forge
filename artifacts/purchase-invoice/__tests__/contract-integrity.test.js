@@ -34,7 +34,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.match(documentNo.label, /Document No\./);
   });
 
-  it('keeps POReference editable in the contract and positioned as the second principal field', () => {
+  it('keeps POReference editable in the contract and positioned as the second principal field (SII lock is server-side only)', () => {
     const orderReference = headerField('orderReference');
     assert.ok(orderReference, 'orderReference field must remain present in the contract');
     assert.equal(orderReference.column, 'POReference');
@@ -82,16 +82,16 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
   });
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {
+    // ETP-4783: aeatsiiEjercicio, aeatsiiPeriodo, aeatsiiPurDescription removed (discarded — never had values in GO)
+    // ETP-4783: SII fields rendered by SifTab.jsx custom component — must stay out of the generated header form
     const expectedNames = [
       'aeatsiiClaveTipoFc',
-      'aeatsiiDescripcionSii',
-      'aeatsiiEjercicio',
       'aeatsiiEstado',
-      'aeatsiiFechaRegCont',
       'aeatsiiIsauthorization',
       'aeatsiiIssent',
-      'aeatsiiPeriodo',
-      'aeatsiiPurDescription',
+      'aeatsiiDescripcionSii',
+      'aeatsiiFechaRegCont',
+      'aeatsiiErrorRegistral',
       'etsgDateOperation',
       'etvfacInvoiceStatus',
     ];
@@ -100,7 +100,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       const field = headerField(name);
       assert.ok(field, `header contract must include ${name}`);
       assert.notEqual(field.visibility, 'discarded', `${name} must not be discarded`);
-      assert.equal(field.form, false, `${name} must stay out of the main header form`);
+      assert.equal(field.form, false, `${name} must stay out of the generated header form (rendered by SifTab)`);
     }
   });
 

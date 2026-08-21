@@ -1,7 +1,4 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
-import { Input } from '@/components/ui/input';
-import { DateField } from '@/components/ui/date-field';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
@@ -14,13 +11,14 @@ import {
   isEtendoTrue,
   normalizeDateInputValue,
   normalizeEtendoBoolean,
+  parseApiError,
   serializeBooleanFields,
 } from './fiscalConfig.utils.js';
 
 // Confirmed from artifacts/tbai-config/contract.json → backendContract.window.primaryEntity
 const TBAI_ENTITY = 'header';
 
-const TERRITORY_NAMES = { ARABA: 'Álava', BIZKAIA: 'Bizkaia', GIPUZKOA: 'Gipuzkoa' };
+const TERRITORY_NAMES = { ARABA: 'Álava', BIZKAIA: 'Vizcaya', GIPUZKOA: 'Guipúzcoa' };
 function formatTerritory(raw) {
   const key = (raw ?? '').toUpperCase();
   if (TERRITORY_NAMES[key]) return TERRITORY_NAMES[key];
@@ -45,13 +43,8 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
-    tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate),
-    productionEnv:           normalizeEtendoBoolean(record?.productionEnv),
-    invoiceDescription:      record?.invoiceDescription     ?? '',
-    uSEAsproductDesc:        normalizeEtendoBoolean(record?.uSEAsproductDesc),
-    autoSendInvoices:        normalizeEtendoBoolean(record?.autoSendInvoices),
-    jasperreportPath:        record?.jasperreportPath       ?? '',
-    validatePreviousInvoice: normalizeEtendoBoolean(record?.validatePreviousInvoice),
+    autoSendInvoices:   normalizeEtendoBoolean(record?.autoSendInvoices),
+    jasperreportPath:   record?.jasperreportPath  ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
@@ -59,8 +52,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
   function validate() {
-    if (!form.tbaisystemdate) return ui('fiscal.tbai.err.enrollDate');
-    if (!form.invoiceDescription) return ui('fiscal.tbai.err.invoiceDesc');
     return null;
   }
 
@@ -79,12 +70,21 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
       const res = await apiFetch(`/tbai-config/${TBAI_ENTITY}/${recordId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serializeBooleanFields(form, ['productionEnv', 'uSEAsproductDesc', 'autoSendInvoices', 'validatePreviousInvoice'])),
+        body: JSON.stringify(serializeBooleanFields({
+          ...form,
+          // Preserve read-only fields from the original record; fall back only for
+          // dates that can be blank. Do NOT hardcode productionEnv/uSEAsproductDesc/
+          // validatePreviousInvoice here — overriding them would silently revert any
+          // change the user made in Classic (e.g. productionEnv='N' for testing). (ETP-4783)
+          invoiceDescription:      record?.invoiceDescription ?? 'Descripcion Factura',
+          tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || new Date().toISOString().slice(0, 10),
+        }, ['autoSendInvoices'])),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);
@@ -103,41 +103,9 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
           <Badge variant="secondary" data-testid="Badge__f06d4b">{formatTerritory(record.etsgSifTerritory)}</Badge>
         </SectionRow>
       )}
-      {/* Fecha acogida TBAI — top-level, no section name */}
-      <div className={`flex items-start py-6 gap-6 ${record?.etsgSifTerritory ? 'border-t border-[hsl(var(--border-subtle))]' : ''}`}>
-        <div className="w-[160px] flex-shrink-0">
-          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.enrollDate')}</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <DateField
-            value={form.tbaisystemdate}
-            onChange={(iso) => set('tbaisystemdate', iso)}
-            className="max-w-[376px]"
-            data-testid="DateField__f06d4b" />
-        </div>
-      </div>
-      {/* Entorno producción — top-level */}
-      <div className="flex items-start py-6 gap-6 border-t border-[hsl(var(--border-subtle))]">
-        <div className="w-[160px] flex-shrink-0">
-          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.production')}</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <Switch
-            checked={isEtendoTrue(form.productionEnv)}
-            onCheckedChange={v => set('productionEnv', v ? 'Y' : 'N')}
-            data-testid="Switch__f06d4b" />
-        </div>
-      </div>
       {/* Facturación */}
       <SectionRow label={ui('fiscal.tbai.legend.billing')} data-testid="SectionRow__f06d4b">
         <div className="flex flex-wrap gap-4 items-start">
-          <div className="flex items-center gap-2 pt-1 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.uSEAsproductDesc)}
-              onCheckedChange={v => set('uSEAsproductDesc', v ? 'Y' : 'N')}
-              data-testid="Switch__f06d4b" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.useAsProduct')}</span>
-          </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.autoSendInvoices)}
@@ -145,26 +113,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
               data-testid="Switch__f06d4b" />
             <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.autoSend')}</span>
           </div>
-          <div className="space-y-1 w-[376px]">
-            <Label data-testid="Label__f06d4b">{ui('fiscal.tbai.field.invoiceDesc')}</Label>
-            <Input
-              value={form.invoiceDescription}
-              onChange={e => set('invoiceDescription', e.target.value)}
-              className="bg-card"
-              data-testid="Input__f06d4b" />
-          </div>
-        </div>
-      </SectionRow>
-      {/* Técnico */}
-      <SectionRow
-        label={ui('fiscal.tbai.legend.technical')}
-        data-testid="SectionRow__f06d4b">
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={isEtendoTrue(form.validatePreviousInvoice)}
-            onCheckedChange={v => set('validatePreviousInvoice', v ? 'Y' : 'N')}
-            data-testid="Switch__f06d4b" />
-          <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.validatePrev')}</span>
         </div>
       </SectionRow>
       {/* Certificado digital */}

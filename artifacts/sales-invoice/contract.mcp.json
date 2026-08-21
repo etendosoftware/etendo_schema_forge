@@ -1,8 +1,8 @@
 {
-  "version": "0.72.0",
+  "version": "0.84.1",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-19T19:36:00.361Z",
-  "contractChecksum": "79117238b1165148",
+  "updatedAt": "2026-08-19T23:35:39.978Z",
+  "contractChecksum": "7d0872c484db4fb7",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -202,14 +202,6 @@
         "reference": "Costcenter",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-      },
-      {
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "column": "EM_Aeatsii_Description_ID",
-        "reference": "aeatsii_description",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
       },
       {
         "entity": "header",
@@ -1050,6 +1042,9 @@
             "required": true,
             "defaultValue": "DR"
           },
+          "tbaiIsreverseinvoice": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
           "grandTotalAmount": {
             "readOnly": true,
             "required": true
@@ -1103,18 +1098,15 @@
           "etvfacVerifacDesc": {
             "readOnlyLogic": "@processed@='Y'"
           },
-          "etvfacReverseinvtype": {
+          "etvfacIssueDescription": {
+            "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
           },
-          "etvfacSimpinvart7273": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
+          "tbaiReverseinvoicecode": {
+            "readOnlyLogic": "@Processed@='Y'"
           },
-          "etvfacInvNoIDArt61d": {
-            "required": true,
-            "readOnlyLogic": "@processed@='Y'",
-            "defaultValue": "N"
+          "tbaiReverseinvoicetype": {
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "aeatsiiIssent": {
             "readOnly": true,
@@ -1126,9 +1118,12 @@
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
           },
-          "aeatsiiDescription": {
-            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
-            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t) AND c.isactive = 'Y'\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+          "aeatsiiTipoRectif": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "I"
+          },
+          "aeatsiiMotivoRectif": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'"
           },
           "aeatsiiDescripcionSii": {
             "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
@@ -1139,23 +1134,36 @@
             "readOnlyLogic": "true",
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
           },
-          "aeatsiiEjercicio": {
-            "readOnly": true,
-            "readOnlyLogic": "true"
-          },
-          "aeatsiiPeriodo": {
-            "readOnly": true,
-            "readOnlyLogic": "true"
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
           },
           "aeatsiiCauseExemption": {},
           "aeatsiiIsauthorization": {
             "required": true,
             "defaultValue": "N"
           },
+          "aeatsiiAuthorizationno": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
           "etgoTotalDiscount": {},
           "processed": {
             "readOnly": true,
             "required": true
+          },
+          "aeatsiiErrorCode": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiFechaRegCont": {
+            "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
           },
           "eTGOCurrencyRate": {},
           "eTGODeliveryStatus": {
@@ -1323,8 +1331,7 @@
         "paymentMethod",
         "currency",
         "priceList",
-        "etvfacSimpinvart7273",
-        "etvfacInvNoIDArt61d",
+        "aeatsiiErrorRegistral",
         "aeatsiiIsauthorization"
       ],
       "lineFields": [
@@ -1475,8 +1482,7 @@
           "paymentMethod",
           "currency",
           "priceList",
-          "etvfacSimpinvart7273",
-          "etvfacInvNoIDArt61d",
+          "aeatsiiErrorRegistral",
           "aeatsiiIsauthorization"
         ]
       },
@@ -1504,5 +1510,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "2fb0a04c98f2ae9d"
+  "checksum": "e082b8f4ed2c6ced"
 }

@@ -58,6 +58,9 @@
       }
     ],
     "lineEntityConfig": "invoice",
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
+    },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
       "enabled": true,
@@ -466,8 +469,7 @@
           "form": false
         },
         "aeatsiiPurDescription": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
@@ -481,6 +483,10 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "aeatsiiIssent": {
           "visibility": "readOnly",
           "form": false
@@ -490,21 +496,31 @@
           "form": false,
           "grid": true
         },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "etsgDateOperation": {
           "visibility": "editable",
           "form": false
         },
         "aeatsiiFechaRegCont": {
-          "visibility": "readOnly",
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
           "form": false
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiIssent": {
           "visibility": "discarded",
