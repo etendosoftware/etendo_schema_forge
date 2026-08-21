@@ -46,7 +46,13 @@ vi.mock('@/components/financial-accounts/contractColumns', () => ({
   ],
 }));
 
-import { MovementsTable } from '../MovementsTable.jsx';
+import * as React from 'react';
+import { useClientSort } from '@/hooks/useClientSort';
+import {
+  MovementsTable,
+  buildMovementSortCtx,
+  buildMovementSortAccessors,
+} from '../MovementsTable.jsx';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
@@ -64,17 +70,35 @@ const baseMovement = (over = {}) => ({
   ...over,
 });
 
-function renderTable(props = {}) {
-  return render(
+// The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
+// "Ordenar por" popover). This harness supplies that state with the same hook the tab uses, so
+// header clicks stay exercised end to end.
+function Harness(props) {
+  const accessors = React.useMemo(
+    () => buildMovementSortAccessors(buildMovementSortCtx((k) => k, (m) => m.trxType)),
+    [],
+  );
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(
+    props.movements ?? [baseMovement()],
+    { accessors },
+  );
+  return (
     <MovementsTable
-      movements={props.movements ?? [baseMovement()]}
+      movements={sorted}
       loading={props.loading ?? false}
       enabledDimensions={props.enabledDimensions ?? []}
       selectedIds={props.selectedIds ?? new Set()}
       onSelectionChange={props.onSelectionChange ?? vi.fn()}
       highlightTxnId={props.highlightTxnId}
-    />,
+      sortKey={sortKey}
+      sortDirection={sortDirection}
+      onSort={toggleSort}
+    />
   );
+}
+
+function renderTable(props = {}) {
+  return render(<Harness {...props} />);
 }
 
 describe('MovementsTable — payment link', () => {

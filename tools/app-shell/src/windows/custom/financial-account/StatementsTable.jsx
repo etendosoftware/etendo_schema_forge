@@ -10,7 +10,6 @@ import { StatementLinesInline } from './StatementLinesInline';
 import { StatementRowKebab } from './StatementRowKebab';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
-import { useClientSort } from '@/hooks/useClientSort';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout — grid (NOT <table>) so the expanded accordion row can span all cols.
@@ -174,9 +173,45 @@ function StatusPill({ status, matched, total, ui }) {
  *   onSelectionChange?: (id: string) => void;
  * }} props
  */
+/**
+ * Sort accessors for this grid.
+ *
+ * Exported with the builder below so the TAB can own the sort state — its toolbar hosts the
+ * "Ordenar por" popover and is this table's sibling, not its child. Same split as
+ * ListView/DataTable: the container owns the state, the grid receives it.
+ *
+ * @param {string} bcpLocale needed by the `name` accessor, whose cell falls back to a formatted
+ *   periodFrom–periodTo range when the statement carries no name.
+ */
+export function buildStatementSortAccessors(bcpLocale) {
+  const ctx = { displayName: (st) => statementDisplayName(st, bcpLocale) };
+  return {
+    ...Object.fromEntries(
+      STATEMENT_COLUMNS
+        .filter((c) => STATEMENT_CELL_RENDERERS[c.name]?.sortValue)
+        .map((c) => [c.name, (row) => STATEMENT_CELL_RENDERERS[c.name].sortValue(row, ctx)]),
+    ),
+    ...Object.fromEntries(Object.entries(TAIL_SORT).map(([k, t]) => [k, t.value])),
+  };
+}
+
+/** The sortable columns — contract ones plus the synthetic tail — for the toolbar popover. */
+export function buildStatementSortColumns(ui) {
+  return [
+    ...STATEMENT_COLUMNS.map((col) => ({
+      key: col.name,
+      label: STATEMENT_CELL_RENDERERS[col.name]
+        ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey)
+        : col.label,
+    })),
+    ...Object.entries(TAIL_SORT).map(([key, tail]) => ({ key, label: ui(tail.labelKey) })),
+  ];
+}
+
 export function StatementsTable({
   statements, loading, currency = 'EUR', actions = null,
   selectedIds = new Set(), onSelectionChange = () => {},
+  sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -184,18 +219,6 @@ export function StatementsTable({
   const [openId, setOpenId] = useState(null);
   const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
 
-  // Client-side, because this list arrives whole from a bespoke Java handler that accepts no
-  // sort parameter at all — see lib/clientSort.js.
-  const sortCtx = { displayName: (st) => statementDisplayName(st, bcpLocale) };
-  const accessors = {
-    ...Object.fromEntries(
-      STATEMENT_COLUMNS
-        .filter((c) => STATEMENT_CELL_RENDERERS[c.name]?.sortValue)
-        .map((c) => [c.name, (row) => STATEMENT_CELL_RENDERERS[c.name].sortValue(row, sortCtx)]),
-    ),
-    ...Object.fromEntries(Object.entries(TAIL_SORT).map(([k, t]) => [k, t.value])),
-  };
-  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(statements, { accessors });
 
   // Selection over the currently rendered rows, mirroring the Movements tab. Deliberately over
   // `statements`, not `sorted`: reordering the rows must not change what is selected.
@@ -235,7 +258,7 @@ export function StatementsTable({
               sortKey={col.name}
               activeKey={sortKey}
               direction={sortDirection}
-              onSort={toggleSort}
+              onSort={onSort}
               data-testid="SortableHeaderLabel__3acaeb" />
           </span>
         ))}
@@ -246,7 +269,7 @@ export function StatementsTable({
               sortKey={key}
               activeKey={sortKey}
               direction={sortDirection}
-              onSort={toggleSort}
+              onSort={onSort}
               data-testid="SortableHeaderLabel__3acaeb" />
           </span>
         ))}
@@ -254,7 +277,7 @@ export function StatementsTable({
       </div>
       {/* Body */}
       {renderBody({
-        loading, statements: sorted, ui, currency, bcpLocale, openId, toggle, actions,
+        loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
         selectedIds, onSelectionChange,
       })}
     </div>

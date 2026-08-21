@@ -18,7 +18,12 @@ vi.mock('../ClearedItemsInline.jsx', () => ({
   ClearedItemsInline: ({ reconciliationId }) => <div data-testid={`stub-cleared-${reconciliationId}`} />,
 }));
 
-import { ReconciliationListTable } from '../ReconciliationListTable.jsx';
+import * as React from 'react';
+import { useClientSort } from '@/hooks/useClientSort';
+import {
+  ReconciliationListTable,
+  buildReconciliationSortAccessors,
+} from '../ReconciliationListTable.jsx';
 
 /**
  * ReconciliationListTable — column sorting (ETP-4921).
@@ -46,9 +51,30 @@ const ROWS = [
 const rowIds = () => [...document.querySelectorAll('[data-testid^="reconciliation-row-"]')]
   .map((el) => el.getAttribute('data-testid').replace('reconciliation-row-', ''));
 
-const renderTable = (rows = ROWS) => render(
-  <ReconciliationListTable reconciliations={rows} loading={false} />,
-);
+// The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
+// "Ordenar por" popover). This harness supplies that state so the header clicks are still
+// exercised end to end, using the same hook the tab uses.
+function Harness({ rows }) {
+  const accessors = React.useMemo(
+    () => buildReconciliationSortAccessors({
+      ui: (k) => k,
+      postedLabel: (posted) => `financeAccountReconciliationsPosted_${posted}`,
+    }),
+    [],
+  );
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(rows, { accessors });
+  return (
+    <ReconciliationListTable
+      reconciliations={sorted}
+      loading={false}
+      sortKey={sortKey}
+      sortDirection={sortDirection}
+      onSort={toggleSort}
+    />
+  );
+}
+
+const renderTable = (rows = ROWS) => render(<Harness rows={rows} />);
 
 describe('ReconciliationListTable — column sorting', () => {
   it('keeps the handler order (transactionDate desc) until a column is picked', () => {

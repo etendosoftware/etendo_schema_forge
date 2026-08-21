@@ -1428,6 +1428,27 @@ both. Returning to "none" on the third click (rather than to a default column) i
 backend's own order reachable: movements arrive newest-first, reconciliations `transactionDate
 desc`.
 
+**The sort state lives in the TAB, not the table.** Each of the three toolbars also hosts the
+same `ListSortPopover` the Cuentas list uses, and a toolbar is the table's *sibling*, not its
+child — so the state has to sit above both. Same split as `ListView`/`DataTable`: the container
+owns it, the grid receives `sortKey` / `sortDirection` / `onSort`. Each table module exports what
+the tab needs to build it, derived from its own renderer registry rather than duplicated:
+
+| Table | Exports |
+|---|---|
+| `MovementsTable` | `useTrxTypeLabel`, `buildMovementSortCtx`, `buildMovementSortAccessors`, `buildMovementSortColumns` |
+| `StatementsTable` | `buildStatementSortAccessors`, `buildStatementSortColumns` |
+| `ReconciliationListTable` | `buildReconciliationSortAccessors`, `buildReconciliationSortColumns` |
+
+Each toolbar takes the control as a rendered `sortControl` node rather than sort props, so the
+toolbars stay presentational — the same shape `AccountsToolbar` uses.
+
+`useClientSort` therefore returns both cycles: `toggleSort` for the headers
+(none → asc → desc → none) and `selectSort` / `clearSort` / `isDefaultSort` for the popover,
+mirroring `ListView`'s own split between `handleColumnSort` and
+`handleSortSelect` / `handleClearSort`. A menu entry that could silently clear the sort would
+read as a no-op.
+
 **Sort values are co-located with the cell renderers**, as an optional `sortValue(row, ctx)` on
 each registry entry. That is deliberate: the contract field name and the payload key routinely
 differ (`transactionDate` renders from `row.date`, `businessPartner` from `row.contact`), and the

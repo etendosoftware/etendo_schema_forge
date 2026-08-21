@@ -8,7 +8,6 @@ import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatDate } from '@/lib/formatSigned';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
-import { useClientSort } from '@/hooks/useClientSort';
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
 
 /**
@@ -124,7 +123,34 @@ function amountAligned(name) {
   return name === 'startingbalance' || name === 'endingBalance';
 }
 
-export function ReconciliationListTable({ reconciliations, loading, currency = 'EUR' }) {
+/**
+ * Sort accessors for this grid, keyed by contract field name.
+ *
+ * Exported so the TAB can own the sort state: its toolbar hosts the "Ordenar por" popover, and
+ * the toolbar is a sibling of this table, not a child. Same split as ListView/DataTable — the
+ * container owns the state, the grid receives it. Each accessor comes from the renderer that
+ * draws the cell, so the order always matches what is on screen.
+ */
+export function buildReconciliationSortAccessors(cellCtx) {
+  return Object.fromEntries(
+    COLUMNS
+      .filter((c) => CELL_RENDERERS[c.name]?.sortValue)
+      .map((c) => [c.name, (row) => CELL_RENDERERS[c.name].sortValue(row, cellCtx)]),
+  );
+}
+
+/** The sortable columns, for the toolbar popover's menu. */
+export function buildReconciliationSortColumns(ui) {
+  return COLUMNS.map((col) => ({
+    key: col.name,
+    label: CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label,
+  }));
+}
+
+export function ReconciliationListTable({
+  reconciliations, loading, currency = 'EUR',
+  sortKey = null, sortDirection = 'asc', onSort,
+}) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -139,15 +165,6 @@ export function ReconciliationListTable({ reconciliations, loading, currency = '
     postedLabel: (posted) => ui(`financeAccountReconciliationsPosted_${posted}`) || posted || '—',
   };
 
-  // Client-side, because this list arrives whole in one request (`_endRow=200`) and its
-  // filtering is already a client-side memo — see lib/clientSort.js. Each accessor comes from
-  // the renderer that draws the cell, so the order always matches what is on screen.
-  const accessors = Object.fromEntries(
-    COLUMNS
-      .filter((c) => CELL_RENDERERS[c.name]?.sortValue)
-      .map((c) => [c.name, (row) => CELL_RENDERERS[c.name].sortValue(row, cellCtx)]),
-  );
-  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(reconciliations, { accessors });
 
   return (
     // Full-bleed like the Imported Statements grid: no card border/radius, the rows' own bottom
@@ -172,13 +189,13 @@ export function ReconciliationListTable({ reconciliations, loading, currency = '
               sortKey={col.name}
               activeKey={sortKey}
               direction={sortDirection}
-              onSort={toggleSort}
+              onSort={onSort}
               align={amountAligned(col.name) ? 'right' : undefined}
               data-testid="SortableHeaderLabel__d80a75" />
           </span>
         ))}
       </div>
-      {renderBody({ loading, reconciliations: sorted, ui, currency, cellCtx, openId, toggle })}
+      {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle })}
     </div>
   );
 }

@@ -20,7 +20,6 @@ import { PostingStatusDot } from './PostingStatusDot';
 import { MovementRowKebab } from './MovementRowKebab';
 import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
-import { useClientSort } from '@/hooks/useClientSort';
 import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
@@ -276,7 +275,8 @@ function renderBody({ loading, movements, ui, renderRow }) {
   return movements.map(renderRow);
 }
 
-function useTrxTypeLabel() {
+// Exported so the tab can build the sort context with the same label resolver the cells use.
+export function useTrxTypeLabel() {
   const ui = useUI();
   return (movement) =>
     movement.typeLabel ||
@@ -351,21 +351,16 @@ function DimensionsPanel({ movement, ui, visible, ctx }) {
  *   onSelectionChange: (id: string) => void;
  * }} props
  */
-export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload, onEdit }) {
-  const ui = useUI();
-  const navigate = useNavigate();
-  const { locale: appLocale } = useLocaleSwitch();
-  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
-  const getTrxTypeLabel = useTrxTypeLabel();
-  const [expandedId, setExpandedId] = useState(null);
-
-  // Client-side, because this list arrives whole from a bespoke Java handler that sends no sort
-  // parameter at all — see lib/clientSort.js. `Balance` is deliberately absent from the
-  // accessors and renders a plain, non-clickable header: it is a RUNNING balance, anchored to
-  // the account's current balance and computed as `currentbalance − SUM(subsequent)` over
-  // `statementdate ASC, line ASC`. It is order-dependent by construction, so reordering the
-  // grid by anything else turns that column into a meaningless number. `Amount` sorts fine.
-  const sortCtx = {
+/**
+ * The sort context every `sortValue` reads: the label helpers that turn a raw code into the text
+ * the cell actually shows.
+ *
+ * Exported with the two builders below so the TAB can own the sort state — its toolbar hosts the
+ * "Ordenar por" popover and is this table's sibling, not its child. Same split as
+ * ListView/DataTable: the container owns the state, the grid receives it.
+ */
+export function buildMovementSortCtx(ui, getTrxTypeLabel) {
+  return {
     getTrxTypeLabel,
     // Mirrors MovementStatusBadge: `processed === false` is a Draft whatever the raw code says,
     // because a reactivated transaction keeps RPR/PPM but is a draft again.
@@ -378,14 +373,24 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
       ? ui('financeAccountMovementsPosted')
       : ui('financeAccountMovementsNotPosted')),
   };
-  const accessors = {
+}
+
+/**
+ * Sort accessors, keyed by the key each header segment issues.
+ *
+ * `Balance` is deliberately absent and its header renders non-clickable: it is a RUNNING
+ * balance, `currentbalance − SUM(subsequent)` over `statementdate ASC, line ASC`. It is
+ * order-dependent by construction, so reordering by anything else makes it meaningless.
+ */
+export function buildMovementSortAccessors(sortCtx) {
+  return {
     ...Object.fromEntries(
       CONTRACT_COLUMNS
         .filter((c) => MOVEMENT_CELL_RENDERERS[c.name]?.sortValue)
         .map((c) => [c.name, (row) => MOVEMENT_CELL_RENDERERS[c.name].sortValue(row, sortCtx)]),
     ),
-    // A multi-segment header contributes one accessor per segment, keyed by the segment — the
-    // host column's own key already came from the loop above.
+    // A multi-segment header contributes one accessor per segment; the host column's own key
+    // already came from the loop above.
     ...Object.fromEntries(
       CONTRACT_COLUMNS
         .flatMap((c) => MOVEMENT_CELL_RENDERERS[c.name]?.parts ?? [])
@@ -394,7 +399,34 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
     ),
     amount: (m) => Number(m.amount) || 0,
   };
-  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(movements, { accessors });
+}
+
+/** The sortable columns, flattened over multi-segment headers, for the toolbar popover's menu. */
+export function buildMovementSortColumns(ui) {
+  return [
+    ...CONTRACT_COLUMNS.flatMap((col) => {
+      const renderer = MOVEMENT_CELL_RENDERERS[col.name];
+      if (renderer?.parts) {
+        return renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }));
+      }
+      return [{ key: col.name, label: renderer ? ui(renderer.labelKey) : col.label }];
+    }),
+    { key: 'amount', label: ui('financeAccountMovementsColAmount') },
+  ];
+}
+
+export function MovementsTable({
+  movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
+  highlightTxnId = null, onReload, onEdit,
+  sortKey = null, sortDirection = 'asc', onSort,
+}) {
+  const ui = useUI();
+  const navigate = useNavigate();
+  const { locale: appLocale } = useLocaleSwitch();
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
+  const getTrxTypeLabel = useTrxTypeLabel();
+  const [expandedId, setExpandedId] = useState(null);
+
   // The "more info" panel shows Proyecto / Centro de coste / Producto, but ONLY the ones actually
   // enabled in the chart of accounts (respects the org's accounting-dimension config).
   const displayedDims = DISPLAYED_DIMENSIONS.filter((k) => enabledDimensions.includes(k));
@@ -556,7 +588,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                       parts={renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
                       activeKey={sortKey}
                       direction={sortDirection}
-                      onSort={toggleSort}
+                      onSort={onSort}
                       data-testid="SortableHeaderSegments__ae5a16" />
                   ) : (
                     <SortableHeaderLabel
@@ -564,7 +596,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                       sortKey={col.name}
                       activeKey={sortKey}
                       direction={sortDirection}
-                      onSort={toggleSort}
+                      onSort={onSort}
                       data-testid="SortableHeaderLabel__ae5a16" />
                   )}
                 </TableHead>
@@ -576,7 +608,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 sortKey="amount"
                 activeKey={sortKey}
                 direction={sortDirection}
-                onSort={toggleSort}
+                onSort={onSort}
                 align="right"
                 data-testid="SortableHeaderLabel__ae5a16" />
             </TableHead>
@@ -588,7 +620,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
         <TableBody data-testid="TableBody__ae5a16">
           {renderBody({
             loading,
-            movements: sorted,
+            movements,
             ui,
             renderRow,
           })}

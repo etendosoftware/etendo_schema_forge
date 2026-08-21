@@ -18,7 +18,8 @@ import { sortRows } from '@/lib/clientSort.js';
  * @param {object} [options]
  * @param {Object<string, function>} [options.accessors] key → (row) => value; see `sortRows`
  * @returns {{ sorted: Array<object>, sortKey: string|null, sortDirection: 'asc'|'desc',
- *   toggleSort: (key: string) => void }}
+ *   toggleSort: (key: string) => void, selectSort: (key: string) => void,
+ *   clearSort: () => void, isDefaultSort: boolean }}
  */
 export function useClientSort(rows, { accessors } = {}) {
   const { locale } = useLocaleSwitch();
@@ -43,6 +44,23 @@ export function useClientSort(rows, { accessors } = {}) {
     setSortDirection('asc');
   }, [sortKey, sortDirection]);
 
+  // For the toolbar popover, which needs pick-a-column and back-to-default rather than the
+  // header's cycle: a menu entry that can silently clear the sort reads as a no-op. Mirrors
+  // ListView's own split between handleColumnSort and handleSortSelect / handleClearSort.
+  const selectSort = useCallback((key) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection('asc');
+  }, [sortKey]);
+
+  const clearSort = useCallback(() => {
+    setSortKey(null);
+    setSortDirection('asc');
+  }, []);
+
   const sorted = useMemo(
     () => sortRows(rows, { key: sortKey, direction: sortDirection, accessors, locale: bcpLocale }),
     // `accessors` is rebuilt on every render by callers that close over i18n helpers, so it is
@@ -52,5 +70,10 @@ export function useClientSort(rows, { accessors } = {}) {
     [rows, sortKey, sortDirection, bcpLocale],
   );
 
-  return { sorted, sortKey, sortDirection, toggleSort };
+  // "Default" here is the backend's own order, i.e. no client sort applied — unlike a
+  // DataTable list, whose default is a declared listSortBy column.
+  return {
+    sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort,
+    isDefaultSort: sortKey === null,
+  };
 }
