@@ -234,6 +234,19 @@ Without this split, Phase 3 has no implementable API.
 
 ### 3.10 The `other` section must start registering its fields
 
+> **SUPERSEDED during implementation (2026-08-21) — see §11.**
+> The `registerFields` route was abandoned. `DetailView` now gates on the contract's
+> own field descriptors (`Form.fields`, emitted by the core generator — Phase 2b),
+> which already carry **every** section. So the `other` section needs no prop at all,
+> and the DOM registry is no longer on the validity path.
+> **The measured table below is unreliable and was not acted on.** It was computed
+> over `artifacts/*/generated/`, which still contains dead files for windows the
+> registry no longer loads; re-measuring gave 24, then 6, then 18 fields depending on
+> how liveness was resolved (alias-based `@generated/` imports and custom wrappers
+> defeat a static sweep). The real regression surface was found empirically instead,
+> by running the full suite and the mocked E2E gate. Kept below as a record of the
+> original reasoning, not as a work list.
+
 `DetailView` passes `registerFields` only to `section="principal"` (:3342) and
 `section="collapsed"` (:3369). The two `section="other"` renders (:4061, :4094) do
 **not**. The generated form forwards it (`<EntityForm fields={fields} {...props} />`
@@ -307,10 +320,30 @@ with the ETP-4556 engine is a separate follow-up (§10).
 
 - Add `|| !hook.isValid` to all five `disabled=` expressions in §2.2(c) (§3.4),
   plus the `title` and `data-missing-required` from §3.6.
-- Pass `registerFields` to the two `section="other"` renders, `:4061` and `:4094`
-  (§3.10), and re-verify no window regresses.
+- ~~Pass `registerFields` to the two `section="other"` renders~~ — **dropped**,
+  superseded by Phase 2b below.
 
 Closes 23 of the ~25 checklist entries.
+
+**As built:** the five `disabled=` expressions and the shared `buildSaveGate` helper
+moved into a new `components/contract-ui/saveActions.jsx`, because the committed
+`check-detailview-growth.mjs` hook blocks any net growth of `DetailView.jsx`. Net
+effect: 4437 → 4299 lines. The `saveGate` `useMemo` must stay **above** the
+`isLoadingRecordForRoute` early return and **below** `useUI()` — getting either wrong
+crashes with "Rendered fewer hooks than expected" or a TDZ error. Both happened.
+
+### Phase 2b — Field descriptors from the contract, not the DOM (core repo)
+
+Not in the original plan; it replaced §3.10. Gating on `registerFields` means validity
+depends on what has been *mounted*, so a collapsed or unrendered section silently
+counts as valid. The core generator now emits a `<Comp>.fields = fields` static inside
+the component markers, and `DetailView` passes `Form?.fields` to `useEntity` as
+`contractFields`, falling back to the DOM registry only when absent.
+
+Hand-written custom windows never see the generator, so they need the static written
+by hand — `ProductCategoryCustomForm` and `ContactsBusinessPartnerForm` were the two
+that needed it. **Any new hand-written form must declare `.fields` or it will never
+gate.**
 
 ### Phase 3 — Normalize the modals
 
@@ -326,7 +359,7 @@ replace the hand-written boolean. Order by checklist priority:
 3. Delete-confirmation modals that require a reason field
 4. Remaining masters / configuration modals
 
-### Phase 4 — Tests (delegate to Tester)
+### Phase 4 — Tests (delegate to Tester) ✅ done
 
 Per `CLAUDE.md`, any test work goes to the `test-generator` subagent.
 
@@ -335,13 +368,14 @@ Per `CLAUDE.md`, any test work goes to the `test-generator` subagent.
 - One E2E per document family; read `docs/e2e-testing-guide.md` first, canonical
   reference `e2e/tests/flows/row-quick-actions.mocked.spec.js`.
 
-### Phase 5 — Docs
+### Phase 5 — Docs ✅ partially done
 
 - Update the affected `docs/generated-custom-windows/<window>.md` guides where
   behaviour visibly changes (self-documentation policy).
 - Add a `CLAUDE.md` rule: *every primary button that persists data is gated through
   `useFormValidity`, never ad-hoc* — same shape as the existing `formatCurrency` and
-  `parseCalendarDate` mandates.
+  `parseCalendarDate` mandates. **Still pending** — deliberately deferred until Phase 3
+  lands, since the rule would be unenforceable while ~11 modals still gate ad-hoc.
 
 ## 5. Verification checklist (from the ticket)
 
@@ -484,7 +518,7 @@ Plus the functional scenarios from the ticket, as unit tests:
 | Test breakage | 28 E2E specs click `action-save` / `action-complete` / `cp-confirm`; 5 vitest suites reference `action-save`. Fixtures with incomplete required fields now hit a disabled button. | **Fix the fixtures, never delete the tests** (coverage gate). |
 | No kill switch | Per §3.8 there is no flag, so a production over-block needs a revert. | Keep Phase 2 and Phase 3 in separate commits so the modal wave can be reverted independently of the `DetailView` wave. |
 | Draft-save becomes unusable for incomplete work | §3.4 gates `action-save-draft` too, by explicit decision. A user with a half-filled document can no longer persist it and return later. | One-line rollback (drop `!isValid` from :959) kept isolated in its own commit. Watch item §9 #4. |
-| `other` section starts blocking | §3.10 makes previously-ignored required fields count. Correct, but a behaviour change per window. **Measured: 24 fields in 10 windows**, concentrated in `purchase-order` and `purchase-invoice` (6 each) — both on the checklist. | Check those 10 windows first, in the §3.10 order. If any of the 24 turns out to be required in the AD but genuinely optional in practice, fix it in that window's `decisions.json`, not by weakening the predicate. |
+| Non-`principal` sections start blocking | **Materialised, differently than predicted.** §3.10's `registerFields` route was dropped for contract-derived `Form.fields` (§11), which pulls in every section at once — a wider change than the plan assumed. The count in §3.10 is unreliable; the surface was found by running the suites. | Fixed empirically: the full suite plus the mocked E2E gate are green. Where a field is required in the AD but optional in practice, fix that window's `decisions.json` — never weaken the predicate. |
 | Per-keystroke closure evaluation | The predicate runs every field's `displayLogic` / `readOnlyLogic` on each change. | Memoize on `values` + field-key set (Phase 1a). Profile the largest window, not `sales-order`. |
 
 ## 8. Impact
@@ -493,19 +527,19 @@ Plus the functional scenarios from the ticket, as unit tests:
 |---|---|
 | Source files touched | ~20 (1 new hook, `useEntity`, `DetailView`, ~17 modals) |
 | Windows affected | All — `DetailView` / `EntityForm` are shared |
-| Pipeline regeneration | None. No `decisions.json`, contract or generator change. |
+| Pipeline regeneration | **Yes.** Phase 2b changed the core generator (`generate-frontend.js`), so all generated windows were regenerated. A `generate-contract.js` fix rode along (§11). |
 | i18n | New keys in `en_US.json` **and** `es_ES.json` (§3.6) |
 | Tests at risk | 28 E2E specs, 5 vitest suites |
 | Feature flag | None (§3.8) |
-| Repo split | Functional only for now; core promotion deferred (§10) |
+| Repo split | Both. Functional repo + two core generator changes (PR #136); the hook itself stays functional-only, core promotion deferred (§10) |
 
 ## 9. Open items
 
 | # | Item | Decides | When |
 |---|---|---|---|
 | 1 | §3.1 diverges from the ticket: Save stays disabled when nothing has changed, whereas the ticket asks for "starts enabled" on a valid edit form. | Valeria Garcia | On delivery — REVIEW must confirm it was raised |
-| 2 | Albarán de Devolución de Compra: confirm whether the checklist item maps to `return-to-vendor-shipment` or `return-to-vendor`. | Dev, during Phase 2 | Before ticking the §5 row |
-| 3 | Manual-reconciliation modal: locate which component under `custom/financial-account/ReconciliationList/` owns the line-linking confirm action. | Dev, during Phase 3 | Before ticking the §5 row |
+| 2 | ~~Albarán de Devolución de Compra mapping~~ — moot: Phase 2b gates every generated window uniformly, so both slugs are covered whichever one the checklist meant. | — | Resolved 2026-08-21 |
+| 3 | Manual-reconciliation modal: locate which component under `custom/financial-account/ReconciliationList/` owns the line-linking confirm action. | Dev, during Phase 3 | **Still open** — Phase 3 not started |
 | 4 | **Watch item.** Draft-save is gated per §3.4. If users report they can no longer persist half-filled documents, drop `!isValid` from `DetailView.jsx:959` — kept as an isolated commit for exactly this. | Valentin / Valeria | Post-release |
 | 5 | Does NEO accept a draft POST with empty required fields? If it already rejects them, §3.4 only surfaces the error earlier; if it accepts them, §3.4 is a UI-only restriction. Worth knowing before release, not before starting. | Dev, during Phase 2 | Informs #4 |
 
@@ -517,3 +551,66 @@ task is the natural moment either to close that gap or to record an explicit dec
 that the core engine is not used. Recommended follow-up: register it via
 `/feature-debt` and evaluate a `/move-to-core` migration for `useFormValidity` once
 it has settled in the functional repo.
+
+---
+
+## 11. Delivery record (2026-08-21)
+
+Phases 1, 2, 2b, 4 and most of 5 are delivered on `feature/ETP-4933` (8 commits) plus
+core PR #136. Full suite green; mocked E2E gate green.
+
+### What was built
+
+| Layer | File | Note |
+|---|---|---|
+| Predicate | `lib/requiredFields.js` (new) | Leaf module, **zero imports**. Exists only to break a circular import: `useFormValidity` needs the predicate, `useEntity` needs the hook, and the predicate used to live in `useEntity`. Both `getReadOnly` and `getVisible` fail **OPEN** on a throwing closure. |
+| Pure core | `hooks/useFormValidity.js` (new) | `{ isValid, missingRequired, missingRequiredFields }`. Imports React + the predicate, nothing else — this is the layer the Phase 3 modals consume with their own state. |
+| Adapter | `hooks/useEntity.js` | New `contractFields` option; re-exports the three predicate helpers because 10 call sites already import them from here. The ref→state mirror returns the previous identity when the signature is unchanged — that guard is what prevents the §7 render loop. |
+| Gate | `components/contract-ui/saveActions.jsx` (new) | `buildSaveGate` **fails open** by design: no descriptors, or `isValid === undefined`, means not blocked. It first shipped failing closed and broke 15 suites. |
+| Wiring | `components/contract-ui/DetailView.jsx` | Five buttons, each with `data-missing-required` (locale-independent E2E hook) and `|| saveGate.blocked`. |
+| Generator | core `cli/src/generate-frontend.js` | Emits `<Comp>.fields`. The rationale comment lives generator-side, deliberately, so it is not duplicated into every generated file. |
+
+### Collateral fix: `classifyEvaluability` (core)
+
+The Phase 2b regen surfaced an unrelated pre-existing bug in
+`cli/src/generate-contract.js`. A `readOnlyLogic` expression whose `@Token@`s are all
+real columns was being misclassified as session-var-backed and therefore dropped, so
+the rule never reached the contract. New `patternIsColumnBacked(rawExpr, pattern,
+columnMap)` makes the classification entity-aware; `columnMap` is threaded through
+four call sites including `processDisplayLogic`.
+
+Blast radius, verified by diffing the regen: `sii-monitor` plus three other windows.
+**Known remaining defect:** the `columnMap` lookup is case-sensitive, so a mixed-case
+token can still be misclassified. Not fixed here — separate ticket.
+
+Consequence worth stating plainly: the AD `readOnlyLogic` on `purchase-invoice`
+`POReference` only became *effective* because of this fix. It reads as a regression in
+the diff, but it is the AD rule finally being honoured.
+
+### Conflict resolved: ETP-3778's `POReference` guard
+
+ETP-3778 had guarded `POReference` unconditionally. The AD rule is **narrower** —
+locked only once the invoice is declared to the SII. Confirmed with Gremiger: the AD
+rule wins, and the two requirements coexist rather than conflict (editable after
+completion, locked after SII). Documented in
+`docs/generated-custom-windows/purchase-invoice.md` (5 places + a history block).
+
+### What remains
+
+| # | Item | Size |
+|---|---|---|
+| 1 | **Phase 3** — ~11 modals: 5 ad-hoc implementations to migrate onto the pure core (`EntityCreationModal:465`, `ListModalWindow:352`, `ProcessParamDialog:50`, `InlineCreateModal:46`, `NewPaymentEntryModal:317`) and 6 with real forms and no gating at all (`NewAccountModal`, `LocationModalField`, `ChangePasswordDialog`, `OAuth2ClientDialog`, `OrganizationPage`, plus confirming `CreateContactModal`). Plus 9 windows with their own save path. | The bulk of what is left |
+| 2 | The `CLAUDE.md` mandate (Phase 5), gated on #1 | Small |
+| 3 | Raise §9 #1 (the `isDirty` divergence) with Valeria | Conversation |
+| 4 | §9 #5 — does NEO accept an incomplete draft POST? Informs the §9 #4 watch item. | Investigation |
+
+### Separate tickets to file
+
+Found while working here, deliberately **not** fixed in this branch:
+
+1. Case-sensitive `columnMap` lookup in `classifyEvaluability` (core).
+2. Dead generated files under `artifacts/` for windows the registry no longer loads —
+   they made the §3.10 measurement unreproducible and will mislead the next sweep too.
+3. Four pre-existing `app-shell-core` test failures, unrelated to this task.
+4. Four test files sharing an `await waitFor(A)` → synchronous `expect(B)` race on
+   different state. Only `OrganizationPage` was fixed, scoped deliberately.
