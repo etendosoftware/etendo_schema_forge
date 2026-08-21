@@ -1395,6 +1395,14 @@ export function DetailView({
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
   const tField = useLabel(labelOverrides ?? api?.labelOverrides);
   const ui = useUI();
+  // ETP-4933: the required-field gate every primary persist button honours. Declared
+  // HERE, among the other hooks, and NOT next to saveActionParams where it is consumed:
+  // an early `return` for the record-loading state sits between the two, so a useMemo
+  // below it runs on some renders and not others — "Rendered fewer hooks than expected".
+  const saveGate = useMemo(
+    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
+    [hook.isValid, hook.missingRequiredFields, tField, ui],
+  );
   // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
   const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
@@ -2768,11 +2776,6 @@ export function DetailView({
     );
   }
 
-  // ETP-4933: the required-field gate every primary persist button honours.
-  const saveGate = useMemo(
-    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
-    [hook.isValid, hook.missingRequiredFields, tField, ui],
-  );
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
