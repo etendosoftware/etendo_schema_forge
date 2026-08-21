@@ -607,6 +607,11 @@ export default function reportApiPlugin() {
                   orderBy: 'ORDER BY name',
                   select: `SELECT m_warehouse_id AS id, name, name AS label`
                 },
+                'product-category': {
+                  fromWhere: `FROM m_product_category WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
+                  orderBy: 'ORDER BY name',
+                  select: `SELECT m_product_category_id AS id, name, name AS label`
+                },
                 'project': {
                   fromWhere: `FROM c_project WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
                   orderBy: 'ORDER BY name',
