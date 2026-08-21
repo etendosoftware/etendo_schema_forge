@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, LogOut, User, Languages, KeyRound, Rocket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
-import { useFeatureFlag, TENANT_UPGRADE } from '@/lib/flags/index.js';
 import { useLocaleSwitch } from '@/i18n/index.js';
 import {
   DropdownMenu,
@@ -35,10 +34,6 @@ export function UserAvatarButton({ expanded = false }) {
   const navigate = useNavigate();
   const { locale, setLocale } = useLocaleSwitch();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-
-  // Visual gating only — /upgrade stays routable and the backend owns the
-  // paywall. Defaults to off, so today's menu is unchanged.
-  const showTenantUpgrade = useFeatureFlag(TENANT_UPGRADE);
 
   // Change Password targets the platform account, so it's only offered when a
   // platform token is present (it provides the credential the endpoint rotates).
@@ -153,15 +148,13 @@ export function UserAvatarButton({ expanded = false }) {
           )}
 
           <div className="px-2 py-2">
-            {showTenantUpgrade && (
-              <DropdownMenuItem
-                onSelect={() => navigate('/upgrade')}
-                data-testid="menu-tenant-upgrade"
-              >
-                <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
-                {ui('upgradeMenuAction')}
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem
+              onSelect={() => navigate('/upgrade')}
+              data-testid="menu-tenant-upgrade"
+            >
+              <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
+              {ui('upgradeMenuAction')}
+            </DropdownMenuItem>
             {canChangePassword && (
               <DropdownMenuItem
                 onSelect={() => setChangePasswordOpen(true)}

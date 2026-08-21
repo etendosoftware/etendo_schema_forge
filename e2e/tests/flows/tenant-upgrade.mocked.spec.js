@@ -2,11 +2,10 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Tenant upgrade (`tenant-upgrade` flag) — smoke (mocked). ETP-4686.
+ * Paid productive environment — smoke (mocked). ETP-4686, ETP-4966.
  *
- * Covers the flag-gated menu entry, the hosted checkout contract, the NDJSON
- * provisioning stream and the two failure paths (checkout creation, backend
- * 402 paywall).
+ * Covers the menu entry, the hosted checkout contract, the NDJSON provisioning
+ * stream and the two failure paths (checkout creation, backend 402 paywall).
  *
  * Mock mode only: every route here is installed on top of the generic `/sws/**`
  * stub that `login()` seeds, so no backend is needed. Playwright matches routes
@@ -14,21 +13,14 @@ import { login } from '../helpers/auth.js';
  *
  * ## Running this spec
  *
- * The flag is read from `import.meta.env.VITE_FEATURE_FLAGS`, which Vite bakes
- * in when the dev server starts — it cannot be flipped per test. The menu-entry
- * regression guard below skips itself (E2E_TENANT_UPGRADE_FLAG) if run against a
- * flag-on server:
+ * No flag setup is needed since ETP-4966 retired `tenant-upgrade`: the capability
+ * is permanent, so every test here runs the same way regardless of how the dev
+ * server was started.
  *
  *   npx vite --port 3101
  *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3101 \
  *     npx playwright test tests/flows/tenant-upgrade.mocked.spec.js --project=mocked
- *
- * Everything except the menu entry runs in both states, because `/upgrade` is
- * registered unconditionally — the flag gates the entry point, not the route
- * (see `docs/feature-flags.md`, rule 3).
  */
-
-const FLAG_ON = process.env.E2E_TENANT_UPGRADE_FLAG === 'on';
 
 const EXISTING_TENANT = 'Acme Trial';
 const EXISTING_ENVIRONMENTS = [
@@ -185,19 +177,20 @@ async function gotoUpgrade(page) {
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
-test.describe('Tenant upgrade — flag gating of the menu entry', () => {
+test.describe('Tenant upgrade — the menu entry is unconditional', () => {
   test.beforeEach(async ({ page }) => {
     await seedPlatformToken(page);
     await login(page);
   });
 
-  test('flag off: the user menu offers no upgrade entry', async ({ page }) => {
-    test.skip(FLAG_ON, 'Requires a dev server started without VITE_FEATURE_FLAGS');
-
+  test('the user menu always offers the upgrade entry', async ({ page }) => {
+    // ETP-4966 retired the `tenant-upgrade` flag, so this no longer depends on how the dev server
+    // was started. The old spec asserted the opposite and skipped itself against a flag-on server —
+    // which is precisely why nobody noticed the two ends of the flag disagreeing in production.
     await page.getByTestId('topbar-user-menu').click();
-    // Assert the menu actually opened, so an absent entry cannot be a false pass.
+    // Assert the menu actually opened, so a present entry cannot be a false pass either way.
     await expect(page.getByTestId('user-menu-logout')).toBeVisible();
-    await expect(page.getByTestId('menu-tenant-upgrade')).toHaveCount(0);
+    await expect(page.getByTestId('menu-tenant-upgrade')).toBeVisible();
   });
 });
 
