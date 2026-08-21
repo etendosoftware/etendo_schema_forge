@@ -35,7 +35,7 @@
 > | `scripts/preview-version.mjs` | Resuelve la versión preview lockstep; reusa `writeVersionEverywhere`/`resolveNextVersion` de `release-version.mjs` (no divergen). Exporta `sanitizeBranchId`, `buildPreviewVersion`. `main()` guardado para invocación directa (no corre al importarse). |
 > | `scripts/cleanup-preview-packages.mjs` | Borrado en 2 modos: `same-branch` (D5a) y `stale-feature` (D5b, 7d hardcoded). Fail-soft (exit 0). Guard duro: solo toca nombres con `-preview.`. |
 > | `scripts/release-version.mjs` | Refactor **behavior-preserving**: extrae funciones compartidas + guarda `main()`. Verificado: `version=0.3.7 / tag=0.3.7` igual que antes. |
-> | `.github/workflows/publish-preview.yml` | `on: push: feature/** + workflow_dispatch`. Tests → resolve preview → publish `alpha` (6 pkgs) → D5a → **commit status + comentario sticky en el PR** (D8, ambos fail-soft). **No** notifica al repo funcional (D7). |
+> | `.github/workflows/publish-preview.yml` | `on: push: feature/** + workflow_dispatch`. Tests → resolve preview → publish `alpha` (6 pkgs) → D5a → **commit status + comentario sticky en el PR** (D8, ambos fail-soft). Publica **con o sin PR**; el PR sólo agrega el comentario (D4, revisión 2026-08-06). **No** notifica al repo funcional (D7). |
 > | `.github/workflows/cleanup-preview-packages.yml` | Reusable (`workflow_call` + `workflow_dispatch` con `dry_run`). Modo `stale-feature`, 7d. |
 > | `.github/workflows/release.yml` | Solo job aditivo `cleanup-previews` (`needs: release`) — el release real quedó intacto. |
 
@@ -122,19 +122,33 @@ workflow lo expone por dos vías, ambas **fail-soft** (`continue-on-error`, nunc
 1. **Commit status** (`preview-package`) sobre el SHA publicado, con `description = "alpha: <version>"`
    y `target_url` al run. Aparece como check ✅ en el commit **y** en la lista de checks del PR — se
    ve la versión sin abrir el run. Requiere `permissions: statuses: write`.
-2. **Comentario sticky** en el PR abierto de la rama: el workflow primero busca el PR por `--head` y
-   **no publica** si no existe. Con el PR encontrado, hace
+2. **Comentario sticky** en el PR abierto de la rama: el workflow busca el PR por `--head` y, si no
+   existe, **omite sólo este paso** — la publicación ocurre igual (D4, revisión 2026-08-06) y la
+   versión queda visible en el commit status. Con el PR encontrado, hace
    *upsert* de un único comentario (marcado con `<!-- preview-packages-bot -->`) — nunca spammea, se
    actualiza en cada push. Incluye la versión y el snippet exacto del pin
    (`"@etendosoftware/app-shell-core": "<version>"`).
    Requiere `permissions: pull-requests: write`.
 
-### D4 — Trigger: automático en cada push a una rama `feature/**` de core, con PR abierto
+### D4 — Trigger: automático en cada push a una rama `feature/**` de core
 El workflow se dispara en cada push a una rama `feature/**` del repo `schema_forge_core`
-(`on: push: branches: ['feature/**']`), pero el job que publica se ejecuta **solo si esa rama tiene
-un PR abierto**. Sin PR el run termina después de la comprobación, sin tests, publicación ni cleanup.
-Se conserva además `workflow_dispatch`, que tiene la misma compuerta: no permite publicar una rama
-sin PR.
+(`on: push: branches: ['feature/**']`) y publica **siempre**. Se conserva además
+`workflow_dispatch`.
+
+> **Revisado 2026-08-06 — se eliminó la compuerta del PR.** La versión original sólo publicaba si la
+> rama tenía un PR abierto (`if: needs.find-pr.outputs.number != ''` a nivel de job); sin PR el run
+> terminaba en verde después de la comprobación, sin tests ni publicación. La compuerta estaba mal
+> puesta: el consumidor del preview es `make bump-core-version VERSION=…`, que sólo necesita la
+> versión publicada — no el PR. Y una rama suele merecer un preview **antes** de estar lista para
+> revisión, que es justo cuando uno quiere probar el camino del paquete publicado. El síntoma que lo
+> destapó: `feature/ETP-4793` pusheada sin PR → run
+> [31113050482](https://github.com/etendosoftware/schema_forge_core/actions/runs/31113050482) en
+> verde con `No open PR … preview publication is skipped`, sin artefacto.
+>
+> Ahora el job `find-pr` **no** decide nada: busca el PR y su único consumidor es el paso del
+> comentario sticky, gateado a nivel de **step** (D8.2). Sin PR se publica igual y la versión se lee
+> del commit status (D8.1), que es la superficie que siempre existe. Nada más dependía del PR — ni
+> `preview-version.mjs` ni `cleanup-preview-packages.mjs` (ambos derivan todo del `<branchid>`).
 
 Ventaja del `on: push` frente al `workflow_dispatch`: el push usa el archivo de workflow **de la rama
 pusheada** y publica **el código de esa misma rama** (via `github.ref_name` para el `<branchid>` y el

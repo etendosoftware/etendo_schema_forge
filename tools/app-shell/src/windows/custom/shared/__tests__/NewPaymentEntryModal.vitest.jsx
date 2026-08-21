@@ -2429,7 +2429,10 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
       }, 12000);
 
-      it('shows an inline error and does not call onSaved when polling reaches a terminal non-executed status', async () => {
+      it('keeps the modal open on a rejected transfer, because no payment was created (ETP-4895)', async () => {
+        // A rejection moves no money, so nothing is recorded — there is no payment row to show and
+        // nothing to undo. The user is already in the modal with their data, so it stays open and
+        // they simply try again; the outcome is reported as a toast.
         mockApiFetch = buildPisApiFetch({
           register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
           pisStatusSequence: ['failed'],
@@ -2442,17 +2445,132 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(confirm);
         expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
 
-        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
+        // Waiting ends, but the editable form comes back so the transfer can be retried from here.
+        await waitFor(() => expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument(),
           { timeout: 4500 });
-        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-confirm')).toBeInTheDocument();
+        // Nothing was registered, so the caller must not be told to refresh anything.
         expect(props.onSaved).not.toHaveBeenCalled();
       }, 8000);
 
-      it('treats a rejected pisPaymentStatus poll as "failed" (network-error catch branch) and surfaces the inline error', async () => {
-        // Unlike the "terminal non-executed status" test above (which resolves the poll with
-        // a JSON body carrying status:"failed"), this rejects the apiFetch call outright —
-        // exercising the poll's own `catch { setPisPolling(... status: 'failed' ...) }` branch
-        // instead of its success path.
+      it('closes on "authorized" — the payment is already registered (ETP-4895)', async () => {
+        // The spec lists AUTHORIZED as resolutive ("create payment"), and the backend does create
+        // and process it there. The modal used to treat it as still-in-flight and keep waiting, so
+        // the payment existed while the user was still staring at a spinner — and could resubmit.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorized'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // Reported as pending, not deposited: the funds have not landed yet.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), 'pending'),
+          { timeout: 8000 });
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+      }, 12000);
+
+      it('locks the form while the bank window is open, and frees it after (ETP-4895)', async () => {
+        // The values are already on their way to the bank, so editing them here could only make the
+        // modal disagree with the transfer being authorized on the other side. The lock lifts as
+        // soon as the wait ends — on a rejection the form has to be usable again to try again.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['failed'],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        expect(screen.getByTestId('cp-modal-body')).not.toHaveAttribute('inert');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-modal-body')).toHaveAttribute('inert');
+        // The footer sits outside the lock, so the wait can still be cancelled from here.
+        expect(screen.getByTestId('cp-pis-cancel-wait')).toBeInTheDocument();
+
+        await waitFor(() => expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument(),
+          { timeout: 4500 });
+        expect(screen.getByTestId('cp-modal-body')).not.toHaveAttribute('inert');
+      }, 8000);
+
+      it('reopening starts a NEW bank order, because the old session is dead (ETP-4895)', async () => {
+        // A Salt Edge widget session is single-use: reopening the original pisPaymentUrl after its
+        // window was closed only ever renders "Sesión perdida". Reopen therefore asks the backend
+        // to abandon the attempt and start a fresh order, and opens that URL instead.
+        const openSpy = vi.spyOn(window, 'open')
+          .mockImplementation(() => ({ closed: true, close: vi.fn() }));
+        const base = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/first', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing'],
+        });
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('retryPisPayment')) {
+            return { ok: true, json: async () => ({ response: { data: { pisPaymentUrl: 'https://saltedge.example/widget/second', pisPaymentId: 'pis-2' } } }) };
+          }
+          return base(path, opts);
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        // The stubbed popup reports itself closed, so the reopen affordance shows up.
+        const reopen = await screen.findByTestId('cp-pis-reopen', {}, { timeout: 6000 });
+        fireEvent.click(reopen);
+
+        await waitFor(() => expect(openSpy).toHaveBeenCalledWith(
+          'https://saltedge.example/widget/second', 'saltEdgePisWidget', expect.any(String)));
+        // It acts on the attempt being abandoned, not on the payment.
+        const retryCall = mockApiFetch.mock.calls.find(([u]) => u.includes('retryPisPayment'));
+        expect(JSON.parse(retryCall[1].body)).toEqual({ pisPaymentId: 'pis-1' });
+        openSpy.mockRestore();
+      }, 15000);
+
+      it('never closes the bank window out from under the user (ETP-4895)', async () => {
+        // The poll used to force-close the Salt Edge popup when it gave up waiting. Authenticating
+        // at a real bank — logging in, waiting for an SMS, approving on a phone — legitimately
+        // takes minutes, so that aborted the very transfer the user was authorizing. Only our own
+        // modal may be closed on a timeout; the bank's window is never touched while it is open.
+        const closeSpy = vi.fn();
+        const openSpy = vi.spyOn(window, 'open')
+          .mockImplementation(() => ({ closed: false, close: closeSpy }));
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // Several poll ticks go by with the bank window still open.
+        await new Promise(r => setTimeout(r, 7000));
+
+        expect(closeSpy).not.toHaveBeenCalled();
+        expect(screen.getByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+        openSpy.mockRestore();
+      }, 15000);
+
+      it('keeps waiting when a pisPaymentStatus poll rejects — a network blip is not a bank failure (ETP-4895)', async () => {
+        // Regression guard. This used to assert the opposite: the poll's catch branch synthesized
+        // a literal 'failed' status, which was indistinguishable from a real bank rejection, so a
+        // transient network/HTTP error told the user the transfer had failed and stopped polling —
+        // stranding a payment that was still in flight. A transport error must now be retried,
+        // never reported as a failed transfer.
         const base = buildPisApiFetch({
           register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
         });
@@ -2468,13 +2586,82 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(confirm);
         expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
 
-        // First poll tick rejects -> status becomes 'failed', a terminal, non-executed status
-        // that immediately surfaces the inline error and stops polling.
-        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
-          { timeout: 4500 });
-        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        // Let several poll ticks reject (interval is 3s; two ticks is enough to prove it retries
+        // rather than resolving to a terminal state on the first error).
+        await new Promise(r => setTimeout(r, 7000));
+
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(mockApiFetch.mock.calls.filter(([p]) => p.includes('pisPaymentStatus')).length)
+          .toBeGreaterThan(1);
         expect(props.onSaved).not.toHaveBeenCalled();
-      }, 8000);
+      }, 15000);
+
+      it('keeps waiting on "initiated_info_required" instead of reporting a failed transfer (ETP-4895)', async () => {
+        // The exact status that caused the reported bug: a real value of the AD ref-list
+        // "PIS Payment Status" that the old whitelist did not know, so it fell through to the
+        // terminal branch and showed "could not be completed" while the transfer was alive.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['initiated_info_required', 'initiated_info_required', 'executed'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        // It must never show the failure copy on the way through, and must still resolve to
+        // success once the bank finishes.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), 'deposited'),
+          { timeout: 14000 });
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+      }, 20000);
+
+      it('treats "settled" as success, not as a failure (ETP-4895)', async () => {
+        // 'settled' (funds received) is the ideal terminal status, but the old code only accepted
+        // 'executed' as success, so a settled transfer took the failure branch.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['settled'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), 'deposited'),
+          { timeout: 8000 });
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+      }, 12000);
+
+      it('keeps waiting on an unrecognized status instead of assuming failure (ETP-4895)', async () => {
+        // Forward-compatibility guard: if Salt Edge introduces a new status, the modal must keep
+        // polling rather than declaring the transfer failed. This is the defaulting choice that
+        // makes the whole class of bug non-recurring.
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['some_future_saltedge_status'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        await new Promise(r => setTimeout(r, 7000));
+
+        expect(screen.queryByText('cpPisFailedError')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-waiting')).toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+      }, 15000);
 
       it('lets the user cancel the wait and return to the editable form', async () => {
         mockApiFetch = buildPisApiFetch({

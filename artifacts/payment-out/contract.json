@@ -1,8 +1,8 @@
 {
   "version": "0.13.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-08-12T14:26:26.692Z",
-  "checksum": "dd67d6fa3fa22e9d",
+  "updatedAt": "2026-08-20T13:23:42.399Z",
+  "checksum": "58b8574336ba2441",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -26,7 +26,7 @@
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel",
         "processConfirmModal": "ReactivarConfirmModal",
-        "topbarExtra": "PaymentConciliadoBadge",
+        "topbarExtra": "PaymentTopbarActions",
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
@@ -57,7 +57,7 @@
           "columnName": "etprReactivatePayment",
           "label": "processReactivate",
           "style": "ghost-danger",
-          "displayLogicRaw": "@status@ != 'RPAP'"
+          "displayLogicRaw": "@status@ != 'RPAP' & @pisLocked@ = 'N'"
         }
       },
       "detailEntity": null,
@@ -68,7 +68,8 @@
         "RPR": "pagoDepositado",
         "RDNC": "pagoDepositado",
         "RPPC": "pagoDepositado",
-        "PPM": "pagoDepositado",
+        "PPM": "cpPaymentStateInProgress",
+        "ETGOERR": "cpPaymentStateError",
         "PWNC": "pagoDepositado"
       },
       "toolbarBorderBottom": true,
@@ -1989,7 +1990,7 @@
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel",
         "processConfirmModal": "ReactivarConfirmModal",
-        "topbarExtra": "PaymentConciliadoBadge",
+        "topbarExtra": "PaymentTopbarActions",
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
@@ -2020,7 +2021,7 @@
           "columnName": "etprReactivatePayment",
           "label": "processReactivate",
           "style": "ghost-danger",
-          "displayLogicRaw": "@status@ != 'RPAP'"
+          "displayLogicRaw": "@status@ != 'RPAP' & @pisLocked@ = 'N'"
         }
       },
       "detailEntity": null,
@@ -2031,7 +2032,8 @@
         "RPR": "pagoDepositado",
         "RDNC": "pagoDepositado",
         "RPPC": "pagoDepositado",
-        "PPM": "pagoDepositado",
+        "PPM": "cpPaymentStateInProgress",
+        "ETGOERR": "cpPaymentStateError",
         "PWNC": "pagoDepositado"
       },
       "toolbarBorderBottom": true,

@@ -18,7 +18,7 @@ export const STATUS_ORDER = [
   // Closed
   'CL', 'PA',
   // Voided / rejected
-  'VO', 'CJ', 'RPVOID', 'P',
+  'VO', 'CJ', 'RPVOID', 'ETGOERR', 'P',
 ];
 
 /**
@@ -50,19 +50,23 @@ export function compareStatusCodes(a, b) {
 export function getStatusTone(status) {
   const s = String(status ?? '').toLowerCase();
   if (
-    s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'pa' || s === 'rppc' || s === 'ppm' ||
+    s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'pa' || s === 'rppc' ||
     s === 'pwnc' || s === 'rdnc' || s === 'o' ||
     s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' ||
     s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
   if (s === 'rpr' || s === 'rpae') return 'success';
+  // PPM ("Payment Made") is confirmed but NOT withdrawn from the account, so it is amber, not
+  // green: for a PIS transfer it is the state between the bank authorizing and the money moving.
+  // See STATUS_PAYMENT_MADE in windows/custom/shared/paymentStatuses.js (ETP-4895).
   if (
-    s === 'ip' || s === 'ue' || s === 'm' ||
+    s === 'ip' || s === 'ue' || s === 'm' || s === 'ppm' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
   if (s === 'rpap') return 'neutral';
   if (
     s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' || s === 'p' ||
+    s === 'etgoerr' ||
     s === 'voided' || s === 'cancelled' || s === 'void' || s === 'rejected'
   ) return 'destructive';
   return 'neutral';
@@ -86,17 +90,17 @@ export function getStatusBadgeProps(status) {
   if (s === 'draft' || s === 'dr') {
     return { variant: 'secondary' };
   }
-  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') {
+  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'pwnc' || s === 'rdnc') {
     // Same hover fix as above — this is the "Cerrado - Pedido creado" (CA) case.
     return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success' };
   }
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') {
     return { variant: 'default', className: 'border-status-info-border bg-status-info text-status-info-foreground' };
   }
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') {
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid' || s === 'etgoerr') {
     return { variant: 'destructive' };
   }
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') {
+  if (s === 'in process' || s === 'ip' || s === 'ppm' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') {
     return { variant: 'outline', className: 'border-status-warning-border bg-status-warning text-status-warning-foreground' };
   }
   if (s === 'rpap') {
@@ -110,10 +114,10 @@ export function getStatusDotColor(status) {
   if (s === 'true' || s === 'processed') return 'bg-status-success-foreground';
   if (s === 'false' || s === 'not processed') return 'bg-status-neutral-foreground';
   if (s === 'draft' || s === 'dr') return 'bg-status-neutral-foreground';
-  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success-foreground';
+  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success-foreground';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info-foreground';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') return 'bg-status-warning-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid' || s === 'etgoerr') return 'bg-destructive';
+  if (s === 'in process' || s === 'ip' || s === 'ppm' || s === 'rpae' || s === 'rpr' || s === 'under evaluation' || s === 'ue') return 'bg-status-warning-foreground';
   if (s === 'rpap') return 'bg-status-neutral-foreground';
   return 'bg-status-neutral-foreground';
 }
@@ -123,10 +127,10 @@ export function getStatusPillClass(status) {
   if (s === 'true' || s === 'processed') return 'bg-status-success text-status-success-foreground';
   if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
   if (s === 'draft' || s === 'dr') return 'bg-muted text-foreground';
-  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
+  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info text-status-info-foreground';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive/10 text-destructive';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid' || s === 'etgoerr') return 'bg-destructive/10 text-destructive';
+  if (s === 'in process' || s === 'ip' || s === 'ppm' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
   if (s === 'rpap') return 'bg-muted text-foreground';
   if (s === 'under evaluation' || s === 'ue') return 'bg-status-info text-status-info-foreground';
   return 'bg-muted text-foreground';
@@ -137,10 +141,10 @@ export function getStatusGridPillClass(status) {
   if (s === 'true' || s === 'processed') return 'bg-status-success text-status-success-foreground';
   if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
   if (s === 'draft' || s === 'dr') return 'bg-muted text-muted-foreground border border-border-control';
-  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
+  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info text-status-info-foreground';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive text-destructive-foreground';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid' || s === 'etgoerr') return 'bg-destructive text-destructive-foreground';
+  if (s === 'in process' || s === 'ip' || s === 'ppm' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
   if (s === 'rpap') return 'bg-muted text-muted-foreground border border-border-control';
   if (s === 'under evaluation' || s === 'ue') return 'bg-status-info text-status-info-foreground';
   return 'bg-muted text-muted-foreground border border-border-control';
@@ -187,7 +191,7 @@ export function statusLabel(status, dictionary, translate, enumLabels) {
     CJ: 'statusRejected', ETGO_CI: 'statusInvoiceCreated',
     // Payment statuses
     RPR: 'statusPaymentReceived', RPAE: 'statusAwaitingExecution', RPAP: 'statusAwaitingPayment',
-    RPPC: 'statusPaymentCleared', RPVOID: 'statusVoid',
+    RPPC: 'statusPaymentCleared', RPVOID: 'statusVoid', ETGOERR: 'cpPaymentStateError',
     PPM: 'statusPaymentMade', PWNC: 'statusWithdrawnNotCleared', RDNC: 'statusDepositedNotCleared',
   };
   const key = MAP[status];

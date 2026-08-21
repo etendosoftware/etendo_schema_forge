@@ -36,6 +36,7 @@ vi.mock('../CertSection.jsx', () => ({ default: () => <div data-testid="cert-sec
 vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
+  parseApiError: async (res) => res.text().then(t => { try { return JSON.parse(t)?.error?.message ?? t; } catch { return t; } }),
   normalizeEtendoBoolean: vi.fn((v) => v === 'Y'),
   normalizeVerifactuTaxType: vi.fn((v) => v ?? 'IVA'),
   getVerifactuTaxTypeLabel: vi.fn((v) => v ?? ''),
@@ -81,9 +82,9 @@ describe('VerifactuSection — locked state', () => {
     expect(screen.getByTestId('Input__e30816')).toBeDisabled();
   });
 
-  it('disables the QR switch when isReady=Y', () => {
+  it('does not render a QR switch (ETP-4783: defaultQR always forced to true)', () => {
     render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'Y' }} />);
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('hides the save button when locked', () => {

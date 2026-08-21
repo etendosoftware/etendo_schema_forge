@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefreshSignal';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -18,6 +19,8 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
   if (!data) return null;
 
   const [appliedAmount, setAppliedAmount] = useState(null);
+
+  const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
@@ -40,7 +43,11 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
         setAppliedAmount(0);
       }
     })();
-  }, [data?.id, token, apiBaseUrl]);
+  // The refresh signal is in the deps on purpose: the record id never changes when the payment
+  // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload
+  // moves for this effect to react to. Without it the panel kept showing the amounts from
+  // before the save until the whole window was reloaded.
+  }, [data?.id, refreshSignal, token, apiBaseUrl]);
 
   const status = data.status || data.documentStatus;
   const badgeLabelKey = STATUS_LABEL_KEYS[status] || status || 'statusUnknown';
