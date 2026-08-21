@@ -178,11 +178,14 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         return;
       }
 
-      // ETP-4576 — the registration response no longer carries a bearer token to
-      // stash: it sets the `__Host-` session cookie and returns the CSRF proof
-      // bound to it. Writing `sf_platform_token` here was worse than useless,
-      // since `purgeLegacyAuthStorage()` deletes that key on the next mount.
-      if (data.csrfToken) setSessionCsrfToken(data.csrfToken);
+      // ETP-4576 — nothing to stash here, and deliberately so. This endpoint
+      // (`register-and-accept`) never joined the session family: it answers with
+      // a bearer `token` and issues no cookie. That token is not a CSRF proof, so
+      // it must not go in `sessionCsrfToken` — and this page has no use for it
+      // either, because acceptance already happened server-side in the same call,
+      // leaving no authenticated request for it to sign. Writing the old
+      // `sf_platform_token` key here was worse than useless: it is one of the
+      // keys `purgeLegacyAuthStorage()` deletes on the next mount.
 
       clearTokenFromUrl();
       setSuccessData({
@@ -215,10 +218,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return data;
   };
 
-  const handleInvitationRegistered = async (csrfToken, account) => {
-    // RegisterStep hands back the proof bound to the freshly-minted cookie
-    // session — the same first argument LoginStep's onAuthenticated passes.
-    if (csrfToken) setSessionCsrfToken(csrfToken);
+  const handleInvitationRegistered = async (_credential, account) => {
+    // RegisterStep hands back whichever credential the response carried, and for
+    // THIS endpoint that is a bearer token, not a CSRF proof (see
+    // registerInvitationAccount above). It is deliberately not stored: putting a
+    // bearer token in `sessionCsrfToken` would send it as `X-Go-CSRF` on a later
+    // request, and the two are not interchangeable. Registration accepts the
+    // invitation server-side, so there is no later request to sign.
     clearTokenFromUrl();
     setSuccessData({
       clientName: invitationData?.clientName,

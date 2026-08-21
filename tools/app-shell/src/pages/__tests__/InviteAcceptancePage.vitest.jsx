@@ -227,11 +227,10 @@ describe('InviteAcceptancePage', () => {
           method: 'POST',
           // ETP-4576 — the SSO sign-in leaves a `__Host-` cookie and a CSRF
           // proof, never a bearer token, so this POST carries the proof and the
-          // cookie. NOTE: the backend's `/company-invitations/accept` still
-          // authenticates with `extractBearerToken` only (ETP-4894), so this
-          // flow cannot authenticate for real until that endpoint accepts the
-          // cookie session — tracked separately, deliberately not papered over
-          // here by relabelling the proof as a bearer token.
+          // cookie. The backend's `/company-invitations/accept` now resolves the
+          // caller through `runWithAuthenticatedAccount` — the same helper its
+          // siblings (create/list invitations) already used — which accepts
+          // either credential, so this is the shape it authenticates.
           headers: expect.objectContaining({ 'X-Go-CSRF': 'sso-session-csrf' }),
           credentials: 'include',
           body: JSON.stringify({ token: 'valid-token-789' }),
