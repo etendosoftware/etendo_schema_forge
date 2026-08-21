@@ -131,7 +131,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
@@ -142,6 +142,8 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**Save-before-confirm contract for `topbarRight` (ETP-4940 follow-up).** If a `topbarRight` component fires its own documentAction request (e.g. a custom "Confirm" button opening its own modal, as `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase` do), it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before opening that modal — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` was the one choke point that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
 ---
 

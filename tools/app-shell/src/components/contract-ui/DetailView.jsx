@@ -2964,7 +2964,7 @@ export function DetailView({
                     api={api}
                     onProcess={hook.handleProcess}
                     onRefresh={() => hook.fetchById?.(data?.id || recordId)}
-                    onSave={() => hook.handleSave({ silent: true })}
+                    onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
                     data-testid="TopbarRightComponent__fa3275" />
                 );
               })()}
