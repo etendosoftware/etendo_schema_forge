@@ -246,12 +246,20 @@ test.describe('Cash close (real backend)', () => {
       'The invoice should have exactly 1 saved line',
     ).toBeVisible({ timeout: 15_000 });
 
-    await clickConfirmButton(page);
     // Precise wait for the sales-invoice documentAction confirmation itself — the generic
     // waitForConfirmResponse() resolves on ANY successful NEO write and can race ahead of the
     // actual confirmation request, letting the pill assertion below read the stale "Borrador"
     // status before the invoice has actually finished completing on the backend.
-    await waitForDocumentActionResponse(page, 'sales-invoice');
+    //
+    // ARMED BEFORE THE CLICK, and that ordering is load-bearing: clickConfirmButton ends with
+    // `await slow(page)`, which sleeps E2E_SLOW_MS. Run with E2E_SLOW_MS set (any --headed
+    // debugging session) the POST completes inside that sleep, so a waiter attached afterwards
+    // is listening for an event that already fired and stalls the full 30s — with the invoice
+    // sitting there Completado on screen, which is a maddening thing to debug. Unset, slow() is
+    // a no-op and the old ordering happened to win the race.
+    const confirmed = waitForDocumentActionResponse(page, 'sales-invoice');
+    await clickConfirmButton(page);
+    await confirmed;
     await dismissSuccessModal(page);
 
     // Confirming navigates back to the invoice list, so go back to the record by id instead of
@@ -317,12 +325,21 @@ test.describe('Cash close (real backend)', () => {
     await expect(page.getByTestId('detail-tab-reconciliation-list')).toBeVisible();
     await expect(page.getByTestId('detail-tab-statements')).toHaveCount(0);
 
-    const pendingPromise = waitForNeoData(page, isCashPending);
+    // Scoped to THIS account: `isCashPending` alone matches any cash-close pending response, so a
+    // request for another drawer (or a stale one) could satisfy it.
+    const isThisDrawerPending = (url) => isCashPending(url) && url.includes(accountId);
+
+    const pendingPromise = waitForNeoData(page, isThisDrawerPending);
     await reconciliationTab.click();
     const pending = await pendingPromise;
 
     await expect(page.getByTestId('cash-close-tab')).toBeVisible({ timeout: 20_000 });
 
+    // A flat `Got 0: []` here does not necessarily mean the drawer is empty. `useCashClosePending`
+    // maps any payload without a `movements` array to `[]`, so a NEO error answered with HTTP 200
+    // — notably `{"status":"not_configured_for_report_generation"}` when the cash-close spec has
+    // no ETGO_SF_ENTITY row carrying Java_Qualifier 'cashClose' — reads here as an empty drawer.
+    // Check the response body before suspecting the write.
     const movements = Array.isArray(pending?.movements) ? pending.movements : [];
     expect(
       movements.length,
