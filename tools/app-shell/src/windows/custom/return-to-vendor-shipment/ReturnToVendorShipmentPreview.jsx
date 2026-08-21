@@ -18,10 +18,15 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const modalRef = useRef(null);
   const sendModal = usePreviewSendModal();
 
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
+  // useReturnToVendorPdf skip the jsreport round-trip and serve the marked attachment
+  // directly when one already exists, instead of regenerating on every open.
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR' };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnToVendorPdf(
     shipment?.id ?? null,
     apiBaseUrl,
     token,
+    pdfCacheConfig,
   );
 
   if (!shipment) return null;
@@ -36,11 +41,23 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
   const windowLabel = tMenu('Return to Vendor Shipment');
   const isSendable = shipment.documentStatus === SENDABLE_STATUS;
+  const isDraft = shipment.documentStatus === 'DR';
 
   const handleDownload = () => {
     if (!pdfBlob) return;
     downloadBlobAsFile(pdfBlob, `dev-compra-${shipment.documentNo || 'devolucion'}.pdf`);
   };
+
+  // ETP-4315 — new wiring (this window never cached its rendered PDF before,
+  // design doc Open design question 6, resolved "do it now" for consistency).
+  // Real, marked Attachment (M_InOut), same draft-gated pattern as the other
+  // generated-PDF windows.
+  const attachmentConfig = !isDraft
+    ? {
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl,
+      }
+    : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
 
   const specs = [
     { key: 'sourceReceipts', type: 'goods-receipt', fetch: async () => shipment?.sourceReceipts ?? [] },
@@ -71,6 +88,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
         title={`${windowLabel} ${shipment.documentNo}`}
         subtitle={partnerName !== '—' ? `${ui('returnToVendorPreviewVendor')} ${partnerName}` : undefined}
         leftPanel={leftPanel}
+        attachmentConfig={attachmentConfig}
         onClose={onClose}
         onEdit={() => onEdit?.(shipment.id)}
         tabs={tabs}
