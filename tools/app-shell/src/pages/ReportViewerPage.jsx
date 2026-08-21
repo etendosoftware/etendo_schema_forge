@@ -1134,7 +1134,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
         ))}
         <button onClick={openFullReport}
           className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
-          <ExternalLink className="h-3.5 w-3.5" />{ui('openFullReport')}
+          <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__3c998a" />{ui('openFullReport')}
         </button>
       </div>
       <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
