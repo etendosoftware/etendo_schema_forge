@@ -87,14 +87,17 @@ async function installEnvironmentsMock(page, environments) {
  * path never matches, and the switch would no-op forever.
  */
 async function installEnvironmentLoginMock(page, { roleList } = {}) {
+  const requests = [];
   await page.route('**/sws/go/session/environment', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
+    requests.push(JSON.parse(route.request().postData() || '{}'));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ status: 'success', csrfToken: 'e2e-csrf-env', roleList }),
     });
   });
+  return { requests };
 }
 
 /** Mocks provider-hosted checkout creation and the paid return status. */
@@ -230,7 +233,7 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     // enterByClientName (useEnvironmentSwitch.js) re-fetches /environments to
     // find the tenant by name, then switchTo() logs into it via this route —
     // both need a response, or the auto-enter after success silently fails.
-    await installEnvironmentLoginMock(page, {
+    const { requests: envLoginRequests } = await installEnvironmentLoginMock(page, {
       roleList: [{ id: 'role-productive', name: 'Administrator', orgList: [{ id: 'org-productive', name: 'Acme Productive HQ' }] }],
     });
 
@@ -288,14 +291,18 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     await page.getByTestId('upgrade-success-continue').click();
     await page.waitForURL('**/dashboard', { timeout: 15_000 });
 
-    // sf_auth_client_name is written by buildEnvironmentSessionStorage and
-    // not touched by login()'s init script (unlike sf_auth_token, which that
-    // script reseeds on every new document — see auth.js), so it is the
-    // reliable signal that the session landed in the new tenant rather than
-    // merely surviving the reload with the old one.
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem('sf_auth_client_name')))
-      .toBe('Acme Productive');
+    // The old proof was `localStorage.sf_auth_client_name`, written by
+    // `buildEnvironmentSessionStorage`. ETP-4576 deleted that function — the
+    // tenant now lives in the rotated `__Host-` session cookie, which the page
+    // cannot read, and the key is one of those `purgeLegacyAuthStorage()`
+    // deletes. So there is nothing in localStorage left to assert on.
+    //
+    // The equivalent proof under the cookie session is the switch REQUEST: it
+    // must have targeted the newly-provisioned tenant's admin user, not the one
+    // the page booted with. That distinguishes "landed in the new tenant" from
+    // "survived the reload with the old one" exactly as the key did.
+    await expect.poll(() => envLoginRequests.length).toBeGreaterThan(0);
+    expect(envLoginRequests.at(-1)).toMatchObject({ userId: 'user-2' });
   });
 
   test('checkout creation failure stays on the checkout without onboarding', async ({ page }) => {

@@ -14,7 +14,7 @@ const src = readFileSync(join(__dirname, '..', 'useConversionRate.js'), 'utf8');
 
 describe('useConversionRate (ETP-4504)', () => {
   it('exports the useConversionRate hook', () => {
-    assert.match(src, /export function useConversionRate\(\{ fromCode, toCode, date, apiBaseUrl, token \}\)/);
+    assert.match(src, /export function useConversionRate\(\{ fromCode, toCode, date, apiBaseUrl \}\)/);
   });
 
   it('reuses the shared fetchOptionalJson helper', () => {
@@ -22,7 +22,7 @@ describe('useConversionRate (ETP-4504)', () => {
   });
 
   it('short-circuits (no fetch) when currencies match or a required input is missing', () => {
-    assert.match(src, /if \(!fromCode \|\| !toCode \|\| fromCode === toCode \|\| !apiBaseUrl \|\| !token\)/);
+    assert.match(src, /if \(!fromCode \|\| !toCode \|\| fromCode === toCode \|\| !apiBaseUrl\)/);
     assert.match(src, /if \(!date\)/);
   });
 

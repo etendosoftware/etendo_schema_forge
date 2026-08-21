@@ -20,10 +20,9 @@ import { fetchOptionalJson } from './pdfUtils.js';
  * @param {string} params.toCode     - ISO 4217 code (or DB id) of the target currency (account currency)
  * @param {string} params.date       - Rate date (ISO string, e.g. "2026-01-15")
  * @param {string} params.apiBaseUrl - Window API base (e.g. /sws/neo/sales-invoice)
- * @param {string} params.token      - Bearer token
  * @returns {{ rate: number|null, hasRate: boolean, loading: boolean }}
  */
-export function useConversionRate({ fromCode, toCode, date, apiBaseUrl, token }) {
+export function useConversionRate({ fromCode, toCode, date, apiBaseUrl }) {
   const [state, setState] = useState({
     rate: null,
     hasRate: false,
@@ -32,7 +31,10 @@ export function useConversionRate({ fromCode, toCode, date, apiBaseUrl, token })
 
   useEffect(() => {
     // Same currency (or missing inputs) → nothing to convert; no fetch needed.
-    if (!fromCode || !toCode || fromCode === toCode || !apiBaseUrl || !token) {
+    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
+    // structurally undefined, so the rate was never fetched: the conversion
+    // fields rendered empty with no request and no error.
+    if (!fromCode || !toCode || fromCode === toCode || !apiBaseUrl) {
       setState({ rate: null, hasRate: false, loading: false });
       return undefined;
     }
@@ -51,7 +53,6 @@ export function useConversionRate({ fromCode, toCode, date, apiBaseUrl, token })
       try {
         const rateData = await fetchOptionalJson(
           `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCode)}&toCurrency=${encodeURIComponent(toCode)}&date=${encodeURIComponent(date)}`,
-          token,
         );
         if (cancelled) return;
         const rate = rateData?.rate ?? null;
@@ -62,7 +63,7 @@ export function useConversionRate({ fromCode, toCode, date, apiBaseUrl, token })
     })();
 
     return () => { cancelled = true; };
-  }, [fromCode, toCode, date, apiBaseUrl, token]);
+  }, [fromCode, toCode, date, apiBaseUrl]);
 
   return state;
 }

@@ -1028,7 +1028,7 @@ export default function NewPaymentEntryModal({
   const isForeign = !!(accountCurrency && currency && accountCurrency !== currency);
   // Prefill the (editable) rate from the system exchange rate for invoice→account currency.
   const conversion = useConversionRate({
-    fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
+    fromCode: currency, toCode: accountCurrency, date, apiBaseUrl,
   });
   const [rateStr, setRateStr] = useState('');
   // Edit mode: the rate stored on the draft (ETP-4841). Kept as the raw string from the response

@@ -241,7 +241,6 @@ const G2_DEBT = new Set([
   'windows/custom/product/ProductSidebar.jsx',
   'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
-  'windows/custom/shared/useConversionRate.js',
   'windows/custom/user/InviteUserDialog.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
   // Arrived with the epic (ETP-4783). Absorbed, not migrated: nothing the merge

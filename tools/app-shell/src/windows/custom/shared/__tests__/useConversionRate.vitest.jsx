@@ -16,7 +16,6 @@ const BASE_PARAMS = {
   toCode: 'EUR',         // account currency
   date: '2026-01-15',
   apiBaseUrl: '/sws/neo/sales-invoice',
-  token: 'test-token',
 };
 
 // The hook strips the last path segment of apiBaseUrl to reach the endpoint root.
@@ -48,12 +47,13 @@ describe('useConversionRate', () => {
 
       await waitFor(() => expect(fetchOptionalJson).toHaveBeenCalledTimes(1));
 
-      const [url, token] = fetchOptionalJson.mock.calls[0];
+      const [url] = fetchOptionalJson.mock.calls[0];
       expect(url).toContain(`${BASE_URL}/validate-exchange-rate`);
       expect(url).toContain('fromCurrency=USD');
       expect(url).toContain('toCurrency=EUR');
       expect(url).toContain('date=2026-01-15');
-      expect(token).toBe('test-token');
+      // ETP-4576: no credential argument — the builders read the active scheme.
+      expect(fetchOptionalJson.mock.calls[0]).toHaveLength(1);
     });
   });
 
@@ -106,7 +106,6 @@ describe('useConversionRate', () => {
       ['fromCode', { fromCode: '' }],
       ['toCode', { toCode: '' }],
       ['apiBaseUrl', { apiBaseUrl: undefined }],
-      ['token', { token: undefined }],
       ['date', { date: '' }],
     ])('returns null/false and does not fetch when %s is missing', async (_name, override) => {
       const { result } = renderHook(() =>
