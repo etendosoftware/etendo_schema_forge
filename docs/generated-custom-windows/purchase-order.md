@@ -187,6 +187,8 @@ When a purchase order is denominated in a currency different from the organizati
 
 `GET /sws/neo/validate-exchange-rate` is implemented in `NeoExchangeRateService.java`. It queries `C_Conversion_Rate` for the most recent active row valid on the document date. Both ISO 4217 codes and internal DB IDs are accepted. If the direct `FROM→TO` row is absent, the endpoint tries the inverse direction and returns `1/rate`, so configuring only one direction in Etendo is sufficient. Full parameter reference: see the Sales Order dual-currency section above.
 
+Rows are scoped `AD_Client_ID IN ('0', <client>)`, so the System-level rates that currencyLayer syncs (ETP-4474) are visible to every tenant. The header callout's `noExchangeRateAvailable` warning resolves availability through the same helper since ETP-4838 — see `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of truth".
+
 ### Currency change handling (ETP-4027 functional model)
 
 The `currency` field on the header form is **always editable on draft purchase orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
@@ -248,3 +250,74 @@ This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the 
 total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
 If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
 the only thing telling the agent what is legal.
+
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` now shows once the order is Completado, backed by the pre-existing
+`print-purchase-order` report — verified rendering real order data end-to-end during this
+ticket. No custom component was added: `PurchaseOrderActions.jsx` (this window's
+`topbarRight`) and its `usePurchaseOrderPdf` hook — used only to feed the "Enviar documento"
+preview modal — are unrelated and untouched. See `docs/decisions-reference.md`
+("Print Visibility") for the generic mechanism.
+
+**Review catch:** swapping `hidePrint: true` for `hidePrintWhen` only affects the detail view —
+the generator's `hidePrintListProp` still keys off the plain `hidePrint`, so the list view's
+bulk "Print (N)" and toolbar Print buttons would otherwise become visible for every row
+regardless of status. `decisions.json` also declares `"listViewOptions": { "hidePrint": true }`
+to keep the list-level print exactly as hidden as it was before this ticket — only the detail
+view gained the new conditional behavior.
+
+**Second catch — the custom wrapper bypasses the generated `listViewOptions` too.**
+`tools/app-shell/src/windows/custom/purchase-order/index.jsx` hand-rolls its own `<ListView>`
+for the list route instead of delegating to the generated `HeaderPage.jsx` (only the
+detail/record route goes through the generated component), so the generator's literal
+`listViewOptions={{"hidePrint":true}}` emitted into `HeaderPage.jsx` is never reached for the
+list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
+this file's own `<ListView>` call, matching the existing pattern already used there for
+`dateFilterKey` and other generator-derived list props.
+
+## Related Documents auto-refresh — ETP-4779
+
+The "Documentos" tab (`artifacts/purchase-order/custom/RelatedDocuments.jsx`) did not update
+after confirming a Purchase Order and generating a Goods Receipt / Purchase Invoice — it required
+the manual 🔄 button. This turned out to be **two separate bugs**, found in two passes (the first
+pass fixed only the first one, which manual QA retesting on `localhost:3100` then showed was not
+sufficient):
+
+1. **Missing listener.** `PurchaseOrderActions.jsx` (this window's `topbarRight` component)
+   already dispatched a `purchase-order:document-created` `window` `CustomEvent` after generating
+   a derived document, mirroring the `sales-order:document-created` convention — but nothing was
+   listening for it. Fixed by having `RelatedDocuments.jsx` listen for that event and bump its
+   local `refreshKey` (the same key that drives its `fetchByCriteria`/`fetchChild` effect).
+
+2. **Premature dispatch (found via live reproduction after the listener fix alone didn't resolve
+   the bug in manual testing).** In `ConfirmModal.handleConfirm` — the "Confirmar" flow used to
+   confirm a still-Draft order and optionally generate its receipt/invoice in the same modal —
+   the event was dispatched right after **Step 1** (`documentAction=CO`, confirming the order),
+   *before* **Steps 2/3** (`createGoodsReceipt` / `createPurchaseInvoice`) had even run. The
+   listener added in the previous fix reacted correctly and refetched immediately, but at that
+   point neither derived document existed yet, so the refetch always came back empty — and
+   because nothing dispatched the event again afterward, the panel never learned about the
+   documents Steps 2/3 went on to create. Symptom when reproduced live: confirming with both
+   "Crear albarán de proveedor" and "Crear factura" checked showed the success modal with both
+   documents listed, but the "Documentos" row behind it stayed on "Sin documentos relacionados"
+   forever (not merely delayed) — matching the original bug reports exactly. `CreateDocsModal`
+   (used for the already-`CO` "Gestionar factura"/"Gestionar recepción" flow, a separate modal in
+   the same file) did **not** have this bug — it already dispatched once, after its POST(s)
+   resolved, which is why that flow worked correctly and briefly made the earlier fix look
+   sufficient.
+
+   Fixed by moving the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle,
+   right before `onConfirmed(result)` — mirroring `CreateDocsModal.handleCreate`'s already-correct
+   placement — and guarding it to only fire when a receipt or invoice actually exists
+   (`finalReceipt || finalInvoice`). Also added the same guarded dispatch to `handleClose`'s
+   partial-failure path (e.g. the receipt POST succeeds but the invoice POST then fails and the
+   user closes instead of retrying), which previously could leave a successfully-created receipt
+   with no event at all.
+
+Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
+checkboxes shows both the new Recibo and Factura chips in the "Documentos" row immediately,
+before even closing the success modal — no reload, no lag.

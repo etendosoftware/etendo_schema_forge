@@ -6,7 +6,17 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 
-const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B' };
+// countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
+// (see saltEdgeEligibility.js), so a fixture without it would hide that item.
+const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B', countryIso: 'ES' };
+
+/** Radix opens on pointerdown, not click. */
+function openMenu(id = 'acc-1') {
+  fireEvent.pointerDown(
+    screen.getByTestId(`account-row-menu-trigger-${id}`),
+    { button: 0, ctrlKey: false, pointerType: 'mouse' },
+  );
+}
 
 describe('AccountRowMenu', () => {
   it('renders the trigger button keyed by the row id', () => {
@@ -38,6 +48,44 @@ describe('AccountRowMenu', () => {
       render(<AccountRowMenu account={baseAccount} onOpen={onOpen} />),
     ).not.toThrow();
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  // ── Archive / unarchive swap ────────────────────────────────────────────────
+  describe('archive vs unarchive item', () => {
+    it('offers Archive on an active account', async () => {
+      render(<AccountRowMenu account={baseAccount} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-row-menu-unarchive-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('offers Unarchive instead once the account is archived', async () => {
+      // Before this, an archived account's only action was to archive it again — no way back.
+      render(<AccountRowMenu account={{ ...baseAccount, active: false }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-unarchive-acc-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-row-menu-archive-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('routes both directions through the same onArchive callback', async () => {
+      const onArchive = vi.fn();
+      const archived = { ...baseAccount, active: false };
+      render(<AccountRowMenu account={archived} onArchive={onArchive} />);
+      openMenu();
+
+      fireEvent.click(await screen.findByTestId('account-row-menu-unarchive-acc-1'));
+
+      // The dialog derives the direction from the record, so one callback serves both.
+      expect(onArchive).toHaveBeenCalledWith(archived);
+    });
+
+    it('keeps Archive for an account whose active flag is absent', async () => {
+      // Most fixtures omit `active`; only an explicit false means archived.
+      const { active, ...noFlag } = { ...baseAccount, active: undefined };
+      render(<AccountRowMenu account={noFlag} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+    });
   });
 
   // The bank-connection group is a three-way choice, not a connected/not-connected toggle:
@@ -77,12 +125,76 @@ describe('AccountRowMenu', () => {
       expect(screen.queryByTestId('account-row-menu-delete-connection-acc-1')).toBeNull();
     });
 
+    // ETP-4896 Test Case 6 — Salt Edge is Spain-only. Hidden rather than disabled here: this menu
+    // has no disabled-item styling and conditionally renders every other inapplicable action.
+    it('hides connect for a non-Spanish account', () => {
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('hides connect when the account country is unknown', () => {
+      openMenu({ ...baseAccount, countryIso: '', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('still offers disconnect on a non-Spanish account that is already linked', () => {
+      // The rule gates CONNECTING, not managing an existing link — an account connected before
+      // the restriction existed must still be releasable.
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: true });
+      expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
+    });
+
     it('dispatches deleteConnection with the account', () => {
       const onBankConnectionAction = openMenu({ ...baseAccount, bankConnected: true });
       fireEvent.click(screen.getByTestId('account-row-menu-delete-connection-acc-1'));
       expect(onBankConnectionAction).toHaveBeenCalledWith(
         'deleteConnection', expect.objectContaining({ id: 'acc-1' }),
       );
+    });
+  });
+
+  // ETP-4871 — a real, irreversible delete. Independent of Archivar/Desarchivar above: both
+  // items can appear on the same still-active, deletable account.
+  describe('delete item (ETP-4871)', () => {
+    it('is offered when the account is deletable', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is explicitly false', async () => {
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: false }} />);
+      openMenu();
+      // Wait on something that IS rendered so the query below isn't racing the menu mount.
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is NOT offered when deletable is absent (most fixtures)', async () => {
+      render(<AccountRowMenu account={baseAccount} />);
+      openMenu();
+      await screen.findByTestId('account-row-menu-open-acc-1');
+      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    });
+
+    it('is still offered alongside Archive on a deletable, still-active account', async () => {
+      // Deleting and archiving are independent actions on this row (see AccountRowMenu.jsx's
+      // doc comment) — neither one replaces the other while the account is active.
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: true }} />);
+      openMenu();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+    });
+
+    it('fires onDelete with the account on click', async () => {
+      const onDelete = vi.fn();
+      const deletable = { ...baseAccount, deletable: true };
+      render(<AccountRowMenu account={deletable} onDelete={onDelete} />);
+      openMenu();
+
+      fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+      expect(onDelete).toHaveBeenCalledWith(deletable);
     });
   });
 });

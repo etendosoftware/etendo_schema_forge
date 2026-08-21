@@ -8,7 +8,7 @@
       "allowEmail": false
     },
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
+    "hidePrintWhen": true,
     "relatedDocuments": true,
     "notesField": "description",
     "noHeaderBorder": true,
@@ -59,6 +59,10 @@
     ],
     "lineEntityConfig": "invoice",
     "linesLayout": "inlineEditable",
+    "lineTaxSifTrigger": {
+      "enabled": true,
+      "_note": "ETP-4888 point 5. NOT yet wired through generate-frontend.js (that generator lives in schema_forge_core, out of reach from this repo) — consumed directly by this window's hand-written index.jsx via a local LINE_TAX_SIF_TRIGGER_ENABLED constant, so flipping this value alone does nothing today; the index.jsx constant must be edited by hand too, in sync. See docs/decisions-reference.md's lineTaxSifTrigger row and docs/ui-customization.md §14d for the full mechanism. Follow-up: wire this through generate-frontend.js once convenient (per Alex's review)."
+    },
     "extraTabs": [
       {
         "key": "sif",
@@ -97,7 +101,8 @@
         "label": "Exchange Rates",
         "tabOrder": 50,
         "requireSavedRecord": true,
-        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+        "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+        "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
       }
     },
     "statusPills": [

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
@@ -82,308 +83,267 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Login
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await login(page, { user, password });
-    await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Ensure the contact has isVendor = true
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await ensureVendorSetup(page, { navigateTo });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Create a new Purchase Order
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await navigateTo(page, 'purchase-order');
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    await slow(page);
-
-    const newButton = page.getByTestId('action-new');
-    await expect(newButton).toBeVisible({ timeout: 15_000 });
-    await newButton.click();
-    await waitForDetailReady(page);
-    await slow(page);
-
-    // ── Fill header — select a vendor Business Partner ──
-    await selectVendorBP(page);
-
-    // ── Save as draft ──
-    await saveDraft(page);
-
-    await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
-
-    // ── Add a single line ──
-    await addProductLine(page, { isFirst: true, productIndex: 0 });
-
-    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 4: Confirm the order — check "Crear albarán de proveedor" ONLY
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await clickConfirmButton(page);
-
-    const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-    await expect(confirmModal).toBeVisible({ timeout: 10_000 });
-
-    // Both checkboxes default OFF — check ONLY the receipt one, leaving the
-    // invoice card unchecked, matching the real return-flow chain.
-    const receiptCheckbox = page.getByText('Crear albarán de proveedor', { exact: true });
-    await expect(receiptCheckbox).toBeVisible({ timeout: 5_000 });
-    await receiptCheckbox.click();
-    await slow(page);
-
-    const modalConfirmBtn = page.locator('[data-testid="action-confirm-modal"]');
-    await expect(modalConfirmBtn).toBeVisible({ timeout: 5_000 });
-    await modalConfirmBtn.click();
-
-    await page.waitForTimeout(2_000);
-    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 5: Navigate to the generated receipt via the result modal
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const orderConfirmedMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-    await expect(orderConfirmedMsg).toBeVisible({ timeout: 30_000 });
-    await slow(page);
-
-    const viewReceiptBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-    await expect(viewReceiptBtn).toBeVisible({ timeout: 10_000 });
-    await viewReceiptBtn.click();
-    await slow(page);
-
-    await expect(page).toHaveURL(/\/goods-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await waitForDetailReady(page);
-    await slow(page);
-
-    await expectStatusPill(page, /borrador|draft/i, 'Receipt should be in Draft status');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 6: Confirm the receipt (DR → CO) with the invoice toggle OFF
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await clickConfirmButton(page);
-
-    const receiptModal = page.getByTestId('confirm-inout-modal');
-    await expect(receiptModal).toBeVisible({ timeout: 10_000 });
-
-    // The invoice toggle defaults ON for receipts (defaultCreateInvoice=true)
-    // — explicitly turn it OFF so confirming the receipt does NOT also
-    // create a purchase invoice; this flow generates its invoice from the
-    // return, not from the receipt.
-    const createInvoiceToggle = receiptModal.getByTestId('confirm-modal-invoice-toggle');
-    await expect(createInvoiceToggle).toBeVisible({ timeout: 5_000 });
-    await expect(createInvoiceToggle).toHaveAttribute('aria-checked', 'true');
-    await createInvoiceToggle.click();
-    await expect(createInvoiceToggle).toHaveAttribute('aria-checked', 'false');
-    await slow(page);
-
-    const receiptConfirmPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/action/documentAction') &&
-        resp.request().method() === 'POST' &&
-        resp.status() < 500,
-      { timeout: 30_000 },
-    );
-    await receiptModal.getByTestId('confirm-modal-confirm-btn').click();
-    await receiptConfirmPromise;
-    await slow(page);
-
-    // With the toggle off, no invoice was created — the follow-up
-    // ConfirmResultModal shows only "Cerrar"; closing it reloads the page.
-    await dismissSuccessModal(page);
-
-    await waitForDetailReady(page);
-    await expectStatusPill(page, /completado|completed/i, 'Receipt should show Completed after confirmation');
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 7: "Crear Devolución" — create the Return to Vendor Shipment
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const createReturnBtn = page.getByRole('button', { name: 'Crear Devolución', exact: true });
-    await expect(createReturnBtn).toBeVisible({ timeout: 10_000 });
-    await createReturnBtn.click();
-    await slow(page);
-
-    const returnDialog = page.getByRole('dialog');
-    await expect(returnDialog).toBeVisible({ timeout: 10_000 });
-
-    // PurchaseReturnWizard auto-loads the receipt lines and pre-selects them
-    // at full quantity — wait for at least one row before proceeding.
-    await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
-    await slow(page);
-
-    const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-    await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-    await nextBtn.click();
-    await slow(page);
-
-    const returnConfirmPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/action/createPurchaseReturn') &&
-        resp.request().method() === 'POST' &&
-        resp.status() < 500,
-      { timeout: 20_000 },
-    );
-    const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
-    await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
-    await createReturnConfirmBtn.click();
-    await returnConfirmPromise;
-    await slow(page);
-
-    // ── Navigate to the generated return via the result modal ──
-    const returnCreatedMsg = page.getByText('Devolución de compra creada', { exact: true });
-    await expect(returnCreatedMsg).toBeVisible({ timeout: 30_000 });
-    await slow(page);
-
-    const viewShipmentBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-    await expect(viewShipmentBtn).toBeVisible({ timeout: 10_000 });
-    await viewShipmentBtn.click();
-    await slow(page);
-
-    await expect(page).toHaveURL(/\/return-to-vendor-shipment\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await waitForDetailReady(page);
-    await slow(page);
-
-    await expectStatusPill(page, /borrador|draft/i, 'Return to Vendor Shipment should be in Draft status');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 8: Confirm the return with "Crear Factura Rectificativa" checked
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const confirmReturnBtn = page.getByTestId('action-confirm-with-credit');
-    await expect(confirmReturnBtn).toBeVisible({ timeout: 10_000 });
-    await expect(confirmReturnBtn).toBeEnabled();
-    await confirmReturnBtn.click();
-    await slow(page);
-
-    const returnConfirmModal = page.getByTestId('confirm-inout-modal');
-    await expect(returnConfirmModal).toBeVisible({ timeout: 10_000 });
-
-    // "Crear Factura Rectificativa" toggle defaults to CHECKED for returns
-    // (defaultCreateInvoice=true) — verify it, then confirm with it as-is.
-    const invoiceToggle = returnConfirmModal.getByTestId('confirm-modal-invoice-toggle');
-    await expect(invoiceToggle).toBeVisible({ timeout: 5_000 });
-    await expect(invoiceToggle).toHaveAttribute('aria-checked', 'true');
-    await expect(returnConfirmModal.getByText('Crear Factura Rectificativa', { exact: true })).toBeVisible();
-
-    const returnDocActionPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/action/createReturnInvoice') &&
-        resp.request().method() === 'POST' &&
-        resp.status() < 500,
-      { timeout: 30_000 },
-    );
-    await returnConfirmModal.getByTestId('confirm-modal-confirm-btn').click();
-    await returnDocActionPromise;
-    await slow(page);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 9: Navigate to the generated rectificative invoice
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const rectificativeCreatedMsg = page.getByText('Factura rectificativa de compra creada', { exact: true });
-    await expect(rectificativeCreatedMsg).toBeVisible({ timeout: 30_000 });
-    await slow(page);
-
-    const viewInvoiceBtn = page.getByRole('button', { name: 'Ver factura', exact: true });
-    await expect(viewInvoiceBtn).toBeVisible({ timeout: 10_000 });
-    await viewInvoiceBtn.click();
-    await slow(page);
-
-    await expect(page).toHaveURL(/\/purchase-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await waitForDetailReady(page);
-    await slow(page);
-
-    // ── Verify: doc type reads as rectificativa ──
-    await expect(page.getByText(/rectificativ/i).first()).toBeVisible({ timeout: 15_000 });
-
-    // ── Verify: line quantity is NEGATIVE ──
-    // This is the exact contract the ETP-4737 sign-asymmetry bug in
-    // ReturnShipmentUtils.addReturnInvoiceLines violated on the Purchase
-    // side (Sales came out negative correctly; Purchase came out positive).
-    const invoiceLineRow = page.locator('tbody tr').first();
-    await expect(invoiceLineRow).toBeVisible({ timeout: 10_000 });
-    await expect(invoiceLineRow).toContainText(/-\s?\d/, { timeout: 5_000 });
-
-    // ── Verify: total amount is NEGATIVE ──
-    const totalValue = page.getByTestId('totals-row-total-value');
-    await expect(totalValue).toBeVisible({ timeout: 10_000 });
-    await expect(totalValue).toContainText(/^-/, { timeout: 5_000 });
-
-    await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // STEP 10: Confirm the rectificative invoice — may hit a known env gap
-    // ═══════════════════════════════════════════════════════════════════════
-    //
-    // Completing a rectificativa document was seen (manually, on the Sales
-    // side, same session) to sometimes fail with "The Period does not exist
-    // or it is not opened" — root-caused inconclusively (org/period config vs.
-    // transient issue). This is NOT a bug in this test: the Draft-state,
-    // negative-amount, and doc-type assertions above already prove the actual
-    // generation/negative-amount/doc-type-selection logic works end-to-end —
-    // which is also the live proof that the sign-asymmetry fix holds.
-    // If this exact error surfaces here, report it instead of failing the run.
-
-    await clickConfirmButton(page);
-
-    const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
-    const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
-
-    const outcome = await Promise.race([
-      periodError.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'period-error').catch(() => null),
-      invoiceCompletedPill.waitFor({ state: 'visible', timeout: 30_000 })
-        .then(async () => (
-          (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
-        ))
-        .catch(() => null),
-    ]);
-
-    if (outcome === 'period-error') {
-      await page.screenshot({
-        path: 'e2e/test-results/purchase-rectificativa-period-error.png',
-        fullPage: true,
-      }).catch(() => {});
-      test.info().annotations.push({
-        type: 'known-environment-issue',
-        description:
-          'Confirming the rectificative purchase invoice hit "The Period does not exist or '
-          + 'it is not opened" — a known, inconclusively root-caused environment gap (see '
-          + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
-          + 'already verified in Draft with the correct doc type and negative amounts above, '
-          + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
-      });
-      return;
-    }
-
-    // No period error surfaced — the confirm must have actually succeeded.
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    const invoiceCloseBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await invoiceCloseBtn.click();
+    await test.step('Login', async () => {
+      await login(page, { user, password });
+      await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
-    }
+    });
 
-    const currentInvoiceUrl = page.url();
-    if (currentInvoiceUrl.includes('/purchase-invoice/')) {
-      await safeReload(page);
-    } else {
-      await page.goto(currentInvoiceUrl, { waitUntil: 'networkidle' });
-    }
-    await waitForDetailReady(page);
+    await test.step('Ensure the contact has isVendor = true', async () => {
+      await ensureVendorSetup(page, { navigateTo });
+    });
 
-    await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed');
+    await test.step('Create a new Purchase Order with one line', async () => {
+      await navigateTo(page, 'purchase-order');
+      const newButton = page.getByTestId('action-new');
+      await expect(newButton).toBeVisible({ timeout: 15_000 });
+      await slow(page);
+
+      await newButton.click();
+      await waitForDetailReady(page);
+      await slow(page);
+
+      await selectVendorBP(page);
+      await saveDraft(page);
+
+      await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      await waitForDetailReady(page);
+
+      await addProductLine(page, { isFirst: true, productIndex: 0 });
+
+      await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
+    });
+
+    await test.step('Confirm the order with receipt generation only', async () => {
+      const confirmOrderBtn = page.getByTestId('action-save');
+      const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
+
+      await expect(async () => {
+        await confirmOrderBtn.click({ timeout: 3_000 });
+        await expect(confirmModal).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+
+      const receiptCheckbox = page.getByText('Crear albarán de proveedor', { exact: true });
+      await expect(receiptCheckbox).toBeVisible({ timeout: 5_000 });
+      await receiptCheckbox.click();
+      await slow(page);
+
+      const modalConfirmBtn = page.locator('[data-testid="action-confirm-modal"]');
+      await expect(modalConfirmBtn).toBeVisible({ timeout: 5_000 });
+
+      const orderConfirmResponse = page.waitForResponse(
+        (r) => r.url().includes('/sws/neo/') &&
+          ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
+          r.ok(),
+        { timeout: 30_000 },
+      );
+      await modalConfirmBtn.click();
+      await orderConfirmResponse;
+      await slow(page);
+    });
+
+    await test.step('Navigate to the generated receipt', async () => {
+      const orderConfirmedMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
+      await expect(orderConfirmedMsg).toBeVisible({ timeout: 30_000 });
+      await slow(page);
+
+      const viewReceiptBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
+      await expect(viewReceiptBtn).toBeVisible({ timeout: 10_000 });
+      await viewReceiptBtn.click();
+      await slow(page);
+
+      await expect(page).toHaveURL(/\/goods-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      await waitForDetailReady(page);
+      await slow(page);
+
+      await expectStatusPill(page, /borrador|draft/i, 'Receipt should be in Draft status');
+    });
+
+    await test.step('Confirm the receipt (DR to CO) with invoice toggle OFF', async () => {
+      const receiptConfirmBtn = page.getByTestId('action-save');
+      const receiptModal = page.getByTestId('confirm-inout-modal');
+
+      await expect(async () => {
+        await receiptConfirmBtn.click({ timeout: 3_000 });
+        await expect(receiptModal).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+
+      const createInvoiceToggle = receiptModal.getByTestId('confirm-modal-invoice-toggle');
+      await expect(createInvoiceToggle).toBeVisible({ timeout: 5_000 });
+      await expect(createInvoiceToggle).toHaveAttribute('aria-checked', 'true');
+      await createInvoiceToggle.click();
+      await expect(createInvoiceToggle).toHaveAttribute('aria-checked', 'false');
+      await slow(page);
+
+      const receiptConfirmPromise = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/action/documentAction') &&
+          resp.request().method() === 'POST' &&
+          resp.status() < 400,
+        { timeout: 30_000 },
+      );
+      await receiptModal.getByTestId('confirm-modal-confirm-btn').click();
+      await receiptConfirmPromise;
+      await slow(page);
+
+      await dismissSuccessModal(page);
+
+      await waitForDetailReady(page);
+      await expectStatusPill(page, /completado|completed/i, 'Receipt should show Completed after confirmation');
+      await slow(page);
+    });
+
+    await test.step('Create the Return to Vendor Shipment', async () => {
+      const createReturnBtn = page.getByRole('button', { name: /^Crear Devoluci[oó]n$|^Create Return$/i });
+      const returnDialog = page.getByRole('dialog');
+
+      await expect(async () => {
+        await createReturnBtn.click({ timeout: 3_000 });
+        await expect(returnDialog).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+
+      await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
+      await slow(page);
+
+      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
+      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
+      await nextBtn.click();
+      await slow(page);
+
+      const returnConfirmPromise = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/action/createPurchaseReturn') &&
+          resp.request().method() === 'POST' &&
+          resp.status() < 400,
+        { timeout: 20_000 },
+      );
+      const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
+      await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await createReturnConfirmBtn.click();
+      await returnConfirmPromise;
+      await slow(page);
+
+      const returnCreatedMsg = page.getByText('Devolución de compra creada', { exact: true });
+      await expect(returnCreatedMsg).toBeVisible({ timeout: 30_000 });
+      await slow(page);
+
+      const viewShipmentBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
+      await expect(viewShipmentBtn).toBeVisible({ timeout: 10_000 });
+      await viewShipmentBtn.click();
+      await slow(page);
+
+      await expect(page).toHaveURL(/\/return-to-vendor-shipment\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      await waitForDetailReady(page);
+      await slow(page);
+
+      await expectStatusPill(page, /borrador|draft/i, 'Return to Vendor Shipment should be in Draft status');
+    });
+
+    await test.step('Confirm the return with rectificative invoice generation', async () => {
+      const confirmReturnBtn = page.getByTestId('action-confirm-with-credit');
+      const returnConfirmModal = page.getByTestId('confirm-inout-modal');
+
+      await expect(async () => {
+        await confirmReturnBtn.click({ timeout: 3_000 });
+        await expect(returnConfirmModal).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+
+      const invoiceToggle = returnConfirmModal.getByTestId('confirm-modal-invoice-toggle');
+      await expect(invoiceToggle).toBeVisible({ timeout: 5_000 });
+      await expect(invoiceToggle).toHaveAttribute('aria-checked', 'true');
+      await expect(returnConfirmModal.getByText('Crear Factura Rectificativa', { exact: true })).toBeVisible();
+
+      const returnDocActionPromise = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/action/createReturnInvoice') &&
+          resp.request().method() === 'POST' &&
+          resp.status() < 400,
+        { timeout: 30_000 },
+      );
+      await returnConfirmModal.getByTestId('confirm-modal-confirm-btn').click();
+      await returnDocActionPromise;
+      await slow(page);
+    });
+
+    await test.step('Navigate to the rectificative invoice and verify', async () => {
+      const rectificativeCreatedMsg = page.getByText('Factura rectificativa de compra creada', { exact: true });
+      await expect(rectificativeCreatedMsg).toBeVisible({ timeout: 30_000 });
+      await slow(page);
+
+      const viewInvoiceBtn = page.getByRole('button', { name: 'Ver factura', exact: true });
+      await expect(viewInvoiceBtn).toBeVisible({ timeout: 10_000 });
+      await viewInvoiceBtn.click();
+      await slow(page);
+
+      await expect(page).toHaveURL(/\/purchase-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      await waitForDetailReady(page);
+      await slow(page);
+
+      // Verify: doc type reads as rectificativa
+      await expect(page.getByText(/rectificativ/i).first()).toBeVisible({ timeout: 15_000 });
+
+      // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression)
+      const invoiceLineRow = page.locator('tbody tr').first();
+      await expect(invoiceLineRow).toBeVisible({ timeout: 10_000 });
+      await expect(invoiceLineRow).toContainText(/-\s?\d/, { timeout: 5_000 });
+
+      // Verify: total amount is NEGATIVE
+      const totalValue = page.getByTestId('totals-row-total-value');
+      await expect(totalValue).toBeVisible({ timeout: 10_000 });
+      await expect(totalValue).toContainText(/^-/, { timeout: 5_000 });
+
+      await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
+    });
+
+    await test.step('Confirm the rectificative invoice (may hit known env gap)', async () => {
+      // Completing a rectificativa document was seen to sometimes fail with
+      // "The Period does not exist or it is not opened" — a known environment
+      // gap, NOT a bug in this test. If hit, report instead of failing.
+
+      await clickConfirmButton(page);
+
+      const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
+      const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
+
+      const outcome = await Promise.race([
+        periodError.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'period-error').catch(() => null),
+        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 30_000 })
+          .then(async () => (
+            (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
+          ))
+          .catch(() => null),
+      ]);
+
+      if (outcome === 'period-error') {
+        await captureScreenshot(page, {
+          path: 'e2e/test-results/purchase-rectificativa-period-error.png',
+          fullPage: true,
+        }).catch(() => {});
+        test.info().annotations.push({
+          type: 'known-environment-issue',
+          description:
+            'Confirming the rectificative purchase invoice hit "The Period does not exist or '
+            + 'it is not opened" — a known, inconclusively root-caused environment gap (see '
+            + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
+            + 'already verified in Draft with the correct doc type and negative amounts above, '
+            + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
+        });
+        return;
+      }
+
+      // No period error surfaced — the confirm must have actually succeeded.
+      const invoiceCloseBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await invoiceCloseBtn.click();
+        await slow(page);
+      }
+
+      // Reload to get fresh status — use goto on current URL to avoid ERR_ABORTED
+      const currentInvoiceUrl = page.url();
+      await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await waitForDetailReady(page);
+
+      await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed');
+    });
   });
 });

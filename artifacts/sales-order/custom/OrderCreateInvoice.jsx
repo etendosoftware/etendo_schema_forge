@@ -358,7 +358,6 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
         trackTransactionPosted();
-        window.dispatchEvent(new CustomEvent('sales-order:document-created'));
       } catch (e) {
         setError(e.message || ui('soErrorOccurred'));
         setLoading(false);
@@ -420,9 +419,25 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
     // All requested steps succeeded — close the modal with whatever was created.
     // Use the current attempt's result first; fall back to persisted result from a prior attempt.
+    const finalShipment = currentShipment ?? shipmentResult;
+    const finalInvoice  = currentInvoice  ?? invoiceResult;
+    // ETP-4779 — dispatch AFTER the shipment/invoice POSTs above have actually
+    // resolved (not right after Step 1's docAction=CO, as before). Dispatching
+    // immediately after Step 1 fired the event before createShipment /
+    // createDraftInvoice even ran, so RelatedDocuments.jsx's refetch raced
+    // ahead of document creation, found nothing, and — since no later event
+    // fired to catch up — the "Documentos" panel stayed empty (verified live
+    // on localhost:3100: confirming with both checkboxes showed both docs in
+    // the success modal, but the panel behind it never updated). Only fire
+    // when a document actually exists to show, mirroring
+    // CreateDocsModal.handleCreate below and the equivalent fix already
+    // applied to artifacts/purchase-order/custom/PurchaseOrderActions.jsx.
+    if (finalShipment || finalInvoice) {
+      window.dispatchEvent(new CustomEvent('sales-order:document-created'));
+    }
     onConfirmed({
-      shipment: currentShipment ?? shipmentResult,
-      invoice:  currentInvoice  ?? invoiceResult,
+      shipment: finalShipment,
+      invoice:  finalInvoice,
     });
   };
 
@@ -440,6 +455,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
   // and reopening the modal would re-attempt step 1 → @AlreadyPosted@.
   const handleClose = () => {
     if (orderConfirmed || shipmentResult || invoiceResult) {
+      // ETP-4779 — covers the partial-failure path: e.g. the shipment POST
+      // succeeded (shipmentResult set) but the invoice POST then failed, and
+      // the user closes instead of retrying. handleConfirm's own dispatch
+      // (above) never runs in that case since it errors out first, so the
+      // successfully-created shipment would otherwise never notify
+      // RelatedDocuments.jsx.
+      if (shipmentResult || invoiceResult) {
+        window.dispatchEvent(new CustomEvent('sales-order:document-created'));
+      }
       onConfirmed({
         shipment: shipmentResult,
         invoice:  invoiceResult,
@@ -450,7 +474,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
   };
 
   return (
-    <div onClick={handleClose} style={overlayStyle}>
+    <div data-testid="sales-order-confirm-modal" onClick={handleClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
@@ -501,7 +525,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateShipmentTitle')}
             subtitle={shipmentResult ? ui('soAlreadyCreated') : ui('soCreateShipmentCheckDesc')}
             disabled={Boolean(shipmentResult)}
-            data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-confirm-shipment-card" />
           <SoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -509,7 +533,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-            data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-confirm-invoice-card" />
         </div>
 
         {error && (
@@ -522,7 +546,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           <button type="button" onClick={handleClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleConfirm} disabled={loading}
+          <button type="button" data-testid="sales-order-confirm-submit" onClick={handleConfirm} disabled={loading}
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : primaryLabel}
@@ -535,9 +559,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
 // ── SoCheckboxCard ─────────────────────────────────────────────────────────────
 
-function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
+function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
   return (
     <div
+      data-testid={testId}
       onClick={disabled ? undefined : onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -651,7 +676,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   const canCreate = createShipment || createInvoice;
 
   return (
-    <div onClick={onClose} style={overlayStyle}>
+    <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
@@ -688,7 +713,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🚚"
               title={ui('soCreateShipmentTitle')}
               subtitle={shipmentSubtitle}
-              data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-manage-shipment-card" />
           )}
           {needsInvoice && (
             <SoCheckboxCard
@@ -697,7 +722,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-              data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-manage-invoice-card" />
           )}
         </div>
 
@@ -711,7 +736,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
+          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={handleCreate} disabled={loading || !canCreate}
             style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}

@@ -8,7 +8,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 
 ## What this window should allow
 
-- List existing amortization documents with name, accounting date, starting date, and total amortization formatted with currency symbol, with a status filter dropdown ("All statuses / Borrador / Procesado") in the toolbar. Amortization documents cannot be created from the list — the create button is hidden (`window.hideCreate: true`); records originate from the **Assets** → **Create Amortization** action.
+- List existing amortization documents with name, accounting date, starting date, total amortization formatted with currency symbol, and a **Status** badge column (Borrador/Procesado) between "Total Amortization" and "Posted", plus a status filter dropdown ("All statuses / Borrador / Procesado") in the toolbar (ETP-4549). Amortization documents cannot be created from the list — the create button is hidden (`window.hideCreate: true`); records originate from the **Assets** → **Create Amortization** action.
 - Open a document to inspect the header and its amortization lines.
 - Header fields are read-only regardless of document state — **Name**, **Accounting Date**, **Starting Date**, and **Currency** are locked unconditionally. Only **Description** is editable.
 - While in **draft** (`processed='N'`):
@@ -109,7 +109,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `currency.defaultExpr: "@$C_Currency_ID@"`; `currency.visibility: "readOnly"`.
   - Header fields `name`, `accountingDate`, `startingDate`, `currency`: `visibility: "readOnly"`. Only `description` stays editable.
   - `etblkpAccountingstatus` and `etblkpBulkposting`: `visibility: "discarded"` — removes the "Others" tab Accounting Status field and the stale Bulk Posting label.
-  - `processed` header field: `grid: true`, `filterOnly: true`, `columnType: "status"`, `filterable: false` — feeds the status dropdown without showing as a column.
+  - `processed` header field: `grid: true`, `columnType: "status"` — renders as the "Status" (`Processed` → `Estado`/`Status` via `labelOverrides`) badge column between "Total Amortization" and "Posted", and feeds the status dropdown filter (ETP-4549).
   - Accounting entity excluded. Line dimensions kept: `project`, `costcenter`, `eTADASBpartner` (editable); all other line dimensions discarded.
 - `tools/app-shell/src/lib/statusBadge.js` — `getStatusTone` maps `'y'`/`'yes'` → `'success'`; `statusLabel` MAP includes `Y: 'statusProcessed'` and `N: 'statusDraft'` so `DocumentStatusPill` resolves tones and labels for `processed` field values.
 - `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset | Amortization % | Amount | Accounting dimensions columns. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 3 dimension selectors — **Project**, **Cost Center**, **Contact** (`DIMENSION_FIELDS`) — auto-saving on `onChange`. `DimSummary` returns `null` (hides the "+ Add dimensions" affordance) when the document is processed and the line has no dimensions; when dimensions exist it always renders read-only "Label: Value" chips. Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy.
@@ -285,16 +285,24 @@ shape into a reusable mechanism rather than special-casing it:
   expand-panel consistently.
 - **`project`**: raw AD `displayLogic` = `@ACCT_DIMENSION_DISPLAY@` — now genuinely
   config-gated for the first time in this window's history.
-- **`costcenter` / `eTADASBpartner`**: raw AD `displayLogic` on the amortization-line tab is
-  still **empty** for both (`AD_Field.DisplayLogic` was never wired to
-  `@ACCT_DIMENSION_DISPLAY@` at the Application Dictionary level) — a separate, already-tracked
-  gap explicitly **deferred** per product direction (to be fixed by a different, already-existing
-  ticket that populates the AD_Field and regenerates the contract). Per that direction, this hook
-  is wired to *read* whatever `displayLogic.raw` the AD eventually provides rather than hardcoding
-  a value — it fails open (stays visible) for both today, exactly like
-  `NeoDisplayLogicHelper.evaluateExpression()`'s own fail-open behavior server-side. Once the AD
-  change lands and the contract is regenerated, both fields start being correctly gated with
-  **zero further changes** needed in `AmortizationLinesTable.jsx` or the hook.
+- **`costcenter` / `eTADASBpartner`** (ETP-4914 update — this section previously described both
+  fields as having an empty, deferred `AD_Field.DisplayLogic`; that is now stale): direct DB
+  verification confirms both are now correctly wired at the AD level. `Cost Center`
+  (`C_Costcenter_ID`) on the Amortización Lines tab now carries
+  `AD_Field.DisplayLogic = @ACCT_DIMENSION_DISPLAY@` — the same macro `project` uses — AND a
+  matching `AD_Dimension_Mapping` row now exists for `A_Amortizationline` (dimension `CC`,
+  docbasetype `AMZ`, level `L`, active), which is what makes the macro resolve to real,
+  non-empty JS instead of falling back to fail-open (this table did not have that mapping row
+  before). `Business Partner` (`EM_Etadas_C_Bpartner_ID`) carries `AD_Field.DisplayLogic =
+  @$Element_BP@='Y'`. Both changes were made entirely on the AD/DB side — **zero code changes**
+  were needed in `AmortizationLinesTable.jsx` or `useAccountingDimensionFields`, confirming the
+  original design note above: the hook reads whatever `displayLogic.raw` the AD provides with no
+  hardcoding, so it started respecting both fields automatically once the AD metadata landed.
+  Empirically confirmed: `make regen ONLY=amortization` produces a **zero diff** against the
+  committed artifacts — this dimension-gating fix is resolved live via the
+  `evaluate-display`/`NeoDisplayLogicHelper` server-side evaluator, not baked into
+  `contract.json`, so no regeneration step was required for this specific fix. This closes the
+  gap that was previously tracked here as deferred.
 - **`product`**: no product dimension field exists on the amortization-line tab — matrix's
   "Nunca" is already trivially satisfied.
 

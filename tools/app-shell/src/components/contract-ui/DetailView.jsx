@@ -88,6 +88,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
@@ -97,7 +98,7 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -334,19 +335,7 @@ export function buildSecondaryLineHandlers(deps) {
     try {
       const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
       const fieldValues = {};
-      for (const [k, v] of Object.entries(secondaryLineEdits)) {
-        if (k.endsWith('$_identifier')) continue;
-        // NEO Headless PATCH expects camelCase API keys, not DB column names.
-        // Always use k (the API key) as the field name.
-        // Convert numeric strings to numbers for BigDecimal compatibility.
-        // Only strip when the value is already in standard format (no commas).
-        // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-          fieldValues[k] = parseFloat(v);
-        } else {
-          fieldValues[k] = v;
-        }
-      }
+      normalizePatchFieldValues(secondaryLineEdits, fieldValues, st.addLineFields?.entry);
       const res = await fetch(secUrl, {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
@@ -690,18 +679,17 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui }) {
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
-    // Inline autosave with callout chain. NEO Headless expects API keys
-    // (camelCase), an unwrapped body, and numeric strings coerced for
-    // BigDecimal — mirrors the side-panel save at line ~1750. When a
-    // trigger field changes (e.g., product), `handleLineFieldChange`
-    // populates `derivedUpdates` with all callout-driven fields (price,
-    // tax, description, etc.) so they can be PATCHed in one shot.
-    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-    const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
-    const payloadValue = coerce(value);
+    // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
+    // and numeric strings coerced for BigDecimal — mirrors the side-panel save at line ~1750. `coerce`
+    // (ETP-4886) skips `_ID` columns via buildRowValueCoercer: they're always strings even when
+    // numeric-looking (e.g. attributeSetValue's "0" sentinel), so PATCHing them as a Number 400s.
+    // Trigger fields (e.g. product) populate `derivedUpdates` with callout-driven fields (price, tax,
+    // description) PATCHed in one shot via `handleLineFieldChange`.
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id) || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    const coerce = buildRowValueCoercer(fields);
+    const payloadValue = coerce(value, fieldKey);
 
     // Build the row snapshot the callout sees: existing row + the change.
     // Strip null/empty inherited keys that the parent has set (e.g.
@@ -758,7 +746,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     //    standardPrice, unitPrice, listPrice).
     for (const [k, v] of Object.entries(derivedUpdates)) {
       if (k.endsWith('$_identifier')) continue;
-      fieldValues[k] = coerce(v);
+      fieldValues[k] = coerce(v, k);
     }
     // 3. The user-changed field always wins (last-write).
     fieldValues[fieldKey] = payloadValue;
@@ -1030,9 +1018,9 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
   return true;
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
-  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {
@@ -1090,14 +1078,13 @@ function renderNewRecordSaveActions({
  */
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, blockSaveForBalance,
+  ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
     <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
     }}>
       {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
@@ -1262,6 +1249,7 @@ export function DetailView({
   deleteAction = null,
   customTabsAfterBottom = false,
   hidePrint = false,
+  hidePrintWhen = null,
   hideSaveStatuses = [],
   hideMoreMenu = false,
   hideMoreDetails = false,
@@ -1298,7 +1286,7 @@ export function DetailView({
   requiredHeaderFields = null,
   showDetailFooterTotals = undefined,
   onAfterSave,
-  onAfterCreate,
+  onAfterCreate, onAfterExistingSave,
   additionalDirtyState = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
@@ -1324,8 +1312,7 @@ export function DetailView({
   showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
-  formScrollPaddingB = 'pb-6',
-  secondaryTabContentPaddingT = 'pt-3',
+  formScrollPaddingB = 'pb-6', secondaryTabContentPaddingT = 'pt-3',
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
@@ -1338,7 +1325,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [],
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -2610,7 +2597,6 @@ export function DetailView({
       roundAmounts(result);
       applyUpdates?.(result, forceFields);
 
-
     } catch {
       // Callout is best-effort
     }
@@ -2640,6 +2626,16 @@ export function DetailView({
         return;
       }
       hook.handleChange?.('etgoTotalDiscount', pct);
+      // ETP-4777 — the PATCH above also makes the backend recompute
+      // grandTotalAmount (GET-time discount compensation, see
+      // Abstract{Order,Invoice}HeaderHandler), but this endpoint's response
+      // isn't applied to local state beyond etgoTotalDiscount itself.
+      // Without this, DocumentTotalsPanel's persisted-baseline (ETP-4777)
+      // freezes on the stale pre-discount grandTotalAmount the instant
+      // inputPct catches up to the (now also stale) totalDiscountPct prop —
+      // same lightweight, non-disruptive header refresh already used after
+      // primary-line edits (see the exchangeRates PATCH handler above).
+      hook.refreshHeaderTotals?.(currentId);
       toast.success(ui('totalDiscountSaved'));
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
@@ -2920,7 +2916,7 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal,
   };
@@ -2941,7 +2937,7 @@ export function DetailView({
             >
               {ui('cancel')}
             </Button>
-            {statusField && data[statusField] != null && (
+            {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
@@ -2999,7 +2995,7 @@ export function DetailView({
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
-              {!documentPreview && !hidePrint && !isNew && recordId && (
+              {!documentPreview && !hidePrint && !isNew && recordId && !evaluateFieldCondition(hidePrintWhen, data) && (
                 <button
                   onClick={() => setShowPrint(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
@@ -3102,7 +3098,7 @@ export function DetailView({
                         )
                         : (
                           <>
-                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}
+                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
                             {tMenu(resolveProcessLabel(p, data))}
                           </>
                         )}
@@ -3515,8 +3511,8 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={lineHiddenColumns}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
+                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
@@ -3828,7 +3824,7 @@ export function DetailView({
                                                 const patchEdits = { ...lineEdits };
                                                 if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
                                                 const fieldValues = {};
-                                                normalizePatchFieldValues(patchEdits, fieldValues);
+                                                normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
                                                   headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -4439,25 +4435,3 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
   }
 }
 
-function getButtonClass(salesTheme, p, isPrimary) {
-  if (p.style === 'ghost-danger') {
-    return 'bg-card border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]';
-  }
-  if (salesTheme) {
-    if (p.style === 'destructive') {
-      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
-    } else {
-      if (isPrimary) {
-        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
-      } else {
-        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
-      }
-    }
-  } else {
-    if (p.style === 'destructive') {
-      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
-    } else {
-      return '';
-    }
-  }
-}

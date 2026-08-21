@@ -210,15 +210,20 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
   // For product changes, trust the callout if it already computed the gross amount.
   if (field === 'product' && calloutResult.grossAmount != null && Number(calloutResult.grossAmount) !== 0) return;
 
-  // When a client-side field produces exactly 0 AND qty+price are both set, the
-  // zero is intentional (e.g. 100% discount). Explicitly zero out the gross so
-  // stale intermediate values (e.g. grossAmount from when the user typed "10" on
-  // the way to "100") do not remain visible. When qty or price is missing the
-  // zero is indeterminate — leave result unchanged.
+  // When a client-side field produces exactly 0, the zero is intentional in two
+  // cases: (a) the field the user just edited IS qty or price itself — that is
+  // always deterministic (qty×price with either factor at 0 is always 0,
+  // regardless of the other factor's value; ETP-4727), or (b) a *different*
+  // client-side field (discount) drove lineNet to 0 AND qty+price are both set
+  // (e.g. 100% discount). Explicitly zero out the gross so stale intermediate
+  // values (e.g. grossAmount from when the user typed "10" on the way to "100")
+  // do not remain visible. Only when qty/price is missing AND the edited field
+  // is neither of them is the zero indeterminate — leave result unchanged.
   if (clientSideFields.includes(field) && lineNet === 0) {
+    const editedIsQtyOrPrice = field === config.qtyField || field === config.priceField;
     const qty   = parseFloat(String(rowValues[config.qtyField]   ?? '')) || 0;
     const price = parseFloat(String(rowValues[config.priceField] ?? '')) || 0;
-    if (qty !== 0 && price !== 0) {
+    if (editedIsQtyOrPrice || (qty !== 0 && price !== 0)) {
       calloutResult.lineNetAmount = 0;
       calloutResult.grossAmount = 0;
       calloutResult[config.grossField] = 0;
@@ -253,15 +258,20 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
 export function computeUnitPriceForPost(lineData, config) {
   if (config.priceField === 'unitPrice') return;
   const discountField = config.discountField || 'discount';
-  const listPrice = parseFloat(String(lineData[config.priceField] ?? '')) || 0;
-  const discount  = parseFloat(String(lineData[discountField]     ?? '')) || 0;
-  // 0 means "not entered" (indeterminate, skip deriving unitPrice), but a real
-  // negative listPrice (credit/return lines, ETP-4567) must still compute and
-  // be sent — see the guard fix in computeLineGrossAmount above for the same
-  // reason.
-  if (listPrice !== 0) {
-    lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
-  }
+  // A genuinely ABSENT priceField (key not present at all, e.g. a partial payload
+  // that never touched price) is the only case where deriving unitPrice would be
+  // guesswork — skip it then. But 0 is deterministic like any other real value:
+  // listPrice=0 must derive unitPrice=0 too (ETP-4727 — editing Precio to exactly 0
+  // on an existing line left unitPrice at its stale pre-edit value here, which the
+  // backend's own fallback then read as "price wasn't really changed" and
+  // recomputed a nonzero lineGrossAmount from it, clobbering the correct 0 the
+  // frontend had already sent). A real negative listPrice (credit/return lines,
+  // ETP-4567) must still compute and be sent too — see the guard fix in
+  // computeLineGrossAmount above for the same reason.
+  if (lineData[config.priceField] === undefined || lineData[config.priceField] === null) return;
+  const listPrice = parseFloat(String(lineData[config.priceField])) || 0;
+  const discount  = parseFloat(String(lineData[discountField] ?? '')) || 0;
+  lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
 }
 
 // ─── React hook ──────────────────────────────────────────────────────────────

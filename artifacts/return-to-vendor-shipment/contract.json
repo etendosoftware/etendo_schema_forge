@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
-  "generatedAt": "2026-07-06T16:17:20.534Z",
-  "updatedAt": "2026-08-06T13:47:46.616Z",
-  "checksum": "eed628b2edf5cbce",
+  "version": "0.2.0",
+  "generatedAt": "2026-08-13T11:56:58.791Z",
+  "updatedAt": "2026-08-17T11:20:18.327Z",
+  "checksum": "d2916d345847c345",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -12,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -555,6 +560,7 @@
             "inputMode": "search",
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },
@@ -710,6 +716,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -1269,12 +1280,12 @@
             "required": true
           },
           {
-            "name": "invoicefromshipment",
-            "apiKey": "invoicefromshipment",
-            "column": "Invoicefromshipment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           },
           {
             "name": "invoiceStatus",
@@ -1282,6 +1293,14 @@
             "column": "InvoiceStatus",
             "type": "integer",
             "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "invoicefromshipment",
+            "apiKey": "invoicefromshipment",
+            "column": "Invoicefromshipment",
+            "type": "button",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1331,14 +1350,6 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
-          },
-          {
-            "name": "etgoCurrency",
-            "apiKey": "etgoCurrency",
-            "column": "EM_ETGO_Currency_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
           }
         ],
         "javaQualifier": "returnToVendorShipmentHeaderHandler"
@@ -1425,7 +1436,7 @@
             "apiKey": "storageBin",
             "column": "M_Locator_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1557,19 +1568,19 @@
             "required": false
           },
           {
-            "name": "canceledInoutLine",
-            "apiKey": "canceledInoutLine",
-            "column": "Canceled_Inoutline_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "businessPartner",
             "apiKey": "businessPartner",
             "column": "C_Bpartner_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "canceledInoutLine",
+            "apiKey": "canceledInoutLine",
+            "column": "Canceled_Inoutline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {

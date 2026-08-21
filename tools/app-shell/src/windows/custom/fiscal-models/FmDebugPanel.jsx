@@ -33,7 +33,7 @@ const MOCK_303 = {
   incidents: { blocking: 0, warning: 0, items: [] },
   summary: { accrued: 682.08, deductible: 3498.39, result: -2816.31 },
   boxes: REAL_303_BOXES,
-  file: null, sources: [], history: [],
+  fileName: null, sources: [], history: [],
   updatedAt: '14/05/2026',
 };
 
@@ -51,10 +51,10 @@ const MOCK_SUMMARY = {
   prev: { accrued: 38400.00, deductible: 31200.50, result: 7199.50 },
 };
 
-const MOCK_FILE = {
-  name: '303_B12345678_2026_T1.303', size: '3,4 KB',
-  generatedAt: '2026-05-02 10:30',
-};
+// Matches the real backend contract: FiscalDeclCrudHandler#declToJson serializes the generated
+// declaration file as a plain string under the "fileName" key (not an object) — see
+// FmListPage.jsx's FileCell, which renders this value verbatim as text.
+const MOCK_FILE_NAME = '303_B12345678_2026_T1.303';
 
 const MOCK_SOURCES = [
   { date: '2026-03-21', ref: 'F-2026-0188', type: 'Venta',  party: 'Catering Pirineos S.L.',   regime: 'General 21%',    base: 1200, vat: 252,  total: 1452,  boxes: '7, 8' },
@@ -344,7 +344,7 @@ export default function FmDebugPanel({ view, setView }) {
                 { label: 'Summary',          active: !!decl?.summary,                              onInject: () => patchDecl({ summary: MOCK_SUMMARY }),          onClear: () => patchDecl({ summary: null }) },
                 { label: 'Boxes · real',     active: decl?.boxes?.[7] === REAL_303_BOXES[7],       onInject: () => patchDecl({ boxes: REAL_303_BOXES, result: { kind:'C', amount:2816.31 }, summary: { accrued:682.08, deductible:3498.39, result:-2816.31 } }), onClear: () => patchDecl({ boxes: {} }) },
                 { label: 'Boxes · demo',     active: decl?.boxes?.[7] === DEMO_303_BOXES[7],       onInject: () => patchDecl({ boxes: DEMO_303_BOXES, result: { kind:'I',  amount:12179.75 }, summary: { accrued:45230.80, deductible:33051.05, result:12179.75 } }), onClear: () => patchDecl({ boxes: {} }) },
-                { label: 'File',             active: !!decl?.file,                                 onInject: () => patchDecl({ file: MOCK_FILE }),                 onClear: () => patchDecl({ file: null }) },
+                { label: 'File',             active: !!decl?.fileName,                             onInject: () => patchDecl({ fileName: MOCK_FILE_NAME }), onClear: () => patchDecl({ fileName: null }) },
                 { label: 'Sources (4 rows)', active: (decl?.sources ?? []).length > 0,            onInject: () => patchDecl({ sources: MOCK_SOURCES }),           onClear: () => patchDecl({ sources: [] }) },
                 { label: 'History (4)',      active: (decl?.history ?? []).length > 0,            onInject: () => patchDecl({ history: MOCK_HISTORY }),           onClear: () => patchDecl({ history: [] }) },
               ].map(({ label, active, onInject, onClear }) => (
@@ -407,8 +407,8 @@ export default function FmDebugPanel({ view, setView }) {
               {[
                 { label: '2026 T1 · draft',           patch: { year: 2026, period: 'T1', status: 'draft', incidents: { blocking: 0, warning: 0, items: [] } } },
                 { label: '2026 T1 · 2 blocking',      patch: { year: 2026, period: 'T1', status: 'draft', incidents: { blocking: 2, warning: 3, items: [...MOCK_INCIDENTS.blocking, ...MOCK_INCIDENTS.warning] } } },
-                { label: '2026 T1 · ready + file',    patch: { year: 2026, period: 'T1', status: 'ready', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
-                { label: '2026 T1 · submitted_ack',   patch: { year: 2026, period: 'T1', status: 'submitted_ack', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
+                { label: '2026 T1 · ready + file',    patch: { year: 2026, period: 'T1', status: 'ready', fileName: MOCK_FILE_NAME, incidents: { blocking: 0, warning: 0, items: [] } } },
+                { label: '2026 T1 · submitted_ack',   patch: { year: 2026, period: 'T1', status: 'submitted_ack', fileName: MOCK_FILE_NAME, incidents: { blocking: 0, warning: 0, items: [] } } },
                 { label: '2025 T1 · draft',           patch: { year: 2025, period: 'T1', status: 'draft' } },
                 { label: '2024 T4 · rectificativa',   patch: { year: 2024, period: 'T4', status: 'draft' } },
                 { label: '2024 T1 · complementaria',  patch: { year: 2024, period: 'T1', status: 'draft' } },

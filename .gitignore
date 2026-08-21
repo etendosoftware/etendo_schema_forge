@@ -21,9 +21,11 @@ artifacts/test-report.html
 window-locks.json
 .active-locale
 tools/app-shell/dist/
+tools/app-shell/dist-e2e/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 tools/app-shell/.env.development.local
+tools/app-shell/.env.production.local
 tools/app-shell/.env.es
 tools/etendo-go-ar/.env.local
 artifacts/e2e-report/
@@ -40,6 +42,7 @@ e2e/playwright-report/
 e2e/recordings/
 e2e/auth.json
 e2e/.auth-credentials.json
+e2e/.auth-credentials-*.json
 .fyso/
 tmp/
 sonar-results.md
@@ -90,3 +93,4 @@ flag-debt.html
 
 # push-to-neo --dump-delta diagnostic output (derived mirror, never committed)
 artifacts/*/neo-delta.json
+e2e/.auth-credentials-*.json

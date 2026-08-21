@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
-import { makeStaticPreviewTabs } from '../shared/PreviewActionButtons.jsx';
 import { InfoRow, PercentBar, MovementSummaryCard } from '../shared/preview-cards/SummaryCard.jsx';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
@@ -114,12 +113,14 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
           data-testid="ReceiptStatsPanel__ba7c74" />
       ),
     },
-    ...makeStaticPreviewTabs(ui),
   ];
 
+  // ETP-4315 — real, marked Attachment shared with the "Adjuntos" tab
+  // (M_InOut is the physical table for goods receipts).
   const attachmentConfig = {
     documentId: receipt.id,
-    specName: 'goods-receipt',
+    tableName: 'M_InOut',
+    useMainAttachment: true,
     storeCondition: true,
     autoFetch: false,
     token,

@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, FileDown, FileSpreadsheet, Eye, Loader2, X, ChevronDown } from 'lucide-react';
+import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
@@ -439,13 +440,28 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-function PopupMultiSelector({ selector, label, onChange }) {
+function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState([]);
   const [pending, setPending] = useState([]); // selection inside modal (not yet confirmed)
-  const [confirmed, setConfirmed] = useState([]); // [{id, name}] committed to the report
+  // [{id, name}] committed to the report. Seeded once from `value`/`displayValue`
+  // (the same comma / ", "-joined shape `confirm()` below writes into params/
+  // `_display_<name>`) — without this, a deep-linked report (ETP-4898's "Open in
+  // new tab" drill-down button, or any future one) renders correctly server-side
+  // but this field shows empty chips, because this component otherwise never
+  // reads its initial selection from props.
+  const [confirmed, setConfirmed] = useState(() => {
+    if (!value) return [];
+    const ids = value.split(',').filter(Boolean);
+    const names = displayValue ? displayValue.split(', ') : [];
+    return ids.map((id, i) => ({ id, name: names[i] || id }));
+  });
+  // Frozen at openModal() time — "what was confirmed as of the last OK". Options matching
+  // this snapshot float to the top of the list. Deliberately NOT derived from `pending`, so
+  // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
+  const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -461,10 +477,17 @@ function PopupMultiSelector({ selector, label, onChange }) {
 
   const openModal = () => {
     setPending([...confirmed]);
+    setOpenSnapshotIds(new Set(confirmed.map(s => s.id)));
     setQuery('');
     setOpen(true);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
+
+  const orderedOptions = useMemo(() => (
+    [...options].sort((a, b) =>
+      (openSnapshotIds.has(b.id) ? 1 : 0) - (openSnapshotIds.has(a.id) ? 1 : 0)
+    )
+  ), [options, openSnapshotIds]);
 
   const toggleItem = (item) => {
     const exists = pending.some(s => s.id === item.id);
@@ -549,7 +572,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
                   {query.length > 0 ? ui('noResults') : ui('loading')}
                 </p>
               ) : (
-                options.map(o => {
+                orderedOptions.map(o => {
                   const isSelected = pending.some(s => s.id === o.id);
                   return (
                     <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
@@ -681,12 +704,24 @@ const SIDEBAR_SECTIONS = [
   { key: 'options', labelKey: 'displayOptions' },
 ];
 
+// Reports whose contract declares its own `sections` (id + label) use the
+// collapsible accordion below. Reports without one keep the legacy flat
+// primary/dimensions/options layout untouched — migrate them one at a time
+// by adding a `sections` array to their report-contract.json (ETP-4898).
 function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [displayValues, setDisplayValues] = useState({});
   const [errors, setErrors] = useState({});
   const [popup, setPopup] = useState(null); // { name, selector, label } for popup-single
+  const useAccordion = Array.isArray(report.sections) && report.sections.length > 0;
+  // Independent open/closed state per section — several can be expanded at once,
+  // unlike a classic single-open accordion.
+  const [openSections, setOpenSections] = useState(() => ({ [report.sections?.[0]?.id]: true }));
+
+  useEffect(() => {
+    setOpenSections({ [report.sections?.[0]?.id]: true });
+  }, [report.id]);
 
   useEffect(() => {
     setDisplayValues({});
@@ -716,6 +751,192 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     grouped[sec].push(p);
   }
 
+  // Each renderXParam below owns exactly one `p.type` branch that renderParam
+  // used to inline — pure extraction (ETP-4898/Sonar cognitive complexity),
+  // no behavior change. They stay as closures alongside renderParam so they
+  // keep direct access to the same component state/handlers (params, errors,
+  // handleChange, displayValues, setPopup, token, selectedOrgId, roleOrgIds,
+  // report, ui, locale, resetKey) instead of threading a dozen props through.
+
+  // Multi-select popup (checkboxes)
+  const renderSearchPopupParam = (p, { label, labelEl }) => (
+    <div key={`${p.name}-${resetKey}`}>
+      {labelEl}
+      <PopupMultiSelector
+        key={`${p.name}-${resetKey}`}
+        selector={p.selector}
+        label={label}
+        value={params[p.name] || ''}
+        displayValue={params['_display_' + p.name] || ''}
+        onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
+        data-testid="PopupMultiSelector__3c998a" />
+    </div>
+  );
+
+  // Single-select popup modal
+  const renderSearchPopupSingleParam = (p, { label, labelEl, hasError, errorBorder }) => {
+    const display = displayValues[p.name] || params['_display_' + p.name] || '';
+    return (
+      <div key={p.name}>
+        {labelEl}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+            const extra = {};
+            if (p.dependsOn) {
+              const paramKey = p.selector === 'account' ? 'selectedAcctSchemaId' : 'selectedOrgId';
+              extra[paramKey] = params[p.dependsOn] || '';
+            }
+            setPopup({ name: p.name, selector: p.selector, label, extraParams: extra });
+          }}
+            className={`flex-1 h-9 px-3 text-sm border rounded-md bg-card hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
+          >
+            {display || <span className="opacity-50">{ui('selectPlaceholder')}</span>}
+          </button>
+          {display && (
+            <button
+              type="button"
+              onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
+              className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
+            ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
+          )}
+        </div>
+        {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+      </div>
+    );
+  };
+
+  // Inline search dropdown (default)
+  const renderSearchInlineParam = (p, { label, labelEl, hasError }) => (
+    <div key={p.name}>
+      {labelEl}
+      <SearchInput
+        selector={p.selector}
+        value={params[p.name] || ''}
+        displayValue={displayValues[p.name] || params['_display_' + p.name] || ''}
+        onChange={(id, name) => {
+          handleChange(p.name, id);
+          handleChange('_display_' + p.name, name);
+          setDisplayValues(prev => ({ ...prev, [p.name]: name }));
+        }}
+        multi={p.multi}
+        minLength={p.inputStyle === 'dropdown' ? 0 : 2}
+        fullWidth
+        hasError={hasError}
+        token={token}
+        label={label}
+        selectedOrgId={selectedOrgId}
+        roleOrgIds={roleOrgIds}
+        selectedWarehouseId={params.M_Warehouse_ID || ''}
+        data-testid="SearchInput__3c998a" />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
+  const renderSearchParam = (p, ctx) => {
+    if (p.inputStyle === 'popup') return renderSearchPopupParam(p, ctx);
+    if (p.inputStyle === 'popup-single') return renderSearchPopupSingleParam(p, ctx);
+    return renderSearchInlineParam(p, ctx);
+  };
+
+  const renderSelectParam = (p, { label, labelEl }) => {
+    const resolvedOptions = p.options ?? (() => {
+      // groupByValue is the deliberate opt-in marker for "usable as a Group By
+      // option" — filtering on it alone is robust across section-naming schemes
+      // (legacy 'dimensions', or a report's own 'sections' ids like 'dimensiones').
+      const base = { value: '', label: ui('none') };
+      const fromDimensions = (report.parameters || [])
+        .filter(d => d.groupByValue)
+        .map(d => ({ value: d.groupByValue, label: d.label?.[locale] || d.label?.en_US || d.name }));
+      return [base, ...fromDimensions];
+    })();
+    const resolveOptLabel = (o) => (o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label);
+    // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
+    // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
+    // behavior), not via a pinned empty option.
+    const staticOpts = resolvedOptions
+      .filter(o => o.value !== '')
+      .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
+    const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
+    return (
+      <div key={p.name}>
+        {labelEl}
+        <CreatableSearchSelect
+          field={{ key: p.name, required: p.required }}
+          value={params[p.name] || ''}
+          displayValue={selectedOpt ? selectedOpt.name : ''}
+          onChange={(id) => handleChange(p.name, id)}
+          resolvedLabel={label}
+          staticOptions={staticOpts}
+          placeholderOverride={ui('selectPlaceholder')}
+          data-testid="CreatableSearchSelect__3c998a" />
+      </div>
+    );
+  };
+
+  const renderToggleParam = (p, { label }) => {
+    const isOn = params[p.name] === 'true';
+    return (
+      <div key={p.name} className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <button
+          type="button"
+          onClick={() => handleChange(p.name, isOn ? 'false' : 'true')}
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOn ? 'bg-foreground' : 'bg-muted'}`}
+          role="switch"
+          aria-checked={isOn}
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderBooleanParam = (p, { label }) => (
+    <div key={p.name} className="flex items-start gap-2.5 p-3 rounded-lg border border-border/40 bg-muted/20 cursor-pointer"
+      onClick={() => handleChange(p.name, params[p.name] === 'true' ? 'false' : 'true')}
+    >
+      <input
+        type="checkbox"
+        checked={params[p.name] === 'true'}
+        onChange={e => handleChange(p.name, e.target.checked ? 'true' : 'false')}
+        onClick={e => e.stopPropagation()}
+        className="mt-0.5 w-4 h-4 accent-primary shrink-0"
+      />
+      <div>
+        <div className="text-xs font-medium text-foreground">{label}</div>
+        {p.description && <div className="text-[10px] text-muted-foreground mt-0.5">{p.description}</div>}
+      </div>
+    </div>
+  );
+
+  const renderDateParam = (p, { labelEl, hasError, errorBorder }) => (
+    <div key={p.name}>
+      {labelEl}
+      <DateField
+        value={params[p.name] || ''}
+        onChange={(iso) => handleChange(p.name, iso)}
+        className={errorBorder}
+        data-testid="DateField__3c998a" />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
+  // number, text
+  const renderTextParam = (p, { labelEl, hasError, errorBorder }) => (
+    <div key={p.name}>
+      {labelEl}
+      <input
+        type={p.type === 'number' ? 'number' : 'text'}
+        value={params[p.name] || ''}
+        onChange={e => handleChange(p.name, e.target.value)}
+        className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
+      />
+      {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
+    </div>
+  );
+
   const renderParam = (p) => {
     const label = p.label?.[locale] || p.label?.en_US || p.name;
     const hasError = !!errors[p.name];
@@ -725,157 +946,14 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </label>
     );
     const errorBorder = hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border';
+    const ctx = { label, hasError, labelEl, errorBorder };
 
-    if (p.type === 'search') {
-      // Multi-select popup (checkboxes)
-      if (p.inputStyle === 'popup') {
-        return (
-          <div key={`${p.name}-${resetKey}`}>
-            {labelEl}
-            <PopupMultiSelector
-              key={`${p.name}-${resetKey}`}
-              selector={p.selector}
-              label={label}
-              onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
-              data-testid="PopupMultiSelector__3c998a" />
-          </div>
-        );
-      }
-
-      // Single-select popup modal
-      if (p.inputStyle === 'popup-single') {
-        const display = displayValues[p.name] || params['_display_' + p.name] || '';
-        return (
-          <div key={p.name}>
-            {labelEl}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                const extra = {};
-                if (p.dependsOn) {
-                  const paramKey = p.selector === 'account' ? 'selectedAcctSchemaId' : 'selectedOrgId';
-                  extra[paramKey] = params[p.dependsOn] || '';
-                }
-                setPopup({ name: p.name, selector: p.selector, label, extraParams: extra });
-              }}
-                className={`flex-1 h-9 px-3 text-sm border rounded-md bg-card hover:bg-muted/50 text-left truncate text-muted-foreground ${errorBorder}`}
-              >
-                {display || <span className="opacity-50">{ui('selectPlaceholder')}</span>}
-              </button>
-              {display && (
-                <button
-                  type="button"
-                  onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
-                  className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
-                ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
-              )}
-            </div>
-            {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-          </div>
-        );
-      }
-
-      // Inline search dropdown (default)
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <SearchInput
-            selector={p.selector}
-            value={params[p.name] || ''}
-            displayValue={displayValues[p.name] || params['_display_' + p.name] || ''}
-            onChange={(id, name) => {
-              handleChange(p.name, id);
-              handleChange('_display_' + p.name, name);
-              setDisplayValues(prev => ({ ...prev, [p.name]: name }));
-            }}
-            multi={p.multi}
-            minLength={p.inputStyle === 'dropdown' ? 0 : 2}
-            fullWidth
-            hasError={hasError}
-            token={token}
-            label={label}
-            selectedOrgId={selectedOrgId}
-            roleOrgIds={roleOrgIds}
-            selectedWarehouseId={params.M_Warehouse_ID || ''}
-            data-testid="SearchInput__3c998a" />
-          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-        </div>
-      );
-    }
-
-    if (p.type === 'select') {
-      const resolvedOptions = p.options ?? (() => {
-        const base = { value: '', label: report.groups?.[0]?.label?.en_US || 'Account' };
-        const fromDimensions = (report.parameters || [])
-          .filter(d => d.section === 'dimensions' && d.groupByValue)
-          .map(d => ({ value: d.groupByValue, label: d.label?.en_US || d.name }));
-        return [base, ...fromDimensions];
-      })();
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <select
-            value={params[p.name] || ''}
-            onChange={e => handleChange(p.name, e.target.value)}
-            className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
-          >
-            {resolvedOptions.map(o => {
-              const optLabel = o.label && typeof o.label === 'object' ? (o.label[locale] || o.label.en_US) : o.label;
-              return <option key={o.value} value={o.value}>{optLabel}</option>;
-            })}
-          </select>
-        </div>
-      );
-    }
-
-    if (p.type === 'boolean') {
-      return (
-        <div key={p.name} className="flex items-start gap-2.5 p-3 rounded-lg border border-border/40 bg-muted/20 cursor-pointer"
-          onClick={() => handleChange(p.name, params[p.name] === 'true' ? 'false' : 'true')}
-        >
-          <input
-            type="checkbox"
-            checked={params[p.name] === 'true'}
-            onChange={e => handleChange(p.name, e.target.checked ? 'true' : 'false')}
-            onClick={e => e.stopPropagation()}
-            className="mt-0.5 w-4 h-4 accent-primary shrink-0"
-          />
-          <div>
-            <div className="text-xs font-medium text-foreground">{label}</div>
-            {p.description && <div className="text-[10px] text-muted-foreground mt-0.5">{p.description}</div>}
-          </div>
-        </div>
-      );
-    }
-
-    if (p.type === 'date') {
-      return (
-        <div key={p.name}>
-          {labelEl}
-          <DateField
-            value={params[p.name] || ''}
-            onChange={(iso) => handleChange(p.name, iso)}
-            className={errorBorder}
-            data-testid="DateField__3c998a" />
-          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-        </div>
-      );
-    }
-
-    // number, text
-    return (
-      <div key={p.name}>
-        {labelEl}
-        <input
-          type={p.type === 'number' ? 'number' : 'text'}
-          value={params[p.name] || ''}
-          onChange={e => handleChange(p.name, e.target.value)}
-          className={`w-full h-9 px-2 text-sm rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
-        />
-        {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
-      </div>
-    );
+    if (p.type === 'search') return renderSearchParam(p, ctx);
+    if (p.type === 'select') return renderSelectParam(p, ctx);
+    if (p.type === 'toggle') return renderToggleParam(p, ctx);
+    if (p.type === 'boolean') return renderBooleanParam(p, ctx);
+    if (p.type === 'date') return renderDateParam(p, ctx);
+    return renderTextParam(p, ctx);
   };
 
   const renderSection = (sec, sectionParams) => {
@@ -910,37 +988,67 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           }}
           data-testid="SelectorPopup__3c998a" />
       )}
-      <div className="px-4 pt-4 pb-3 border-b border-border/30 shrink-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{ui('reportBuilder')}</p>
+      <div className="p-2 border-b border-border/30 shrink-0">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {ui('customizeReport')}
+          <Info className="h-3.5 w-3.5 text-muted-foreground" data-testid="Info__3c998a" />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{ui('customizeReportHint')}</p>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 space-y-6">
-          {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
-            const sectionParams = grouped[key];
-            if (!sectionParams?.length) return null;
+        {useAccordion ? (
+          report.sections.map(({ id, label }) => {
+            // A section with no parameters yet still renders (header + empty
+            // body) instead of disappearing — a contract may declare a
+            // section ahead of the fields that will populate it later.
+            const sectionParams = grouped[id] || [];
+            const isOpen = !!openSections[id];
+            const sectionLabel = label?.[locale] || label?.en_US || id;
             return (
-              <div key={key}>
-                <h4 className="text-xs font-semibold text-foreground mb-3">{ui(labelKey)}</h4>
-                {renderSection(key, sectionParams)}
+              <div key={id} className="border-b border-border/30">
+                <button
+                  type="button"
+                  onClick={() => setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))}
+                  className={`w-full flex items-center justify-between px-2 py-3 text-left text-xs font-semibold transition-colors ${
+                    isOpen ? 'bg-accent-highlight text-accent-highlight-foreground' : 'bg-card text-foreground hover:bg-muted/40'
+                  }`}
+                >
+                  {sectionLabel}
+                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} data-testid="ReportSectionChevron__3c998a" />
+                </button>
+                {isOpen && <div className="px-2 py-2">{renderSection(id, sectionParams)}</div>}
               </div>
             );
-          })}
-        </div>
+          })
+        ) : (
+          <div className="px-4 py-4 space-y-6">
+            {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
+              const sectionParams = grouped[key];
+              if (!sectionParams?.length) return null;
+              return (
+                <div key={key}>
+                  <h4 className="text-xs font-semibold text-foreground mb-3">{ui(labelKey)}</h4>
+                  {renderSection(key, sectionParams)}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-      <div className="px-4 pb-5 pt-3 border-t border-border/30 space-y-2 shrink-0">
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="w-full h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loading ? ui('running') : ui('runReport')}
-        </button>
+      <div className="p-2 border-t border-border/30 flex gap-2 shrink-0">
         <button
           onClick={onReset}
           disabled={loading}
-          className="w-full h-9 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
+          className="flex-1 h-10 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
         >
           {ui('resetFilters')}
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="flex-1 h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {loading ? ui('running') : ui('runReport')}
         </button>
       </div>
     </div>
@@ -951,6 +1059,8 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { locale } = useLocaleSwitch();
+  const ui = useUI();
 
   const reportId = targetReportId || report.id;
   const drillParams = { ...baseParams, ...(bpId ? { bPartnerId: bpId, showDetails: 'true' } : {}), ...extraParams };
@@ -972,7 +1082,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ format, params: drillParams }),
+        body: JSON.stringify({ format, params: drillParams, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -990,19 +1100,42 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
     } catch (err) { setError(err.message); }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report.id, token, bpId]);
+  }, [report.id, token, bpId, locale]);
 
   useEffect(() => { fetchFormat('preview'); }, [fetchFormat]);
+
+  // Opens the same render, but as a standalone report page in a new tab —
+  // its own sidebar/toolbar, not the read-only modal preview (ETP-4898).
+  // Same-origin navigation: the JWT lives in localStorage, so the new tab is
+  // already authenticated on load, no token needs to travel through the URL.
+  const openFullReport = useCallback(() => {
+    const basePath = window.location.pathname.replace(/\/[^/]*$/, ''); // same pattern as the invoice iframe (below)
+    const qs = new URLSearchParams();
+    qs.set('report', reportId);
+    qs.set('category', 'finance');
+    // Only forward filled-in values — an empty/undefined one would otherwise
+    // stringify as the literal "undefined" and needlessly override the target
+    // report's own default for that parameter.
+    for (const [key, value] of Object.entries(drillParams)) {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+    }
+    window.open(`${window.location.origin}${basePath}/report-viewer?${qs.toString()}`, '_blank');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId, JSON.stringify(drillParams)]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center gap-2 px-1">
-        {[{ id: 'preview', labelKey: 'preview', icon: Eye }, { id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }].map(f => (
+        {[{ id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }, { id: 'csv', labelKey: 'CSV', icon: FileText }].map(f => (
           <button key={f.id} onClick={() => fetchFormat(f.id)} disabled={loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
             <f.icon className="h-3.5 w-3.5" />{ui(f.labelKey)}
           </button>
         ))}
+        <button onClick={openFullReport}
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
+          <ExternalLink className="h-3.5 w-3.5" />{ui('openFullReport')}
+        </button>
       </div>
       <div className="flex-1 bg-card rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
@@ -1023,16 +1156,27 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [recordCount, setRecordCount] = useState(null);
   const previewHtmlRef = useRef('');
+  // Tracks "a render has actually completed", independent of previewHtmlRef
+  // (which only ever holds HTML — 'preview' format). Clicking PDF/Excel/CSV
+  // directly, before ever generating the HTML preview, used to leave this
+  // condition permanently false, so the "ready to go" skeleton stayed stuck
+  // ON TOP of the iframe (an absolutely-positioned overlay always paints
+  // above the statically-positioned iframe) even after the PDF/file rendered
+  // successfully behind it.
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
   const [invoicePopup, setInvoicePopup] = useState(null);
   const { locale } = useLocaleSwitch();
-  const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const tMenu = useMenuLabel();
   const ui = useUI();
+  // Same URL state ReportViewerPage already reads for `report`/`category` — a
+  // second useSearchParams() call is fine (React Router just re-reads the
+  // current URL), used here to let a deep-link pre-fill the sidebar's filter
+  // values (e.g. the "open in new tab" drill-down button, ETP-4898).
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const handler = (e) => {
@@ -1061,12 +1205,28 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       } else {
         defaults[p.name] = '';
       }
+      // A deep-link query-string value (e.g. the "open in new tab" drill-down
+      // button, ETP-4898) overrides the contract default for that same
+      // parameter name — this is what lets a new tab land pre-filled instead
+      // of resetting to the report's plain defaults.
+      if (searchParams.has(p.name)) {
+        defaults[p.name] = searchParams.get(p.name);
+      }
+      // Search/popup params (fromAccountId, bPartnerId, etc.) render their
+      // human label from `_display_<name>` (see renderSearchPopupSingleParam/
+      // renderSearchInlineParam/renderSearchPopupParam below), never from the
+      // raw id/code — carry that companion key too, or the field shows the
+      // right filter with an empty-looking "Seleccionar..." placeholder.
+      const displayKey = '_display_' + p.name;
+      if (searchParams.has(displayKey)) {
+        defaults[displayKey] = searchParams.get(displayKey);
+      }
     }
     if ('orgId' in defaults) {
-      defaults.orgId = selectedOrgId || '';
+      defaults.orgId = searchParams.get('orgId') || selectedOrgId || '';
     }
     return defaults;
-  }, [report, selectedOrgId]);
+  }, [report, selectedOrgId, searchParams]);
 
   const [params, setParams] = useState(getDefaultParams);
 
@@ -1119,7 +1279,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       const res = await fetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ format, params }),
+        body: JSON.stringify({ format, params, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1128,13 +1288,15 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       if (format === 'html' || format === 'preview') {
         const html = await res.text();
         previewHtmlRef.current = html;
-        const rowMatch = html.match(/(\d+) records/);
-        if (rowMatch) setRecordCount(parseInt(rowMatch[1], 10));
         writeToIframe(html);
+        setHasGenerated(true);
       } else if (format === 'pdf') {
         const blob = await res.blob();
         iframeRef.current.src = URL.createObjectURL(blob);
+        setHasGenerated(true);
       } else {
+        // Excel/CSV are pure downloads — they never touch the iframe, so the
+        // "ready to go" hint stays exactly as informative as before.
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1147,9 +1309,29 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, token, params]);
+  }, [report.id, token, params, locale]);
 
-  // No auto-render on mount — wait for user to click Run Report
+  // No auto-render on mount — wait for user to click Run Report... UNLESS the
+  // page was opened via a deep-link that carries real filter values (e.g. the
+  // drill-down modal's "Open in new tab" button, ETP-4898) rather than just
+  // `?report=`/`?category=` (the plain report-list/favorites navigation).
+  // Those already have a filled-in sidebar, so re-running "Generar informe"
+  // manually would be redundant friction. Fires once, and waits for any
+  // autoDefault-driven param (still loading async above) to land first.
+  const isDeepLinked = useMemo(() => {
+    for (const key of searchParams.keys()) {
+      if (key !== 'report' && key !== 'category') return true;
+    }
+    return false;
+  }, [searchParams]);
+  const autoRunFiredRef = useRef(false);
+  useEffect(() => {
+    if (!isDeepLinked || autoRunFiredRef.current) return;
+    const missingRequired = (report.parameters || []).some(p => p.required && !p.hidden && !params[p.name]);
+    if (missingRequired) return;
+    autoRunFiredRef.current = true;
+    renderReport('html');
+  }, [isDeepLinked, params, report.parameters, renderReport]);
 
   const handlePrint = () => {
     if (iframeRef.current?.contentDocument?.body?.innerHTML) {
@@ -1182,7 +1364,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
   const DOWNLOAD_FORMATS = [
-    { id: 'html', labelKey: 'preview', icon: Eye },
     { id: 'pdf', labelKey: 'PDF', icon: FileDown },
     { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet },
     { id: 'csv', labelKey: 'CSV', icon: FileText },
@@ -1191,10 +1372,38 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col">
+        {/* ===== Top bar: Cancel + format actions — spans sidebar + content ===== */}
+        <div className="flex items-center justify-between px-2 py-2 bg-card border-b border-border/30 shrink-0">
+          <Button
+            variant="outline"
+            className="h-9 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+            data-testid="action-cancel"
+            onClick={onBack}
+          >
+            {ui('cancel')}
+          </Button>
+          <div className="flex items-center gap-1">
+            {DOWNLOAD_FORMATS.map(fmt => {
+              const Icon = fmt.icon;
+              return (
+                <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
+                  <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
+                </button>
+              );
+            })}
+            <div className="w-px h-6 bg-border/50 mx-1" />
+            <button onClick={handlePrint} disabled={loading}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
+            </button>
+          </div>
+        </div>
+
         {/* ===== Content: sidebar + right panel ===== */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left sidebar */}
-          <div className="w-72 shrink-0 flex flex-col border-r border-border/30 bg-card overflow-hidden">
+          <div className="w-[300px] shrink-0 flex flex-col border-r border-border/30 bg-card overflow-hidden">
             <ReportSidebar
               report={report}
               params={params}
@@ -1211,32 +1420,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
 
           {/* Right panel */}
           <div className="flex-1 flex flex-col overflow-hidden bg-muted">
-            {/* Format actions bar */}
-            <div className="flex items-center justify-between px-5 py-2 bg-card border-b border-border/30 shrink-0">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3c998a" />}
-                {recordCount != null && !loading && <span>{ui('recordsFound').replace('{count}', recordCount)}</span>}
-              </div>
-              <div className="flex items-center gap-1">
-                {DOWNLOAD_FORMATS.map(fmt => {
-                  const Icon = fmt.icon;
-                  return (
-                    <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
-                      <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
-                    </button>
-                  );
-                })}
-                <div className="w-px h-6 bg-border/50 mx-1" />
-                <button onClick={handlePrint} disabled={loading}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                  <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
-                </button>
-              </div>
-            </div>
-
           {/* Report iframe */}
-          <div className="flex-1 overflow-hidden p-4">
+          <div className="flex-1 overflow-hidden pt-4 pr-0 pb-0 pl-4">
             <div className="bg-card rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground">
@@ -1246,7 +1431,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               {error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>
               )}
-              {!loading && !error && !previewHtmlRef.current && (
+              {!loading && !error && !hasGenerated && (
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Skeleton table background */}
                   <div className="p-6 opacity-30 pointer-events-none select-none blur-[2px]">
@@ -1318,7 +1503,16 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               token={token}
               baseParams={params}
               targetReportId="report-general-ledger"
-              extraParams={{ fromAccountId: drillDownAccount.value, toAccountId: drillDownAccount.value }}
+              extraParams={{
+                fromAccountId: drillDownAccount.value,
+                toAccountId: drillDownAccount.value,
+                // Same "code - name" shape the account popup selector itself stores
+                // (report-api.js's `account` selector SELECTs `value || ' - ' || name`
+                // as its label) — without this, "Open in new tab" lands with the
+                // right filter values but an empty-looking "Desde/A la cuenta" field.
+                _display_fromAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+                _display_toAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+              }}
               data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>

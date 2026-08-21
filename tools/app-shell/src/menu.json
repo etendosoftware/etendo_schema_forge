@@ -145,7 +145,8 @@
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
-          "path": "report-viewer?category=purchases"
+          "path": "report-viewer?category=purchases",
+          "hidden": true
         }
       ]
     },
@@ -262,6 +263,18 @@
           "label": "Chart of Accounts",
           "favname": "Chart of Accounts",
           "windowId": "118"
+        },
+        {
+          "name": "cost-center",
+          "label": "Cost Center",
+          "favname": "Cost Center",
+          "windowId": "79FC23AB84F04384B4B7CCCADCDD2942"
+        },
+        {
+          "name": "service-project",
+          "label": "Service Project",
+          "favname": "Service Project",
+          "windowId": "800001"
         },
         {
           "name": "general-ledger-configuration",
@@ -416,13 +429,15 @@
         {
           "name": "smart-scan",
           "label": "Smart Scan",
-          "favname": "Smart Scan"
+          "favname": "Smart Scan",
+          "hidden": true
         },
         {
           "name": "oauth2-clients",
           "label": "OAuth2 Clients",
           "favname": "OAuth2 Clients",
-          "icon": "Shield"
+          "icon": "Shield",
+          "hidden": true
         },
         {
           "name": "fiscal-config",

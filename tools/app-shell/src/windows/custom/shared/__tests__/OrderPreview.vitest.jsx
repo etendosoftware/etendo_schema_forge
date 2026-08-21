@@ -15,7 +15,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('../GenericPreviewModal.jsx', () => ({
-  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose }) => (
+  default: vi.fn(({ title, subtitle, tabs, actionButtons, onClose, attachmentConfig }) => (
     <div data-testid="generic-preview-modal">
       <span data-testid="modal-title">{title}</span>
       {subtitle && <span data-testid="modal-subtitle">{subtitle}</span>}
@@ -30,6 +30,18 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
       <button data-testid="close-btn" onClick={onClose}>
         Close
       </button>
+      {/* ETP-4789: simulates ManagedLeftPanel invoking attachmentConfig.onFileChange
+          once the cached attachment (GET /preview-file) resolves — ahead of the
+          jsreport regeneration behind useOrderPdf/usePurchaseOrderPdf. Mirrors the
+          same mechanism already used in GoodsReceiptPreview.vitest.jsx. */}
+      {attachmentConfig?.onFileChange && (
+        <button
+          data-testid="simulate-file-change"
+          onClick={() => attachmentConfig.onFileChange({ objectUrl: 'blob:cached-url', fileName: 'cached.pdf' })}
+        >
+          SimulateFileChange
+        </button>
+      )}
     </div>
   )),
 }));
@@ -107,6 +119,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import OrderPreview from '../OrderPreview.jsx';
+import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useOrderPdf } from '../useOrderPdf.js';
 import { usePurchaseOrderPdf } from '../usePurchaseOrderPdf.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
@@ -188,11 +201,13 @@ describe('OrderPreview', () => {
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
   });
 
-  it('renders 3 tabs: general, messages, history', () => {
+  // ETP-4855 — Messages and History were empty placeholders and were removed
+  // from every preview. Only the general tab is left.
+  it('renders the general tab alone: no messages or history tab', () => {
     renderOrderPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('shows send modal when email button is clicked', () => {
@@ -329,6 +344,148 @@ describe('OrderPreview', () => {
 
     it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {
       renderWithPdf({ ...defaultOrder, documentStatus: 'DR' }, 'purchase-order');
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
+    });
+  });
+
+  // ── ETP-4315: attachmentConfig wiring (real Attachment, C_Order table) ────
+  describe('attachmentConfig wiring (ETP-4315 — real Attachment, tableName C_Order)', () => {
+    function lastAttachmentConfig() {
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    it('includes tableName C_Order and the order documentId', () => {
+      renderOrderPreview();
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('C_Order');
+      expect(cfg.documentId).toBe(defaultOrder.id);
+    });
+
+    it('sets storeCondition: false when order.documentStatus is DR (draft)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+
+    it('sets storeCondition: true and sourceBlob=pdfBlob when order.documentStatus is CO (non-draft)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob, loading: false, error: null });
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+      expect(cfg.autoFetch).toBe(true);
+    });
+
+    it('applies the same tableName and gating for purchase-order (shared C_Order table)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      usePurchaseOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob, loading: false, error: null });
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('C_Order');
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+    });
+
+    it('sets storeCondition: false for purchase-order when documentStatus is DR (draft)', () => {
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+  });
+
+  // ── ETP-4315 follow-up (2026-08-18): pdfCacheConfig wiring into useOrderPdf/
+  // usePurchaseOrderPdf — same tableName/storeCondition shape as attachmentConfig,
+  // lets usePdfGenerator skip the jsreport round-trip on a cache hit.
+  describe('pdfCacheConfig wiring into useOrderPdf/usePurchaseOrderPdf (ETP-4315 follow-up)', () => {
+    function lastOrderPdfCacheConfig() {
+      const calls = vi.mocked(useOrderPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][4];
+    }
+
+    function lastPurchaseOrderPdfCacheConfig() {
+      const calls = vi.mocked(usePurchaseOrderPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][4];
+    }
+
+    it('sales-order: passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {
+      renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      const cfg = lastOrderPdfCacheConfig();
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: false });
+    });
+
+    it('sales-order: passes { tableName: "C_Order", storeCondition: true } when documentStatus is CO (non-draft)', () => {
+      renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      const cfg = lastOrderPdfCacheConfig();
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: true });
+    });
+
+    it('purchase-order: passes the same { tableName: "C_Order", storeCondition } shape (shared C_Order table)', () => {
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false });
+
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'CO' } });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
+    });
+  });
+
+  // ── ETP-4789 (reject-cycle fix): Download gates on the cached attachment too ──
+  // The cached attachment (GenericPreviewModal's ManagedLeftPanel, GET /preview-file)
+  // resolves ahead of the slow jsreport regeneration behind useOrderPdf/
+  // usePurchaseOrderPdf. hasPdf must become true as soon as attachmentConfig.onFileChange
+  // fires, even while pdfUrl is still null — closing the perceptible gap QA reported
+  // between the preview panel showing the PDF and the Download button enabling.
+  describe('Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)', () => {
+    it('enables the download button once the cached attachment resolves, even while pdfUrl is still null', () => {
+      useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: true, error: null });
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+    });
+
+    it('downloads via cachedAttachment.objectUrl/fileName, not the (still-null) pdfUrl/pdfBlob', () => {
+      useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      // Spy AFTER render/state-update — mocking document.createElement globally
+      // before React finishes creating real DOM nodes breaks reconciliation.
+      const clickMock = vi.fn();
+      const fakeAnchor = { href: '', download: '', click: clickMock };
+      const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+
+      try {
+        fireEvent.click(screen.getByTestId('download-btn'));
+        expect(fakeAnchor.href).toBe('blob:cached-url');
+        expect(fakeAnchor.download).toBe('cached.pdf');
+        expect(clickMock).toHaveBeenCalledTimes(1);
+      } finally {
+        createElementSpy.mockRestore();
+      }
+    });
+
+    it('keeps the download button disabled when documentStatus is DR, even with a cached attachment present (status gate is not bypassed by cache)', () => {
+      useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
+    });
+
+    it('applies the same DR + cached-attachment gating for purchase-order', () => {
+      usePurchaseOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+
+      fireEvent.click(screen.getByTestId('simulate-file-change'));
+
       expect(screen.getByTestId('download-btn')).toBeDisabled();
     });
   });

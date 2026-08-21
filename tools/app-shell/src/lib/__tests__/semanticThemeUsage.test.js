@@ -40,6 +40,33 @@ const DATA_COLOR_LITERALS = new Map([
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
   ])],
+  // Support chat "talk to a human" escalate CTA: a deliberate brand-navy matching a specific
+  // reference design, with no existing semantic precedent (checked --primary/--foreground —
+  // --primary collapses to near-black in light mode, not this blue). See the comment above
+  // .sc-escalate-btn in support-chat.css for the same rationale.
+  // Matched fragments are truncated by COLOR_LITERAL's `\brgba?\(\s*\d` (captures only up to
+  // the first digit, e.g. "rgba(3" for "rgba(32,36,82,.32)") — both box-shadow values below
+  // happen to share that same first digit, so one "rgba(3" entry covers both occurrences.
+  ['components/support/support-chat.css', new Set([
+    '#202452', '#2c3168', 'rgba(3',
+  ])],
+  // Model-tag colors for the fiscal models list (303 blue / 349 purple), no
+  // existing semantic precedent — same rationale as ReversedInvoicesPanel above.
+  ['windows/custom/fiscal-models/fiscal-models.css', new Set([
+    '#f0faff', '#0075ad', '#ade4ff', '#f4f1fd', '#4316ca', '#c6b6f7',
+  ])],
+  // ETP-4797: activity-timeline dots restored to their pre-ETP-4554 literal colors after the
+  // migration mapped both to a token from the wrong lightness range (draft: a much darker amber
+  // instead of the original bright orange; confirmed: a much darker/paler green than the
+  // original) — no existing success/warning-family token reproduces either brightness, so the
+  // literal is kept rather than force-fit. See PaymentDetailSidebarBase.jsx for the color-math
+  // rationale.
+  ['windows/custom/shared/PaymentDetailSidebarBase.jsx', new Set(['#faaf00', '#2dca72'])],
+  // ETP-4797: the draft-banner bold title restored to its pre-ETP-4554 literal near-black after
+  // the migration mapped it to --foreground, a visibly darker/cooler navy-tinted near-black
+  // (confirmed by sampling the Figma reference vs. the rendered pixel). See PaymentDraftBanner.jsx.
+  ['payment-in/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
+  ['payment-out/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;

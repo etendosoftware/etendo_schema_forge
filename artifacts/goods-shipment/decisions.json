@@ -7,6 +7,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
     "customComponents": {
       "topbarRight": "GoodsShipmentActions",
       "topbarExtra": "GoodsShipmentBillingBadge",
@@ -318,7 +319,8 @@
           "seq": 30
         },
         "storageBin": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "_note": "ETP-4863: included in the spec (IsIncluded=Y) so the header-warehouse locator injected by NeoHandlerUtils survives NeoFieldFilter.filterCreateRequest; hidden from the UI, derived backend-side."
         },
         "description": {
           "grid": false,

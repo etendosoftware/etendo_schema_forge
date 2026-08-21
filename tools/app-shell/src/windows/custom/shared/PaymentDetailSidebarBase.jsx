@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   return formatCurrency(currency || 'EUR', n);
+}
+
+/**
+ * The payment's booked conversion rate, shown verbatim. Deliberately allows up to 6 decimals
+ * instead of clamping to the org's standard precision (2) the way the invoice preview's rate note
+ * does: the whole point is that the user reads back the rate they typed in the Cobros/Pagos modal
+ * (ETP-4841), and "0,68" would hide the 0,680272 that was actually applied.
+ */
+function fmtRate(rate) {
+  return rate.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
@@ -109,6 +120,39 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
+  // Multi-currency readout (ETP-4841). When the money moved through a financial account whose
+  // currency differs from the payment's own, show the account-currency equivalent plus the rate
+  // between them, echoing the "(rate) secondary amount" line of the invoice preview's SummaryCard.
+  //
+  // Three deliberate departures from that card, because a payment is not an invoice:
+  //  1. The primary figure stays in the PAYMENT's currency — it is this document's own defining
+  //     value, and the breakdown rows right below it are in that currency too, so promoting the
+  //     converted amount would leave the headline disagreeing with its own breakdown.
+  //  2. The pair is payment↔ACCOUNT currency (the money that actually moved through the bank), not
+  //     payment↔org currency, which would silently omit the account currency whenever org and
+  //     account differ.
+  //  3. No currency badge. On the preview card the badge is load-bearing: its primary figure is the
+  //     converted one, so the badge names the document's TRUE currency ("shown in €, but this
+  //     invoice is in USD"). Here the primary figure is already the true one, so a bare ISO badge
+  //     would carry the inverted meaning to anyone trained on that card — and it would be redundant
+  //     anyway, since the secondary line below already renders its own currency symbol.
+  //
+  // The rate is the payment's OWN booked rate, not a session/system spot rate — same principle as
+  // the preview preferring a document's own eTGOCurrencyRate over C_Conversion_Rate. These three
+  // fields are injected by ReactivatePaymentHandler's GET post-hook; on an older backend they are
+  // absent and this block simply does not render.
+  const accountCurrency = data?.accountCurrency || null;
+  const conversionRate = parseFloat(data?.conversionRate ?? 0);
+  const accountAmount = data?.financialTransactionAmount != null
+    ? parseFloat(data.financialTransactionAmount)
+    : null;
+  const showDualCurrency = !!accountCurrency && !!currency && accountCurrency !== currency
+    && conversionRate > 0 && accountAmount != null && !Number.isNaN(accountAmount);
+  // ETP-4797: the invoice difference the payment wrote off instead of leaving pending. Only a
+  // payment created through the write-off toggle carries this — everything else keeps rendering
+  // exactly as before the toggle existed, since a zero write-off row would just be noise.
+  const writeoffAmount = parseFloat(data?.writeoffAmount ?? 0);
+  const hasWriteoff = Math.abs(writeoffAmount) >= WRITEOFF_EPSILON;
 
   useEffect(() => {
     if (!data?.id) return;
@@ -191,16 +235,30 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
       date: createdDate,
-      dot: isDraft ? 'var(--status-warning-fg)' : 'var(--status-success-fg)',
+      // Draft dot: before ETP-4554 this was a bright, vivid orange (~49% lightness). The
+      // migration mapped it to --status-warning-fg, a much darker amber-brown (~27% lightness),
+      // since that token is meant for warning TEXT (needs contrast on a light bg), not a
+      // standalone dot. No warning-family token matches the original brightness (the border
+      // token is too pale, the bg token near-white) — same "no exact token" situation as the
+      // confirmed-dot green below, so the literal color is restored rather than force-fit
+      // (allowlisted in semanticThemeUsage.test.js; found while verifying ETP-4797).
+      dot: isDraft ? '#FAAF00' : 'var(--status-success-fg)',
     },
     // Every confirm/reactivate ever recorded — a full cycle (confirm →
     // reactivate → confirm) shows as three separate rows, not just the
     // latest occurrence of each type.
+    // Confirmed dots are a lighter, brighter green than the "created" dot's
+    // --status-success-fg: before ETP-4554 ("Migrate shared window styles") this was a
+    // mid-lightness green sitting almost exactly halfway between --status-success-fg (dark
+    // forest green, ~25% lightness) and --status-success-border (pale mint, ~71% lightness), so
+    // neither existing token reproduces it. Restored the literal color rather than force-fitting
+    // a token that's visibly too dark or too pale (allowlisted in semanticThemeUsage.test.js;
+    // found while verifying ETP-4797).
     ...events.map(ev => ({
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : 'var(--status-success-fg)',
+      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : '#2DCA72',
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
@@ -208,7 +266,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
       confirmedAt: null,
       date: paymentDate,
-      dot: 'var(--status-success-fg)',
+      dot: '#2DCA72',
     }] : []),
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),
@@ -245,6 +303,19 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
             </span>
           );
         })()}
+        {showDualCurrency && (
+          <div
+            className="tabular-nums"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
+            data-testid="payment-account-amount">
+            <span style={{ font: '700 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>
+              {`(${fmtRate(conversionRate)})`}
+            </span>
+            <span style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))' }}>
+              {fmtAmt(accountAmount, accountCurrency)}
+            </span>
+          </div>
+        )}
       </div>
       {/* Breakdown outer: padding 12px, gap 10px */}
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -267,6 +338,15 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
               value={lines === null ? '...' : fmtAmt(unapplied, currency)}
               muted={unapplied === 0}
               data-testid="BreakdownRow__624cef" />
+            {hasWriteoff && (
+              <>
+                <Separator data-testid="Separator__624cef" />
+                <BreakdownRow
+                  label={ui('writtenOffLabel')}
+                  value={fmtAmt(writeoffAmount, currency)}
+                  data-testid="BreakdownRow__writeoff" />
+              </>
+            )}
           </div>
         </div>
       </div>

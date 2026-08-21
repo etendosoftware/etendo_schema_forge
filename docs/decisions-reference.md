@@ -82,7 +82,9 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
 | `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
 | `hideCreate` | boolean | `false` | — | Hides the generic Create/New button in the list toolbar. Use this when creation is handled by a window-specific action or custom component. |
-| `hidePrint` | boolean | `false` | — | Hides the print button EVERYWHERE it appears: the detail view action bar, the list toolbar, and the list bulk-actions bar. There is no way to hide it in only one of these places with this flag — if a window needs print in the grid but not the detail (or vice versa), that requires a code-level change, not a `decisions.json` toggle. |
+| `hidePrint` | boolean | `false` | — | Hides the print button, unconditionally, in every document status — **in both the detail view action bar AND the list view** (the list's row-selection "Print (N)" bulk button and its toolbar Print/Report button — both call `printDocuments()`/open a report modal with no per-row status gating). One boolean, two surfaces; see the "Print Visibility" subsection below for why that matters when switching a window to `hidePrintWhen`. |
+| `hidePrintWhen` | object \| `true` | `null` | See below | Hides the print button in the **detail view** action bar only while a generic field condition matches the current record (e.g. only outside a given status). The literal `true` matches unconditionally — use it instead of `hidePrint: true` when a window must hide Print in every status but its list-view print buttons must stay untouched (see the pitfall note below). Only feeds the detail-view button either way — it has **no effect on the list view's print buttons**, which stay driven by the plain `hidePrint` (see below). See the "Print Visibility" subsection below. Added ETP-4714. |
+| `listViewOptions.hidePrint` | boolean | `null` | — | Per-list override for the list view's two print buttons (bulk "Print (N)" + toolbar Print/Report), independent of the detail-view `hidePrint`/`hidePrintWhen`. `ListView.jsx` reads `listViewOptions?.hidePrint ?? hidePrint` — set this explicitly when a window uses `hidePrintWhen` (which doesn't touch the list) but the list-level print should still stay hidden. See "Print Visibility" below. Added ETP-4714. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
 | `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
@@ -105,6 +107,97 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `sendDocument` | object | _absent_ (auto-enabled on documental windows) | See below | Send/Download envelope config forwarded to the generic `SendDocumentModal`. Auto-enabled when the header exposes `documentNo`; declare it only to disable (`enabled: false`), drop the email panel (`allowEmail: false`), or tune the recipient-edit policy (see the Send Document subsection below). |
 | `balanceFooter` | object | `null` | `{ debitField, creditField }` | Renders a debit/credit balance footer (Σ debit, Σ credit, difference, balanced ✓/✗ badge) for double-entry windows (e.g. manual journals). Both fields must be amount-typed fields on the lines entity. When set, the generator emits `BalanceFooterPanel` instead of `DocumentTotalsPanel` and disables the Save button (with a tooltip) only when the entry is unbalanced (Σ debit ≠ Σ credit). An empty/zero entry is treated as balanced and is savable as a draft; the ✓/✗ badge is hidden until the lines carry amounts. Validator F17 enforces field existence. Example: `"balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }`. |
 | `linesLayout` | string | `"classic"` | `"classic"`, `"inlineEditable"` | Lines tab rendering mode. `"classic"` keeps the side-panel edit flow (current behavior). `"inlineEditable"` switches the table to `InlineLinesPanel`: pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. All column types (string, number, amount, percent, date, selector, search) are inline-editable; selector/search columns use `InlineSearchCombo` (text input with server-side search) so FK fields with many options are filterable by typing. The add-line button, related-documents panel, notes panel and totals panel are unchanged. Validator F12 enforces the enum. |
+| `lineTaxSifTrigger` | boolean \| object | `false` | `{ enabled, _note }` | ETP-4888 point 5. Shows an inline warning-color badge next to the lines grid's `tax` cell value when the selected tax is missing its TBAI/Verifactu SIF (Sistemas de Información de Facturación) key, opening a quick-fix modal (`TaxSifModal.jsx`) instead of sending the user to the standalone Impuestos (Taxes) window. Accepts either a plain boolean or the `{ enabled, _note }` object shape (same "boolean-or-object" convention as `attachments`/`sendDocument` above) — `sales-invoice`/`purchase-invoice` use the object form purely to carry the inline `_note` below, no other sub-key is read. **Not yet wired through `generate-frontend.js`** — this flag documents the decision, but today (`sales-invoice`, `purchase-invoice`) each window's own hand-written `index.jsx` mirrors it by hand via a local `LINE_TAX_SIF_TRIGGER_ENABLED` constant, calling `useTaxSifLineRowActions()` and passing its `cellBadges` result to the generated `HeaderPage`'s `lineCellBadges` prop — the same "hand-mirror a decision the generator doesn't carry" convention this file already uses for `SUBSET_FILTERS`/`LABEL_OVERRIDES` on these two windows. See `docs/ui-customization.md` §14e for the full mechanism (also covers the backend `InvoiceLineTaxSifSelectorPolicy` enrichment in `com.etendoerp.go`). SII is out of scope: it has nothing to configure at tax level (its header-level `aeatsiiCauseExemption` equivalent is unaffected, still owned by `SifTab.jsx`). A follow-up ticket to wire this through `generate-frontend.js` (in `schema_forge_core`) is recommended once convenient, per Alex's review. |
+
+### Print Visibility (`window.hidePrintWhen`) — ETP-4714
+
+`hidePrintWhen` gates the generic detail-view Print button (`DetailView.jsx`, backed by
+`DocumentPrintDrawer` → `/api/reports/print-{window}/render`) with a declarative condition on
+any field of the record, instead of the all-or-nothing `hidePrint` boolean. The Print button is
+hidden whenever the condition matches, and shown otherwise.
+
+The core pipeline (`resolve-curated.js` / `generate-frontend.js`) only passes the object through
+as a literal JSON prop — it does not interpret its shape. All evaluation happens client-side in
+`tools/app-shell/src/lib/evaluateFieldCondition.js`, so new operators never require a
+`schema_forge_core` change/publish, only an edit to that one file in this repo.
+
+Shape — a `{ field: expectation }` map, every key ANDed together:
+
+- Scalar value → equality: `{ "documentStatus": "DR" }`.
+- Array value → membership (`in`): `{ "documentStatus": ["DR", "CO"] }`.
+- Object value → explicit operator: `equals`, `notEquals`, `in`, `notIn`, `gt`, `gte`, `lt`,
+  `lte`. Example: `{ "documentStatus": { "notEquals": "CO" } }` hides Print unless the
+  document is Completado; `{ "documentStatus": { "notIn": ["UE", "CA"] } }` hides Print unless
+  the status is one of the listed codes.
+
+Real examples in this repo (all added for ETP-4714):
+
+| Window | `hidePrintWhen` | Meaning |
+|---|---|---|
+| `sales-invoice`, `sales-order`, `purchase-order`, `return-to-vendor-shipment`, `goods-shipment` | `{ "documentStatus": { "notEquals": "CO" } }` | Print only visible once Completado |
+| `sales-quotation` | `{ "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } }` | Print only visible in Bajo Evaluación / Cerrado-Pedido creado / Cerrado-Factura creada / Cerrado-Rechazado |
+| `purchase-invoice`, `return-material-receipt` | `true` | Print always hidden |
+
+`purchase-invoice` and `return-material-receipt` use the unconditional-match literal `true`
+(not the plain `hidePrint` boolean — see the pitfall below for why). `goods-receipt` uses the
+plain `hidePrint: true` (it never needed a condition and its list-view print was already meant
+to be hidden).
+
+`goods-shipment`, `return-to-vendor-shipment`, and `return-material-receipt` used to gate their
+own **custom** Print buttons directly inside their custom `topbarRight` components
+(`isCompleted`/`status !== 'DR'`/`hidePrintAlways` respectively). A separate, unrelated ticket
+(ETP-4728/ETP-4729 — "print unification onto the generic icon") removed those custom Print
+buttons outright from `ConfirmWithCreditButtonBase.jsx` and `GoodsShipmentActions.jsx`: printing
+for every window is now served exclusively by the generic icon-only button in `DetailView.jsx` /
+`DocumentPrintDrawer.jsx`. These 3 windows were left with no gate at all on that generic button
+until ETP-4714 added `hidePrintWhen` to their `decisions.json`, same as every other window in
+the table above — there is no more custom-component special case for print visibility.
+
+**Pitfall — `hidePrint` also drives the list view, `hidePrintWhen` does not.** The generator
+emits `hidePrint` into **two** places: the detail-view Print button (`hidePrintProp`) and the
+list-view's print buttons (`hidePrintListProp` → `ListView.jsx`'s bulk "Print (N)" and toolbar
+Print/Report buttons, neither of which has any per-row status gating). `hidePrintWhen` only
+feeds the first one — this is intentional (ETP-4714 was scoped to the form view only, per
+explicit product direction: the list-view print must never be touched by this feature). Two
+regressions were caught during review because of this split, with two different fixes:
+
+- `sales-invoice`/`purchase-order` **already had** `hidePrint: true` before this ticket (list
+  AND form both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form
+  behavior silently un-hid their list-view print buttons (list has no gate of its own once
+  `hidePrint` is unset). Fix: also declare `"listViewOptions": { "hidePrint": true }` alongside
+  `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint` prop
+  (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its pre-ticket
+  always-hidden state. **These two windows also needed a second fix**: their custom
+  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-rolls its
+  own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`
+  (only the detail/record route goes through the generated component) — so the generator's
+  literal `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` is never even reached for
+  the list. The custom wrapper needs the exact same prop hardcoded directly on its own
+  `<ListView>` call (matching the existing pattern already used there for `dateFilterKey` etc.)
+  — check for this class of gap on **any** window whose custom `index.jsx` renders `<ListView>`
+  itself rather than delegating unconditionally to the generated `App`/`HeaderPage`.
+- `purchase-invoice` needed the **opposite** correction: it never had `hidePrint` set before
+  this ticket, so its list-view print was **visible**. An earlier iteration set
+  `"hidePrint": true` to hide the form unconditionally, which also hid the previously-visible
+  list print — a second, different regression. Fix: use `"hidePrintWhen": true` instead (the
+  unconditional-match literal — see the field row above), which hides only the form and leaves
+  `hidePrint`/`listViewOptions` undeclared, so the list keeps its original, untouched, always-
+  visible behavior.
+- `sales-order`/`sales-quotation` went through the **same** `listViewOptions: {hidePrint:true}`
+  fix as `sales-invoice`/`purchase-order` above — until a separate, unrelated ticket (ETP-4729,
+  "print unification onto the generic icon — print restored") landed on `epic/ETP-3504` and
+  **deliberately removed** the pre-existing `hidePrint: true` from both windows' `decisions.json`
+  (plus `goods-shipment`'s), restoring their list-view print to always-visible as the new,
+  tested, intended baseline — `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js`
+  has an explicit regression guard (`'does not hardcode hidePrint on ListView (ETP-4729 — print
+  restored)'`) asserting this. ETP-4714's original `listViewOptions` fix for these two windows
+  is now obsolete and was removed — do **not** reintroduce it; the list stays unconditionally
+  visible for `sales-order`/`sales-quotation`, only the detail-view `hidePrintWhen` gate applies.
+
+**Rule of thumb:** before changing a window's Print visibility, check what its list-view print
+buttons looked like *before* your change, and make sure they still look the same *after* it —
+match to the pre-existing `hidePrint: true` (→ add `listViewOptions.hidePrint: true`) or absence
+(→ use `hidePrintWhen: true`/an object condition, never the plain `hidePrint`) case above.
 
 ### Send Document (`window.sendDocument`)
 

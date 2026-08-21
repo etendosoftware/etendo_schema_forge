@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { attachFile } from './attachFile';
+import { listAttachments, markAttachmentAsMain } from './listAttachments';
 import { buildOcrSchema } from './buildOcrSchema';
 import { useOcrExtraction } from './useOcrExtraction';
 import { useOcrFlow } from './useOcrFlow';
@@ -62,9 +63,12 @@ export default function OcrInlineUploader({
 
   // After a successful batch commit:
   //   1. attach the source PDF to the new record (if a tabId is registered)
-  //   2. hop from /<window>/new to /<window>/<newId> so the form binds to it
-  // Attachment failure is non-fatal — the document was created, the file just
-  // didn't get persisted; we still navigate so the user sees the result.
+  //   2. mark that attachment as the record's "main" document (ETP-4315) —
+  //      safe without a heuristic here specifically because the record just
+  //      came into existence, so it cannot yet have more than one attachment
+  //   3. hop from /<window>/new to /<window>/<newId> so the form binds to it
+  // Both attachment steps are non-fatal — the document was created either
+  // way; we still navigate so the user sees the result.
   useEffect(() => {
     if (!result?.committed || !result?.recordId || !docType?.routePrefix) return;
     const newId = result.recordId;
@@ -79,11 +83,24 @@ export default function OcrInlineUploader({
         });
         if (res?.error) {
           console.warn('[OCR] AttachFile failed (non-fatal):', res.error);
+        } else if (docType.tableName) {
+          const created = await listAttachments({
+            token, tableName: docType.tableName, recordId: newId, apiBaseUrl,
+          });
+          const soleAttachment = created[0];
+          if (soleAttachment?.id) {
+            const marked = await markAttachmentAsMain({
+              token, attachmentId: soleAttachment.id, isMain: true, apiBaseUrl,
+            });
+            if (!marked) {
+              console.warn('[OCR] Marking the scanned document as main failed (non-fatal)');
+            }
+          }
         }
       }
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
     })();
-  }, [result?.committed, result?.recordId, docType, navigate, token]);
+  }, [result?.committed, result?.recordId, docType, navigate, token, apiBaseUrl]);
   const { extract, status, error, reset } = useOcrExtraction({
     token,
     toolName: docType?.toolName,

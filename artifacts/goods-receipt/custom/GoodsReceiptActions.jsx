@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
+import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -14,7 +14,7 @@ import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton'
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl }) {
+export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl, onRefresh }) {
   const ui = useUI();
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -35,9 +35,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const downloadLinkRef = useRef(null);
 
-  const previewAttachment = usePreviewAttachment({
+  const previewAttachment = useMainAttachment({
     documentId: recordId,
-    specName: 'goods-receipt',
+    tableName: 'M_InOut',
     storeCondition: isCompleted,
     token,
     apiBaseUrl,
@@ -209,7 +209,12 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
           onClose={() => {
             setConfirmedDocs(null);
             setTimeout(() => {
-              if (!resultNavigatedRef.current) window.location.reload();
+              // ETP-4779 — partial refresh instead of a full page reload: refetch
+              // the header (badge/readonly state) via onRefresh; the "Documentos"
+              // section (RelatedDocuments.jsx, derived from `data.linkedInvoices`)
+              // picks up the newly created invoice automatically once `data`
+              // updates. Skipped when the user navigated away instead of closing.
+              if (!resultNavigatedRef.current) onRefresh?.();
               resultNavigatedRef.current = false;
             }, 0);
           }}
@@ -226,7 +231,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
           onClose={() => {
             setReturnedDoc(null);
             setTimeout(() => {
-              if (!resultNavigatedRef.current) window.location.reload();
+              // ETP-4779 — same partial-refresh rationale as the invoice
+              // confirmation panel above.
+              if (!resultNavigatedRef.current) onRefresh?.();
               resultNavigatedRef.current = false;
             }, 0);
           }}

@@ -31,14 +31,14 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 4
+          "gridOrder": 5
         }
       ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
         "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
-        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
         "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
         "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
@@ -54,17 +54,17 @@
         "default": { "visibility": "readOnly", "grid": false },
         "genericAccountNo": { "visibility": "discarded" },
         "iNENo": { "visibility": "discarded" },
-        "country": { "visibility": "system" },
+        "country": { "visibility": "editable", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColCountry", "cellType": "accountCountry", "required": true, "displayLogic": null, "reason": "ETP-4896 — country was backend-only (derived from the IBAN and overwritten on every write), leaving cash/card/IBAN-less bank accounts with no country and no way for the user to set one. Now user-editable and always required — pre-filled with the organization's country, never locked (no readOnlyLogic). displayLogic explicitly nulled: the raw AD field carries '@Type@='B'' (IBAN's own display logic), which would otherwise hide Country outside Bank accounts. Grid column added right after Type (gridOrder 3, ETP-4896 follow-up) — Balance/Pending bumped to 4/5." },
         "bankFormat": { "visibility": "discarded" },
         "typewriteoff": { "visibility": "discarded" },
-        "writeofflimit": { "visibility": "discarded" },
+        "writeofflimit": { "visibility": "editable" },
         "bankDigitcontrol": { "visibility": "discarded" },
         "accountDigitcontrol": { "visibility": "discarded" },
         "routingNo": { "visibility": "discarded" },
         "lastreconciliation": { "visibility": "system" },
         "lastreconbalance": { "visibility": "system" },
         "aprmIsfundstransEnabled": { "visibility": "discarded" },
-        "aprmGlitemDiff": { "visibility": "discarded" },
+        "aprmGlitemDiff": { "visibility": "editable", "grid": false },
         "eTGODateTolerance": { "visibility": "editable" },
         "eTGOAmountTolerance": { "visibility": "editable" }
       }
@@ -99,14 +99,15 @@
         "finPaymentID": { "visibility": "system" },
         "currency": { "visibility": "system" },
         "organization": { "visibility": "readOnly", "grid": false },
-        "project": { "visibility": "readOnly", "grid": false },
-        "costCenter": { "visibility": "readOnly", "grid": false },
+        "eTGOFinaccTransDest": { "visibility": "readOnly", "grid": false, "dimensionsPanel": true, "seq": 5, "reason": "Funds-transfer counterpart link (ETP-4882). Set automatically by FundsTransferDestinationHook, never by the user, so it is readOnly regardless of the AD column's Updatable flag. Declared first in the panel so it renders immediately before the accounting dimensions, and rendered by a bespoke link renderer (MOVEMENT_PANEL_RENDERERS) that resolves BOTH transfer directions from the handler's transfer* props." },
+        "project": { "visibility": "readOnly", "grid": false, "dimensionsPanel": true, "seq": 10 },
+        "costCenter": { "visibility": "readOnly", "grid": false, "dimensionsPanel": true, "seq": 20 },
         "activity": { "visibility": "readOnly", "grid": false },
         "salesCampaign": { "visibility": "readOnly", "grid": false },
         "salesRegion": { "visibility": "readOnly", "grid": false },
         "stDimension": { "visibility": "readOnly", "grid": false },
         "ndDimension": { "visibility": "readOnly", "grid": false },
-        "product": { "visibility": "discarded" },
+        "product": { "visibility": "readOnly", "grid": false, "dimensionsPanel": true, "seq": 30 },
         "lineNo": { "visibility": "system" },
         "reconciliation": { "visibility": "system" },
         "dateAcct": { "visibility": "system" },
@@ -189,8 +190,85 @@
       }
     },
     "paymentMethod": { "exclude": true },
-    "reconciliations": { "exclude": true },
-    "clearedItems": { "exclude": true },
+    "reconciliations": {
+      "fields": {
+        "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "endingDate": {
+          "visibility": "readOnly",
+          "grid": false,
+          "reason": "ETP-4795 — a cash close writes Statementdate and Dateto with the same value, so the two dates are always identical. The UI shows one column, \"Fecha cierre\", backed by transactionDate."
+        },
+        "startingbalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "endingBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
+        "documentStatus": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "posted": {
+          "visibility": "readOnly",
+          "type": "string",
+          "form": false,
+          "grid": true,
+          "gridOrder": 6,
+          "reason": "ETP-4795 — accounting status of the reconciliation. Read from Posted, NOT from EM_Etblkp_Accountingstatus: that mirror column is maintained by a trigger that only fires on UPDATE, so freshly inserted rows keep the 'l' (Pending Refresh) default and go stale."
+        },
+        "documentType": { "visibility": "system" },
+        "account": { "visibility": "system" },
+        "processed": { "visibility": "system" },
+        "processNow": { "visibility": "system" },
+        "printdetailed": { "visibility": "system" },
+        "printsummary": { "visibility": "system" },
+        "aPRMProcessReconciliation": { "visibility": "system" },
+        "etblkpAccountingstatus": { "visibility": "discarded" },
+        "aPRMReconciledItemNo": { "visibility": "discarded" },
+        "aPRMReconciledItemAmount": { "visibility": "discarded" },
+        "aPRMUnReconciledItemNo": { "visibility": "discarded" },
+        "aPRMUnReconciledItemAmount": { "visibility": "discarded" },
+        "aPRMOutstandingPaymentsItemNo": { "visibility": "discarded" },
+        "aPRMOutstandingPaymentsItemsAmount": { "visibility": "discarded" },
+        "aPRMOutstandingDepositsItemNo": { "visibility": "discarded" },
+        "aPRMOutstandingDepositItemsAmount": { "visibility": "discarded" },
+        "aPRMPrintDetailed": { "visibility": "discarded" },
+        "aPRMPrintSummary": { "visibility": "discarded" },
+        "aprmProcessRec": { "visibility": "discarded" },
+        "aPRMProcessReconciliationForce": { "visibility": "discarded" },
+        "etprReactivateRecon": { "visibility": "discarded" },
+        "etprRemoveReconciliation": { "visibility": "discarded" },
+        "etblkpBulkposting": { "visibility": "discarded" }
+      }
+    },
+    "clearedItems": {
+      "fields": {
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "accountingDate": {
+          "visibility": "readOnly",
+          "grid": false,
+          "reason": "ETP-4795 — a single \"Fecha\" column, backed by transactionDate. A cash close writes Statementdate and Dateacct with the same value (including the date rewrite it applies to post-dated movements), so showing both only ever repeated the same date."
+        },
+        "description": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "financialAccountTransaction": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "payment": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
+        "currency": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
+        "gLItem": { "visibility": "readOnly", "grid": true, "gridOrder": 7 },
+        "depositAmount": {
+          "visibility": "readOnly",
+          "grid": false,
+          "reason": "ETP-4795 — still fetched, but not its own column: the UI merges deposit and payment into a single signed 'Importe' column (green in / red out), like the Movements grid. A signed net is a derived value, not an AD field, so it is a structural column in the table rather than a contract one."
+        },
+        "paymentAmount": { "visibility": "readOnly", "grid": false },
+        "bankStatementLine": {
+          "visibility": "readOnly",
+          "grid": false,
+          "reason": "ETP-4795 — always NULL on a cash reconciliation (no bank statements), so it would be an empty column on the only tab that renders this entity."
+        },
+        "project": { "visibility": "readOnly", "grid": false },
+        "stDimension": { "visibility": "readOnly", "grid": false },
+        "ndDimension": { "visibility": "readOnly", "grid": false },
+        "reconciliation": { "visibility": "system" },
+        "financialAccount": { "visibility": "system" },
+        "activity": { "visibility": "system" },
+        "salesCampaign": { "visibility": "system" }
+      }
+    },
     "accounting": { "exclude": true },
     "bankConnections": { "exclude": true }
   },

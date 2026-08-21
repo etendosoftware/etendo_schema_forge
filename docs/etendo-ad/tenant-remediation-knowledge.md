@@ -276,6 +276,7 @@
 
 - **2026-06-11 — Two-layer rule.** A fix's `@check` query gates whether `@apply` runs at all; the `@apply` body must ALSO be guarded (`WHERE NOT EXISTS`). Don't rely on only one layer — partial/interrupted runs leave inconsistent state otherwise.
 - **2026-06-11 — Tenant isolation.** Every statement must filter `ad_client_id = :client_id`. A `@check` that forgets the client filter will give false positives/negatives across tenants.
+- **2026-08-12 — NEW PATTERN: a data-fix can be a pure SYSTEM-LEVEL singleton seed (no `:client_id` filter at all) when — and only when — its preventive twin is itself a `ModuleScript` (a per-instance, not per-tenant, `update.database` hook), not a per-tenant onboarding step.** `R23-system-role-templates-fallback` (ETP-4852, fallback for `EnsureSystemRoleTemplatesScript.java`) inserts only `ad_client_id='0'` rows (4 literal `AD_Role` ids + 8 literal `AD_Role/AD_Window` `AD_Window_Access` pairs) — every row is identical regardless of which tenant triggers the run, so there is no tenant data to scope by `:client_id`; the "never touch another tenant's rows" invariant is trivially satisfied because zero tenant-owned rows are ever touched. The runner still applies it once per tenant in its normal chain sweep (no "run once globally" mode exists), which is harmless: whichever tenant is processed first performs the real INSERTs (guarded by `NOT EXISTS` on the literal ids, mirroring the Java's `ensureRole`/`ensureWindowAccess` checks byte-for-byte), and every subsequent tenant's `@check` returns 0 rows immediately (`SKIPPED_NOT_NEEDED`) — so each tenant still gets its own ledger row, while the underlying side effect converges exactly once. **No CUT bump** for this shape either: `ONBOARDING_PROVISIONED_THROUGH` gates per-tenant onboarding birth dates, and a system-level `ModuleScript` seed has no relationship to any tenant's birth date at all (bumping it would be a category error, not merely redundant like R16's case). **Apply generally:** before reflexively adding a `:client_id` filter to every statement, check what the *preventive* front actually is — if it's a `ModuleScript`/instance-level hook rather than a step in the per-tenant onboarding chain, the corrective twin should mirror that shape (system-level, unscoped) rather than forcing an artificial tenant filter onto data that has no tenant. Verified idempotent by running `@apply` twice inside one `BEGIN`/`ROLLBACK` transaction against the local dev DB (`etendogoclean`): first run inserted 4 roles + 8 window-access rows, second run inserted 0/0 with no duplicates, then rolled back — confirmed by `SELECT count(*)` before/after the `ROLLBACK`.
 
 ---
 
@@ -1065,3 +1066,57 @@
   failure) but it mocks away every real DAL/native-SQL call, so it was never going to catch a live
   DB-shape issue — the live-tenant DB comparison above is the evidence that actually closes the gap,
   not the unit test.**
+
+## ETP-4854 — K1: `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'`, "Dimensiones contables" screen a no-op (2026-08-11)
+
+- **2026-08-11 — `DimensionDisplayUtility.getAccountingDimensionConfiguration()` does NOT check
+  `IsAcctDimCentrally` at all — it is called ONLY when the caller (`LoginUtils.doLogin`,
+  `NeoDisplayLogicHelper.resolveAccountingDimensionFlags`) already knows the client is `'Y'`.**
+  The `'N'`/`'Y'` branch lives entirely in the CALLER, not inside `DimensionDisplayUtility` itself.
+  Read the method signature carefully before assuming it self-guards on the flag — it always
+  computes and returns the full `AD_Client.<Dim>_Acctdim_*` matrix regardless of the flag's value;
+  the caller decides whether to use the result.
+- **2026-08-11 — `C_AcctSchema_Element.isactive` defaults to `'Y'` at the SQL schema level, and
+  every live tenant checked (14 `'Y'`-mode clients) actually has it `'Y'` for ALL 7 configurable
+  dimensions (OO/PJ/BP/PR/CC/U1/U2) regardless of that client's own `<Dim>_Acctdim_IsEnable`
+  value.** This means the flat mechanism's data is essentially always "everything visible" by
+  default, independent of what the fine-grained `AD_Client` matrix says — the two mechanisms do
+  NOT start from the same baseline. **Apply:** any fix or feature that flips a client from `'Y'`
+  to `'N'` (or vice versa) MUST explicitly reconcile `C_AcctSchema_Element.isactive` against the
+  `AD_Client` per-dimension config first — never assume the flat mechanism's existing state
+  already reflects what the client intends, or the flip will silently change visibility.
+- **2026-08-11 — Chosen effective-visibility formula for the Y→N collapse: `IsEnable='Y' AND
+  (Header='Y' OR Lines='Y' OR Breakdown='Y')`, per dimension.** Flat mode has no level
+  granularity (one flag governs Header/Lines/Breakdown simultaneously), so an exact 1:1 mapping
+  from the 3-level matrix is impossible. Chose OR-of-levels (err toward showing, never toward
+  hiding something the client currently sees on some level/doctype) over AND-of-levels or
+  Header-only. On this DB, `Breakdown` is `'N'` everywhere for every dimension/client today, so in
+  practice the formula currently collapses to `IsEnable='Y' AND (Header='Y' OR Lines='Y')` — but
+  the general OR-of-3 formula is what ships, for correctness against any future client shape.
+- **2026-08-11 — `NeoDisplayLogicHelper` (com.etendoerp.go) is a THIRD, previously-undocumented
+  consumer of `AcctdimCentrallyMaintained` beyond classic core's `DimensionDisplayUtility`/
+  `LoginUtils`/`InitialSetupUtility`.** `resolveAccountingDimensionFlags` faithfully mirrors the
+  classic 'N'/'Y' branch (confirmed by reading both side by side), with its own documented
+  ETP-4529 comment explaining WHY it re-implements the 'N' branch's `C_AcctSchema_Element` query
+  live per-request instead of relying on session state the way classic `LoginUtils` does (NEO
+  Headless is stateless/JWT-based, no `HttpSession` to populate at login time). This does not
+  contradict "no security impact" — it's the SAME logic Etendo GO already runs; the finding
+  confirms GO's own field-visibility engine benefits from (does not break under) the `'N'` flip.
+- **2026-08-11 — `schema_forge_core` (sibling repo, `../schema_forge_core`) carries its OWN
+  `cli/src/data-fixes/sql/` directory but it is STALE on this local checkout — tops out at `R8`,
+  6 fixes behind `etendo_schema_forge`'s actual latest (`R22` at the time of this ticket).** Per
+  the repo-topology note the data-fixes framework is duplicated in BOTH SF repos, but this
+  checkout's copy in `schema_forge_core` was clearly not kept in sync post-split. Did not touch it
+  for R23 (out of scope, no branch there related to this ticket) — flagged here so a future run
+  does not assume it is current without checking `ls` first.
+- **2026-08-11 — Compiling `com.etendoerp.go`'s main sources (`:modules:com.etendoerp.go
+  :compileJava`) DOES work in this environment and is a fast, reliable syntax/type-check** (unlike
+  the module's `test`/`compileTestJava` tasks, which report `NO-SOURCE` even for pre-existing,
+  presumably-passing test files like `OnboardingBaselineServiceTest` — see the ETP-4515 section
+  above for the established root cause). **Apply:** always run `./gradlew ":modules:com.etendoerp
+  .go:compileJava"` after any change to this module's `src/` as a cheap correctness gate, even
+  though the equivalent test-compile gate is unavailable locally. **Addendum (Alex, REVIEW,
+  git-stash repro):** this only works invoked from the etendo root wrapper — running it from
+  inside `modules/com.etendoerp.go` fails with a Gradle-version mismatch (module pins Gradle
+  9.4.1, root pins 8.12.1), a pre-existing, diff-independent quirk; always run it as
+  `./gradlew ":modules:com.etendoerp.go:compileJava"` from the etendo root.

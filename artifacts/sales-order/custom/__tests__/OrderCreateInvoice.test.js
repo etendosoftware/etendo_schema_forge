@@ -103,6 +103,59 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /dispatchEvent/);
   });
 
+  // ETP-4779 — live user report: generating an invoice from a confirmed Sales
+  // Order still required a manual page reload for the "Documentos" panel to
+  // update. Root cause, confirmed by reproducing live on localhost:3100 (same
+  // method used to diagnose and fix the identical bug in
+  // artifacts/purchase-order/custom/PurchaseOrderActions.jsx): handleConfirm
+  // dispatched sales-order:document-created right after Step 1
+  // (documentAction=CO), BEFORE Steps 2/3 (createShipment /
+  // createDraftInvoice) had even run — so RelatedDocuments.jsx's refetch
+  // raced ahead of document creation, found nothing, and — since no later
+  // event fired to catch up — the panel stayed empty. CreateDocsModal (the
+  // separate "Gestionar" modal for already-CO orders, further below in this
+  // file) never had this bug — it already dispatched once, after its POST(s)
+  // resolved. QA's original 2026-08-11 pass on Sales Order happened not to
+  // hit this timing-dependent race.
+  describe('event dispatch ordering — must fire AFTER shipment/invoice creation, not right after Step 1 (ETP-4779)', () => {
+    it('does NOT dispatch document-created inside the Step 1 (documentAction) success block', () => {
+      const step1Block = src.match(
+        /if\s*\(!orderConfirmed\)\s*\{\s*try\s*\{[\s\S]*?setOrderConfirmed\(true\);[\s\S]*?\}\s*catch\s*\(e\)\s*\{[\s\S]*?\}\s*\}/,
+      );
+      assert.ok(step1Block, 'could not locate the Step 1 try/catch block');
+      assert.doesNotMatch(
+        step1Block[0],
+        /sales-order:document-created/,
+        'the event must not be dispatched from inside Step 1 — that runs before the shipment/invoice POSTs',
+      );
+    });
+
+    it('dispatches document-created after both finalShipment/finalInvoice are resolved, right before onConfirmed(...)', () => {
+      assert.match(
+        src,
+        /const finalShipment\s*=\s*currentShipment\s*\?\?\s*shipmentResult;\s*const finalInvoice\s*=\s*currentInvoice\s*\?\?\s*invoiceResult;[\s\S]*?if\s*\(finalShipment\s*\|\|\s*finalInvoice\)\s*\{\s*window\.dispatchEvent\(new CustomEvent\('sales-order:document-created'\)\);\s*\}\s*onConfirmed\(\{/,
+      );
+    });
+
+    it('guards the dispatch so it never fires when neither a shipment nor an invoice was created', () => {
+      assert.match(src, /if\s*\(finalShipment\s*\|\|\s*finalInvoice\)\s*\{\s*window\.dispatchEvent/);
+    });
+
+    it('the errors.length early-return sits BEFORE the dispatch — a failed step must not fire the event for a half-finished result', () => {
+      const errorsIdx = src.indexOf('if (errors.length > 0) {');
+      const dispatchIdx = src.lastIndexOf("window.dispatchEvent(new CustomEvent('sales-order:document-created'))");
+      assert.ok(errorsIdx >= 0 && dispatchIdx >= 0);
+      assert.ok(errorsIdx < dispatchIdx);
+    });
+
+    it('handleClose also dispatches when closing after a partial success (shipment or invoice already created)', () => {
+      assert.match(
+        src,
+        /const handleClose\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(orderConfirmed\s*\|\|\s*shipmentResult\s*\|\|\s*invoiceResult\)\s*\{[\s\S]*?if\s*\(shipmentResult\s*\|\|\s*invoiceResult\)\s*\{\s*window\.dispatchEvent\(new CustomEvent\('sales-order:document-created'\)\);\s*\}\s*onConfirmed\(\{/,
+      );
+    });
+  });
+
   it('navigates to shipment and invoice detail after creation', () => {
     assert.match(src, /\/goods-shipment\//);
     assert.match(src, /\/sales-invoice\//);
@@ -140,8 +193,12 @@ describe('OrderCreateInvoice', () => {
     });
 
     it('falls back to persisted state when assembling onConfirmed payload', () => {
-      assert.match(src, /shipment:\s*currentShipment\s*\?\?\s*shipmentResult/);
-      assert.match(src, /invoice:\s*currentInvoice\s*\?\?\s*invoiceResult/);
+      // ETP-4779 — extracted from the onConfirmed(...) call site into named
+      // consts (finalShipment/finalInvoice) so the dispatch guard below can
+      // reuse them; the fallback logic itself is unchanged.
+      assert.match(src, /const finalShipment\s*=\s*currentShipment\s*\?\?\s*shipmentResult;/);
+      assert.match(src, /const finalInvoice\s*=\s*currentInvoice\s*\?\?\s*invoiceResult;/);
+      assert.match(src, /onConfirmed\(\{\s*shipment:\s*finalShipment,\s*invoice:\s*finalInvoice,\s*\}\);/);
     });
 
     it('locks the shipment checkbox once the shipment was created', () => {
@@ -199,7 +256,7 @@ describe('OrderCreateInvoice', () => {
         /const handleClose\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(orderConfirmed\s*\|\|\s*shipmentResult\s*\|\|\s*invoiceResult\)[\s\S]*?onConfirmed\(\{[\s\S]*?shipment:\s*shipmentResult[\s\S]*?invoice:\s*invoiceResult[\s\S]*?\}\)[\s\S]*?return;[\s\S]*?\}[\s\S]*?onClose\(\);/,
       );
       // Cancel button + X button + overlay click all use handleClose, not onClose directly
-      assert.match(src, /<div onClick=\{handleClose\} style=\{overlayStyle\}>/);
+      assert.match(src, /<div data-testid="sales-order-confirm-modal" onClick=\{handleClose\} style=\{overlayStyle\}>/);
       assert.match(src, /onClick=\{handleClose\} style=\{closeBtn\}/);
       assert.match(src, /onClick=\{handleClose\} disabled=\{loading\}/);
     });

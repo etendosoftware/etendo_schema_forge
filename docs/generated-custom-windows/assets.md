@@ -34,6 +34,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 - Detail layout: the detail page uses a sidebar layout, exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - List toolbar: shows an **"All statuses ▾"** dropdown to filter by `fullyDepreciated` (Fully deprecated / Still in progress) and a funnel icon for the Conditional Filter. The `fullyDepreciated` column is hidden from visual display (`hiddenColumns`) but present in the columns array to power the status dropdown.
+- List columns include a **Depreciate** (`IsDepreciated`) Sí/No badge column (green/gray pill, same pattern as Payment Term's "Default" column) between "Purchase Date" and "Depreciation Start Date", filterable via the Conditional Filter's boolean value picker (ETP-4549).
 
 ## Reactive behavior and dependencies
 
@@ -71,7 +72,7 @@ The Assets window should let a finance user register fixed assets, define how ea
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
 4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Category regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
-4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a single **Project** selector only when the client's accounting-dimension configuration enables the Project dimension for this org's ledger, and disappears entirely otherwise. Open the selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a **Project** and/or **Cost Center** selector, each independently, only when the client's accounting-dimension configuration enables that dimension for this org's ledger (ETP-4914 — Cost Center is now also "Por config", not "Nunca"), and disappears entirely when both resolve to not-visible. Open each visible selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -573,6 +574,42 @@ does not join the "Dimensiones contables" panel at all — it is now always show
 - No backend change needed: `product`'s raw AD field already carries the
   `SL_Asset_Product` callout, so selecting a value fires the standard `/assets/callout`
   round-trip like any other field, same as before it was discarded.
+
+### Centro de costo corrected to Por config (ETP-4914)
+
+The accounting-dimension matrix was corrected again: `Activo (Amortizaciones) | Cabecera`
+now reads Contacto=**Por config** (deferred, see below), Producto=**Siempre**, Proyecto=
+**Por config**, Centro de costo=**Por config** (Centro de costo was previously, incorrectly,
+**Nunca** — the "Producto corrected to Siempre" section above and the original ETP-4529
+matrix both had it wrong). Direct DB verification confirmed `eTADASCostCenter`'s raw
+`AD_Field.DisplayLogic` on the Assets tab was already correctly wired all along
+(`@$Element_CC@='Y' & @IsDepreciated@='Y'`, the exact same pattern as `project`'s
+`@$Element_PJ@='Y' & @IsDepreciated@='Y'`) — this was a pure classification/decisions.json
+fix, no AD metadata change needed.
+
+- `decisions.json`: `assets.eTADASCostCenter.visibility` changed from `discarded` to
+  `editable` (`section: "principal"`), matching `project`'s shape.
+- `AssetsDetailPanel.jsx`: `eTADASCostCenter` added to `dimensionFieldCandidates` —
+  `{ key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section:
+  'principal', reference: 'Costcenter', inputMode: 'selector' }` — resolved through the same
+  `useAccountingDimensionFields('assets', d, dimensionFieldCandidates, { token, apiBaseUrl })`
+  call as `project`, so it is independently config-gated (visible only when the client's Cost
+  Center dimension is enabled for this org's ledger). Confirmed in the regenerated
+  `AssetsForm.jsx`: `eTADASCostCenter` now carries `visibilitySource: 'server'` and
+  `displayLogicReason: 'accounting-dimension'`, the same server-evaluated shape as `project`.
+- **Contacto remains out of scope for this pass**, even though the corrected matrix also
+  marks it "Por config": its raw `AD_Field.DisplayLogic` on the Assets tab is only
+  `@IsDepreciated@='Y'` — missing the `@$Element_BP@` dimension term that `project` and
+  `eTADASCostCenter` both carry — so fixing it properly requires an AD-level `DisplayLogic`
+  metadata edit first, tracked as a separate follow-up. `businessPartner` stays
+  `visibility: "discarded"` in `decisions.json` until that lands.
+- Regenerated via `make regen ONLY=assets`; the contract's auto-generated system-field test
+  entry for `eTADASCostCenter` (previously "should exist in backend but not frontend")
+  was replaced automatically by the standard editable-field test set (displaylogic-evaluable,
+  displaylogic-valid, field-presence, field-type, selector-endpoint) — no manual test-file
+  authoring needed for the contract itself. `AssetsDetailPanel.vitest.jsx` and
+  `AssetsDetailPanel.test.js` were updated to expect both `project` and `eTADASCostCenter`
+  as independently-gated dimension candidates.
 
 ## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
 

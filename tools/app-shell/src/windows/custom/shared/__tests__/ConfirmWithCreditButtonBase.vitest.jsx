@@ -22,8 +22,15 @@ vi.mock('sonner', () => ({
 // own callback wiring (onConfirmed/onClose/onConfirm/navigate) via buttons the
 // tests can click directly — the real modals' internals are out of scope here.
 vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
-  default: ({ onConfirmed, onClose }) => (
-    <div data-testid="confirm-inout-modal">
+  // invoiceAction/defaultCreateInvoice are exposed as data-attributes (ETP-4848)
+  // so tests can assert what ConfirmWithCreditButtonBase computed and passed down,
+  // without needing to render the real modal's internals.
+  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice }) => (
+    <div
+      data-testid="confirm-inout-modal"
+      data-invoice-action={invoiceAction ?? ''}
+      data-default-create-invoice={String(defaultCreateInvoice)}
+    >
       <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100 } })} />
       <button data-testid="confirm-inout-confirm-no-id" onClick={() => onConfirmed({ invoice: {} })} />
       <button data-testid="confirm-inout-close" onClick={onClose} />
@@ -112,6 +119,29 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
     expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
     // DR renders its own distinct confirm button instead.
     expect(screen.getByTestId('action-confirm-with-credit')).toBeInTheDocument();
+  });
+});
+
+// ETP-4728 — print unification. PrintButton no longer exists: printing is
+// served exclusively by the generic icon-only print flow in DetailView.jsx /
+// DocumentPrintDrawer.jsx. This component must never regrow it.
+describe('ConfirmWithCreditButtonBase — no private PrintButton (ETP-4728)', () => {
+  it('does not render a print button in any status', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+      />
+    );
+    expect(screen.queryByText('print')).not.toBeInTheDocument();
+
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+      />
+    );
+    expect(screen.queryAllByText('print').length).toBe(0);
   });
 });
 
@@ -287,5 +317,63 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     await waitFor(() => expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument());
     await waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4848 — DR-status confirm modal must default-check the invoice option
+// whenever the document is not yet fully invoiced (isFullyInvoiced = parseFloat
+// (data?.invoiceStatus ?? 0) >= 100), and must hide the invoice option entirely
+// (invoiceAction=undefined) once it is fully invoiced.
+describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by invoiceStatus (ETP-4848)', () => {
+  it('passes invoiceAction="createReturnInvoice" and defaultCreateInvoice=true when invoiceStatus is partial (40)', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 40 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = screen.getByTestId('confirm-inout-modal');
+    expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
+  });
+
+  it('passes invoiceAction="createReturnInvoice" and defaultCreateInvoice=true when invoiceStatus is unset', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = screen.getByTestId('confirm-inout-modal');
+    expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
+  });
+
+  it('passes invoiceAction=undefined and defaultCreateInvoice=false when invoiceStatus is 100 (number)', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 100 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = screen.getByTestId('confirm-inout-modal');
+    expect(modal).toHaveAttribute('data-invoice-action', '');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
+  });
+
+  it('passes invoiceAction=undefined and defaultCreateInvoice=false when invoiceStatus is "100" (string, real API shape)', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: '100' }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = screen.getByTestId('confirm-inout-modal');
+    expect(modal).toHaveAttribute('data-invoice-action', '');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
   });
 });

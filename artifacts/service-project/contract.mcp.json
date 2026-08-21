@@ -1,0 +1,286 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-08-14T11:30:57.119Z",
+  "contractChecksum": "d1665ad7a0539ef9",
+  "apiPrediction": {
+    "specName": "service-project",
+    "baseUrl": "/sws/neo/service-project",
+    "crud": {
+      "serviceProject": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/service-project/serviceProject",
+        "detailUrl": "/sws/neo/service-project/serviceProject/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "name": "changeProjectStatus",
+        "actionType": "utilityAction",
+        "entity": "serviceProject",
+        "column": "ChangeProjectStatus",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/changeProjectStatus",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800002",
+        "processType": "classic"
+      },
+      {
+        "name": "copyFrom",
+        "actionType": "createFrom",
+        "entity": "serviceProject",
+        "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "212",
+        "processType": "classic"
+      },
+      {
+        "name": "generateOrder",
+        "actionType": "createFrom",
+        "entity": "serviceProject",
+        "column": "GenerateOrder",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/generateOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "800005",
+        "processType": "classic"
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "serviceProject",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "164",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "serviceProject",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "227",
+        "processType": "classic"
+      },
+      {
+        "name": "setProjectType",
+        "actionType": "utilityAction",
+        "entity": "serviceProject",
+        "column": "Setprojecttype",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/setProjectType",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "215",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Isactive": "Activo"
+      },
+      "es_AR": {
+        "Isactive": "Activo"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "serviceProject": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage service project financial records.",
+    "whenToUse": [
+      "Use for service project management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "active"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "copyFrom",
+      "generateOrder",
+      "generateTo",
+      "processNow"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "active"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "copyFrom"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "470da043c5914686"
+}

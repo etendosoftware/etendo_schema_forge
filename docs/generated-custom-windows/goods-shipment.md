@@ -175,6 +175,35 @@ data gap, not a real blocker. `contract.json`, `contract.mcp.json`, and
 `GoodsShipmentLineTable.jsx` are now regenerated and validated (`sf-validate-pipeline`: OK) —
 see `docs/feedback.md`'s ETP-4610 entry for the full trail.
 
+## Print button visible only in Completado — ETP-4714
+
+`artifacts/goods-shipment/decisions.json` sets
+`window.hidePrintWhen: { "documentStatus": { "notEquals": "CO" } }` — the same generic
+mechanism used by `sales-invoice`/`sales-order`/`purchase-order`/`return-to-vendor-shipment`
+(see `docs/decisions-reference.md` — "Print Visibility"). It hides the generic icon-only Print
+button rendered by `DetailView.jsx` unless the record is Completado, with no effect on the
+list view.
+
+This window originally shipped a different fix: the custom "Imprimir" button in
+`artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` (the `topbarRight` component),
+wrapped in `{isCompleted && (...)}` to close the bug the ticket reported (visible in Borrador
+too). A separate, unrelated ticket (ETP-4729 — "print unification onto the generic icon")
+removed that custom button from `GoodsShipmentActions.jsx` outright: printing for every window
+is now served exclusively by the generic `DetailView.jsx` icon. That left the generic icon
+with no gate at all on this window until the `hidePrintWhen` entry above was added.
+
+## Related Documents auto-refresh — ETP-4779
+
+Generating a Sales Invoice from `GoodsShipmentActions.jsx` (the `topbarRight` component) used to
+close the result modal with a full `window.location.reload()`. `GoodsShipmentActions` now
+accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
+hook.fetchById(recordId)`) and calls that instead — in the invoice-result `ConfirmResultModal`'s
+`onClose` (skipped when the user navigated to the new invoice instead) and as the `ReturnWizard`
+`onSuccess` fallback when the created return has no id to navigate to. The **Related Documents**
+tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate refetch: it
+derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
+refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

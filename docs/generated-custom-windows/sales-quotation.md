@@ -46,7 +46,7 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. Sending posts only the contract command to the backend `sales-quotation-send` email contract; the backend resolves the final recipient and builds the default document payload (`document_type`, `document_number`, and `download_link`) instead of accepting recipient/template/provider fields from the browser. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
 - Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`.
 - Send status gating (ETP-4717): `QuotationTopbarActions.jsx` gates `SendDocumentButton` on `status !== 'DR'` — Send is available from `Under Evaluation` (`UE`) onward, not while the quotation is still `Draft` (`DR`). This differs from the other four document windows (which gate on `CO`) because a quotation's first non-draft status is `UE`, not `CO`. It matches the grid row quick-action's `rowQuickActions.actions.email.visibleWhen: "@DocumentStatus@!='DR'"` in `decisions.json`, so "Enviar" shows or hides consistently between the list and the detail topbar.
-- Download PDF status gating (ETP-4789): the preview-panel Download PDF button (`QuotationPreview.jsx`, rendered via the shared `PreviewActionButtons.jsx`) reuses the same `isSendable` variable already computed for Send (`documentStatus !== 'DR'` — available from `Under Evaluation` onward, same rule as the bullet above) — previously it was gated only by `hasPdf`, so a draft quotation with an already-generated preview PDF could still be downloaded. The shared `PreviewActionButtons.jsx` component was fixed generically as part of this ticket: the Download button now also disables whenever `onDownloadPdf` itself is falsy, not just when `hasPdf` is false, so any caller that gates the prop (rather than hiding the whole button) gets the same protection automatically. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/QuotationPreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`) and `tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx`.
+- Download PDF status gating (ETP-4789): the preview-panel Download PDF button (`QuotationPreview.jsx`, rendered via the shared `PreviewActionButtons.jsx`) reuses the same `isSendable` variable already computed for Send (`documentStatus !== 'DR'` — available from `Under Evaluation` onward, same rule as the bullet above) — previously it was gated only by `hasPdf`, so a draft quotation with an already-generated preview PDF could still be downloaded. The shared `PreviewActionButtons.jsx` component was fixed generically as part of this ticket: the Download button now also disables whenever `onDownloadPdf` itself is falsy, not just when `hasPdf` is false, so any caller that gates the prop (rather than hiding the whole button) gets the same protection automatically. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/QuotationPreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`) and `tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx`. Follow-up reject-cycle fix (still ETP-4789): `hasPdf` is now `!!pdfUrl || !!cachedAttachment`, where `cachedAttachment` is captured via the `onFileChange` callback wired into `ManagedLeftPanel`'s cache-fetch options. The cached attachment (fetched via `GET /preview-file`) normally resolves well ahead of the slower jsreport regeneration behind `pdfUrl`, so the button now enables as soon as whichever source resolves first — closing the perceptible gap QA reported between the PDF becoming visible in the preview panel and the Download button becoming clickable. `handleDownloadPdf` downloads the cached blob directly when it is available, falling back to the jsreport-generated `pdfUrl` otherwise. The `isSendable`/`documentStatus` gate described above is unchanged. Locked in by the `Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)` describe block in `QuotationPreview.vitest.jsx`.
 - Preview panel behavior: clicking a row in the sales-quotation list opens a lateral `QuotationPreview` panel via `GenericPreviewModal`. The preview has three tabs: `General`, `Messages` (placeholder), and `History` (placeholder). The General tab stacks: `SummaryCard` (totals, status, contact, order date, valid-until), `EmailsCard` (placeholder), and `RelatedDocumentsCard`. The `RelatedDocumentsCard` fetches related sales orders via `fetchByCriteria('sales-order','header','quotation',id,...)`, showing each order's document number, total, and status as a clickable chip. A refresh button re-triggers the fetch. For non-draft quotations, the PDF is auto-cached on first open; drafts always regenerate live. The PDF includes conditional discount breakdown rows and uses `Precio tarifa` / `List Price` as the price column header. All numeric amounts use period as the decimal separator (`en-US` locale in the shared `fmt` Handlebars helper), consistent with the form view.
 - Related downstream behavior: the Related Documents tab is intended to surface sales orders and invoices tied to the quotation so the user can navigate into fulfillment and billing from the quotation record.
 - Line amount recalculation for `orderedQuantity`, `listPrice`, and `discount` is client-side and instantaneous — no server round-trip is required. The `tax` field change still fires a callout (to obtain `taxRate` and update `lineGrossAmount` via the same `useLineGrossAmount` hook), and product selection fires a callout to fill price, tax, and UOM. Header total fields (`summedLineAmount`, `grandTotalAmount`) refresh only after save, since they are computed server-side by the `Line_Recalc_Totals` event handler. The `DocumentTotalsPanel` in the detail footer aggregates from live lines plus the in-progress add-row in real time, so the user sees an accurate running total without saving — it does not read from the server-side totals.
@@ -280,6 +280,12 @@ The behavior is identical to Sales Order — see
   synchronized with the saved currency/date so that newly added lines have their
   prices converted automatically from the pricelist currency to the order
   currency.
+- The header callout raises a separate `noExchangeRateAvailable` warning on the
+  same event. Since ETP-4838 both checks resolve availability through
+  `NeoExchangeRateService.hasRate(...)` — client-or-system scoped, with the
+  inverse-direction fallback — so they can no longer disagree. See
+  `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of
+  truth".
 
 ### Automated evidence
 
@@ -302,6 +308,46 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Print button — added, visible in specific evaluation/closed states — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notIn: ["UE", "CA", "ETGO_CI", "CJ"] } }` — i.e. hidden
+except when the quotation is Bajo Evaluación (`UE`), Cerrado - Pedido creado (`CA`), Cerrado -
+Factura creada (`ETGO_CI`), or Cerrado - Rechazado (`CJ`), per `QuotationStatusBadge.jsx`'s
+`STATUS_CONFIG` map — exactly the state list on the ticket. Backed by the pre-existing
+`print-sales-quotation` report via the generic `DetailView` Print button; verified end-to-end
+by moving a real quotation from Borrador to `UE` in the running app and confirming the button
+appears and opens the correct rendered document. No custom component was added:
+`QuotationTopbarActions.jsx` and its `useQuotationPdf` hook — used only to feed the "Enviar
+documento" preview modal — are unrelated and untouched. See `docs/decisions-reference.md`
+("Print Visibility") for the generic mechanism.
+
+**List-view print — superseded by ETP-4729, do not re-hide.** An earlier iteration of this fix
+also declared `"listViewOptions": { "hidePrint": true }` to keep the list's bulk "Print (N)"
+and toolbar Print buttons hidden, matching this window's pre-ticket state. A separate, later
+ticket (ETP-4729 — "print unification onto the generic icon — print restored") deliberately
+removed the window-level `hidePrint: true` this window had before ETP-4714 even started,
+restoring list-view print to always-visible as the new, intended, tested baseline. The
+`listViewOptions` addition was removed to defer to ETP-4729's more recent decision; only the
+detail-view `hidePrintWhen` gate above still applies. See `docs/decisions-reference.md`
+("Print Visibility") for the full collision writeup.
+
+## Related Documents auto-refresh — ETP-4779
+
+Converting a quotation into a Sales Order or Sales Invoice (`QuotationConfirmModal.jsx`) used to
+refresh the "Documentos" tab only via a full `window.location.reload()` on
+`handleCloseAfterCreate`. `QuotationConfirmModal` now dispatches a
+`sales-quotation:document-created` `window` `CustomEvent` right after each conversion action
+succeeds (`Convertquotation` / `createDraftInvoice`), mirroring the
+`sales-order:document-created` / `purchase-order:document-created` convention those two windows
+already use. `RelatedDocuments.jsx` listens for that event and bumps its local `refreshKey`
+(the same key that drives its `fetchByCriteria` effect), so the newly created order/invoice
+chip appears without a manual reload. `QuotationTopbarActions.jsx` (the `topbarRight` component)
+threads the `onRefresh` prop `DetailView.jsx` already passes it down to `QuotationConfirmModal`,
+which now calls it from `handleCloseAfterCreate` instead of reloading — refreshing the header
+badge/readonly state in place of the event, which only covers the related-docs panel.
 
 ## Theme roles
 

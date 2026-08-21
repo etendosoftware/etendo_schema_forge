@@ -8,6 +8,7 @@ export function buildBrowserObservabilityConfig({
   env = import.meta.env,
   location = globalThis.window?.location,
   logger = console,
+  storage = globalThis.localStorage,
 } = {}) {
   const hostname = location?.hostname;
 
@@ -42,6 +43,7 @@ export function buildBrowserObservabilityConfig({
         debug: env.VITE_MIXPANEL_DEBUG,
         apiHost: env.VITE_MIXPANEL_API_HOST,
         logger,
+        storage,
       }),
     ],
   };
@@ -51,6 +53,11 @@ export async function initBrowserObservability(
   options = {},
   client = { initObservability, track }
 ) {
-  await client.initObservability(buildBrowserObservabilityConfig(options));
+  const config = buildBrowserObservabilityConfig(options);
+  await client.initObservability(config);
+  // The Mixpanel one-time stale-identity reset (see docs/surveys.md) is no longer
+  // orchestrated here: it lives inside createMixpanelProvider's getClient() gate
+  // (providers/mixpanel.js), so it is guaranteed to run before ANY provider
+  // method touches the SDK, regardless of call ordering across the app.
   await client.track(OBSERVABILITY_EVENTS.APP_STARTED.name);
 }

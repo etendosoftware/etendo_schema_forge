@@ -1,8 +1,8 @@
 {
-  "version": "0.43.0",
+  "version": "0.44.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-08-06T17:20:38.808Z",
-  "checksum": "323eb4ee09a6f034",
+  "updatedAt": "2026-08-19T15:15:00.244Z",
+  "checksum": "3a2812db53cc826c",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -242,9 +242,21 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -598,7 +610,7 @@
             "form": false,
             "summable": true,
             "businessCritical": true,
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "maxLength": 12
             },
@@ -760,6 +772,30 @@
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "eTADASCostCenter",
+            "apiKey": "eTADASCostCenter",
+            "column": "EM_Etadas_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@$Element_CC@='Y' & @IsDepreciated@='Y'",
+              "evaluable": false,
+              "reason": "accounting-dimension",
+              "js": null
             }
           },
           {
@@ -1697,7 +1733,7 @@
             "apiKey": "eTADASCostCenter",
             "column": "EM_Etadas_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2198,6 +2234,14 @@
         "url": "/sws/neo/assets/assets/selectors/project"
       },
       {
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "column": "EM_Etadas_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
+      },
+      {
         "entity": "amortizationLine",
         "field": "amortization",
         "column": "A_Amortization_ID",
@@ -2491,6 +2535,14 @@
         "description": "Display logic for 'depreciationType' in assets should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-assets-eTADASCostCenter",
+        "category": "displaylogic-evaluable",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "Display logic for 'eTADASCostCenter' in assets should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-assets-everyMonthIs30Days",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2641,6 +2693,14 @@
         "field": "depreciationType",
         "runner": "node",
         "description": "Display logic for 'depreciationType' in assets should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assets-eTADASCostCenter",
+        "category": "displaylogic-valid",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "Display logic for 'eTADASCostCenter' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-everyMonthIs30Days",
@@ -2897,6 +2957,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in assets"
+      },
+      {
+        "id": "t-field-presence-assets-eTADASCostCenter",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "Field 'eTADASCostCenter' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-etgoAmortizationStatus",
@@ -3185,6 +3253,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in assets"
+      },
+      {
+        "id": "t-field-type-assets-eTADASCostCenter",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "Field 'eTADASCostCenter' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-etgoAmortizationStatus",
@@ -3534,6 +3610,14 @@
         "description": "Selector endpoint for 'currency' in assets should exist"
       },
       {
+        "id": "t-selector-endpoint-assets-eTADASCostCenter",
+        "category": "selector-endpoint",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'eTADASCostCenter' in assets should exist"
+      },
+      {
         "id": "t-selector-endpoint-assets-product",
         "category": "selector-endpoint",
         "entity": "assets",
@@ -3878,14 +3962,6 @@
         "description": "System field 'eTADASActivity' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-system-field-assets-eTADASCostCenter",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "eTADASCostCenter",
-        "runner": "node",
-        "description": "System field 'eTADASCostCenter' should exist in backend but not frontend for assets"
-      },
-      {
         "id": "t-system-field-assets-eTADASSalesCampaign",
         "category": "system-field",
         "entity": "assets",
@@ -4132,25 +4208,25 @@
       }
     ],
     "summary": {
-      "total": 231,
+      "total": 235,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 19,
-        "displaylogic-valid": 19,
-        "field-presence": 36,
-        "field-type": 36,
+        "displaylogic-evaluable": 20,
+        "displaylogic-valid": 20,
+        "field-presence": 37,
+        "field-type": 37,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
         "searchable-filters": 4,
-        "selector-endpoint": 9,
-        "system-field": 70,
+        "selector-endpoint": 10,
+        "system-field": 69,
         "visibility": 3
       },
       "byRunner": {
-        "node": 231,
+        "node": 235,
         "junit": 0
       }
     }

@@ -17,8 +17,9 @@ describe('useInvoicePdf', () => {
     assert.match(src, /export function useInvoicePdf/);
   });
 
-  it('accepts invoiceId, apiBaseUrl and token parameters', () => {
-    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*token\)/);
+  it('accepts invoiceId, apiBaseUrl, token and optional cacheConfig parameters', () => {
+    // Signature updated in ETP-4315 to include cacheConfig for jsreport-regeneration-skip caching
+    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*token,\s*cacheConfig\s*=\s*null\)/);
   });
 
   it('returns pdfUrl, pdfBlob, loading and error', () => {

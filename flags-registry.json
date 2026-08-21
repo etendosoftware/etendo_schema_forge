@@ -102,6 +102,16 @@
           ]
         },
         {
+          "id": "unified-auth-session",
+          "kind": "open",
+          "note": "The feature currently carries two browser credentials: tenant-scoped sf_auth_token and account-scoped sf_platform_token. A login in another tab can rotate the account token while the active environment remains visibly logged in, producing 401s during Checkout or environment discovery. A compatibility resolver now accepts either credential and Checkout prefers sf_auth_token, but the durable fix is one account/session contract with a bootstrap path for accounts that own no environment yet. Closure requires unified login, refresh, logout, 401 handling, and multi-tenant isolation tests.",
+          "refs": [
+            "docs/architecture/07-auth-and-security.md — TD-AUTH-001",
+            "tools/app-shell/src/lib/upgrade/api.js — getCheckoutToken",
+            "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java — findActiveAccountByBearerToken"
+          ]
+        },
+        {
           "id": "plan-badge-in-env-picker",
           "kind": "cosmetic",
           "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
@@ -241,6 +251,81 @@
         }
       ],
       "$deferredItemsComment": "This entry is the scorer scoring itself: a shipped feature (no flag object — 'shipped — no flag' state) whose standing debt is the single-repo registry model. ETP-4697 closes it."
+    },
+    {
+      "id": "product-import-category-resolution",
+      "description": "Product CSV/TXT import resolves existing categories and auto-creates missing categories while preserving legacy product and price imports.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-4905",
+      "created": "2026-08-14",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/product/productImportDescriptor.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "The current usable slice owns the Product import descriptor. Core and NEO are separate repositories; their debt is recorded below because this registry currently scores from the Schema Forge checkout.",
+      "$knownGapComment": "USABLE SLICE WITH EXPLICIT DEBT: category resolution and client-side auto-creation are available for Product imports, but the category POST is separate from the Product + Price batch. The current implementation therefore does not provide one transaction boundary across category, product, and price, and the resolution cache is keyed by token rather than a unique import-run identifier. These gaps are intentionally deferred for the next stack layer.",
+      "deferredItems": [
+        {
+          "id": "backend-category-product-price-atomicity",
+          "kind": "precondition",
+          "note": "Category creation currently uses a separate POST before the Product + Price batch, so a later product or price failure can leave an orphan category. Move dependent creation into an atomic/idempotent backend flow or add a compensating strategy before treating the import as transactionally complete.",
+          "refs": [
+            "tools/app-shell/src/windows/custom/product/productImportDescriptor.js — category createFn and Product + Price operations",
+            "ETP-4905 PRD — FR-5 Atomic product flow"
+          ]
+        },
+        {
+          "id": "import-run-cache-lifecycle",
+          "kind": "open",
+          "note": "Resolution promises are cached by bearer token and are not cleared at import completion, so a later import using the same token can reuse stale category IDs. Introduce a unique import-run cache scope and cleanup without losing in-flight deduplication.",
+          "refs": [
+            "packages/app-shell-core/src/lib/import/resolveDependentEntity.js — getResolutionCache",
+            "tools/app-shell/src/windows/custom/product/productImportDescriptor.js — runCache initialization"
+          ]
+        },
+        {
+          "id": "backend-and-e2e-evidence",
+          "kind": "open",
+          "note": "The usable slice has focused JavaScript coverage, but no ETP-4905 backend integration test in com.etendoerp.go and no reproducible end-to-end import evidence. Add coverage for organization scope, authorization, duplicate creation, failure behavior, and the legacy file path before closing the debt.",
+          "refs": [
+            "ETP-4905 PRD — Test plan / End-to-end",
+            "com.etendoerp.go src-test/src/com/etendoerp/go/schemaforge — backend batch tests"
+          ]
+        },
+        {
+          "id": "cross-repository-score-rollup",
+          "kind": "open",
+          "note": "The current flag-debt registry scores Schema Forge paths and cannot attribute Core and NEO ownership directly. The debt remains visible through this feature entry, but the score is not a complete three-repository measure until the registry rollup work lands.",
+          "refs": [
+            "ETP-4697 — Split flags-registry into per-repo registries with rollup scoring",
+            "docs/flag-debt.md — multi-repository registry limitation"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/productImportDescriptor.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "../schema_forge_core/packages/app-shell-core/src/lib/import/__tests__/resolveDependentEntity.test.js",
+            "expected": true,
+            "note": "Cross-repository Core test; the current registry root cannot resolve this path reliably."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/product-import-category-resolution.spec.js",
+            "expected": true,
+            "note": "Pending real import coverage for existing, new, repeated, ambiguous, invalid, and legacy categories."
+          }
+        ]
+      }
     }
   ]
 }

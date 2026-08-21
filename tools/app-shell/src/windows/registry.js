@@ -27,7 +27,7 @@ const windowLoaders = {
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
   'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
-  'user': () => import('@generated/user/generated/web/user/index.jsx'),
+  'user': () => import('@/windows/custom/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
@@ -51,6 +51,8 @@ const windowLoaders = {
   'payment-in': () => import('@generated/payment-in/generated/web/payment-in/index.jsx'),
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),
   'chart-of-accounts': () => import('@generated/chart-of-accounts/generated/web/chart-of-accounts/index.jsx'),
+  'cost-center': () => import('@generated/cost-center/generated/web/cost-center/index.jsx'),
+  'service-project': () => import('@generated/service-project/generated/web/service-project/index.jsx'),
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
@@ -216,6 +218,7 @@ const customLoaders = {
   'return-to-vendor-shipment': () => import('./custom/return-to-vendor-shipment/index.jsx'),
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
   'assets': () => import('./custom/assets/index.jsx'),
+  'user': () => import('./custom/user/index.jsx'),
 };
 
 /**

@@ -390,10 +390,12 @@ describe('computeLineGrossAmount — order config', () => {
     assert.equal(result.lineGrossAmount, undefined);
   });
 
-  it('no-op when lineNet is 0 (missing listPrice)', () => {
+  it('no-op when discount drives lineNet to 0 but orderedQuantity is missing (indeterminate, not edited directly)', () => {
     const cache  = { [TAX_ID]: 21 };
     const result = { tax: TAX_ID };
-    computeLineGrossAmount('orderedQuantity', '0', result, { listPrice: 50 }, cache, [], ORDER_LINE_CONFIG);
+    // discount changed, not qty/price — qty is genuinely absent here, so the
+    // zero can't be distinguished from "not set yet" (e.g. product pending).
+    computeLineGrossAmount('discount', '100', result, { listPrice: 50 }, cache, [], ORDER_LINE_CONFIG);
     assert.equal(result.lineGrossAmount, undefined);
   });
 
@@ -423,6 +425,27 @@ describe('computeLineGrossAmount — order config', () => {
     const result = { tax: TAX_ID, lineGrossAmount: 999 }; // stale value
     computeLineGrossAmount('discount', '50', result, { orderedQuantity: 2, listPrice: 100 }, cache, [], ORDER_LINE_CONFIG);
     assert.equal(result.lineGrossAmount, 121);
+  });
+
+  // ETP-4727: editing an existing line's own quantity/price down to exactly 0
+  // must zero out the gross. rowValues here mirrors what real call sites pass
+  // (DetailView.jsx merges the field's own new value into rowValues BEFORE
+  // calling computeLineGrossAmount — the changed field is never "missing").
+  it('ETP-4727 — orderedQuantity edited to 0 on an existing priced line zeroes the gross', () => {
+    const cache  = { [TAX_ID]: 21 };
+    const result = { tax: TAX_ID, lineGrossAmount: 24.5, grossAmount: 24.5 }; // stale: 7 × 3.50 × 1.21 before the edit
+    // rowValues already has orderedQuantity: '0' merged in, exactly like DetailView.jsx:722
+    computeLineGrossAmount('orderedQuantity', '0', result, { orderedQuantity: '0', listPrice: 3.50, discount: 0 }, cache, [], ORDER_LINE_CONFIG);
+    assert.equal(result.lineGrossAmount, 0);
+    assert.equal(result.grossAmount, 0);
+  });
+
+  it('ETP-4727 — listPrice edited to 0 on an existing priced line zeroes the gross', () => {
+    const cache  = { [TAX_ID]: 21 };
+    const result = { tax: TAX_ID, lineGrossAmount: 24.5, grossAmount: 24.5 }; // stale: 7 × 3.50 × 1.21 before the edit
+    computeLineGrossAmount('listPrice', '0', result, { orderedQuantity: 7, listPrice: '0', discount: 0 }, cache, [], ORDER_LINE_CONFIG);
+    assert.equal(result.lineGrossAmount, 0);
+    assert.equal(result.grossAmount, 0);
   });
 
 });
@@ -701,6 +724,25 @@ describe('computeUnitPriceForPost', () => {
     const lineData = { listPrice: -100, discount: 10 };
     computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
     assert.equal(lineData.unitPrice, -90);
+  });
+
+  // ETP-4727 (backend counterpart): listPrice explicitly edited to 0 on an existing
+  // line must still derive unitPrice=0. Before this fix, the `listPrice !== 0` guard
+  // left unitPrice at its stale pre-edit value in the outgoing PATCH body, which the
+  // backend's own fallback (NeoCommercialLinePolicy.injectLineGrossAmountIfMissing)
+  // then read as "price wasn't really changed" and recomputed a nonzero
+  // lineGrossAmount from it — clobbering the correct 0 the frontend had computed and
+  // sent for the exact same edit.
+  it('order config: listPrice explicitly 0 derives unitPrice=0 (not left stale)', () => {
+    const lineData = { listPrice: 0, discount: 0 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, 0);
+  });
+
+  it('invoice config: listPrice explicitly 0 derives unitPrice=0 (not left stale)', () => {
+    const lineData = { listPrice: 0, etgoDiscount: 0 };
+    computeUnitPriceForPost(lineData, INVOICE_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, 0);
   });
 
 });

@@ -4,12 +4,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
-import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { normalizeIban } from '@/lib/validateIban.js';
+import { validateIbanForCountry } from '@/lib/countryIban.js';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
+import { getApiBase } from '@/hooks/useNeoResource.js';
 
 const CURRENCY_FIELD = { key: 'account-form-currency', id: 'account-form-currency' };
+const COUNTRY_FIELD = { key: 'account-form-country', id: 'account-form-country' };
 
-const EMPTY = { name: '', iban: '', swiftCode: '', currencyId: '' };
+const COUNTRY_SELECTOR_URL = `${getApiBase()}/sws/neo/financial-account/account/selectors/C_Country_ID`;
+
+const EMPTY = { name: '', iban: '', swiftCode: '', currencyId: '', countryId: '' };
 
 // Form mode → persisted FIN_FinancialAccount.type value. Unmapped modes
 // (e.g. 'cash') fall back to 'C'.
@@ -18,14 +23,24 @@ const TYPE_BY_MODE = { bank: 'B', card: 'CA' };
 const FIELD_LABEL = 'text-sm font-medium leading-6 text-[hsl(var(--foreground))]';
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
+/** Maps a validateIbanForCountry() error code to its i18n key. */
+const IBAN_ERROR_KEYS = {
+  invalid: 'financeAccountsNewIbanInvalid',
+  countryMismatch: 'financeAccountsNewIbanCountryMismatch',
+  lengthMismatch: 'financeAccountsNewIbanLengthMismatch',
+};
+
 /**
  * Reusable account form for the offline flow (ETP-4096). Used both by the New
  * Account wizard (bank/cash creation) and the Edit Account modal.
  *
  * - `mode='bank'` shows IBAN + BIC/SWIFT; `mode='cash'` and `mode='card'` show
- *   only Name + Currency.
- * - Name is required; IBAN is optional but, when present, must pass mod-97.
- * - `onSubmit` receives `{ name, type, currencyId, iban, swiftCode }` — type is
+ *   only Name + Country + Currency.
+ * - Name, Country and Currency are required in every mode (ETP-4896: Country is always
+ *   editable and never locks, unlike Currency/Type elsewhere in this window). IBAN is optional
+ *   but, when present, must pass mod-97 AND — when the selected country carries IBAN metadata —
+ *   match its prefix and length (see `@/lib/countryIban.js`).
+ * - `onSubmit` receives `{ name, type, currencyId, countryId, iban, swiftCode }` — type is
  *   'B' (bank) / 'C' (cash) / 'CA' (card); iban/swift are normalised and only
  *   included for bank accounts.
  */
@@ -34,6 +49,9 @@ export function AccountFormStep({
   bankName,
   currencies = [],
   defaultCurrencyId,
+  countryIbanRules = [],
+  defaultCountryId,
+  token,
   initialValues,
   submitLabel,
   submitting = false,
@@ -47,6 +65,7 @@ export function AccountFormStep({
   const [iban, setIban] = useState(seed.iban);
   const [swiftCode, setSwiftCode] = useState(seed.swiftCode);
   const [currencyId, setCurrencyId] = useState(seed.currencyId || defaultCurrencyId || '');
+  const [countryId, setCountryId] = useState(seed.countryId || defaultCountryId || '');
   const [ibanTouched, setIbanTouched] = useState(false);
 
   // Auto-applies defaultCurrencyId only once (mount, or once it arrives async from
@@ -61,21 +80,40 @@ export function AccountFormStep({
     }
   }, [defaultCurrencyId, currencyId]);
 
+  // Same one-shot guard as currency, for the same reason (ETP-4896): defaultCountryId can arrive
+  // asynchronously (org default, or the country the user filtered Salt Edge providers by in
+  // NewAccountWizard's BankPicker — see its own defaultCountryId={seededCountryId || ...}), and
+  // without the ref it would re-fire on every chip-clear and prevent changing the country at all.
+  const countryDefaultedRef = useRef(countryId !== '');
+  useEffect(() => {
+    if (!countryId && defaultCountryId && !countryDefaultedRef.current) {
+      countryDefaultedRef.current = true;
+      setCountryId(defaultCountryId);
+    }
+  }, [defaultCountryId, countryId]);
+
   // The allowed currency set (EUR/USD/GBP) is enforced server-side by the
   // C_Currency_ID selector; `currencies` arrives already restricted, so this is
   // just a client-side (staticOptions) chip picker over that list.
   const selectedCurrency = currencies.find((currency) => currency.id === currencyId) || null;
   const currencyOptions = currencies.map((currency) => ({ id: currency.id, name: currency.iso }));
 
+  // Unlike currency, `countryIbanRules` is NOT the full country catalog (only the ~45 countries
+  // with IBAN metadata) — the picker itself searches the full C_Country_ID selector live
+  // (`serverSearch`, below). This lookup is only for cross-checking the typed IBAN and for
+  // resolving a display label without a network round-trip when the id was pre-filled.
+  const selectedCountry = countryIbanRules.find((country) => country.id === countryId) || null;
+
   const isBank = mode === 'bank';
-  const ibanInvalid = isBank && iban.trim() !== '' && !isValidIban(iban);
-  const canSubmit = name.trim() !== '' && currencyId !== '' && !ibanInvalid && !submitting;
+  const ibanCheck = isBank ? validateIbanForCountry(iban, selectedCountry) : { ok: true, code: null };
+  const ibanInvalid = isBank && iban.trim() !== '' && !ibanCheck.ok;
+  const canSubmit = name.trim() !== '' && currencyId !== '' && countryId !== '' && !ibanInvalid && !submitting;
 
   const handleSubmit = (event) => {
     event.preventDefault();
     if (!canSubmit) return;
     const typeCode = TYPE_BY_MODE[mode] ?? 'C';
-    const payload = { name: name.trim(), type: typeCode, currencyId };
+    const payload = { name: name.trim(), type: typeCode, currencyId, countryId };
     if (isBank) {
       payload.iban = normalizeIban(iban);
       // Only emit swiftCode when the field is shown — the edit modal hides it and
@@ -114,6 +152,27 @@ export function AccountFormStep({
           />
         </div>
 
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor={COUNTRY_FIELD.key}
+            className={FIELD_LABEL}
+            data-testid="Label__account-form-country">
+            {ui('financeAccountsNewFieldCountry')} <span className="text-[hsl(var(--destructive))]">*</span>
+          </Label>
+          <CreatableSearchSelect
+            field={COUNTRY_FIELD}
+            value={countryId}
+            displayValue={selectedCountry?.name || ''}
+            onChange={(id) => setCountryId(id)}
+            formData={{}}
+            resolvedLabel={ui('financeAccountsNewFieldCountry')}
+            selectorUrl={COUNTRY_SELECTOR_URL}
+            token={token}
+            serverSearch
+            data-testid="CreatableSearchSelect__account-form-country"
+          />
+        </div>
+
         {isBank ? (
           <>
             <div className="flex flex-col gap-2">
@@ -135,7 +194,7 @@ export function AccountFormStep({
               />
               {ibanInvalid && ibanTouched ? (
                 <p className="text-xs text-[hsl(var(--destructive))]" data-testid="account-form-iban-error">
-                  {ui('financeAccountsNewIbanInvalid')}
+                  {ui(IBAN_ERROR_KEYS[ibanCheck.code] || IBAN_ERROR_KEYS.invalid)}
                 </p>
               ) : null}
             </div>
@@ -167,7 +226,7 @@ export function AccountFormStep({
             htmlFor={CURRENCY_FIELD.key}
             className={FIELD_LABEL}
             data-testid="Label__5e0d1d">
-            {ui('financeAccountsNewFieldCurrency')}
+            {ui('financeAccountsNewFieldCurrency')} <span className="text-[hsl(var(--destructive))]">*</span>
           </Label>
           <CreatableSearchSelect
             field={CURRENCY_FIELD}

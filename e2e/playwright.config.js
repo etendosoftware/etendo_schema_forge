@@ -1,4 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// The onboarding project creates this file for the downstream integration tests.
+// Reuse it when available so running integration tests does not register another
+// user on every Playwright invocation.
+const authCredentialsPath = resolve(import.meta.dirname, '.auth-credentials.json');
+const hasAuthCredentials = existsSync(authCredentialsPath);
 
 /**
  * Playwright configuration for Schema Forge E2E tests.
@@ -7,6 +15,35 @@ import { defineConfig, devices } from '@playwright/test';
  *   1. Dev server (default):  make dev → http://localhost:3100
  *   2. Deployed (Etendo):     BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e
  */
+
+// mocked is always safe to parallelize — every mocked spec talks to a fully
+// intercepted, per-page fake backend, so workers never share state.
+//
+// onboarding-setup/integration default to workers:1 for a real reason: every
+// *.integration.spec.js logs in with the SAME shared admin credentials against
+// the SAME live Etendo/Postgres tenant (see e.g. contacts-integration.spec.js),
+// so concurrent workers there race on real, shared records — data corruption,
+// not just flakiness. Raising E2E_WORKERS above 1 applies to ALL THREE
+// projects, including these two: that's an explicit, opt-in acceptance of that
+// risk (deliberately not a separate/quieter knob), not a safe default.
+const E2E_WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined;
+const MOCKED_WORKERS = E2E_WORKERS ?? 4;
+const INTEGRATION_WORKERS = E2E_WORKERS ?? 1;
+const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
+  String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
+);
+
+const emailSinkServer = {
+  command: 'node support/email-sink.mjs',
+  url: 'http://127.0.0.1:8025/health',
+  reuseExistingServer: !process.env.CI,
+  timeout: 10_000,
+  env: {
+    E2E_EMAIL_SINK_PORT: '8025',
+    E2E_EMAIL_SINK_API_KEY: 'e2e-only-secret',
+  },
+};
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -17,12 +54,13 @@ export default defineConfig({
     ['html', { open: 'never', outputFolder: '../artifacts/e2e-report' }],
     ['list'],
   ],
+  webServer: process.env.E2E_EMAIL_SINK === '1' ? emailSinkServer : undefined,
   timeout: 60_000,
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3100',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: CAPTURE_SCREENSHOTS ? 'only-on-failure' : 'off',
     video: process.env.E2E_VIDEO ? 'on' : 'on-first-retry',
     headless: !!process.env.CI,
     viewport: { width: 1440, height: 900 },
@@ -34,7 +72,7 @@ export default defineConfig({
       name: 'mocked',
       testMatch: '**/*.mocked.spec.js',
       use: { ...devices['Desktop Chrome'] },
-      workers: process.env.CI ? 4 : undefined,
+      workers: MOCKED_WORKERS,
     },
     {
       name: 'onboarding-setup',
@@ -45,7 +83,7 @@ export default defineConfig({
     {
       name: 'integration',
       testIgnore: ['**/*.mocked.spec.js', '**/onboarding-register.integration.spec.js'],
-      dependencies: ['onboarding-setup'],
+      dependencies: hasAuthCredentials ? [] : ['onboarding-setup'],
       use: { ...devices['Desktop Chrome'] },
       workers: 1,
     },

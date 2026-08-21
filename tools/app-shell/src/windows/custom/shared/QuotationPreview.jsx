@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLocale, useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useQuotationPdf } from './useQuotationPdf.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -24,8 +24,13 @@ const QUOTATION_SPECS = [
 
 function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
+  // Pass the DB-sourced status dictionary (same one DataTable.jsx uses via
+  // useLocale()) so this preview resolves the exact same "Bajo evaluación"
+  // AD_Ref_List_Trl label the grid shows, instead of falling back to the
+  // generic statusUnderEvaluation ("En evaluación") key.
+  const dictionary = useLocale();
   const statusCode = quotation.documentStatus;
-  const statusLabel = resolveStatusLabel(statusCode, null, ui);
+  const statusLabel = resolveStatusLabel(statusCode, dictionary, ui);
 
   return (
     <div className="pb-4">
@@ -61,6 +66,10 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const modalRef = useRef(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
+  // (GET /preview-file) resolves ahead of the jsreport regeneration below;
+  // capturing it here lets Download gate on whichever source resolves first.
+  const [cachedAttachment, setCachedAttachment] = useState(null);
 
   const ratePrecision = useCurrencyPrecision();
 
@@ -84,11 +93,16 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     : null;
   const currencyData = { orgCurrencyCode, exchangeRate };
 
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
+  // useQuotationPdf skip the jsreport round-trip and serve the marked attachment
+  // directly when one already exists, instead of regenerating on every open.
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: quotation?.documentStatus !== 'DR' };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
     quotation?.id,
     apiBaseUrl,
     token,
     currencyData,
+    pdfCacheConfig,
   );
 
   if (!quotation) return null;
@@ -108,7 +122,18 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     setTimeout(() => setShowSendModal(false), 300);
   };
 
+  // Prefer the cached attachment when available — already fetched, resolves
+  // ahead of the jsreport regeneration and closes the preview/button gap.
+  const hasPdf = !!pdfUrl || !!cachedAttachment;
+
   const handleDownloadPdf = () => {
+    if (cachedAttachment) {
+      const a = document.createElement('a');
+      a.href = cachedAttachment.objectUrl;
+      a.download = cachedAttachment.fileName || `quotation-${quotation.documentNo || quotation.id}.pdf`;
+      a.click();
+      return;
+    }
     if (!pdfUrl) return;
     const a = document.createElement('a');
     a.href = pdfUrl;
@@ -130,22 +155,26 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
 
   // ── Attachment config ───────────────────────────────────────────────────────
 
+  // ETP-4315 — real, marked Attachment (C_Order is sales-quotation's physical
+  // table too, shared with sales-order/purchase-order).
   const attachmentConfig = !isDraft
     ? {
         storeCondition: true,
         sourceBlob: pdfBlob,
         autoFetch: true,
         documentId: quotation.id,
-        specName: 'sales-quotation',
+        tableName: 'C_Order',
         token,
         apiBaseUrl,
+        onFileChange: setCachedAttachment,
       }
     : {
         storeCondition: false,
         documentId: quotation.id,
-        specName: 'sales-quotation',
+        tableName: 'C_Order',
         token,
         apiBaseUrl,
+        onFileChange: setCachedAttachment,
       };
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
@@ -165,22 +194,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         ratePrecision={ratePrecision}
         data-testid="QuotationGeneralTab__7eb018" />,
     },
-    {
-      key: 'messages',
-      label: ui('quotationPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('quotationPreviewMessages')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
-    {
-      key: 'history',
-      label: ui('quotationPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('quotationPreviewHistory')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
   ];
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -193,7 +206,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
-      hasPdf={!!pdfUrl}
+      hasPdf={hasPdf}
       sendLabel={ui('quotationPreviewSend')}
       downloadLabel={ui('quotationPreviewDownloadPdf')}
       editLabel={ui('quotationPreviewEdit')}

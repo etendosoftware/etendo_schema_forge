@@ -13,15 +13,6 @@ import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryC
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
-function EmptyPanel({ icon, text }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
-      <span className="text-3xl">{icon}</span>
-      <p className="text-sm">{text}</p>
-    </div>
-  );
-}
-
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -83,10 +74,15 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     setTimeout(() => { setSendModalClosing(false); setShowSendModal(false); }, 280);
   }, []);
 
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
+  // useShipmentPdf skip the jsreport round-trip and serve the marked attachment
+  // directly when one already exists, instead of regenerating on every open.
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR' };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useShipmentPdf(
     shipment?.id ?? null,
     apiBaseUrl,
     token,
+    pdfCacheConfig,
   );
 
   // Fetch the full header record once; all 3 specs share 1 HTTP call via the cached promise.
@@ -116,6 +112,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates.
   const isSendable = shipment.documentStatus === 'CO';
+  const isDraft = shipment.documentStatus === 'DR';
 
   // ── Left panel ──────────────────────────────────────────────────────────────
 
@@ -128,6 +125,19 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       errorText={ui('shipmentPdfError')}
       data-testid="PreviewPdfPanel__5d626b" />
   );
+
+  // ── Attachment config ───────────────────────────────────────────────────────
+
+  // ETP-4315 — new wiring (this window never cached its rendered PDF before,
+  // design doc Open design question 6, resolved "do it now" for consistency).
+  // Real, marked Attachment (M_InOut), same draft-gated pattern as the other
+  // generated-PDF windows (sales-invoice/order/quotation).
+  const attachmentConfig = !isDraft
+    ? {
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl,
+      }
+    : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
 
   // ── Derived values ──────────────────────────────────────────────────────────
 
@@ -209,22 +219,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         </div>
       ),
     },
-    {
-      key: 'messages',
-      label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel
-        icon="💬"
-        text={ui('invoicePreviewNoMessagesYet')}
-        data-testid="EmptyPanel__5d626b" />,
-    },
-    {
-      key: 'history',
-      label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel
-        icon="🕐"
-        text={ui('invoicePreviewNoActivityRecorded')}
-        data-testid="EmptyPanel__5d626b" />,
-    },
   ];
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -236,6 +230,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         title={`${windowLabel} ${shipment.documentNo}`}
         subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
         leftPanel={leftPanel}
+        attachmentConfig={attachmentConfig}
         onClose={onClose}
         onEdit={() => onEdit?.(shipment.id)}
         tabs={tabs}

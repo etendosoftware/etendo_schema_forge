@@ -2650,6 +2650,13 @@
         }
       ]
     },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": []
+    },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "f6c327775c3b45a5d23a720439e0b43079d561b89eecc408843116c315afb16f",
       "params": [
@@ -2743,6 +2750,102 @@
           "name": "Test SMTP Connection",
           "obuiapp_process_id": "9AB8A39485BD4FB1B6BB38B27E707668",
           "process_id": null
+        }
+      ]
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "e9a6c1b8434eb5c0fb2588c876afc64dfe694d0fdffce67be0d72d9de2dea84a",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "classname": null,
+          "column_name": "ChangeProjectStatus",
+          "mechanism": "classic_process",
+          "name": "Change Project Status",
+          "obuiapp_process_id": null,
+          "process_id": "800002"
+        },
+        {
+          "classname": "org.openbravo.erpCommon.ad_actionButton.ProjectClose",
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Close Project",
+          "obuiapp_process_id": null,
+          "process_id": "227"
+        },
+        {
+          "classname": "ad_actionButton/ProjectCopyFrom.html",
+          "column_name": "CopyFrom",
+          "mechanism": "classic_process",
+          "name": "Copy Details",
+          "obuiapp_process_id": null,
+          "process_id": "212"
+        },
+        {
+          "classname": null,
+          "column_name": "CopyFrom",
+          "mechanism": "classic_process",
+          "name": "Copy Project Lines",
+          "obuiapp_process_id": null,
+          "process_id": "800003"
+        },
+        {
+          "classname": null,
+          "column_name": "GenerateOrder",
+          "mechanism": "classic_process",
+          "name": "Create Purchase Order from Project",
+          "obuiapp_process_id": null,
+          "process_id": "800006"
+        },
+        {
+          "classname": null,
+          "column_name": "GenerateOrder",
+          "mechanism": "classic_process",
+          "name": "Create Sales Order from Project",
+          "obuiapp_process_id": null,
+          "process_id": "800005"
+        },
+        {
+          "classname": null,
+          "column_name": "GenerateTo",
+          "mechanism": "classic_process",
+          "name": "Generate Order",
+          "obuiapp_process_id": null,
+          "process_id": "164"
+        },
+        {
+          "classname": "org.openbravo.process.ProjectLinePricing",
+          "column_name": "DoPricing",
+          "mechanism": "classic_process",
+          "name": "Get Price",
+          "obuiapp_process_id": null,
+          "process_id": "230"
+        },
+        {
+          "classname": null,
+          "column_name": "Projectwon",
+          "mechanism": "classic_process",
+          "name": "Process a Winning Bid",
+          "obuiapp_process_id": null,
+          "process_id": "800094"
+        },
+        {
+          "classname": "ad_actionButton/ProjectSetType.html",
+          "column_name": "Setprojecttype",
+          "mechanism": "classic_process",
+          "name": "Set Project Type",
+          "obuiapp_process_id": null,
+          "process_id": "215"
+        },
+        {
+          "classname": null,
+          "column_name": null,
+          "mechanism": "tab_process",
+          "name": "Proposal print Jr",
+          "obuiapp_process_id": null,
+          "process_id": "800188"
         }
       ]
     },
@@ -3171,7 +3274,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "067b7353a7c4b9a0977eb91071d3e95c24a834c201eb0cd93a4009cb3e6f15c8",
+      "checksum": "29006e55845566f179599a4bf1bc8e64b1db6fc66c7fce21d9423dee0be3178c",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -3417,14 +3520,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
-          "column_name": "EM_Psd2_Refresh_Connections",
-          "mechanism": "obuiapp_process",
-          "name": "Refresh Connections",
-          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
-          "process_id": null
-        },
-        {
           "classname": "com.etendoerp.payment.removal.handler.RemoveReconciliation",
           "column_name": "EM_Etpr_Remove_Reconciliation",
           "mechanism": "obuiapp_process",
@@ -3438,6 +3533,14 @@
           "mechanism": "obuiapp_process",
           "name": "Remove Transaction",
           "obuiapp_process_id": "DC4FCAC608324CB78CF92F99C1A94AD0",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
+          "column_name": "EM_Psd2_Refresh_Connections",
+          "mechanism": "obuiapp_process",
+          "name": "Search Recent Transactions",
+          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
           "process_id": null
         }
       ]

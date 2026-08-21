@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly';
 
 /* eslint-disable react/prop-types */
 
@@ -143,10 +144,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
     return { filtered: visible.slice(0, MAX_VISIBLE), hiddenCount: Math.max(0, visible.length - MAX_VISIBLE) };
   }, [invoices, search, currentId]);
 
-  const fmtDate = (d) => {
-    if (!d) return '—';
-    try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return d; }
-  };
+  const fmtDate = (d) => formatCalendarDate(d, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtAmt = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 
   const invoiceRow = (inv) => (
@@ -355,6 +353,7 @@ function ExpandedForm({
   onSave,
   saving,
   error,
+  model349Active,
 }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -450,56 +449,61 @@ function ExpandedForm({
         </label>
         {invoiceField}
       </div>
-      {/* Gray panel: Correctiva del 349 checkbox + conditional AEAT fields, per UX spec */}
-      <div className="rounded-lg bg-muted px-4 py-3 space-y-4">
-        <div className="flex items-start gap-3">
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={corrective}
-            disabled={readOnly}
-            onClick={() => {
-              if (readOnly) return;
-              const next = corrective ? 'N' : 'Y';
-              onChange('aEAT349IsCorrective', next);
-              onFieldSave?.('aEAT349IsCorrective', next);
-            }}
-            className={[
-              'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-border-control shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
-              'flex items-center justify-center transition-colors focus-visible:outline-none',
-              corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-card',
-              readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
-            ].join(' ')}
-            data-testid="checkbox__isCorrective"
-          >
-            {corrective && (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </button>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-foreground">
-              {t('EM_AEAT349_IsCorrective') ?? 'Correctiva del 349'}
-            </span>
-            <InfoTooltip text={TOOLTIP_TEXT} data-testid="InfoTooltip__4395d6" />
+      {/* Gray panel: Correctiva del 349 checkbox + conditional AEAT fields, per UX spec.
+          Hidden entirely unless Modelo 349 is active in the Fiscal Models catalog — this
+          checkbox exists only to feed the AEAT-349 declaration, so it has no reason to be
+          on-screen when that model isn't even in use. */}
+      {model349Active && (
+        <div className="rounded-lg bg-muted px-4 py-3 space-y-4">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={corrective}
+              disabled={readOnly}
+              onClick={() => {
+                if (readOnly) return;
+                const next = corrective ? 'N' : 'Y';
+                onChange('aEAT349IsCorrective', next);
+                onFieldSave?.('aEAT349IsCorrective', next);
+              }}
+              className={[
+                'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-border-control shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+                'flex items-center justify-center transition-colors focus-visible:outline-none',
+                corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-card',
+                readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
+              ].join(' ')}
+              data-testid="checkbox__isCorrective"
+            >
+              {corrective && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-foreground">
+                {t('EM_AEAT349_IsCorrective') ?? 'Correctiva del 349'}
+              </span>
+              <InfoTooltip text={TOOLTIP_TEXT} data-testid="InfoTooltip__4395d6" />
+            </div>
           </div>
-        </div>
 
-        {/* Conditional AEAT fields */}
-        {corrective && (
-          <AeatGrid
-            data={lineData}
-            onChange={onChange}
-            onFieldSave={onFieldSave}
-            apiBaseUrl={apiBaseUrl}
-            token={token}
-            catalogs={catalogs}
-            readOnly={readOnly}
-            labelOverrides={labelOverrides}
-            data-testid="AeatGrid__4395d6" />
-        )}
-      </div>
+          {/* Conditional AEAT fields */}
+          {corrective && (
+            <AeatGrid
+              data={lineData}
+              onChange={onChange}
+              onFieldSave={onFieldSave}
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              catalogs={catalogs}
+              readOnly={readOnly}
+              labelOverrides={labelOverrides}
+              data-testid="AeatGrid__4395d6" />
+          )}
+        </div>
+      )}
       {/* Draft-only: error + save / cancel buttons */}
       {isDraft && error && (
         <p className="text-sm text-destructive" data-testid="text__saveError">{error}</p>
@@ -563,6 +567,31 @@ export default function ReversedInvoicesPanel({
 
   // Track whether data has been fetched at least once
   const fetchedRef = useRef(false);
+
+  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349
+  // fields) is Modelo-349-specific and must stay hidden entirely unless 349 is
+  // active in the Fiscal Models catalog. The catalog is a generic, per-client
+  // AD_PREFERENCE (ETGO_FiscalModelsCatalog) exposed at the built-in
+  // /sws/neo/fiscal-models-catalog endpoint — not scoped to the fiscal-models
+  // spec — so it's reachable cross-spec exactly like YearPickerSelect's
+  // /fiscal-calendar lookup above. Mirrors FmListPage's own fetch/shape
+  // (activeModels + catalogLoaded) so "unconfigured catalog" behaves the same
+  // "all models inactive" way everywhere: fail-closed (hidden) until the
+  // fetch confirms 349 === true, never a flash of visible-then-hidden.
+  const [activeModels, setActiveModels] = useState({});
+  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+
+  useEffect(() => {
+    if (!apiBaseUrl || !token) return;
+    const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
+    fetch(`${neoBase}/fiscal-models-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(json => setActiveModels(json ?? {}))
+      .catch(() => {})
+      .finally(() => setCatalogLoaded(true));
+  }, [apiBaseUrl, token]);
+
+  const model349Active = catalogLoaded && activeModels?.['349'] === true;
 
   // On unsaved records the route passes recordId='new' — treat it as no record
   // so add/fetch stay disabled until the invoice is saved (a rectification row
@@ -886,6 +915,7 @@ export default function ReversedInvoicesPanel({
                           labelOverrides={api?.labelOverrides}
                           bpId={data?.businessPartner}
                           recordId={recordId}
+                          model349Active={model349Active}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
                     </tr>
@@ -915,6 +945,7 @@ export default function ReversedInvoicesPanel({
                       onCancel={() => { setAddingLine(false); setNewLine({}); setSaveError(null); }}
                       saving={saving}
                       error={saveError}
+                      model349Active={model349Active}
                       data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>

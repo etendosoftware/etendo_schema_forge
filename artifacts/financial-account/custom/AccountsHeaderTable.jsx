@@ -40,6 +40,7 @@ import { getContractGridColumns } from '@/components/financial-accounts/contract
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
 import { EditAccountModal } from '@/windows/custom/financial-account/EditAccountModal.jsx';
 import { ArchiveAccountDialog } from '@/windows/custom/financial-account/ArchiveAccountDialog.jsx';
+import { DeleteAccountDialog } from '@/windows/custom/financial-account/DeleteAccountDialog.jsx';
 import { BankConnectionFlowUI } from '@/windows/custom/financial-account/BankConnectionFlowUI.jsx';
 import { FundsTransferModal } from '@/windows/custom/financial-account/FundsTransferModal.jsx';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
@@ -58,6 +59,7 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 const COLUMN_CHROME = {
   name: { headClass: 'w-[480px] pl-[84px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
+  country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
   pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
 };
@@ -128,6 +130,7 @@ function buildColumns(ui, locale, handlers) {
             onOpen={handlers.onOpen}
             onEdit={handlers.onEdit}
             onArchive={handlers.onArchive}
+            onDelete={handlers.onDelete}
             onBankConnectionAction={handlers.onBankConnectionAction}
             onTransfer={handlers.onTransfer}
             onNewMovement={handlers.onNewMovement} />
@@ -188,6 +191,7 @@ export default function AccountsHeaderTable({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editAccount, setEditAccount] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [transferSource, setTransferSource] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
   const [deleteConnectionTarget, setDeleteConnectionTarget] = useState(null);
@@ -298,6 +302,7 @@ export default function AccountsHeaderTable({
     onNewMovement: (account) => navigate(`/financial-account/${account.id}?tab=movements&newMovement=true`),
     onEdit: setEditAccount,
     onArchive: setArchiveTarget,
+    onDelete: setDeleteTarget,
     onTransfer: setTransferSource,
     onBankConnectionAction: handleBankConnectionAction,
   };
@@ -400,6 +405,7 @@ export default function AccountsHeaderTable({
         onClose={() => setEditAccount(null)}
         onSaved={reload}
         onArchive={(acc) => { setEditAccount(null); setArchiveTarget(acc); }}
+        onDelete={(acc) => { setEditAccount(null); setDeleteTarget(acc); }}
         onConnect={(acc) => { setEditAccount(null); handleBankConnectionAction('connect', acc); }}
         data-testid="EditAccountModal__accthdr" />
       <ArchiveAccountDialog
@@ -408,6 +414,12 @@ export default function AccountsHeaderTable({
         onClose={() => setArchiveTarget(null)}
         onArchived={reload}
         data-testid="ArchiveAccountDialog__accthdr" />
+      <DeleteAccountDialog
+        open={!!deleteTarget}
+        account={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={reload}
+        data-testid="DeleteAccountDialog__accthdr" />
       {/* `...DisconnectConfirm` ("Disconnect this bank connection?") is the dialog's title,
           not a button label — despite the name. `...DisconnectAction` ("Disconnect") is the
           confirm button, and `...DisconnectBody` explains that this only deactivates the

@@ -1,8 +1,8 @@
 {
-  "version": "0.37.0",
-  "generatedAt": "2026-08-07T13:07:42.594Z",
-  "updatedAt": "2026-08-07T18:34:29.585Z",
-  "checksum": "14f639170c77944b",
+  "version": "0.1.0",
+  "generatedAt": "2026-08-13T11:56:58.444Z",
+  "updatedAt": "2026-08-13T12:12:34.435Z",
+  "checksum": "147dea7725088bb3",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -12,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
@@ -512,75 +517,129 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated"
+                "name": "Cost Not Calculated",
+                "labels": {
+                  "es_ES": "Coste No Calculado"
+                }
               },
               {
                 "value": "d",
-                "name": "Disabled For Background"
+                "name": "Disabled For Background",
+                "labels": {
+                  "es_ES": "Deshabilitado Para Background"
+                }
               },
               {
                 "value": "D",
-                "name": "Document Disabled"
+                "name": "Document Disabled",
+                "labels": {
+                  "es_ES": "Documento Deshabilitado"
+                }
               },
               {
                 "value": "L",
-                "name": "Document Locked"
+                "name": "Document Locked",
+                "labels": {
+                  "es_ES": "Documento Bloqueado"
+                }
               },
               {
                 "value": "E",
-                "name": "Error"
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
               },
               {
                 "value": "C",
-                "name": "Error, No cost"
+                "name": "Error, No cost",
+                "labels": {
+                  "es_ES": "Error, No hay coste"
+                }
               },
               {
                 "value": "i",
-                "name": "Invalid Account"
+                "name": "Invalid Account",
+                "labels": {
+                  "es_ES": "Cuenta No Válida"
+                }
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date"
+                "name": "No Accounting Date",
+                "labels": {
+                  "es_ES": "Sin Fecha Contable"
+                }
               },
               {
                 "value": "DT",
-                "name": "No Document Type"
+                "name": "No Document Type",
+                "labels": {
+                  "es_ES": "Sin tipo de Documento"
+                }
               },
               {
                 "value": "NO",
-                "name": "No Related PO"
+                "name": "No Related PO",
+                "labels": {
+                  "es_ES": "Sin PO Relacionada"
+                }
               },
               {
                 "value": "b",
-                "name": "Not Balanced"
+                "name": "Not Balanced",
+                "labels": {
+                  "es_ES": "No Balanceado"
+                }
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)"
+                "name": "Not Convertible (no rate)",
+                "labels": {
+                  "es_ES": "No Convertible (no hay rango)"
+                }
               },
               {
                 "value": "l",
-                "name": "Pending Refresh"
+                "name": "Pending Refresh",
+                "labels": {
+                  "es_ES": "Pendiente de Actualización"
+                }
               },
               {
                 "value": "p",
-                "name": "Period Closed"
+                "name": "Period Closed",
+                "labels": {
+                  "es_ES": "Periodo Cerrado"
+                }
               },
               {
                 "value": "y",
-                "name": "Post Prepared"
+                "name": "Post Prepared",
+                "labels": {
+                  "es_ES": "Contabilidad Preparada"
+                }
               },
               {
                 "value": "Y",
-                "name": "Posted"
+                "name": "Posted",
+                "labels": {
+                  "es_ES": "Contabilizado"
+                }
               },
               {
                 "value": "T",
-                "name": "Table Disabled"
+                "name": "Table Disabled",
+                "labels": {
+                  "es_ES": "Tabla Deshabilitada"
+                }
               },
               {
                 "value": "N",
-                "name": "Unposted"
+                "name": "Unposted",
+                "labels": {
+                  "es_ES": "No Contabilizado"
+                }
               }
             ],
             "defaultValue": "N",
@@ -926,6 +985,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
@@ -1637,7 +1701,7 @@
             "apiKey": "storageBin",
             "column": "M_Locator_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

@@ -24,6 +24,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -33,7 +34,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
   KpiWidget: () => null,
 }));
 vi.mock('../../../FmTabContent.jsx', () => ({
-  SourcesTab: () => null, IncidentsTab: () => null, FilesTab: () => null, HistoryTab: () => null,
+  SourcesTab: () => null, IncidentsTab: () => null, HistoryTab: () => null,
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // Explicit per-icon mock (matching FmModel303Page.vitest.jsx's established pattern) rather
@@ -120,6 +121,8 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
     fireEvent.click(screen.getByTestId('aeat-flow-succeed'));
 
-    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack');
+    // AEAT telematic success never sends a submissionMethod from the frontend —
+    // it is set server-side by Fiscal303SubmissionSupport.persistSuccessfulSubmission.
+    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack', undefined);
   });
 });

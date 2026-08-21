@@ -51,7 +51,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - Save behavior observed in the inspected tests is explicit rather than implicit: new records expose both `Save` and `Save draft`, and `Cancel` returns the user to the list without persisting the draft.
 - Status-driven actions: draft orders show only the confirm action. Confirming can optionally create shipment and/or draft invoice documents. Completed orders switch to management actions that decide whether shipment and/or invoice work is still pending by comparing delivered quantities and invoiced totals against the order lines and header total.
 - Send status gating (ETP-4717): `SendDocumentButton` in `OrderCreateInvoice.jsx` is gated by `isCompleted` only — it does not render while the order is still `DR`. This matches the grid row quick-action's `rowQuickActions.actions.email.visibleWhen: "@DocumentStatus@='CO'"` in `decisions.json`, so "Enviar" shows or hides consistently between the list and the detail topbar. Previously (ETP-4372) the button also rendered on `DR`; that behavior was reverted as part of ETP-4717 to align with the other document windows.
-- Download PDF status gating (ETP-4789): the preview-panel Download PDF button (`OrderPreview.jsx`, rendered via the shared `PreviewActionButtons.jsx`) reuses the same `isSendable` variable already computed for Send (`documentStatus === 'CO'`, no per-spec difference between sales-order and purchase-order) — previously it was gated only by `hasPdf`, so a draft order with an already-generated preview PDF could still be downloaded. The shared `PreviewActionButtons.jsx` component was fixed generically as part of this ticket: the Download button now also disables whenever `onDownloadPdf` itself is falsy (`disabled={!hasPdf || !onDownloadPdf}`), not just when `hasPdf` is false, so any caller that gates the prop (rather than hiding the whole button) gets the same protection automatically. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/OrderPreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`, covering both sales-order and purchase-order) and `tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx`.
+- Download PDF status gating (ETP-4789): the preview-panel Download PDF button (`OrderPreview.jsx`, rendered via the shared `PreviewActionButtons.jsx`) reuses the same `isSendable` variable already computed for Send (`documentStatus === 'CO'`, no per-spec difference between sales-order and purchase-order) — previously it was gated only by `hasPdf`, so a draft order with an already-generated preview PDF could still be downloaded. The shared `PreviewActionButtons.jsx` component was fixed generically as part of this ticket: the Download button now also disables whenever `onDownloadPdf` itself is falsy (`disabled={!hasPdf || !onDownloadPdf}`), not just when `hasPdf` is false, so any caller that gates the prop (rather than hiding the whole button) gets the same protection automatically. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/OrderPreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`, covering both sales-order and purchase-order) and `tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx`. Follow-up reject-cycle fix (still ETP-4789): `hasPdf` is now `!!pdfUrl || !!cachedAttachment`, where `cachedAttachment` is captured via the `onFileChange` callback wired into `ManagedLeftPanel`'s cache-fetch options. The cached attachment (fetched via `GET /preview-file`) normally resolves well ahead of the slower jsreport regeneration behind `pdfUrl`, so the button now enables as soon as whichever source resolves first — closing the perceptible gap QA reported between the PDF becoming visible in the preview panel and the Download button becoming clickable. `handleDownloadPdf` downloads the cached blob directly when it is available, falling back to the jsreport-generated `pdfUrl` otherwise. The `isSendable`/`documentStatus` gate described above is unchanged. Locked in by the `Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)` describe block in `OrderPreview.vitest.jsx` (covering both sales-order and purchase-order).
 - ETP-4006 — Confirm modal preview and invoice discount carry-over (IV-11): `ConfirmModal` (in `OrderCreateInvoice.jsx`) and `OrderConfirmModal.jsx` apply `discountFactor = (1 − etgoTotalDiscount/100)` to the previewed `grandTotalAmount` and `summedLineAmount` ONLY while `documentStatus === 'DR'`. Once the order transitions to `CO`, `TotalDiscountService.recalculate` materializes the `ETGO_DTO` discount line and the server-side totals already include the discount, so the modal renders them as-is — re-multiplying would subtract the discount twice and produce a lower number than `DocumentTotalsPanel` shows behind the modal. The `createDraftInvoice` action invoked from the same modal is updated in `com.etendoerp.go` (`CreateDraftInvoiceHandler`, `NeoCommercialDocumentFactory`): `OrderLine.discount` is copied per line into `InvoiceLine.etgoDiscount`, `etgoTotalDiscount` is copied from order to invoice header, `TotalDiscountService.recalculate` materializes the matching ETGO_DTO line on the new invoice, and `InvoiceTax` taxable bases / amounts plus `summedLineAmount` / `grandTotalAmount` are updated in place from a JDBC aggregate of the current line set so the invoice total matches the source order.
 - Confirm flow idempotency on retry: the `ConfirmModal` (in `OrderCreateInvoice.jsx`) executes three steps — `documentAction=CO` on the header, `createShipment` if the shipment box is checked, and `createDraftInvoice` if the invoice box is checked. Each step is guarded by component-level state (`orderConfirmed`, `shipmentResult`, `invoiceResult`) that persists the outcome of the previous attempt. On retry after a partial failure, completed steps are skipped: this prevents the `@AlreadyPosted@` 400 error from re-confirming a `CO` order and prevents duplicate shipment or invoice generation. The corresponding checkbox flips to a locked green state with a "Already created" / "Ya creado" label so the user can see which step is already done, and the result modal reuses the persisted result objects so both documents show up in the success summary even when invoice and shipment were created on different attempts.
 - Steps 2 and 3 are independent: the invoice uses order quantities, not shipment quantities, so a failure in `createShipment` does NOT abort `createDraftInvoice`. Each step has its own try/catch, and any errors are aggregated and shown together in the modal (with `whiteSpace: pre-line`) without closing it. This means a partial first attempt can succeed for one document and fail for the other — the successful one immediately locks via state, and the next retry only re-runs the failed step. Step 1 (`documentAction=CO`) is the only step that aborts the flow on failure: without a confirmed order there is nothing to ship or invoice.
@@ -196,11 +196,30 @@ When a sales order is denominated in a currency different from the organization'
 | `toCurrency` | yes | ISO 4217 code (`"EUR"`) or DB record ID |
 | `date` | yes | `YYYY-MM-DD` |
 
-The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row. Scoping is client + org (org-level rows take priority over `AD_Org_ID = '0'` rows).
+The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row.
+
+**Scoping (ETP-4474):** rows are matched with `AD_Client_ID IN ('0', <current client>)` and `AD_Org_ID IN ('0', <current org>)`, ordered `ad_client_id DESC` so a tenant-specific rate wins over the shared System row for the same pair and date. Rates synced from currencyLayer live at the System client, so a filter on the tenant alone finds nothing.
 
 **multiplyrate convention:** Etendo stores `multiplyrate` such that `to_amount = from_amount × multiplyrate`. The endpoint returns this value directly; the inverse fallback already applies the `1/rate` division before returning.
 
 **Same-currency short-circuit:** when `fromCurrencyId == toCurrencyId`, the endpoint skips the DB query and returns `{ hasRate: true, rate: 1.0 }` immediately.
+
+#### `NeoExchangeRateService.hasRate` — the single source of truth (ETP-4838)
+
+Two *different* server paths answer "is there a rate?" for the same currency change:
+
+| Path | Trigger | Effect |
+|---|---|---|
+| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change | reverts the dropdown + `noConversionRateError` toast |
+| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | appends a `WARNING` message `noExchangeRateAvailable` |
+
+Both now resolve availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error. They can no longer disagree.
+
+Before ETP-4838 the callout path ran its own private copy of the query in `AbstractOrderHeaderHandler` and `AbstractInvoiceHeaderHandler`, filtered by `ad_client_id = ?` only. Once ETP-4474 moved the currencyLayer rates to the System client, those copies stopped finding them: the frontend accepted the change (`hasRate: true`) while the callout warned "no rate available" for the very same pair and date. The warning was cosmetic — the document completed and posted with the correct rate — but it fired on **every** manual currency change across purchase orders, sales orders, sales quotations, and both invoice windows.
+
+The warning only ever fires when the user edits the `currency` field by hand. The common flow, where the price list sets the currency, never sets `currency` as the callout trigger field — which is why the regression went unnoticed for three weeks.
+
+**Open follow-up:** the callout returns the i18n *key* (`noExchangeRateAvailable`), not a sentence, and `useCallout.js` toasts it verbatim — so on the (now rare) occasions the warning is legitimate, the user sees the raw camelCase key. Tracked separately; ETP-4838 covers only the false positive.
 
 ### Currency change handling (ETP-4027 functional model)
 
@@ -278,8 +297,74 @@ line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285
 this window's workflow rules, update the `agentPrompt` in the same change: it is the only thing
 telling the agent what is legal.
 
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` now shows once the order is Completado, backed by the pre-existing
+`print-sales-order` report — verified rendering real order data end-to-end during this ticket.
+No custom component was added: `OrderCreateInvoice.jsx` (this window's `topbarRight`) and its
+`useOrderPdf` hook — used only to feed the "Enviar documento" preview modal — are unrelated
+and untouched. See `docs/decisions-reference.md` ("Print Visibility") for the generic
+mechanism.
+
+**List-view print — superseded by ETP-4729, do not re-hide.** An earlier iteration of this fix
+also declared `"listViewOptions": { "hidePrint": true }` to keep the list's bulk "Print (N)"
+and toolbar Print buttons hidden, matching this window's pre-ticket state. A separate, later
+ticket (ETP-4729 — "print unification onto the generic icon — print restored") deliberately
+removed the window-level `hidePrint: true` this window had before ETP-4714 even started,
+restoring list-view print to always-visible as the new, intended, tested baseline —
+`tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js` has an explicit
+regression guard against reintroducing it. The `listViewOptions` addition was removed to defer
+to ETP-4729's more recent decision; only the detail-view `hidePrintWhen` gate above still
+applies. See `docs/decisions-reference.md` ("Print Visibility") for the full collision writeup.
+
 ## Semantic visual states
 
 The confirmation modal uses information roles for its selected document options,
 warning roles for its irreversible-action notice, and success roles for completed
 optional documents. Each state pairs its background, border, and foreground token.
+
+## Related Documents auto-refresh — event dispatch ordering fix — ETP-4779
+
+Sales Order was the reference implementation the ETP-4779 fix (auto-refresh of the "Documentos"
+panel after generating a derived document) was modeled on for `purchase-order`, `goods-receipt`,
+`goods-shipment`, and `sales-quotation` — QA's original 2026-08-11 pass found it already working.
+A later live user report showed it was **not** actually fixed: generating an invoice from a
+confirmed order still required a manual page reload.
+
+**Root cause**, confirmed by reproducing live on `localhost:3100` (same method used for the
+identical bug found in `purchase-order`'s `PurchaseOrderActions.jsx`): in
+`artifacts/sales-order/custom/OrderCreateInvoice.jsx`'s `ConfirmModal.handleConfirm` — the
+"Confirmar" flow used to confirm a still-Draft order and optionally generate its shipment/invoice
+in the same modal — the `sales-order:document-created` `window` `CustomEvent` was dispatched
+right after **Step 1** (`documentAction=CO`), *before* **Steps 2/3** (`createShipment` /
+`createDraftInvoice`) had even run. `RelatedDocuments.jsx`'s listener reacted correctly and
+refetched immediately, but at that point neither derived document existed yet, so the refetch
+always came back empty — and because nothing dispatched the event again afterward, the panel
+never learned about the documents Steps 2/3 went on to create. Verified live: confirming a Draft
+order with both "Crear albarán" and "Crear factura" checked showed the success modal listing both
+documents, but the "Documentos" row behind it kept showing only the pre-existing linked quotation
+chip, forever — not merely delayed. This is a timing-dependent race (QA's original pass happened
+not to hit it), not a regression from any other change.
+
+`CreateDocsModal` (the separate "Gestionar" modal for already-`CO` orders, further down in the
+same file) never had this bug — it already dispatched once, after its POST(s) resolved.
+
+**Fix:** moved the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle, right
+before `onConfirmed({...})` — mirroring `CreateDocsModal.handleCreate`'s already-correct
+placement — guarded to only fire when a shipment or invoice actually exists
+(`finalShipment || finalInvoice`). Added the same guarded dispatch to `handleClose`'s
+partial-failure path (e.g. the shipment POST succeeds but the invoice POST then fails and the
+user closes instead of retrying), which previously could leave a successfully-created shipment
+with no event at all.
+
+Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
+checkboxes shows the quotation, Envío, and Factura chips together in the "Documentos" row
+immediately, before even closing the success modal — no reload, no lag.
+
+Same fix pattern, same file shape, as
+`docs/generated-custom-windows/purchase-order.md`'s "Related Documents auto-refresh — ETP-4779"
+section — read that one for the fuller before/after narrative (missing-listener pass +
+premature-dispatch pass) since both bugs were found and fixed in the same two-pass sequence.

@@ -1,8 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const { mockUseFeatureFlag } = vi.hoisted(() => ({
   mockUseFeatureFlag: vi.fn(() => false),
+}));
+const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
+  mockUseEnvironmentSwitch: vi.fn(() => ({
+    environments: [],
+    switchTo: vi.fn(),
+    switching: null,
+    currentClientId: undefined,
+  })),
 }));
 
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
@@ -43,6 +51,10 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
   TENANT_UPGRADE: 'tenant-upgrade',
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+}));
+
+vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  useEnvironmentSwitch: (...args) => mockUseEnvironmentSwitch(...args),
 }));
 
 // Mock menu.json — includes a couple of extra entries (a "Favorites" group and
@@ -103,7 +115,15 @@ vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
       return <div ref={ref}>{children}</div>;
     }),
     DropdownMenuContent: ({ children }) => <div style={{ display: 'none' }}>{children}</div>,
-    DropdownMenuItem: ({ children }) => <div>{children}</div>,
+    // Mirrors the asChild-cloning behavior of DropdownMenuTrigger above so items
+    // like the "Report a bug" <a> (rendered via asChild) keep their own tag,
+    // href, and data-testid instead of being wrapped in an extra <div>.
+    DropdownMenuItem: ({ children, asChild, ...props }) => {
+      if (asChild && React.isValidElement(children)) {
+        return React.cloneElement(children, props);
+      }
+      return <div {...props}>{children}</div>;
+    },
     DropdownMenuLabel: ({ children }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
   };
@@ -216,6 +236,34 @@ describe('SideMenu', () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('shows the current environment plan in the selector when tenant upgrade is enabled', () => {
+    mockUseFeatureFlag.mockImplementation(key => key === 'tenant-upgrade');
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).getByText('environmentDemo')).toBeInTheDocument();
+  });
+
+  it('does not show a plan label in the selector when tenant upgrade is disabled', () => {
+    mockUseFeatureFlag.mockReturnValue(false);
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'demo-1', clientName: 'Test Org', plan: 'free' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'demo-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).queryByText('environmentDemo')).not.toBeInTheDocument();
+  });
+
   it('renders the user avatar button', () => {
     render(<SideMenu {...defaultProps} />);
     expect(screen.getByTestId('user-avatar')).toBeInTheDocument();
@@ -275,6 +323,13 @@ describe('SideMenu', () => {
       delete import.meta.env.VITE_SHOW_ARTIFACTS;
       mockUseFeatureFlag.mockReset();
       mockUseFeatureFlag.mockReturnValue(false);
+      mockUseEnvironmentSwitch.mockReset();
+      mockUseEnvironmentSwitch.mockReturnValue({
+        environments: [],
+        switchTo: vi.fn(),
+        switching: null,
+        currentClientId: undefined,
+      });
     });
 
     // A group whose currentPath ('dashboard') matches one of two items, so the
@@ -461,19 +516,45 @@ describe('SideMenu', () => {
       expect(screen.getByText('9+')).toBeInTheDocument();
     });
 
-    it('calls the provided onHelpClick handler instead of opening the built-in dialog', async () => {
+    it('renders the "Ayuda y soporte" trigger as a dropdown menu with a "Report a bug" link and an "Open chat" action', () => {
+      render(<SideMenu {...defaultProps} />);
+      // The help entry point is now a DropdownMenu trigger, not a direct button —
+      // both options are exposed via their data-testid rather than a single onClick.
+      const reportBugLink = screen.getByTestId('help-menu-report-bug');
+      expect(reportBugLink.tagName).toBe('A');
+      // Points to the generic portals list, not a specific portal/group/create
+      // deep link — customers pick the right service desk themselves.
+      expect(reportBugLink.getAttribute('href')).toBe(
+        'https://etendoproject.atlassian.net/servicedesk/customer/portals'
+      );
+      expect(reportBugLink).toHaveAttribute('target', '_blank');
+      expect(screen.getByText('helpReportBug')).toBeInTheDocument();
+      expect(screen.getByTestId('help-menu-open-chat')).toBeInTheDocument();
+      expect(screen.getByText('helpOpenChat')).toBeInTheDocument();
+    });
+
+    it('calls the provided onHelpClick handler when "Open chat" is selected from the help menu, instead of opening the built-in dialog', async () => {
       const user = userEvent.setup();
       const onHelpClick = vi.fn();
       render(<SideMenu {...defaultProps} onHelpClick={onHelpClick} />);
-      await user.click(screen.getByText('helpAndSupport'));
+      await user.click(screen.getByTestId('help-menu-open-chat'));
       expect(onHelpClick).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('opens and closes the built-in help dialog when no onHelpClick handler is provided', async () => {
+    it('does not call onHelpClick when the "Report a bug" link is present (it navigates externally instead of running JS)', () => {
+      const onHelpClick = vi.fn();
+      render(<SideMenu {...defaultProps} onHelpClick={onHelpClick} />);
+      // The bug-report option is a plain <a href> to the Jira Service Management
+      // portal — there is no onClick to fire, so simply confirming it never
+      // triggers the chat handler documents the intended (non-JS) behavior.
+      expect(onHelpClick).not.toHaveBeenCalled();
+    });
+
+    it('opens and closes the built-in help dialog when "Open chat" is selected and no onHelpClick handler is provided', async () => {
       const user = userEvent.setup();
       render(<SideMenu {...defaultProps} />);
-      await user.click(screen.getByText('helpAndSupport'));
+      await user.click(screen.getByTestId('help-menu-open-chat'));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.getByText('helpComingSoon')).toBeInTheDocument();
       await user.click(screen.getByText('close'));
