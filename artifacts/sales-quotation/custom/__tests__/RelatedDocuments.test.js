@@ -37,7 +37,9 @@ describe('sales-quotation RelatedDocuments', () => {
     });
 
     it('keeps refreshKey in the related-docs fetch effect dependency array', () => {
-      assert.match(src, /\[recordId, token, apiBaseUrl, refreshKey\]/);
+      // ETP-4576 dropped `token` from the dependency array with the credential
+      // itself: the request helpers read the active session scheme instead.
+      assert.match(src, /\[recordId, apiBaseUrl, refreshKey\]/);
     });
   });
 });
