@@ -69,8 +69,14 @@ function trackSupportEvent(eventDefinition, properties = {}) {
 
 const SupportChatContext = React.createContext(null);
 
+// In-memory only (not persisted): once the user dismisses the floating launcher (it can sit
+// on top of another window's own buttons — e.g. an onboarding "Continuar", or the
+// reconciliation action bar), it stays hidden for the rest of this page load. Reloading the
+// page, or reopening the chat from anywhere (the FAB itself, "Ayuda y soporte" in the nav),
+// brings it back — a dismissal is a "hide it for now" gesture, not "hide it forever".
 const INITIAL_STATE = {
   isOpen: false,
+  fabDismissed: false,
   activeTab: 'inicio',
   conversations: [],
   activeConversationId: null,
@@ -87,7 +93,12 @@ const INITIAL_STATE = {
 function reducer(state, action) {
   switch (action.type) {
     case 'OPEN':
-      return { ...state, isOpen: true };
+      // Opening the chat — from the FAB, "Ayuda y soporte" in the nav, or anywhere else —
+      // un-dismisses the FAB: once the user has engaged with the chat again, closing it back
+      // should show the FAB normally, and it only hides again if they explicitly dismiss it.
+      return { ...state, isOpen: true, fabDismissed: false };
+    case 'DISMISS_FAB':
+      return { ...state, fabDismissed: true };
     case 'CLOSE':
       return { ...state, isOpen: false };
     case 'SET_TAB':
@@ -374,6 +385,10 @@ export function SupportChatProvider({ children }) {
     dispatch({ type: 'CLOSE' });
   }, []);
 
+  const dismissFab = React.useCallback(() => {
+    dispatch({ type: 'DISMISS_FAB' });
+  }, []);
+
   const setTab = React.useCallback((tab) => {
     dispatch({ type: 'SET_TAB', tab });
   }, []);
@@ -497,6 +512,7 @@ export function SupportChatProvider({ children }) {
     actions: {
       open: openChat,
       close: closeChat,
+      dismissFab,
       setTab,
       loadConversations,
       loadMessages,
@@ -513,7 +529,7 @@ export function SupportChatProvider({ children }) {
       getLocalImageUrl,
     },
   }), [
-    state, unreadCount, openChat, closeChat, setTab,
+    state, unreadCount, openChat, closeChat, dismissFab, setTab,
     loadConversations, loadMessages, startConversation, sendMessage,
     closeConversation, reopenConversation,
     submitRating, dismissRating, selectConversation, setInput, addPendingFile, removePendingFile,

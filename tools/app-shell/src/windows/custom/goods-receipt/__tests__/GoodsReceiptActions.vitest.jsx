@@ -13,14 +13,15 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock('@/windows/custom/shared/usePreviewAttachment.js', () => ({
-  usePreviewAttachment: vi.fn(() => ({
+vi.mock('@/windows/custom/shared/useMainAttachment.js', () => ({
+  useMainAttachment: vi.fn(() => ({
     storedFile: null,
     isBusy: false,
     storeFailed: false,
     storeFile: vi.fn(),
     storeBlob: vi.fn(),
     storeUrl: vi.fn(),
+    markExisting: vi.fn(),
     deleteFile: vi.fn(),
   })),
 }));
@@ -66,7 +67,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
+import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import GoodsReceiptActions from '@generated/goods-receipt/custom/GoodsReceiptActions';
 
@@ -91,7 +92,7 @@ function renderActions(overrides = {}) {
 describe('GoodsReceiptActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    usePreviewAttachment.mockReturnValue({
+    useMainAttachment.mockReturnValue({
       storedFile: null,
       isBusy: false,
       storeFailed: false,
@@ -104,7 +105,7 @@ describe('GoodsReceiptActions', () => {
 
   describe('Download <a> visibility', () => {
     it('does NOT render the download link when isCompleted is false (DR status)', () => {
-      usePreviewAttachment.mockReturnValue({
+      useMainAttachment.mockReturnValue({
         storedFile: { objectUrl: 'blob:test', fileName: 'test.pdf' },
         isBusy: false,
       });
@@ -115,7 +116,7 @@ describe('GoodsReceiptActions', () => {
     });
 
     it('does NOT render the download link when storedFile is null even if completed', () => {
-      usePreviewAttachment.mockReturnValue({
+      useMainAttachment.mockReturnValue({
         storedFile: null,
         isBusy: false,
       });
@@ -126,7 +127,7 @@ describe('GoodsReceiptActions', () => {
     });
 
     it('renders the download link when isCompleted is true and storedFile exists', () => {
-      usePreviewAttachment.mockReturnValue({
+      useMainAttachment.mockReturnValue({
         storedFile: { objectUrl: 'blob:test-url', fileName: 'receipt.pdf' },
         isBusy: false,
       });
@@ -140,7 +141,7 @@ describe('GoodsReceiptActions', () => {
 
   describe('goods-receipt:download-pdf event', () => {
     it('programmatically clicks the download link when the event is dispatched', () => {
-      usePreviewAttachment.mockReturnValue({
+      useMainAttachment.mockReturnValue({
         storedFile: { objectUrl: 'blob:test-url', fileName: 'receipt.pdf' },
         isBusy: false,
       });
@@ -160,7 +161,7 @@ describe('GoodsReceiptActions', () => {
     });
 
     it('does not throw when event is dispatched but no download link is rendered', () => {
-      usePreviewAttachment.mockReturnValue({
+      useMainAttachment.mockReturnValue({
         storedFile: null,
         isBusy: false,
       });

@@ -37,6 +37,9 @@ import {
   ChevronDown,
   Headphones,
   FileJson,
+  HelpCircle,
+  MessageCircle,
+  ExternalLink,
   Loader2,
 } from 'lucide-react';
 import {
@@ -361,33 +364,28 @@ function UnreadBadge({ unreadCount, expanded }) {
   );
 }
 
-function HelpEntryPoint({ expanded, onClick, unreadCount, ui }) {
-  if (!expanded) {
-    return (
-      <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
-        <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-          <button
-            type="button"
-            onClick={onClick}
-            aria-label={ui('helpAndSupport')}
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
-            <UnreadBadge
-              unreadCount={unreadCount}
-              expanded={false}
-              data-testid="UnreadBadge__247c75" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('helpAndSupport')}</TooltipContent>
-      </Tooltip>
-    );
-  }
-  return (
+// Customer portal for filing a bug report directly (bypasses the AI chat entirely) —
+// a separate, more formal channel from the conversational support flow.
+const REPORT_BUG_URL = 'https://etendoproject.atlassian.net/servicedesk/customer/portals';
+
+function HelpEntryPoint({ expanded, onOpenChat, unreadCount, ui }) {
+  const trigger = !expanded ? (
     <button
       type="button"
-      onClick={onClick}
-      className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
+      aria-label={ui('helpAndSupport')}
+      title={ui('helpAndSupport')}
+      className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
+      <UnreadBadge
+        unreadCount={unreadCount}
+        expanded={false}
+        data-testid="UnreadBadge__247c75" />
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
     >
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
@@ -400,6 +398,33 @@ function HelpEntryPoint({ expanded, onClick, unreadCount, ui }) {
           data-testid="ChevronRight__247c75" />
       )}
     </button>
+  );
+
+  return (
+    <DropdownMenu data-testid="HelpMenu__247c75">
+      <DropdownMenuTrigger asChild data-testid="HelpMenuTrigger__247c75">
+        {expanded ? <div className="w-full">{trigger}</div> : trigger}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={12}
+        className="w-60"
+        data-testid="HelpMenuContent__247c75"
+      >
+        <DropdownMenuItem asChild className="py-2.5 px-3 text-[15px]" data-testid="help-menu-report-bug">
+          <a href={REPORT_BUG_URL} target="_blank" rel="noopener noreferrer">
+            <HelpCircle className="h-[18px] w-[18px] mr-2" data-testid="HelpCircle__247c75" />
+            {ui('helpReportBug')}
+            <ExternalLink className="h-3.5 w-3.5 ml-auto text-muted-foreground" data-testid="ExternalLink__247c75" />
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onOpenChat} className="py-2.5 px-3 text-[15px]" data-testid="help-menu-open-chat">
+          <MessageCircle className="h-[18px] w-[18px] mr-2" data-testid="MessageCircle__247c75" />
+          {ui('helpOpenChat')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -445,7 +470,7 @@ function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsAct
       <div className={cn('border-t border-[hsl(var(--border-subtle))] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
       <HelpEntryPoint
         expanded={expanded}
-        onClick={onHelpClick}
+        onOpenChat={onHelpClick}
         unreadCount={unreadCount}
         ui={ui}
         data-testid="HelpEntryPoint__247c75" />

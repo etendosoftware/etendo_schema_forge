@@ -35,6 +35,7 @@ describe('useQuotationPdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 
@@ -79,6 +80,7 @@ describe('useQuotationPdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 });
