@@ -36,9 +36,9 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
  *      instead of failing outright, since the Draft-state/negative-amount/
  *      doc-type assertions already proved the actual generation logic works.
  *
- * Requires a running backend + dev server. Gated by
- * E2E_SALES_RETURN_RECTIFICATIVA_INTEGRATION=1 (distinct from
- * E2E_SALES_INTEGRATION, used by the plain order→invoice happy path).
+ * Requires a running backend + dev server. Runs whenever the suite executes
+ * `--project=integration` — no custom env-var gate; Playwright's own
+ * mocked/integration project split already isolates it from mocked runs.
  */
 
 function loadCredentials() {
@@ -51,7 +51,6 @@ function loadCredentials() {
 }
 
 const onboardingCreds = loadCredentials();
-const RUN_INTEGRATION = process.env.E2E_SALES_RETURN_RECTIFICATIVA_INTEGRATION === '1';
 const SLOW_MS = Number(process.env.E2E_SLOW_MS || 0);
 
 async function slow(page) {
@@ -77,11 +76,6 @@ function expectSaveResponse(page) {
 
 test.describe('Sales Order → Return → Rectificative Invoice (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
-
-  test.skip(
-    !RUN_INTEGRATION,
-    'Set E2E_SALES_RETURN_RECTIFICATIVA_INTEGRATION=1 to run this live return→rectificativa integration test.',
-  );
 
   test('drives an order through shipment, return, and the generated rectificative invoice', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;

@@ -10,9 +10,10 @@ import {
 /**
  * Purchase Order → Goods Receipt → Return to Vendor → Rectificative Invoice —
  * full live-backend integration E2E. This is the Purchase-side mirror of
- * `sales-order-return-rectificativa.integration.spec.js` — same env-var gate
- * pattern, same live-backend/no-mocking approach, same "report instead of
- * fail" posture on the known period-config environment gap. It is deliberately
+ * `sales-order-return-rectificativa.integration.spec.js` — same no-gate,
+ * always-runs-under-`--project=integration` setup, same live-backend/
+ * no-mocking approach, same "report instead of fail" posture on the known
+ * period-config environment gap. It is deliberately
  * a SEPARATE spec from `purchase-order-full-flow.integration.spec.js`, which
  * stops at PO → Receipt → Invoice → Payment and never drives a Return —
  * exactly the chain this spec exists to cover, per ETP-4737 (unified
@@ -62,22 +63,15 @@ import {
  *      Draft-state/negative-amount/doc-type assertions already proved the
  *      actual generation logic works.
  *
- * Requires a running backend + dev server. Gated by
- * E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION=1 (distinct from
- * E2E_SALES_INTEGRATION, used by the plain PO→receipt→invoice→payment full
- * flow).
+ * Requires a running backend + dev server. Runs whenever the suite executes
+ * `--project=integration` — no custom env-var gate; Playwright's own
+ * mocked/integration project split already isolates it from mocked runs.
  */
 
 const onboardingCreds = loadCredentials();
-const RUN_INTEGRATION = process.env.E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION === '1';
 
 test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
-
-  test.skip(
-    !RUN_INTEGRATION,
-    'Set E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION=1 to run this live return→rectificativa integration test.',
-  );
 
   test('drives a PO through receipt, return to vendor, and the generated rectificative invoice', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
