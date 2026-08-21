@@ -190,7 +190,6 @@ const G1_DEBT = new Set([
   'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
   'windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx',
   'windows/custom/purchase-order/PurchaseOrderActions.jsx',
-  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
   'windows/custom/sales-invoice/SalesInvoiceTopbar.jsx',
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
   'windows/custom/shared/PaymentHeaderTableBase.jsx',
@@ -212,7 +211,6 @@ const G1_DEBT = new Set([
  */
 const G2_DEBT = new Set([
   'components/contract-ui/DataTable.jsx',
-  'components/contract-ui/DetailView.jsx',
   'components/contract-ui/DocumentPrintDrawer.jsx',
   'components/contract-ui/ImageField.jsx',
   'components/contract-ui/ReportDrawer.jsx',
@@ -242,7 +240,6 @@ const G2_DEBT = new Set([
   'windows/custom/price-list/PriceListProductPrices.jsx',
   'windows/custom/product/ProductSidebar.jsx',
   'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
-  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
   'windows/custom/shared/useConversionRate.js',
   'windows/custom/user/InviteUserDialog.jsx',
@@ -298,7 +295,6 @@ const G3_DEBT = new Set([
   'windows/custom/purchase-order/PurchaseOrderActions.jsx',
   'windows/custom/return-material-receipt/ImportFromShipmentModal.jsx',
   'windows/custom/return-to-vendor-shipment/ImportFromReceiptModal.jsx',
-  'windows/custom/sales-invoice/ReversedInvoicesPanel.jsx',
   'windows/custom/shared/PaymentHeaderTableBase.jsx',
   'windows/custom/shared/pdfUtils.js',
   'windows/custom/shared/useConfirmWithCredit.js',

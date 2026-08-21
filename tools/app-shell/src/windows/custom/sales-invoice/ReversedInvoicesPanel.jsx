@@ -3,6 +3,7 @@ import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'luci
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -108,16 +109,16 @@ function InfoTooltip({ text }) {
 // same-BP only when applicable (Verifactu orgs allow cross-BP rectifications),
 // and any rejection is surfaced to the user via the save error message.
 // NEO ignores arbitrary query-param filters, so all filtering is client-side.
-function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose }) {
+function InvoicePickerModal({ apiBaseUrl, currentId, onSelect, onClose }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
-    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: jsonHeaders(), credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         // NEO does not expose `updated` — sort by invoiceDate desc, then
@@ -131,7 +132,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl]);
 
   const MAX_VISIBLE = 5;
   const { filtered, hiddenCount } = useMemo(() => {
@@ -214,14 +215,14 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
 
 // ── YearPickerSelect ──────────────────────────────────────────────────────────
 // Loads fiscal years from /fiscal-calendar instead of the broken NEO selector.
-function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, readOnly }) {
+function YearPickerSelect({ apiBaseUrl, value, displayValue, onChange, readOnly }) {
   const [years, setYears] = useState(null);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: jsonHeaders(), credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const rows = parseRows(json);
@@ -231,7 +232,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
         setYears(opts);
       })
       .catch(() => setYears([]));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl]);
 
   if (readOnly) {
     return (
@@ -281,7 +282,7 @@ function AmountInput({ label, value }) {
 
 // ── AeatGrid ─────────────────────────────────────────────────────────────────
 // Renders the 4 AEAT-349 conditional fields in a 4-column grid.
-function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, labelOverrides }) {
+function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, catalogs, readOnly, labelOverrides }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -298,7 +299,6 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
         </label>
         <YearPickerSelect
           apiBaseUrl={apiBaseUrl}
-          token={token}
           value={data?.aEAT349CYear ?? ''}
           displayValue={data?.['aEAT349CYear$_identifier'] ?? ''}
           readOnly={readOnly}
@@ -347,7 +347,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
 function ExpandedForm({
   lineData, readOnly, isDraft,
   onChange, onFieldSave,
-  apiBaseUrl, token, catalogs, labelOverrides,
+  apiBaseUrl, catalogs, labelOverrides,
   bpId, recordId,
   onCancel,
   onSave,
@@ -377,7 +377,6 @@ function ExpandedForm({
   const picker = (persistOnSelect) => pickerOpen && (
     <InvoicePickerModal
       apiBaseUrl={apiBaseUrl}
-      token={token}
       currentId={recordId}
       onSelect={(id, label) => {
         onChange('reversedInvoice', id);
@@ -496,7 +495,6 @@ function ExpandedForm({
               onChange={onChange}
               onFieldSave={onFieldSave}
               apiBaseUrl={apiBaseUrl}
-              token={token}
               catalogs={catalogs}
               readOnly={readOnly}
               labelOverrides={labelOverrides}
@@ -538,7 +536,6 @@ function ExpandedForm({
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
   data,
-  token,
   apiBaseUrl,
   api,
   catalogs,
@@ -579,17 +576,20 @@ export default function ReversedInvoicesPanel({
   // "all models inactive" way everywhere: fail-closed (hidden) until the
   // fetch confirms 349 === true, never a flash of visible-then-hidden.
   const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+  // ETP-4576 — this seeded itself from `!token`, which is permanently true under
+  // a cookie session: the catalog was marked "already loaded" before it was ever
+  // fetched, so the Modelo-349 checkbox never appeared.
+  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-models-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${neoBase}/fiscal-models-catalog`, { headers: jsonHeaders(), credentials: 'include' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(json => setActiveModels(json ?? {}))
       .catch(() => {})
       .finally(() => setCatalogLoaded(true));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl]);
 
   const model349Active = catalogLoaded && activeModels?.['349'] === true;
 
@@ -623,12 +623,12 @@ export default function ReversedInvoicesPanel({
 
   // ── data fetching ──────────────────────────────────────────────────────────
   const fetchLines = useCallback(async () => {
-    if (!recordId || !apiBaseUrl || !token) return;
+    if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     try {
       const res = await fetch(
         `${apiBaseUrl}/reversedInvoices?_startRow=0&_endRow=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: jsonHeaders(), credentials: 'include' }
       );
       if (!res.ok) return;
       const json = await res.json();
@@ -639,7 +639,7 @@ export default function ReversedInvoicesPanel({
     } catch { /* silent */ } finally {
       setLoading(false);
     }
-  }, [recordId, apiBaseUrl, token, onCountChange]);
+  }, [recordId, apiBaseUrl, onCountChange]);
 
   // Lazy fetch on first activation
   useEffect(() => {
@@ -669,7 +669,8 @@ export default function ReversedInvoicesPanel({
     try {
       const res = await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -725,7 +726,8 @@ export default function ReversedInvoicesPanel({
     try {
       await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
       });
       fetchLines();
     } catch { /* silent */ } finally { setDeleting(null); }
@@ -756,7 +758,8 @@ export default function ReversedInvoicesPanel({
       delete payload['reversedInvoice$_identifier'];
       const res = await fetch(`${apiBaseUrl}/reversedInvoices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ invoice: parentId, ...payload }),
       });
       if (res.ok) {
@@ -910,7 +913,6 @@ export default function ReversedInvoicesPanel({
                           onChange={(k, v) => handleChange(line.id, k, v)}
                           onFieldSave={(k, v) => handleFieldSave(line.id, line, k, v)}
                           apiBaseUrl={apiBaseUrl}
-                          token={token}
                           catalogs={catalogs}
                           labelOverrides={api?.labelOverrides}
                           bpId={data?.businessPartner}
@@ -936,7 +938,6 @@ export default function ReversedInvoicesPanel({
                       onChange={(k, v) => setNewLine(p => ({ ...p, [k]: v }))}
                       onFieldSave={null}
                       apiBaseUrl={apiBaseUrl}
-                      token={token}
                       catalogs={catalogs}
                       labelOverrides={api?.labelOverrides}
                       bpId={data?.businessPartner}

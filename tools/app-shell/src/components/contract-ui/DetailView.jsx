@@ -2038,7 +2038,9 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+    // ETP-4576 — the request below is already scheme-driven; `token` here only
+    // stopped it from ever being issued under a cookie session.
+    if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
 
@@ -2539,7 +2541,11 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
+    // ETP-4576 — same as the header callout in useCallout.js: under the cookie
+    // scheme `token` is structurally undefined, so this gate was permanently
+    // closed and NO line callout ever fired — no request, no error, just fields
+    // that never auto-filled.
+    if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // These fields are computed client-side — no callout needed.
