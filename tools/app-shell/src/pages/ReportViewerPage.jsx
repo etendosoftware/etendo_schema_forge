@@ -25,6 +25,61 @@ const ETENDO_BASE = getEtendoBase();
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
 const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
 
+// Purely decorative mini report-page preview shown above each card — a
+// NARROWER "page" (white, shadowed), horizontally centered with visible gray
+// margin on both sides, sitting inside the light gray frame — so it reads as
+// "a document floating in a preview area", not content stretched edge to
+// edge. Left/right insets are deliberately much bigger than top/bottom (a
+// portrait-ish page inside a landscape frame), unlike a plain `inset-*` on
+// all sides. Inside: two stacked title bars + a couple of short metadata
+// lines top-right, a thin divider, then a handful of lines of varying width
+// (a couple bolder ones standing in for section bands) laid out with
+// `justify-between` — so, unlike a plain `space-y-*` stack of fixed-height
+// bars, they spread across whatever height the body actually gets and keep
+// reaching toward the bottom of the page instead of clumping at the top with
+// blank space below. Colors/frame otherwise match the Figma "Card With Image
+// Tags" component's Imagen layer (bg #F5F7F9, 313:180 aspect). It never
+// reflects a report's real columns/content.
+function ReportCardPreview() {
+  return (
+    <div
+      className="relative w-full aspect-[313/180] rounded-lg bg-[#F5F7F9] overflow-hidden pointer-events-none select-none"
+      aria-hidden="true"
+    >
+      <div className="absolute left-[16%] right-[16%] top-3 bottom-3 rounded bg-white shadow-sm p-2.5 overflow-hidden flex flex-col">
+        <div className="flex items-start justify-between gap-3 shrink-0">
+          <div className="space-y-1">
+            <div className="h-2 w-16 rounded bg-[#D9DEE7]" />
+            <div className="h-1.5 w-11 rounded bg-[#D9DEE7]" />
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+            <div className="h-1 w-7 rounded bg-[#E3E7EE]" />
+            <div className="h-1 w-5 rounded bg-[#E3E7EE]" />
+          </div>
+        </div>
+        <div className="border-t border-[#EDEFF3] mt-1.5 mb-1.5 shrink-0" />
+        <div className="flex-1 flex flex-col justify-between">
+          <div className="h-1.5 w-full rounded bg-[#DEE2E9]" />
+          <div className="h-1 w-full rounded bg-[#EEF0F3]" />
+          <div className="h-1 w-[92%] rounded bg-[#EEF0F3]" />
+          <div className="h-1 w-full rounded bg-[#EEF0F3]" />
+          <div className="h-1.5 w-full rounded bg-[#DEE2E9]" />
+          <div className="h-1 w-[88%] rounded bg-[#EEF0F3]" />
+          <div className="h-1 w-full rounded bg-[#EEF0F3]" />
+          <div className="h-1 w-[95%] rounded bg-[#EEF0F3]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Matches the Figma "Card With Image Tags" component 1:1 (colors, radii,
+// spacing, type scale) — see the CSS the design handed off for every layer.
+// Card: 4px padding, white bg, #E8EAEF border, 12px radius, xs shadow. Texto
+// block: 12px padding, 4px gap. Título row: 32px icon button (#D1D4DB border,
+// sm shadow, 8px radius) + text-base/font-medium at #121217. Descriptive text:
+// text-sm/font-normal at #555B6D. Badges: #F5F7F9 bg, 8px radius, text-xs at
+// #3F3F50.
 function ReportCard({ report, onRun }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -32,20 +87,23 @@ function ReportCard({ report, onRun }) {
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
+      className="flex flex-col items-stretch w-full p-1 rounded-xl border border-[#E8EAEF] bg-white shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
     >
-      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        <FileText className="h-5 w-5 text-primary" data-testid="FileText__3c998a" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground">{reportTitle}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+      <ReportCardPreview />
+      <div className="flex flex-col items-stretch gap-1 p-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-white border border-[#D1D4DB] shadow-sm">
+            <FileText className="h-5 w-5 text-[#828FA3]" data-testid="FileText__3c998a" />
+          </div>
+          <h3 className="text-base font-medium text-[#121217] min-w-0 truncate">{reportTitle}</h3>
+        </div>
+        <p className="text-sm text-[#555B6D]">
           {report.type === 'grouped-listing' ? ui('Grouped Report') : ui('Listing Report')}
           {report.orientation === 'landscape' ? ` — ${ui('Landscape')}` : ''}
         </p>
-        <div className="flex gap-1 mt-2">
+        <div className="flex gap-2 flex-wrap pt-1">
           {(report.outputs || []).map(o => (
-            <span key={o} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-medium">{o}</span>
+            <span key={o} className="inline-flex items-center px-2 py-1 rounded-lg bg-[#F5F7F9] text-xs font-normal text-[#3F3F50] uppercase">{o}</span>
           ))}
         </div>
       </div>
@@ -1598,7 +1656,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
     );
   } else {
     reportListContent = (
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6">
         {Object.entries(grouped).map(([cat, catReports]) => (
           <div key={cat}>
             {!categoryFilter && Object.keys(grouped).length > 1 && (
@@ -1606,7 +1664,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
               </h2>
             )}
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {catReports.map(r => (
                 <ReportCard
                   key={r.id}
