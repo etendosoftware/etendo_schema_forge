@@ -1,5 +1,8 @@
 /* eslint-disable react/prop-types */
 
+// Lookup, not a nested ternary — same reason as ListSortPopover (Sonar javascript:S3358).
+const SORT_ARROW = { asc: '▲', desc: '▼' };
+
 /**
  * The clickable label inside a hand-rolled grid's header cell.
  *
@@ -26,7 +29,7 @@ export function SortableHeaderLabel({ label, sortKey, activeKey, direction, onSo
   const isActive = activeKey === sortKey;
   const arrow = isActive ? (
     <span aria-hidden="true" className="pointer-events-none text-primary/70">
-      {direction === 'asc' ? '▲' : '▼'}
+      {SORT_ARROW[direction]}
     </span>
   ) : null;
 

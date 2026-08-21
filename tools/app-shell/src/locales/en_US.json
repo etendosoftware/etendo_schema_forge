@@ -23842,6 +23842,7 @@
     "statusRpae": "Awaiting Execution",
     "statusRpap": "Awaiting Payment",
     "statusRppc": "Payment Cleared",
+    "statusEtgoerr": "Payment Error",
     "statusRpr": "Payment Received",
     "statusRpvoid": "Void",
     "statusRt": "In Remittance",

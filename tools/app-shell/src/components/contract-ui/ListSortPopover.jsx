@@ -5,6 +5,11 @@ import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 
 /* eslint-disable react/prop-types */
 
+// Direction glyph as a lookup rather than a nested ternary (Sonar javascript:S3358). The
+// inline `isActive ? (dir === 'asc' ? '▲' : '▼') : ''` this replaces was carried over verbatim
+// from ListView's own markup during the extraction.
+const SORT_ARROW = { asc: '▲', desc: '▼' };
+
 /**
  * The toolbar "Ordenar por" control: a toggle button plus a popover listing every sortable
  * column, with the active one marked by its direction arrow and a "clear" row once the sort
@@ -112,7 +117,7 @@ export function ListSortPopover({
                 ].join(' ')}
               >
                 <span className="w-4 text-center text-xs">
-                  {isActive ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  {isActive ? SORT_ARROW[sortDirection] : ''}
                 </span>
                 <span className="flex-1 text-left">{colLabel}</span>
               </button>

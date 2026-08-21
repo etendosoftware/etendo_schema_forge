@@ -7205,7 +7205,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "eabdef031d6ff8fa8ba35a3fe984cfa75824555c1803d96f360ae1deb863b236",
+      "checksum": "b05b12731d9755b263651256c4d54f1fa048a44aa3d7f1067ef413da23196893",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -7366,6 +7366,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "183",

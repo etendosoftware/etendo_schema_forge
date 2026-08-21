@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.31.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-08-21T16:25:24.001Z",
-  "checksum": "464ae44d320e9ff7",
+  "updatedAt": "2026-08-21T18:44:54.589Z",
+  "checksum": "c7e13c08b8720494",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1061,6 +1061,13 @@
                 "name": "Payment Cleared",
                 "labels": {
                   "es_ES": "Conciliado"
+                }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
                 }
               }
             ],

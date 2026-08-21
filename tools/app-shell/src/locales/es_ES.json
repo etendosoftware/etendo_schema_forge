@@ -24091,6 +24091,7 @@
     "statusRpae": "A Ejecutar",
     "statusRpap": "A Pagar",
     "statusRppc": "Conciliado",
+    "statusEtgoerr": "Pago con error",
     "statusRpr": "Cobrado",
     "statusRpvoid": "Anulado",
     "statusRt": "Remesado",
