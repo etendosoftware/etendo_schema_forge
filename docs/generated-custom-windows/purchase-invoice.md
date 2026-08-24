@@ -79,7 +79,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 7. Open a completed invoice with pending balance and confirm the topbar payment-status pill appears, opens the payment modal, and reflects the invoice as pending or paid based on outstanding amount.
 8. Under an org configured for `sii`, `sii-navarra`, `tbai`, or `sii+tbai`, open a completed purchase invoice and confirm `Enviar a SIF` appears in both the detail topbar and the preview modal only for the purchase-side target defined by the fiscal matrix: SII for `sii` / `sii-navarra`, TicketBAI for `tbai`, and SII only for `sii+tbai`. Trigger it and verify the confirmation text matches the pending target and successful sends refresh the invoice state.
 9. From the detail footer or related-documents tab, confirm links are available to the source purchase order, related goods receipts, and downstream payment-out records when those relationships exist. The purchase order chip must show the formatted label (`Order #<documentNo>`), the grand total with currency symbol, and the document status pill — not the raw `_identifier` string (`documentNo - date - amount`).
-10. Open a completed purchase invoice detail and confirm the kebab menu exposes **no document actions** (reactivation is not supported for this window; the kebab `menuActions` array is empty in `decisions.json`).
+10. Open a completed purchase invoice detail and confirm the kebab menu exposes `Reactivate` and `Post` (gated on `processed && !posted`) — see `window.menuActions` in `decisions.json`. SII sending is a separate detail-topbar action (`Enviar a SIF`), not a kebab entry — see "Send to SII from the detail topbar" below.
 11. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Confirmar (N)` button. Verify the expected status transition and a result toast.
 12. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
 13. Open a purchase invoice detail and confirm the bottom panel shows a `SIF` section below Documents and Notes whenever the fiscal profile enables a purchase-side fiscal target. Verify the visible tabs follow the fiscal matrix: SII for `sii` / `sii-navarra`, TicketBAI for `tbai`, SII only for `sii+tbai`, and Verifactu only for `verifactu`. Confirm the SII badge reflects `aeatsiiEstado`, the TBAI badge reflects `tbaiIssent`, the Verifactu badge reflects `etvfacInvoiceStatus`, and SII inline edits persist through `PATCH /sws/neo/purchase-invoice/header/{id}`.
@@ -89,7 +89,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 
 ## Automated evidence
 
-- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm". The `menuActions` array in `artifacts/purchase-invoice/decisions.json` is empty — no kebab document actions (including `Reactivate`) are declared for this window. Reactivation is not supported in the purchase-invoice detail view.
+- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm". The `menuActions` array in `artifacts/purchase-invoice/decisions.json` declares `reactivate` and `post` only — SII sending is handled separately by the detail-topbar `SendToSifButton` (see "Send to SII from the detail topbar" near the `agentPrompt` section below), not by a kebab entry.
 - `tools/app-shell/src/lib/__tests__/dateOnly.test.js`, `tools/app-shell/src/lib/__tests__/invoiceDueDate.test.js`, and `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js` provide source-level and helper-level regression coverage for due-date calendar normalization, locale formatting, max-installment selection, and the paid/overdue/soon/ok state derivation that drives the dot color and the red-text reinforcement on overdue rows in the purchase-invoice list.
 - Shared shell and entity-loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
 - **ETP-4520** — `artifacts/purchase-invoice/decisions.json`, `artifacts/purchase-invoice/contract.json`, and the generated `HeaderPage.jsx`/`HeaderTable.jsx` all carry `"visibleWhenCapability": "showAccountingFields"` on the `posted` field. `tools/app-shell/src/lib/capabilityVisibility.js`, `tools/app-shell/src/hooks/useCapabilitiesSafe.js`, `tools/app-shell/src/components/contract-ui/DataTable.jsx`, and `tools/app-shell/src/components/contract-ui/DetailView.jsx` prove the shared omit-not-disable gating mechanism, with source-reading coverage in `tools/app-shell/src/lib/__tests__/capabilityVisibility.test.js`, `tools/app-shell/src/hooks/__tests__/useCapabilitiesSafe.vitest.jsx`, `tools/app-shell/src/components/contract-ui/__tests__/DataTable.capabilityVisibility.vitest.jsx`, and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.capabilityVisibility.vitest.jsx`.
@@ -1085,6 +1085,16 @@ already posted (the Reactivate menu action carries `preUnpost: true`), `CO -> CL
 Posting is a **separate** action on this window (`menuActions` key `post`, gated on
 `processed && !posted`) and is **not** a `documentAction` value — the prompt explicitly tells
 the agent never to send `PO` here.
+
+**Send to SII from the detail topbar (ETP-4888 point 2):** this window already had a
+`Send to SIF` button in its detail topbar (`PurchaseInvoiceTopbar.jsx` → `SendToSifButton.jsx`
+→ `SifSendingModal.jsx`, gated on the organisation's fiscal profile via
+`useFiscalConfig`/`getPendingSifTargets`, and also covering TBAI when applicable — see the
+acceptance test above). An earlier iteration of the ETP-4888 point 2 fix additionally added a
+plain `aeatsiiSend` kebab-menu entry (`window.menuActions`) that called the backend directly via
+`useNeoAction` without checking the fiscal profile; it was reverted in favor of wiring the same
+`SendToSifButton` into sales-invoice's topbar instead (see `sales-invoice.md`), so purchase-invoice
+keeps this single, fiscal-profile-aware entry point and does not gain a duplicate kebab action.
 
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
