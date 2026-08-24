@@ -244,30 +244,6 @@ export default function BillingPreferencesForm(props) {
   const customerPaymentTermsField = [
     { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
   ];
-  // ── SII (AEAT) invoicing defaults — read at invoicing time in Classic, no
-  // callout of their own here. "Invoice type key" only makes sense once
-  // "Default Key" is on, mirroring the AD displayLogic
-  // @EM_Aeatsii_Defaultsiikey@='Y' (see artifacts/contacts/contract.json,
-  // entity "customer"). Option value/labels copied from that same contract —
-  // AD_Ref_List values are static, not derived per-record.
-  const aeatsiiDefaultKeyField = [
-    { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', section: 'principal' },
-  ];
-  const aeatsiiKeyListField = [
-    {
-      key: 'aeatsiiSiikeylist',
-      column: 'EM_Aeatsii_Siikeylist',
-      type: 'select',
-      section: 'principal',
-      options: [
-        { value: 'R', label: 'Corrective invoice', labels: { es_ES: 'Factura rectificativa' } },
-        { value: 'F1', label: 'Invoice' },
-        { value: 'F2', label: 'Simplified invoice', labels: { es_ES: 'Factura simplificada' } },
-        { value: 'F4', label: 'Simplified invoices summary', labels: { es_ES: 'Asiento resumen facturas simplificadas' } },
-      ],
-      displayLogic: (record) => !!record?.aeatsiiDefaultsiikey,
-    },
-  ];
 
   const vendorTopBillingFields = [
     { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
@@ -327,24 +303,6 @@ export default function BillingPreferencesForm(props) {
                       value={data?.customerBlocking}
                       onCheckedChange={(next) => onChange?.('customerBlocking', next, 'Customer_Blocking')}
                       data-testid="BlockingToggle__7f0756-customer" />
-                  </div>
-                </div>
-                <div className="flex flex-row gap-5 items-start">
-                  <div className="flex-1 min-w-0">
-                    <EntityForm
-                      {...props}
-                      fields={aeatsiiDefaultKeyField}
-                      cols={1}
-                      selectorContext={customerSelectorContext}
-                      data-testid="EntityForm__7f0756-aeatsii-default" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <EntityForm
-                      {...props}
-                      fields={aeatsiiKeyListField}
-                      cols={1}
-                      selectorContext={customerSelectorContext}
-                      data-testid="EntityForm__7f0756-aeatsii-keylist" />
                   </div>
                 </div>
               </>

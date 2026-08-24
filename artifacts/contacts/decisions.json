@@ -170,7 +170,7 @@
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",
-          "form": true,
+          "form": false,
           "grid": false,
           "section": "principal",
           "label": "Simplified Invoice"

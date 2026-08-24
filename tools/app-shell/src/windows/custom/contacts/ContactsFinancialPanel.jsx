@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import BillingPreferencesForm from './BillingPreferencesForm';
+import FiscalDefaultsSection from './FiscalDefaultsSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
@@ -170,6 +171,18 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
             data-testid="BillingPreferencesForm__d55d36" />
         </div>
       </div>
+      <hr className="border-t border-border mx-5" />
+      {/* Fiscal defaults (SII / TicketBAI) — grouped block, ETP-4784 part 2 UX fix */}
+      <FiscalDefaultsSection
+        data={data}
+        entity="businessPartner"
+        api={api}
+        token={token}
+        catalogs={catalogs}
+        onChange={onChange}
+        editing={editing}
+        apiBaseUrl={apiBaseUrl}
+        data-testid="FiscalDefaultsSection__d55d36" />
     </div>
   );
 }

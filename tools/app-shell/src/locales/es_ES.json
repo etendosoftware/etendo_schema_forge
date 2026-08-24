@@ -18013,6 +18013,8 @@
     "billingPreferences": "Preferencias de facturación",
     "billingPreferencesDesc": "Configuración de facturación de cliente y proveedor.",
     "billingPreferencesAfterSave": "Guarda el contacto para configurar preferencias de facturación.",
+    "fiscalDefaults": "Valores fiscales por defecto",
+    "fiscalDefaultsDescription": "Se usan como valores por defecto al enviar las facturas de este cliente a SII/TicketBAI.",
     "validationRequiredField": "El campo \"{field}\" es obligatorio.",
     "validationRequiredGeneric": "Falta un campo obligatorio.",
     "validationDuplicateRecord": "Ya existe un registro con el mismo valor.",

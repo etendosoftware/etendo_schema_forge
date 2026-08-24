@@ -48,7 +48,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartner
 
 // @sf-generated-start requiredHeaderFields:businessPartner
-const requiredHeaderFields = ['name', 'businessPartnerCategory', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit', 'tbaiIssimplifiedinv'];
+const requiredHeaderFields = ['name', 'businessPartnerCategory', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit'];
 // @sf-generated-end requiredHeaderFields:businessPartner
 
 

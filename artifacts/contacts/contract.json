@@ -1,8 +1,8 @@
 {
-  "version": "0.49.0",
+  "version": "0.49.1",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-24T16:29:45.225Z",
-  "checksum": "05c8287126073aa2",
+  "updatedAt": "2026-08-24T17:12:01.617Z",
+  "checksum": "0a0be75dab0ccbbc",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1016,7 +1016,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",

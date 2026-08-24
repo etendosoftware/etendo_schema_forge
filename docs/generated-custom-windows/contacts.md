@@ -350,53 +350,26 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Checkbox in the Financial tab → Cliente (customer) billing block, `BillingPreferencesForm.jsx` |
-| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Checkbox in the header form (General tab), auto-emitted — no custom component |
-
-**TBAI (`tbaiIssimplifiedinv`):** `decisions.json → entities.businessPartner.fields.tbaiIssimplifiedinv`
-changed from `visibility: "discarded"` to `editable` (`form: true`, `grid: false`,
-`section: "principal"`). Regenerated with `make regen ONLY=contacts` — the generator's
-generic field-array emission on `BusinessPartnerForm.jsx` picked it up automatically as a
-`type: 'checkbox'` entry; no custom component change was needed.
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Checkbox in the Financial tab → **Default fiscal values** section, `FiscalDefaultsSection.jsx`, visible only when the Customer flag is enabled |
+| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same section, visible only when `aeatsiiDefaultsiikey` is checked |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Checkbox in the same **Default fiscal values** section, `FiscalDefaultsSection.jsx` |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. Deliberately
 **not** declared with an explicit `fieldGroup`/entity-level customization in `decisions.json`:
 the generated `CustomerForm.jsx` for the `customer` entity is never imported by
 `BusinessPartnerPage.jsx` or any custom component — every `customer`/`vendor` entity field in
-this window (`priceList`, `paymentMethod`, `purchasePricelist`, …) is hand-wired directly in
-`BillingPreferencesForm.jsx` via small local `fields` arrays passed to `EntityForm`, not
-through the auto-generated per-entity form. Adding a `fieldGroup` would have had zero effect
-on the rendered UI, so the two new fields follow the same established pattern instead:
-
-```js
-const aeatsiiDefaultKeyField = [
-  { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', section: 'principal' },
-];
-const aeatsiiKeyListField = [
-  {
-    key: 'aeatsiiSiikeylist',
-    column: 'EM_Aeatsii_Siikeylist',
-    type: 'select',
-    section: 'principal',
-    options: [ /* R / F1 / F2 / F4, labels copied from artifacts/contacts/contract.json */ ],
-    displayLogic: (record) => !!record?.aeatsiiDefaultsiikey,
-  },
-];
-```
-
-Both are rendered as a new row (`EntityForm` × 2, one column each) directly under the
-existing "Condiciones de pago / Bloqueo de cliente" row inside the Cliente billing block, so
-they only appear when the Customer flag is enabled — matching the AD `displayLogic
-@EM_Aeatsii_Defaultsiikey@='Y'` for the invoice-type selector.
+this window (`priceList`, `paymentMethod`, `purchasePricelist`, …) is hand-wired directly via
+small local `fields` arrays passed to `EntityForm`. `aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`
+follow that same established pattern, but from `FiscalDefaultsSection.jsx` (see below) rather
+than `BillingPreferencesForm.jsx`.
 
 **Hide ≠ strip.** Unchecking "Clave por defecto" hides `aeatsiiSiikeylist` via
 `displayLogic` — it does **not** clear the stored value. The field simply stops being
 visible and stops being required while hidden; its previously-saved value persists
 untouched, and reappears if "Clave por defecto" is checked again. This is intentional
 parity with Classic's own behavior for the same field, not a bug. Covered by a regression
-test in `BillingPreferencesForm.vitest.jsx` ("does not clear aeatsiiSiikeylist when the
+test in `FiscalDefaultsSection.vitest.jsx` ("does not clear aeatsiiSiikeylist when the
 default-key checkbox is off").
 
 Field labels are resolved
@@ -409,5 +382,46 @@ The four enum option labels (`R`/`F1`/`F2`/`F4`) are hardcoded in the component 
 pattern already used by `AssetsConfigPanel.jsx`/`TaxSifField.jsx` — `F1` ("Invoice") has no
 AD-side Spanish translation either, same underlying data gap.
 
-No generator or `decisions.json` schema change was needed beyond the one `tbaiIssimplifiedinv`
-visibility flip — this was purely a UI-wiring task. Verified with `make regen ONLY=contacts`.
+## ETP-4784 (part 2, UX follow-up) — Fiscal defaults grouped into one section
+
+Part 2 (above) shipped the 3 fields as **stray fields** split across two unrelated spots:
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist` inside the Cliente billing block, and
+`tbaiIssimplifiedinv` auto-rendered in the header form's General tab — with no visual
+indication that all three configure the same thing (billing-time defaults consumed by SII /
+TicketBAI when an invoice is generated for this Business Partner). Human feedback: group them
+under one clearly-labeled section, regardless of which Classic tab each field originally came
+from.
+
+**New component — `tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx`.**
+Self-contained: it renders its own title/description (i18n keys `fiscalDefaults` /
+`fiscalDefaultsDescription`, both locales) plus the 3 fields, so `ContactsFinancialPanel.jsx`
+only needs to mount it — no layout duplication. It follows the label-left / content-right row
+convention already used by the sibling Credit and Billing Preferences sections in the same
+panel. Rendered in the Financial tab, directly below the Billing Preferences row (own `<hr>`
+separator).
+
+- `tbaiIssimplifiedinv` — always rendered, unconditional (it never depended on the
+  Customer/Vendor flags to begin with).
+- `aeatsiiDefaultsiikey` / `aeatsiiSiikeylist` — moved out of `BillingPreferencesForm.jsx`
+  verbatim, keeping the exact same `displayLogic`/gating wiring: both only render when
+  `data.customer` is true, and `aeatsiiSiikeylist` stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` (unchanged AD parity behavior, see above).
+
+**`decisions.json` — `tbaiIssimplifiedinv.form` flipped `true` → `false`** (visibility stays
+`editable`). This removes it from the header form's auto-rendered field array
+(`BusinessPartnerForm.jsx`) and from the generated `requiredHeaderFields` gate on
+`BusinessPartnerPage.jsx` (used only to gate the "+ Add Line" affordance on child tabs) —
+harmless here since it's a boolean checkbox that is always "filled" (`defaultValue: "N"`), so
+the required-flag never actually blocked anything. The field itself is unaffected in
+`contract.json`/the API: `form: false` only silences the auto-form emission, it does not
+touch `visibility`, so the field keeps flowing through `resolve-curated.js` →
+`generate-contract.js` exactly as before — `FiscalDefaultsSection.jsx` reads/writes it
+directly off `data`/`onChange`, same mechanism `BillingPreferencesForm.jsx` already used for
+the other two fields.
+
+No other generator or `decisions.json` change was needed — this was a pure UI-grouping
+task on top of the already-working part 2 wiring. Verified with `make regen ONLY=contacts`
+(published core, no `LOCAL_CORE` needed): `BusinessPartnerForm.jsx` no longer emits
+`tbaiIssimplifiedinv`, `BusinessPartnerPage.jsx`'s `requiredHeaderFields` array dropped it,
+and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
+`FiscalDefaultsSection.vitest.jsx`, `ContactsFinancialPanel.vitest.jsx`) pass.
