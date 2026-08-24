@@ -1,7 +1,36 @@
+/**
+ * ETP-4576 — every dashboard widget request is a GET, so under BOTH credential
+ * schemes it must carry `credentials: 'include'` (so the `__Host-go_session`
+ * cookie can travel) and NO `X-Go-CSRF` proof: a safe method never proves intent.
+ *
+ * Which scheme is live is a backend preference, so both are reachable at runtime
+ * and neither may be the one this suite happens to inherit. `src/test/setup.js`
+ * resets the scheme to the bearer default before EVERY test, so a credential
+ * assertion written without declaring a scheme only ever exercises that default —
+ * it passes by omission and proves nothing. Every credential-sensitive case below
+ * therefore declares its scheme and runs once per scheme.
+ */
 import { renderHook, waitFor } from '@testing-library/react';
 import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  expectBearerHeader,
+  expectNoAuthorizationHeader,
+  expectNoCsrfHeader,
+} from '@/test/sessionContract.js';
 import { useDashboardData } from '../useDashboardData';
+
+/**
+ * The two schemes the preference switches between. The loop below asserts the
+ * part of the contract that must hold either way — that is what stops someone
+ * making `credentials` or the CSRF decision conditional on the scheme, which
+ * would break the switch in one direction while looking fine in the other.
+ */
+const SCHEMES = [
+  { name: 'cookie', declare: declareCookieSession },
+  { name: 'bearer', declare: declareBearerSession },
+];
 
 // Mock external dependencies
 vi.mock('@generated/dashboard/generated/config', () => ({
@@ -231,7 +260,34 @@ describe('useDashboardData', () => {
     expect(result.current.topClients).toHaveLength(1);
   });
 
-  it('never sends an Authorization header on any widget request', async () => {
+  for (const scheme of SCHEMES) {
+    it(`still loads every widget, with credentials and no CSRF proof, under the ${scheme.name} scheme`, async () => {
+      scheme.declare();
+      mockAllEndpointsOk();
+
+      const { result } = renderHook(() => useDashboardData());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // The widgets must load under either scheme. A `!token` gate here rendered
+      // the whole dashboard empty in silence under the cookie session.
+      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(result.current.kpis[0].value).toBe(1000);
+      for (const [, init] of globalThis.fetch.mock.calls) {
+        // Unconditional by design: required under cookie, a no-op for the
+        // same-origin requests this app makes under bearer.
+        expect(init.credentials).toBe('include');
+      }
+      // These are GETs — safe methods — so the CSRF proof is never legitimate
+      // on them and neither scheme may attach one.
+      expectNoCsrfHeader();
+    });
+  }
+
+  it('never sends an Authorization header on any widget request under the cookie scheme', async () => {
+    declareCookieSession();
     mockAllEndpointsOk();
 
     const { result } = renderHook(() => useDashboardData());
@@ -243,6 +299,27 @@ describe('useDashboardData', () => {
     expect(globalThis.fetch).toHaveBeenCalled();
     // ETP-4576 — the `__Host-` session cookie authenticates every widget call.
     expectNoAuthorizationHeader();
+  });
+
+  // The bearer counterpart of the test above. It was parked as a todo while
+  // fetchWidget hard-coded a lone Content-Type and attached no credential — under
+  // bearer every widget GET went out unauthenticated and the dashboard rendered
+  // its zeroed fallback SILENTLY, because fetchWidget swallows the failure and
+  // returns null. The hook now asks readCredentialHeaders() for the active
+  // credential, so the bearer half is assertable instead of parked.
+  it('sends the bearer token on every widget GET under the bearer scheme', async () => {
+    declareBearerSession();
+    mockAllEndpointsOk();
+
+    const { result } = renderHook(() => useDashboardData());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalled();
+    expectBearerHeader();
+    expectNoCsrfHeader();
   });
 
   it('handles response without response.data field', async () => {

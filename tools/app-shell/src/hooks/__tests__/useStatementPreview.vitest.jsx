@@ -1,9 +1,19 @@
 /**
- * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
- * hook holds no bearer token: the request must carry `credentials: 'include'`
- * and NO Authorization header. The single call is a POST (an unsafe method), so
- * it must also carry the session-bound `X-Go-CSRF` proof, and must omit that
- * header entirely when no proof is available yet.
+ * ETP-4576 — which credential scheme is live is a BACKEND PREFERENCE, so both are
+ * reachable at runtime and this hook's single POST has to work under either one:
+ *
+ *  - bearer: `Authorization: Bearer <token>`, and never a CSRF proof (sending one
+ *            would mean the builders are ignoring the active mode).
+ *  - cookie: the `__Host-go_session` cookie travels via `credentials: 'include'`,
+ *            no header carries a credential, and the POST — an unsafe method —
+ *            proves intent with `X-Go-CSRF`.
+ *
+ * Every credential-sensitive case below therefore declares its scheme and runs
+ * once per scheme. That is not ceremony: `src/test/setup.js` resets the scheme to
+ * the bearer default before EVERY test, so an assertion like "no Authorization
+ * header was sent" that does not declare a scheme is only ever exercising that
+ * default — it passes by omission (the default holds no token, so there is
+ * nothing to send) rather than by proving the cookie scheme suppresses it.
  *
  * The auth mock is a plain mutable object rather than a vi.fn() with
  * mockReturnValueOnce: React can invoke the hook more than once per render, and
@@ -11,18 +21,18 @@
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+  expectBearerHeader,
+  expectNoAuthorizationHeader,
+  expectNoCsrfHeader,
+} from '@/test/sessionContract.js';
 
 vi.mock('@/auth/AuthContext.jsx', async () =>
   (await import('@/test/authContextMock.js')).authContextMock);
-
-// ETP-4576 — these assertions describe the cookie-session contract, so the
-// request builders have to be in that mode. src/test/setup.js resets the scheme
-// before every test, hence a beforeEach rather than module scope.
-beforeEach(() => {
-  declareCookieSession();
-});
-
 
 import { useStatementPreview } from '../useStatementPreview.js';
 
@@ -32,6 +42,60 @@ function setPathname(pathname) {
     writable: true,
   });
 }
+
+/**
+ * Asserts every recorded request carried the CSRF proof. The positive mirror of
+ * `expectNoCsrfHeader`; the lookup is case-insensitive so a builder that emitted
+ * `x-go-csrf` would still satisfy the backend contract and this assertion.
+ */
+function expectCsrfHeader(token = TEST_CSRF_TOKEN) {
+  expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(0);
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = Object.fromEntries(
+      Object.entries(init?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
+    );
+    expect(headers['x-go-csrf']).toBe(token);
+  }
+}
+
+/**
+ * The two schemes the preference switches between, each stating the FULL contract
+ * for an unsafe request: the header that must be present AND the one that must be
+ * absent. Asserting only the presence would let an implementation that emits both
+ * credentials at once pass, which is precisely the bug the preference exists to
+ * make impossible.
+ *
+ * `assertCredentialWithoutProof` is the same contract for a session that is
+ * authenticated but holds no CSRF proof yet — the bearer credential must survive
+ * that (it does not depend on the proof), while the cookie scheme must simply omit
+ * the header rather than send it empty.
+ */
+const SCHEMES = [
+  {
+    name: 'bearer',
+    declare: declareBearerSession,
+    assertCredential: () => {
+      expectBearerHeader();
+      expectNoCsrfHeader();
+    },
+    assertCredentialWithoutProof: () => {
+      expectBearerHeader();
+      expectNoCsrfHeader();
+    },
+  },
+  {
+    name: 'cookie',
+    declare: declareCookieSession,
+    assertCredential: () => {
+      expectCsrfHeader();
+      expectNoAuthorizationHeader();
+    },
+    assertCredentialWithoutProof: () => {
+      expectNoCsrfHeader();
+      expectNoAuthorizationHeader();
+    },
+  },
+];
 
 describe('useStatementPreview', () => {
   beforeEach(() => {
@@ -50,54 +114,64 @@ describe('useStatementPreview', () => {
     expect(typeof result.current.previewStatement).toBe('function');
   });
 
-  it('POSTs to bank-statements?action=preview with the expected body shape', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: { format: 'C43', lineCount: 7 } } }),
-    });
+  for (const scheme of SCHEMES) {
+    it(`POSTs to bank-statements?action=preview with the expected body under the ${scheme.name} scheme`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ response: { data: { format: 'C43', lineCount: 7 } } }),
+      });
 
-    const { result } = renderHook(() => useStatementPreview());
+      const { result } = renderHook(() => useStatementPreview());
 
-    let res;
-    await act(async () => {
-      res = await result.current.previewStatement({
-        accountId: 'acc-1',
+      let res;
+      await act(async () => {
+        res = await result.current.previewStatement({
+          accountId: 'acc-1',
+          fileName: 'ext.c43',
+          contentBase64: 'AAAA',
+        });
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = globalThis.fetch.mock.calls[0];
+      expect(url).toBe('/etendo/sws/neo/bank-statements?action=preview');
+      expect(init.method).toBe('POST');
+      // Unconditional in both schemes: required so the `__Host-` cookie travels,
+      // and a same-origin no-op under bearer. Making it conditional on the scheme
+      // would break the switch in one direction.
+      expect(init.credentials).toBe('include');
+      scheme.assertCredential();
+      expect(JSON.parse(init.body)).toEqual({
+        FIN_Financial_Account_ID: 'acc-1',
         fileName: 'ext.c43',
         contentBase64: 'AAAA',
       });
+      expect(res).toEqual({ format: 'C43', lineCount: 7 });
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('/etendo/sws/neo/bank-statements?action=preview');
-    expect(init.method).toBe('POST');
-    expect(init.credentials).toBe('include');
-    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
-    expectNoAuthorizationHeader();
-    expect(JSON.parse(init.body)).toEqual({
-      FIN_Financial_Account_ID: 'acc-1',
-      fileName: 'ext.c43',
-      contentBase64: 'AAAA',
+    it(`omits X-Go-CSRF entirely under ${scheme.name} when no CSRF proof is available`, async () => {
+      // A session can be authenticated before the CSRF proof lands; the header must
+      // be added defensively, never sent as an empty/undefined value.
+      scheme.declare();
+      // Declared first, then overridden: setAuthMock republishes the credentials
+      // while PRESERVING the mode, so dropping the proof cannot silently drop the
+      // scheme. The bearer token is restated because the same call also republishes
+      // `token`, and bearer must keep authenticating without a CSRF proof.
+      setAuthMock({ isAuthenticated: true, token: TEST_BEARER_TOKEN, csrfToken: null });
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: {} } }) });
+
+      const { result } = renderHook(() => useStatementPreview());
+      await act(async () => {
+        await result.current.previewStatement({ accountId: 'a', fileName: 'f', contentBase64: 'x' });
+      });
+
+      const [, init] = globalThis.fetch.mock.calls[0];
+      expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+      expect(init.credentials).toBe('include');
+      scheme.assertCredentialWithoutProof();
     });
-    expect(res).toEqual({ format: 'C43', lineCount: 7 });
-  });
-
-  it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
-    // A session can be authenticated before the CSRF proof lands; the header must
-    // be added defensively, never sent as an empty/undefined value.
-    setAuthMock({ isAuthenticated: true, csrfToken: null });
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: {} } }) });
-
-    const { result } = renderHook(() => useStatementPreview());
-    await act(async () => {
-      await result.current.previewStatement({ accountId: 'a', fileName: 'f', contentBase64: 'x' });
-    });
-
-    const [, init] = globalThis.fetch.mock.calls[0];
-    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
-    expect(init.credentials).toBe('include');
-    expectNoAuthorizationHeader();
-  });
+  }
 
   it('flips previewing during the call', async () => {
     let resolve;

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { kpisConfig, actions } from '@generated/dashboard/generated/config';
 import { useAuth } from '@/auth/AuthContext';
 import { createDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { readCredentialHeaders } from '@/lib/sessionHeaders.js';
 import { useDashboardDateRange } from '@/components/dashboard/DashboardDateRangeContext';
 
 /* ------------------------------------------------------------------
@@ -36,9 +37,13 @@ async function fetchWidget(apiBase, entity, range) {
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
 
   try {
+    // ETP-4576 — the headers were hard-coded to a lone Content-Type: no credential
+    // under either scheme, so every widget GET relied on the cookie riding along by
+    // itself and returned 401 under bearer. Content-Type is dropped on purpose too:
+    // this GET has no body, and application/json is not a CORS-safelisted value.
     const res = await fetch(url, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: readCredentialHeaders(),
       signal: ctrl.signal,
     });
     clearTimeout(timer);

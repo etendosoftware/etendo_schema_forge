@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { getApiBase } from './useNeoResource';
+import { readCredentialHeaders } from '../lib/sessionHeaders.js';
 
 /**
  * Triggers a browser download for a Blob using a transient <a download>.
@@ -47,8 +48,15 @@ export function useCsvExport() {
       const apiBase = getApiBase();
       const query = buildExportQuery(params);
       const url = `${apiBase}${path}${path.includes('?') ? '&' : '?'}${query}`;
+      // ETP-4576 — this carried `credentials: 'include'` and NO headers, so it
+      // authenticated only by accident: the cookie travels on its own, but under
+      // the bearer scheme nothing identified the caller and the export 401'd.
+      // readCredentialHeaders() sends whichever credential the active scheme holds
+      // and deliberately omits Content-Type — a bodyless GET that declares
+      // application/json is not CORS-safelisted and forces a preflight.
       const res = await fetch(url, {
         credentials: 'include',
+        headers: readCredentialHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();

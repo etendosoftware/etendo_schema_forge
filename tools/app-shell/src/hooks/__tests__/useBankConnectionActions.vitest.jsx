@@ -1,16 +1,28 @@
 /**
- * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
- * hook holds no bearer token: every request must carry `credentials: 'include'`
- * and NO Authorization header.
+ * ETP-4576 — this hook under BOTH credential schemes.
+ *
+ * Which scheme is live is a backend preference, so both are reachable at runtime:
+ *   - bearer — `Authorization: Bearer <token>` on every request, no CSRF proof;
+ *   - cookie — the `__Host-go_session` cookie travels via `credentials: 'include'`
+ *              and unsafe methods prove intent with `X-Go-CSRF`; reads carry no
+ *              credential header at all.
+ * Neither may be the one a test happens to inherit: `src/test/setup.js` resets to
+ * the bearer default before EVERY test, so an assertion like "no Authorization
+ * header was sent" that declares no scheme passes by OMISSION — it only ever
+ * exercises that default and proves nothing about the other one.
  *
  * This hook is the subtle one in the batch: it has a single generic
  * `call(method, action, …)` whose method is a PARAMETER, and callers pass both
  * 'GET' (accounts / providers / status) and 'POST' (connect / link /
- * createAndLink / reconnect / disconnect / sync / import-settings). The CSRF
- * proof header `X-Go-CSRF` is only legitimate on the unsafe methods, so both
- * sides of that branch are asserted here: a POST action MUST send it, a GET
- * action MUST NOT. A blanket "always send it" implementation and a "never send
- * it" one both have to fail.
+ * createAndLink / reconnect / disconnect / sync / import-settings). So the header
+ * decision has two independent inputs — the active scheme and the method's safety
+ * — and every credential-sensitive test below drives the same call site once per
+ * scheme, asserting the header that must be PRESENT and the one that must be
+ * ABSENT both times.
+ *
+ * An implementation that always sends the CSRF proof, one that never sends it,
+ * one that ignores the active mode, and one that sends both credentials at once
+ * each have to fail at least one of the four assertion sets in SCHEMES.
  *
  * The auth mock is a plain mutable object rather than a vi.fn() with
  * mockReturnValueOnce: React can invoke the hook more than once per render, and
@@ -18,7 +30,15 @@
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+  expectBearerHeader,
+  expectNoAuthorizationHeader,
+  expectNoCsrfHeader,
+} from '@/test/sessionContract.js';
 
 vi.mock('@/auth/AuthContext.jsx', async () =>
   (await import('@/test/authContextMock.js')).authContextMock);
@@ -38,6 +58,46 @@ function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
+/**
+ * The two schemes, each with the FULL header contract it promises.
+ *
+ * Both `declare` helpers publish BOTH credentials (see src/test/sessionContract.js),
+ * so `mode` is the only thing that differs between them — that is what makes an
+ * implementation which ignores the mode and emits whatever it holds fail, instead
+ * of passing the absence checks for the wrong reason ("nothing to emit").
+ *
+ * `assertUnsafe` and `assertSafe` are separate because the CSRF proof is only
+ * legitimate on POST/PUT/PATCH/DELETE; `assertCredential` is the scheme's own
+ * credential alone, for the cases where the proof is deliberately unavailable.
+ */
+const SCHEMES = [
+  {
+    name: 'bearer',
+    declare: declareBearerSession,
+    assertCredential: () => expectBearerHeader(),
+    // Reads carry the token just as much as writes do: a builder left
+    // credential-less while only the cookie scheme existed silently
+    // unauthenticated every GET the moment bearer came back.
+    assertUnsafe: () => { expectBearerHeader(); expectNoCsrfHeader(); },
+    assertSafe: () => { expectBearerHeader(); expectNoCsrfHeader(); },
+  },
+  {
+    name: 'cookie',
+    declare: declareCookieSession,
+    assertCredential: () => expectNoAuthorizationHeader(),
+    assertUnsafe: (init) => {
+      expect(init.headers['X-Go-CSRF']).toBe(TEST_CSRF_TOKEN);
+      expectNoAuthorizationHeader();
+    },
+    assertSafe: (init) => {
+      // A read needs no proof of intent — the browser attaches the `__Host-`
+      // cookie and nothing else is required.
+      expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
+      expectNoAuthorizationHeader();
+    },
+  },
+];
+
 describe('useBankConnectionActions — constants', () => {
   it('exposes the SPA callback path and connection storage key', () => {
     expect(BANK_CONNECTION_CALLBACK_PATH).toBe('/financial-account/bank-connection-callback');
@@ -47,9 +107,11 @@ describe('useBankConnectionActions — constants', () => {
 
 describe('useBankConnectionActions — hook', () => {
   beforeEach(() => {
-    // ETP-4576 — declare the scheme this suite asserts on. The builders read the
-    // active scheme, and src/test/setup.js resets it to the bearer default before
-    // every test, so a suite expecting the CSRF proof has to say so.
+    // ETP-4576 — baseline for the tests that are NOT about credentials (URL
+    // shape, payload normalization, error mapping): they still have to run under
+    // a real scheme, and the cookie session is the target one. Every
+    // credential-sensitive test below overrides this by declaring its own scheme
+    // and runs once per scheme, so none of them depends on this line.
     declareCookieSession();
     globalThis.fetch = vi.fn();
   });
@@ -64,27 +126,31 @@ describe('useBankConnectionActions — hook', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('connect posts to the bridge and returns the connectUrl', async () => {
-    globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://saltedge/connect' }));
+  for (const scheme of SCHEMES) {
+    it(`connect posts to the bridge and returns the connectUrl under the ${scheme.name} scheme`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://saltedge/connect' }));
 
-    const { result } = renderHook(() => useBankConnectionActions());
-    let url;
-    await act(async () => {
-      url = await result.current.connect();
+      const { result } = renderHook(() => useBankConnectionActions());
+      let url;
+      await act(async () => {
+        url = await result.current.connect();
+      });
+
+      expect(url).toBe('https://saltedge/connect');
+      const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+      expect(calledUrl).toContain('/sws/neo/financial-account-bank-connection');
+      expect(calledUrl).toContain('action=connect');
+      expect(init.method).toBe('POST');
+      // Unconditional in both schemes: required for the cookie to travel, a no-op
+      // for bearer. Making it scheme-conditional would break the switch one way.
+      expect(init.credentials).toBe('include');
+      scheme.assertUnsafe(init);
+      expect(JSON.parse(init.body)).toEqual({});
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
     });
-
-    expect(url).toBe('https://saltedge/connect');
-    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
-    expect(calledUrl).toContain('/sws/neo/financial-account-bank-connection');
-    expect(calledUrl).toContain('action=connect');
-    expect(init.method).toBe('POST');
-    expect(init.credentials).toBe('include');
-    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
-    expectNoAuthorizationHeader();
-    expect(JSON.parse(init.body)).toEqual({});
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeNull();
-  });
+  }
 
   it('connect sends the financialAccountId in the body when provided', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://x' }));
@@ -98,37 +164,40 @@ describe('useBankConnectionActions — hook', () => {
     expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1' });
   });
 
-  it('fetchAccounts normalizes the payload and passes query params', async () => {
-    globalThis.fetch.mockResolvedValue(
-      okResponse({
+  for (const scheme of SCHEMES) {
+    it(`fetchAccounts normalizes the payload and passes query params under the ${scheme.name} scheme`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue(
+        okResponse({
+          accounts: [{ id: 'acc1' }],
+          providerName: 'BBVA',
+          providerLogoUrl: 'https://logo',
+        }),
+      );
+
+      const { result } = renderHook(() => useBankConnectionActions());
+      let data;
+      await act(async () => {
+        data = await result.current.fetchAccounts('conn-1', 'B', 'FA-1');
+      });
+
+      expect(data).toEqual({
         accounts: [{ id: 'acc1' }],
         providerName: 'BBVA',
         providerLogoUrl: 'https://logo',
-      }),
-    );
-
-    const { result } = renderHook(() => useBankConnectionActions());
-    let data;
-    await act(async () => {
-      data = await result.current.fetchAccounts('conn-1', 'B', 'FA-1');
+      });
+      const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+      expect(init.method).toBe('GET');
+      expect(init.credentials).toBe('include');
+      // GET is a safe method: no CSRF proof in either scheme, and whichever
+      // credential the scheme does use must still be there.
+      scheme.assertSafe(init);
+      expect(calledUrl).toContain('action=accounts');
+      expect(calledUrl).toContain('connectionId=conn-1');
+      expect(calledUrl).toContain('type=B');
+      expect(calledUrl).toContain('financialAccountId=FA-1');
     });
-
-    expect(data).toEqual({
-      accounts: [{ id: 'acc1' }],
-      providerName: 'BBVA',
-      providerLogoUrl: 'https://logo',
-    });
-    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
-    expect(init.method).toBe('GET');
-    expect(init.credentials).toBe('include');
-    // GET is a safe method — the CSRF proof must not be attached to it.
-    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
-    expectNoAuthorizationHeader();
-    expect(calledUrl).toContain('action=accounts');
-    expect(calledUrl).toContain('connectionId=conn-1');
-    expect(calledUrl).toContain('type=B');
-    expect(calledUrl).toContain('financialAccountId=FA-1');
-  });
+  }
 
   it('fetchAccounts falls back to empty defaults when fields are missing', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({}));
@@ -263,30 +332,33 @@ describe('useBankConnectionActions — hook', () => {
     expect(JSON.parse(init.body)).toEqual({ financialAccountId: 'FA-1', frequency: 'daily' });
   });
 
-  it('fetchStatus issues a GET with the financialAccountId query', async () => {
-    globalThis.fetch.mockResolvedValue(okResponse({ connected: true }));
+  for (const scheme of SCHEMES) {
+    it(`fetchStatus issues a GET with the financialAccountId query under the ${scheme.name} scheme`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue(okResponse({ connected: true }));
 
-    const { result } = renderHook(() => useBankConnectionActions());
-    let status;
-    await act(async () => {
-      status = await result.current.fetchStatus('FA-1');
+      const { result } = renderHook(() => useBankConnectionActions());
+      let status;
+      await act(async () => {
+        status = await result.current.fetchStatus('FA-1');
+      });
+
+      expect(status).toEqual({ connected: true });
+      const [calledUrl, init] = globalThis.fetch.mock.calls[0];
+      expect(init.method).toBe('GET');
+      expect(init.credentials).toBe('include');
+      scheme.assertSafe(init);
+      expect(calledUrl).toContain('action=status');
+      expect(calledUrl).toContain('financialAccountId=FA-1');
     });
+  }
 
-    expect(status).toEqual({ connected: true });
-    const [calledUrl, init] = globalThis.fetch.mock.calls[0];
-    expect(init.method).toBe('GET');
-    expect(init.credentials).toBe('include');
-    // GET is a safe method — the CSRF proof must not be attached to it.
-    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
-    expectNoAuthorizationHeader();
-    expect(calledUrl).toContain('action=status');
-    expect(calledUrl).toContain('financialAccountId=FA-1');
-  });
-
-  // ── CSRF proof: both sides of the generic call(method, …) branch ────────────
+  // ── credential contract: scheme x method-safety, over every action ─────────
   // `call` takes the method as a parameter, so the header decision cannot be
-  // hardcoded per-callsite. Every POST action must carry X-Go-CSRF and every GET
-  // action must not, exercised through the public API of the hook.
+  // hardcoded per-callsite — and the scheme is a second, independent input. Every
+  // action is therefore driven once per scheme through the hook's public API: an
+  // unsafe action must carry the active scheme's proof, a safe one must not, and
+  // neither may ever carry the other scheme's credential.
   const POST_ACTIONS = [
     { label: 'connect', invoke: (api) => api.connect('FA-1') },
     { label: 'link', invoke: (api) => api.link({ financialAccountId: 'FA-1' }) },
@@ -303,51 +375,59 @@ describe('useBankConnectionActions — hook', () => {
     { label: 'status', invoke: (api) => api.fetchStatus('FA-1') },
   ];
 
-  for (const { label, invoke } of POST_ACTIONS) {
-    it(`sends X-Go-CSRF on the unsafe ${label} action`, async () => {
+  for (const scheme of SCHEMES) {
+    for (const { label, invoke } of POST_ACTIONS) {
+      it(`sends the ${scheme.name} scheme's write credential on the unsafe ${label} action`, async () => {
+        scheme.declare();
+        globalThis.fetch.mockResolvedValue(okResponse({}));
+        const { result } = renderHook(() => useBankConnectionActions());
+
+        await act(async () => { await invoke(result.current); });
+
+        const [, init] = globalThis.fetch.mock.calls[0];
+        expect(init.method).toBe('POST');
+        expect(init.credentials).toBe('include');
+        scheme.assertUnsafe(init);
+      });
+    }
+
+    for (const { label, invoke } of GET_ACTIONS) {
+      it(`sends no write proof on the safe ${label} action under the ${scheme.name} scheme`, async () => {
+        scheme.declare();
+        globalThis.fetch.mockResolvedValue(okResponse({}));
+        const { result } = renderHook(() => useBankConnectionActions());
+
+        await act(async () => { await invoke(result.current); });
+
+        const [, init] = globalThis.fetch.mock.calls[0];
+        expect(init.method).toBe('GET');
+        expect(init.credentials).toBe('include');
+        scheme.assertSafe(init);
+      });
+    }
+
+    it(`omits X-Go-CSRF on a POST under the ${scheme.name} scheme when the session holds no proof`, async () => {
+      scheme.declare();
+      // A session can be authenticated before the CSRF proof lands; the header
+      // must be added defensively, never sent as an empty/undefined value. The
+      // token is kept so this stays the SAME session in both schemes — only the
+      // proof is missing — and `setAuthMock` republishes it while preserving the
+      // mode declared above, so the scheme is not silently changed here.
+      setAuthMock({ isAuthenticated: true, token: TEST_BEARER_TOKEN, csrfToken: null });
       globalThis.fetch.mockResolvedValue(okResponse({}));
       const { result } = renderHook(() => useBankConnectionActions());
 
-      await act(async () => { await invoke(result.current); });
+      await act(async () => { await result.current.sync('FA-1'); });
 
       const [, init] = globalThis.fetch.mock.calls[0];
       expect(init.method).toBe('POST');
-      expect(init.credentials).toBe('include');
-      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
-      expectNoAuthorizationHeader();
-    });
-  }
-
-  for (const { label, invoke } of GET_ACTIONS) {
-    it(`does not send X-Go-CSRF on the safe ${label} action`, async () => {
-      globalThis.fetch.mockResolvedValue(okResponse({}));
-      const { result } = renderHook(() => useBankConnectionActions());
-
-      await act(async () => { await invoke(result.current); });
-
-      const [, init] = globalThis.fetch.mock.calls[0];
-      expect(init.method).toBe('GET');
-      expect(init.credentials).toBe('include');
       expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
-      expectNoAuthorizationHeader();
+      expect(init.credentials).toBe('include');
+      // Under bearer the request is still authenticated by the token; under
+      // cookie by the cookie, with no header at all.
+      scheme.assertCredential();
     });
   }
-
-  it('omits X-Go-CSRF entirely on a POST action when no CSRF proof is available', async () => {
-    // A session can be authenticated before the CSRF proof lands; the header must
-    // be added defensively, never sent as an empty/undefined value.
-    setAuthMock({ isAuthenticated: true, csrfToken: null });
-    globalThis.fetch.mockResolvedValue(okResponse({}));
-    const { result } = renderHook(() => useBankConnectionActions());
-
-    await act(async () => { await result.current.sync('FA-1'); });
-
-    const [, init] = globalThis.fetch.mock.calls[0];
-    expect(init.method).toBe('POST');
-    expect(Object.keys(init.headers ?? {})).not.toContain('X-Go-CSRF');
-    expect(init.credentials).toBe('include');
-    expectNoAuthorizationHeader();
-  });
 
   it('returns an empty object when the response has no data payload', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
