@@ -93,6 +93,21 @@ The error **code** (`aeatsiiErrorCode`) still comes only from the header — `*S
 
 TBAI does **not** need this fallback: its error reason already comes exclusively from the `resultadoValidación` join (see below), never from a header field that can be silently empty.
 
+#### CSV export replicates the same fallback (ETP-4784 correction #3)
+
+`handleExport()`/`fetchCsvAndDownload()` re-fetches the invoice list independently of the
+on-screen state — it needs the **full** dataset for the active tab/period, not just the pages
+already paginated into `rows`/`motivoMap`, so it cannot simply reuse the on-screen `motivoMap`.
+Reusing it would silently export an empty Error cell for any invoice not yet scrolled into view.
+
+Instead, `handleExport()` performs the same second fetch `fetchSubtab()` does: it queries the
+tab's `*SiiData` sibling entity (`SUBTAB_SII_DATA_ENTITIES[entityKey]`, scoped by `organization`,
+`_startRow`/`_endRow` covering the full range) and rebuilds a dedicated `exportMotivoMap` via the
+same `pickMostRecentMotivo()` helper. The CSV column builder — `buildSiiExportCols(motivoMap)`
+(replaces the old static `SII_EXPORT_COLS` array) — applies the identical resolution order as the
+on-screen column: `row.aeatsiiErrorMsg || motivoMap[row.id] || ''`. If the SiiData re-fetch fails,
+export proceeds with the header-only Error column rather than failing the whole export.
+
 **KPI sync:** `onTabChange` callback encodes the combined key (`'emitidas'`, `'emitidas-anterior'`, `'recibidas'`, `'recibidas-anterior'`) and bubbles up to `FiscalMonitorPage`, which passes it back as `activeKey` to `FiscalKpiCards`.
 
 ## TBAI section (`TbaiMonitorSection`)
@@ -336,7 +351,7 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitor.utils.js` — `buildMonitorFetchPlan`, `computeKpis`, `pickMostRecentMotivo` (pure functions, fully tested). `pickMostRecentMotivo` builds the invoice → most-recent-`motivo` lookup used by `SiiMonitorSection`'s "Motivo error" header-empty fallback (ETP-4784 correction #2 — see above).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalKpiCards.jsx` — clickable metric cards per system variant.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx` — emitidas/recibidas × actual/anterior; `onTabChange` callback with combined key; dedicated "Error reason" column (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) between Status and CSV AEAT, same visual pattern as Verifactu's column (see "Same layout for all three monitors" above); `fetchSubtab()` also builds a `motivoMap` (invoice → most-recent `motivo`) from the already-fetched `*SiiData` response, used to fill the column when the header field is empty (see "Header-empty fallback" above).
+- `tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx` — emitidas/recibidas × actual/anterior; `onTabChange` callback with combined key; dedicated "Error reason" column (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) between Status and CSV AEAT, same visual pattern as Verifactu's column (see "Same layout for all three monitors" above); `fetchSubtab()` also builds a `motivoMap` (invoice → most-recent `motivo`) from the already-fetched `*SiiData` response, used to fill the column when the header field is empty (see "Header-empty fallback" above). `handleExport()` re-fetches the `*SiiData` sibling entity independently and rebuilds an `exportMotivoMap` via `pickMostRecentMotivo()`, feeding `buildSiiExportCols(motivoMap)` — the CSV export's Error column applies the same fallback as the on-screen column (see "CSV export replicates the same fallback" above).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx` — server-side criteria filter per status; `onFilterChange` callback; `buildValidationMap`/`validationResults` prop joins `resultadoValidación` error reasons onto a dedicated "Error reason" table column (see "Error reason (ETP-4784)" above); `buildTbaiExportCols` joins the same reasons into the CSV export.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/VerifactuMonitorSection.jsx` — entity-per-status tab; `onTabChange` callback.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fmtDateUtils.js` — pure `fmtDate` helper (no React deps); converts `YYYY-MM-DD` → `DD/MM/YYYY`, passes through already-formatted dates, returns `'—'` for falsy input. Importable in Node.js tests without any alias setup.
@@ -356,6 +371,7 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/SiiMonitorSection.test.js` — 21 component source-guard tests: tab/period state, `initialTab` derivation, `mockRows` bypass, data fetching, pending-pill → `onInvoiceOpen` wiring.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/SiiMonitorSection.errorReason.vitest.jsx` — 4 render tests for the ETP-4784 correction #2 fallback: header `aeatsiiErrorMsg` wins over SiiData `motivo` when present; falls back to SiiData `motivo` when the header is empty and there is one row; picks the most-recent `motivo` when there are 2+ SiiData rows for the invoice; shows a dash when the header is empty and there are no SiiData rows.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/fiscalMonitor.utils.vitest.js` — includes 8 `pickMostRecentMotivo` tests: single row, most-recent-by-date across 2+ rows, `updated`/`created` fallback when `fechaltimaModificacinSII` is blank (mirrors the real ETP-4784 sample), no-invoice-FK skip, null/undefined/empty input, multi-invoice isolation.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/SiiMonitorSection.export.errorReason.vitest.jsx` — ETP-4784 correction #3: exercises `handleExport()` end to end (real `fetchCsvAndDownload`/`buildCsvAndDownload`, mocked `apiFetch`) and asserts the downloaded CSV blob contains the SiiData `motivo` when the header `aeatsiiErrorMsg` is empty, and prefers the header message over `motivo` when both are present.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/TbaiMonitorSection.test.js` — expanded with pending-pill → `onInvoiceOpen` wiring tests (TBAI sales-only); `buildValidationMap`/`buildTbaiExportCols` source guards for the error-reason join; dedicated Error Reason column source guards (header key, `join(' | ')`, empty-cell dash).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/TbaiMonitorSection.errorReason.vitest.jsx` — 6 render tests: dash in the Error Reason column for accepted rows, `[codigo] descripcion` for a single reason, all N reasons joined for a multi-reason row, dash for an error row with no matching result, the reason renders in its own `<td>` separate from the status-pill cell, no crash when `validationResults` is undefined.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/FiscalMonitorPage.tbaiValidation.vitest.jsx` — verifies `FiscalMonitorPage` threads `tbaiValidationResults` from `useFiscalMonitor` to `TbaiMonitorSection`'s `validationResults` prop (standalone `tbai` profile).

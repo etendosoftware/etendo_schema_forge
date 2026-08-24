@@ -34,18 +34,27 @@ const SUBTAB_ENTITIES = {
   receivedPrevious: SII_RECIBIDAS_ANT_ENTITY,
 };
 
-const SII_EXPORT_COLS = [
-  { label: 'Date',             get: r => r.invoiceDate ?? '' },
-  { label: 'Invoice No.',      get: r => r.documentNo ?? '' },
-  { label: 'Business Partner', get: r => r['businessPartner$_identifier'] ?? r.businessPartnerIdentifier ?? r.businessPartner ?? '' },
-  { label: 'Type',             get: r => siiTipoLabel(r.aeatsiiClaveTipo ?? r.aeatsiiClaveTipoFc) },
-  { label: 'Total',            get: r => r.grandTotalAmount ?? '' },
-  { label: 'Currency',         get: r => r['currency$_identifier'] ?? '' },
-  { label: 'Status',           get: r => r.aeatsiiEstado ?? '' },
-  { label: 'CSV',              get: r => r.cdigoCSV ?? '' },
-  { label: 'Error Code',       get: r => r.aeatsiiErrorCode ?? '' },
-  { label: 'Error',            get: r => r.aeatsiiErrorMsg ?? '' },
-];
+/**
+ * Builds the CSV column defs for SII export. `motivoMap` (invoice id → most
+ * recent aeatsii_facturas `motivo`) is joined in so the exported "Error"
+ * column matches the on-screen fallback (ETP-4784): the header
+ * EM_Aeatsii_Error_Msg can be empty for an "Error" (EE) invoice even though
+ * the related aeatsii_facturas row(s) carry the real reason in `motivo`.
+ */
+function buildSiiExportCols(motivoMap) {
+  return [
+    { label: 'Date',             get: r => r.invoiceDate ?? '' },
+    { label: 'Invoice No.',      get: r => r.documentNo ?? '' },
+    { label: 'Business Partner', get: r => r['businessPartner$_identifier'] ?? r.businessPartnerIdentifier ?? r.businessPartner ?? '' },
+    { label: 'Type',             get: r => siiTipoLabel(r.aeatsiiClaveTipo ?? r.aeatsiiClaveTipoFc) },
+    { label: 'Total',            get: r => r.grandTotalAmount ?? '' },
+    { label: 'Currency',         get: r => r['currency$_identifier'] ?? '' },
+    { label: 'Status',           get: r => r.aeatsiiEstado ?? '' },
+    { label: 'CSV',              get: r => r.cdigoCSV ?? '' },
+    { label: 'Error Code',       get: r => r.aeatsiiErrorCode ?? '' },
+    { label: 'Error',            get: r => r.aeatsiiErrorMsg || motivoMap[r.id] || '' },
+  ];
+}
 
 // Entities that hold the CSV code (aeatsii_facturas table)
 const SUBTAB_SII_DATA_ENTITIES = {
@@ -309,12 +318,29 @@ export default function SiiMonitorSection({
     if (exporting) return;
     setExporting(true);
     try {
+      // ETP-4784: export fetches the FULL dataset for this tab/period (no
+      // pagination params), which can include invoices not yet loaded into
+      // `motivoMap` (state only tracks pages fetched so far for the on-screen
+      // table). Re-fetch the SiiData entity independently so the exported
+      // "Error" column gets the same header/motivo fallback as the screen.
+      const siiDataEntity = SUBTAB_SII_DATA_ENTITIES[entityKey];
+      const siiDataParams = new URLSearchParams({ organization: orgId, _startRow: '0', _endRow: '9999' });
+      let exportMotivoMap = {};
+      try {
+        const siiRes = await apiFetch(`/${SII_SPEC}/${encodeURIComponent(siiDataEntity)}?${siiDataParams}`);
+        if (siiRes.ok) {
+          const siiJson = await siiRes.json();
+          exportMotivoMap = pickMostRecentMotivo(siiJson?.response?.data ?? []);
+        }
+      } catch {
+        // Non-fatal: export proceeds with the header-only Error column.
+      }
       await fetchCsvAndDownload(
         apiFetch,
         `/${SII_SPEC}/${encodeURIComponent(SUBTAB_ENTITIES[entityKey])}`,
         { parentId },
         `sii_${tab}_${period}`,
-        SII_EXPORT_COLS,
+        buildSiiExportCols(exportMotivoMap),
       );
     } finally {
       setExporting(false);

@@ -177,12 +177,12 @@ describe('SiiMonitorSection — CSV export wiring', () => {
     assert.match(src, /fetchCsvAndDownload.*from.*FmPrimitives/);
   });
 
-  it('declares SII_EXPORT_COLS constant', () => {
-    assert.match(src, /const SII_EXPORT_COLS/);
+  it('declares buildSiiExportCols function', () => {
+    assert.match(src, /function buildSiiExportCols\(motivoMap\)/);
   });
 
-  it('SII_EXPORT_COLS is an array with at least one column definition', () => {
-    assert.match(src, /SII_EXPORT_COLS\s*=\s*\[/);
+  it('buildSiiExportCols returns an array with at least one column definition', () => {
+    assert.match(src, /buildSiiExportCols\(motivoMap\)\s*\{\s*return\s*\[/);
   });
 
   it('declares exporting state with useState', () => {
@@ -197,7 +197,22 @@ describe('SiiMonitorSection — CSV export wiring', () => {
     assert.match(src, /disabled=\{loading \|\| exporting\}/);
   });
 
-  it('handleExport calls fetchCsvAndDownload with SII_EXPORT_COLS', () => {
-    assert.match(src, /fetchCsvAndDownload[\s\S]*?SII_EXPORT_COLS/);
+  it('handleExport calls fetchCsvAndDownload with buildSiiExportCols(exportMotivoMap)', () => {
+    assert.match(src, /fetchCsvAndDownload[\s\S]*?buildSiiExportCols\(exportMotivoMap\)/);
+  });
+
+  // Guards ETP-4784 correction #3: export must not silently drop the motivo
+  // fallback — it re-fetches the SiiData entity and reuses pickMostRecentMotivo,
+  // the same helper the on-screen column fallback uses.
+  it('handleExport fetches the SiiData entity before building export cols', () => {
+    assert.match(src, /handleExport[\s\S]*?SUBTAB_SII_DATA_ENTITIES\[entityKey\][\s\S]*?fetchCsvAndDownload/);
+  });
+
+  it('handleExport reuses pickMostRecentMotivo to build the export fallback map', () => {
+    assert.match(src, /handleExport[\s\S]*?pickMostRecentMotivo\(/);
+  });
+
+  it('the exported Error column falls back to motivoMap when header msg is empty', () => {
+    assert.match(src, /aeatsiiErrorMsg \|\| motivoMap\[r\.id\] \|\| ''/);
   });
 });
