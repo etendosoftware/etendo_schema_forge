@@ -19,6 +19,7 @@ import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -156,7 +157,7 @@ function applyLocalSearch(rows, filters, searchQuery) {
 // component state — so exporting adds no coupling.
 export async function runInlineToggleRequest({
   apiBaseUrl, entity, row, col, token, checked,
-  toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated,
+  toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated, ui,
 }) {
   setOptimisticToggles(prev => ({ ...prev, [toggleKey]: checked }));
   setSavingToggles(prev => ({ ...prev, [toggleKey]: true }));
@@ -169,7 +170,10 @@ export async function runInlineToggleRequest({
       },
       body: JSON.stringify({ [col.key]: checked }),
     });
-    if (!res.ok) throw new Error(`Error ${res.status}`);
+    if (!res.ok) {
+      const raw = await parseBackendErrorMessage(res);
+      throw new Error(translateBackendError(raw ?? `Error ${res.status}`, ui));
+    }
     onDataMutated?.();
   } catch (error) {
     setOptimisticToggles(prev => {
@@ -2038,9 +2042,9 @@ export function DataTable({
     await runInlineToggleRequest({
       apiBaseUrl, entity, row, col, token, checked,
       toggleKey: `${row.id}:${col.key}`,
-      setOptimisticToggles, setSavingToggles, onDataMutated,
+      setOptimisticToggles, setSavingToggles, onDataMutated, ui,
     });
-  }, [apiBaseUrl, entity, onDataMutated, token]);
+  }, [apiBaseUrl, entity, onDataMutated, token, ui]);
 
   const renderCellValue = (row, col) => {
     if (typeof col.render === 'function') return col.render(row, { entity, token, apiBaseUrl });

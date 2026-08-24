@@ -20190,6 +20190,8 @@
     "backendError.cashCloseLineInClosedPeriod": "El movimiento «{movement}» tiene fecha contable en un periodo cerrado. Reabre ese periodo o desmarca el movimiento antes de confirmar el cierre.",
     "backendError.cashCloseHasBankStatementLines": "Esta conciliación ya tiene líneas de extracto bancario asociadas. Un cierre de caja y una conciliación bancaria no pueden compartir el mismo documento.",
     "backendError.cashCloseOnlyForCashAccount": "El cierre de caja solo está disponible para cuentas de tipo Caja.",
+    "backendError.cannotDeactivateOwnAccount": "No puede desactivar su propia cuenta de usuario.",
+    "backendError.cannotDeactivateLastAdmin": "No se puede desactivar al último administrador activo de este cliente.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",

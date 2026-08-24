@@ -19943,6 +19943,8 @@
     "backendError.cashCloseLineInClosedPeriod": "The movement “{movement}” has an accounting date in a closed period. Reopen that period or unmark the movement before confirming the close.",
     "backendError.cashCloseHasBankStatementLines": "This reconciliation already has bank-statement lines linked to it. A cash close and a bank reconciliation cannot share the same document.",
     "backendError.cashCloseOnlyForCashAccount": "Cash close is only available for cash-type financial accounts.",
+    "backendError.cannotDeactivateOwnAccount": "You cannot deactivate your own user account.",
+    "backendError.cannotDeactivateLastAdmin": "Cannot deactivate the last active administrator for this client.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",

@@ -62,6 +62,7 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
       setOptimisticToggles,
       setSavingToggles,
       onDataMutated: onRefresh,
+      ui,
     }).catch((err) => {
       console.error('Failed to toggle user active status:', err);
     });
