@@ -26,6 +26,10 @@
  * formatCurrency.js's own test suite) can't load at all. `detectBaseUrl` is a
  * two-line check, so it's inlined here instead of shared.
  */
+// Safe under plain `node --test` despite the caveat above: sessionHeaders.js only
+// re-exports the credential builders from app-shell-core's `sessionCredentials`
+// LEAF, which is JSX-free and published as its own subpath for exactly this reason.
+import { readCredentialHeaders } from './sessionHeaders.js';
 
 function detectBaseUrl() {
   if (typeof window === 'undefined') return '';
@@ -81,7 +85,15 @@ export function isCurrencySymbolRightSide(currencyCode) {
 export function fetchCurrencyFormatConfig() {
   if (fetchPromise) return fetchPromise;
 
-  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`)
+  // ETP-4576 — this went out bare: no credential and not even `credentials`, so it
+  // depended on same-origin cookie defaults and sent nothing identifying under the
+  // bearer scheme. A 401 here is silent by design (the catch below falls back to
+  // the built-in separators), so the symptom is amounts formatted with the wrong
+  // thousands/decimal marks rather than an error anyone would notice.
+  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`, {
+    credentials: 'include',
+    headers: readCredentialHeaders(),
+  })
     .then((res) => {
       if (!res.ok) throw new Error(`currency-format fetch failed: ${res.status}`);
       return res.json();

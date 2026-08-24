@@ -6,6 +6,7 @@ import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 // From the `sessionCredentials` leaf, not the `./auth` barrel — the barrel
 // re-exports AuthContext.jsx and drags JSX into every graph that reaches it.
 import { CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
+import { readCredentialHeaders } from './lib/sessionHeaders.js';
 import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 import AppLayout from './layout/AppLayout.jsx';
@@ -78,9 +79,16 @@ export async function fetchWindowAccess(session) {
     // class javadoc in com.etendoerp.go for the full rationale. Same backend
     // Java class (SFWindowAccessMap) and response shape either way, only the
     // transport changed.
+    // ETP-4576 — headers, not just the cookie. This sent NO credential at all: it
+    // authenticated by accident, because the browser attaches the `__Host-` session
+    // on its own. Under the bearer scheme nothing identified the caller, the map
+    // came back 401, and this function's fail-closed `null` left AuthProvider's
+    // windowAccess at `{}` — which WindowAccessGuard reads as "no access" and uses
+    // to blank every generated window. Silent, and total.
     const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
       method: 'GET',
       credentials: 'include',
+      headers: readCredentialHeaders(),
     });
     if (!res.ok) return null;
     const data = await res.json();

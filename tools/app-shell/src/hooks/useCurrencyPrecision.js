@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
+import { readCredentialHeaders } from '../lib/sessionHeaders.js';
 
 /**
  * Returns the org currency's Standard Precision from the /sws/neo/session endpoint.
@@ -20,8 +21,13 @@ export function useCurrencyPrecision() {
     const apiBase = getApiBase();
     (async () => {
       try {
+        // ETP-4576 — the cookie alone is not the credential contract. Without
+        // headers this identified no one under the bearer scheme, the session read
+        // 401'd, and the hook fell back to a precision of 2 — a wrong number of
+        // decimals on every amount, with nothing logged.
         const res = await fetch(`${apiBase}/sws/neo/session`, {
           credentials: 'include',
+          headers: readCredentialHeaders(),
         });
         if (cancelled || !res.ok) return;
         const json = await res.json();

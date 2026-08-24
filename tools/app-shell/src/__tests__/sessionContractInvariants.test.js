@@ -297,6 +297,77 @@ const G3_DEBT = new Set([
 
 const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;
 
+/**
+ * G4's detector: backend requests that carry NO credential at all.
+ *
+ * This is the gap G1-G3 leave open, and it is not hypothetical — it is how two
+ * live bugs survived the whole sweep. G1 looks for a hand-built Authorization,
+ * G2 for a `!token` gate, G3 for an unsafe method missing the write proof. A GET
+ * that simply passes no headers matches none of them, so `useCsvExport` and
+ * `useDashboardData`'s fetchWidget sat there sending nothing: authenticated by
+ * accident under `cookie` (the browser attaches the `__Host-` session on its own)
+ * and 401 under `bearer`. Both failed SILENTLY — one returned an empty export,
+ * the other swallowed the error and rendered a zeroed dashboard.
+ *
+ * Lenient by construction, like G3: when the headers come from an identifier this
+ * resolves it in-file and accepts anything credential-bearing, and when it CANNOT
+ * resolve it (a prop, a hook result) it stays quiet. A hand-built bearer counts as
+ * a credential here on purpose — it is wrong, but it is G1's wrong, not G4's.
+ */
+const CREDENTIAL = /jsonHeaders|writeHeaders|readCredentialHeaders|writeCredentialHeaders|credentialHeaders|buildWriteHeaders|Authorization|X-Go-CSRF/;
+const BACKEND_URL = /\/sws\/|apiBase|apiBaseUrl|API_BASE/;
+
+/**
+ * Endpoints where sending no credential is the DESIGN, not an oversight:
+ *
+ *  - `/sws/go/session` GET is the cookie-session restore. Its whole point is that
+ *    the `__Host-` cookie is the only credential; a bearer there would defeat it.
+ *  - The `company-invitations/*` pair (`resolve`, `register-and-accept`) is reached
+ *    from an emailed link by someone who is not signed in and may not even have an
+ *    account yet. The invitation token IS the credential there.
+ *
+ * Matched on the URL rather than the file so an unrelated violation in the same
+ * file still gets caught.
+ */
+const UNAUTHENTICATED_BY_DESIGN = /sws\/go\/session['"`\s)]|company-invitations\//;
+
+function credentiallessBackendSites(raw) {
+  const src = stripComments(raw);
+  const hits = [];
+  // `\bfetch\s*\(` alone also matches `spec.fetch(...)`, a method on a local
+  // object — hence the explicit "not preceded by a dot".
+  const re = /(^|[^.\w$])fetch\s*\(/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const at = m.index + m[1].length;
+    const seg = callArgs(src, at);
+    if (!BACKEND_URL.test(seg)) continue;
+    if (UNAUTHENTICATED_BY_DESIGN.test(seg)) continue;
+    if (CREDENTIAL.test(seg)) continue;
+    // A headers OBJECT LITERAL can still carry the credential through a spread
+    // (`headers: { ...authHeaders(), 'Content-Type': … }`). Resolve the spread
+    // before judging: that call site is G1's problem, not G4's.
+    const spread = seg.match(/headers\s*:\s*\{[^}]*\.\.\.\s*([A-Za-z_$][\w$]*)/);
+    if (spread) {
+      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${spread[1]}\\b[\\s\\S]{0,600}`));
+      if (!def || CREDENTIAL.test(def[0])) continue;
+    }
+    const named = seg.match(/headers\s*:\s*([A-Za-z_$][\w$]*)/)
+      || (/\bheaders\b\s*[},]/.test(seg) ? [, 'headers'] : null);
+    if (named) {
+      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${named[1]}\\b[\\s\\S]{0,600}`));
+      if (!def || CREDENTIAL.test(def[0])) continue;
+      const hop = def[0].match(/=\s*([A-Za-z_$][\w$]*)\s*\(\s*\)/);
+      if (hop) {
+        const viaHop = src.match(new RegExp(`(?:const|let|var|function)\\s+${hop[1]}\\b[\\s\\S]{0,600}`));
+        if (!viaHop || CREDENTIAL.test(viaHop[0])) continue;
+      }
+    }
+    hits.push(seg.slice(0, 80));
+  }
+  return hits;
+}
+
 describe('ETP-4576 — cookie-session invariants across app-shell source', () => {
   it('finds source files to scan (guards against a silently empty sweep)', () => {
     assert.ok(FILES.length > 300, `expected the whole tree, scanned ${FILES.length}`);
@@ -389,5 +460,20 @@ describe('ETP-4576 — cookie-session invariants across app-shell source', () =>
       .map((f) => f.rel));
     const fixed = [...G3_DEBT].filter((f) => !offenders.has(f)).sort();
     assert.deepEqual(fixed, [], `${fixed.length} file(s) now carry the proof everywhere. Delete them from G3_DEBT:\n  ${fixed.join('\n  ')}`);
+  });
+  /**
+   * G4 — every backend request carries a credential.
+   *
+   * No debt list: the sweep that introduced this rule fixed all three offenders it
+   * found (App.jsx's window-access map, useCurrencyPrecision, currencyFormatConfig),
+   * so it starts life as a completion proof rather than a ratchet. If it ever needs
+   * a list, that is a decision to make deliberately — not a default to fall into.
+   */
+  it('G4: no backend request goes out without a credential', () => {
+    const offenders = FILES
+      .filter((f) => credentiallessBackendSites(f.raw).length > 0)
+      .map((f) => f.rel)
+      .sort();
+    assert.deepEqual(offenders, [], `${offenders.length} file(s) call the backend with no credential at all. Under \`bearer\` nothing identifies the caller and the request 401s — usually silently. Pass readCredentialHeaders() (safe methods) or writeHeaders() (unsafe ones):\n  ${offenders.join('\n  ')}`);
   });
 });
