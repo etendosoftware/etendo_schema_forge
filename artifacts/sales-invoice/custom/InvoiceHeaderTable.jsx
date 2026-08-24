@@ -31,6 +31,16 @@ function fmtAmt(val, currency) {
 
 const FILTERS = ['documentNo', 'invoiceDate', 'businessPartner'];
 
+// ETP-4833: shared base style for every inline-flex badge/button rendered by
+// this file (credit-applied, credit-available, paid, pending-payment). Without
+// `whiteSpace: 'nowrap'` a two-word label (e.g. "Factura Rectificativa") or a
+// "Saldo a favor · X €" amount wraps onto a second line whenever the grid's
+// column width shrinks (e.g. on scroll-triggered column recalculation).
+// `flexShrink: 0` stops the flex container itself from being squeezed
+// narrower than its content, which is what allows the wrap to happen in the
+// first place. Mirrors purchase-invoice's NOWRAP_FLEX (PurchaseInvoiceHeaderTable.jsx).
+const NOWRAP_FLEX = { whiteSpace: 'nowrap', flexShrink: 0 };
+
 // ─── Component ──────────────────────────────────────────────────
 
 export default function InvoiceHeaderTable(props) {
@@ -98,7 +108,10 @@ export default function InvoiceHeaderTable(props) {
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{ color: cfg.color, backgroundColor: cfg.bg }}
+              // ETP-4833: `inline-block` alone doesn't stop text from wrapping
+              // once the column narrows below the label's width — a two-word
+              // doc type ("Factura Rectificativa") needs an explicit nowrap.
+              style={{ color: cfg.color, backgroundColor: cfg.bg, whiteSpace: 'nowrap' }}
             >
               {cfg.label}
             </span>
@@ -156,7 +169,7 @@ export default function InvoiceHeaderTable(props) {
           if (badge.kind === 'draft') return <span className="text-muted-foreground">—</span>;
           if (badge.kind === 'credit-applied') {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+              <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12}/>{ui('cpCreditFullyApplied')}
               </span>
             );
@@ -170,7 +183,7 @@ export default function InvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
                 {ui('cpFavorBadge')} · {fmtAmt(badge.amount, currency)}
@@ -179,7 +192,7 @@ export default function InvoiceHeaderTable(props) {
           }
           if (badge.kind === 'paid') {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+              <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12}/>{t('cobrada')}
               </span>
             );
@@ -189,7 +202,7 @@ export default function InvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addCobro')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {fmtAmt(badge.amount, currency)}
