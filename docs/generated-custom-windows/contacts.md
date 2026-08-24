@@ -485,3 +485,40 @@ change on top of the already-working part 2/3 wiring; the underlying fields, the
 `fiscalDefaults.utils.vitest.js` covering `useSiiTbaiActive`'s active/inactive/fail-safe
 paths, and the rewritten `FiscalDefaultsSection.vitest.jsx` covering all 4 combinations of
 SII/TicketBAI active plus the toggle wiring).
+
+## ETP-4784 (part 4) — Detection simplified to a single `AD_OrgInfo` read
+
+Part 3's `useSiiTbaiActive` inferred SII/TicketBAI activation by fetching and filtering the
+`sii-config`/`tbai-config` lists (two calls, `isActiveRecord()` trace-row filtering). Human
+feedback: `AD_OrgInfo` already carries 3 server-maintained Y/N flags per organization —
+`EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`, `EM_Etsg_Has_Vfactu_Config` — so the whole
+detection collapses to **one `getById` call**, no filtering needed.
+
+**Backend side (see `docs/generated-custom-windows/organization.md`):** the 3 flags were
+exposed as `system`-visibility fields on the `organization` spec's `information` entity
+(`AD_OrgInfo`, 1:1 by `AD_Org_ID`) — previously `discarded`. `system` keeps them out of the
+auto-generated Organization form while making them available on the backend contract/API.
+
+**`useSiiTbaiActive(organizationId, apiBaseUrl)` rewritten** in
+`tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js`: a single
+`GET {apiBase}/organizaci-n/information/{organizationId}` (note: the `organization` spec's
+real kebab-cased name is `organizaci-n` — the kebab-caser trips on "Organización"'s accents;
+always read `apiPrediction.specName`/`baseUrl` off `artifacts/organization/contract.json`
+rather than assuming). Resolves `{ loading, sii, tbai, vfactuActive }`:
+- `sii` = `isEtendoTrue(response.etsgHasSIIConfig)`
+- `tbai` = `isEtendoTrue(response.etsgHasTbaiConfig)`
+- `vfactuActive` = `isEtendoTrue(response.etsgHasVfactuConfig)` — exposed for a future
+  Verifactu block, **not yet consumed** by `FiscalDefaultsSection.jsx` (out of scope here).
+
+Same fail-safe contract as before: any fetch rejection, non-ok response (404 — org info not
+found / module not installed), or falsy `organizationId` degrades to
+`{ sii: false, tbai: false, vfactuActive: false }`, hiding both blocks rather than risking
+stale/incorrect defaults. `isActiveRecord()` and the `sii-config`/`tbai-config` fetch/filter
+logic were removed from `fiscalDefaults.utils.js` — no longer needed (the Y/N flags are
+already the "is it active" answer, no trace-row filtering required). `FiscalDefaultsSection.jsx`
+itself needed no changes: it only reads `loading/sii/tbai` off the hook, same shape as before.
+
+Verified with `npx vitest run src/windows/custom/contacts` — `fiscalDefaults.utils.vitest.js`
+rewritten to mock the single `organizaci-n/information/{id}` call (covers both active, only
+SII, only TBAI, neither, fetch rejection, and 404); `FiscalDefaultsSection.vitest.jsx` mocks
+`useSiiTbaiActive` directly and required no behavioral changes.

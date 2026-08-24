@@ -29,8 +29,10 @@ function findFieldsCall(fieldKey) {
   );
 }
 
-function mockActive({ loading = false, sii = false, tbai = false } = {}) {
-  vi.mocked(useSiiTbaiActive).mockReturnValue({ loading, sii, tbai });
+function mockActive({ loading = false, sii = false, tbai = false, vfactuActive = false } = {}) {
+  // vfactuActive is returned by the hook (ETP-4784 follow-up) but not yet
+  // consumed by FiscalDefaultsSection — included here for shape parity only.
+  vi.mocked(useSiiTbaiActive).mockReturnValue({ loading, sii, tbai, vfactuActive });
 }
 
 describe('FiscalDefaultsSection', () => {

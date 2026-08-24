@@ -1,6 +1,12 @@
 /**
- * Tests for useSiiTbaiActive (ETP-4784) — SII / TicketBAI active-config
- * detection for FiscalDefaultsSection, plus resolveOrganizationId.
+ * Tests for useSiiTbaiActive (ETP-4784) — SII / TicketBAI / Verifactu
+ * active-config detection for FiscalDefaultsSection, plus resolveOrganizationId.
+ *
+ * As of the follow-up simplification, the hook does a SINGLE GET to
+ * `/organizaci-n/information/{orgId}` and reads the 3 server-maintained
+ * `AD_OrgInfo` flags (`etsgHasSIIConfig` / `etsgHasTbaiConfig` /
+ * `etsgHasVfactuConfig`) instead of fetching+filtering the sii-config/
+ * tbai-config lists.
  */
 import { renderHook, waitFor } from '@testing-library/react';
 
@@ -15,8 +21,8 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 
 import { useSiiTbaiActive, resolveOrganizationId } from '../fiscalDefaults.utils.js';
 
-function ok(rows) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: rows } }) });
+function ok(data) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
 }
 function fail(status = 404) {
   return Promise.resolve({ ok: false, status, json: () => Promise.resolve({}) });
@@ -40,74 +46,69 @@ describe('useSiiTbaiActive', () => {
     vi.clearAllMocks();
   });
 
-  it('resolves loading:false, sii:false, tbai:false when organizationId is falsy', async () => {
+  it('resolves loading:false, sii:false, tbai:false, vfactuActive:false when organizationId is falsy, without fetching', async () => {
     const { result } = renderHook(() => useSiiTbaiActive(null, '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current).toEqual({ loading: false, sii: false, tbai: false });
+    expect(result.current).toEqual({ loading: false, sii: false, tbai: false, vfactuActive: false });
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
-  it('resolves sii:true when an active siiConfiguration record has acogidaAlSII truthy', async () => {
-    mockApiFetch.mockImplementation((url) => {
-      if (url.includes('sii-config')) return ok([{ active: true, acogidaAlSII: true }]);
-      return ok([]);
-    });
+  it('calls the single organization-info endpoint for the given orgId', async () => {
+    mockApiFetch.mockImplementation(() => ok({}));
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.sii).toBe(true);
-    expect(result.current.tbai).toBe(false);
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      '/organizaci-n/information/org-1',
+      expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/json' }) }),
+    );
   });
 
-  it('resolves sii:false when the siiConfiguration record has acogidaAlSII falsy', async () => {
-    mockApiFetch.mockImplementation((url) => {
-      if (url.includes('sii-config')) return ok([{ active: true, acogidaAlSII: false }]);
-      return ok([]);
-    });
+  it('resolves sii:true, tbai:true, vfactuActive:true when all three flags are truthy', async () => {
+    mockApiFetch.mockImplementation(() =>
+      ok({ etsgHasSIIConfig: true, etsgHasTbaiConfig: true, etsgHasVfactuConfig: true }),
+    );
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.sii).toBe(false);
+    expect(result.current).toEqual({ loading: false, sii: true, tbai: true, vfactuActive: true });
   });
 
-  it('ignores an inactive siiConfiguration record in favor of an active one', async () => {
-    mockApiFetch.mockImplementation((url) => {
-      if (url.includes('sii-config')) {
-        return ok([{ active: false, acogidaAlSII: true }, { active: true, acogidaAlSII: false }]);
-      }
-      return ok([]);
-    });
+  it('resolves only sii:true when just etsgHasSIIConfig is truthy (string "Y")', async () => {
+    mockApiFetch.mockImplementation(() =>
+      ok({ etsgHasSIIConfig: 'Y', etsgHasTbaiConfig: false, etsgHasVfactuConfig: 'N' }),
+    );
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.sii).toBe(false);
+    expect(result.current).toEqual({ loading: false, sii: true, tbai: false, vfactuActive: false });
   });
 
-  it('resolves tbai:true from the mere existence of an active tbai-config/header record', async () => {
-    mockApiFetch.mockImplementation((url) => {
-      if (url.includes('tbai-config')) return ok([{ active: true }]);
-      return ok([]);
-    });
+  it('resolves only tbai:true when just etsgHasTbaiConfig is truthy', async () => {
+    mockApiFetch.mockImplementation(() =>
+      ok({ etsgHasSIIConfig: false, etsgHasTbaiConfig: true, etsgHasVfactuConfig: false }),
+    );
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.tbai).toBe(true);
+    expect(result.current).toEqual({ loading: false, sii: false, tbai: true, vfactuActive: false });
   });
 
-  it('resolves tbai:false when there is no tbai-config record', async () => {
-    mockApiFetch.mockImplementation(() => ok([]));
+  it('resolves sii:false, tbai:false, vfactuActive:false when all three flags are falsy/absent', async () => {
+    mockApiFetch.mockImplementation(() => ok({}));
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.tbai).toBe(false);
+    expect(result.current).toEqual({ loading: false, sii: false, tbai: false, vfactuActive: false });
   });
 
-  it('fail-safe: degrades to sii:false, tbai:false on a fetch rejection', async () => {
+  it('fail-safe: degrades to sii:false, tbai:false, vfactuActive:false on a fetch rejection (network error)', async () => {
     mockApiFetch.mockRejectedValue(new Error('network down'));
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current).toEqual({ loading: false, sii: false, tbai: false });
+    expect(result.current).toEqual({ loading: false, sii: false, tbai: false, vfactuActive: false });
   });
 
   it('fail-safe: degrades to false on a non-ok response (e.g. 404, module not installed)', async () => {
     mockApiFetch.mockImplementation(() => fail(404));
     const { result } = renderHook(() => useSiiTbaiActive('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current).toEqual({ loading: false, sii: false, tbai: false });
+    expect(result.current).toEqual({ loading: false, sii: false, tbai: false, vfactuActive: false });
   });
 });

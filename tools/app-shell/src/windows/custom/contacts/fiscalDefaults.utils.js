@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { isActiveRecord, isEtendoTrue } from '../fiscal-config/fiscalConfig.utils.js';
+import { isEtendoTrue } from '../fiscal-config/fiscalConfig.utils.js';
 
-// ── Config entity names (same fiscal-config specs used by the Monitor Fiscal
-// / Fiscal Config windows — see useFiscalMonitor.js / fiscalConfig.utils.js) ──
-const SII_CFG_SPEC = 'sii-config';
-const SII_CFG_ENTITY = 'siiConfiguration';
-const TBAI_CFG_SPEC = 'tbai-config';
-const TBAI_CFG_ENTITY = 'header';
+// ── Organization info spec/entity (ETP-4784) ────────────────────────────────
+// `AD_OrgInfo` already carries 3 server-maintained Y/N flags — no need to
+// fetch+filter sii-config/tbai-config lists to infer whether SII/TicketBAI
+// apply to a Business Partner's organization, a single getById does it.
+// NOTE: the spec's real kebab-cased name is `organizaci-n` (the kebab-caser
+// trips on "Organización"'s accents) — see artifacts/organization/contract.json
+// (apiPrediction.specName / baseUrl), not `organization`.
+const ORG_INFO_SPEC = 'organizaci-n';
+const ORG_INFO_ENTITY = 'information';
 
 /**
  * Resolves a Business Partner FK-style field (raw UUID, `{id}` object, or
@@ -23,18 +26,13 @@ export function resolveOrganizationId(value) {
   return String(value);
 }
 
-async function fetchActiveConfigRecord(apiFetch, spec, entity, orgId) {
+async function fetchOrganizationInfo(apiFetch, orgId) {
   try {
-    // NEO reads with NO_ACTIVE_FILTER=true; prefer the active row so a
-    // deactivated ("Change SIF") trace row never masks a live config —
-    // same pattern as fetchConfigRecord() in useFiscalMonitor.js.
-    const url = `/${spec}/${encodeURIComponent(entity)}?${new URLSearchParams({ organization: orgId, _limit: '10' })}`;
+    const url = `/${ORG_INFO_SPEC}/${ORG_INFO_ENTITY}/${encodeURIComponent(orgId)}`;
     const res = await apiFetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) return null;
     const body = await res.json();
-    const rows = body?.response?.data ?? [];
-    if (rows.length === 0) return null;
-    return rows.find(isActiveRecord) ?? rows[0];
+    return body?.response?.data ?? null;
   } catch {
     // Network error / 404 (spec not installed for this org) → not configured.
     return null;
@@ -44,45 +42,44 @@ async function fetchActiveConfigRecord(apiFetch, spec, entity, orgId) {
 /**
  * Detects whether SII and/or TicketBAI are actively configured for the given
  * Business Partner organization, so `FiscalDefaultsSection` can show only
- * the sub-block(s) that apply.
+ * the sub-block(s) that apply. Reads the 3 server-maintained flags off
+ * `AD_OrgInfo` (`organizaci-n/information/{orgId}`) instead of fetching and
+ * filtering the `sii-config`/`tbai-config` lists.
  *
- * - SII "active": an active `sii-config/siiConfiguration` record exists for
- *   the org AND its `acogidaAlSII` flag is truthy.
- * - TicketBAI "active": the mere EXISTENCE of an active `tbai-config/header`
- *   record for the org — there is no boolean flag, presence is the signal.
+ * - SII "active": `etsgHasSIIConfig` is truthy.
+ * - TicketBAI "active": `etsgHasTbaiConfig` is truthy.
+ * - `vfactuActive` (`etsgHasVfactuConfig`) is exposed too for a future
+ *   Verifactu block — not consumed by `FiscalDefaultsSection` yet.
  *
- * Fail-safe: any fetch error, missing connectivity, or 404 (module not
- * installed) degrades to `false` for that system — hide the block rather
- * than show broken or incorrect data, mirroring the non-fatal degradation
- * pattern already used by `useFiscalMonitor.js`.
+ * Fail-safe: any fetch error, missing connectivity, or 404 (record not found
+ * / module not installed) degrades to `false` for every system — hide the
+ * blocks rather than show broken or incorrect data.
  */
 export function useSiiTbaiActive(organizationId, apiBaseUrl) {
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
-  const [state, setState] = useState({ loading: true, sii: false, tbai: false });
+  const [state, setState] = useState({ loading: true, sii: false, tbai: false, vfactuActive: false });
 
   useEffect(() => {
     let cancelled = false;
 
     if (!organizationId) {
-      setState({ loading: false, sii: false, tbai: false });
+      setState({ loading: false, sii: false, tbai: false, vfactuActive: false });
       return undefined;
     }
 
     setState((s) => ({ ...s, loading: true }));
 
     (async () => {
-      const [siiRecord, tbaiRecord] = await Promise.all([
-        fetchActiveConfigRecord(apiFetch, SII_CFG_SPEC, SII_CFG_ENTITY, organizationId),
-        fetchActiveConfigRecord(apiFetch, TBAI_CFG_SPEC, TBAI_CFG_ENTITY, organizationId),
-      ]);
+      const info = await fetchOrganizationInfo(apiFetch, organizationId);
       if (cancelled) return;
       setState({
         loading: false,
-        sii: !!siiRecord && isEtendoTrue(siiRecord.acogidaAlSII),
-        tbai: !!tbaiRecord,
+        sii: isEtendoTrue(info?.etsgHasSIIConfig),
+        tbai: isEtendoTrue(info?.etsgHasTbaiConfig),
+        vfactuActive: isEtendoTrue(info?.etsgHasVfactuConfig),
       });
     })().catch(() => {
-      if (!cancelled) setState({ loading: false, sii: false, tbai: false });
+      if (!cancelled) setState({ loading: false, sii: false, tbai: false, vfactuActive: false });
     });
 
     return () => {
