@@ -1,18 +1,22 @@
 import { renderHook, act } from '@testing-library/react';
 
-const { toast, connect, fetchAccounts, link, createAndLink, launchSaltEdgePopup } = vi.hoisted(() => ({
+const { toast, connect, fetchAccounts, link, createAndLink, launchSaltEdgePopup, uiMock } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   connect: vi.fn(),
   fetchAccounts: vi.fn(),
   link: vi.fn(),
   createAndLink: vi.fn(),
   launchSaltEdgePopup: vi.fn(),
+  // Echoes the key by default (same as every other test in this file expects); a single test
+  // below overrides this to prove the ETP-4891 translateBackendError wiring actually threads `ui`
+  // through, instead of just asserting the pre-existing "unmapped string passes through" case.
+  uiMock: vi.fn((key) => key),
 }));
 
 vi.mock('sonner', () => ({ toast }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => uiMock,
 }));
 
 vi.mock('../useBankConnectionActions', () => ({
@@ -24,6 +28,7 @@ import { useBankConnectionFlow } from '../useBankConnectionFlow';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  uiMock.mockImplementation((key) => key);
 });
 
 describe('useBankConnectionFlow — initial state', () => {
@@ -228,6 +233,31 @@ describe('useBankConnectionFlow — confirmSelection (link mode)', () => {
 
     expect(toast.warning).toHaveBeenCalledWith('partial import');
     expect(toast.success).toHaveBeenCalledWith('financeAccountsBankConnectionSuccess');
+  });
+
+  // ETP-4891 follow-up: com.etendoerp.psd2's AD_MESSAGE for this warning has no real es_ES
+  // translation (Core resolves the same English text regardless of session locale — see
+  // backendErrors.js), so the raw backend warning must be run through translateBackendError
+  // before it reaches the toast, not passed straight through like an unmapped string.
+  it('translates the PSD2 IBAN-autofill warning before toasting it', async () => {
+    uiMock.mockImplementation((key, params) => (key === 'backendError.ibanAutoFillFailed'
+      ? `No se pudo establecer el IBAN automáticamente (${params.iban}). Introduce el IBAN manualmente en la cuenta financiera.`
+      : key));
+    link.mockResolvedValue({
+      warning: 'IBAN could not be set automatically (DE89370400440532013000). '
+        + 'Please enter it manually in the Financial Account.',
+    });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await openSelection(result);
+
+    await act(async () => {
+      await result.current.confirmSelection('se1');
+    });
+
+    expect(toast.warning).toHaveBeenCalledWith(
+      'No se pudo establecer el IBAN automáticamente (DE89370400440532013000). '
+        + 'Introduce el IBAN manualmente en la cuenta financiera.',
+    );
   });
 
   it('shows an error toast when link fails', async () => {

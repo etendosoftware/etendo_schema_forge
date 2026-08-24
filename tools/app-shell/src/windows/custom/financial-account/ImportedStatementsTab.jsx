@@ -1,6 +1,7 @@
 import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
@@ -106,7 +107,10 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     try {
       const res = await sync(accountId);
       reload();
-      const msg = res?.message;
+      // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
+      // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
+      // through the same frontend translation map every other untranslated backend message uses.
+      const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
       if (res?.status === 'ERROR') {
         toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
       } else if (res?.status === 'WARNING') {

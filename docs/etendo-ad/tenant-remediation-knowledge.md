@@ -427,6 +427,47 @@
 
 ---
 
+## Imported Bank Statement "Estado" stuck at Borrador after PSD2 sync — R25 (L1)
+
+- **2026-08-24 — `EM_ETGO_STATUS` only ever got recomputed by CODE WE CONTROL, never by a header-level
+  observer.** `BankStatementAggregates.apply()` derives the SPA's "Estado" column from `(Processed,
+  lineCount, matchedCount)`, but until today it was only ever CALLED from `BankStatementsHandler`'s
+  own create/process/reactivate flows and from `BankStatementLineAggregateHandler` (fires on LINE
+  changes). A statement imported through the PSD2 bank-connection sync
+  (`SaltEdgeAccountLinkHelper#fetchAccountTransactions`, external `com.etendoerp.psd2` module) never
+  touches either: its LINES still get counted correctly (the per-line observer fires for each insert,
+  since the external sync's bulk insert isn't wrapped in our `suppress()`), but at that instant
+  `Processed` is still `'N'`, so the status the line events compute — correctly, for that moment — is
+  `DRAFT`. The sync then flips `Processed` to `'Y'` directly on the header, and nothing re-derives the
+  status afterward, since no LINE event fires for a header-only column change. **Apply:** when adding
+  an aggregate/derived column, audit every code path that can flip the fields it depends on — not just
+  the ones inside your own module's handlers. An external module writing directly to a shared entity
+  is exactly the blind spot a per-field-change (not per-write-flow) observer exists to catch.
+- **2026-08-24 — User-visible symptom chain, confirmed live.** GO's list showed "Borrador" for a
+  statement whose Core `Processed` flag was actually `'Y'` (confirmed in Classic and via direct DB
+  read). Clicking "Procesar" in GO then failed with a 400: `"Only draft (unprocessed) statements can be
+  modified"` — the backend guard (`BankStatementsHandler.requireDraft`) is CORRECT (it reads the real
+  flag, already true) but reads as a contradiction to a user trusting the "Borrador" label. **Apply:**
+  a stale display column doesn't just mislead — it can make a correct backend rejection look like a
+  bug, generating a support round-trip for something that was never broken server-side.
+- **2026-08-24 — Fix is a NEW `FIN_BankStatement` NEW/UPDATE observer, not a change to the existing
+  line observer.** `BankStatementHeaderStatusHandler` mirrors
+  `BankStatementLinePendingAmountHandler`'s technique exactly: write the derived value onto the
+  in-flight event state via `event.setCurrentState(...)`, never call `recompute()`+`save()` on the same
+  entity being observed (that WOULD re-trigger the same `EntityUpdateEvent`, since — unlike the line
+  observer, which saves a DIFFERENT entity, the parent statement — this one's target IS the statement
+  being saved). Safe to run unconditionally, no `suppress()` gate needed: it only reads the header's own
+  already-correct `EM_ETGO_LINE_COUNT`/`EM_ETGO_MATCHED_COUNT` (no query), so it's cheap and idempotent
+  even when it fires redundantly during our own `recompute()`-triggered saves.
+- **2026-08-24 — Live sweep found 5 stuck statements, all on GOClient, all `PENDING` (0 matched
+  lines).** `R25-bankstatement-stale-status` repairs them: one guarded `UPDATE`, `IS DISTINCT FROM`
+  against the same derivation formula so a re-run is a no-op. Deliberately does NOT join
+  `fin_bankstatementline` — the header's own stored counters were never wrong, only `EM_ETGO_STATUS`
+  itself was stale. New gap-label series `L` (runtime aggregate-consistency drift) — not a
+  provisioning gap, so it doesn't fit A–K; noted in the map §L1.
+
+---
+
 ## Org type / period-control gate (ad_org_trg) — R3 in-place amendment (C1-pre)
 
 - **2026-07-14 — `@OrgTypeDoesNotAllowPeriodControl@` comes from core trigger `ad_org_trg`, gated ONLY on org-type flags (no acctschema requirement).** Verified via `pg_get_functiondef` on staging: on INSERT/UPDATE, when `new.ISPERIODCONTROLALLOWED='Y'`, it counts `ad_orgtype` rows for `new.AD_ORGTYPE_ID` where `ISBUSINESSUNIT='Y' OR (ISLEGALENTITY='Y' AND ISACCTLEGALENTITY='Y')`; if 0, it raises. So R3's final `UPDATE ad_org SET isperiodcontrolallowed='Y'` fails whenever the operative org's type does not allow period control. **Apply:** to unblock R3, the org's `ad_orgtype_id` must satisfy that flag condition — nothing else (no C_ACCTSCHEMA, no link) is checked by the trigger.
