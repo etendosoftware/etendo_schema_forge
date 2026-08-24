@@ -367,6 +367,16 @@ function extractSaveError(json, ui) {
     || ui('cpSaveFailed');
 }
 
+/**
+ * True when a confirm must be refused client-side regardless of the (already-disabled) Confirm
+ * button: a transfer aimed at an account whose PSD2 connection is inactive (ETP-4891). A draft
+ * save is never blocked — it moves no money. Extracted so `submit`'s own guard is a single-term
+ * `if`, keeping the function's cognitive complexity down (javascript:S3776).
+ */
+function blocksPsd2Confirm(psd2Blocked, process) {
+  return psd2Blocked && process === 'confirm';
+}
+
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
@@ -1379,7 +1389,7 @@ export default function NewPaymentEntryModal({
     // The Confirm button is already disabled here, but a confirm must never depend on the button
     // alone: it would hand a payment to a bank channel that is switched off (ETP-4891). A draft
     // stays allowed — it moves no money.
-    if (psd2Blocked && process === 'confirm') return;
+    if (blocksPsd2Confirm(psd2Blocked, process)) return;
     if (!date) { setDateInvalid(true); setError(ui('paymentDateRequired')); return; }
     if (!scheduleId) { setError(ui('paymentRequestFailed')); return; }
     if (!accountId) { setError(ui('paymentAccountRequired')); return; }
