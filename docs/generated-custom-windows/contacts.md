@@ -327,10 +327,13 @@ with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `Busin
 Three Classic Business Partner fields, used as **billing-time defaults** by the Etendo
 Classic AEAT SII / TicketBAI modules, are now exposed in the Go Contacts window. These are
 plain configuration values with **no callout/derivation logic of their own** on the Business
-Partner — they are only *read* later when an invoice is generated in Classic. Consuming them
-in Go's own invoicing flow (equivalent default-application logic) is explicitly **out of
-scope** for this ticket; that is separate follow-up work once/if Go grows an invoicing flow
-that needs them.
+Partner — they are only *read* later when an invoice is generated. Architecture investigation
+has **confirmed** that consumption of these defaults at invoicing time already works
+automatically in Go with no additional code: SII reads `aeatsiiDefaultsiikey`/
+`aeatsiiSiikeylist` via the existing Classic DB trigger path, and TBAI reads
+`tbaiIssimplifiedinv` via the reused Classic Java process — both fire the same way regardless
+of whether the invoice originates in Classic or Go. No follow-up ticket is needed for that
+consumption path.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
