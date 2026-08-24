@@ -21782,6 +21782,8 @@
     "taxSif.opt.verifactuNonSubject.N1": "Non-subject operation article 7, 14, others",
     "taxSif.opt.verifactuNonSubject.N2": "Non-subject operation by localization rules",
     "upgradeCheckingAccount": "Checking your account...",
+    "upgradeEnvironmentsUnavailable": "We could not load your tenants, so the option to upgrade the tenant you are in is not available right now. Continuing will create a NEW tenant.",
+    "upgradeEnvironmentsRetry": "Retry",
     "upgradeFirstTenantFreeTitle": "Your first tenant is free",
     "upgradeFirstTenantFreeBody": "You do not have a tenant yet, and the first one costs nothing. Payment only applies to additional tenants.",
     "upgradeFirstTenantFreeAction": "Create my first tenant",

@@ -22031,6 +22031,8 @@
     "taxSif.opt.verifactuNonSubject.N1": "Operación No Sujeta artículo 7, 14, otros",
     "taxSif.opt.verifactuNonSubject.N2": "Operación No Sujeta por Reglas de localización",
     "upgradeCheckingAccount": "Comprobando tu cuenta...",
+    "upgradeEnvironmentsUnavailable": "No hemos podido cargar tus entornos, así que la opción de mejorar el entorno en el que estás no está disponible ahora mismo. Si continúas se creará un entorno NUEVO.",
+    "upgradeEnvironmentsRetry": "Reintentar",
     "upgradeFirstTenantFreeTitle": "Tu primer entorno es gratuito",
     "upgradeFirstTenantFreeBody": "Todavía no tienes ningún entorno, y el primero no tiene coste. El pago solo se aplica a los entornos adicionales.",
     "upgradeFirstTenantFreeAction": "Crear mi primer entorno",
