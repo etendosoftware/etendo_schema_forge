@@ -7,6 +7,7 @@ import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import PaymentEditModalLauncher from './PaymentEditModalLauncher';
 import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
@@ -391,7 +392,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (res.ok) {
@@ -427,7 +428,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (res.ok) {

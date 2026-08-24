@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button.jsx';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -57,7 +58,7 @@ export default function ContactsWindow(props) {
     const { succeeded, failed } = await runBatchDelete(rows, (row) =>
       fetch(`${apiBaseUrl}/businessPartner/${row.id || row}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
       }).then(async (res) => {
         if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
         return row;

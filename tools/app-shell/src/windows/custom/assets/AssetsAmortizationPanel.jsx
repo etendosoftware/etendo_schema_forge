@@ -7,6 +7,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 function PeriodLink({ label, onClick }) {
   return (
@@ -103,7 +104,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     const url = `${apiBaseUrl}/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`;
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(url, { headers: readCredentialHeaders() })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -114,7 +115,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         const ids = [...new Set(normalizedRows.map(l => l.amortization).filter(Boolean))];
         return Promise.all(
           ids.map(id =>
-            fetch(`${amortBase}/header/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+            fetch(`${amortBase}/header/${id}`, { headers: readCredentialHeaders() })
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;

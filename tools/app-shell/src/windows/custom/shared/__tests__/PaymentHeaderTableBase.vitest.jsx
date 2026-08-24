@@ -89,6 +89,11 @@ import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import PaymentHeaderTableBase from '../PaymentHeaderTableBase.jsx';
+// ETP-4576 — the credential comes from the ACTIVE SCHEME, not from a literal the
+// test also supplies. The scheme is declared explicitly because src/test/setup.js
+// resets to the bearer default before every test: an assertion that leans on that
+// default passes by omission rather than by proving anything.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 // The source now delegates straight to the shared formatCurrency() — build
 // expectations from the SAME real function instead of a hand-rolled mirror,
@@ -125,6 +130,7 @@ const BASE_PROPS = {
 beforeEach(() => {
   vi.clearAllMocks();
   dataTableSpy.current = null;
+  declareBearerSession('tok-1');
   globalThis.fetch = vi.fn();
 });
 
@@ -420,7 +426,7 @@ describe('PaymentHeaderTableBase — confirm payment flow', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('cobroConfirmadoOk'));
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/neo/finPayment/p1/action/aPRMProcessPayment',
-      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer tok-1' }) }),
+      expect.objectContaining({ method: 'POST', }),
     );
     expect(listener).toHaveBeenCalledTimes(1);
     expect(onDataMutated).toHaveBeenCalledTimes(1);

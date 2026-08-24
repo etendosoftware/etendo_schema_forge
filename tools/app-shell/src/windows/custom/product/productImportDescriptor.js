@@ -1,6 +1,7 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 // The simplified Products CSV import supports: searchKey (código),
 // name (nombre), description (descripción), price (precio), and category (categoryCode/categoryName/category).
@@ -91,7 +92,7 @@ async function fetchProductDefaults(token) {
   try {
     const res = await fetch(url, {
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
     });
     if (!res.ok) return {};
     const json = await res.json().catch(() => null);
@@ -112,7 +113,7 @@ function resolveProductDefaults(token) {
 async function fetchSalesPriceListVersion(spec, token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
-  const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, { credentials: 'include', headers: readCredentialHeaders() });
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -140,7 +141,7 @@ async function fetchProductCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { credentials: 'include', headers: readCredentialHeaders() });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -180,10 +181,7 @@ registerImportDescriptor('product', async (row, config) => {
       const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.token}`,
-        },
+        headers: writeHeaders(),
         body: JSON.stringify({ searchKey, name }),
       });
       if (!res.ok) {

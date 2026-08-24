@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { aggregateProducts } from './warehouseUtils';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 const inFlightCounts = new Map();
 
@@ -11,7 +12,7 @@ async function fetchProductCount(warehouseId, token, apiBaseUrl) {
   const promise = (async () => {
     const res = await fetch(
       `${apiBaseUrl}/storageBin?parentId=${warehouseId}&_startRow=0&_endRow=100`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: readCredentialHeaders() },
     );
     if (!res.ok) return null;
     const binsJson = await res.json();
@@ -22,7 +23,7 @@ async function fetchProductCount(warehouseId, token, apiBaseUrl) {
       bins.map(b =>
         fetch(
           `${apiBaseUrl}/binContents?parentId=${b.id}&_startRow=0&_endRow=1000`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: readCredentialHeaders() },
         )
           .then(r => (r.ok ? r.json() : null))
           .then(data => data?.response?.data ?? data?.data ?? [])

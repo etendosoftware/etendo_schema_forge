@@ -4,6 +4,12 @@
  * toasts), the drag & drop dropzone, the lightbox and the blob lifecycle were
  * never exercised. This file drives those flows.
  */
+import {
+  declareBearerSession,
+  expectBearerHeader,
+  expectNoCsrfHeader,
+} from '@/test/sessionContract.js';
+
 const toastMocks = vi.hoisted(() => ({ error: vi.fn() }));
 
 vi.mock('sonner', () => ({ toast: toastMocks }));
@@ -60,6 +66,14 @@ describe('ImageField — behaviour', () => {
     });
   });
 
+  beforeEach(() => {
+    // The suite asserts the bearer half; `dualCredentialScheme.vitest.jsx` owns the
+    // cross-scheme contract for the shared builders themselves. Declaring it here
+    // rather than inheriting src/test/setup.js's default is the point: an ambient
+    // default makes a credential assertion pass by omission.
+    declareBearerSession('tk');
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -69,20 +83,21 @@ describe('ImageField — behaviour', () => {
       render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/etendo/sws/neo/product" onChange={vi.fn()} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/etendo/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
-      );
+      expect(globalThis.fetch.mock.calls[0][0]).toBe('/etendo/sws/neo/image/IMG-1');
+      // ETP-4576 — the credential comes from the active scheme, not the `token`
+      // prop. `declareBearerSession('tk')` below is what makes 'Bearer tk' the
+      // right answer; the prop no longer decides.
+      expectBearerHeader('tk');
+      expectNoCsrfHeader();
       const img = await screen.findByRole('img');
       expect(img).toHaveAttribute('src', BLOB_URL);
     });
 
     it('falls back to the default /sws/neo/image base when no apiBaseUrl is given', async () => {
       render(<ImageField imageId="IMG-1" token="tk" onChange={vi.fn()} />);
-      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
-      ));
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+      expect(globalThis.fetch.mock.calls[0][0]).toBe('/sws/neo/image/IMG-1');
+      expectBearerHeader('tk');
     });
 
     it('does not fetch when there is no imageId or no token', () => {
@@ -193,7 +208,11 @@ describe('ImageField — behaviour', () => {
       const [url, options] = globalThis.fetch.mock.calls.at(-1);
       expect(url).toBe('/etendo/sws/neo/image');
       expect(options.method).toBe('POST');
-      expect(options.headers).toEqual({ Authorization: 'Bearer tk', 'Content-Type': 'application/json' });
+      // An upload is an unsafe method: under bearer it carries the token, under
+      // cookie the CSRF proof. Asserted through the shared helper so neither
+      // scheme is baked in here.
+      expect(options.headers).toMatchObject({ 'Content-Type': 'application/json' });
+      expectBearerHeader('tk');
       const body = JSON.parse(options.body);
       expect(body.name).toBe('front.png');
       expect(body.mimeType).toBe('image/png');

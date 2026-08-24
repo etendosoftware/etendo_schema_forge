@@ -30,6 +30,12 @@ vi.mock('@/components/contract-ui', () => ({
 }));
 
 import YearTableWithCloseStatus from '../YearTableWithCloseStatus.jsx';
+// ETP-4576 — the component asks the shared builder for its credential, so what a
+// test may assert is "the active scheme's header", never a literal it also chose.
+// The scheme is declared per test rather than inherited: src/test/setup.js resets
+// to the bearer default, and an assertion that relies on that default passes by
+// omission.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 const YEARS = [
   { id: 'y1', fiscalYear: '2026', description: 'FY26' },
@@ -39,18 +45,19 @@ const YEARS = [
 describe('YearTableWithCloseStatus', () => {
   it('rewrites apiBaseUrl to the end-year-close spec for the status check (not the year list\'s own base)', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    declareBearerSession('tok');
     render(
       <YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />
     );
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/end-year-close/accounting?year=y1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
-    ));
+    await waitFor(() => expect(global.fetch.mock.calls.at(-1)?.[0])
+      .toBe('https://api.test/end-year-close/accounting?year=y1'));
+    expectBearerHeader('tok', global.fetch);
   });
 
   it('shows the "closed" pill (green) for a year with at least one closing-type entry', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'f1' }] }) }));
+    declareBearerSession('tok');
     render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     await waitFor(() => {
@@ -61,6 +68,7 @@ describe('YearTableWithCloseStatus', () => {
 
   it('shows the "not closed" pill (neutral) for a year with no closing-type entries', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    declareBearerSession('tok');
     render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     await waitFor(() => {
@@ -72,6 +80,7 @@ describe('YearTableWithCloseStatus', () => {
   it('checks each row independently and in parallel, not one row at a time', async () => {
     const calls = [];
     global.fetch = vi.fn((url) => {
+    declareBearerSession('tok');
       calls.push(url);
       const closed = url.includes('year=y1');
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: closed ? [{ id: 'f1' }] : [] }) });
@@ -91,6 +100,7 @@ describe('YearTableWithCloseStatus', () => {
 
   it('renders nothing for the status cell while the check is pending or on error (no misleading placeholder)', async () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    declareBearerSession('tok');
     render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     expect(screen.getByTestId('col-yearCloseStatus-y1')).toBeEmptyDOMElement();
@@ -98,6 +108,7 @@ describe('YearTableWithCloseStatus', () => {
 
   it('still renders the standard fiscalYear/description columns', () => {
     global.fetch = vi.fn(() => new Promise(() => {}));
+    declareBearerSession('tok');
     render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     expect(screen.getByTestId('col-fiscalYear-y1')).toHaveTextContent('2026');

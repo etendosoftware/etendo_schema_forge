@@ -2,6 +2,12 @@
 
 import { renderHook, waitFor } from '@testing-library/react';
 import { useWarehouseStock } from '../useWarehouseStock';
+// ETP-4576 — the component asks the shared builder for its credential, so what a
+// test may assert is "the active scheme's header", never a literal it also chose.
+// The scheme is declared per test rather than inherited: src/test/setup.js resets
+// to the bearer default, and an assertion that relies on that default passes by
+// omission.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -150,7 +156,6 @@ describe('useWarehouseStock', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('storageBin'),
         expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer my-token' }),
         }),
       );
     });

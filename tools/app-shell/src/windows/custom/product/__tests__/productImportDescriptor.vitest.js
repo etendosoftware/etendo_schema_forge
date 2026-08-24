@@ -1,6 +1,10 @@
 import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+} from '@/test/sessionContract.js';
 import '../productImportDescriptor.js'; // side-effecting import: registers the 'product' descriptor on load
 
 // The descriptor caches the resolved sales price-list version in a module-level Map keyed by
@@ -15,6 +19,10 @@ const SALES_ITEMS = [
 ];
 
 function stubFetch(items) {
+  // Declared per stub rather than inherited: src/test/setup.js resets the scheme to
+  // the bearer default before every test, so asserting a credential without
+  // declaring one only ever exercises that default.
+  declareBearerSession();
   const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ items }) }));
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -70,7 +78,12 @@ describe('product import descriptor', () => {
     assert.equal(priceFetchCalls.length, 1);
     const [url, opts] = priceFetchCalls[0];
     assert.ok(url.includes('/sws/neo/product/price/selectors/M_PriceList_Version_ID'), `unexpected url: ${url}`);
-    assert.equal(opts.headers.Authorization, 'Bearer tok-valid');
+    // ETP-4576 — the descriptor asks the shared builder for its credential instead
+    // of pinning `Authorization` from the token it was configured with. That token
+    // still keys the module-level PLV cache (see the note at the top of this file),
+    // which is why the config keeps it; it just no longer authenticates the call.
+    assert.equal(opts.headers.Authorization, `Bearer ${TEST_BEARER_TOKEN}`);
+    assert.equal(opts.credentials, 'include');
   });
 
   it('parses both plain and es-ES price formats (comma decimal, dot thousands) into the price op body', async () => {

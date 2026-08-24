@@ -23,6 +23,7 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
@@ -149,7 +150,7 @@ export default function AmortizationLinesTable({
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
     })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
@@ -198,7 +199,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
         body: JSON.stringify({ [fieldKey]: value }),
       });
       if (res.ok) { fetchLines(); onRefresh?.(); }
@@ -226,7 +227,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
       });
       if (res.ok) { fetchLines(); onRefresh?.(); }
     } finally { setDeleting(null); }
@@ -240,7 +241,7 @@ export default function AmortizationLinesTable({
       await Promise.all(ids.map(id =>
         fetch(`${apiBaseUrl}/lines/${id}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: writeHeaders(),
         }).catch(() => null),
       ));
       setSelectedRows(new Set());
@@ -257,7 +258,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: writeHeaders(),
         body: JSON.stringify({ ...newLine, amortization: recordId, currency: data?.currency }),
       });
       if (res.ok) {

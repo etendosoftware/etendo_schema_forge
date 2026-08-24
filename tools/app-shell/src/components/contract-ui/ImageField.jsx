@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { TrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { sanitizeImageName } from '@/lib/imageUpload.js';
+import { readCredentialHeaders, writeHeaders } from '../../lib/sessionHeaders.js';
 
 // Upload constraints (shared across stretch and non-stretch modes)
 const IMAGE_MAX_SIZE_MB = 30;
@@ -83,7 +84,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
       return;
     }
     let cancelled = false;
-    fetch(`${imageBase}/${imageId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${imageBase}/${imageId}`, { headers: readCredentialHeaders() })
       .then(res => res.ok ? res.blob() : null)
       .then(blob => {
         if (!cancelled && blob) {
@@ -113,7 +114,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
       const base64 = await fileToBase64(file);
       const res = await fetch(imageBase, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({ name: sanitizeImageName(file.name), mimeType: file.type || 'application/octet-stream', data: base64 }),
       });
       if (!res.ok) throw new Error((await res.text()) || `Upload failed (${res.status})`);

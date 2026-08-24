@@ -1,5 +1,6 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { deriveContactsApiBase } from '../contactApi.js';
+import { readCredentialHeaders } from '../../../../lib/sessionHeaders.js';
 
 /**
  * Translate the vision-LLM extracted JSON for a purchase invoice into a list
@@ -43,7 +44,7 @@ async function findBpLocation({ token, apiBaseUrl, bpId }) {
   const where = encodeURIComponent(`businessPartner.id = '${bpId}' and active = true`);
   const url = `${contactsBase}/locationAddress?_neoWhere=${where}&limit=1`;
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { headers: readCredentialHeaders() });
     if (!res.ok) {
       console.warn('[OCR][findBpLocation] non-OK', res.status, url);
       return null;
@@ -82,7 +83,7 @@ export async function findBp({ token, apiBaseUrl, taxId, name }) {
     const where = encodeURIComponent(`${property} = '${escaped}' and active = true`);
     const url = `${contactsBase}/businessPartner?_neoWhere=${where}`;
     try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(url, { headers: readCredentialHeaders() });
       if (!res.ok) {
         console.warn('[OCR][findBp] non-OK', res.status, url);
         return null;

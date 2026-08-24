@@ -3,6 +3,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useUI } from '@/i18n';
 import CertModal from './CertModal.jsx';
 import { useDraggable } from '../fiscal-monitor/useDraggable.js';
+import { jsonHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 // PK fields are now extracted via IsKey='Y' (schema_forge_core commit 5d363ad2f), so
 // NeoFieldFilter no longer renames them to a per-system name — the API always returns
@@ -91,7 +92,7 @@ async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
     _endRow: '49',
   })}`;
   const res = await fetch(listUrl, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
   });
   if (!res.ok) throw new Error(`GET ${spec} HTTP ${res.status}`);
   const json = await res.json();
@@ -106,7 +107,7 @@ async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
     const rid = idField ? (r[idField] ?? r.id) : r.id;
     const delRes = await fetch(`${base}/${spec}/${encodeURIComponent(entity)}/${rid}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: writeHeaders(),
     });
     if (!delRes.ok) throw new Error(`DELETE ${spec}/${rid} HTTP ${delRes.status}`);
     deleted++;
@@ -117,7 +118,7 @@ async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
 async function deleteCertificates(base, orgId, token) {
   const res = await fetch(`${base}/certificate?${new URLSearchParams({ orgId })}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: writeHeaders(),
   });
   if (!res.ok) throw new Error(`Delete certificate HTTP ${res.status}`);
   const json = await res.json().catch(() => ({}));

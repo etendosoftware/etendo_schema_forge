@@ -46,6 +46,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
+import { writeHeaders } from '../../lib/sessionHeaders.js';
 
 /**
  * Resolve a value from an object using a dotted path (e.g. `_aux._LOC`).
@@ -157,10 +158,7 @@ async function runInlineToggleRequest({
   try {
     const res = await fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: writeHeaders(),
       body: JSON.stringify({ [col.key]: checked }),
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);

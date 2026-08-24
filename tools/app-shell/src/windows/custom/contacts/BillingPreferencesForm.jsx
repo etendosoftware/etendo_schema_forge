@@ -4,6 +4,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 const PRE_SAVE_BILLING_PREF_FIELDS = [
   'priceList',
@@ -138,7 +139,7 @@ export default function BillingPreferencesForm(props) {
     if (!bpId || !token) return;
 
     // Fetch current discount record for this BP
-    fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: readCredentialHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => setDiscountRecord(d?.response?.data?.[0] ?? null))
       .catch(() => setDiscountRecord(null));
@@ -147,7 +148,7 @@ export default function BillingPreferencesForm(props) {
     const discountParams = new URLSearchParams({ limit: '200', offset: '0' });
     if (organizationId) discountParams.set('AD_Org_ID', organizationId);
     if (clientId) discountParams.set('AD_Client_ID', clientId);
-    fetch(`${apiBase}/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBase}/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`, { headers: readCredentialHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         const seen = new Set();

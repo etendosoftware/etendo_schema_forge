@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 const CLOSED_STATUSES = new Set(['C', 'P']);
 const ACTION_BY_DIRECTION = { close: 'closeYear', undo: 'undoCloseYear' };
@@ -35,7 +36,7 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
     if (!isOpen || !currentRecord?.id) return;
     setPrecheckError(false);
     fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?${yearCriteria(currentRecord.id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -63,7 +64,7 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
       const action = ACTION_BY_DIRECTION[direction];
       const res = await fetch(`${apiBaseUrl}/year/${currentRecord.id}/action/${action}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);

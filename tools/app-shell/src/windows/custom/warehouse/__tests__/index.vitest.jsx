@@ -59,11 +59,16 @@ vi.mock('@generated/warehouse/generated/web/warehouse/WarehousePage', () => ({
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WarehouseWindow from '../index.jsx';
+// ETP-4576 — the credential is the ACTIVE SCHEME's, not a literal this test also
+// supplies. Declared explicitly: src/test/setup.js resets to the bearer default
+// before every test, so leaning on it asserts nothing.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 describe('WarehouseWindow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastWarehousePageProps = null;
+    declareBearerSession('ctx-token');
     globalThis.fetch = vi.fn(async () => ({ ok: true }));
   });
 
@@ -111,12 +116,10 @@ describe('WarehouseWindow', () => {
       { token: 'ctx-token', apiBaseUrl: '/ctx-api' },
     );
 
+    expectBearerHeader('ctx-token', fetch);
     expect(fetch).toHaveBeenCalledWith('/ctx-api/storageBin', {
       method: 'POST',
-      headers: {
-        Authorization: 'Bearer ctx-token',
-        'Content-Type': 'application/json',
-      },
+      headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         warehouse: 'wh-1',
         organization: 'org-1',

@@ -1,6 +1,7 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'creditLimit', 'taxID'];
 const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
@@ -20,7 +21,7 @@ async function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { credentials: 'include', headers: readCredentialHeaders() });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -71,7 +72,7 @@ async function resolveCategoryId(row, config) {
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      headers: writeHeaders(),
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {

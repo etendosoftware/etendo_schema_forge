@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { sanitizeImageName } from '@/lib/imageUpload.js';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 const LOGO_MAX_SIZE_MB = 2;
 const LOGO_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
@@ -62,7 +63,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
       return;
     }
     let cancelled = false;
-    fetch(`${imageBase}/${imageId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${imageBase}/${imageId}`, { headers: readCredentialHeaders() })
       .then(res => (res.ok ? res.blob() : null))
       .then(blob => {
         if (!cancelled && blob) {
@@ -90,7 +91,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
       const base64 = await fileToBase64(file);
       const res = await fetch(imageBase, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({ name: sanitizeImageName(file.name), mimeType: file.type, data: base64 }),
       });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);

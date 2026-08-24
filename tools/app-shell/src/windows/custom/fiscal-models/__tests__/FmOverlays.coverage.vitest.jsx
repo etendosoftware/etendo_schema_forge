@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+// ETP-4576 — the credential is the ACTIVE SCHEME's, not a literal this test also
+// supplies. Declared explicitly: src/test/setup.js resets to the bearer default
+// before every test, so leaning on it asserts nothing.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => params ? `${key}:${Object.values(params).join('|')}` : key,
@@ -28,6 +32,7 @@ import {
 describe('FmOverlays interactive coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    declareBearerSession('tkn');
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -161,9 +166,8 @@ describe('FmOverlays interactive coverage', () => {
     const onClose = vi.fn();
     render(<ConfigDrawer model="349" token="tkn" apiBaseUrl="/sws/neo/fiscal-models" onClose={onClose} />);
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/sws/neo/session', expect.objectContaining({
-      headers: { Authorization: 'Bearer tkn' },
-    })));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/sws/neo/session', expect.any(Object)));
+    expectBearerHeader('tkn', fetch);
     expect(await screen.findByDisplayValue('Etendo Org')).toBeInTheDocument();
     expect(screen.getByDisplayValue('28001')).toBeInTheDocument();
     expect(screen.getAllByDisplayValue('Madrid')).toHaveLength(2);

@@ -93,30 +93,26 @@ test.describe('Invoice Preview — modal lifecycle (purchase invoice)', () => {
     await expect(page.getByTestId('generic-preview-modal')).not.toBeVisible({ timeout: 2_000 });
   });
 
-  test('tabs are rendered and switching changes the active tab', async ({ page }) => {
+  /**
+   * ETP-4855 (0944ac67f, 2026-08-13) removed the Messages and History preview tabs;
+   * InvoicePreview now supplies a single `general` tab. This test's assertion that
+   * all three render predates that change (2026-08-07), so it had been failing ever
+   * since — invisible because the integration suite was not reaching this spec.
+   *
+   * Rewritten to pin the current design rather than deleted: General must render,
+   * and the two removed tabs must STAY removed. A silent reintroduction is exactly
+   * what an assertion-free deletion would have stopped catching.
+   */
+  test('renders the single General tab, with Messages and History gone', async ({ page }) => {
     await openPreview(page);
 
     const modal = page.getByTestId('generic-preview-modal');
 
-    // Detect locale from rendered tab text (General is the same in both locales)
-    const generalTab = modal.getByRole('button', { name: 'General' });
-    const messagesTab = modal.getByRole('button', { name: /mensajes|messages/i });
-    const historyTab = modal.getByRole('button', { name: /historial|history/i });
+    // 'General' reads the same in both locales, so no locale detection is needed.
+    await expect(modal.getByRole('button', { name: 'General' })).toBeVisible();
 
-    await expect(generalTab).toBeVisible();
-    await expect(messagesTab).toBeVisible();
-    await expect(historyTab).toBeVisible();
-
-    // Switch to Messages tab
-    await messagesTab.click();
-
-    // Messages tab becomes active (white background shadow-sm); General loses it.
-    // We verify by checking for the empty-state content that the Messages tab renders.
-    await expect(modal.locator('text=/mensajes|messages/i').last()).toBeVisible();
-
-    // Switch to History tab
-    await historyTab.click();
-    await expect(modal.locator('text=/historial|history/i').last()).toBeVisible();
+    await expect(modal.getByRole('button', { name: /mensajes|messages/i })).toHaveCount(0);
+    await expect(modal.getByRole('button', { name: /historial|history/i })).toHaveCount(0);
   });
 
   test('Edit button navigates to the detail page', async ({ page }) => {

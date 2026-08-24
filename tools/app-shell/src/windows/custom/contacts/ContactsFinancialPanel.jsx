@@ -3,6 +3,7 @@ import { Minus, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import BillingPreferencesForm from './BillingPreferencesForm';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 
 function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
@@ -95,10 +96,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       const payload = { [fieldKey]: normalizedValue };
       const res = await fetch(`${apiBaseUrl}/businessPartner/${data.id}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(),
         body: JSON.stringify(payload),
       });
 

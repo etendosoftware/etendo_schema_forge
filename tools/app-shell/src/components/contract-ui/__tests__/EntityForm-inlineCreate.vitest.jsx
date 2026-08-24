@@ -18,6 +18,10 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { buildCreateUrl, createLookupRecord } from '../InlineCreateSelector.jsx';
+// ETP-4576 — the credential is the ACTIVE SCHEME's, not a literal this test also
+// supplies. Declared explicitly: src/test/setup.js resets to the bearer default
+// before every test, so leaning on it asserts nothing.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 const API_BASE = '/sws/neo/match-rule';
 const TOKEN = 'test-token';
@@ -35,7 +39,12 @@ describe('buildCreateUrl', () => {
 });
 
 describe('createLookupRecord', () => {
-  beforeEach(() => { global.fetch = vi.fn(); });
+  beforeEach(() => {
+    global.fetch = vi.fn();
+    // Declared, not inherited: src/test/setup.js resets to the bearer default before
+    // every test, so a credential assertion that leans on it proves nothing.
+    declareBearerSession(TOKEN);
+  });
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('POSTs { name } to the FK target endpoint with the bearer token and returns the created record', async () => {
@@ -47,10 +56,8 @@ describe('createLookupRecord', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe('/sws/neo/transaction-type/transactionType');
     expect(opts.method).toBe('POST');
-    expect(opts.headers).toMatchObject({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${TOKEN}`,
-    });
+    expect(opts.headers).toMatchObject({ 'Content-Type': 'application/json' });
+    expectBearerHeader(TOKEN);
     expect(JSON.parse(opts.body)).toEqual({ name: 'Bank fee' });
     expect(created).toEqual({ id: 'TT-1', name: 'Bank fee' });
   });

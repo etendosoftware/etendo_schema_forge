@@ -10,6 +10,7 @@ import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.js
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
+import { readCredentialHeaders, writeHeaders } from '../lib/sessionHeaders.js';
 
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
@@ -138,7 +139,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   const fetchPage = useCallback((q, off, append) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const params = `q=${encodeURIComponent(q)}&limit=${SELECTOR_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
-    return fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    return fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params}`, { headers: readCredentialHeaders() })
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : (data?.items ?? []);
@@ -313,7 +314,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
       if (selectedOrgId) params.set('selectedOrgId', selectedOrgId);
       if (roleOrgIds && roleOrgIds.length > 0) params.set('roleOrgIds', roleOrgIds.join(','));
     }
-    fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params.toString()}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params.toString()}`, { headers: readCredentialHeaders() })
       .then(r => r.json())
       .then(data => { setOptions(normalizeOptions(data)); setOpen(true); })
       .catch(() => setOptions([]));
@@ -529,7 +530,7 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
-      fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+      fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`, { headers: readCredentialHeaders() })
         .then(r => r.json())
         .then(data => setOptions(Array.isArray(data) ? data : (data?.items ?? [])))
         .catch(() => setOptions([]));
@@ -1166,7 +1167,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
     try {
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: writeHeaders(),
         body: JSON.stringify({ format, params: drillParams, locale }),
       });
       if (!res.ok) {
@@ -1366,7 +1367,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         const orgParam = (p.selector === 'currency' && selectedOrgId)
           ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
           : '';
-        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: readCredentialHeaders() })
           .then(r => r.json())
           .then(data => { const rows = Array.isArray(data) ? data : (data.items || []); return rows[0] ? { name: p.name, id: rows[0].id, display: rows[0].name } : null; })
           .catch(() => null);
@@ -1400,7 +1401,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     try {
       const res = await fetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: writeHeaders(),
         body: JSON.stringify({ format, params, locale }),
       });
       if (!res.ok) {

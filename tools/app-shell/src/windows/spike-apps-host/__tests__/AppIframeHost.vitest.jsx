@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
 import AppIframeHost from '../AppIframeHost.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  expectBearerHeader,
+  expectNoAuthorizationHeader,
+  expectNoCsrfHeader,
+} from '@/test/sessionContract.js';
 
 describe('AppIframeHost', () => {
   beforeEach(() => {
@@ -16,7 +23,7 @@ describe('AppIframeHost', () => {
 
   it('shows loading state initially', () => {
     globalThis.fetch.mockReturnValue(new Promise(() => {})); // never resolves
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
     expect(screen.getByText(/loading app/i)).toBeInTheDocument();
   });
 
@@ -25,7 +32,7 @@ describe('AppIframeHost', () => {
       ok: true,
       json: async () => ({ token: 'app-jwt-token' }),
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
 
     await waitFor(() => {
       const iframe = screen.getByTitle('myapp');
@@ -41,7 +48,7 @@ describe('AppIframeHost', () => {
       ok: true,
       json: async () => ({ token: 'jwt123' }),
     });
-    render(<AppIframeHost appUrl="https://app.test?foo=bar" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test?foo=bar" appId="myapp" />);
 
     await waitFor(() => {
       const iframe = screen.getByTitle('myapp');
@@ -51,14 +58,25 @@ describe('AppIframeHost', () => {
     });
   });
 
-  it('shows error when token is missing', () => {
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="" />);
-    expect(screen.getByText(/missing etendo session token/i)).toBeInTheDocument();
-  });
+  /**
+   * ETP-4576 — the two cases that lived here asserted a `!token` gate: with no
+   * token the component refused to mint the app JWT and rendered "Missing Etendo
+   * session token". Under the cookie scheme the client never holds a token, so
+   * that gate turned the whole embedded app into a permanent error for every
+   * user. Whether the session is valid is the token endpoint's answer to give,
+   * which the non-ok and throw cases below already cover.
+   *
+   * Replaced by its inverse, so removing the gate cannot silently regress: with
+   * no token held, the request must still be issued.
+   */
+  it('still requests the app token when the client holds no bearer', async () => {
+    declareCookieSession();
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: 'jwt' }) });
 
-  it('shows error when token is undefined', () => {
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token={undefined} />);
-    expect(screen.getByText(/missing etendo session token/i)).toBeInTheDocument();
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+    expectNoAuthorizationHeader();
   });
 
   it('shows error when fetch fails with non-ok status', async () => {
@@ -66,7 +84,7 @@ describe('AppIframeHost', () => {
       ok: false,
       status: 403,
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
 
     await waitFor(() => {
       expect(screen.getByText(/token endpoint failed: 403/)).toBeInTheDocument();
@@ -75,7 +93,7 @@ describe('AppIframeHost', () => {
 
   it('shows error when fetch throws', async () => {
     globalThis.fetch.mockRejectedValue(new Error('Network error'));
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
 
     await waitFor(() => {
       expect(screen.getByText(/network error/i)).toBeInTheDocument();
@@ -87,7 +105,7 @@ describe('AppIframeHost', () => {
       ok: true,
       json: async () => ({ token: 'jwt' }),
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="tok123" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="myapp" />);
 
     await waitFor(() => {
       const iframe = screen.getByTitle('myapp');
@@ -95,30 +113,40 @@ describe('AppIframeHost', () => {
     });
   });
 
-  it('calls fetch with correct URL and authorization', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: 'jwt' }),
+  // Runs once per scheme: minting the app JWT is an unsafe POST, so it must carry
+  // the bearer under one and the CSRF proof under the other. Pinning either here
+  // would let a call site that hard-codes one scheme pass while being broken in
+  // the other direction — the failure this whole task exists to prevent.
+  for (const scheme of [
+    { name: 'bearer', declare: declareBearerSession,
+      assertCredential: () => { expectBearerHeader(); expectNoCsrfHeader(); } },
+    { name: 'cookie', declare: declareCookieSession,
+      assertCredential: () => expectNoAuthorizationHeader() },
+  ]) {
+    it(`calls fetch with the correct URL and the ${scheme.name} credential`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: 'jwt' }),
+      });
+      render(<AppIframeHost appUrl="https://app.test" appId="app42" />);
+
+      await waitFor(() => screen.getByTitle('app42'));
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('appId=app42'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+      scheme.assertCredential();
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="app42" token="bearer-tok" />);
-
-    await waitFor(() => screen.getByTitle('app42'));
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('appId=app42'),
-      expect.objectContaining({
-        method: 'POST',
-        headers: { Authorization: 'Bearer bearer-tok' },
-      }),
-    );
-  });
+  }
 
   it('encodes appId in URL', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ token: 'jwt' }),
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="app with spaces" token="tok" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="app with spaces" />);
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -134,7 +162,7 @@ describe('AppIframeHost', () => {
       ok: true,
       json: async () => ({ token: 'jwt' }),
     });
-    render(<AppIframeHost appUrl="https://app.test" appId="x" token="tok" />);
+    render(<AppIframeHost appUrl="https://app.test" appId="x" />);
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(

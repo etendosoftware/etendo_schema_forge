@@ -8,6 +8,11 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { render, screen, act, waitFor } from '@testing-library/react';
+// ETP-4576 — the credential comes from the ACTIVE SCHEME, not from a literal the
+// test also supplies. The scheme is declared explicitly because src/test/setup.js
+// resets to the bearer default before every test: an assertion that leans on that
+// default passes by omission rather than by proving anything.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 import {
   ContactsFinanceProvider,
   useContactsFinance,
@@ -45,6 +50,7 @@ function wrapper(props) {
 
 describe('ContactsFinanceProvider', () => {
   beforeEach(() => {
+    declareBearerSession('tok');
     globalThis.fetch = vi.fn();
     vi.clearAllMocks();
   });
@@ -95,7 +101,7 @@ describe('ContactsFinanceProvider', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-stats?businessPartnerId=BP1'),
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) }),
+        expect.objectContaining({ }),
       );
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-trend?businessPartnerId=BP1'),

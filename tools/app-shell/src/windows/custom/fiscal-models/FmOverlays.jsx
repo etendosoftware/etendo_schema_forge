@@ -5,6 +5,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import './fiscal-models.css';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 function parseCityLine(cityLine) {
   if (!cityLine) return { postal: '', city: '', province: '' };
@@ -803,7 +804,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
     if (!token || !apiBaseUrl) return;
     const controller = new AbortController();
     fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
       signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : null)

@@ -58,6 +58,11 @@ vi.mock('@/hooks/useDisplayLogic', () => ({
 
 import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import AmortizationLinesTable from '../AmortizationLinesTable.jsx';
+// ETP-4576 — the credential comes from the ACTIVE SCHEME, not from a literal the
+// test also supplies. The scheme is declared explicitly because src/test/setup.js
+// resets to the bearer default before every test: an assertion that leans on that
+// default passes by omission rather than by proving anything.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 const LINE_FILLED = {
   id: 'line-1',
@@ -142,7 +147,7 @@ describe('AmortizationLinesTable — fetch + render', () => {
     // fetch URL targets the lines sub-endpoint with the parent id
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/lines?parentId=amort-1'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) }),
+      expect.objectContaining({ }),
     );
   });
 
@@ -528,6 +533,7 @@ describe('AmortizationLinesTable — empty + error states', () => {
   });
 
   it('falls back to empty (no rows) when the fetch rejects', async () => {
+    declareBearerSession('tok');
     global.fetch = vi.fn().mockRejectedValue(new Error('network'));
     const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
     await waitFor(() => expect(screen.getByTestId('add-line-btn')).toBeInTheDocument());

@@ -5,6 +5,18 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { useBatch } from '../useBatch.js';
+// ETP-4576 — the credential comes from the ACTIVE SCHEME, not from a literal the
+// test also supplies. The scheme is declared explicitly because src/test/setup.js
+// resets to the bearer default before every test: an assertion that leans on that
+// default passes by omission rather than by proving anything.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
+
+// File scope, not per-describe: src/test/setup.js resets the scheme to the bearer
+// default before every test, so a credential assertion that does not declare one
+// is only ever exercising that default — and both describes below assert one.
+beforeEach(() => {
+  declareBearerSession('my-token');
+});
 
 describe('useBatch — batchUrl', () => {
   it('defaults to /sws/neo/batch when no apiBaseUrl is provided', () => {
@@ -84,7 +96,7 @@ describe('useBatch — runBatch', () => {
     const [url, opts] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/sws/neo/batch');
     expect(opts.method).toBe('POST');
-    expect(opts.headers.Authorization).toBe('Bearer my-token');
+    expectBearerHeader('my-token');
     expect(opts.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(opts.body)).toEqual({ operations: ops });
   });

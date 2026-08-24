@@ -8,15 +8,13 @@ import WarehouseProductsTab from './WarehouseProductsTab';
 import WarehouseCustomTable from './WarehouseCustomTable';
 import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
 import AccountingForm from '@generated/warehouse/generated/web/warehouse/AccountingForm';
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
   const res = await fetch(`${apiBaseUrl}/storageBin`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: writeHeaders(),
     body: JSON.stringify({
       warehouse: warehouse.id,
       organization: warehouse.organization,

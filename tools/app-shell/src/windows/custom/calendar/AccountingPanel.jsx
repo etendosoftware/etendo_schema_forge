@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
@@ -13,7 +14,7 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
     if (!parentId) return;
     setRows(undefined);
     fetch(`${apiBaseUrl}/accounting?year=${parentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);

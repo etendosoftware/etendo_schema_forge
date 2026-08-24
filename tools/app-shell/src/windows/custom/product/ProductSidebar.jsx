@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useUI } from '@/i18n';
 import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
@@ -532,7 +533,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
   useEffect(() => {
     if (!recordId || !token) return;
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = readCredentialHeaders();
 
     fetch(`${apiBaseUrl}/stock?parentId=${recordId}&_startRow=0&_endRow=200`, { headers })
       .then(r => (r.ok ? r.json() : null))

@@ -12,6 +12,7 @@ import {
   TBAI_REVERSEINVOICECODE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 function Field({ label, htmlFor, children }) {
   return (
@@ -329,7 +330,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     try {
       const res = await fetch(`${apiBaseUrl}/header/callout`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({ field: 'aeatsiiIsauthorization', value: val ? 'Y' : 'N', formState: data ?? {} }),
       });
       if (!res.ok) return;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
 
 /**
  * The single, canonical "is this year closed" derivation for the whole Calendar window —
@@ -26,7 +27,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     let cancelled = false;
     setClosed(undefined);
     fetch(`${endYearCloseApiBaseUrl}/accounting?year=${yearId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: readCredentialHeaders(),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);

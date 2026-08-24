@@ -18,6 +18,12 @@ vi.mock('@/components/ui/tag', () => ({
 }));
 
 import YearCloseStatusBadge from '../YearCloseStatusBadge.jsx';
+// ETP-4576 — the component asks the shared builder for its credential, so what a
+// test may assert is "the active scheme's header", never a literal it also chose.
+// The scheme is declared per test rather than inherited: src/test/setup.js resets
+// to the bearer default, and an assertion that relies on that default passes by
+// omission.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const localesDir = join(__dirname, '..', '..', '..', '..', 'locales');
@@ -34,13 +40,12 @@ function renderWithLocale(locale, ui) {
 describe('YearCloseStatusBadge', () => {
   it('shows "Año cerrado" (green) when the year has at least one closing-type accounting entry', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
+    declareBearerSession('tok');
     renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('year-close-status')).toBeInTheDocument());
-    expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/accounting?year=year1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
-    );
+    expect(global.fetch.mock.calls.at(-1)[0]).toBe('https://api.test/accounting?year=year1');
+    expectBearerHeader('tok', global.fetch);
     const badge = screen.getByTestId('tag');
     expect(badge).toHaveAttribute('data-variant', 'green');
     expect(badge).toHaveTextContent('Año cerrado');
@@ -48,6 +53,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('shows "Año no cerrado" (neutral) when the year has no closing-type accounting entries', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
+    declareBearerSession('tok');
     renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('year-close-status')).toBeInTheDocument());
@@ -58,6 +64,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('shows the equivalent English labels ("Year closed" / "Year not closed") under en_US', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
+    declareBearerSession('tok');
     renderWithLocale('en_US', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('tag')).toHaveTextContent('Year closed'));
@@ -65,6 +72,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('falls back to `data.id` when recordId is not provided', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
+    declareBearerSession('tok');
     renderWithLocale('es_ES', <YearCloseStatusBadge data={{ id: 'year-from-data' }} token="tok" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -75,12 +83,14 @@ describe('YearCloseStatusBadge', () => {
 
   it('renders nothing while the request is pending (no misleading placeholder)', () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    declareBearerSession('tok');
     const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing (fails silently) when the request errors, rather than showing a wrong status', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    declareBearerSession('tok');
     const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
 
     // Give the rejected fetch a tick to resolve into the `null` (errored) state.
@@ -91,6 +101,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('renders nothing when there is no year id at all', () => {
     global.fetch = vi.fn();
+    declareBearerSession('tok');
     const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge token="tok" apiBaseUrl="https://api.test" />);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(container).toBeEmptyDOMElement();

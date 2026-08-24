@@ -39,8 +39,16 @@ describe('AmortizationLinesTable — fetch pattern', () => {
     assert.match(src, /_sortBy=sEQNoAsset/);
   });
 
-  it('sends Authorization Bearer token in fetch header', () => {
-    assert.match(src, /Authorization.*Bearer.*token/);
+  // ETP-4576 — the component no longer decides how a request authenticates. It
+  // asks the shared builder, which yields the bearer under `bearer` and the CSRF
+  // proof under `cookie`; asserting the literal header here would pin one scheme
+  // and fail the moment the preference flips.
+  it('takes its credential from the shared session builder, not a hand-built header', () => {
+    assert.match(src, /\b(writeHeaders|jsonHeaders|readCredentialHeaders)\s*\(/);
+    assert.doesNotMatch(
+      src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''),
+      /Authorization/,
+    );
   });
 
   it('calls onCountChange after fetching lines', () => {

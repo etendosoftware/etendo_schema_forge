@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from './useNeoResource';
+import { writeHeaders } from '../lib/sessionHeaders.js';
 
 /**
  * Data access for the cash-close screen of cash-type financial accounts (ETP-4795).
@@ -47,10 +48,7 @@ function useNeoPost(action) {
       const url = `${getApiBase()}${BASE_PATH}?action=${action}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(),
         body: JSON.stringify(payload),
       });
 

@@ -6,6 +6,7 @@ import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { useUI } from '@/i18n';
 import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { jsonHeaders } from '../../lib/sessionHeaders.js';
 
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
@@ -116,7 +117,7 @@ const MAX_REPORT_ROWS = 10000;
 const BATCH = 200;
 
 async function fetchAllRecords(apiBaseUrl, entity, token, sortColumn, sortDirection) {
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = jsonHeaders();
   let allRows = [];
   let start = 0;
   let hasMore = true;

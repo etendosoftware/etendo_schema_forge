@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { writeHeaders } from '../../../../lib/sessionHeaders.js';
 
 /**
  * Drives the generic transactional batch endpoint.
@@ -32,10 +33,7 @@ export function useBatch({ apiBaseUrl, token }) {
     try {
       const res = await fetch(batchUrl, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(),
         body: JSON.stringify({ operations }),
       });
       const text = await res.text().catch(() => '');

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateModal } from './InlineCreateModal.jsx';
+import { writeHeaders } from '../../lib/sessionHeaders.js';
 
 /**
  * Build the create endpoint for an inline-creatable FK. The host window's `apiBaseUrl`
@@ -19,7 +20,7 @@ export function buildCreateUrl(apiBaseUrl, createSpec, createEntity) {
 export async function createLookupRecord({ apiBaseUrl, createSpec, createEntity, token, name }) {
   const res = await fetch(buildCreateUrl(apiBaseUrl, createSpec, createEntity), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: writeHeaders(),
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {

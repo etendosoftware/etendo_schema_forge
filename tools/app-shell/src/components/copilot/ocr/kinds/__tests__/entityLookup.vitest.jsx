@@ -4,6 +4,11 @@
  */
 
 import { renderHook, act } from '@testing-library/react';
+// ETP-4576 — the credential comes from the ACTIVE SCHEME, not from a literal the
+// test also supplies. The scheme is declared explicitly because src/test/setup.js
+// resets to the bearer default before every test: an assertion that leans on that
+// default passes by omission rather than by proving anything.
+import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
 import {
   SEARCH_DEBOUNCE_MS,
   escHql,
@@ -121,6 +126,7 @@ describe('useClickOutside', () => {
 describe('useEntitySearch', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    declareBearerSession('tok');
     globalThis.fetch = vi.fn();
   });
 
@@ -258,7 +264,7 @@ describe('useEntitySearch', () => {
     const [url, opts] = globalThis.fetch.mock.calls[0];
     const expectedWhere = "lower(name) like lower('%O''Brien%') and active = true";
     expect(url).toContain(`_neoWhere=${encodeURIComponent(expectedWhere)}`);
-    expect(opts.headers.Authorization).toBe('Bearer tok');
+    expectBearerHeader('tok');
   });
 
   it('cancels an in-flight request when params change (does not set items after cancel)', async () => {

@@ -329,7 +329,19 @@ test.describe('SifTab — Verifactu fields on sales invoice (ETP-4390)', () => {
   // carries every pending edit (SIF fields included) together with the rest of
   // the header payload. These tests assert the field values land in that single
   // PATCH, rather than intercepting a PATCH fired per field on blur/select.
-  test('editing the invoice type to a rectifying value reveals the corrective type field, and the Guardar PATCH includes both SIF field changes', async ({ page }) => {
+  /**
+   * ETP-4783 removed "Tipo de Factura Rectificativa" (etvfacReverseinvtype) from the
+   * UI on purpose — see the comment at SifTab.jsx's verifactu panel: the value is
+   * now derived and saved as 'I' (Por Diferencias) by useSifFieldPatcher whenever
+   * vfInvType is rectificative (R1-R5). This test still asserted the field became
+   * visible, so it had been failing since that change; nobody saw it because the
+   * integration suite was not reaching this spec.
+   *
+   * The three stale visibility assertions are gone. Everything that still holds is
+   * kept — above all the final one, which is the real subject now: the derived
+   * value must reach the single Guardar PATCH alongside the type the user picked.
+   */
+  test('picking a rectifying invoice type derives the corrective type into the Guardar PATCH', async ({ page }) => {
     await installFiscalProfileMocks(page, 'verifactu');
 
     const invoice = {
@@ -353,22 +365,15 @@ test.describe('SifTab — Verifactu fields on sales invoice (ETP-4390)', () => {
     await page.getByTestId('tab-custom:sif').click();
     await expect(page.getByText(t('sifDataTabs.panel.verifactu.subtitle'))).toBeVisible({ timeout: 8_000 });
 
-    // Corrective invoice type field is not shown before an invType is selected.
-    await expect(page.getByText(t('sifDataTabs.field.correctiveInvoiceType'))).toHaveCount(0);
-
     // Open the "Tipo de Factura" select and choose a rectifying value (R2).
     await page.locator('#sif-vfInvType').click();
     await page.getByRole('option', { name: /R2/ }).click();
 
-    // The corrective invoice type field becomes visible immediately — driven by
-    // the shared editing state (onChange updates it, data reflects it on the very
-    // next render), with no save round-trip involved.
-    await expect(page.getByText(t('sifDataTabs.field.correctiveInvoiceType'))).toBeVisible({ timeout: 4_000 });
-    await expect(page.locator('#sif-vfReverseType')).toBeVisible();
-
-    // The corrective invoice type select is itself selectable.
-    await page.locator('#sif-vfReverseType').click();
-    await page.getByRole('option', { name: /Por Diferencias|By difference/i }).click();
+    // ETP-4783: the corrective type is no longer a field the user can see or set.
+    // Asserting its ABSENCE is what pins that decision — without this, silently
+    // bringing the field back would go unnoticed.
+    await expect(page.getByText(t('sifDataTabs.field.correctiveInvoiceType'))).toHaveCount(0);
+    await expect(page.locator('#sif-vfReverseType')).toHaveCount(0);
 
     // No PATCH has fired yet from any of the above — SifTab no longer persists
     // per-field.
