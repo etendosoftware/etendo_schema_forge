@@ -112,6 +112,30 @@ A later ETP-4749 review round removed the original "Nombre comercial" field (`C_
 
 A later round removed the Business-Partner-sourced contact fields (email/phone/website via `AD_OrgInfo.businessPartner` → `contacts` spec) and replaced them with three new, dedicated `AD_OrgInfo` columns (`EM_Etgo_Email`, `EM_Etgo_Phone`, `EM_Etgo_Web`), added in `com.etendoerp.go`. This removed the entire "is a Business Partner linked, and did it load" state machine: the "no BP linked" notice, the "BP linked but failed to load" notice + retry affordance, and the `disabled`/gray styling on those three inputs are all gone. The fields are now always editable, plain optional strings on the `information` entity, handled exactly like `taxID` or `locationAddress` in `useOrganizationData.js`'s `load`/`save`.
 
+## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
+
+Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,
+`EM_Etsg_Has_Vfactu_Config` (server-maintained Y/N flags, one per fiscal system, on the
+`information` entity) — were promoted from `visibility: "discarded"` to `visibility: "system"`
+in `artifacts/organization/decisions.json`. `system` keeps them out of this window's
+auto-generated form (they carry no UI here) while making them available on the backend
+contract/API (`GET /sws/neo/organizaci-n/information/{orgId}`).
+
+**Why:** the Contacts window's `FiscalDefaultsSection` needs to know, per contact
+organization, whether SII and/or TicketBAI are actively configured, to gate its two
+conditional sub-blocks. Previously it inferred this by fetching and filtering the
+`sii-config`/`tbai-config` entity lists; these 3 flags are the authoritative,
+already-computed answer, so exposing them collapsed that detection to a single `getById`
+read. See `docs/generated-custom-windows/contacts.md` ("ETP-4784 part 4") for the consumer
+side. `etsgHasVfactuConfig` is exposed for a future Verifactu use case — nothing consumes it
+yet.
+
+No frontend change was needed on this window itself — `system` fields are excluded from
+`frontendContract`/the generated form by design, only added to `backendContract`. Verified via
+`make regen ONLY=organization` (contract shows the 3 fields as `visibility: "system"` under
+`backendContract.entities.information.fields`, absent from `frontendContract`) followed by
+`make regen ONLY=organization PUSH_TO_NEO=1`.
+
 ## Known gaps
 
 - **Country is derived, not a real field**: `deriveCountryFromIdentifier()` in `OrganizationPage.jsx` takes the last `" - "`-separated segment of the fiscal address's `$_identifier` string (e.g. `"... - España"`). There is no dedicated read-only country field on this window's contract. If one is added later, prefer it over this heuristic.

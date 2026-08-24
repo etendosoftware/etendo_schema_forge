@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "generatedAt": "2026-08-01T00:36:50.964Z",
   "updatedAt": "2026-08-03T16:25:15.395Z",
-  "contractChecksum": "261839b234d57627",
+  "contractChecksum": "fc4973a54168c7bb",
   "apiPrediction": {
     "specName": "organizaci-n",
     "baseUrl": "/sws/neo/organizaci-n",
