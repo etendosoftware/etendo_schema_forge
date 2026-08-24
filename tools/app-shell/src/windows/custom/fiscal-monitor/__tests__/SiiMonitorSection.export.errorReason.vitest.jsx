@@ -154,4 +154,71 @@ describe('SiiMonitorSection — CSV export "Error" column fallback (ETP-4784 #3)
     await waitFor(() => expect(getCsv()).not.toBeNull());
     expect(getCsv()).not.toContain('Referencia del proveedor');
   });
+
+  // Coverage gap closed: the export path re-fetches *SiiData independently
+  // and must pick the MOST RECENT motivo across 2+ rows for the same
+  // invoice, mirroring the on-screen `pickMostRecentMotivo()` behavior.
+  it('picks the most-recent SiiData motivo in the export when there are 2+ rows for the invoice', async () => {
+    currentApiFetch = mockApiFetch(
+      [invoiceRow()],
+      [
+        { invoice: 'inv-1', motivo: 'Older motivo', fechaltimaModificacinSII: '2026-01-01' },
+        { invoice: 'inv-1', motivo: 'Newer motivo', fechaltimaModificacinSII: '2026-01-15' },
+      ],
+    );
+    const getCsv = captureDownloadedCsv();
+
+    render(<SiiMonitorSection {...baseProps} />);
+    const btn = await screen.findByRole('button', { name: /fiscalMonitor\.export/ });
+    await userEvent.click(btn);
+
+    await waitFor(() => expect(getCsv()).not.toBeNull());
+    expect(getCsv()).toContain('Newer motivo');
+    expect(getCsv()).not.toContain('Older motivo');
+  });
+
+  // Coverage gap closed: no *SiiData rows at all for the invoice — the
+  // exported Error cell must be an empty string, not throw or leak 'undefined'.
+  it('exports an empty Error cell when there are no SiiData rows and no header msg', async () => {
+    currentApiFetch = mockApiFetch([invoiceRow()], []);
+    const getCsv = captureDownloadedCsv();
+
+    render(<SiiMonitorSection {...baseProps} />);
+    const btn = await screen.findByRole('button', { name: /fiscalMonitor\.export/ });
+    await userEvent.click(btn);
+
+    await waitFor(() => expect(getCsv()).not.toBeNull());
+    const dataLine = getCsv().split('\n')[1];
+    expect(dataLine).toBeDefined();
+    expect(dataLine.endsWith('""')).toBe(true);
+  });
+
+  // Coverage gap closed: the *SiiData re-fetch used for the export is
+  // documented as "non-fatal" (SiiMonitorSection.jsx handleExport catch
+  // block) — a rejected/failed fetch must not abort the export, and the
+  // Error column falls back to the header-only fields.
+  it('still exports successfully (header-only Error column) when the SiiData re-fetch fails', async () => {
+    currentApiFetch = vi.fn((url) => {
+      if (String(url).includes('SiiData')) {
+        return Promise.reject(new Error('network error'));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          response: {
+            data: [invoiceRow({ aeatsiiErrorCode: '500', aeatsiiErrorMsg: 'Header error message' })],
+            totalRows: 1,
+          },
+        }),
+      });
+    });
+    const getCsv = captureDownloadedCsv();
+
+    render(<SiiMonitorSection {...baseProps} />);
+    const btn = await screen.findByRole('button', { name: /fiscalMonitor\.export/ });
+    await userEvent.click(btn);
+
+    await waitFor(() => expect(getCsv()).not.toBeNull());
+    expect(getCsv()).toContain('Header error message');
+  });
 });
