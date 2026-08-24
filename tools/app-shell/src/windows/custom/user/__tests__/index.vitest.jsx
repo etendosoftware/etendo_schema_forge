@@ -59,6 +59,10 @@ vi.mock('@/lib/userRoleAssignmentsApi.js', () => ({
   saveUserRoleAssignments: vi.fn(),
 }));
 
+vi.mock('@/lib/resendInvitationApi.js', () => ({
+  resendInvitation: vi.fn(),
+}));
+
 import { useRoleSelection } from '../roleSelectionContext.js';
 
 /** Renders inside the mocked UserPage, giving tests a hook to drive the shared
@@ -111,6 +115,7 @@ vi.mock('@generated/user/generated/web/user/UserPage', () => ({
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 beforeEach(() => {
@@ -439,7 +444,16 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
     expect(pill).toHaveAttribute('data-status', 'DELIVERY_FAILED');
   });
 
-  it.each(['ACCEPTED', 'EXPIRED', 'REVOKED'])('renders nothing when invitationStatus is %s (terminal, non-actionable state)', (status) => {
+  it('renders a neutral expired pill when invitationStatus is EXPIRED (ETP-4830 item #2/#3 — a genuinely reachable value now that findLatestInvitationStatus computes it live)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationExpiredBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'EXPIRED');
+  });
+
+  it.each(['ACCEPTED', 'REVOKED'])('renders nothing when invitationStatus is %s (terminal, non-actionable state)', (status) => {
     render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
   });
@@ -611,5 +625,82 @@ describe('UserWindow — actionable "user created" toast (ETP-4830, onAfterCreat
     toastSuccess.mock.calls[0][1].action.onClick();
 
     expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', expect.anything());
+  });
+});
+
+describe('UserWindow — "Resend invitation" button (ETP-4830 item #2, detail-header topbarExtra)', () => {
+  it('renders nothing on a brand-new, not-yet-saved record (no id to resend against)', () => {
+    render(<UserWindow recordId="new" data={{ invitationStatus: 'PENDING' }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when invitationStatus is absent (e.g. an existing pre-ETP-4830 user)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it.each(['ACCEPTED', 'REVOKED'])('renders nothing when invitationStatus is %s (not eligible for resend)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it.each(['PENDING', 'SENT', 'EXPIRED', 'DELIVERY_FAILED'])('renders when invitationStatus is %s (eligible for resend)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+    expect(screen.getByTestId('ResendInvitationButton')).toBeInTheDocument();
+  });
+
+  it('calls resendInvitation with the record id, shows a success toast, and refreshes on success', async () => {
+    resendInvitation.mockResolvedValue({ status: 'success', invitation: { status: 'SENT' } });
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', invitationStatus: 'EXPIRED' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(resendInvitation).toHaveBeenCalledWith('user-1'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('resendInvitationSuccessToast'));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('shows an error toast with the rejection message and does not refresh on failure', async () => {
+    resendInvitation.mockRejectedValue(new Error("Invitation status 'REVOKED' cannot be resent"));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', invitationStatus: 'EXPIRED' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Invitation status 'REVOKED' cannot be resent"));
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic i18n error key when the rejection has no message', async () => {
+    resendInvitation.mockRejectedValue(new Error());
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('resendInvitationErrorFallback'));
+  });
+
+  it('disables the button while a resend is in flight', async () => {
+    let resolveResend;
+    resendInvitation.mockReturnValue(new Promise((resolve) => { resolveResend = resolve; }));
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(screen.getByTestId('ResendInvitationButton')).toBeDisabled());
+
+    resolveResend({ status: 'success', invitation: { status: 'SENT' } });
+    await waitFor(() => expect(screen.getByTestId('ResendInvitationButton')).not.toBeDisabled());
   });
 });

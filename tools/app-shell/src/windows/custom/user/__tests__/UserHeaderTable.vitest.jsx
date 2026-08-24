@@ -341,7 +341,15 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
     expect(pill).toHaveAttribute('data-tone', 'destructive');
   });
 
-  it.each(['ACCEPTED', 'EXPIRED', 'REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
+  it('renders the neutral (gray) pill for invitationStatus EXPIRED', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'EXPIRED' }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it.each(['ACCEPTED', 'REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
     'renders a blank cell (no crash) for invitationStatus %s',
     async (status) => {
       const col = await getInvitationColumn();

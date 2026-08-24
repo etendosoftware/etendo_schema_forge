@@ -38,7 +38,15 @@ describe('PendingInvitationPill', () => {
     expect(pill).toHaveAttribute('data-status', 'DELIVERY_FAILED');
   });
 
-  it.each(['ACCEPTED', 'EXPIRED', 'REVOKED'])('renders nothing (null) for terminal status %s', (status) => {
+  it('renders a neutral (gray) pill with the expired label for EXPIRED (ETP-4830 item #2/#3 — a genuinely reachable value now that findLatestInvitationStatus computes it live)', () => {
+    render(<PendingInvitationPill status="EXPIRED" />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationExpiredBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'EXPIRED');
+  });
+
+  it.each(['ACCEPTED', 'REVOKED'])('renders nothing (null) for terminal status %s', (status) => {
     const { container } = render(<PendingInvitationPill status={status} />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();

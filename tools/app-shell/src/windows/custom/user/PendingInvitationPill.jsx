@@ -19,9 +19,15 @@ import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx'
  * `PENDING` is only a transient pre-send state within the request that creates the
  * invitation — the persisted status after a successful send is `SENT`, so both render
  * the same amber pill (an invite is outstanding either way). `DELIVERY_FAILED` gets its
- * own red pill so the admin notices the email never went out. Every other value
- * (`ACCEPTED`, `EXPIRED`, `REVOKED`, `null`, or any unrecognized string) renders
- * nothing — a blank cell in the grid, nothing in the toolbar.
+ * own red pill so the admin notices the email never went out. `EXPIRED` gets a neutral
+ * (gray) pill (ETP-4830 item #2/#3) — this is a genuinely reachable value now that
+ * `CompanyInvitationService#findLatestInvitationStatus` computes it live from
+ * `expiresAt` rather than relying on a stored column nothing ever wrote (see that
+ * method's own javadoc); it also gives the new "Resend invitation" button (rendered
+ * next to this pill, see `index.jsx`'s `TopbarExtra`) something to sit beside instead
+ * of floating with no status indicator. Every other value (`ACCEPTED`, `REVOKED`,
+ * `null`, or any unrecognized string) renders nothing — a blank cell in the grid,
+ * nothing in the toolbar.
  *
  * Purely reactive to `status` — no local state or polling. In the grid, this means a
  * row updates the next time its data reloads (same as every other cell); in the
@@ -45,6 +51,15 @@ export default function PendingInvitationPill({ status, 'data-testid': dataTestI
         status={status}
         tone="destructive"
         label={ui('invitationDeliveryFailedBadge')}
+        data-testid={dataTestId} />
+    );
+  }
+  if (status === 'EXPIRED') {
+    return (
+      <DocumentStatusPill
+        status={status}
+        tone="neutral"
+        label={ui('invitationExpiredBadge')}
         data-testid={dataTestId} />
     );
   }

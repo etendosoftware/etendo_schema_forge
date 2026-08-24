@@ -1,16 +1,27 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Loader2, Send } from 'lucide-react';
 import { useUI } from '@/i18n';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
+
+// ETP-4830 item #2 — the set of invitationStatus values a "Resend invitation" click is
+// meaningful for. Matches CompanyInvitationService#resendInvitation's own server-side
+// eligibility gate exactly (that method is the real boundary; this list is only for
+// deciding whether to render the button at all). REVOKED is intentionally excluded — a
+// revoked invite must not be silently resurrected by an admin who forgot it was revoked;
+// ACCEPTED is excluded because there is nothing left to resend.
+const RESENDABLE_INVITATION_STATUSES = new Set(['PENDING', 'SENT', 'EXPIRED', 'DELIVERY_FAILED']);
 
 function sameIdSet(a, b) {
   if (a.length !== b.length) return false;
@@ -82,15 +93,67 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
 }
 
 /**
- * ETP-4830 — composite `topbarExtra` component: pending-invitation pill first, then
- * the active/inactive toggle, matching the reference screenshot's visual order
- * (pill-then-toggle is the reasonable default absent a pixel-exact mockup).
- * `ActiveStatusToggle` reads straight off the same props `DetailView.jsx` passes into
- * `topbarExtra` (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread
- * straight through. `PendingInvitationPill` (`./PendingInvitationPill.jsx`, extracted
- * so the Users LIST GRID can render the identical pill per row — see that file's own
- * doc comment) only needs the raw status value, so only `data?.invitationStatus` is
- * pulled out of `props` for it, rather than spreading the whole prop bag.
+ * ETP-4830 item #2 — "Resend invitation" button, rendered next to the pill (human-
+ * confirmed placement — see this ticket's design decisions). Visible only when
+ * `data.invitationStatus` is one of `RESENDABLE_INVITATION_STATUSES`; the server-side
+ * gate in `CompanyInvitationService#resendInvitation` is the real boundary (this is
+ * only a UX nicety — don't offer a click that would just 400).
+ *
+ * On success: mints a fresh token, marks any still-open prior invitation REVOKED (see
+ * that method's javadoc), sends a new email, and calls `onRefresh` so the pill's status
+ * flips (PENDING/SENT/EXPIRED/DELIVERY_FAILED all become SENT or DELIVERY_FAILED again,
+ * per the actual send outcome — not assumed optimistically).
+ */
+function ResendInvitationButton({ data, recordId, onRefresh }) {
+  const ui = useUI();
+  const [sending, setSending] = useState(false);
+  const id = data?.id || recordId;
+  const status = data?.invitationStatus;
+
+  if (!id || id === 'new' || !RESENDABLE_INVITATION_STATUSES.has(status)) return null;
+
+  const handleClick = async () => {
+    setSending(true);
+    try {
+      await resendInvitation(id);
+      toast.success(ui('resendInvitationSuccessToast'));
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || ui('resendInvitationErrorFallback'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="gap-1.5"
+      disabled={sending}
+      onClick={handleClick}
+      data-testid="ResendInvitationButton">
+      {sending
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__ResendInvitation" />
+        : <Send className="h-3.5 w-3.5" data-testid="Send__ResendInvitation" />}
+      <span>{ui('resendInvitationAction')}</span>
+    </Button>
+  );
+}
+
+/**
+ * ETP-4830 — composite `topbarExtra` component: pending-invitation pill, then the
+ * resend button (item #2), then the active/inactive toggle, matching the reference
+ * screenshot's visual order (pill-then-toggle is the reasonable default absent a
+ * pixel-exact mockup; resend sits next to the pill it acts on, per this ticket's own
+ * design decision). Both `ActiveStatusToggle` and `ResendInvitationButton` read
+ * straight off the same props `DetailView.jsx` passes into `topbarExtra` (`data`,
+ * `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread straight through.
+ * `PendingInvitationPill` (`./PendingInvitationPill.jsx`, extracted so the Users LIST
+ * GRID can render the identical pill per row — see that file's own doc comment) only
+ * needs the raw status value, so only `data?.invitationStatus` is pulled out of `props`
+ * for it, rather than spreading the whole prop bag.
  */
 function TopbarExtra(props) {
   return (
@@ -98,6 +161,7 @@ function TopbarExtra(props) {
       <PendingInvitationPill
         status={props.data?.invitationStatus}
         data-testid="PendingInvitationPill__toolbar" />
+      <ResendInvitationButton {...props} />
       <ActiveStatusToggle {...props} />
     </div>
   );
