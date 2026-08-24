@@ -14,6 +14,7 @@ const fields = [
   { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text', label: 'Email', section: 'principal' },
   { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'text', label: 'Phone', section: 'principal' },
   { key: 'creditLimit', column: 'SO_CreditLimit', type: 'number', label: 'Credit Limit', required: true, section: 'other' },
+  { key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv', type: 'checkbox', label: 'Simplified Invoice', required: true, section: 'principal' },
 ];
 // @sf-generated-end fields:businessPartner
 

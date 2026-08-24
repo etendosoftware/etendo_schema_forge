@@ -1,8 +1,8 @@
 {
-  "version": "0.48.0",
+  "version": "0.49.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-15T03:01:25.636Z",
-  "checksum": "4d3d4a22a8301944",
+  "updatedAt": "2026-08-24T16:29:45.225Z",
+  "checksum": "05c8287126073aa2",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1007,6 +1007,29 @@
             }
           },
           {
+            "name": "tbaiIssimplifiedinv",
+            "apiKey": "tbaiIssimplifiedinv",
+            "column": "EM_Tbai_Issimplifiedinv",
+            "label": "Simplified Invoice",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -1434,6 +1457,13 @@
           },
           {
             "name": "isCustomerConsent",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "tbaiIssimplifiedinv",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -5832,7 +5862,7 @@
             "apiKey": "tbaiIssimplifiedinv",
             "column": "EM_Tbai_Issimplifiedinv",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -12225,6 +12255,14 @@
         "description": "Default value for 'setNewCurrency' in businessPartner should be a string"
       },
       {
+        "id": "t-default-value-type-businessPartner-tbaiIssimplifiedinv",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Default value for 'tbaiIssimplifiedinv' in businessPartner should be a string"
+      },
+      {
         "id": "t-default-value-type-businessPartner-vendorBlocking",
         "category": "default-value-type",
         "entity": "businessPartner",
@@ -13809,6 +13847,14 @@
         "description": "Field 'taxID' should be present in businessPartner"
       },
       {
+        "id": "t-field-presence-businessPartner-tbaiIssimplifiedinv",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Field 'tbaiIssimplifiedinv' should be present in businessPartner"
+      },
+      {
         "id": "t-field-presence-businessPartner-uRL",
         "category": "field-presence",
         "entity": "businessPartner",
@@ -14935,6 +14981,14 @@
         "field": "taxID",
         "runner": "node",
         "description": "Field 'taxID' should have type 'string' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-tbaiIssimplifiedinv",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Field 'tbaiIssimplifiedinv' should have type 'boolean' in businessPartner"
       },
       {
         "id": "t-field-type-businessPartner-uRL",
@@ -17487,14 +17541,6 @@
         "field": "taxExempt",
         "runner": "node",
         "description": "System field 'taxExempt' should exist in backend but not frontend for businessPartner"
-      },
-      {
-        "id": "t-system-field-businessPartner-tbaiIssimplifiedinv",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "tbaiIssimplifiedinv",
-        "runner": "node",
-        "description": "System field 'tbaiIssimplifiedinv' should exist in backend but not frontend for businessPartner"
       },
       {
         "id": "t-system-field-businessPartner-transactionalBankAccount",
@@ -20971,23 +21017,23 @@
       }
     ],
     "summary": {
-      "total": 1147,
+      "total": 1149,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 47,
+        "default-value-type": 48,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 141,
-        "field-type": 141,
+        "field-presence": 142,
+        "field-type": 142,
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 519,
+        "system-field": 518,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1147,
+        "node": 1149,
         "junit": 0
       }
     }

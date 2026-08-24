@@ -321,3 +321,67 @@ itself is still frágil for other windows in principle, but tightening it for ev
 is a separate, cross-window concern with its own risk budget — out of scope here. Verified
 with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
 `statusField` resolves to `null` and the pill no longer renders on new or existing records.
+
+## ETP-4784 (part 2) — SII/TicketBAI Business Partner defaults exposed
+
+Three Classic Business Partner fields, used as **billing-time defaults** by the Etendo
+Classic AEAT SII / TicketBAI modules, are now exposed in the Go Contacts window. These are
+plain configuration values with **no callout/derivation logic of their own** on the Business
+Partner — they are only *read* later when an invoice is generated in Classic. Consuming them
+in Go's own invoicing flow (equivalent default-application logic) is explicitly **out of
+scope** for this ticket; that is separate follow-up work once/if Go grows an invoicing flow
+that needs them.
+
+| Classic field | Go field (camelCase) | Entity | Where it lives in Go |
+|---|---|---|---|
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Checkbox in the Financial tab → Cliente (customer) billing block, `BillingPreferencesForm.jsx` |
+| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same block, visible only when `aeatsiiDefaultsiikey` is checked |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Checkbox in the header form (General tab), auto-emitted — no custom component |
+
+**TBAI (`tbaiIssimplifiedinv`):** `decisions.json → entities.businessPartner.fields.tbaiIssimplifiedinv`
+changed from `visibility: "discarded"` to `editable` (`form: true`, `grid: false`,
+`section: "principal"`). Regenerated with `make regen ONLY=contacts` — the generator's
+generic field-array emission on `BusinessPartnerForm.jsx` picked it up automatically as a
+`type: 'checkbox'` entry; no custom component change was needed.
+
+**SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
+and already pushed to NEO from earlier work — only the UI wiring was missing. Deliberately
+**not** declared with an explicit `fieldGroup`/entity-level customization in `decisions.json`:
+the generated `CustomerForm.jsx` for the `customer` entity is never imported by
+`BusinessPartnerPage.jsx` or any custom component — every `customer`/`vendor` entity field in
+this window (`priceList`, `paymentMethod`, `purchasePricelist`, …) is hand-wired directly in
+`BillingPreferencesForm.jsx` via small local `fields` arrays passed to `EntityForm`, not
+through the auto-generated per-entity form. Adding a `fieldGroup` would have had zero effect
+on the rendered UI, so the two new fields follow the same established pattern instead:
+
+```js
+const aeatsiiDefaultKeyField = [
+  { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', section: 'principal' },
+];
+const aeatsiiKeyListField = [
+  {
+    key: 'aeatsiiSiikeylist',
+    column: 'EM_Aeatsii_Siikeylist',
+    type: 'select',
+    section: 'principal',
+    options: [ /* R / F1 / F2 / F4, labels copied from artifacts/contacts/contract.json */ ],
+    displayLogic: (record) => !!record?.aeatsiiDefaultsiikey,
+  },
+];
+```
+
+Both are rendered as a new row (`EntityForm` × 2, one column each) directly under the
+existing "Condiciones de pago / Bloqueo de cliente" row inside the Cliente billing block, so
+they only appear when the Customer flag is enabled — matching the AD `displayLogic
+@EM_Aeatsii_Defaultsiikey@='Y'` for the invoice-type selector. Field labels are resolved
+automatically by `EntityForm` via `useLabel()`/`t(column)` against the AD dictionary
+(`EM_Aeatsii_Defaultsiikey` → "Default Key", `EM_Aeatsii_Siikeylist` → "Invoice type key" in
+both `en_US.json` and `es_ES.json` — the AD reference data itself has not been translated to
+Spanish yet; that is a pre-existing AD/i18n data gap, not something this change introduces).
+The four enum option labels (`R`/`F1`/`F2`/`F4`) are hardcoded in the component with their
+`labels.es_ES` overrides copied verbatim from `contract.json`, following the same static-enum
+pattern already used by `AssetsConfigPanel.jsx`/`TaxSifField.jsx` — `F1` ("Invoice") has no
+AD-side Spanish translation either, same underlying data gap.
+
+No generator or `decisions.json` schema change was needed beyond the one `tbaiIssimplifiedinv`
+visibility flip — this was purely a UI-wiring task. Verified with `make regen ONLY=contacts`.

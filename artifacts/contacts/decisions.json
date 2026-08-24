@@ -169,7 +169,11 @@
     "businessPartner": {
       "fields": {
         "tbaiIssimplifiedinv": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "form": true,
+          "grid": false,
+          "section": "principal",
+          "label": "Simplified Invoice"
         },
         "employee": {
           "visibility": "editable",
