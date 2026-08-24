@@ -328,12 +328,25 @@ Three Classic Business Partner fields, used as **billing-time defaults** by the 
 Classic AEAT SII / TicketBAI modules, are now exposed in the Go Contacts window. These are
 plain configuration values with **no callout/derivation logic of their own** on the Business
 Partner — they are only *read* later when an invoice is generated. Architecture investigation
-has **confirmed** that consumption of these defaults at invoicing time already works
-automatically in Go with no additional code: SII reads `aeatsiiDefaultsiikey`/
-`aeatsiiSiikeylist` via the existing Classic DB trigger path, and TBAI reads
-`tbaiIssimplifiedinv` via the reused Classic Java process — both fire the same way regardless
-of whether the invoice originates in Classic or Go. No follow-up ticket is needed for that
-consumption path.
+has **confirmed, by code inspection and live DB-trigger verification**, that consumption of
+these defaults at invoicing time already works automatically in Go with no additional code:
+the `aeatsii_invoice_trg` DB trigger was confirmed to exist with correct logic for reading
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`, and `XMLUtils.java` was confirmed to read the
+`tbaiIssimplifiedinv` field directly off the Business Partner at TBAI send time — both fire
+the same way regardless of whether the invoice originates in Classic or Go. **Not yet
+verified end-to-end through the Go UI** — that check requires a running Tomcat/Go
+environment, which was not available during this ticket's development, so it remains a
+pending manual verification (steps below) rather than a follow-up ticket.
+
+**Pending manual end-to-end verification (requires a live Go environment):**
+1. Start Tomcat / the local Go environment.
+2. In Go Contacts, create or edit a Business Partner with `Customer = true`, "Clave por
+   defecto" checked, "Clave tipo factura" = `F1`, and "Factura Simplificada" checked. Save.
+3. Create and complete a sales invoice for that Business Partner from Go.
+4. In Classic, open the invoice → AEAT SII tab → confirm "Clave tipo factura" was populated
+   with `F1`.
+5. Trigger/inspect that invoice's TBAI submission → confirm the XML carries
+   `<FacturaSimplificada>S</FacturaSimplificada>`.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
@@ -376,7 +389,17 @@ const aeatsiiKeyListField = [
 Both are rendered as a new row (`EntityForm` × 2, one column each) directly under the
 existing "Condiciones de pago / Bloqueo de cliente" row inside the Cliente billing block, so
 they only appear when the Customer flag is enabled — matching the AD `displayLogic
-@EM_Aeatsii_Defaultsiikey@='Y'` for the invoice-type selector. Field labels are resolved
+@EM_Aeatsii_Defaultsiikey@='Y'` for the invoice-type selector.
+
+**Hide ≠ strip.** Unchecking "Clave por defecto" hides `aeatsiiSiikeylist` via
+`displayLogic` — it does **not** clear the stored value. The field simply stops being
+visible and stops being required while hidden; its previously-saved value persists
+untouched, and reappears if "Clave por defecto" is checked again. This is intentional
+parity with Classic's own behavior for the same field, not a bug. Covered by a regression
+test in `BillingPreferencesForm.vitest.jsx` ("does not clear aeatsiiSiikeylist when the
+default-key checkbox is off").
+
+Field labels are resolved
 automatically by `EntityForm` via `useLabel()`/`t(column)` against the AD dictionary
 (`EM_Aeatsii_Defaultsiikey` → "Default Key", `EM_Aeatsii_Siikeylist` → "Invoice type key" in
 both `en_US.json` and `es_ES.json` — the AD reference data itself has not been translated to
