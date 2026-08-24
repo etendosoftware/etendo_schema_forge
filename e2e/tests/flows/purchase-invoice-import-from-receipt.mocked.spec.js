@@ -603,15 +603,16 @@ test.describe('Purchase Invoice — Import from Source Invoice (ETP-4737)', () =
     await expect.poll(() => state.postBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
     expect(Number(state.postBodies[0].invoicedQuantity)).toBeLessThan(0);
 
-    // Assertion: after a successful import, afterImport PATCHes the header's originInvoice
-    // virtual field with the source invoice's id. Other unrelated PATCHes to the same header
-    // (e.g. autosave) may also fire, so find the one that actually carries originInvoice
-    // rather than assuming it is the first captured PATCH.
+    // Assertion: after a successful import, afterImport PATCHes the header's originInvoices
+    // virtual field (ETP-4919: plural — a rectificativa can be linked to more than one source
+    // invoice across separate import runs) with the source invoice's id. Other unrelated
+    // PATCHes to the same header (e.g. autosave) may also fire, so find the one that actually
+    // carries originInvoices rather than assuming it is the first captured PATCH.
     await expect.poll(
-      () => state.patchBodies.some((b) => b.originInvoice !== undefined),
+      () => state.patchBodies.some((b) => b.originInvoices !== undefined),
       { timeout: 5_000 },
     ).toBe(true);
-    const originInvoicePatch = state.patchBodies.find((b) => b.originInvoice !== undefined);
-    expect(originInvoicePatch.originInvoice).toBe(SOURCE_PINV_ID);
+    const originInvoicePatch = state.patchBodies.find((b) => b.originInvoices !== undefined);
+    expect(originInvoicePatch.originInvoices).toEqual([SOURCE_PINV_ID]);
   });
 });

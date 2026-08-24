@@ -79,7 +79,7 @@ async function buildInvoiceData(invoiceId, base, token) {
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useInvoicePdf(invoiceId, apiBaseUrl, token) {
+export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('invoicePdfTitle'),
@@ -88,5 +88,5 @@ export function useInvoicePdf(invoiceId, apiBaseUrl, token) {
     date:            ui('invoicePdfDate'),
     colQty:          ui('invoicePdfColQty'),
   });
-  return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels);
+  return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels, cacheConfig);
 }

@@ -18,15 +18,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
-import { useHasCapability } from '@/auth/AuthContext.jsx';
+import { useHasCapability, useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
+import { getApiBase } from '@/hooks/useNeoResource.js';
 import { DateInput, Field, ChipSelect } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
 import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
-import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
+import { normalizeIban } from '@/lib/validateIban.js';
+import { validateIbanForCountry } from '@/lib/countryIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
@@ -36,6 +39,44 @@ const EDIT_TAB_ACCOUNTING = 'accounting';
 
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
+
+// ETP-4896 — Country field. `CreatableSearchSelect` over the live `C_Country_ID` selector, NOT
+// the Radix `Select` Currency/Type use: 239 active countries in an unfiltered `SelectContent`
+// (no search box) is unusable, whereas Currency's ~20 options are fine in a plain dropdown.
+// Deliberately not "made consistent" with Currency — see the field's own comment below.
+const EDIT_COUNTRY_FIELD = { key: 'edit-account-country', id: 'edit-account-country' };
+const COUNTRY_SELECTOR_URL = `${getApiBase()}/sws/neo/financial-account/account/selectors/C_Country_ID`;
+
+/**
+ * Maps a validateIbanForCountry() error code to its i18n key — same base mapping as
+ * AccountFormStep, plus `missingCountry` (EditAccountModal-only: Country isn't mandatory here the
+ * way it is on the New Account form, so clearing it while a real IBAN remains is its own error,
+ * not a code `validateIbanForCountry` itself produces).
+ */
+const IBAN_ERROR_KEYS = {
+  invalid: 'financeAccountsNewIbanInvalid',
+  countryMismatch: 'financeAccountsNewIbanCountryMismatch',
+  lengthMismatch: 'financeAccountsNewIbanLengthMismatch',
+  missingCountry: 'financeAccountsNewCountryRequiredForIban',
+};
+
+/**
+ * Backend 400 bodies (`FinancialAccountHandler`/`FinancialAccountCountrySupport`, ETP-4896) are
+ * plain English literals — there is no error `code` field, only `message` (see
+ * `financialAccountHttp.js#readErrorMessage`). `useAccountFields`'s own pre-check above is meant
+ * to catch every one of these BEFORE the request fires, so this is only a safety net for
+ * whatever slips past it (e.g. `countryIbanRules` staleness, a race with another tab) — translate
+ * the ones we can recognize verbatim rather than showing raw English in a toast.
+ */
+const BACKEND_ERROR_MESSAGE_KEYS = {
+  'A bank account with an IBAN must have a country.': 'financeAccountsNewCountryRequiredForIban',
+};
+
+/** Translates a backend error message when recognized, otherwise passes it through as-is. */
+function localizeBackendMessage(message, ui) {
+  const key = BACKEND_ERROR_MESSAGE_KEYS[message];
+  return key ? ui(key) : message;
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept top-level so the component/hooks stay simple)
@@ -122,6 +163,10 @@ async function persistAccountEdits({
   if (fields.typeDirty) updates.type = fields.type;
   if (fields.ibanDirty) updates.iban = normalizeIban(fields.iban);
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
+  // Country (ETP-4896) — always editable, so this can fire on its own even when nothing else on
+  // the form changed; the `Object.keys(updates).length > 0` gate below already turns that into a
+  // real PUT.
+  if (fields.countryDirty) updates.countryId = fields.countryId;
   // The `*Value` fields, never the raw strings the inputs hold — see useReconciliationSettings.
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateToleranceValue;
   if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountToleranceValue;
@@ -219,7 +264,6 @@ async function runDisconnect({
  * Editable account fields.
  *
  * - Name is always editable.
- * - IBAN is editable while the account has no bank link (owned by the bank once linked).
  * - Currency is editable only while the account BOTH has no bank link AND has no registered
  *   transactions yet (ETP-4530) — a stricter, distinct condition from the IBAN/connection one:
  *   an offline account can accumulate movements (manual statements, transfers) without ever
@@ -228,9 +272,23 @@ async function runDisconnect({
  *
  * "Has a bank link" is deliberately broader than "is connected": a soft-disconnected account
  * (ETP-4764) is still bound to one specific Salt Edge account and can be revived with Reconectar,
- * so its IBAN/type/currency must stay locked. Letting the currency change while deactivated would
+ * so its type/currency must stay locked. Letting the currency change while deactivated would
  * silently desync the account from the bank account it re-binds to — the link filters the bank's
  * accounts by currency. These only unlock once the connection is deleted for good.
+ *
+ * - **Country** (ETP-4896) is always editable, in every state, unlike Type/Currency above: it is
+ *   descriptive metadata, not something that rewrites past balances or that a Salt Edge link pins
+ *   the way Currency does. Changing it does re-run the IBAN↔country pair check (see
+ *   `validateIbanForCountry`), same as the New Account form.
+ * - **IBAN** (ETP-4896 follow-up) is likewise always editable for non-cash accounts, including a
+ *   live-connected one — this REVERSES the pre-ETP-4896 stance ("owned by the bank once linked").
+ *   Locking it made an inconsistent (IBAN, country) pair on an already-linked account
+ *   unfixable from this modal: Country could be changed freely but the IBAN it must pair with
+ *   could not, so a legacy mismatch (or the demo/seed data kind) permanently blocked Save with no
+ *   way out short of un-linking the bank first. A hand-edited IBAN here is metadata on this
+ *   record, same as Country — it does not reach into Salt Edge and rewrite what the live
+ *   connection itself considers the account's IBAN, so it cannot desync the sync feed the way
+ *   changing Currency could.
  */
 function useAccountFields(open, account, hasBankLink, hasTransactions) {
   const { fetchDefaults } = useAccountMutations();
@@ -238,9 +296,20 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   const [type, setType] = useState('');
   const [iban, setIban] = useState('');
   const [currencyId, setCurrencyId] = useState('');
+  const [countryId, setCountryId] = useState('');
+  // The picker's display label, sourced from `account.countryName` (both the W and R specs emit
+  // it, ETP-4896) — NOT derived from `countryIbanRules` below, which only covers the ~45
+  // countries with IBAN metadata and would render blank for the ~198 majority that lack it.
+  const [countryLabel, setCountryLabel] = useState('');
   const [ibanTouched, setIbanTouched] = useState(false);
   const [currencies, setCurrencies] = useState([]);
-  const [snapshot, setSnapshot] = useState({ name: '', type: '', iban: '', currencyId: '' });
+  // ETP-4896: the ≤45-country IBAN-metadata catalog, same source/shape as AccountFormStep's —
+  // used ONLY to cross-check the typed IBAN against the selected country, never as the picker's
+  // option list (that comes from the live C_Country_ID selector in AccountFieldsGrid).
+  const [countryIbanRules, setCountryIbanRules] = useState([]);
+  const [snapshot, setSnapshot] = useState({
+    name: '', type: '', iban: '', currencyId: '', countryId: '',
+  });
 
   useEffect(() => {
     if (!open || !account) return;
@@ -248,11 +317,14 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
     setType(account.type ?? '');
     setIban(account.iban ?? '');
     setCurrencyId(account.currencyId ?? '');
+    setCountryId(account.countryId ?? '');
+    setCountryLabel(account.countryName ?? '');
     setSnapshot({
       name: account.name ?? '',
       type: account.type ?? '',
       iban: account.iban ?? '',
       currencyId: account.currencyId ?? '',
+      countryId: account.countryId ?? '',
     });
     setIbanTouched(false);
   }, [open, account]);
@@ -263,33 +335,71 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   // balances/journal entries, so they become read-only info instead of inputs (ETP-4581).
   const typeEditable = !hasBankLink && !hasTransactions;
   const currencyEditable = !hasBankLink && !hasTransactions;
+  // Country never locks (see the hook's own doc comment above) — kept as an explicit `true`
+  // constant, not a computed condition, so the intent reads the same as its siblings above.
+  const countryEditable = true;
 
-  // Currency options are only needed while the currency field is editable.
+  // ETP-4896: no longer gated on `currencyEditable` — the Country field needs this same catalog
+  // for its IBAN cross-check regardless of whether Currency itself is locked, and Country is
+  // always editable. Same single call as before, just one fewer condition, not an extra request.
   useEffect(() => {
-    if (!open || !currencyEditable) return undefined;
+    if (!open) return undefined;
     let cancelled = false;
     fetchDefaults()
       .then((data) => {
-        if (!cancelled) setCurrencies(Array.isArray(data.currencies) ? data.currencies : []);
+        if (cancelled) return;
+        setCurrencies(Array.isArray(data.currencies) ? data.currencies : []);
+        setCountryIbanRules(Array.isArray(data.countryIbanRules) ? data.countryIbanRules : []);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [open, currencyEditable, fetchDefaults]);
+  }, [open, fetchDefaults]);
 
   // Reactive to the pending Type selection (falling back to the persisted value) so that
   // switching to/from Cash immediately reflows the IBAN field and the General tab before saving.
-  const isCash = (type || account?.type) === ACCOUNT_TYPE.CASH;
-  const ibanEditable = !hasBankLink && !isCash;
-  const ibanInvalid = ibanEditable && iban.trim() !== '' && !isValidIban(iban);
+  const currentType = type || account?.type;
+  const isCash = currentType === ACCOUNT_TYPE.CASH;
+  // ETP-4896 follow-up: no longer gated on `hasBankLink` — see the hook's own doc comment above.
+  const ibanEditable = !isCash;
+  // Only the ~45 countries with IBAN metadata match here; for the rest `validateIbanForCountry`
+  // skips the prefix/length checks and falls back to plain mod-97 (see `@/lib/countryIban.js`).
+  const selectedCountryMeta = countryIbanRules.find((c) => c.id === countryId) || null;
+  // Bank-type gate, NOT `ibanEditable`: the IBAN↔country pair must be re-checked even when the
+  // IBAN box itself is read-only (bank-linked accounts), because Country stays editable there —
+  // clearing Country while the account still has a real, stored IBAN is exactly as invalid as
+  // typing a mismatched one. Without this, that combination sailed past every frontend check and
+  // came back as the backend's raw, untranslated `A bank account with an IBAN must have a
+  // country.` 400 (ETP-4896 follow-up).
+  const isBankType = currentType === ACCOUNT_TYPE.BANK;
+  const ibanCheck = isBankType
+    ? validateIbanForCountry(iban, selectedCountryMeta)
+    : { ok: true, code: null };
+  // Distinct from `ibanCheck`: `validateIbanForCountry(iban, null)` deliberately treats "no
+  // country yet" as nothing-to-cross-check (the New Account form's in-progress-typing case). Here
+  // it must additionally require `countryId !== snapshot.countryId` (an ACTIVE clear during this
+  // edit, not merely "this legacy account never had one") — mirroring the backend's own
+  // `isExplicitClear` guard and its trigger-mirroring no-op rule: an account whose country was
+  // already blank when the modal opened, left untouched, sends no `country` key in the PUT body
+  // at all, so the backend never re-validates it either (same COALESCE-based no-op the trigger
+  // uses). Without the dirty check, every legacy account with a stored IBAN and no country (a
+  // common pre-ETP-4896 state) would show this error — and block Save — on open, for an edit that
+  // has nothing to do with either field.
+  const countryRequiredForIban = isBankType && iban.trim() !== ''
+    && countryId === '' && countryId !== snapshot.countryId;
+  const ibanInvalid = isBankType && iban.trim() !== '' && (!ibanCheck.ok || countryRequiredForIban);
+  const ibanErrorCode = countryRequiredForIban ? 'missingCountry' : ibanCheck.code;
   const nameDirty = name.trim() !== snapshot.name.trim();
   const typeDirty = typeEditable && type !== snapshot.type;
   const ibanDirty = ibanEditable && normalizeIban(iban) !== normalizeIban(snapshot.iban);
   const currencyDirty = currencyEditable && currencyId !== snapshot.currencyId;
+  const countryDirty = countryEditable && countryId !== snapshot.countryId;
 
   return {
     name, setName, type, setType, iban, setIban, currencyId, setCurrencyId,
-    ibanTouched, setIbanTouched, currencies, isCash, typeEditable, currencyEditable,
-    ibanInvalid, nameDirty, typeDirty, ibanDirty, currencyDirty,
+    countryId, setCountryId, countryLabel, setCountryLabel, countryIbanRules,
+    ibanTouched, setIbanTouched, currencies, isCash, typeEditable, currencyEditable, countryEditable,
+    ibanInvalid, ibanErrorCode, ibanEditable,
+    nameDirty, typeDirty, ibanDirty, currencyDirty, countryDirty,
   };
 }
 
@@ -810,6 +920,7 @@ export function EditAccountModal({
 }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
+  const { token } = useAuth();
   const { updateAccount } = useAccountMutations();
   const { saveImportSettings } = useBankConnectionActions();
   const { saveAccountingConfiguration } = useFinancialAccountAccounting();
@@ -880,6 +991,7 @@ export function EditAccountModal({
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
+    || fields.countryDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
@@ -908,7 +1020,7 @@ export function EditAccountModal({
       if (err.status === 409) {
         setError(ui('financeAccountsNewNameExists'));
       } else {
-        toast.error(err.message || ui('financeAccountsEditError'));
+        toast.error(localizeBackendMessage(err.message, ui) || ui('financeAccountsEditError'));
       }
     } finally {
       setSaving(false);
@@ -960,6 +1072,7 @@ export function EditAccountModal({
           isCash={isCash}
           hasBankLink={hasBankLink}
           fields={fields}
+          token={token}
           data-testid="AccountFieldsGrid__73027d" />
 
         <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
@@ -989,6 +1102,7 @@ export function EditAccountModal({
                   reauthMessage={reauthMessage}
                   onConnect={handleConnectClick}
                   onReconnect={bankConnection.handleReconnect}
+                  connectEligible={canConnectToSaltEdge(account)}
                   data-testid="BankConnectionSection__73027d" />
 
                 <ReconciliationSettingsSection
@@ -1080,7 +1194,7 @@ export function EditAccountModal({
 
 // `hasBankLink`, not `bankConnected`: a deactivated-but-reconnectable account still belongs to the
 // bank, so its IBAN stays a read-only value rather than turning back into an input (ETP-4764).
-function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields }) {
+function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields, token }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <EditField
@@ -1094,30 +1208,62 @@ function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields }) {
           className={FIELD_INPUT}
         />
       </EditField>
-      {!isCash && hasBankLink ? (
-        <ReadField
-          label={ui('financeAccountsBankConnectionFieldIban')}
-          value={account.iban}
-          onCopy={account.iban ? () => copyIbanToClipboard(account, ui) : undefined}
-          copyLabel={ui('financeAccountsCopyIban')}
-          data-testid="ReadField__73027d" />
-      ) : null}
-      {!isCash && !hasBankLink ? (
+      {/* Country (ETP-4896) — always editable, in every account state, unlike the IBAN/Type/
+          Currency fields below which lock progressively. Placed right after Name so it reads
+          before the IBAN it cross-checks against, mirroring AccountFormStep's field order. */}
+      <EditField
+        label={ui('financeAccountsBankConnectionFieldCountry')}
+        data-testid="EditField__country">
+        <CreatableSearchSelect
+          field={EDIT_COUNTRY_FIELD}
+          value={fields.countryId}
+          displayValue={fields.countryLabel}
+          onChange={(id, label) => {
+            fields.setCountryId(id || '');
+            fields.setCountryLabel(label || '');
+            // Reuses the IBAN "touched" gate: a country change can flip `ibanInvalid` (mismatch,
+            // or the missing-country case) on its own, without the IBAN input itself ever being
+            // touched — without this, the error would compute correctly and Save would disable,
+            // but nothing would explain why.
+            fields.setIbanTouched(true);
+          }}
+          formData={{}}
+          resolvedLabel={ui('financeAccountsBankConnectionFieldCountry')}
+          selectorUrl={COUNTRY_SELECTOR_URL}
+          token={token}
+          serverSearch
+          data-testid="edit-account-country" />
+      </EditField>
+      {!isCash ? (
         <EditField
           label={ui('financeAccountsBankConnectionFieldIban')}
           data-testid="EditField__73027d">
-          <Input
-            value={fields.iban}
-            onChange={(e) => fields.setIban(e.target.value)}
-            onBlur={() => fields.setIbanTouched(true)}
-            placeholder={ui('financeAccountsNewFieldIbanPlaceholder')}
-            maxLength={42}
-            data-testid="edit-account-iban"
-            className={FIELD_INPUT}
-          />
+          {/* ETP-4896 follow-up: editable even while bank-linked (see useAccountFields' own doc
+              comment) — the copy button is kept alongside it for a connected/linked account so
+              that existing convenience isn't lost just because the field became editable. */}
+          <div className="flex items-center gap-2">
+            <Input
+              value={fields.iban}
+              onChange={(e) => fields.setIban(e.target.value)}
+              onBlur={() => fields.setIbanTouched(true)}
+              placeholder={ui('financeAccountsNewFieldIbanPlaceholder')}
+              maxLength={42}
+              data-testid="edit-account-iban"
+              className={FIELD_INPUT}
+            />
+            {hasBankLink && account.iban ? (
+              <button
+                type="button"
+                onClick={() => copyIbanToClipboard(account, ui)}
+                aria-label={ui('financeAccountsCopyIban')}
+                className="shrink-0 text-[hsl(var(--text-disabled))] hover:text-[hsl(var(--foreground))]">
+                <Copy className="h-4 w-4" data-testid="Copy__73027d" />
+              </button>
+            ) : null}
+          </div>
           {fields.ibanInvalid && fields.ibanTouched ? (
             <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-iban-error">
-              {ui('financeAccountsNewIbanInvalid')}
+              {ui(IBAN_ERROR_KEYS[fields.ibanErrorCode] || IBAN_ERROR_KEYS.invalid)}
             </p>
           ) : null}
         </EditField>
@@ -1247,10 +1393,12 @@ function BankConnectionStatusBadge({ ui, connected, deactivated }) {
  * - **deactivated** (soft-disconnected) — the same panel, but with a "Reconectar" call to action
  *   instead of sync. The account still holds its bank link, so offering a from-scratch "Conectar
  *   banco" here would create a second connection and orphan the existing one.
- * - **unconnected** — just the "Conectar banco" button.
+ * - **unconnected** — just the "Conectar banco" button, and only when the account's country makes
+ *   it eligible (ETP-4896, see `saltEdgeEligibility.js`); otherwise a disabled button plus the
+ *   reason, since this is the one surface where the Country field that causes it is on screen.
  */
 function BankConnectionSection({
-  ui, bankConnection, busy, reauthMessage, onConnect, onReconnect,
+  ui, bankConnection, busy, reauthMessage, onConnect, onReconnect, connectEligible,
 }) {
   // All three states come from the connection hook's live view, never from the account record the
   // modal was opened with — reconnecting from inside the modal changes the state under it.
@@ -1277,8 +1425,9 @@ function BankConnectionSection({
           <button
             type="button"
             onClick={onConnect}
+            disabled={!connectEligible}
             data-testid="edit-account-connect-bank"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
           >
             <Plug className="h-4 w-4" data-testid="Plug__73027d" />
             {ui('financeAccountsMenuConnect')}
@@ -1299,6 +1448,14 @@ function BankConnectionSection({
       </div>
       {hasBankLink && bankConnection.loading ? (
         <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('financeAccountsBankConnectionLoading')}</p>
+      ) : null}
+      {/* ETP-4896: the reason the button above is disabled. Spelled out only here — the list row
+          and the row kebab hide their connect affordance outright, since neither has room to
+          explain it, and this is the surface where the Country field that decides it is visible. */}
+      {!hasBankLink && !connectEligible ? (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="edit-account-connect-country-hint">
+          {ui('financeAccountsBankConnectionSpainOnly')}
+        </p>
       ) : null}
       {deactivated && !bankConnection.loading ? (
         <p className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="edit-account-deactivated-hint">
@@ -1507,26 +1664,6 @@ function EditField({ label, children }) {
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function ReadField({ label, value, onCopy, copyLabel }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
-      {/* bg-muted/50 + cursor-default matches the read-only styling EntityForm.jsx already
-          uses everywhere else in the app (contract-ui's generic pipeline-generated forms) —
-          this custom modal's ReadField had been left visually identical to an editable Input
-          (a plain surface background), giving no visual cue that Tipo de cuenta/Moneda aren't editable. */}
-      <div className="flex h-10 cursor-default items-center gap-2 rounded-lg border border-[hsl(var(--border-control))] bg-muted/50 px-3 shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
-        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{value || '—'}</span>
-        {onCopy ? (
-          <button type="button" onClick={onCopy} aria-label={copyLabel} className="text-[hsl(var(--text-disabled))] hover:text-[hsl(var(--foreground))]">
-            <Copy className="h-4 w-4" data-testid="Copy__73027d" />
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }

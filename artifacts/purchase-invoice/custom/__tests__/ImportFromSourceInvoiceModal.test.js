@@ -35,10 +35,17 @@ describe('ImportFromSourceInvoiceModal (purchase) — source shape', () => {
     assert.match(src, /invoicedQuantity:\s*negQty/);
   });
 
-  it('best-effort PATCHes originInvoice after import to link back to the source', () => {
+  it('best-effort PATCHes originInvoices after import to link back to the source(s)', () => {
     assert.match(src, /afterImport/);
-    assert.match(src, /originInvoice:\s*sourceInvoiceId/);
+    assert.match(src, /originInvoices:\s*\[\.\.\.importedDocIds\]/);
     assert.match(src, /method:\s*'PATCH'/);
+  });
+
+  // ETP-4919: importing from a SECOND source invoice used to silently drop the link to the
+  // first one — afterImport only ever PATCHed when exactly one document had been imported in
+  // that run, and always sent a single `originInvoice` id, discarding any earlier import.
+  it('does not gate afterImport on importedDocIds.size === 1 (ETP-4919 fix)', () => {
+    assert.doesNotMatch(src, /importedDocIds\.size\s*!==\s*1/);
   });
 
   it('wires the source-invoice-specific i18n keys', () => {
@@ -205,5 +212,67 @@ describe('ImportFromSourceInvoiceModal (purchase) — duplicate detection via so
     );
     assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
     assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
+  });
+});
+
+// ── Behavioral: afterImport (ETP-4919 — multi-origin fix) ───────────────────
+// Re-implemented verbatim (same reasoning as the other helpers above: only the
+// component is exported). Proves the PATCH always fires and always carries the
+// FULL set of imported ids, not just when exactly one document was imported.
+
+async function afterImport({ importedDocIds, base, headers, invoiceId }) {
+  if (importedDocIds.size === 0) return;
+  try {
+    await fetch(`${base}/purchase-invoice/header/${invoiceId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
+    });
+  } catch {
+    // best-effort — the lines are already imported regardless of this link.
+  }
+}
+
+describe('ImportFromSourceInvoiceModal (purchase) — afterImport (ETP-4919: multi-origin fix)', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('PATCHes originInvoices with a single id when importing from one source invoice', async () => {
+    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
+    await afterImport({
+      importedDocIds: new Set(['source-1']),
+      base: '/b', headers: {}, invoiceId: 'inv1',
+    });
+    assert.equal(globalThis.fetch.mock.calls.length, 1);
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, '/b/purchase-invoice/header/inv1');
+    assert.equal(opts.method, 'PATCH');
+    assert.deepEqual(JSON.parse(opts.body), { originInvoices: ['source-1'] });
+  });
+
+  it('PATCHes originInvoices with BOTH ids when importing from two source invoices across two runs — this used to silently drop the first one', async () => {
+    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
+    await afterImport({
+      importedDocIds: new Set(['source-1', 'source-2']),
+      base: '/b', headers: {}, invoiceId: 'inv1',
+    });
+    assert.equal(globalThis.fetch.mock.calls.length, 1);
+    const [, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.deepEqual(JSON.parse(opts.body), { originInvoices: ['source-1', 'source-2'] });
+  });
+
+  it('does not PATCH when nothing was imported', async () => {
+    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
+    await afterImport({ importedDocIds: new Set(), base: '/b', headers: {}, invoiceId: 'inv1' });
+    assert.equal(globalThis.fetch.mock.calls.length, 0);
+  });
+
+  it('swallows a fetch failure (best-effort link, lines are already imported regardless)', async () => {
+    globalThis.fetch = mock.fn(async () => { throw new Error('network error'); });
+    await assert.doesNotReject(afterImport({
+      importedDocIds: new Set(['source-1']),
+      base: '/b', headers: {}, invoiceId: 'inv1',
+    }));
   });
 });

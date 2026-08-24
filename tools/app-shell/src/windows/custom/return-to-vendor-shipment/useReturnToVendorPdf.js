@@ -96,12 +96,12 @@ async function buildReturnToVendorData(shipmentId, base, token) {
   };
 }
 
-export function useReturnToVendorPdf(shipmentId, apiBaseUrl, token) {
+export function useReturnToVendorPdf(shipmentId, apiBaseUrl, token, cacheConfig = null) {
   const ui = useUI();
   return usePdfGenerator(shipmentId, apiBaseUrl, token, (id, base, tok) => {
     const labels = getReturnToVendorPdfLabels(ui);
     return buildReturnToVendorData(id, base, tok).then((data) => renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels }));
-  });
+  }, cacheConfig);
 }
 
 export function getReturnToVendorPdfLabels(ui) {

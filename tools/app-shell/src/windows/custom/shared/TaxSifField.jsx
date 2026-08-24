@@ -230,7 +230,14 @@ function buildOptions(optionsKey, ui) {
     return {
       value,
       // Prefix code so the AEAT key stays visible even before/without a translation.
+      // Consumed by TaxSifField's own EntityForm rendering (single concatenated string).
       label: `${value} — ${labelText}`,
+      // Code and description exposed SEPARATELY (additive, `label` above is unchanged)
+      // for consumers that render them as two distinct visual pieces instead of one
+      // concatenated string — see TaxSifModal.jsx's EnumSearchSelect, which renders the
+      // AEAT code and its description as two side-by-side pieces per option row.
+      code: value,
+      description: labelText,
     };
   });
 }

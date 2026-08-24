@@ -563,7 +563,8 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
     ],
   }),
-  // Checkout funnel for the tenant-upgrade flow (paid-second-tenant, ETP-4686).
+  // Checkout funnel for the paid productive-environment flow (ETP-4686, ETP-4966).
+  // These events are independent of any feature flag and survived the flag being retired.
   // See docs/paid-tenant-infrastructure.md §3.6.
   UPGRADE_PAGE_VIEWED: defineEvent('upgrade_page_viewed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],

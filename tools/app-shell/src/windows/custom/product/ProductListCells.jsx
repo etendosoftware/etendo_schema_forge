@@ -1,4 +1,5 @@
 import { BoxIcon } from '@/components/ui/box-icon';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /* eslint-disable react/prop-types */
 
@@ -31,9 +32,15 @@ function PriceText({ value, bold }) {
   if (value === undefined || value === null) {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
+  // Currency hardcoded to EUR: the list row carries no currency-code field today
+  // (ETGO_PRODUCT_SALE_PRICE/_PURCHASE_PRICE return a bare number) — using the
+  // real price-list currency is a separate, already-tracked bug (ETP-4314 test
+  // case #12), out of scope here. This fix is scoped to the decimal separator
+  // QA reported (46.00 € instead of 46,00 €) — routing through formatCurrency()
+  // instead of a raw .toFixed(2) fixes that without touching the symbol bug.
   return (
     <span className={`text-sm text-[hsl(var(--foreground))] whitespace-nowrap${bold ? ' font-semibold' : ''}`}>
-      {value.toFixed(2)} €
+      {formatCurrency('EUR', value)}
     </span>
   );
 }

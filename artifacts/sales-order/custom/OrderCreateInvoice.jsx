@@ -358,7 +358,6 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
         trackTransactionPosted();
-        window.dispatchEvent(new CustomEvent('sales-order:document-created'));
       } catch (e) {
         setError(e.message || ui('soErrorOccurred'));
         setLoading(false);
@@ -420,9 +419,25 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
     // All requested steps succeeded — close the modal with whatever was created.
     // Use the current attempt's result first; fall back to persisted result from a prior attempt.
+    const finalShipment = currentShipment ?? shipmentResult;
+    const finalInvoice  = currentInvoice  ?? invoiceResult;
+    // ETP-4779 — dispatch AFTER the shipment/invoice POSTs above have actually
+    // resolved (not right after Step 1's docAction=CO, as before). Dispatching
+    // immediately after Step 1 fired the event before createShipment /
+    // createDraftInvoice even ran, so RelatedDocuments.jsx's refetch raced
+    // ahead of document creation, found nothing, and — since no later event
+    // fired to catch up — the "Documentos" panel stayed empty (verified live
+    // on localhost:3100: confirming with both checkboxes showed both docs in
+    // the success modal, but the panel behind it never updated). Only fire
+    // when a document actually exists to show, mirroring
+    // CreateDocsModal.handleCreate below and the equivalent fix already
+    // applied to artifacts/purchase-order/custom/PurchaseOrderActions.jsx.
+    if (finalShipment || finalInvoice) {
+      window.dispatchEvent(new CustomEvent('sales-order:document-created'));
+    }
     onConfirmed({
-      shipment: currentShipment ?? shipmentResult,
-      invoice:  currentInvoice  ?? invoiceResult,
+      shipment: finalShipment,
+      invoice:  finalInvoice,
     });
   };
 
@@ -440,6 +455,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
   // and reopening the modal would re-attempt step 1 → @AlreadyPosted@.
   const handleClose = () => {
     if (orderConfirmed || shipmentResult || invoiceResult) {
+      // ETP-4779 — covers the partial-failure path: e.g. the shipment POST
+      // succeeded (shipmentResult set) but the invoice POST then failed, and
+      // the user closes instead of retrying. handleConfirm's own dispatch
+      // (above) never runs in that case since it errors out first, so the
+      // successfully-created shipment would otherwise never notify
+      // RelatedDocuments.jsx.
+      if (shipmentResult || invoiceResult) {
+        window.dispatchEvent(new CustomEvent('sales-order:document-created'));
+      }
       onConfirmed({
         shipment: shipmentResult,
         invoice:  invoiceResult,

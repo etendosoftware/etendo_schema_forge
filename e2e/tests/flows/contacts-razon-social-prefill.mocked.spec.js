@@ -39,6 +39,25 @@ const ROWS = [
     etgoIsperson: true,
     'businessPartnerCategory$_identifier': 'General',
   },
+  // ETP-4793 — the same two records with `etgoIsperson` in Etendo's raw char(1)
+  // storage encoding instead of a JSON boolean. See the describe block at the
+  // bottom of this file for why both shapes must be served.
+  {
+    id: 'contact-person-y-shape',
+    name: '',
+    etgoFirstname: '',
+    etgoLastname: '',
+    etgoIsperson: 'Y',
+    'businessPartnerCategory$_identifier': 'General',
+  },
+  {
+    id: 'contact-company-n-shape',
+    name: 'ACME Raw Shape SL',
+    etgoFirstname: '',
+    etgoLastname: '',
+    etgoIsperson: 'N',
+    'businessPartnerCategory$_identifier': 'General',
+  },
 ];
 
 /**
@@ -209,5 +228,68 @@ test.describe('Contacts — Razón Social pre-fill on Person → Company switch'
     await switchToCompany(page);
     await expect(nameInput(page)).toBeVisible();
     await expect(nameInput(page)).toHaveValue('');
+  });
+});
+
+/**
+ * ETP-4793 — `etgoIsperson` boolean shape tolerance on the record-read path.
+ *
+ * Etendo stores booleans as char(1) 'Y'/'N', and the three call sites that decide
+ * Person vs Company each hand-roll `=== true || === 'Y'`
+ * (`ContactTypeToggle.jsx:46`, `windows/custom/contacts/index.jsx:25`,
+ * `ContactsTable.jsx:19`). `!!value` would be wrong: `!!'N'` is `true`, which
+ * would open every company record in Person mode.
+ *
+ * This is a DIFFERENT surface from the one `canonicalizeBooleanDefaults` fixed.
+ * That post-pass normalizes `/defaults` only (see
+ * boolean-defaults-tolerance.mocked.spec.js) — a record GET is not touched, so a
+ * raw 'Y'/'N' arriving here stays a live possibility and the guards must stay.
+ * `ContactTypeToggle` has a vitest for the 'Y' case; nothing covered the 'N' trap,
+ * and nothing covered either shape end-to-end through the real window.
+ *
+ * Person mode and Company mode are told apart by which fields render:
+ * Person shows etgoFirstname/etgoLastname and hides `name`; Company is the
+ * inverse — the same distinction the tests above rely on.
+ */
+test.describe('Contacts — etgoIsperson shape tolerance (ETP-4793)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installContactsMock(page);
+  });
+
+  test('a string "Y" opens the record in Person mode', async ({ page }) => {
+    await openDetail(page, 'contact-person-y-shape');
+
+    await expect(page.getByTestId('field-etgoFirstname')).toBeVisible();
+    await expect(page.getByTestId('field-etgoLastname')).toBeVisible();
+    await expect(nameInput(page)).toHaveCount(0);
+  });
+
+  test('a string "N" opens the record in Company mode', async ({ page }) => {
+    // The regression this pins: `!!'N'` is truthy, so dropping the explicit
+    // comparison would render this company as a person.
+    await openDetail(page, 'contact-company-n-shape');
+
+    await expect(nameInput(page)).toBeVisible();
+    await expect(nameInput(page)).toHaveValue('ACME Raw Shape SL');
+    await expect(page.getByTestId('field-etgoFirstname')).toHaveCount(0);
+  });
+
+  test('the "Y" record behaves exactly like the boolean-true one', async ({ page }) => {
+    // Same pre-fill flow as the first test in the describe above, but driven from
+    // the raw shape: tolerance must hold through the whole interaction, not just
+    // on mount.
+    await openDetail(page, 'contact-person-y-shape');
+
+    const first = page.getByTestId('field-etgoFirstname');
+    const last = page.getByTestId('field-etgoLastname');
+    await first.fill('Ada');
+    await last.fill('Lovelace');
+    await last.blur();
+
+    await switchToCompany(page);
+
+    await expect(nameInput(page)).toBeVisible();
+    await expect(nameInput(page)).toHaveValue('Ada Lovelace');
   });
 });

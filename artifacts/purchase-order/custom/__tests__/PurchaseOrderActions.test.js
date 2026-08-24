@@ -59,6 +59,57 @@ describe('PurchaseOrderActions', () => {
     assert.match(src, /dispatchEvent/);
   });
 
+  // ETP-4779 (reject cycle #2) — QA's live retest on localhost:3100 showed the
+  // "Documentos" panel STILL never updated after confirming a Draft order with
+  // "Crear albarán de proveedor" + "Crear factura" both checked, even after
+  // RelatedDocuments.jsx gained its event listener in the previous fix pass.
+  // Root cause, found by reproducing live: handleConfirm dispatched
+  // purchase-order:document-created right after Step 1 (documentAction=CO),
+  // BEFORE Steps 2/3 (createGoodsReceipt / createPurchaseInvoice) had even
+  // run — so the listener's refetch always raced ahead of document creation
+  // and came back empty, with no later event to catch up. CreateDocsModal
+  // (the separate "Gestionar" modal for already-CO orders, further below in
+  // this file) never had this bug — it already dispatched once, after its
+  // POST(s) resolved.
+  describe('event dispatch ordering — must fire AFTER receipt/invoice creation, not right after Step 1 (ETP-4779)', () => {
+    it('does NOT dispatch document-created inside the Step 1 (documentAction) success block', () => {
+      const step1Block = src.match(
+        /if\s*\(!orderConfirmed\)\s*\{\s*try\s*\{[\s\S]*?setOrderConfirmed\(true\);[\s\S]*?\}\s*catch\s*\(e\)\s*\{[\s\S]*?\}\s*\}/,
+      );
+      assert.ok(step1Block, 'could not locate the Step 1 try/catch block');
+      assert.doesNotMatch(
+        step1Block[0],
+        /purchase-order:document-created/,
+        'the event must not be dispatched from inside Step 1 — that runs before the receipt/invoice POSTs',
+      );
+    });
+
+    it('dispatches document-created after both currentReceipt/currentInvoice are resolved, right before onConfirmed(result)', () => {
+      assert.match(
+        src,
+        /const finalReceipt\s*=\s*currentReceipt\s*\?\?\s*receiptResult;\s*const finalInvoice\s*=\s*currentInvoice\s*\?\?\s*invoiceResult;[\s\S]*?if\s*\(finalReceipt\s*\|\|\s*finalInvoice\)\s*\{\s*window\.dispatchEvent\(new CustomEvent\('purchase-order:document-created'\)\);\s*\}\s*onConfirmed\(result\);/,
+      );
+    });
+
+    it('guards the dispatch so it never fires when neither a receipt nor an invoice was created', () => {
+      assert.match(src, /if\s*\(finalReceipt\s*\|\|\s*finalInvoice\)\s*\{\s*window\.dispatchEvent/);
+    });
+
+    it('the errors.length early-return sits BEFORE the dispatch — a failed step must not fire the event for a half-finished result', () => {
+      const errorsIdx = src.indexOf('if (errors.length > 0) {');
+      const dispatchIdx = src.lastIndexOf("window.dispatchEvent(new CustomEvent('purchase-order:document-created'))");
+      assert.ok(errorsIdx >= 0 && dispatchIdx >= 0);
+      assert.ok(errorsIdx < dispatchIdx);
+    });
+
+    it('handleClose also dispatches when closing after a partial success (receipt or invoice already created)', () => {
+      assert.match(
+        src,
+        /const handleClose\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(orderConfirmed\s*\|\|\s*receiptResult\s*\|\|\s*invoiceResult\)\s*\{[\s\S]*?if\s*\(receiptResult\s*\|\|\s*invoiceResult\)\s*\{\s*window\.dispatchEvent\(new CustomEvent\('purchase-order:document-created'\)\);\s*\}\s*onConfirmed\(result\);/,
+      );
+    });
+  });
+
   it('exposes receipt + invoice optional checkboxes inside the confirm modal', () => {
     assert.match(src, /<PoCheckboxCard/);
     assert.match(src, /poCreateReceiptTitle/);
@@ -206,12 +257,23 @@ describe('PurchaseOrderActions', () => {
 
     it('switches to semantic success roles when disabled', () => {
       assert.match(src, /disabled\s*\?\s*'2px solid var\(--status-success-border\)'/);
-      assert.match(src, /background:\s*disabled\s*\?\s*'hsl\(var\(--card\)\)'/);
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-bg\)'/);
       assert.match(src, /color:\s*disabled\s*\?\s*'var\(--status-success-fg\)'/);
     });
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  describe('semantic color roles (ETP-4781)', () => {
+    it('uses foreground roles for selected and completed checkbox indicators', () => {
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-fg\)'\s*:\s*\(checked\s*\?\s*'var\(--status-info-fg\)'/);
+    });
+
+    it('uses semantic surface roles for the confirmation summary and warning', () => {
+      assert.match(src, /background: 'var\(--status-info-bg\)', border: '0\.5px solid var\(--status-info-border\)'/);
+      assert.match(src, /background: 'var\(--status-warning-bg\)', border: '1px solid var\(--status-warning-border\)'/);
     });
   });
 

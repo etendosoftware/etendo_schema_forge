@@ -204,6 +204,56 @@ describe('buildJsreportHelpersString', () => {
     const formatNumber = new Function(`${groupSrc}\n${fnSource}; return formatNumber;`)();
     assert.equal(formatNumber(1.2), '1,2000');
   });
+
+  // ETP-4898: `__groupEsEs` (the jsreport-side twin of formatCurrency's
+  // Intl.NumberFormat guard) must drop the sign the same way once the rounded,
+  // DISPLAYED digits are all zero — the exact case a report's "Total" row hits
+  // when summing floats leaves a residual like -2.9e-11 instead of exactly 0.
+  describe('formatCurrency negative-zero guard (ETP-4898) — parity with the live helper', () => {
+    function buildFormatCurrency() {
+      const built = buildJsreportHelpersString(DOCUMENT_HELPERS_SRC);
+      const groupSrc = extractFunctionSource(built, '__groupEsEs');
+      const fnSource = extractFunctionSource(built, 'formatCurrency');
+      return new Function(`${groupSrc}\n${fnSource}; return formatCurrency;`)();
+    }
+
+    it('does not render "-0,00" for a tiny float-sum residual that rounds to zero', () => {
+      const formatCurrency = buildFormatCurrency();
+      assert.equal(formatCurrency(-2.9103830456733704e-11), '0,00');
+    });
+
+    it('does not render "-0,00" for a genuine negative zero (-0)', () => {
+      const formatCurrency = buildFormatCurrency();
+      assert.equal(formatCurrency(-0), '0,00');
+    });
+
+    it('still renders "0,00" for a plain positive zero (no regression)', () => {
+      const formatCurrency = buildFormatCurrency();
+      assert.equal(formatCurrency(0), '0,00');
+    });
+
+    it('still shows the sign for a genuinely negative value (fix must not hide real negatives)', () => {
+      const formatCurrency = buildFormatCurrency();
+      assert.equal(formatCurrency(-186708.62), '-186.708,62');
+    });
+
+    it('still shows the sign for a small negative value that rounds to a non-zero display', () => {
+      const formatCurrency = buildFormatCurrency();
+      assert.equal(formatCurrency(-0.006), '-0,01');
+    });
+
+    it('matches the live createReportHelpers().formatCurrency() output for every case above', () => {
+      const emitted = buildFormatCurrency();
+      const { formatCurrency: live } = createReportHelpers();
+      for (const value of [-2.9103830456733704e-11, -0, 0, -186708.62, -0.006]) {
+        assert.equal(
+          emitted(value),
+          live(value),
+          `formatCurrency(${value}) drifted between the emitted jsreport string and the live helper`,
+        );
+      }
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

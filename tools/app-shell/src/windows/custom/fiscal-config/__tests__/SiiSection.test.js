@@ -34,24 +34,33 @@ describe('SiiSection — Navarra badge', () => {
 });
 
 describe('SiiSection — form fields', () => {
-  it('renders the enrolled (acogidaAlSII) toggle', () => {
-    assert.match(src, /fiscal\.sii\.field\.enrolled/);
-    assert.match(src, /acogidaAlSII/);
+  it('does not render the enrolled (acogidaAlSII) toggle (ETP-4783: value comes from record via mapSiiRecordToForm)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.enrolled/);
   });
 
-  it('renders the production environment toggle', () => {
-    assert.match(src, /fiscal\.sii\.field\.production/);
-    assert.match(src, /entornoDeProduccin/);
+  it('does not render the production environment toggle (ETP-4783: value comes from record via mapSiiRecordToForm)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.production/);
   });
 
-  it('renders the submission deadline (plazoLmiteDeEnvoASII) field', () => {
-    assert.match(src, /fiscal\.sii\.field\.deadline/);
-    assert.match(src, /plazoLmiteDeEnvoASII/);
+  it('does not render enrollment date fields (ETP-4783: always set to creation date)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.enrollDate/);
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.monitorDate/);
   });
 
-  it('validates deadline is present before saving', () => {
-    assert.match(src, /plazoLmiteDeEnvoASII/);
-    assert.match(src, /fiscal\.sii\.err\.deadline/);
+  it('enrollment dates are still sent in the PUT body from the record', () => {
+    assert.match(src, /fechaAcogidaSII/);
+    assert.match(src, /monitordate/);
+  });
+
+  // ETP-4783: the entire "Envíos" section (plazo/cadencia/postedInvoices) was removed
+  // from SiiSection. Validation of the deadline is gone; the field is not sent in the PUT body.
+  it('does not render the submission deadline field (ETP-4783: Envíos section removed)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.deadline/);
+    assert.doesNotMatch(src, /plazoLmiteDeEnvoASII/);
+  });
+
+  it('does not validate the submission deadline before saving (ETP-4783: validation removed)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.err\.deadline/);
   });
 });
 

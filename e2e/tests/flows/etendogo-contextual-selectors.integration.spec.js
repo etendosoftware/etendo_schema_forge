@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const RUN_LIVE_CONTEXT_SMOKE = process.env.E2E_ETENDOGO_CONTEXT_SELECTORS === '1';
 const ETENDO_BASE_URL = trimTrailingSlash(process.env.ETENDO_URL || 'http://localhost:8080/etendo');
 const TOKEN = process.env.E2E_ETENDOGO_JWT || resolveJwt();
 
@@ -43,11 +42,6 @@ const MOVEMENT_SCENARIOS = [
 ];
 
 test.describe('Etendo GO contextual selector live integration', () => {
-  test.skip(
-    !RUN_LIVE_CONTEXT_SMOKE,
-    'Set E2E_ETENDOGO_CONTEXT_SELECTORS=1 to run this live Etendo GO selector smoke.',
-  );
-
   test.describe.configure({ timeout: 120_000 });
 
   for (const scenario of DOCUMENT_SCENARIOS) {
@@ -125,7 +119,6 @@ async function firstSelectorItem(request, spec, entity, field, params = {}) {
 }
 
 function resolveJwt() {
-  if (!RUN_LIVE_CONTEXT_SMOKE) return '';
   try {
     return execFileSync(
       resolve(import.meta.dirname, '..', '..', '..', 'scripts', 'neo-token-groupadmin.sh'),

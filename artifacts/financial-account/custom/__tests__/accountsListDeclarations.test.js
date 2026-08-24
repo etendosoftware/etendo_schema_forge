@@ -43,10 +43,12 @@ const contractGridFields = contract.frontendContract.entities.account.fields
   .filter((f) => f.grid === true && f.gridOrder != null)
   .sort((a, b) => a.gridOrder - b.gridOrder);
 
-// The four columns the Cuentas list renders, in gridOrder, with the renderer each binds.
+// The five columns the Cuentas list renders, in gridOrder, with the renderer each binds.
 const EXPECTED_COLUMNS = [
   { name: 'name', gridLabelKey: 'financeAccountsColAccount', cellType: 'accountName' },
   { name: 'type', gridLabelKey: 'financeAccountsColType', cellType: 'accountType' },
+  // ETP-4896 follow-up: inserted right after Type.
+  { name: 'country', gridLabelKey: 'financeAccountsColCountry', cellType: 'accountCountry' },
   { name: 'currentBalance', gridLabelKey: 'financeAccountsColBalance', cellType: 'accountBalance' },
   // Virtual field: no AD column, no gridLabelKey and no cellType it could declare.
   { name: 'pendingCount', gridLabelKey: null, cellType: null },
@@ -62,7 +64,8 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
     assert.deepEqual(declared, [
       { name: 'name', gridOrder: 1 },
       { name: 'type', gridOrder: 2 },
-      { name: 'currentBalance', gridOrder: 3 },
+      { name: 'country', gridOrder: 3 },
+      { name: 'currentBalance', gridOrder: 4 },
     ]);
   });
 
@@ -87,7 +90,7 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
     assert.equal(pending.visibility, 'readOnly');
     assert.equal(pending.form, false, 'it is a list-only column, never a form field');
     assert.equal(pending.grid, true);
-    assert.equal(pending.gridOrder, 4, 'it must come last, after the three real columns');
+    assert.equal(pending.gridOrder, 5, 'it must come last, after the four real columns');
   });
 
   // The list owns its actions through the trailing AccountRowActions column, so the
@@ -98,7 +101,7 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
 });
 
 describe('Cuentas list — the regen carried the declarations into contract.json', () => {
-  it('emits the four grid columns in the declared gridOrder', () => {
+  it('emits the five grid columns in the declared gridOrder', () => {
     assert.deepEqual(
       contractGridFields.map((f) => f.name),
       EXPECTED_COLUMNS.map((c) => c.name),

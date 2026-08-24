@@ -26,12 +26,21 @@ const API_BASE = '/sws/neo/sales-invoice';
 
 let fetchCalls;
 
-function installFetch({ lines = [], headerInvoices = [], years = [], postResponse = null } = {}) {
+// Defaults 349 to active (see ReversedInvoicesPanel.vitest.jsx's identical convention)
+// so this file's flows are unaffected by the ETP-4755 catalog gate on the
+// "Correctiva del 349" checkbox — this suite doesn't test that gate itself.
+function installFetch({
+  lines = [], headerInvoices = [], years = [], postResponse = null,
+  activeModels = { '349': true },
+} = {}) {
   fetchCalls = [];
   global.fetch = vi.fn(async (url, opts = {}) => {
     const method = opts.method ?? 'GET';
     fetchCalls.push({ url: String(url), method, body: opts.body ? JSON.parse(opts.body) : null });
     const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+    if (method === 'GET' && String(url).includes('/fiscal-models-catalog')) {
+      return { ok: true, json: async () => activeModels };
+    }
     if (method === 'GET' && String(url).includes('/fiscal-calendar/year')) return ok(years);
     if (method === 'GET' && String(url).includes('/reversedInvoices')) return ok(lines);
     if (method === 'GET' && String(url).includes('/header')) return ok(headerInvoices);

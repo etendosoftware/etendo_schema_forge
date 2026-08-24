@@ -258,15 +258,20 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
 export function computeUnitPriceForPost(lineData, config) {
   if (config.priceField === 'unitPrice') return;
   const discountField = config.discountField || 'discount';
-  const listPrice = parseFloat(String(lineData[config.priceField] ?? '')) || 0;
-  const discount  = parseFloat(String(lineData[discountField]     ?? '')) || 0;
-  // 0 means "not entered" (indeterminate, skip deriving unitPrice), but a real
-  // negative listPrice (credit/return lines, ETP-4567) must still compute and
-  // be sent — see the guard fix in computeLineGrossAmount above for the same
-  // reason.
-  if (listPrice !== 0) {
-    lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
-  }
+  // A genuinely ABSENT priceField (key not present at all, e.g. a partial payload
+  // that never touched price) is the only case where deriving unitPrice would be
+  // guesswork — skip it then. But 0 is deterministic like any other real value:
+  // listPrice=0 must derive unitPrice=0 too (ETP-4727 — editing Precio to exactly 0
+  // on an existing line left unitPrice at its stale pre-edit value here, which the
+  // backend's own fallback then read as "price wasn't really changed" and
+  // recomputed a nonzero lineGrossAmount from it, clobbering the correct 0 the
+  // frontend had already sent). A real negative listPrice (credit/return lines,
+  // ETP-4567) must still compute and be sent too — see the guard fix in
+  // computeLineGrossAmount above for the same reason.
+  if (lineData[config.priceField] === undefined || lineData[config.priceField] === null) return;
+  const listPrice = parseFloat(String(lineData[config.priceField])) || 0;
+  const discount  = parseFloat(String(lineData[discountField] ?? '')) || 0;
+  lineData.unitPrice = parseFloat((listPrice * (1 - discount / 100)).toFixed(6));
 }
 
 // ─── React hook ──────────────────────────────────────────────────────────────

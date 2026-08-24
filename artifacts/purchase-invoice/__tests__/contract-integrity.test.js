@@ -34,14 +34,30 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.match(documentNo.label, /Document No\./);
   });
 
-  it('keeps POReference editable in the contract and positioned as the second principal field', () => {
+  it('keeps POReference editable in the contract and positioned as the second principal field (SII lock is server-side only)', () => {
     const orderReference = headerField('orderReference');
     assert.ok(orderReference, 'orderReference field must remain present in the contract');
     assert.equal(orderReference.column, 'POReference');
     assert.equal(orderReference.visibility, 'editable');
     assert.equal(orderReference.form, true);
     assert.equal(orderReference.seq, 20);
-    assert.equal(orderReference.readOnlyLogic, undefined);
+  });
+
+  // ETP-4918: this assertion used to be `readOnlyLogic === undefined`, which held only while
+  // the extraction ran against an instance where C_Invoice.POReference carried no readOnlyLogic.
+  // The SII module patches that Core column with "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+  // (lock the supplier reference once the invoice has been declared to the tax authority), so on
+  // any SII-enabled instance the contract now carries it — and dropping it would be the bug, not
+  // keeping it. What ETP-3778 actually needed to guarantee is narrower and still holds: no
+  // client-side lock is compiled for this field. @IsSOTrx@ is a session variable, so the
+  // expression is classified non-evaluable, js stays null, and enforcement is left to the server.
+  it('delegates the POReference readOnly rule to the server instead of compiling a client lock', () => {
+    const orderReference = headerField('orderReference');
+    const readOnlyLogic = orderReference.readOnlyLogic;
+    assert.ok(readOnlyLogic, 'the AD readOnlyLogic must reach the contract, not be silenced');
+    assert.equal(readOnlyLogic.evaluable, false);
+    assert.equal(readOnlyLogic.reason, 'session-variable');
+    assert.equal(readOnlyLogic.js, null, 'a session variable must never be compiled to client JS');
   });
 
   it('keeps the generated HeaderForm order as Business Partner, Transaction Document, Document No. first', () => {
@@ -53,23 +69,29 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.doesNotMatch(headerFormSrc, /key: 'documentNo'/);
   });
 
-  it('does not generate readOnlyLogic for orderReference in HeaderForm', () => {
+  // ETP-4918: same rewrite as above. The old assertion banned the substring "readOnlyLogic",
+  // which the server-delegation marker `readOnlyLogicReason` now trips on. The behaviour worth
+  // pinning is that no evaluated lock is emitted — i.e. no `readOnlyLogic: (record) => ...`
+  // closure — and that the field is instead marked as server-governed.
+  it('emits no compiled readOnlyLogic closure for orderReference in HeaderForm', () => {
     const orderReferenceBlock = headerFormSrc.match(/\{ key: 'orderReference'[\s\S]*?\}/);
     assert.ok(orderReferenceBlock, 'expected orderReference field block in HeaderForm.jsx');
-    assert.doesNotMatch(orderReferenceBlock[0], /readOnlyLogic/);
+    assert.doesNotMatch(orderReferenceBlock[0], /readOnlyLogic:/);
+    assert.match(orderReferenceBlock[0], /readOnlySource: 'server'/);
+    assert.match(orderReferenceBlock[0], /readOnlyLogicReason: 'session-variable'/);
   });
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {
+    // ETP-4783: aeatsiiEjercicio, aeatsiiPeriodo, aeatsiiPurDescription removed (discarded — never had values in GO)
+    // ETP-4783: SII fields rendered by SifTab.jsx custom component — must stay out of the generated header form
     const expectedNames = [
       'aeatsiiClaveTipoFc',
-      'aeatsiiDescripcionSii',
-      'aeatsiiEjercicio',
       'aeatsiiEstado',
-      'aeatsiiFechaRegCont',
       'aeatsiiIsauthorization',
       'aeatsiiIssent',
-      'aeatsiiPeriodo',
-      'aeatsiiPurDescription',
+      'aeatsiiDescripcionSii',
+      'aeatsiiFechaRegCont',
+      'aeatsiiErrorRegistral',
       'etsgDateOperation',
       'etvfacInvoiceStatus',
     ];
@@ -78,7 +100,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       const field = headerField(name);
       assert.ok(field, `header contract must include ${name}`);
       assert.notEqual(field.visibility, 'discarded', `${name} must not be discarded`);
-      assert.equal(field.form, false, `${name} must stay out of the main header form`);
+      assert.equal(field.form, false, `${name} must stay out of the generated header form (rendered by SifTab)`);
     }
   });
 

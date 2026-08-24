@@ -110,6 +110,21 @@ describe('QuotationTopbarActions', () => {
     });
   });
 
+  // ETP-4779 — this component is the topbarRight custom component and must
+  // thread the onRefresh prop DetailView already passes it down to
+  // QuotationConfirmModal, so the confirm flow can refresh the header state
+  // (and dispatch sales-quotation:document-created for the "Documentos"
+  // section) without a full page reload.
+  describe('partial refresh — threads onRefresh down (ETP-4779)', () => {
+    it('accepts an onRefresh prop', () => {
+      assert.match(src, /export default function QuotationTopbarActions\(\{[^}]*onRefresh[^}]*\}\)/);
+    });
+
+    it('threads onRefresh down to QuotationConfirmModal', () => {
+      assert.match(src, /<QuotationConfirmModal[\s\S]*?onRefresh=\{onRefresh\}[\s\S]*?\/>/);
+    });
+  });
+
   // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
   // quotation is still Draft (DR) — it must be visible from "Bajo evaluación"
   // (UE) onward. Today it renders unconditionally, with zero status gating.

@@ -31,6 +31,11 @@ vi.mock('@/auth/useApiFetch', () => ({
 
 import { ConversationView } from '../ConversationView.jsx';
 
+// Mirrors ConversationView.jsx's own (module-private) SUGGESTS_ESCALATION_MARKER —
+// the zero-width-space-prefixed marker the backend appends to a message's text when
+// the ADK offers to escalate to a human agent.
+const SUGGESTS_ESCALATION_MARKER = '​##SUGGESTS_ESCALATION##';
+
 function baseProps(overrides = {}) {
   return {
     conversation: { id: 'c1', status: 'open', assigneeKind: 'bot' },
@@ -56,10 +61,12 @@ function baseProps(overrides = {}) {
 }
 
 describe('ConversationView', () => {
-  it('shows the bot name and "team can help" meta for an open bot conversation', () => {
-    render(<ConversationView {...baseProps()} />);
+  it('shows the bot name and no status meta for an open bot conversation (ValerIA active, unassigned)', () => {
+    const { container } = render(<ConversationView {...baseProps()} />);
     expect(screen.getByText('ValerIA')).toBeInTheDocument();
-    expect(screen.getByText('supportTeamCanHelp')).toBeInTheDocument();
+    const meta = container.querySelector('.sc-conv-meta');
+    expect(meta?.textContent).toBe('');
+    expect(screen.queryByText('supportTeamCanHelp')).not.toBeInTheDocument();
   });
 
   it('shows the human agent name and active status for a human-assigned open conversation', () => {
@@ -73,6 +80,20 @@ describe('ConversationView', () => {
     const conversation = { id: 'c1', status: 'closed' };
     render(<ConversationView {...baseProps({ conversation })} />);
     expect(screen.getByText('supportConversationClosedMeta')).toBeInTheDocument();
+  });
+
+  it('shows the linked Jira ticket key in the header meta when the conversation has one', () => {
+    const conversation = { id: 'c1', status: 'open', assigneeKind: 'bot', jiraTicketKey: 'EGS-165' };
+    const { container } = render(<ConversationView {...baseProps({ conversation })} />);
+    const meta = container.querySelector('.sc-conv-meta');
+    expect(meta?.textContent).toMatch(/EGS-165/);
+  });
+
+  it.each([null, undefined, ''])('does not render the ticket meta when jiraTicketKey is %p', (jiraTicketKey) => {
+    const conversation = { id: 'c1', status: 'open', assigneeKind: 'bot', jiraTicketKey };
+    const { container } = render(<ConversationView {...baseProps({ conversation })} />);
+    const meta = container.querySelector('.sc-conv-meta');
+    expect(meta?.textContent).not.toMatch(/EGS-/);
   });
 
   it('greets a first-time visitor with the welcome bubbles when there is no conversation yet', () => {
@@ -638,6 +659,40 @@ describe('ConversationView', () => {
       fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
       expect(onAddFile).toHaveBeenCalledWith(file);
       expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('escalate bar dismiss', () => {
+    it('renders the escalate bar with an escalate button and a dismiss control when a message suggests escalation', () => {
+      const messages = [{ id: 'm1', sender: 'ai', text: `Puedo escalar esto para vos.${SUGGESTS_ESCALATION_MARKER}` }];
+      const { container } = render(<ConversationView {...baseProps({ messages })} />);
+      expect(container.querySelector('.sc-escalate-bar')).toBeInTheDocument();
+      expect(container.querySelector('.sc-escalate-btn')).toBeInTheDocument();
+      expect(container.querySelector('.sc-escalate-dismiss')).toBeInTheDocument();
+      expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
+      expect(screen.getByLabelText('supportDismissEscalateBar')).toBeInTheDocument();
+    });
+
+    it('removes the whole escalate bar once the dismiss control is clicked', async () => {
+      const user = userEvent.setup();
+      const messages = [{ id: 'm1', sender: 'ai', text: `Puedo escalar esto para vos.${SUGGESTS_ESCALATION_MARKER}` }];
+      const { container } = render(<ConversationView {...baseProps({ messages })} />);
+      await user.click(screen.getByLabelText('supportDismissEscalateBar'));
+      expect(screen.queryByText('supportEscalateToHuman')).not.toBeInTheDocument();
+      expect(container.querySelector('.sc-escalate-bar')).not.toBeInTheDocument();
+    });
+
+    it('shows the escalate bar again for a different conversation that also suggests escalation, even after it was dismissed on the previous one', () => {
+      const conversationA = { id: 'c1', status: 'open', assigneeKind: 'bot' };
+      const messagesA = [{ id: 'm1', sender: 'ai', text: `Escalar A.${SUGGESTS_ESCALATION_MARKER}` }];
+      const { rerender } = render(<ConversationView {...baseProps({ conversation: conversationA, messages: messagesA })} />);
+      fireEvent.click(screen.getByLabelText('supportDismissEscalateBar'));
+      expect(screen.queryByText('supportEscalateToHuman')).not.toBeInTheDocument();
+
+      const conversationB = { id: 'c2', status: 'open', assigneeKind: 'bot' };
+      const messagesB = [{ id: 'm2', sender: 'ai', text: `Escalar B.${SUGGESTS_ESCALATION_MARKER}` }];
+      rerender(<ConversationView {...baseProps({ conversation: conversationB, messages: messagesB })} />);
+      expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
     });
   });
 

@@ -163,6 +163,8 @@ Registered as secondary tab with key `productTransactions`, label `warehouseTran
 
 The tab fetches transactions from the `transactions` slice of `useWarehouseStock` (collected from all bins via `productTransactions?parentId=<binId>`), then sorts client-side by `movementDate` descending. Sort is fixed — no sort arrows, no user-accessible sort controls. No search.
 
+`productTransactions` is declared `"readOnly": true` in `decisions.json`, so the contract grants only `GET` + `GETBYID` (`apiPrediction.crud.productTransactions.methods`). `M_Transaction` rows are written by document processing, never by a user — the entity previously advertised `POST`/`PUT`/`PATCH`/`DELETE` while every one of its fields was read-only, so a write could not carry a single value. Reads are unchanged. The live `ETGO_SF_ENTITY` flags follow on the next `make regen ONLY=warehouse PUSH_TO_NEO=1` + `./gradlew export.database`.
+
 Columns:
 
 | Column | Alignment | Notes |
@@ -305,7 +307,7 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx` — Transactions tab table, document navigation, movement type mapping.
 - `tools/app-shell/src/windows/custom/warehouse/useWarehouseStock.js` — shared data fetch hook (bins → binContents + productTransactions, UOM resolution).
 - `tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js` — `aggregateProducts` helper. Returns all aggregated rows unfiltered; each consumer (`WarehouseProductsTab.jsx`, `WarehouseCustomTable.jsx` with `!= 0`, `WarehouseSummary.jsx` with `> 0`) applies its own qty predicate — see "Stock filtering semantics".
-- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` for productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
+- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` + `readOnly: true` for the productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
 - `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` — regression guard: `entities.accounting.hideDelete` must be `true`.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/warehouseUtils.test.js` / `warehouseUtils.vitest.js` — unit tests for `aggregateProducts` (cross-bin summation, UOM resolution, numeric coercion; no longer filters by qty).
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseProductsTab.vitest.jsx` — regression guard: list keeps negative-stock rows, hides exact-zero.

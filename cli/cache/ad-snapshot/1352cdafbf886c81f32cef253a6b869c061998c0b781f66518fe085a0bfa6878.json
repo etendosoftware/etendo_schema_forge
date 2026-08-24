@@ -9,11 +9,17 @@
       "rows": []
     },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "b683e747b399f9bdc59b9c2706b07f2675e38c5619615a280901502270656232",
+      "checksum": "9ada441824e561cc61d572072760f51c6740d0edda10229c1a940bc1edb87563",
       "params": [
         "144"
       ],
       "rows": [
+        {
+          "ad_val_rule_id": "4DBF8D6EDA9C4E8BA53E27D8E37DEAC4",
+          "code": "(CASE WHEN (SELECT COALESCE((SELECT conf.taxtype FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'IVA') FROM dual) = 'IGIC' AND value LIKE ('AEATSII_IGIC%') THEN 1 WHEN (SELECT COALESCE((SELECT conf.taxtype FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'IVA') FROM dual) = 'IVA' AND value LIKE ('AEATSII_IVA%') THEN 1 ELSE 0 END) = 1",
+          "columnname": "EM_Aeat347_Situation",
+          "name": "Situación Inmueble IGIC"
+        },
         {
           "ad_val_rule_id": "772B9BE4957746EC809B8FE4D8E3F924",
           "code": "Issummary='N'",
@@ -1936,7 +1942,7 @@
       "rows": []
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "7d8932102df6c9dd0f9a83e97191cfa33f6f75cbac360e54cbe5cc19dc8f0026",
+      "checksum": "beb6d61181d8d552baa3fe442e119afe0415de936cb4e0febe4384eec1254925",
       "params": [
         "140"
       ],
@@ -1970,6 +1976,12 @@
           "code": "m_product_po.discontinued = 'N' and m_product_po.m_product_id = @M_Product_ID@",
           "columnname": "M_Product_Po_ID",
           "name": "M_Product_PO of the m_product_id"
+        },
+        {
+          "ad_val_rule_id": "4DBF8D6EDA9C4E8BA53E27D8E37DEAC4",
+          "code": "(CASE WHEN (SELECT COALESCE((SELECT conf.taxtype FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'IVA') FROM dual) = 'IGIC' AND value LIKE ('AEATSII_IGIC%') THEN 1 WHEN (SELECT COALESCE((SELECT conf.taxtype FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'IVA') FROM dual) = 'IVA' AND value LIKE ('AEATSII_IVA%') THEN 1 ELSE 0 END) = 1",
+          "columnname": "EM_Aeat347_Situation",
+          "name": "Situación Inmueble IGIC"
         },
         {
           "ad_val_rule_id": "57D84BE9C3774FDD87CD846F805A07FB",
@@ -2020,6 +2032,13 @@
           "name": "M_Ch_Value of a M_Product_CH"
         }
       ]
+    },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": []
     },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "e5effa39b33b4db9694da617bcabf071e385b11cc5ebfc32f23c35514e2a0f32",
@@ -2162,6 +2181,110 @@
           "code": "M_Warehouse.AD_Client_ID = @Default_AD_Client_ID@",
           "columnname": "Default_M_Warehouse_ID",
           "name": "M_Warehouse of Role"
+        }
+      ]
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "403f8a4d159d35b293068f529ae8d495b952f8b4c59bc7d0a7aabbc4380b81df",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1004400001",
+          "code": "M_Pricelist.IsSOPricelist='N'",
+          "columnname": "M_PriceList_ID",
+          "name": "Purchase Pricelist"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "131",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location"
+        },
+        {
+          "ad_val_rule_id": "165",
+          "code": "C_ProjectPhase.C_Project_ID=@C_Project_ID@",
+          "columnname": "C_ProjectPhase_ID",
+          "name": "C_ProjectPhase of Project"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "171",
+          "code": "C_Phase.C_ProjectType_ID=@C_ProjectType_ID@",
+          "columnname": "C_Phase_ID",
+          "name": "C_Phase of Project Type"
+        },
+        {
+          "ad_val_rule_id": "34A2733B41B04DC19B3E54F764753D19",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID)",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccount"
+        },
+        {
+          "ad_val_rule_id": "34A2733B41B04DC19B3E54F764753D19",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID)",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccount"
         }
       ]
     },

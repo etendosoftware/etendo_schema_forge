@@ -83,6 +83,7 @@ function mockChat(stateOverrides = {}, actionOverrides = {}) {
     reopenConversation: vi.fn(),
     addPendingFile: vi.fn(),
     removePendingFile: vi.fn(),
+    dismissFab: vi.fn(),
     ...actionOverrides,
   };
   mockUseSupportChat.mockReturnValue({ state: { ...BASE_STATE, ...stateOverrides }, actions });
@@ -313,6 +314,33 @@ describe('SupportChatWidget', () => {
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('false');
     await user.click(screen.getByText('conv-toggle-expand'));
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('true');
+  });
+
+  describe('FAB dismiss state (in-memory only — resets on remount/refresh)', () => {
+    it('hides the FAB when state.fabDismissed is true', () => {
+      mockChat({ isOpen: false, fabDismissed: true });
+      render(<SupportChatWidget />);
+      expect(screen.queryByLabelText('supportOpenAria')).not.toBeInTheDocument();
+    });
+
+    it('clicking the FAB dismiss control calls actions.dismissFab', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({ isOpen: false, fabDismissed: false });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByLabelText('supportDismissFab'));
+      expect(actions.dismissFab).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the FAB again on a fresh mount after a previous mount had it dismissed — fabDismissed is in-memory only and is never persisted, so a real page refresh (a brand-new SupportChatProvider) always starts undismissed (see SupportChatContext.vitest.jsx for the no-localStorage-persistence coverage)', () => {
+      mockChat({ isOpen: false, fabDismissed: true });
+      const { unmount } = render(<SupportChatWidget />);
+      expect(screen.queryByLabelText('supportOpenAria')).not.toBeInTheDocument();
+      unmount();
+
+      mockChat({ isOpen: false, fabDismissed: false });
+      render(<SupportChatWidget />);
+      expect(screen.getByLabelText('supportOpenAria')).toBeInTheDocument();
+    });
   });
 
   describe('additional coverage', () => {

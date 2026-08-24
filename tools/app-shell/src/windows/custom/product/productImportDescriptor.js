@@ -1,12 +1,11 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
 
-// The simplified Products CSV import supports exactly 4 columns: searchKey (código),
-// name (nombre), description (descripción) and price (precio). uOM/productCategory/
-// taxCategory were dropped — their free-text CSV values don't fuzzy-match real records,
-// and all three resolve on their own server-side (productCategory via its AD_Column @SQL
-// default; uOM/taxCategory via NeoDefaultsService.tryInjectFirstFromLookup, which picks
-// the first active record for combo-style TableDir refs — ETP-3894).
+// The simplified Products CSV import supports: searchKey (código),
+// name (nombre), description (descripción), price (precio), and category (categoryCode/categoryName/category).
+// uOM is copied from the official product defaults endpoint for batch creates;
+// taxCategory continues to resolve server-side via the product defaults handler.
 const PRODUCT_TARGETS = ['searchKey', 'name', 'description'];
 
 // `price` is NOT a product field — in this system prices live in a separate M_ProductPrice
@@ -79,6 +78,37 @@ function parsePrice(raw) {
 // synchronously so the bounded-concurrency pool's first few rows don't each fire the fetch.
 const salesPlvCache = new Map();
 
+// Batch operations do not pass through the product NeoHandler, so they cannot
+// receive the product defaults injected by ProductDefaultsHandler. Resolve the
+// same official defaults endpoint once per import run and carry the UOM into
+// every product operation explicitly. This keeps the value tenant-configurable
+// and avoids duplicating a database ID in the frontend.
+const productDefaultsCache = new Map();
+
+async function fetchProductDefaults(token) {
+  const base = detectEtendoBase();
+  const url = `${base}/sws/neo/product/product/defaults`;
+  try {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return {};
+    const json = await res.json().catch(() => null);
+    return json?.defaults ?? json?.response?.defaults ?? {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function resolveProductDefaults(token) {
+  const key = token || 'default';
+  if (!productDefaultsCache.has(key)) {
+    productDefaultsCache.set(key, fetchProductDefaults(token));
+  }
+  return productDefaultsCache.get(key);
+}
+
 async function fetchSalesPriceListVersion(spec, token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
@@ -103,9 +133,96 @@ function resolveSalesPlv(spec, token) {
   return salesPlvCache.get(key);
 }
 
+// Existing product categories cache per token/run
+const productCategoriesCache = new Map();
+
+async function fetchProductCategories(token) {
+  const base = detectEtendoBase();
+  const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
+  try {
+    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data ?? json?.data ?? [];
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function getExistingCategories(token, existingCategoriesOverride) {
+  if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
+  const key = token || 'default';
+  if (!productCategoriesCache.has(key)) {
+    productCategoriesCache.set(key, fetchProductCategories(token));
+  }
+  return productCategoriesCache.get(key);
+}
+
 registerImportDescriptor('product', async (row, config) => {
-  const productOp = { id: 'product', spec: config.spec, entity: config.entity, body: pick(row, PRODUCT_TARGETS) };
-  const ops = [productOp];
+  const productBody = pick(row, PRODUCT_TARGETS);
+  const ops = [];
+
+  const productDefaults = await resolveProductDefaults(config.token);
+  if (!productBody.uOM && productDefaults.uOM) {
+    productBody.uOM = productDefaults.uOM;
+  }
+
+  // Category resolution / creation
+  const hasCategoryInput = Boolean(row.categoryCode || row.categoryName || row.category);
+  if (hasCategoryInput) {
+    const categories = await getExistingCategories(config.token, config.existingCategories);
+    const runCache = getResolutionCache(config.token || 'product-import');
+
+    const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
+      const base = detectEtendoBase();
+      const url = `${base}/sws/neo/product-category/productCategory`;
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({ searchKey, name }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const errDetail = errJson?.error?.message || errJson?.message || 'Category creation failed';
+        throw new Error(errDetail);
+      }
+      const json = await res.json().catch(() => null);
+      const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
+      const createdId = record?.id ?? record?.M_Product_Category_ID;
+      // Add newly created category to cached list for subsequent lookups
+      if (createdId) {
+        categories.push({ id: createdId, searchKey, name });
+      }
+      return { id: createdId, searchKey, name };
+    });
+
+    const categoryResolution = await resolveOrAutoCreateDependentEntity({
+      code: row.categoryCode,
+      name: row.categoryName,
+      fallbackValue: row.category,
+      existingRecords: categories,
+      allowCreate: true,
+      createFn,
+      cache: runCache,
+      translate: config.translate,
+    });
+
+    if (categoryResolution.status === 'error' || categoryResolution.status === 'unresolved') {
+      throw categoryResolution.error || new Error(`Category could not be resolved`);
+    }
+
+    if (categoryResolution.id) {
+      productBody.productCategory = categoryResolution.id;
+    }
+  }
+
+  const productOp = { id: 'product', spec: config.spec, entity: config.entity, body: productBody };
+  ops.push(productOp);
 
   const price = parsePrice(row.price);
   if (price === null) return ops; // no price cell → import the product only
@@ -127,8 +244,7 @@ registerImportDescriptor('product', async (row, config) => {
 
   // Single CSV `price` → standardPrice/listPrice/priceLimit, matching ProductPriceBar's add
   // flow (priceLimit defaults to the list price). parentRef links this to the product op's
-  // created id in the same batch — no explicit `product`/`parentId` here (unknown until the
-  // product commits), exactly like contactsImportDescriptor's locationAddress/contact ops.
+  // created id in the same batch.
   const priceStr = String(price);
   ops.push({
     id: 'price',

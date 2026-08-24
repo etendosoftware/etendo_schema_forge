@@ -26,7 +26,7 @@ import {
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../../observability/events.js';
 import { sanitizeEventProperties } from '../../observability/payload.js';
 
-function hookContext({ flagKey = 'tenant-upgrade', provider = 'in-memory', targetingKey = 'ada' } = {}) {
+function hookContext({ flagKey = 'sample-flag', provider = 'in-memory', targetingKey = 'ada' } = {}) {
   return {
     flagKey,
     providerMetadata: { name: provider },
@@ -43,7 +43,7 @@ beforeEach(() => {
 describe('buildExposureProperties', () => {
   it('maps the evaluation onto the declared event properties', () => {
     expect(buildExposureProperties(hookContext(), details(true))).toEqual({
-      flagKey: 'tenant-upgrade',
+      flagKey: 'sample-flag',
       enabled: true,
       variant: 'on',
       provider: 'in-memory',
@@ -70,7 +70,7 @@ describe('the reported payload survives the observability sanitizer', () => {
     );
     expect(event.name).toBe('feature_flag_evaluated');
     expect(sanitizeEventProperties(event.properties)).toEqual({
-      flagKey: 'tenant-upgrade',
+      flagKey: 'sample-flag',
       enabled: true,
       variant: 'on',
       provider: 'in-memory',
@@ -91,7 +91,7 @@ describe('createFlagExposureHook — deduplication', () => {
     expect(trackImpl).toHaveBeenCalledTimes(1);
     expect(trackImpl).toHaveBeenCalledWith(
       'feature_flag_evaluated',
-      expect.objectContaining({ flagKey: 'tenant-upgrade', enabled: true })
+      expect.objectContaining({ flagKey: 'sample-flag', enabled: true })
     );
   });
 
@@ -172,7 +172,7 @@ describe('createFlagExposureHook — the provider is part of the dedupe key', ()
       .toEqual(['in-memory', 'configcat']);
     // Same flag, same resolved value — only the provider differs.
     for (const [, properties] of trackImpl.mock.calls) {
-      expect(properties).toMatchObject({ flagKey: 'tenant-upgrade', enabled: false });
+      expect(properties).toMatchObject({ flagKey: 'sample-flag', enabled: false });
     }
   });
 
@@ -234,7 +234,7 @@ describe('createFlagExposureHook — the provider is part of the dedupe key', ()
     const trackImpl = vi.fn();
     const hook = createFlagExposureHook({ trackImpl });
 
-    hook.after({ flagKey: 'tenant-upgrade', context: {} }, details(false));
+    hook.after({ flagKey: 'sample-flag', context: {} }, details(false));
     hook.after(hookContext({ provider: 'configcat' }), details(false));
 
     expect(trackImpl).toHaveBeenCalledTimes(2);

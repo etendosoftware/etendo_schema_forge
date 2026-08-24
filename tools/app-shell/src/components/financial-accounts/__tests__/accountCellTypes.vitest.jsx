@@ -33,6 +33,10 @@ const ACCOUNT = {
   type: 'B',
   currentBalance: 1234.56,
   currencyIso: 'EUR',
+  // ES on purpose: the accountName cell's connect affordance is Spain-only since ETP-4896
+  // (see saltEdgeEligibility.js), so a fixture without it would hide the button.
+  countryIso: 'ES',
+  countryName: 'Spain',
   iban: 'ES1212340000000000000001',
   pendingCount: 3,
   bankConnected: true,
@@ -54,7 +58,7 @@ const UI = (key, params = {}) => {
 describe('ACCOUNT_CELL_TYPES — registry shape', () => {
   it('exposes exactly the cellTypes the Cuentas list can bind', () => {
     expect(Object.keys(ACCOUNT_CELL_TYPES).sort()).toEqual([
-      'accountBalance', 'accountName', 'accountType', 'reconcilePill',
+      'accountBalance', 'accountCountry', 'accountName', 'accountType', 'reconcilePill',
     ]);
   });
 
@@ -105,6 +109,30 @@ describe('ACCOUNT_CELL_TYPES — accountType', () => {
     );
 
     expect(screen.getByTestId('account-row-card-number-acc-1')).toHaveTextContent('**** 4321');
+  });
+});
+
+describe('ACCOUNT_CELL_TYPES — accountCountry', () => {
+  it('renders the country name', () => {
+    renderCell('accountCountry', { ...ACCOUNT, countryName: 'Spain', countryIso: 'ES' });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('Spain');
+  });
+
+  it('falls back to the ISO code when countryName is absent', () => {
+    renderCell('accountCountry', { ...ACCOUNT, countryName: '', countryIso: 'ES' });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('ES');
+  });
+
+  it('renders an em dash for an account with no country (pre-ETP-4896 data)', () => {
+    renderCell('accountCountry', { ...ACCOUNT, countryName: '', countryIso: '' });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('—');
+  });
+
+  it('needs no context — the country cell reads everything off the row', () => {
+    expect(() => renderCell('accountCountry', ACCOUNT, {})).not.toThrow();
   });
 });
 

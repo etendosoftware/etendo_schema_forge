@@ -109,13 +109,12 @@ export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {})
 }
 
 /**
- * Download a single attachment as a Blob URL. Caller is responsible for
- * `URL.revokeObjectURL` when the document unmounts to avoid leaking memory.
- * Returns null on any failure so callers can short-circuit gracefully.
+ * Downloads a single attachment as a raw Blob. Returns null on any failure
+ * so callers can short-circuit gracefully.
  *
  * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
  */
-export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl } = {}) {
+export async function fetchAttachmentBlob({ token, attachmentId, apiBaseUrl } = {}) {
   if (!token || !attachmentId) return null;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}`;
@@ -126,9 +125,103 @@ export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl }
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
+    return await res.blob();
   } catch {
     return null;
   }
 }
+
+/**
+ * Download a single attachment as a Blob URL. Caller is responsible for
+ * `URL.revokeObjectURL` when the document unmounts to avoid leaking memory.
+ * Returns null on any failure so callers can short-circuit gracefully.
+ *
+ * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
+ */
+export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl } = {}) {
+  const blob = await fetchAttachmentBlob({ token, attachmentId, apiBaseUrl });
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
+/**
+ * Looks up the attachment currently marked as (tableName, recordId)'s "main"
+ * document — the single file the sidebar/tab and preview must always agree
+ * on. Returns `{ id, name, ... }` metadata, or `null` if none is marked or on
+ * any failure.
+ *
+ * @param {{ token: string, tableName: string, recordId: string, apiBaseUrl?: string }} params
+ */
+export async function fetchMainAttachment({ token, tableName, recordId, apiBaseUrl } = {}) {
+  if (!token || !tableName || !recordId) return null;
+  const base = detectAttachmentsBase(apiBaseUrl);
+  const url = `${base}/sws/neo/attachments/${tableName}/${recordId}/main`;
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return json && json.id ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Uploads a file and marks it as (tableName, recordId)'s "main" document in
+ * the same request — the previously-marked attachment, if any, is deleted
+ * server-side as part of the same transaction. Returns the created
+ * attachment's metadata, or `null` on failure.
+ *
+ * @param {{ token: string, tableName: string, recordId: string, file: File|Blob,
+ *   fileName?: string, apiBaseUrl?: string }} params
+ */
+export async function uploadAndMarkMainAttachment({
+  token, tableName, recordId, file, fileName, apiBaseUrl,
+} = {}) {
+  if (!token || !tableName || !recordId || !file) return null;
+  const base = detectAttachmentsBase(apiBaseUrl);
+  const url = `${base}/sws/neo/attachments/${tableName}/${recordId}?markAsMain=true`;
+  const form = new FormData();
+  form.append('file', file, fileName || file.name || 'document');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return json?.response?.data ?? json?.data ?? json;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Marks or unmarks an existing attachment as its record's "main" document.
+ * Marking (`isMain: true`) deletes the previously-marked attachment for the
+ * same record server-side, in the same transaction.
+ *
+ * @param {{ token: string, attachmentId: string, isMain: boolean, apiBaseUrl?: string }} params
+ */
+export async function markAttachmentAsMain({ token, attachmentId, isMain, apiBaseUrl } = {}) {
+  if (!token || !attachmentId) return false;
+  const base = detectAttachmentsBase(apiBaseUrl);
+  const url = `${base}/sws/neo/attachments/file/${attachmentId}/main`;
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isMain }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+

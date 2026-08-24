@@ -107,6 +107,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `sendDocument` | object | _absent_ (auto-enabled on documental windows) | See below | Send/Download envelope config forwarded to the generic `SendDocumentModal`. Auto-enabled when the header exposes `documentNo`; declare it only to disable (`enabled: false`), drop the email panel (`allowEmail: false`), or tune the recipient-edit policy (see the Send Document subsection below). |
 | `balanceFooter` | object | `null` | `{ debitField, creditField }` | Renders a debit/credit balance footer (Σ debit, Σ credit, difference, balanced ✓/✗ badge) for double-entry windows (e.g. manual journals). Both fields must be amount-typed fields on the lines entity. When set, the generator emits `BalanceFooterPanel` instead of `DocumentTotalsPanel` and disables the Save button (with a tooltip) only when the entry is unbalanced (Σ debit ≠ Σ credit). An empty/zero entry is treated as balanced and is savable as a draft; the ✓/✗ badge is hidden until the lines carry amounts. Validator F17 enforces field existence. Example: `"balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }`. |
 | `linesLayout` | string | `"classic"` | `"classic"`, `"inlineEditable"` | Lines tab rendering mode. `"classic"` keeps the side-panel edit flow (current behavior). `"inlineEditable"` switches the table to `InlineLinesPanel`: pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. All column types (string, number, amount, percent, date, selector, search) are inline-editable; selector/search columns use `InlineSearchCombo` (text input with server-side search) so FK fields with many options are filterable by typing. The add-line button, related-documents panel, notes panel and totals panel are unchanged. Validator F12 enforces the enum. |
+| `lineTaxSifTrigger` | boolean \| object | `false` | `{ enabled, _note }` | ETP-4888 point 5. Shows an inline warning-color badge next to the lines grid's `tax` cell value when the selected tax is missing its TBAI/Verifactu SIF (Sistemas de Información de Facturación) key, opening a quick-fix modal (`TaxSifModal.jsx`) instead of sending the user to the standalone Impuestos (Taxes) window. Accepts either a plain boolean or the `{ enabled, _note }` object shape (same "boolean-or-object" convention as `attachments`/`sendDocument` above) — `sales-invoice`/`purchase-invoice` use the object form purely to carry the inline `_note` below, no other sub-key is read. **Not yet wired through `generate-frontend.js`** — this flag documents the decision, but today (`sales-invoice`, `purchase-invoice`) each window's own hand-written `index.jsx` mirrors it by hand via a local `LINE_TAX_SIF_TRIGGER_ENABLED` constant, calling `useTaxSifLineRowActions()` and passing its `cellBadges` result to the generated `HeaderPage`'s `lineCellBadges` prop — the same "hand-mirror a decision the generator doesn't carry" convention this file already uses for `SUBSET_FILTERS`/`LABEL_OVERRIDES` on these two windows. See `docs/ui-customization.md` §14e for the full mechanism (also covers the backend `InvoiceLineTaxSifSelectorPolicy` enrichment in `com.etendoerp.go`). SII is out of scope: it has nothing to configure at tax level (its header-level `aeatsiiCauseExemption` equivalent is unaffected, still owned by `SifTab.jsx`). A follow-up ticket to wire this through `generate-frontend.js` (in `schema_forge_core`) is recommended once convenient, per Alex's review. |
 
 ### Print Visibility (`window.hidePrintWhen`) — ETP-4714
 
@@ -699,7 +700,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `name` | string | Entity key | Override display name. |
-| `exclude` | boolean | `false` | Omit entire entity from schema. |
+| `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
@@ -1357,6 +1358,34 @@ Rule keys use **extended names** (including trigger column suffix for multi-trig
   }
 }
 ```
+
+**What it does (ETP-4793).** The entity is dropped from the curated schema, and so
+from `contract.json`. Both write paths then close it in NEO:
+
+| Row | Column | Value |
+|---|---|---|
+| `ETGO_SF_ENTITY` (the excluded entity) | `ISINCLUDED` | `N` |
+| `ETGO_SF_FIELD` (every field of it) | `ISINCLUDED` | `N` |
+
+`ISINCLUDED = 'N'` on the entity is what actually removes it from the served
+surface — every REST and MCP reader filters on it before resolving an entity, so
+neither `GET /{entity}` nor an MCP `neo_list` can reach it. The field rows are
+closed too: it is redundant for behaviour, but a closed entity whose 15 field rows
+still claim `ISINCLUDED = 'Y'` misreports the size of the agent surface, which is
+exactly how the gap went unnoticed for 90 entities / 386 fields.
+
+Two deliberate non-changes:
+
+- **The six HTTP method flags are left at the window default, not zeroed.** They
+  are unreachable once the entity is closed, and an all-`N` set would break the
+  "GET and GETBYID are always granted" invariant that `cli/src/lib/entity-methods.js`
+  enforces. Leaving them alone also keeps the XML diff to one column per entity.
+- **`VISIBILITY` is not written on the closed field rows.** The offline XML delta
+  does not model that column, and NULL beside `ISINCLUDED='N'` / `ISREADONLY='N'`
+  is already the pair `mapVisibility('discarded')` produces.
+
+Excluding an entity changes `ETGO_SF_*`, so it needs a re-push and an export:
+`make regen ONLY=<window> PUSH_TO_NEO=1` then `./gradlew export.database`.
 
 ### Custom NeoHandler for an entity
 ```json

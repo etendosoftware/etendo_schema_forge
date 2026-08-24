@@ -318,32 +318,30 @@ Hay **dos sistemas de "rol" sin relación directa** en este código, y confundir
 - **Evidencia:** `RolesOverviewPage.jsx:1-209`; `rolesApi.js:1-80`; `SFRolesOverview.java:93-337` (test: `SFRolesOverviewTest.java`, 14 tests); `e2e/tests/flows/roles-overview.mocked.spec.js`.
 - **Huecos abiertos:** [Ambigüedad] deep-link directo a `/roles` como no-admin no se puede probar en modo mock (limitación del mock de fetch) — solo cubierto por test unitario Java + test React por separado, nunca end-to-end contra un servidor real.
 
-## CAP-ROL-02 — Asignar / cambiar el rol de un usuario
+## CAP-ROL-02 — Asignar / cambiar los roles de un usuario (composición multi-rol, ETP-4906)
 
 - **Actor:** Usuario con acceso de escritura a la ventana `User` (gateado por `AD_Window_Access` estándar, no por la capability admin-only de CAP-ROL-01).
-- **Superficie:** Ventana `User` → control custom `AssignRoleControl.jsx`.
-- **Objetivo:** Asignar (o quitar) el único rol activo de un usuario.
-- **Precondiciones:** Editar un usuario existente (no aplica en creación).
-- **Trigger:** Cambiar el selector "Assigned Role" y guardar.
+- **Superficie:** Ventana `User` → control custom `AssignTemplateRolesControl.jsx` (header, chips multi-select) + tab custom "Roles del usuario" (`UserRolesTab.jsx`, matriz de permisos en vivo) + columna de chips y filtro de rol en el grid de usuarios (`RoleChipsCell.jsx`/`RoleFilterControl.jsx`/`UserHeaderTable.jsx`). Reemplaza el control single-select `AssignRoleControl.jsx` (ETP-4512) que existía antes.
+- **Objetivo:** Componer 1+ roles-plantilla de sistema (Finanzas/Ventas/Compras/Inventario) sobre el rol personal del usuario, con preview de permisos antes de guardar.
+- **Precondiciones:** Editar un usuario existente (no aplica en creación — nunca se llama a `SFAssignUserRoles` antes de que exista un `AD_User_ID`).
+- **Trigger:** Togglear chips de rol en el control y guardar (Guardar).
 - **Flujo principal:**
-  1. El selector carga opciones desde el endpoint del child-tab `userRoles.role` (deliberadamente, no el selector nativo `defaultRole` que solo lista roles que el usuario *ya tiene*).
-  2. Al elegir un rol, se actualiza el campo de header `defaultRole` (`AD_User.Default_Ad_Role_ID`) como cualquier otro campo.
-  3. Al guardar, `UserRoleAssignmentHandler` (`@Named("user")`) corre en `afterHandle()`:
-     - Borra **todas** las filas `AD_User_Roles` existentes del usuario.
-     - Si hay rol destino, inserta **exactamente una** fila nueva.
-     - Si ya está en sync (mismo rol, 1 fila), no hace nada.
-  4. `defaultRole` se muestra en el grid de usuarios como badge de solo lectura — la única superficie de edición es `AssignRoleControl`.
+  1. Al abrir un usuario existente, el frontend llama `fetchUserRoleAssignments(userId)` (`GET /sws/neo/userroleassignments?UserId=...`) para precargar los roles-plantilla ya aplicados.
+  2. El control muestra los roles seleccionados como chips removibles (+N si hay overflow) y una lista de checkboxes con las opciones de `SFRolesOverview` (excluyendo el rol Admin — nunca es seleccionable como plantilla). Cada toggle es **local, sin llamada de red** — solo actualiza un estado de selección compartido (`roleSelectionContext.js`) que también lee el tab "Roles del usuario" para su matriz en vivo (0 llamadas extra por toggle).
+  3. Al hacer click en Guardar, `windows/custom/user/index.jsx` compara la selección local contra la aplicada al cargar; si cambió, llama `saveUserRoleAssignments(userId, templateRoleIds)` → `SFAssignUserRoles`, que resuelve/crea el rol personal del usuario y reconcilia sus filas `AD_Role_Inheritance` contra el set completo deseado (llamada de reconciliación, no incremental).
+  4. El grid de usuarios (`/user`) muestra los roles aplicados de cada fila como chips (`RoleChipsCell`, vía el mapa bulk de `fetchUserRoleAssignments()` sin `UserId`) y permite filtrarlos por rol-plantilla o por "Administrador" (`RoleFilterControl`).
 - **Variantes / errores observables:**
-  - [Hecho] Sin rol seleccionado → se borran todas las filas `AD_User_Roles`, usuario queda sin rol.
-  - [Hecho] Cambiar de rol A a B → borra fila de A, inserta fila de B.
-  - [Hecho] La sincronización es **best-effort**: cualquier excepción se loguea y se traga, **nunca falla el guardado del usuario**.
-  - [Hecho] En creación de usuario (`POST`), no hay asignación de rol — `syncRoleAfterUpdate` solo corre en PUT/PATCH. Un usuario recién creado queda sin rol hasta la primera edición.
-  - [Hecho] El child-tab `userRoles` es 100% solo lectura — vista de confirmación, no una segunda vía de edición.
-- **Resultado esperado:** `AD_User_Roles` del usuario tiene 0 o 1 fila activa, siempre coincidiendo con `Default_Ad_Role_ID`.
-- **Reglas / permisos implicados:** Quién puede *ver* la ventana `User` está gobernado por `AD_Window_Access` normal (windowId 108), no por la capability de CAP-ROL-01.
-- **Datos / entidades tocadas:** `AD_User.Default_Ad_Role_ID`, `AD_User_Roles`.
-- **Evidencia:** `AssignRoleControl.jsx:1-92`; `UserRoleAssignmentHandler.java:47-342` (tests: `afterHandleCreatesOneRowForUserWithNoExistingRole`, `afterHandleReplacesExistingRowWhenRoleChanges`, `afterHandleIsNoOpWhenAlreadyInSync`, `afterHandleRemovesExistingRowWhenRoleIsCleared`); `e2e/tests/flows/role-assignment.mocked.spec.js`.
-- **Huecos abiertos:** [Ambigüedad] no se pudo confirmar en código estático si algún rol no-admin (Finance/Sales/etc.) tiene acceso de escritura a la ventana `User` en un tenant real — depende de los datos de `AD_Window_Access` que traiga el cliente template GOClient.
+  - [Hecho] Togglear un chip habilita Guardar aunque ningún otro campo del formulario haya cambiado (`additionalDirtyState` en `DetailView.jsx`).
+  - [Hecho] Guardar sin cambios reales en la selección de roles es un no-op (no dispara `SFAssignUserRoles`).
+  - [Hecho] Un usuario recién creado (aún sin `AD_User_ID`) muestra un placeholder "guarda primero" en el control y no expone el tab "Roles del usuario".
+  - [Hecho] El rol Admin nunca aparece como opción de composición, pero sí es un valor válido del filtro del grid (un usuario Admin clásico no tiene entradas en el mapa de composición).
+- **Resultado esperado:** El rol personal del usuario (`UserRoleCompositionService`) tiene exactamente las filas `AD_Role_Inheritance` correspondientes al set de roles-plantilla elegido; el grid y la matriz en vivo reflejan ese mismo set tras guardar y recargar.
+- **Reglas / permisos implicados:** Quién puede *ver* la ventana `User` está gobernado por `AD_Window_Access` normal (windowId 108), no por la capability de CAP-ROL-01. `SFUserRoleAssignments`/`SFAssignUserRoles` aplican el mismo chequeo de límite de tenant (`enforceCallerClientBoundary`) que el resto de los webhooks de roles — nunca permiten leer/escribir usuarios de otro cliente.
+- **Datos / entidades tocadas:** El rol personal del usuario (composición) y sus filas `AD_Role_Inheritance`. `AD_User.Default_Ad_Role_ID` **no** se toca desde este flujo (ver Huecos abiertos).
+- **Evidencia:** `AssignTemplateRolesControl.jsx` (+ `__tests__/AssignTemplateRolesControl.vitest.jsx`); `UserRolesTab.jsx`; `RoleChipsCell.jsx`/`RoleFilterControl.jsx`/`UserHeaderTable.jsx`; `windows/custom/user/index.jsx`; `userRoleAssignmentsApi.js`; `SFUserRoleAssignments.java`/`SFAssignUserRoles.java`/`UserRoleCompositionService.java` (tests: `SFUserRoleAssignmentsTest`, `SFAssignUserRolesTest`, `UserRoleCompositionServiceTest`); `e2e/tests/flows/user-role-assignment.mocked.spec.js` (reemplaza al extinto `role-assignment.mocked.spec.js` de ETP-4512, borrado por estar completamente superado).
+- **Huecos abiertos:**
+  - [Ambigüedad] no se pudo confirmar en código estático si algún rol no-admin (Finance/Sales/etc.) tiene acceso de escritura a la ventana `User` en un tenant real — depende de los datos de `AD_Window_Access` que traiga el cliente template GOClient.
+  - [Hecho, orfandad conocida] El mecanismo ETP-4512 (`UserRoleAssignmentHandler`, sincroniza `AD_User_Roles` desde `Default_Ad_Role_ID` en cada PUT/PATCH) sigue existiendo en el backend, sin tocar por ETP-4906, pero ya no tiene ningún escritor en esta ventana — ni `AssignTemplateRolesControl` ni ningún otro campo escriben `defaultRole`. **Corrección (ETP-4906, DEV wave 6):** el tab hijo nativo "User Roles" (`userRoles`, `AD_User_Roles`) ya NO se renderiza en absoluto — quedó `exclude: true` en `decisions.json` porque compartía la misma etiqueta traducida ("Roles del usuario") que la nueva pestaña custom de este ticket, exponiendo el rol de composición interno "Personal – &lt;user&gt;" al admin; su salida generada (`UserRolesTable.jsx`/`UserRolesForm.jsx`) fue borrada tras confirmar que un `make regen ONLY=user` limpio ya no la emite (ver `docs/generated-custom-windows/user.md` → "Window shape"). La fila legacy de `AD_User_Roles` sigue existiendo en la base (el sync de `Default_Ad_Role_ID` no fue tocado), pero hoy no tiene ninguna superficie de UI, ni siquiera de solo lectura. No es un flujo activo hoy; queda documentado para quien decida limpiarlo o reutilizarlo.
 
 ## CAP-ROL-03 — Selección del rol activo al iniciar sesión
 

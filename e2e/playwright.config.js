@@ -29,6 +29,20 @@ const hasAuthCredentials = existsSync(authCredentialsPath);
 const E2E_WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined;
 const MOCKED_WORKERS = E2E_WORKERS ?? 4;
 const INTEGRATION_WORKERS = E2E_WORKERS ?? 1;
+const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
+  String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
+);
+
+const emailSinkServer = {
+  command: 'node support/email-sink.mjs',
+  url: 'http://127.0.0.1:8025/health',
+  reuseExistingServer: !process.env.CI,
+  timeout: 10_000,
+  env: {
+    E2E_EMAIL_SINK_PORT: '8025',
+    E2E_EMAIL_SINK_API_KEY: 'e2e-only-secret',
+  },
+};
 
 export default defineConfig({
   testDir: './tests',
@@ -40,12 +54,13 @@ export default defineConfig({
     ['html', { open: 'never', outputFolder: '../artifacts/e2e-report' }],
     ['list'],
   ],
+  webServer: process.env.E2E_EMAIL_SINK === '1' ? emailSinkServer : undefined,
   timeout: 60_000,
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3100',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: CAPTURE_SCREENSHOTS ? 'only-on-failure' : 'off',
     video: process.env.E2E_VIDEO ? 'on' : 'on-first-retry',
     headless: !!process.env.CI,
     viewport: { width: 1440, height: 900 },

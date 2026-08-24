@@ -56,18 +56,17 @@ vi.mock('@/windows/custom/shared/useInvoicePdf.js', () => ({
   useInvoicePdf: () => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null }),
 }));
 
-vi.mock('@/windows/custom/shared/usePreviewAttachment.js', () => ({
-  usePreviewAttachment: () => ({
+vi.mock('@/windows/custom/shared/useMainAttachment.js', () => ({
+  useMainAttachment: () => ({
     storedFile: null,
     isBusy: false,
     storeFailed: false,
     storeFile: vi.fn(),
     storeBlob: vi.fn(),
     storeUrl: vi.fn(),
+    markExisting: vi.fn(),
     deleteFile: vi.fn(),
   }),
-  ACCEPTED_TYPES: { 'application/pdf': 'pdf', 'image/png': 'image' },
-  ACCEPT_ATTR: 'application/pdf,image/png',
 }));
 
 vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({

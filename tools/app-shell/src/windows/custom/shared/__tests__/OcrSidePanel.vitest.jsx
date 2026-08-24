@@ -13,15 +13,14 @@ vi.mock('@/components/copilot/ocr/ocrDocTypes', () => ({
   getOcrDocType: () => ({ tableName: 'C_Invoice' }),
 }));
 
-// The document slot itself has its own tests (usePreviewAttachment.vitest.jsx);
-// here we drive the panel through it.
+// DocumentView (edit mode) is backed by useMainAttachment (ETP-4315) — the same
+// real, marked Attachment row the grid preview reads. We drive the panel
+// through this hook the way the old file drove it through usePreviewAttachment.
 let hookArgs = null;
 let hookState = null;
 const storeFile = vi.fn();
-vi.mock('../usePreviewAttachment.js', () => ({
-  usePreviewAttachment: (args) => { hookArgs = args; return hookState; },
-  ACCEPTED_TYPES: { 'application/pdf': 'pdf', 'image/png': 'image' },
-  ACCEPT_ATTR: 'application/pdf,image/png',
+vi.mock('../useMainAttachment.js', () => ({
+  useMainAttachment: (args) => { hookArgs = args; return hookState; },
 }));
 
 // The panel passes each icon an auto-generated `data-testid` (see
@@ -54,10 +53,20 @@ const defaultProps = {
   recordId: 'inv-1',
   token: 'test-token',
   apiBaseUrl: '/sws/neo/purchase-invoice',
+  docTypeId: 'purchase-invoice',
   isNew: false,
 };
 
-const emptySlot = { storedFile: null, isBusy: false, storeFailed: false, storeFile, storeBlob: vi.fn(), storeUrl: vi.fn(), deleteFile: vi.fn() };
+const emptySlot = {
+  storedFile: null,
+  isBusy: false,
+  storeFailed: false,
+  storeFile,
+  storeBlob: vi.fn(),
+  storeUrl: vi.fn(),
+  markExisting: vi.fn(),
+  deleteFile: vi.fn(),
+};
 const withFile = (file) => ({ ...emptySlot, storedFile: file });
 
 const pdfFile = (name = 'invoice.pdf') =>
@@ -65,6 +74,10 @@ const pdfFile = (name = 'invoice.pdf') =>
 
 function fileInput(container) {
   return container.querySelector('input[type="file"]');
+}
+
+function dropZone(container) {
+  return container.querySelector('button');
 }
 
 beforeEach(() => {
@@ -76,8 +89,9 @@ beforeEach(() => {
 // --- Tests ---
 
 /**
- * ETP-4855 Error 3 asked for three removals. These are regression guards: each
- * one was visible in staging and must not come back.
+ * ETP-4855 Error 3 asked for the "Messages" / "History" tabs and the
+ * context-menu button to be removed. These are regression guards: each one
+ * was visible in staging and must not come back.
  */
 describe('OcrSidePanel — removed placeholder UI', () => {
   it('renders no Messages or History tab', () => {
@@ -119,20 +133,18 @@ describe('OcrSidePanel — OCR reader gating', () => {
 });
 
 /**
- * The panel shows the record's document slot — the OCR source — and nothing
- * else. Files added through the Attachments tab never surface here.
+ * The panel shows the record's real, marked Attachment — the same row the
+ * grid preview and the Attachments tab read — via useMainAttachment.
  */
 describe('OcrSidePanel — the document slot', () => {
-  it('reads the slot of this record and asks for the attachments mirror', () => {
+  it('reads the record identity and asks useMainAttachment for its main attachment', () => {
     render(<OcrSidePanel {...defaultProps} />);
     expect(hookArgs).toMatchObject({
       documentId: 'inv-1',
-      specName: 'purchase-invoice',
+      tableName: 'C_Invoice',
       storeCondition: true,
       token: 'test-token',
       apiBaseUrl: '/sws/neo/purchase-invoice',
-      // Mirrors into the record's attachments so the file shows in that tab.
-      tableName: 'C_Invoice',
     });
   });
 
@@ -143,7 +155,33 @@ describe('OcrSidePanel — the document slot', () => {
     expect(fileInput(container)).toBeTruthy();
   });
 
-  it('stores a picked PDF in the slot', () => {
+  it('shows a spinner while the slot is loading and nothing is attached yet', () => {
+    hookState = { ...emptySlot, isBusy: true };
+    render(<OcrSidePanel {...defaultProps} />);
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
+    expect(screen.queryByText('ocrSidePanelNoAttachments')).toBeNull();
+  });
+
+  it('renders a PDF slot file in the PdfViewer, with the attach action still available', async () => {
+    hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
+    render(<OcrSidePanel {...defaultProps} />);
+
+    expect(screen.getByText('supplier.pdf')).toBeInTheDocument();
+    expect(screen.getByText('ocrSidePanelAttach')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument());
+  });
+
+  it('renders an image slot file as an image, not through the PDF viewer', () => {
+    hookState = withFile({ attachmentId: 'att-2', fileName: 'scan.png', mimeType: 'image/png', objectUrl: 'blob:img' });
+    render(<OcrSidePanel {...defaultProps} />);
+
+    const img = screen.getByAltText('scan.png');
+    expect(img).toBeInTheDocument();
+    expect(img.getAttribute('src')).toBe('blob:img');
+    expect(screen.queryByTestId('pdf-viewer')).toBeNull();
+  });
+
+  it('stores a picked PDF via storeFile', () => {
     const { container } = render(<OcrSidePanel {...defaultProps} />);
     const file = pdfFile();
 
@@ -152,7 +190,7 @@ describe('OcrSidePanel — the document slot', () => {
     expect(storeFile).toHaveBeenCalledWith(file);
   });
 
-  it('rejects a file type the preview cannot render', () => {
+  it('rejects a disallowed file type without calling storeFile', () => {
     const { container } = render(<OcrSidePanel {...defaultProps} />);
 
     const odd = new File(['x'], 'notes.txt', { type: 'text/plain' });
@@ -168,35 +206,75 @@ describe('OcrSidePanel — the document slot', () => {
     expect(screen.getByText('ocrSidePanelAttachError')).toBeInTheDocument();
   });
 
-  it('renders a PDF slot file in the viewer, with the attach action still available', async () => {
-    hookState = withFile({ fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
-    render(<OcrSidePanel {...defaultProps} />);
-
-    expect(screen.getByText('supplier.pdf')).toBeInTheDocument();
-    expect(screen.getByText('ocrSidePanelAttach')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument());
-  });
-
-  it('renders an image slot file as an image, not through the PDF viewer', () => {
-    hookState = withFile({ fileName: 'scan.png', mimeType: 'image/png', objectUrl: 'blob:img' });
-    render(<OcrSidePanel {...defaultProps} />);
-
-    const img = screen.getByAltText('scan.png');
-    expect(img).toBeInTheDocument();
-    expect(img.getAttribute('src')).toBe('blob:img');
-    expect(screen.queryByTestId('pdf-viewer')).toBeNull();
-  });
-
-  it('shows a spinner while the slot is loading', () => {
-    hookState = { ...emptySlot, isBusy: true };
-    render(<OcrSidePanel {...defaultProps} />);
-    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
-    expect(screen.queryByText('ocrSidePanelNoAttachments')).toBeNull();
-  });
-
   it('hides the attach action when the record is not yet identifiable', () => {
     render(<OcrSidePanel {...defaultProps} recordId={null} />);
     expect(screen.getByText('ocrSidePanelNoAttachments')).toBeInTheDocument();
     expect(screen.queryByText('ocrSidePanelAttach')).toBeNull();
+  });
+});
+
+/**
+ * Drag-and-drop is a second way to attach, on top of click-to-browse. It must
+ * work both before anything is attached and once a file already fills the slot.
+ */
+describe('OcrSidePanel — drag and drop', () => {
+  it('stores a dropped PDF in the empty state', () => {
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const file = pdfFile();
+
+    fireEvent.drop(dropZone(container), { dataTransfer: { files: [file] } });
+
+    expect(storeFile).toHaveBeenCalledWith(file);
+  });
+
+  it('rejects a dropped file of a disallowed type in the empty state', () => {
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const odd = new File(['x'], 'notes.txt', { type: 'text/plain' });
+
+    fireEvent.drop(dropZone(container), { dataTransfer: { files: [odd] } });
+
+    expect(storeFile).not.toHaveBeenCalled();
+    expect(screen.getByText('ocrInlinePdfOnly')).toBeInTheDocument();
+  });
+
+  it('stores a dropped file in the filled state too', () => {
+    hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const file = pdfFile('replacement.pdf');
+
+    fireEvent.drop(container.querySelector('.min-h-0.flex-1'), { dataTransfer: { files: [file] } });
+
+    expect(storeFile).toHaveBeenCalledWith(file);
+  });
+
+  it('does not crash on dragOver/dragLeave in the empty state', () => {
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const zone = dropZone(container);
+
+    fireEvent.dragOver(zone);
+    fireEvent.dragLeave(zone, { relatedTarget: document.body });
+    // Should not crash — visual state changes only
+  });
+});
+
+describe('OcrSidePanel — re-attach button', () => {
+  it('clicking the re-attach button opens the hidden file input', () => {
+    hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const input = fileInput(container);
+    const clickSpy = vi.spyOn(input, 'click');
+
+    fireEvent.click(screen.getByText('ocrSidePanelAttach'));
+
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('picking a replacement file through the input triggers storeFile', () => {
+    hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+
+    fireEvent.change(fileInput(container), { target: { files: [pdfFile('new.pdf')] } });
+
+    expect(storeFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'new.pdf' }));
   });
 });

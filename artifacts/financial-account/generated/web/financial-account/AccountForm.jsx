@@ -12,6 +12,7 @@ const fields = [
   { key: 'aprmGlitemDiff', column: 'EM_Aprm_Glitem_Diff', type: 'selector', label: 'GL Item Difference', section: 'other', reference: 'Glitem', inputMode: 'selector' },
   { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN', section: 'other' },
   { key: 'swiftCode', column: 'Swiftcode', type: 'text', label: 'SWIFT Code', section: 'other' },
+  { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', required: true, section: 'other', reference: 'Country', inputMode: 'selector' },
   { key: 'writeofflimit', column: 'Writeofflimit', type: 'number', label: 'Write-off Limit', section: 'other' },
   { key: 'bankCode', column: 'Codebank', type: 'text', label: 'Bank Code', section: 'other' },
   { key: 'branchCode', column: 'Codebranch', type: 'text', label: 'Branch Code', section: 'other' },

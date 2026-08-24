@@ -29,16 +29,26 @@ describe('accountCellTypes — module shape', () => {
   });
 
   it('declares one renderer per cellType decisions.json can name', () => {
-    for (const cellType of ['accountName', 'accountType', 'accountBalance', 'reconcilePill']) {
+    for (const cellType of [
+      'accountName', 'accountType', 'accountCountry', 'accountBalance', 'reconcilePill',
+    ]) {
       assert.match(src, new RegExp(`\\n  ${cellType}: \\(row`));
     }
   });
 
   it('reuses the shared cell bodies instead of re-implementing them', () => {
-    assert.match(
-      src,
-      /import \{ NameCell, TypeCell, BalanceCell \} from '\.\/AccountsTable\/accountColumns\.jsx'/,
+    // Pins the INVARIANT — every cell body comes from the shared module — rather than the exact
+    // destructuring list. The previous literal-list regex broke the moment a cell was added
+    // (ETP-4896's CountryCell) even though nothing about the reuse rule had changed, which makes
+    // the test read as a tripwire for growth instead of for re-implementation.
+    const sharedImport = src.match(
+      /import \{([^}]+)\} from '\.\/AccountsTable\/accountColumns\.jsx'/,
     );
+    assert.ok(sharedImport, 'the registry must import its cell bodies from accountColumns.jsx');
+    const imported = sharedImport[1].split(',').map((name) => name.trim());
+    for (const cell of ['NameCell', 'TypeCell', 'CountryCell', 'BalanceCell']) {
+      assert.ok(imported.includes(cell), `${cell} must be reused from the shared module`);
+    }
     assert.match(src, /import \{ ReconcilePill \} from '\.\/ReconcilePill\.jsx'/);
   });
 });

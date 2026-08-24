@@ -564,6 +564,25 @@ describe('DetailView helper functions', () => {
   });
 
   describe('isDeleteButtonVisible', () => {
+    it('hides Delete for a lifecycle-locked record even with a deleteAction (ETP-4895)', () => {
+      // The deleteAction bypass exists because such a delete reactivates server-side first — which
+      // is precisely what must not happen to a payment whose bank transfer is live. So the flag has
+      // to be checked BEFORE that bypass, not inside the status gate it skips.
+      expect(isDeleteButtonVisible({
+        isNew: false, recordId: '123', data: { status: 'PPM', pisLocked: true },
+        statusField: 'status', hideDeleteWhenComplete: true, isProcessed: true,
+        deleteAction: { field: 'eTPRRemovePayment' },
+      })).toBeFalsy();
+    });
+
+    it('keeps the deleteAction bypass for a record that is not locked', () => {
+      expect(isDeleteButtonVisible({
+        isNew: false, recordId: '123', data: { status: 'PPM', pisLocked: false },
+        statusField: 'status', hideDeleteWhenComplete: true, isProcessed: true,
+        deleteAction: { field: 'eTPRRemovePayment' },
+      })).toBeTruthy();
+    });
+
     // Signature: ({ isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, deleteAction, hideDeleteButton })
     it('false for new records', () => {
       expect(isDeleteButtonVisible({ isNew: true, recordId: 'new', data: {}, statusField: null, hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();

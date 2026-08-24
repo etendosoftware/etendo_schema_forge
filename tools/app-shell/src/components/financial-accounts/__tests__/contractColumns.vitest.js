@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getContractGridColumns } from '../contractColumns.js';
+import { getContractGridColumns, getContractPanelFields } from '../contractColumns.js';
 
 // These assertions run against the REAL window contract
 // (artifacts/financial-account/contract.json): they pin the declarative
@@ -56,7 +56,8 @@ describe('getContractGridColumns', () => {
   // what lets AccountsHeaderTable stop hand-appending it as a column literal.
   it('returns the account (Cuentas list) grid columns in order', () => {
     const cols = getContractGridColumns('account').map((c) => c.name);
-    expect(cols).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
+    // ETP-4896 follow-up: Country inserted right after Type (gridOrder 3).
+    expect(cols).toEqual(['name', 'type', 'country', 'currentBalance', 'pendingCount']);
   });
 
   it('places the virtual pendingCount column last, per its declared gridOrder', () => {
@@ -118,5 +119,37 @@ describe('getContractGridColumns', () => {
     // no gridOrder — they must not leak into the grid.
     expect(cols).not.toContain('depositAmount');
     expect(cols).not.toContain('paymentAmount');
+  });
+});
+
+// Pins the "more info" panel of the Movimientos row (ETP-4869): which accounting
+// dimensions it shows and in what order come from decisions.json → contract.json
+// (fields with `dimensionsPanel: true`, sorted by `seq`), not from a hardcoded
+// array in MovementsTable.jsx.
+describe('getContractPanelFields', () => {
+  // The funds-transfer counterpart link is declared with a lower seq than every accounting
+  // dimension precisely so it renders immediately BEFORE them, as the feature requires.
+  it('returns the transaction panel fields in declared seq order', () => {
+    const fields = getContractPanelFields('transaction').map((f) => f.name);
+    expect(fields).toEqual(['eTGOFinaccTransDest', 'project', 'costCenter', 'product']);
+  });
+
+  it('only includes fields that explicitly opt in via dimensionsPanel', () => {
+    const fields = getContractPanelFields('transaction').map((f) => f.name);
+    // organization/activity/salesCampaign/salesRegion/stDimension/ndDimension are
+    // accounting dimensions in the contract too, but are not declared for this
+    // panel — they must not leak into it.
+    expect(fields).not.toContain('organization');
+    expect(fields).not.toContain('activity');
+    expect(fields).not.toContain('salesCampaign');
+  });
+
+  it('exposes contract labels as fallbacks', () => {
+    const byName = Object.fromEntries(getContractPanelFields('transaction').map((f) => [f.name, f]));
+    expect(byName.costCenter.label).toBe('Cost Center');
+  });
+
+  it('returns an empty list for unknown entities', () => {
+    expect(getContractPanelFields('nope')).toEqual([]);
   });
 });

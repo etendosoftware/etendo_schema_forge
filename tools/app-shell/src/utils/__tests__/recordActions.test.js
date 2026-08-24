@@ -3,6 +3,40 @@ import assert from 'node:assert/strict';
 import { isDeleteVisibleForRecord, DELETABLE_DOC_STATUSES, evalRowVisibleWhen } from '../recordActions.js';
 
 describe('isDeleteVisibleForRecord', () => {
+  it('hides Delete for a record the backend flagged as lifecycle-locked (ETP-4895)', () => {
+    // A payment whose bank transfer is live: deleting it would leave Salt Edge holding an order for
+    // a payment that no longer exists. The flag wins over an otherwise deletable draft status.
+    assert.equal(
+      isDeleteVisibleForRecord({
+        record: { documentStatus: 'RPAP', pisLocked: true },
+        statusField: 'documentStatus',
+        hideDeleteWhenComplete: false,
+      }),
+      false,
+    );
+  });
+
+  it('leaves Delete alone for records that do not carry the flag', () => {
+    // Every window other than payments: the backend never emits pisLocked, so this stays inert.
+    assert.equal(
+      isDeleteVisibleForRecord({
+        record: { documentStatus: 'DR' },
+        statusField: 'documentStatus',
+        hideDeleteWhenComplete: true,
+      }),
+      true,
+    );
+    // And a rejected transfer hands the payment back: the backend sends false, not the flag unset.
+    assert.equal(
+      isDeleteVisibleForRecord({
+        record: { documentStatus: 'RPAP', pisLocked: false },
+        statusField: 'documentStatus',
+        hideDeleteWhenComplete: false,
+      }),
+      true,
+    );
+  });
+
   it('returns true when hideDeleteWhenComplete is false (feature opt-out)', () => {
     assert.equal(
       isDeleteVisibleForRecord({

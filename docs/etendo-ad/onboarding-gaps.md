@@ -893,6 +893,13 @@ WHERE au.ad_client_id = '<NEW_CLIENT_ID>';
 > `neo-headless.md` §4.10–4.11) instead of the Webhooks module, so no grant is needed at all — this
 > whole gap class cannot recur for these 3 webhooks. Left below for historical context; the
 > corrective/preventive code this section describes has since been removed as dead weight.
+>
+> **Related leak (2026-08-21, ETP-4968):** stale `SMFWHE_DEFINEDWEBHOOK_ROLE` rows from this
+> already-superseded flow leaked from GOClient's sample data into the module's universal baseline
+> via an `export.database` run, breaking CI — see the "FOLLOW-UP" note at the top of
+> `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql`. General risk:
+> `export.database` dumps a module-owned table's full live state regardless of client scope, so any
+> table with client-scoped rows plus a dev DB carrying sample-tenant data can leak the same way.
 
 **Symptom:** any authenticated role other than System Administrator (`AD_Role_ID = '0'`) gets a flat `404` from every Schema Forge webhook that requires a `SMFWHE_DEFINEDWEBHOOK_ROLE` grant — `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`. Observable symptoms compound in a confusing way because the two callers fail in opposite directions: the sidebar shows the **full, unfiltered** menu (`useRoleMenu()`'s fetch fails → `AppLayout` fails **open** on a fetch error) while **every window** is denied (`fetchWindowAccess`'s fetch fails → `AuthContext`'s `windowAccess` map stays at its fail-**closed** `{}` default → `WindowAccessGuard` blocks everything).
 

@@ -21,6 +21,7 @@ import {
   activeOrNull,
   getChangeSifNoticeKey,
   getSystemsToDeactivate,
+  parseApiError,
 } from '../fiscalConfig.utils.js';
 
 // ---------------------------------------------------------------------------
@@ -294,28 +295,29 @@ describe('detectProfile', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildOnboardingPayloads — SII', () => {
-  it('navarra: sets navarra=Y, taxtype=IVA', () => {
+  it('navarra: sets navarra=Y, taxtype=IVA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII', 'navarra');
-    expect(p.sii).toEqual({ navarra: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ navarra: 'Y', taxtype: 'IVA', acogidaAlSII: 'N', entornoDeProduccin: 'Y', adjuntarArchivosXML: 'Y' }));
+    expect(p.sii.fechaAcogidaSII).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(p.tbai).toBeNull();
     expect(p.verifactu).toBeNull();
   });
 
-  it('gipuzkoa: sets guipuzcoa=Y, taxtype=IVA', () => {
+  it('gipuzkoa: sets guipuzcoa=Y, taxtype=IVA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII', 'gipuzkoa');
-    expect(p.sii).toEqual({ guipuzcoa: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'N' }));
   });
 
-  it('baleares: IVA', () => {
-    expect(buildOnboardingPayloads('SII', 'baleares').sii).toEqual({ taxtype: 'IVA' });
+  it('baleares: IVA with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'baleares').sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
   });
 
-  it('canarias: IGIC', () => {
-    expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual({ taxtype: 'IGIC' });
+  it('canarias: IGIC with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual(expect.objectContaining({ taxtype: 'IGIC', acogidaAlSII: 'N' }));
   });
 
-  it('ceuta: IPSI', () => {
-    expect(buildOnboardingPayloads('SII', 'ceuta').sii).toEqual({ taxtype: 'IPSI' });
+  it('ceuta: IPSI with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'ceuta').sii).toEqual(expect.objectContaining({ taxtype: 'IPSI', acogidaAlSII: 'N' }));
   });
 
   it('unknown territory returns all null', () => {
@@ -347,22 +349,23 @@ describe('buildOnboardingPayloads — TBAI', () => {
 });
 
 describe('buildOnboardingPayloads — SII+TBAI', () => {
-  it('alava: sets sii taxtype=IVA and tbai ARABA', () => {
+  it('alava: sets sii taxtype=IVA and tbai ARABA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'alava');
-    expect(p.sii).toEqual({ taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
     expect(p.tbai.etsgSifTerritory).toBe('ARABA');
+    expect(p.tbai.productionEnv).toBe('Y');
     expect(p.verifactu).toBeNull();
   });
 
-  it('bizkaia: sii IVA + BIZKAIA', () => {
+  it('bizkaia: sii IVA + BIZKAIA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'bizkaia');
-    expect(p.sii).toEqual({ taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'N' }));
     expect(p.tbai.etsgSifTerritory).toBe('BIZKAIA');
   });
 
-  it('gipuzkoa: sii guipuzcoa=Y + GIPUZKOA', () => {
+  it('gipuzkoa: sii guipuzcoa=Y + GIPUZKOA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'gipuzkoa');
-    expect(p.sii).toEqual({ guipuzcoa: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'N' }));
     expect(p.tbai.etsgSifTerritory).toBe('GIPUZKOA');
   });
 
@@ -372,9 +375,9 @@ describe('buildOnboardingPayloads — SII+TBAI', () => {
 });
 
 describe('buildOnboardingPayloads — VERIFACTU', () => {
-  it('baleares: tAXType=01', () => {
+  it('baleares: tAXType=01 with defaultQR=Y forced', () => {
     const p = buildOnboardingPayloads('VERIFACTU', 'baleares');
-    expect(p.verifactu).toEqual({ tAXType: '01', nextSendWaitTime: '60' });
+    expect(p.verifactu).toEqual(expect.objectContaining({ tAXType: '01', nextSendWaitTime: '60', defaultQR: 'Y' }));
     expect(p.sii).toBeNull();
     expect(p.tbai).toBeNull();
   });
@@ -409,16 +412,19 @@ describe('buildVerifactuUpdatePayload', () => {
     expect(p.defaultQR).toBe(true);
   });
 
-  it('sets defaultQR to false for "N"', () => {
+  // ETP-4783: defaultQR is now read from the form/DB record rather than always forced to
+  // true. The PUT preserves whatever value is stored, so Classic users who toggle it off
+  // do not have it silently re-enabled on every Go save.
+  it('preserves defaultQR=false when the record has defaultQR=N (ETP-4783)', () => {
     const p = buildVerifactuUpdatePayload({ tAXType: 'IGIC', defaultQR: 'N' });
     expect(p.tAXType).toBe('03');
     expect(p.defaultQR).toBe(false);
   });
 
-  it('handles null form gracefully', () => {
+  it('defaults defaultQR to true when form is null (fallback via ?? Y)', () => {
     const p = buildVerifactuUpdatePayload(null);
     expect(p.tAXType).toBe('');
-    expect(p.defaultQR).toBe(false);
+    expect(p.defaultQR).toBe(true);
   });
 });
 
@@ -470,16 +476,18 @@ describe('getFiscalRecordId', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapSiiRecordToForm', () => {
-  it('maps a fully-populated record correctly', () => {
+  // ETP-4783: plazoLmiteDeEnvoASII, cadenciaEnvoFacturasVentaASII,
+  // cadenciaEnvoFacturasCompraASII, and recc were intentionally removed from the mapping.
+  // When those numeric columns are NULL in a freshly-created record, the empty-string
+  // fallback is coerced to null by the ORM layer, triggering NOT-NULL violations on PUT.
+  // They are not editable in the Go UI and must not be in the form.
+  it('maps the editable fields correctly (ETP-4783: numeric-only fields excluded)', () => {
     const record = {
       acogidaAlSII: 'Y',
       fechaAcogidaSII: '2025-01-15',
-      plazoLmiteDeEnvoASII: '10',
-      cadenciaEnvoFacturasVentaASII: '5',
-      cadenciaEnvoFacturasCompraASII: '3',
+      // plazoLmiteDeEnvoASII, cadenciaEnvo* excluded — NOT-NULL ORM issue (ETP-4783)
       entornoDeProduccin: 'Y',
       adjuntarArchivosXML: 'N',
-      recc: 'N',
       redeme: 'Y',
       monitordate: '2025-06-01',
       postedInvoices: 'Y',
@@ -488,23 +496,25 @@ describe('mapSiiRecordToForm', () => {
     const form = mapSiiRecordToForm(record);
     expect(form.acogidaAlSII).toBe('Y');
     expect(form.fechaAcogidaSII).toBe('2025-01-15');
-    expect(form.plazoLmiteDeEnvoASII).toBe('10');
-    expect(form.cadenciaEnvoFacturasVentaASII).toBe('5');
-    expect(form.cadenciaEnvoFacturasCompraASII).toBe('3');
     expect(form.entornoDeProduccin).toBe('Y');
     expect(form.adjuntarArchivosXML).toBe('N');
-    expect(form.recc).toBe('N');
     expect(form.redeme).toBe('Y');
     expect(form.monitordate).toBe('2025-06-01');
     expect(form.postedInvoices).toBe('Y');
     expect(form.authorizationno).toBe('AUTH123');
+    // Confirm the dropped fields are not present in the form shape
+    expect(form).not.toHaveProperty('plazoLmiteDeEnvoASII');
+    expect(form).not.toHaveProperty('cadenciaEnvoFacturasVentaASII');
+    expect(form).not.toHaveProperty('cadenciaEnvoFacturasCompraASII');
+    expect(form).not.toHaveProperty('recc');
   });
 
   it('maps missing optional fields to empty strings / default N', () => {
     const form = mapSiiRecordToForm({});
     expect(form.acogidaAlSII).toBe('N');
     expect(form.fechaAcogidaSII).toBe('');
-    expect(form.plazoLmiteDeEnvoASII).toBe('');
+    // plazoLmiteDeEnvoASII is intentionally excluded from the mapping (ETP-4783)
+    expect(form).not.toHaveProperty('plazoLmiteDeEnvoASII');
     expect(form.authorizationno).toBe('');
   });
 
@@ -736,5 +746,53 @@ describe('getSystemsToDeactivate', () => {
     expect(getSystemsToDeactivate('unconfigured')).toEqual([]);
     expect(getSystemsToDeactivate('conflict')).toEqual([]);
     expect(getSystemsToDeactivate(null)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseApiError
+// ---------------------------------------------------------------------------
+
+describe('parseApiError', () => {
+  function makeRes(bodyText, statusText = 'Error') {
+    return {
+      text: () => Promise.resolve(bodyText),
+      statusText,
+    };
+  }
+
+  it('returns error.message from a JSON body with { error: { message } }', async () => {
+    const res = makeRes(JSON.stringify({ error: { message: 'Nested error message' } }));
+    expect(await parseApiError(res)).toBe('Nested error message');
+  });
+
+  it('returns message from a JSON body with top-level { message }', async () => {
+    const res = makeRes(JSON.stringify({ message: 'Top-level message' }));
+    expect(await parseApiError(res)).toBe('Top-level message');
+  });
+
+  it('falls back to raw body when JSON has neither error.message nor message', async () => {
+    const res = makeRes(JSON.stringify({ code: 42 }));
+    const raw = JSON.stringify({ code: 42 });
+    expect(await parseApiError(res)).toBe(raw);
+  });
+
+  it('returns raw text when body is not valid JSON', async () => {
+    const res = makeRes('plain text error');
+    expect(await parseApiError(res)).toBe('plain text error');
+  });
+
+  it('returns statusText when body is empty and body has no usable content', async () => {
+    const res = makeRes('', 'Internal Server Error');
+    // empty string is falsy → falls back to statusText
+    expect(await parseApiError(res)).toBe('Internal Server Error');
+  });
+
+  it('returns statusText when res.text() rejects', async () => {
+    const res = {
+      text: () => Promise.reject(new Error('stream error')),
+      statusText: 'Bad Gateway',
+    };
+    expect(await parseApiError(res)).toBe('Bad Gateway');
   });
 });

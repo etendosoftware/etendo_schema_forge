@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './documentPdf.js';
 
-export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null) {
+export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('orderPdfTitle'),
@@ -16,5 +16,5 @@ export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels);
+  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels, cacheConfig);
 }

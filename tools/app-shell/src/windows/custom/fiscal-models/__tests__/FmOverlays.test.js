@@ -14,7 +14,6 @@ describe('FmOverlays — exports', () => {
   it('exports IncidentTray', () => assert.match(src, /export function IncidentTray/));
   it('exports DrillDownPanel', () => assert.match(src, /export function DrillDownPanel/));
   it('exports ConfigDrawer', () => assert.match(src, /export function ConfigDrawer/));
-  it('exports CompareDrawer', () => assert.match(src, /export function CompareDrawer/));
 });
 
 describe('ConfigDrawer — structure', () => {
@@ -25,23 +24,18 @@ describe('ConfigDrawer — structure', () => {
   it('has operation keys E,A,T,S,I', () => assert.match(src, /'E', 'A', 'T', 'S', 'I'/));
 });
 
-describe('CompareDrawer — structure', () => {
-  it('has compare title key', () => assert.match(src, /fm\.compare\.title/));
-  it('uses period-based column labels (prevLabel/currLabel)', () => assert.match(src, /prevLabel/));
-  it('has delta column header', () => assert.match(src, /fm\.compare\.delta/));
-  it('has dynamic insight note', () => assert.match(src, /devImproved|resultImproved/));
-});
-
 describe('FmOverlays — no removed components', () => {
   it('does NOT export AuditReasonModal', () => assert.doesNotMatch(src, /export.*AuditReasonModal/));
   it('does NOT export CellHistoryPanel', () => assert.doesNotMatch(src, /export.*CellHistoryPanel/));
   it('does NOT contain manual adjustment logic', () => assert.doesNotMatch(src, /manualAdj/));
+  it('does NOT export CompareDrawer', () => assert.doesNotMatch(src, /export function CompareDrawer/));
+  it('does NOT reference T1_2026_BOXES (was CompareDrawer-only)', () => assert.doesNotMatch(src, /T1_2026_BOXES/));
 });
 
-describe('PresentModal — 3 manual paths + 1 opt-in AEAT path', () => {
+describe('PresentModal — 2 manual paths + 1 opt-in AEAT path', () => {
   it('has submitted_ack path', () => assert.match(src, /submitted_ack/));
   it('has submitted (no ack) path', () => assert.match(src, /'submitted'/));
-  it('has submitted_ext path', () => assert.match(src, /submitted_ext/));
+  it('does not have a submitted_ext path', () => assert.doesNotMatch(src, /submitted_ext/));
   it('file upload tied to submitted_ack path', () => assert.match(src, /acuseFile/));
   it('has an aeat_telematic sentinel path, gated behind showAeatPath', () => {
     assert.match(src, /aeat_telematic/);

@@ -157,6 +157,54 @@ function FieldRow({ field }) {
   });
 });
 
+// ── Fragment / Context.Provider skip (ETP-4906) ────────────────────────────────
+// `Fragment` only accepts `key`/`children` (React logs "Invalid prop supplied to
+// React.Fragment" for anything else) and a `Context.Provider` re-export (the
+// `createContext()` naming convention, e.g. `SomeProvider = SomeContext.Provider`)
+// renders no DOM node — a `data-testid` on either is always silently dropped/inert.
+// The transformer must never stamp one on, so a manual removal never gets undone
+// on the next dry-run/apply pass.
+
+describe('add-data-testid transformer — Fragment/Context.Provider skip', () => {
+  it('does not add data-testid to a bare <Fragment>', () => {
+    const src = `
+import { Fragment } from 'react';
+function App() { return <Fragment key="x"><div /></Fragment>; }`.trim();
+    const out = run(src, 'src/App.jsx');
+    assert.doesNotMatch(out, /data-testid/);
+  });
+
+  it('does not add data-testid to a component named "...Provider"', () => {
+    const src = `function App() { return <RoleSelectionProvider value={{}}><div /></RoleSelectionProvider>; }`;
+    const out = run(src, 'src/App.jsx');
+    assert.doesNotMatch(out, /data-testid/);
+  });
+
+  it('does not add data-testid to a component named "...Consumer"', () => {
+    const src = `function App() { return <ThemeConsumer>{() => <div />}</ThemeConsumer>; }`;
+    const out = run(src, 'src/App.jsx');
+    assert.doesNotMatch(out, /data-testid/);
+  });
+
+  it('still adds data-testid to a normal uppercase component in the same file', () => {
+    const src = `
+import { Fragment } from 'react';
+function App() { return <Fragment><MyButton /></Fragment>; }`.trim();
+    const out = run(src, 'src/App.jsx');
+    assert.match(out, /MyButton__/);
+    assert.doesNotMatch(out, /Fragment__/);
+  });
+
+  it('leaves an already-present data-testid on a Fragment untouched rather than duplicating', () => {
+    // Defensive: even if some other tool/hand-edit left one there, the transformer
+    // must not add a second attribute — skip means "don't touch this element at all".
+    const src = `function App() { return <Fragment data-testid="manual"><div /></Fragment>; }`;
+    const out = run(src, 'src/App.jsx');
+    const count = (out.match(/data-testid/g) || []).length;
+    assert.equal(count, 1);
+  });
+});
+
 // ── Excluded paths ────────────────────────────────────────────────────────────
 
 describe('add-data-testid transformer — excluded directory paths', () => {

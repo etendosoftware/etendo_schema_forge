@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { login } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
  * General Ledger Configuration ("Configuración contable", AD window 125) —
@@ -60,7 +61,7 @@ test.describe('General Ledger Configuration — visual capture (mocked)', () => 
       // Let fonts/transitions settle, then capture the full page for human review.
       mkdirSync(OUT_DIR, { recursive: true });
       await page.waitForTimeout(300);
-      await page.screenshot({ path: path.join(OUT_DIR, tab.file), fullPage: true });
+      await captureScreenshot(page, { path: path.join(OUT_DIR, tab.file), fullPage: true });
     });
   }
 });

@@ -64,6 +64,19 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const navigate = useNavigate();
   const ui = useUI();
 
+  // ETP-4779 — PurchaseOrderActions already dispatches this event right after a
+  // derived document (goods receipt / purchase invoice) is created via the
+  // confirm/manage-docs flow (see ConfirmModal.handleConfirm and
+  // CreateDocsModal.handleCreate in ../PurchaseOrderActions.jsx). This mirrors
+  // the sales-order:document-created convention (see ../../sales-order/custom/
+  // RelatedDocuments.jsx) so this panel refetches automatically instead of
+  // requiring the manual 🔄 refresh button.
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('purchase-order:document-created', handler);
+    return () => window.removeEventListener('purchase-order:document-created', handler);
+  }, []);
+
   useEffect(() => {
     if (!recordId) return;
     setLoading(true);

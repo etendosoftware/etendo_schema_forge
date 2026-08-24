@@ -192,6 +192,18 @@ removed that custom button from `GoodsShipmentActions.jsx` outright: printing fo
 is now served exclusively by the generic `DetailView.jsx` icon. That left the generic icon
 with no gate at all on this window until the `hidePrintWhen` entry above was added.
 
+## Related Documents auto-refresh — ETP-4779
+
+Generating a Sales Invoice from `GoodsShipmentActions.jsx` (the `topbarRight` component) used to
+close the result modal with a full `window.location.reload()`. `GoodsShipmentActions` now
+accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
+hook.fetchById(recordId)`) and calls that instead — in the invoice-result `ConfirmResultModal`'s
+`onClose` (skipped when the user navigated to the new invoice instead) and as the `ReturnWizard`
+`onSuccess` fallback when the created return has no id to navigate to. The **Related Documents**
+tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate refetch: it
+derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
+refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

@@ -42,9 +42,12 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   // Left panel is the customer-supplied return receipt (optional — the customer may
   // not issue or provide one). Replaces the system-generated PDF that used to render
   // here; that PDF is still available via the "Enviar"/"Descargar PDF" actions.
+  // ETP-4315 — real, marked Attachment (M_InOut is the physical table for this
+  // window), same pattern as purchase-invoice/goods-receipt.
   const attachmentConfig = {
     documentId: receipt.id,
-    specName: 'return-material-receipt',
+    tableName: 'M_InOut',
+    useMainAttachment: true,
     storeCondition: true,
     autoFetch: false,
     token,

@@ -10,6 +10,8 @@ import {
   fmtDecl,
   deriveBoxes303,
   computeUpcomingDeadlines,
+  isUpcomingDeadline,
+  countUpcomingDeadlines,
   generate303File,
   applyIdentParams,
 } from '../fiscalModelsUtils.js';
@@ -17,14 +19,12 @@ import {
 // ── STATUSES ──────────────────────────────────────────────────────────────────
 
 describe('STATUSES', () => {
-  it('is an array with 7 entries', () => {
+  it('is an array with 5 entries', () => {
     expect(Array.isArray(STATUSES)).toBe(true);
-    expect(STATUSES).toHaveLength(7);
+    expect(STATUSES).toHaveLength(5);
   });
 
   it('contains all expected status values', () => {
-    expect(STATUSES).toContain('skipped');
-    expect(STATUSES).toContain('pending');
     expect(STATUSES).toContain('draft');
     expect(STATUSES).toContain('ready');
     expect(STATUSES).toContain('submitted');
@@ -48,8 +48,6 @@ describe('STATUS_COLOR', () => {
   });
 
   it('maps specific statuses to expected color names', () => {
-    expect(STATUS_COLOR.skipped).toBe('grey');
-    expect(STATUS_COLOR.pending).toBe('orange');
     expect(STATUS_COLOR.draft).toBe('blue');
     expect(STATUS_COLOR.ready).toBe('green');
     expect(STATUS_COLOR.submitted).toBe('teal');
@@ -80,8 +78,8 @@ describe('STATUS_ORDER', () => {
     expect(Array.isArray(STATUS_ORDER)).toBe(true);
   });
 
-  it('contains all 7 statuses', () => {
-    expect(STATUS_ORDER).toHaveLength(7);
+  it('contains all 5 statuses', () => {
+    expect(STATUS_ORDER).toHaveLength(5);
     for (const s of STATUSES) {
       expect(STATUS_ORDER).toContain(s);
     }
@@ -880,11 +878,11 @@ describe('computeUpcomingDeadlines', () => {
       expect(deadline.getDate()).toBe(20);
     });
 
-    it('T4 → deadline January 20 of next year', () => {
+    it('T4 → deadline January 30 of next year', () => {
       const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'draft')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(0);
-      expect(deadline.getDate()).toBe(20);
+      expect(deadline.getDate()).toBe(30);
     });
   });
 
@@ -915,6 +913,62 @@ describe('computeUpcomingDeadlines', () => {
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(6);
       expect(deadline.getDate()).toBe(20);
+    });
+
+    it('349 "07" (July) → deadline September 20 (consolidated with August, not Aug 20)', () => {
+      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '07', 'draft')]);
+      expect(deadline.getFullYear()).toBe(2026);
+      expect(deadline.getMonth()).toBe(8);
+      expect(deadline.getDate()).toBe(20);
+    });
+  });
+
+  describe('303 monthly period deadlines (day 30 of the following month, Jan extends to Feb)', () => {
+    it('303 "05" (May) → deadline June 30 (day 30 of the following month)', () => {
+      const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, '05', 'draft')]);
+      expect(deadline.getFullYear()).toBe(2026);
+      expect(deadline.getMonth()).toBe(5);
+      expect(deadline.getDate()).toBe(30);
+    });
+
+    it('303 "01" (January) in a non-leap year → deadline is the last day of February (28)', () => {
+      const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, '01', 'draft')]);
+      expect(deadline.getFullYear()).toBe(2026);
+      expect(deadline.getMonth()).toBe(1);
+      expect(deadline.getDate()).toBe(28);
+    });
+
+    it('303 "01" (January) in a leap year → deadline is the last day of February (29)', () => {
+      const [{ deadline }] = computeUpcomingDeadlines([D('303', 2028, '01', 'draft')]);
+      expect(deadline.getFullYear()).toBe(2028);
+      expect(deadline.getMonth()).toBe(1);
+      expect(deadline.getDate()).toBe(29);
+    });
+  });
+
+  describe('349 quarterly deadlines match 303 quarterly exactly (parity)', () => {
+    it.each([
+      ['T1', 3, 20], ['T2', 6, 20], ['T3', 9, 20],
+    ])('%s → same month/day for both models', (period, month, day) => {
+      const [{ deadline: d303 }] = computeUpcomingDeadlines([D('303', 2026, period, 'draft')]);
+      const [{ deadline: d349 }] = computeUpcomingDeadlines([D('349', 2026, period, 'draft')]);
+      expect(d303.getFullYear()).toBe(2026);
+      expect(d303.getMonth()).toBe(month);
+      expect(d303.getDate()).toBe(day);
+      expect(d349.getFullYear()).toBe(d303.getFullYear());
+      expect(d349.getMonth()).toBe(d303.getMonth());
+      expect(d349.getDate()).toBe(d303.getDate());
+    });
+
+    it('T4 → both models land on January 30 of the following year', () => {
+      const [{ deadline: d303 }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'draft')]);
+      const [{ deadline: d349 }] = computeUpcomingDeadlines([D('349', 2025, 'T4', 'draft')]);
+      expect(d303.getFullYear()).toBe(2026);
+      expect(d303.getMonth()).toBe(0);
+      expect(d303.getDate()).toBe(30);
+      expect(d349.getFullYear()).toBe(d303.getFullYear());
+      expect(d349.getMonth()).toBe(d303.getMonth());
+      expect(d349.getDate()).toBe(d303.getDate());
     });
   });
 

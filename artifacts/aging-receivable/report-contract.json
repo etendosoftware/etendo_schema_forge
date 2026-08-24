@@ -15,31 +15,41 @@
   },
   "columns": [
     { "field": "bPartner", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "string", "width": "20%", "sortable": true },
-    { "field": "current", "label": { "en_US": "Current", "es_ES": "Corriente" }, "type": "amount", "width": "10%", "sortable": true },
+    { "field": "current", "label": { "en_US": "Current", "es_ES": "Actual" }, "type": "amount", "width": "10%", "sortable": true },
     { "field": "days30", "label": { "en_US": "1-30", "es_ES": "1-30" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "days60", "label": { "en_US": "31-60", "es_ES": "31-60" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "days90", "label": { "en_US": "61-90", "es_ES": "61-90" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "days120", "label": { "en_US": "91-120", "es_ES": "91-120" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "days150plus", "label": { "en_US": ">120", "es_ES": ">120" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "total", "label": { "en_US": "Total", "es_ES": "Total" }, "type": "amount", "width": "10%", "sortable": true },
-    { "field": "credits", "label": { "en_US": "Credits", "es_ES": "Créditos" }, "type": "amount", "width": "8%", "sortable": true },
+    { "field": "credits", "label": { "en_US": "Credits", "es_ES": "Crédito" }, "type": "amount", "width": "8%", "sortable": true },
     { "field": "net", "label": { "en_US": "Net", "es_ES": "Neto" }, "type": "amount", "width": "8%", "sortable": true }
   ],
   "groups": [],
   "filters": [],
+  "sections": [
+    { "id": "periodo", "label": { "en_US": "Period", "es_ES": "Periodo" } },
+    { "id": "alcance", "label": { "en_US": "Scope", "es_ES": "Alcance" } },
+    { "id": "tramos", "label": { "en_US": "Aging Brackets", "es_ES": "Tramos de antigüedad" } }
+  ],
   "parameters": [
     { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true },
-    { "name": "glId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "autoDefault": true },
-    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "default": "__TODAY__", "required": true },
-    { "name": "bPartnerId", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "search", "selector": "bpartner", "inputStyle": "popup" },
-    { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "boolean" },
-    { "name": "column1", "label": { "en_US": "Days Group 1", "es_ES": "Días Tramo 1" }, "type": "number" },
-    { "name": "column2", "label": { "en_US": "Days Group 2", "es_ES": "Días Tramo 2" }, "type": "number" },
-    { "name": "column3", "label": { "en_US": "Days Group 3", "es_ES": "Días Tramo 3" }, "type": "number" },
-    { "name": "column4", "label": { "en_US": "Days Group 4", "es_ES": "Días Tramo 4" }, "type": "number" }
+    { "name": "glId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true, "section": "alcance" },
+    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "default": "__TODAY__", "required": true, "section": "periodo" },
+    { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "inputStyle": "popup", "section": "alcance" },
+    { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "boolean", "hidden": true },
+    { "name": "column1", "label": { "en_US": "Number Of Days Overdue: Group One", "es_ES": "Días Tramo 1" }, "type": "number", "section": "tramos" },
+    { "name": "column2", "label": { "en_US": "Number Of Days Overdue: Group Two", "es_ES": "Días Tramo 2" }, "type": "number", "section": "tramos" },
+    { "name": "column3", "label": { "en_US": "Number Of Days Overdue: Group Three", "es_ES": "Días Tramo 3" }, "type": "number", "section": "tramos" },
+    { "name": "column4", "label": { "en_US": "Number Of Days Overdue: Group Four", "es_ES": "Días Tramo 4" }, "type": "number", "section": "tramos" }
   ],
   "defaultSort": { "field": "bPartner", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],
   "summary": { "totalRows": true },
+  "labels": {
+    "documentNo": { "en_US": "Document No.", "es_ES": "Nº Documento" },
+    "documentDate": { "en_US": "Document Date", "es_ES": "Fecha Documento" },
+    "noData": { "en_US": "No data found for the selected filters.", "es_ES": "No se encontraron datos para los filtros seleccionados." }
+  },
   "mockDataFile": "mock-data.json"
 }

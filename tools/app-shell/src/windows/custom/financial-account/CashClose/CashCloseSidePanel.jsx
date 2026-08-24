@@ -5,6 +5,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Input } from '@/components/ui/input';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { FieldRow } from '../formFields.jsx';
 
 /**
@@ -46,6 +47,8 @@ export function CashCloseSidePanel({
   busy, onConfirm, onSaveDraft,
 }) {
   const ui = useUI();
+  // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
+  const rightSide = isCurrencySymbolRightSide(currency);
 
   return (
     <div className="flex w-[400px] shrink-0 flex-col overflow-hidden">
@@ -70,14 +73,15 @@ export function CashCloseSidePanel({
                   Same approach the tolerance fields use in EditAccountModal. */}
               <div className="relative">
                 <Input
-                  className="bg-card pr-8 text-right tabular-nums"
+                  className={`bg-card ${rightSide ? 'pr-8' : 'pl-8'} text-right tabular-nums`}
                   inputMode="decimal"
                   // Shared key, so the decimal separator follows the locale (0,00 vs 0.00).
                   placeholder={ui('financeAccountAmountPlaceholder')}
                   value={declaredInput}
                   onChange={(e) => onDeclaredInputChange(e.target.value)}
                   data-testid="cash-close-declared-balance" />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">
+                <span
+                  className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
                   {getCurrencySymbol(currency) || '€'}
                 </span>
               </div>

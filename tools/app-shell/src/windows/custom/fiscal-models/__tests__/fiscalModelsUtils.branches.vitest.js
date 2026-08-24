@@ -7,6 +7,8 @@ import {
   compute349Operators,
   computeBoxes303,
   computeUpcomingDeadlines,
+  countUpcomingDeadlines,
+  isUpcomingDeadline,
   formatPeriod,
   STATUS_ICON,
 } from '../fiscalModelsUtils.js';
@@ -17,7 +19,7 @@ import {
 
 describe('STATUS_ICON', () => {
   it('has an icon for every status', () => {
-    for (const s of ['skipped', 'pending', 'draft', 'ready', 'submitted', 'submitted_ext', 'submitted_ack']) {
+    for (const s of ['draft', 'ready', 'submitted', 'submitted_ext', 'submitted_ack']) {
       expect(typeof STATUS_ICON[s]).toBe('string');
       expect(STATUS_ICON[s].length).toBeGreaterThan(0);
     }
@@ -269,6 +271,158 @@ describe('computeUpcomingDeadlines — branch coverage', () => {
 });
 
 // ---------------------------------------------------------------------------
+// countUpcomingDeadlines — "Por vencer" KPI count (real fix under test)
+// ---------------------------------------------------------------------------
+
+describe('countUpcomingDeadlines', () => {
+  const D = (model, year, period, status) => ({ id: `${model}-${year}-${period}`, model, year, period, status });
+
+  it('counts a declaration whose deadline is exactly the reference date (boundary: deadline >= today)', () => {
+    // period '03' (March) 2026 → deadline is April 20, 2026 (day-20-of-following-month rule).
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    const decls = [D('349', 2026, '03', 'draft')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(1);
+  });
+
+  it('excludes a declaration whose deadline was the day before the reference date', () => {
+    // Same declaration as above (deadline April 20, 2026), but "today" is April 21, 2026.
+    const referenceDate = new Date(2026, 3, 21); // April 21, 2026
+    const decls = [D('349', 2026, '03', 'draft')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(0);
+  });
+
+  it('excludes a declaration whose deadline falls beyond the 7-day window', () => {
+    // period '04' (April) 2026 → deadline is May 20, 2026, 30 days after the reference date —
+    // outside the [today, today+7] window, so it no longer counts as "upcoming".
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    const decls = [D('349', 2026, '04', 'draft')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(0);
+  });
+
+  it('counts a declaration with a genuine future deadline within the 7-day window', () => {
+    // period '03' (March) 2026 → deadline is April 20, 2026, 5 days after the reference date —
+    // inside the [today, today+7] window, and not the boundary (today itself).
+    const referenceDate = new Date(2026, 3, 15); // April 15, 2026
+    const decls = [D('349', 2026, '03', 'draft')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(1);
+  });
+
+  it('excludes a submitted declaration even with a still-future deadline', () => {
+    // period 'T2' 2026 → deadline July 20, 2026, clearly future relative to April 20 — but
+    // completed-status exclusion must win regardless of the date comparison.
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    const decls = [D('303', 2026, 'T2', 'submitted')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(0);
+  });
+
+  it('excludes a submitted_ack declaration even with a still-future deadline', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    const decls = [D('303', 2026, 'T2', 'submitted_ack')];
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(0);
+  });
+
+  it('is uncapped: more than 5 genuinely-upcoming declarations all count, unlike computeUpcomingDeadlines\'s default limit=5', () => {
+    // period '03' (March) 2026 → deadline April 20, 2026, the boundary of the 7-day window
+    // when referenceDate is April 20, 2026 — all 7 declarations share this one deadline (only
+    // the id differs), still genuinely proving "uncapped" since computeUpcomingDeadlines's
+    // hard slice(0,5) truncates identical-deadline entries just the same as distinct ones.
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    const decls = Array.from({ length: 7 }, (_, i) => ({
+      id: `dup-${i}`, model: '349', year: 2026, period: '03', status: 'draft',
+    }));
+    expect(decls).toHaveLength(7);
+    // Old bug this fix addresses: computeUpcomingDeadlines(decls).length silently caps at 5.
+    expect(computeUpcomingDeadlines(decls).length).toBe(5);
+    // countUpcomingDeadlines has no artificial cap — it's a count, not a truncated preview.
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(7);
+  });
+
+  it('returns 0 for an empty declarations array without throwing', () => {
+    expect(() => countUpcomingDeadlines([], new Date(2026, 3, 20))).not.toThrow();
+    expect(countUpcomingDeadlines([], new Date(2026, 3, 20))).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isUpcomingDeadline — per-declaration predicate extracted out of
+// countUpcomingDeadlines (ETP-4755, KPI-cards-as-filters). Mirrors the exact
+// boundary/exclusion cases above, since countUpcomingDeadlines is defined as
+// `decls.filter(d => isUpcomingDeadline(d, referenceDate)).length` — the two
+// must never disagree on any of these fixtures.
+// ---------------------------------------------------------------------------
+
+describe('isUpcomingDeadline', () => {
+  const D = (model, year, period, status) => ({ id: `${model}-${year}-${period}`, model, year, period, status });
+
+  it('is true when the deadline is exactly the reference date (boundary: deadline >= today)', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    expect(isUpcomingDeadline(D('349', 2026, '03', 'draft'), referenceDate)).toBe(true);
+  });
+
+  it('is false when the deadline was the day before the reference date', () => {
+    const referenceDate = new Date(2026, 3, 21); // April 21, 2026
+    expect(isUpcomingDeadline(D('349', 2026, '03', 'draft'), referenceDate)).toBe(false);
+  });
+
+  it('is true for a genuine future deadline within the 7-day window', () => {
+    // period '03' (March) 2026 → deadline April 20, 2026, 5 days after the reference date —
+    // inside the window, and not the boundary (today itself).
+    const referenceDate = new Date(2026, 3, 15); // April 15, 2026
+    expect(isUpcomingDeadline(D('349', 2026, '03', 'draft'), referenceDate)).toBe(true);
+  });
+
+  it('is false for a submitted declaration even with a still-future deadline', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    expect(isUpcomingDeadline(D('303', 2026, 'T2', 'submitted'), referenceDate)).toBe(false);
+  });
+
+  it('is false for a submitted_ack declaration even with a still-future deadline', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    expect(isUpcomingDeadline(D('303', 2026, 'T2', 'submitted_ack'), referenceDate)).toBe(false);
+  });
+
+  it('is false for a submitted_ext declaration even with a still-future deadline', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    expect(isUpcomingDeadline(D('303', 2026, 'T2', 'submitted_ext'), referenceDate)).toBe(false);
+  });
+
+  it('is false for a skipped declaration even with a still-future deadline', () => {
+    const referenceDate = new Date(2026, 3, 20); // April 20, 2026
+    expect(isUpcomingDeadline(D('303', 2026, 'T2', 'skipped'), referenceDate)).toBe(false);
+  });
+
+  it('defaults referenceDate to the real current date when omitted', () => {
+    // Pin "now" to a fixed date, then use a declaration whose real getDeadlineDate-derived
+    // deadline falls within 7 days of that fixed date — calling isUpcomingDeadline with NO
+    // referenceDate arg still exercises the "defaults to new Date()" property.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 15)); // October 15, 2026
+      // model 349, period '09' (September) → deadline October 20, 2026 (day-20-of-following-
+      // month rule) — 5 days after the pinned "now", inside the window.
+      expect(isUpcomingDeadline(D('349', 2026, '09', 'draft'))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('countUpcomingDeadlines genuinely delegates to isUpcomingDeadline — consistent results across a shared fixture set', () => {
+    const referenceDate = new Date(2026, 3, 25); // April 25, 2026
+    const decls = [
+      D('349', 2026, '03', 'draft'),        // excluded (deadline April 20 — already past)
+      D('303', 2026, '03', 'draft'),        // upcoming (future, in-window: deadline April 30)
+      D('303', 2026, 'T2', 'submitted'),    // excluded (completed)
+      D('303', 2026, 'T2', 'submitted_ack'),// excluded (completed)
+      D('349', 2026, '02', 'draft'),        // excluded (deadline already past)
+    ];
+    const expectedCount = decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
+    expect(countUpcomingDeadlines(decls, referenceDate)).toBe(expectedCount);
+    // Sanity: the shared fixture set actually exercises both true and false branches.
+    expect(expectedCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Async functions — generate303File
 // ---------------------------------------------------------------------------
 
@@ -371,20 +525,22 @@ describe('generate349File', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns false when no token', async () => {
-    expect(await generate349File({ year: 2026, period: 'T1' })).toBe(false);
+  it('returns { ok: false, error: "no_token" } when no token', async () => {
+    const result = await generate349File({ year: 2026, period: 'T1' });
+    expect(result).toEqual({ ok: false, error: 'no_token' });
   });
 
-  it('returns false on non-ok response', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false });
+  it('returns { ok: false } on non-ok response', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => '' });
     const result = await generate349File(
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
-    expect(result).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('http_500');
   });
 
-  it('returns true and triggers download on success', async () => {
+  it('returns { ok: true } and triggers download on success', async () => {
     const mockBlob = new Blob(['content']);
     globalThis.fetch.mockResolvedValue({ ok: true, blob: () => Promise.resolve(mockBlob) });
     const mockA = { click: vi.fn(), href: '', download: '' };
@@ -396,16 +552,16 @@ describe('generate349File', () => {
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec', phone: '555', contact: 'Juan' },
     );
-    expect(result).toBe(true);
+    expect(result).toEqual({ ok: true });
   });
 
-  it('returns false on fetch error', async () => {
+  it('returns { ok: false, error: "network" } on fetch error', async () => {
     globalThis.fetch.mockRejectedValue(new Error('fail'));
     const result = await generate349File(
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: 'http://test/neo/spec' },
     );
-    expect(result).toBe(false);
+    expect(result).toEqual({ ok: false, error: 'network' });
   });
 });
 

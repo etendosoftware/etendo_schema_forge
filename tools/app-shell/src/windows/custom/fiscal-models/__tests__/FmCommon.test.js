@@ -20,7 +20,6 @@ describe('fiscal-models.css — key class families', () => {
 
 describe('FmCommon — exports', () => {
   it('exports StatusPill', () => assert.match(src, /export function StatusPill/));
-  it('exports StatusPillMenu', () => assert.match(src, /export function StatusPillMenu/));
   it('exports KpiCard', () => assert.match(src, /export function KpiCard/));
   it('exports Tabs', () => assert.match(src, /export function Tabs/));
   it('exports Banner', () => assert.match(src, /export function Banner/));

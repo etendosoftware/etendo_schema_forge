@@ -1,6 +1,7 @@
-import { describe, it } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatCurrency, getCurrencySymbol } from '../formatCurrency.js';
+import { fetchCurrencyFormatConfig } from '../currencyFormatConfig.js';
 
 // NOTE (ETP-4314): under the `es-ES` locale, `Intl.NumberFormat` inserts a
 // NON-BREAKING SPACE (U+00A0) between the amount and the currency symbol/word
@@ -29,7 +30,12 @@ describe('formatCurrency', () => {
     });
   });
 
-  describe('USD — symbol after amount too (no more symbol-before distinction)', () => {
+  describe('USD — default fallback before any config is fetched (symbol after amount)', () => {
+    // isCurrencySymbolRightSide() defaults to true (right side) until
+    // fetchCurrencyFormatConfig() resolves — no test in this describe block has
+    // triggered a fetch yet, so USD still renders symbol-after here. The real,
+    // config-driven left-side behavior is covered in the 'symbol position' describe
+    // block at the end of this file, which fetches a realistic symbolRightSide map.
     it('formats positive amount', () => {
       assert.equal(formatCurrency('USD', 1234.56), `1.234,56${NBSP}$`);
     });
@@ -55,7 +61,7 @@ describe('formatCurrency', () => {
     });
   });
 
-  describe('other currencies — same symbol-after convention, no special-casing left (ARS, GBP, DKK)', () => {
+  describe('other currencies — same pre-fetch default (ARS, GBP, DKK)', () => {
     it('formats ARS with symbol after amount', () => {
       assert.equal(formatCurrency('ARS', 500), `500,00${NBSP}$`);
     });
@@ -148,11 +154,10 @@ describe('formatCurrency', () => {
   });
 
   describe('-0 edge case', () => {
-    // Both currencies now go through the same single code path (no more
-    // symbol-before/symbol-after branching), so -0 renders consistently
-    // with a leading minus sign for every currency — unlike the old
-    // implementation, which had a documented inconsistency between the
-    // EUR and USD branches.
+    // Both assertions below exercise the pre-fetch default (right-side) — -0
+    // renders with a leading minus sign there regardless of currency. The
+    // 'symbol position' describe block covers the same -0 case once a
+    // left-side currency's config has actually loaded.
     it('EUR: negative zero renders with a minus sign', () => {
       assert.equal(formatCurrency('EUR', -0), `-0,00${NBSP}€`);
     });
@@ -307,5 +312,69 @@ describe('getCurrencySymbol (ETP-4314)', () => {
     // 4+ letter codes are not valid ISO 4217 and make `Intl.NumberFormat` throw,
     // hitting the try/catch fallback, which returns the raw code as-is.
     assert.equal(getCurrencySymbol('XYZ_INVALID'), 'XYZ_INVALID');
+  });
+});
+
+describe('symbol position — driven by C_CURRENCY.ISSYMBOLRIGHTSIDE (ETP-4314 follow-up)', () => {
+  // Loads a realistic symbolRightSide snapshot (mirrors the real reference data:
+  // EUR is the ONLY currency with the right-side flag — every other currency,
+  // including GBP, ships false) by stubbing global fetch and running the real
+  // fetchCurrencyFormatConfig() once. Runs last in this file (after every
+  // pre-fetch-default describe block above) so it can't affect their assertions.
+  before(async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        thousandsSeparator: '.',
+        decimalSeparator: ',',
+        symbolRightSide: { EUR: true, USD: false, GBP: false, ARS: false, DKK: false },
+      }),
+    });
+    try {
+      await fetchCurrencyFormatConfig();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('EUR keeps rendering symbol-after (the one currency with the right-side flag)', () => {
+    assert.equal(formatCurrency('EUR', 1234.56), `1.234,56${NBSP}€`);
+  });
+
+  it('USD moves the symbol to the front, no separating space', () => {
+    assert.equal(formatCurrency('USD', 1234.56), '$1.234,56');
+  });
+
+  it('USD negative amount: sign before the symbol, not after', () => {
+    assert.equal(formatCurrency('USD', -99.9), '-$99,90');
+  });
+
+  it('USD negative zero: sign still renders before the symbol', () => {
+    assert.equal(formatCurrency('USD', -0), '-$0,00');
+  });
+
+  it('GBP also moves to the front — confirmed against the real reference data, only EUR is right-side', () => {
+    assert.equal(formatCurrency('GBP', 99.5), '£99,50');
+  });
+
+  it('ARS moves to the front', () => {
+    assert.equal(formatCurrency('ARS', 500), '$500,00');
+  });
+
+  it('a multi-character symbol (DKK "kr") moves to the front the same way, no space', () => {
+    assert.equal(formatCurrency('DKK', 100), 'kr100,00');
+  });
+
+  it('large USD amount still groups thousands correctly with the symbol in front', () => {
+    assert.equal(formatCurrency('USD', 1_234_567.89), '$1.234.567,89');
+  });
+
+  it('an ISO code absent from the fetched map falls back to right-side (safe default)', () => {
+    assert.equal(formatCurrency('XYZ', 99), `99,00${NBSP}XYZ`);
+  });
+
+  it('compact notation also respects the left-side position for USD', () => {
+    assert.equal(formatCurrency('USD', 12500, { compact: true }), `$12,50${NBSP}mil`);
   });
 });

@@ -37,6 +37,11 @@
       "windowId": "118"
     },
     {
+      "name": "cost-center",
+      "windowId": "79FC23AB84F04384B4B7CCCADCDD2942",
+      "menuName": "Cost Center"
+    },
+    {
       "name": "general-ledger-configuration",
       "windowId": "125"
     },
@@ -143,6 +148,11 @@
     {
       "name": "simple-g-l-journal",
       "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
+    },
+    {
+      "name": "service-project",
+      "windowId": "800001",
+      "menuName": "Service Project"
     },
     {
       "name": "sii-config",

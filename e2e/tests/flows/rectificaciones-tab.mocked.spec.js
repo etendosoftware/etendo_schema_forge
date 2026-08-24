@@ -155,6 +155,26 @@ async function installDetailMocks(page, spec, invoice, reversedLines = []) {
   });
 }
 
+/**
+ * Mocks GET /sws/neo/fiscal-models-catalog — the Fiscal Models catalog
+ * (ETGO_FiscalModelsCatalog, cross-spec: not scoped under `${spec}/`, mirroring
+ * ReversedInvoicesPanel.jsx's own `neoBase` derivation). Gates whether the
+ * "Correctiva del 349" checkbox panel renders at all inside ExpandedForm.
+ * Must run AFTER login() so this specific route beats its /sws/** catch-all
+ * (LIFO) — the catch-all's generic `{ data: [], totalRows: 0 }` body has no
+ * `349` key, so without this mock the checkbox is fail-closed (hidden) anyway.
+ */
+async function installCatalogMock(page, activeModels) {
+  await page.route('**/sws/neo/fiscal-models-catalog**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(activeModels),
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -175,6 +195,42 @@ test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked
     await expect(page.getByTestId('reversed-invoices-panel')).toBeVisible();
     // No lines mocked → the panel shows its empty state
     await expect(page.getByText('Sin rectificaciones todavía')).toBeVisible();
+  });
+
+  test('ETP-4755: "Correctiva del 349" checkbox is visible when Modelo 349 is active in the catalog', async ({ page }) => {
+    await login(page);
+    await installDetailMocks(page, 'sales-invoice', SI_RECTIFICATIVE);
+    await installCatalogMock(page, { '303': true, '349': true });
+
+    await page.goto(`/sales-invoice/${SI_RECTIFICATIVE_ID}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    await page.getByTestId(TAB_TESTID).click();
+    const panel = page.getByTestId('reversed-invoices-panel');
+    await expect(panel).toBeVisible();
+
+    // No existing lines → open the empty-state draft row.
+    await panel.getByTestId('btn__addFirstRectificacion').click();
+    await expect(panel.getByTestId('checkbox__isCorrective')).toBeVisible();
+  });
+
+  test('ETP-4755: "Correctiva del 349" checkbox is hidden when Modelo 349 is inactive in the catalog', async ({ page }) => {
+    await login(page);
+    await installDetailMocks(page, 'sales-invoice', SI_RECTIFICATIVE);
+    await installCatalogMock(page, { '303': true, '349': false });
+
+    await page.goto(`/sales-invoice/${SI_RECTIFICATIVE_ID}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    await page.getByTestId(TAB_TESTID).click();
+    const panel = page.getByTestId('reversed-invoices-panel');
+    await expect(panel).toBeVisible();
+
+    await panel.getByTestId('btn__addFirstRectificacion').click();
+    // The draft row itself still renders (invoice picker, save/cancel) — only
+    // the 349-specific checkbox panel is gated by the catalog.
+    await expect(panel.getByTestId('btn__saveNewLine')).toBeVisible();
+    await expect(panel.getByTestId('checkbox__isCorrective')).toHaveCount(0);
   });
 
   test('TC-13: non-rectificative invoice keeps the tab but the panel is read-only (no add)', async ({ page }) => {

@@ -30,9 +30,23 @@ export const VERIFACTU_INV_TYPE_OPTIONS = [
   { value: 'R5', labelKey: 'sifDataTabs.option.vfR5' },
 ];
 
-export const VERIFACTU_REVERSE_TYPE_OPTIONS = [
-  { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
-  { value: 'S', labelKey: 'sifDataTabs.option.vfReverseBySubstitution' },
+// ETP-4783: SII rectification reason (EM_Aeatsii_Motivo_Rectif) — only shown on rectificative invoices.
+export const SII_MOTIVO_RECTIF_OPTIONS = [
+  { value: 'R1', labelKey: 'sifDataTabs.option.siiMotivoR1' },
+  { value: 'R2', labelKey: 'sifDataTabs.option.siiMotivoR2' },
+  { value: 'R3', labelKey: 'sifDataTabs.option.siiMotivoR3' },
+  { value: 'R4', labelKey: 'sifDataTabs.option.siiMotivoR4' },
+  { value: 'R5', labelKey: 'sifDataTabs.option.siiMotivoR5' },
+];
+
+// ETP-4783: TicketBAI reverse-invoice code options — shown in the TBAI SIF
+// panel when the transaction document type is marked as rectificative.
+export const TBAI_REVERSEINVOICECODE_OPTIONS = [
+  { value: 'R1', labelKey: 'sifDataTabs.option.tbaiReverseR1' },
+  { value: 'R2', labelKey: 'sifDataTabs.option.tbaiReverseR2' },
+  { value: 'R3', labelKey: 'sifDataTabs.option.tbaiReverseR3' },
+  { value: 'R4', labelKey: 'sifDataTabs.option.tbaiReverseR4' },
+  { value: 'R5', labelKey: 'sifDataTabs.option.tbaiReverseR5' },
 ];
 
 // ETP-4463: SIF fields no longer persist themselves via a per-field PATCH on
@@ -71,6 +85,8 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   const siiFieldReadOnly = isSentToSii;
 
   const vfInvTypeDefaultedRef = useRef(null);
+  const vfReverseTypeRef = useRef(null);
+  const siiRectifTypeRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -95,6 +111,39 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
     if (data?.etvfacInvType) return; // already has a value — never clobber
     vfInvTypeDefaultedRef.current = recordId;
     onChange?.('etvfacInvType', 'F1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+
+  // ETP-4783: When SII is configured and the selected document type is rectificative
+  // (isRectificative injected by AbstractInvoiceHeaderHandler.enrichIsRectificative),
+  // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
+  // rectificativa). Keyed on recordId+isRectificative so a document-type change
+  // mid-session re-fires. Never clobbers a value that is already 'R'.
+  useEffect(() => {
+    if (!showSii || !isDraft || !recordId) return;
+    if (!data?.isRectificative) return;
+    const currentVal = data?.[siiTypeField];
+    if (currentVal === 'R') return; // already correct — no-op
+    const key = `${recordId}:rectif`;
+    if (siiRectifTypeRef.current === key) return;
+    siiRectifTypeRef.current = key;
+    onChange?.(siiTypeField, 'R');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+
+  // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
+  // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
+  // always be persisted as 'I' (Por Diferencias) — the only valid value. We write it
+  // into the shared editing state so the batch save picks it up automatically.
+  // Keyed on recordId + vfInvType so a type change within the same record re-fires.
+  useEffect(() => {
+    if (!showVerifactu || !isDraft || !recordId) return;
+    const vfInvType = data?.etvfacInvType;
+    if (typeof vfInvType !== 'string' || !vfInvType.startsWith('R')) return;
+    const key = `${recordId}:${vfInvType}`;
+    if (vfReverseTypeRef.current === key) return;
+    vfReverseTypeRef.current = key;
+    onChange?.('etvfacReverseinvtype', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
 

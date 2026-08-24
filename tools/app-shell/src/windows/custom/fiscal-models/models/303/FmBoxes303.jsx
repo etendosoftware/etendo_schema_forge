@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
@@ -26,12 +26,16 @@ const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado',
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
 
 
-export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange }) {
+export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly }) {
   const ui = useUI();
   const t = ui;
   const layout = getLayout303(year, period);
   const [editingCell, setEditingCell] = useState(null);
   const [pendingValues, setPendingValues] = useState({});
+
+  useEffect(() => {
+    if (readOnly) setEditingCell(null);
+  }, [readOnly]);
 
   const valueMap = {};
   if (Array.isArray(boxes)) {
@@ -54,6 +58,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
       onBlur={() => { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); }}
       onKeyDown={e => { if (e.key === 'Enter') { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
       autoFocus
+      disabled={readOnly}
     />
   );
 
@@ -66,6 +71,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
         className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
         value={identification?.[f.id] ?? ''}
         onChange={e => onIdentChange?.(f.id, e.target.value)}
+        disabled={readOnly}
       >
         <option value="">{t('fm.ident.decl.placeholder')}</option>
         {f.options?.map(opt => (
@@ -125,7 +131,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
           <>
             <span className="fm-aeat-cell__value">{val != null ? formatCell(val, colType) : ''}</span>
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
-            {isCellEditable && (
+            {isCellEditable && !readOnly && (
               <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
                 <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
               </button>
@@ -179,6 +185,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                           <Checkbox
                             checked={identification?.[f.id] ?? false}
                             onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                            disabled={readOnly}
                             data-testid="Checkbox__49d327" />
                           <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                         </div>
@@ -197,6 +204,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                           value={identification?.[f.id] ?? ''}
                           onChange={e => onIdentChange?.(f.id, e.target.value)}
                           autoComplete="off"
+                          disabled={readOnly}
                         />
                       </div>
                     );
@@ -240,6 +248,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         <Checkbox
                           checked={identification?.[f.id] ?? false}
                           onChange={handleChange}
+                          disabled={readOnly}
                           data-testid="Checkbox__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>
@@ -258,6 +267,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         value={identification?.[f.id] ?? ''}
                         onChange={e => onIdentChange?.(f.id, e.target.value)}
                         autoComplete="off"
+                        disabled={readOnly}
                       />
                     </div>
                   );
@@ -334,7 +344,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                                   ) : (
                                     <>
                                       <span className="fm-aeat-cell__value">{val != null ? formatCell(val, 'amount') : ''}</span>
-                                      {isCellEditable && (
+                                      {isCellEditable && !readOnly && (
                                         <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
                                           <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
                                         </button>

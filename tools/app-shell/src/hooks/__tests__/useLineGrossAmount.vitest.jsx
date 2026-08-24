@@ -160,6 +160,22 @@ describe('computeUnitPriceForPost', () => {
     computeUnitPriceForPost(lineData, { priceField: 'unitPrice' });
     expect(lineData.unitPrice).toBe(100);
   });
+
+  // ETP-4727 (backend counterpart): listPrice explicitly edited to 0 on an existing
+  // line must still derive unitPrice=0 — the old `listPrice !== 0` guard left unitPrice
+  // at its stale pre-edit value, which the backend's fallback then read as "price wasn't
+  // really changed" and recomputed a nonzero lineGrossAmount from it.
+  it('derives unitPrice=0 when listPrice is explicitly 0', () => {
+    const lineData = { listPrice: 0, discount: 0 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    expect(lineData.unitPrice).toBe(0);
+  });
+
+  it('leaves unitPrice undefined when listPrice is genuinely absent', () => {
+    const lineData = { discount: 10 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    expect(lineData.unitPrice).toBeUndefined();
+  });
 });
 
 // ─── useLineGrossAmount hook (covers the bound useCallback wrappers) ──────────

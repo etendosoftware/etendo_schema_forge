@@ -136,8 +136,8 @@ export default function ConfirmInOutModal({
         {/* Body */}
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Info row — hidden when only creating invoice (skipDocumentAction) */}
-          {!skipDocumentAction && infoRowBold && (
+          {/* Info row — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
+          {!skipDocumentAction && invoiceAction && infoRowBold && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
                 <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -152,8 +152,8 @@ export default function ConfirmInOutModal({
             </div>
           )}
 
-          {/* Toggle card — hidden when only creating invoice (skipDocumentAction) */}
-          {!skipDocumentAction && <div
+          {/* Toggle card — hidden when only creating invoice (skipDocumentAction) or when no invoice action is available */}
+          {!skipDocumentAction && invoiceAction && <div
             role="switch"
             aria-checked={createInvoice}
             data-testid="confirm-modal-invoice-toggle"

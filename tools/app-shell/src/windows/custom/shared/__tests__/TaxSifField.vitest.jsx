@@ -158,6 +158,28 @@ describe('selectSifFields — option shape and i18n keys', () => {
     const [b] = pick({ profile: 'tbai', verifactuRecord: null, data: { notTaxable: true } });
     expect(b.key).toBe('tbaiNonsubjectcause');
   });
+
+  // ETP-4888 design-polish round — buildOptions() gained ADDITIVE `code`/`description`
+  // fields alongside the pre-existing concatenated `label`, for consumers (TaxSifModal's
+  // EnumSearchSelect) that render the AEAT code and its description as two distinct
+  // pieces instead of one string. TaxSifField's own EntityForm rendering is unaffected —
+  // it still only reads `label`.
+  it('every option additionally exposes `code` (the raw AEAT value) and `description` (the translated text) alongside the unchanged `label`', () => {
+    const [f] = pick({ profile: 'tbai', verifactuRecord: null, data: {} });
+    const first = f.options[0];
+    expect(first.code).toBe('01');
+    expect(first.description).toBe('taxSif.opt.tbaiRegime.01');
+    // label is unchanged: still the single concatenated "code — description" string.
+    expect(first.label).toBe('01 — taxSif.opt.tbaiRegime.01');
+  });
+
+  it('code and description are populated for every option in a multi-entry catalog, not just the first', () => {
+    const [f] = pick({ profile: 'tbai', verifactuRecord: null, data: { taxExempt: 'Y' } });
+    for (const opt of f.options) {
+      expect(opt.code).toBe(opt.value);
+      expect(opt.description).toBe(`taxSif.opt.tbaiExemption.${opt.value}`);
+    }
+  });
 });
 
 describe('TaxSifField — orgId resolution (real formFooter wiring)', () => {

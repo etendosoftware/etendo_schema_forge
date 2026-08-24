@@ -12,6 +12,7 @@
       "exclude": true
     },
     "accounting": {
+      "readOnly": true,
       "javaQualifier": "year-accounting",
       "fields": {
         "account": {

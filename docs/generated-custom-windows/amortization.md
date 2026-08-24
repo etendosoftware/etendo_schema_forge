@@ -285,16 +285,24 @@ shape into a reusable mechanism rather than special-casing it:
   expand-panel consistently.
 - **`project`**: raw AD `displayLogic` = `@ACCT_DIMENSION_DISPLAY@` — now genuinely
   config-gated for the first time in this window's history.
-- **`costcenter` / `eTADASBpartner`**: raw AD `displayLogic` on the amortization-line tab is
-  still **empty** for both (`AD_Field.DisplayLogic` was never wired to
-  `@ACCT_DIMENSION_DISPLAY@` at the Application Dictionary level) — a separate, already-tracked
-  gap explicitly **deferred** per product direction (to be fixed by a different, already-existing
-  ticket that populates the AD_Field and regenerates the contract). Per that direction, this hook
-  is wired to *read* whatever `displayLogic.raw` the AD eventually provides rather than hardcoding
-  a value — it fails open (stays visible) for both today, exactly like
-  `NeoDisplayLogicHelper.evaluateExpression()`'s own fail-open behavior server-side. Once the AD
-  change lands and the contract is regenerated, both fields start being correctly gated with
-  **zero further changes** needed in `AmortizationLinesTable.jsx` or the hook.
+- **`costcenter` / `eTADASBpartner`** (ETP-4914 update — this section previously described both
+  fields as having an empty, deferred `AD_Field.DisplayLogic`; that is now stale): direct DB
+  verification confirms both are now correctly wired at the AD level. `Cost Center`
+  (`C_Costcenter_ID`) on the Amortización Lines tab now carries
+  `AD_Field.DisplayLogic = @ACCT_DIMENSION_DISPLAY@` — the same macro `project` uses — AND a
+  matching `AD_Dimension_Mapping` row now exists for `A_Amortizationline` (dimension `CC`,
+  docbasetype `AMZ`, level `L`, active), which is what makes the macro resolve to real,
+  non-empty JS instead of falling back to fail-open (this table did not have that mapping row
+  before). `Business Partner` (`EM_Etadas_C_Bpartner_ID`) carries `AD_Field.DisplayLogic =
+  @$Element_BP@='Y'`. Both changes were made entirely on the AD/DB side — **zero code changes**
+  were needed in `AmortizationLinesTable.jsx` or `useAccountingDimensionFields`, confirming the
+  original design note above: the hook reads whatever `displayLogic.raw` the AD provides with no
+  hardcoding, so it started respecting both fields automatically once the AD metadata landed.
+  Empirically confirmed: `make regen ONLY=amortization` produces a **zero diff** against the
+  committed artifacts — this dimension-gating fix is resolved live via the
+  `evaluate-display`/`NeoDisplayLogicHelper` server-side evaluator, not baked into
+  `contract.json`, so no regeneration step was required for this specific fix. This closes the
+  gap that was previously tracked here as deferred.
 - **`product`**: no product dimension field exists on the amortization-line tab — matrix's
   "Nunca" is already trivially satisfied.
 

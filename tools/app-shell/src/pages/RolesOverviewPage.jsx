@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, RefreshCw, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
-import { fetchRolesOverview } from '@/lib/rolesApi.js';
-import { ROLE_NAME_I18N_KEYS, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useRolesOverviewData, ROLE_ICONS, resolveRoleKind } from './roles/useRolesOverviewData.js';
+import RoleSummaryCard from './roles/RoleSummaryCard.jsx';
+import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
 
 /**
  * Shared centered "status" card wrapper for the error and no-access states below — both were
@@ -29,92 +29,34 @@ function StatusCard({ testId, className, children }) {
 }
 
 /**
- * ETP-4513 — the tenant's 4 fixed non-admin roles: NAME -> {nameKey, descKey}. Matched by the
- * role's own NAME (consistent across every tenant, since `OnboardingRoleProvisioningService` /
- * `R16-tenant-roles-and-webhook-access.sql` clone these 4 names verbatim onto every client), NOT
- * by a hardcoded per-client role id — a hardcoded-GOClient-id map is exactly the bug fixed
- * 2026-07-27 (see `SFRolesOverview.java`'s class javadoc for the live RolesPresa symptom: every
- * OTHER tenant's admin saw GOClient's role names with empty user counts/windows). The 5th role
- * (client-admin) is NOT in this map — its NAME varies per tenant ("RolesPresa Admin" vs
- * "GOClient Admin" vs any future tenant's own), so it's identified by the backend's
- * `isClientAdmin` flag instead and always rendered with the generic `roleNameAdmin`/
- * `roleDescAdmin` copy, never its literal AD_Role.name.
+ * "Configuración > Roles" overview page (ETP-4513, redesigned by ETP-4907 to match
+ * a new reference layout): 5 role summary cards (icon, name, user-count badge, window
+ * count) followed by a full window x role access matrix grouped by category, each cell
+ * tri-state (full access / read-only / no access). Data comes from
+ * `useRolesOverviewData()` (`./roles/useRolesOverviewData.js`), which calls the real
+ * `GET /sws/neo/rolesoverview` (`lib/rolesApi.js`'s `fetchRolesOverview()`, unchanged
+ * since ETP-4513) and adapts its response into this page's card/matrix shape. This is a
+ * hand-built standalone page (no `decisions.json`/pipeline artifact), routed via
+ * `runtime-routes.jsx`'s `lazyRoute('roles', RolesOverviewPage)` and gated in `menu.json`
+ * by the `isAdminOrClientAdmin` capability — see `registry.js`'s `filterMenuGroupsByAccess`.
  *
- * The backend's `rawDescription` (raw `AD_Role.description`) is explicitly NOT display copy
- * (boilerplate "do not edit this role" text for 4 of the 5 roles today — see
- * `SFRolesOverview.java`'s class javadoc). These curated, i18n-keyed descriptions are what
- * actually renders; `rawDescription` is only used as a last-resort fallback for a role this map
- * doesn't recognize (a name Etendo Go doesn't know about, which should never happen for the 4
- * fixed roles, but keeps the page from showing a blank description if that ever changes).
- */
-const ROLE_DESC_I18N_KEYS = {
-  Finance: 'roleDescFinance',
-  Sales: 'roleDescSales',
-  Purchasing: 'roleDescPurchasing',
-  Inventory: 'roleDescInventory',
-};
-
-const ROLE_NAME_I18N = Object.fromEntries(
-  Object.entries(ROLE_NAME_I18N_KEYS).map(([name, nameKey]) => (
-    [name, { nameKey, descKey: ROLE_DESC_I18N_KEYS[name] }]
-  ))
-);
-
-/** Generic copy for the client-admin role, identified by `role.isClientAdmin`, never its name. */
-const ADMIN_I18N = { nameKey: ADMIN_NAME_I18N_KEY, descKey: 'roleDescAdmin' };
-
-/**
- * Read-only "Configuración > Roles" page (ETP-4513). Lists the tenant's 5 fixed roles with a
- * curated description, assigned-user count, and the Etendo GO windows each role can reach
- * (from `GET /sws/neo/rolesoverview`). No create/edit/delete actions anywhere — these 5
- * roles are product-defined and not editable by any tenant user; only future user-created
- * roles (out of scope for now) will ever be editable here.
- *
- * The menu entry that routes here is itself gated by the `isAdminOrClientAdmin` capability
- * (`SFWindowAccessMap`, see `menu.json`'s `roles` entry and `registry.js`'s
- * `filterMenuGroupsByAccess`) — a non-admin role should never reach this route through normal
- * navigation. The empty-state handling below (`roles.length === 0`) is a defense-in-depth
- * fallback for direct navigation / a stale menu, not the primary access control: the backend
- * (`SFRolesOverview.java`) is the actual enforcement point and always returns `{ roles: [] }`
- * for a non-admin/no-role caller regardless of how the request reached it.
+ * The empty-state handling below (`cards.length === 0`) is a defense-in-depth fallback for
+ * direct navigation / a stale menu, not the primary access control — `SFRolesOverview.java`
+ * is the actual enforcement point and always returns an empty `roles`/`matrix` payload for a
+ * non-admin/no-role caller regardless of how the request reached it.
  */
 export default function RolesOverviewPage() {
   const ui = useUI();
   const tMenu = useMenuLabel();
-  const [roles, setRoles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { loading, error, cards, matrix, reload } = useRolesOverviewData();
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchRolesOverview()
-      .then((data) => setRoles(Array.isArray(data?.roles) ? data.roles : []))
-      .catch((err) => setError(err?.message || String(err)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  useSetPageMeta({
+    title: ui('rolesPageTitle'),
+    breadcrumb: `${tMenu('Settings')} / ${ui('rolesPageTitle')}`,
+  });
 
   return (
     <div className="h-full overflow-y-auto space-y-6 p-6" data-testid="RolesOverviewPage">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{ui('rolesPageTitle')}</h2>
-          <p className="text-muted-foreground">{ui('rolesPageSubtitle')}</p>
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={load}
-          disabled={loading}
-          data-testid="RolesOverviewPage__refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} data-testid="RefreshCw__rolesOverview" />
-        </Button>
-      </div>
       {(() => {
         if (loading) {
           return (
@@ -133,14 +75,14 @@ export default function RolesOverviewPage() {
               className="gap-3 py-12"
               data-testid="StatusCard__67e3bc">
               <p className="text-sm text-muted-foreground">{ui('rolesLoadError')}</p>
-              <Button variant="outline" onClick={load} data-testid="RolesOverviewPage__retry">
+              <Button variant="outline" onClick={reload} data-testid="RolesOverviewPage__retry">
                 {ui('retry')}
               </Button>
             </StatusCard>
           );
         }
 
-        if (roles.length === 0) {
+        if (cards.length === 0) {
           return (
             <StatusCard
               testId="RolesOverviewPage__noAccess"
@@ -154,53 +96,24 @@ export default function RolesOverviewPage() {
         }
 
         return (
-          <div className="space-y-4" data-testid="RolesOverviewPage__list">
-            {roles.map((role) => {
-              const i18nKeys = role.isClientAdmin ? ADMIN_I18N : ROLE_NAME_I18N[role.name];
-              const displayName = i18nKeys ? ui(i18nKeys.nameKey) : role.name;
-              const displayDescription = i18nKeys ? ui(i18nKeys.descKey) : role.rawDescription;
-              const windows = Array.isArray(role.windows) ? role.windows : [];
-
-              return (
-                <Card key={role.id} data-testid={`RolesOverviewPage__role-${role.id}`}>
-                  <CardHeader
-                    className="flex flex-row items-start justify-between gap-4 space-y-0"
-                    data-testid="CardHeader__67e3bc">
-                    <div>
-                      <CardTitle data-testid="CardTitle__67e3bc">{displayName}</CardTitle>
-                      <CardDescription data-testid="CardDescription__67e3bc">{displayDescription}</CardDescription>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <Badge
-                        variant="secondary"
-                        title={ui('rolesColUsers')}
-                        data-testid={`RolesOverviewPage__userCount-${role.id}`}>
-                        <Users className="mr-1 h-3 w-3" data-testid="Users__rolesOverview" />
-                        {role.userCount}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent data-testid="CardContent__67e3bc">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">{ui('rolesColWindows')}</p>
-                    <div className="flex flex-wrap gap-1.5" data-testid={`RolesOverviewPage__windows-${role.id}`}>
-                      {windows.length === 0 && (
-                        <span className="text-xs text-muted-foreground">{'—'}</span>
-                      )}
-                      {windows.map((w) => (
-                        <Badge
-                          key={w.id}
-                          variant={w.tier === 'full' ? 'default' : 'outline'}
-                          title={w.tier === 'full' ? ui('accessTierFull') : ui('accessTierReadOnly')}
-                          data-testid={`RolesOverviewPage__window-${role.id}-${w.id}`}
-                        >
-                          {tMenu(w.name)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div className="space-y-6" data-testid="RolesOverviewPage__content">
+            <div
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+              data-testid="RolesOverviewPage__cards"
+            >
+              {cards.map((role) => (
+                <RoleSummaryCard
+                  key={role.id}
+                  role={role}
+                  Icon={ROLE_ICONS[resolveRoleKind(role)]}
+                  data-testid={`RoleSummaryCard__wrapper-${role.id}`} />
+              ))}
+            </div>
+            <RolesAccessMatrix
+              cards={cards}
+              matrix={matrix}
+              iconFor={(role) => ROLE_ICONS[resolveRoleKind(role)]}
+              data-testid="RolesAccessMatrix__67e3bc" />
           </div>
         );
       })()}

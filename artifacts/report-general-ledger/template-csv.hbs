@@ -1,0 +1,13 @@
+{{!-- CSV-only template (ETP-4898) — genuine comma-separated text, not the HTML/PDF page
+      dumped verbatim (recipe 'text' streams whatever this template compiles to, byte for
+      byte — reusing template.hbs meant the entire rendered <html> document, <style> block
+      and all, was written into the .csv file). Same flat, one-row-per-movement shape as
+      template-excel.hbs. Amounts print the raw dot-decimal value from the query (no
+      formatCurrency — CSV is locale-independent by convention and calculation-friendly,
+      like the Excel export). Every field goes through csvField (this report's helpers.js)
+      so a value containing a comma/quote/newline gets quoted correctly — and every csvField
+      call MUST be triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes double-stash
+      output by default, which turns csvField's own escaped `""` into `&quot;&quot;`, corrupting
+      the CSV. --}}{{#with meta}}{{{csvField labels.value}}},{{{csvField labels.name}}},{{{csvField labels.dateacct}}},{{{csvField labels.amtacctdr}}},{{{csvField labels.amtacctcr}}},{{{csvField descriptionLabel}}},{{{csvField labels.bPartnerId}}},{{{csvField labels.productId}}},{{{csvField labels.projectId}}}
+{{/with}}{{#each rows}}{{{csvField (lookup this 'value')}}},{{{csvField (lookup this 'name')}}},{{{csvField (formatDate (lookup this 'dateacct'))}}},{{lookup this 'amtacctdr'}},{{lookup this 'amtacctcr'}},{{{csvField (lookup this 'groupbyname')}}},{{{csvField (lookup this 'bpname')}}},{{{csvField (lookup this 'productname')}}},{{{csvField (lookup this 'projectname')}}}
+{{/each}}

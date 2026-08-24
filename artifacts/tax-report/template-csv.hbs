@@ -1,0 +1,19 @@
+{{!-- CSV-only template (ETP-4899) — genuine comma-separated text, not the HTML/PDF page
+      dumped verbatim. Same flat, one-row-per-line shape as template-excel.hbs (see that
+      file's header comment for the full rationale — denormalized fields, no group bands,
+      unconditional purchase+sales walk since the unused side is always an empty array).
+
+      Only the Detail section is exported to CSV (a single flat sheet, unlike Excel's 3
+      sheets — CSV has no concept of multiple sheets, and Detail is the actionable,
+      per-document data the summaries can be recomputed from via pivot).
+
+      Amounts print the raw dot-decimal value (no formatCurrency). Every field goes through
+      csvField (this report's helpers.js) to quote values containing a comma/quote/newline —
+      and every csvField call MUST be triple-stashed ({{{ }}}), never {{ }}: Handlebars
+      HTML-escapes double-stash output by default, which turns csvField's own escaped `""`
+      into `&quot;&quot;`, corrupting the CSV. --}}{{#with meta}}{{{csvField labels.transactionType}}},{{{csvField labels.taxName}}},{{{csvField labels.docNo}}},{{{csvField labels.docType}}},{{{csvField labels.docDate}}},{{{csvField labels.acctDate}}},{{{csvField labels.bPartnerId}}},{{{csvField labels.country}}},{{{csvField labels.region}}},{{{csvField labels.taxBaseAmt}}},{{{csvField labels.taxAmt}}},{{{csvField labels.totalAmt}}}
+{{/with}}{{#each rows.purchase.detail}}{{#each this.docs}}{{{csvField @root.meta.labels.purchasesPayments}}},{{{csvField ../taxName}}},{{{csvField docNo}}},{{{csvField docType}}},{{{csvField (formatDateDisplay docDate)}}},{{{csvField (formatDateDisplay acctDate)}}},{{{csvField bPartner}}},{{{csvField bpCountry}}},{{{csvField bpRegion}}},{{taxBaseAmt}},{{taxAmt}},{{totalAmt}}
+{{/each}}{{#each this.bpGroups}}{{#each this.docs}}{{{csvField @root.meta.labels.purchasesPayments}}},{{{csvField ../../taxName}}},{{{csvField docNo}}},{{{csvField docType}}},{{{csvField (formatDateDisplay docDate)}}},{{{csvField (formatDateDisplay acctDate)}}},{{{csvField bPartner}}},{{{csvField bpCountry}}},{{{csvField bpRegion}}},{{taxBaseAmt}},{{taxAmt}},{{totalAmt}}
+{{/each}}{{/each}}{{/each}}{{#each rows.sales.detail}}{{#each this.docs}}{{{csvField @root.meta.labels.salesReceipts}}},{{{csvField ../taxName}}},{{{csvField docNo}}},{{{csvField docType}}},{{{csvField (formatDateDisplay docDate)}}},{{{csvField (formatDateDisplay acctDate)}}},{{{csvField bPartner}}},{{{csvField bpCountry}}},{{{csvField bpRegion}}},{{taxBaseAmt}},{{taxAmt}},{{totalAmt}}
+{{/each}}{{#each this.bpGroups}}{{#each this.docs}}{{{csvField @root.meta.labels.salesReceipts}}},{{{csvField ../../taxName}}},{{{csvField docNo}}},{{{csvField docType}}},{{{csvField (formatDateDisplay docDate)}}},{{{csvField (formatDateDisplay acctDate)}}},{{{csvField bPartner}}},{{{csvField bpCountry}}},{{{csvField bpRegion}}},{{taxBaseAmt}},{{taxAmt}},{{totalAmt}}
+{{/each}}{{/each}}{{/each}}

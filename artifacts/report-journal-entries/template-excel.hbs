@@ -1,0 +1,57 @@
+{{!-- Excel-only template (ETP-4898) — flat, calculation-friendly export.
+      Unlike template.hbs (HTML/PDF: entry bands, one line per account per entry),
+      this dumps every account line with its entry/date/detail repeated, so the
+      sheet can be summed/pivoted directly in Excel.
+      Amount cells use data-cell-type="number" with the RAW value (no formatCurrency) —
+      html-to-xlsx does `parseFloat(cell.innerText)` for that type, so a formatted
+      amount would silently truncate at the thousands separator. Never format here. --}}
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  table { border-collapse: collapse; font-family: sans-serif; font-size: 10pt; }
+  th { font-weight: bold; text-align: left; background: #f1f5f9; }
+  th, td { padding: 1px 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.fact_acct_group_id}}</th>
+      <th>{{meta.labels.dateacct}}</th>
+      <th>{{meta.labels.document_type}}</th>
+      <th>{{meta.labels.account_no}}</th>
+      <th>{{meta.labels.account_name}}</th>
+      <th>{{meta.labels.amtacctdr}}</th>
+      <th>{{meta.labels.amtacctcr}}</th>
+      {{#ifCond meta.params.showDimensions '===' 'true'}}
+      <th>{{meta.labels.bPartnerId}}</th>
+      <th>{{meta.labels.productId}}</th>
+      <th>{{meta.labels.projectId}}</th>
+      {{/ifCond}}
+      {{#ifCond meta.params.showEntryDescription '===' 'true'}}
+      <th>{{meta.labels.entry_description}}</th>
+      {{/ifCond}}
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td>{{lookup this 'entry_no'}}</td>
+        <td>{{formatDate (lookup this 'dateacct')}}</td>
+        <td>{{lookup this 'document_type'}}</td>
+        <td>{{lookup this 'account_no'}}</td>
+        <td>{{lookup this 'account_name'}}</td>
+        <td data-cell-type="number">{{lookup this 'amtacctdr'}}</td>
+        <td data-cell-type="number">{{lookup this 'amtacctcr'}}</td>
+        {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+        <td>{{lookup this 'bpname'}}</td>
+        <td>{{lookup this 'productname'}}</td>
+        <td>{{lookup this 'projectname'}}</td>
+        {{/ifCond}}
+        {{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}
+        <td>{{lookup this 'entry_description'}}</td>
+        {{/ifCond}}
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</body></html>

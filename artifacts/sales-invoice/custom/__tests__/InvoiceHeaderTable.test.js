@@ -274,3 +274,40 @@ describe('Sales InvoiceHeaderTable — custom column filter modes (ETP-4681)', (
     assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
   });
 });
+
+// ── ETP-4833: badge/button renderers must not wrap onto two lines when the
+// grid's column width shrinks (column-width recalculation on scroll). QA
+// (Emilio Polliotti, 2026-08-20) confirmed the purchase-invoice fix but
+// reproduced the same "Factura Rectificativa" wrap here, because it was never
+// applied to sales-invoice — mirrors PurchaseInvoiceHeaderTable.jsx's
+// equivalent NOWRAP_FLEX assertions.
+describe('Sales InvoiceHeaderTable — badge/button nowrap styling (ETP-4833)', () => {
+  it('declares a shared NOWRAP_FLEX style with whiteSpace nowrap and flexShrink 0', () => {
+    assert.match(
+      src,
+      /const NOWRAP_FLEX = \{ whiteSpace: 'nowrap', flexShrink: 0 \}/,
+      'a shared nowrap/flexShrink constant keeps the four flex-based renderers consistent',
+    );
+  });
+
+  it('doc-type badge (two-word "Factura Rectificativa") declares whiteSpace nowrap', () => {
+    const cell = src.match(/key: 'transactionDocument',[\s\S]*?key: 'documentNo'/);
+    assert.ok(cell, 'expected the transactionDocument column block');
+    assert.match(
+      cell[0],
+      /style=\{\{ color: cfg\.color, backgroundColor: cfg\.bg, whiteSpace: 'nowrap' \}\}/,
+      'inline-block alone does not stop a two-word label from wrapping once the column narrows',
+    );
+  });
+
+  it('applies NOWRAP_FLEX to all four flex-based badge/button renderers in the outstandingAmount cell', () => {
+    const cell = src.match(/key: 'outstandingAmount',[\s\S]*?key: 'eTGODeliveryStatus'/);
+    assert.ok(cell, 'expected the outstandingAmount column block');
+    const occurrences = [...cell[0].matchAll(/\{\.\.\.NOWRAP_FLEX,display:'inline-flex'/g)].length;
+    assert.equal(
+      occurrences,
+      4,
+      'credit-applied, credit-available, paid, and pending-payment must all spread NOWRAP_FLEX',
+    );
+  });
+});

@@ -33,6 +33,14 @@ vi.mock('@/components/financial-accounts/contractColumns', () => ({
     { name: 'documentNo', label: 'Doc' },
     { name: 'reference', label: 'Reference' }, // no registry entry → fallback cell
   ],
+  // Same panel fields as the real financial-account contract, in `seq` order: the
+  // funds-transfer counterpart link first, then the three fixed dimensions.
+  getContractPanelFields: () => [
+    { name: 'eTGOFinaccTransDest', label: 'Destination Financial Account' },
+    { name: 'project', label: 'Project' },
+    { name: 'costCenter', label: 'Cost Center' },
+    { name: 'product', label: 'Product' },
+  ],
 }));
 
 import { MovementsTable } from '../MovementsTable.jsx';
@@ -168,6 +176,90 @@ describe('MovementsTable — expandable dimensions panel', () => {
       enabledDimensions: ['bpartner'],
       movements: [baseMovement({ dimensions: { product: 'Prod X' } })],
     });
+    expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
+  });
+});
+
+// The funds-transfer counterpart link (ETP-4882). One panel slot serves both directions:
+// the backend collapses em_etgo_finacc_trans_dest / em_aprm_finacc_trans_origin into the
+// same transfer* props and flags the side via transferDirection.
+describe('MovementsTable — funds-transfer counterpart link', () => {
+  const transferMovement = (over = {}) => baseMovement({
+    transferTxnId: 'txn-far',
+    transferAccountId: 'acct-far',
+    transferAccountName: 'Banco Santander',
+    transferDirection: 'out',
+    ...over,
+  });
+
+  it('labels the link "destination" on the source (BPW) leg', () => {
+    renderTable({ enabledDimensions: ['project'], movements: [transferMovement({ trxType: 'BPW' })] });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByText('financeAccountMovementsTransferTo')).toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferFrom')).not.toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-transfer-link-m1')).toHaveTextContent('Banco Santander');
+  });
+
+  it('labels the link "origin" on the destination (BPD) leg', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [transferMovement({ trxType: 'BPD', transferDirection: 'in' })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByText('financeAccountMovementsTransferFrom')).toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferTo')).not.toBeInTheDocument();
+  });
+
+  it('renders the link BEFORE the accounting dimensions', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [transferMovement({ dimensions: { project: 'Proj A' } })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    const labels = within(panel).getAllByText(/^financeAccountMovements(TransferTo|Dim)/).map((n) => n.textContent);
+    expect(labels[0]).toBe('financeAccountMovementsTransferTo');
+    expect(labels).toContain('financeAccountMovementsDimProject');
+  });
+
+  it('navigates to the counterpart transaction in the other account', () => {
+    renderTable({ enabledDimensions: ['project'], movements: [transferMovement()] });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-transfer-link-m1'));
+
+    expect(navigate).toHaveBeenCalledWith('/financial-account/acct-far?tab=movements&txn=txn-far');
+  });
+
+  it('omits the link on a movement that is not part of a transfer', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [baseMovement({ dimensions: { project: 'Proj A' } })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-transfer-link-m1')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferTo')).not.toBeInTheDocument();
+  });
+
+  // Regression guard: expandability used to be a single global flag, so a client with no
+  // accounting dimension enabled got no chevron at all and the link was unreachable.
+  it('still exposes the expand control when NO accounting dimension is enabled', () => {
+    renderTable({ enabledDimensions: [], movements: [transferMovement()] });
+
+    const expand = screen.getByTestId('movement-expand-m1');
+    fireEvent.click(expand);
+    expect(within(screen.getByTestId('movement-moreinfo-m1'))
+      .getByTestId('movement-transfer-link-m1')).toBeInTheDocument();
+  });
+
+  it('keeps non-transfer rows unexpandable when no dimension is enabled', () => {
+    renderTable({ enabledDimensions: [], movements: [baseMovement()] });
     expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
   });
 });

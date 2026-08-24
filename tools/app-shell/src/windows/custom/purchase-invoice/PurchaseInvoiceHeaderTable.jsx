@@ -30,6 +30,19 @@ const SUBTYPE_BADGE = {
   RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'rectificativeInvoicesTab' },
 };
 
+// ETP-4833: shared base style for every inline-flex badge/button rendered by
+// this file (credit-applied, credit-available, paid, pending-payment). Without
+// `whiteSpace: 'nowrap'` a two-word label (e.g. "Factura Rectificativa") or a
+// "Saldo a favor · X €" amount wraps onto a second line whenever the grid's
+// column width shrinks (e.g. on scroll-triggered column recalculation).
+// `flexShrink: 0` stops the flex container itself from being squeezed
+// narrower than its content, which is what allows the wrap to happen in the
+// first place. Kept as one small constant — rather than repeating both
+// properties in each renderer's style object — so a future extraction into a
+// shared `shared/StatusPill.jsx` (once sales-invoice needs the same badges)
+// is a mechanical lift, not a redesign.
+const NOWRAP_FLEX = { whiteSpace: 'nowrap', flexShrink: 0 };
+
 // `getApSubtype` drives ONLY the document-type badge above. Payment state —
 // "Saldo a favor" vs payable — is decided by the sign of the total via
 // resolveInvoicePaymentBadge (ETP-4841), never by the document type.
@@ -86,7 +99,10 @@ export default function PurchaseInvoiceHeaderTable(props) {
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{ color: cfg.color, backgroundColor: cfg.bg }}
+              // ETP-4833: `inline-block` alone doesn't stop text from wrapping
+              // once the column narrows below the label's width — a two-word
+              // doc type ("Factura Rectificativa") needs an explicit nowrap.
+              style={{ color: cfg.color, backgroundColor: cfg.bg, whiteSpace: 'nowrap' }}
             >
               {t(cfg.label)}
             </span>
@@ -148,7 +164,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           if (badge.kind === 'draft') return <span className="text-muted-foreground">—</span>;
           if (badge.kind === 'credit-applied') {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+              <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12} data-testid="Check__6b7cdb" />{ui('cpCreditFullyApplied')}
               </span>
             );
@@ -162,16 +178,36 @@ export default function PurchaseInvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
                 {ui('cpFavorBadge')} · {formatCurrency(currency, badge.amount)}
               </button>
             );
           }
+          // A payment in progress or rejected leaves the invoice with a zero outstanding, so an
+          // amount here would be a lie in both directions: "Pagada" for money that never moved, or
+          // a figure the user must not pay again. Show the state and make it open the payments
+          // modal, where the amounts and the per-payment states live and each row navigates to its
+          // payment (ETP-4895).
+          if (badge.kind === 'transfer-error' || badge.kind === 'transfer-in-progress') {
+            const failed = badge.kind === 'transfer-error';
+            const tone = failed ? 'destructive' : 'warning';
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+                data-testid={failed ? 'invoice-transfer-error' : 'invoice-transfer-in-progress'}
+                style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:`var(--status-${tone}-bg)`,border:'none',color:`var(--status-${tone}-fg)`,cursor:'pointer'}}
+              >
+                <span style={{width:8,height:8,borderRadius:'50%',background:`var(--status-${tone}-fg)`,flexShrink:0,display:'inline-block'}}/>
+                {ui(failed ? 'cpPaymentStateError' : 'cpPaymentStateInProgress')}
+              </button>
+            );
+          }
           if (badge.kind === 'paid') {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+              <span style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12} data-testid="Check__6b7cdb" />{t('pagada')}
               </span>
             );
@@ -181,7 +217,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addPago')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {formatCurrency(currency, badge.amount)}

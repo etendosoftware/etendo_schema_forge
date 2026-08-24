@@ -14,12 +14,23 @@ describe('payment-in ReactivarConfirmModal', () => {
   });
 
   it('accepts process/record props to route between modals and forward the record', () => {
-    assert.match(src, /\{\s*process\s*,\s*record\s*,\s*onConfirm\s*,\s*onClose\s*\}/);
+    assert.match(src, /process\s*,\s*record\s*,\s*onConfirm\s*,\s*onClose\s*,\s*apiBaseUrl\s*,\s*onRefresh/);
   });
 
-  it('routes aPRMProcessPayment to ConfirmPaymentModal with dir="in"', () => {
+  it('routes aPRMProcessPayment to the editable payment modal, not a yes/no dialog', () => {
+    // This window has no form of its own, so the old confirm dialog was the only thing a user who
+    // reactivated a payment could reach — and it could not change anything. Confirmar now opens the
+    // invoice's editor, which falls back to that dialog on its own when the invoice is unresolvable.
     assert.match(src, /process\?\.columnName === 'aPRMProcessPayment'/);
-    assert.match(src, /<ConfirmPaymentModal dir="in"/);
+    assert.match(src, /<PaymentEditModalLauncher/);
+    assert.match(src, /dir="in"/);
+    assert.doesNotMatch(src, /<ConfirmPaymentModal/);
+  });
+
+  it('forwards what the launcher needs to reach the API and refresh the window', () => {
+    // It never goes through handleProcess, so nothing else would reload the record afterwards.
+    assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
+    assert.match(src, /onRefresh=\{onRefresh\}/);
   });
 
   it('falls through to PaymentLifecycleConfirmModal with dir="in", action="reactivate", forwarding the record', () => {
@@ -28,7 +39,7 @@ describe('payment-in ReactivarConfirmModal', () => {
 
   it('imports both modal components from the shared window', () => {
     assert.match(src, /import PaymentLifecycleConfirmModal from '@\/windows\/custom\/shared\/PaymentLifecycleConfirmModal'/);
-    assert.match(src, /import ConfirmPaymentModal from '@\/windows\/custom\/shared\/ConfirmPaymentModal'/);
+    assert.match(src, /import PaymentEditModalLauncher from '@\/windows\/custom\/shared\/PaymentEditModalLauncher'/);
   });
 
 });

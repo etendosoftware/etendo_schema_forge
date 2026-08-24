@@ -346,7 +346,6 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
         trackTransactionPosted();
-        window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
       } catch (e) {
         setError(e.message || ui('poErrorOccurred'));
         setLoading(false);
@@ -422,6 +421,18 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     const finalInvoice = currentInvoice ?? invoiceResult;
     if (finalReceipt) result.receipt = finalReceipt;
     if (finalInvoice) result.invoice = finalInvoice;
+    // ETP-4779 — dispatch AFTER the receipt/invoice POSTs above have actually
+    // resolved (not right after Step 1's docAction=CO, as before). Dispatching
+    // immediately after Step 1 fired the event before createGoodsReceipt /
+    // createPurchaseInvoice even ran, so RelatedDocuments.jsx's refetch raced
+    // ahead of document creation, found nothing, and — since no later event
+    // fired to catch up — the "Documentos" panel stayed empty until some
+    // unrelated action (e.g. a later "Gestionar factura" call) happened to
+    // dispatch the event again. Only fire when a document actually exists to
+    // show, mirroring CreateDocsModal.handleCreate below.
+    if (finalReceipt || finalInvoice) {
+      window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
+    }
     onConfirmed(result);
   };
 
@@ -442,6 +453,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       const result = {};
       if (receiptResult) result.receipt = receiptResult;
       if (invoiceResult) result.invoice = invoiceResult;
+      // ETP-4779 — covers the partial-failure path: e.g. the receipt POST
+      // succeeded (receiptResult set) but the invoice POST then failed, and
+      // the user closes instead of retrying. handleConfirm's own dispatch
+      // (above) never runs in that case since it errors out first, so the
+      // successfully-created receipt would otherwise never notify
+      // RelatedDocuments.jsx.
+      if (receiptResult || invoiceResult) {
+        window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
+      }
       onConfirmed(result);
       return;
     }
@@ -462,9 +482,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
         {/* Blue summary card */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: 'var(--status-info-bg)' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
                 {bpName}
               </div>
             )}
@@ -473,13 +493,13 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
-              {' '}<span style={{ color: 'var(--status-info-bg)' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-fg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
               <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
                 {formatCurrency(currency, totalLines)}
               </span>
             </div>
-            <div style={{ borderRadius: 6, background: 'hsl(var(--card))', border: '1px solid var(--status-warning-bg)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>🔒</span>
               <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.4 }}>
                 {ui('poConfirmWarning')}
@@ -544,8 +564,8 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
         display: 'flex', alignItems: 'center', gap: 12,
         padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8,
         cursor: disabled ? 'default' : 'pointer',
-        border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--card))'),
-        background: disabled ? 'hsl(var(--card))' : (checked ? 'hsl(var(--card))' : 'hsl(var(--card))'),
+        border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))'),
+        background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
         opacity: disabled ? 0.85 : 1,
         transition: 'border-color 0.15s, background 0.15s',
       }}
@@ -561,8 +581,8 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
       </div>
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--card))',
-        background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
+        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+        background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
@@ -666,9 +686,9 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
         {/* Blue summary card — no warning since order is already confirmed */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: 'var(--status-info-bg)' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
                 {bpName}
               </div>
             )}
@@ -861,24 +881,24 @@ const overlayStyle = {
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: 'var(--status-info-bg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
+  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnCloneStyle = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   padding: '7px', borderRadius: 6,
-  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'var(--status-info-bg)', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
   boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 

@@ -336,10 +336,10 @@ describe('AccountsHeaderTable — columns', () => {
   it('takes the data columns from the contract grid definition, in gridOrder', () => {
     renderTable();
 
-    // contract.json → entities.account: name(1), type(2), currentBalance(3) and the
-    // `virtualFields[]` entry pendingCount(4).
-    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 4);
-    expect(dataKeys).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
+    // contract.json → entities.account: name(1), type(2), country(3, ETP-4896),
+    // currentBalance(4) and the `virtualFields[]` entry pendingCount(5).
+    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 5);
+    expect(dataKeys).toEqual(['name', 'type', 'country', 'currentBalance', 'pendingCount']);
   });
 
   it('appends exactly one synthetic column after the contract ones', () => {
@@ -348,7 +348,7 @@ describe('AccountsHeaderTable — columns', () => {
     // Only `_rowActions` is hand-written: its declarative equivalent
     // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'type', 'currentBalance', 'pendingCount', '_rowActions',
+      'name', 'type', 'country', 'currentBalance', 'pendingCount', '_rowActions',
     ]);
   });
 

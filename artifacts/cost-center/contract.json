@@ -1,0 +1,538 @@
+{
+  "version": "0.3.0",
+  "generatedAt": "2026-08-13T18:05:12.953Z",
+  "updatedAt": "2026-08-13T18:36:29.182Z",
+  "checksum": "89386212b4f8a290",
+  "frontendContract": {
+    "window": {
+      "id": "79FC23AB84F04384B4B7CCCADCDD2942",
+      "name": "Cost Center",
+      "primaryEntity": "costCenter",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "labelOverrides": {
+        "es_ES": {
+          "Isactive": "Activo"
+        },
+        "es_AR": {
+          "Isactive": "Activo"
+        }
+      },
+      "noHeaderBorder": true,
+      "layoutType": "default"
+    },
+    "entities": {
+      "costCenter": {
+        "tableName": "C_Costcenter",
+        "tabId": "2DBFD0E6ACF444D0BDAA29269B80E455",
+        "tabName": "Cost Center",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "textarea",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "seq": 3,
+            "span": 2,
+            "rows": 1,
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          }
+        ],
+        "searchableFields": [
+          "searchKey",
+          "name"
+        ],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "79FC23AB84F04384B4B7CCCADCDD2942",
+      "name": "Cost Center",
+      "primaryEntity": "costCenter",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "labelOverrides": {
+        "es_ES": {
+          "Isactive": "Activo"
+        },
+        "es_AR": {
+          "Isactive": "Activo"
+        }
+      },
+      "noHeaderBorder": true
+    },
+    "entities": {
+      "costCenter": {
+        "tableName": "C_Costcenter",
+        "tabId": "2DBFD0E6ACF444D0BDAA29269B80E455",
+        "tabName": "Cost Center",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "textarea",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "Issummary",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Costcenter_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/costCenter",
+        "entity": "costCenter",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/costCenter/:id",
+        "entity": "costCenter",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/costCenter",
+        "entity": "costCenter",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/costCenter/:id",
+        "entity": "costCenter",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/costCenter/:id",
+        "entity": "costCenter",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "cost-center",
+    "baseUrl": "/sws/neo/cost-center",
+    "crud": {
+      "costCenter": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/cost-center/costCenter",
+        "detailUrl": "/sws/neo/cost-center/costCenter/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Isactive": "Activo"
+      },
+      "es_AR": {
+        "Isactive": "Activo"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-costCenter",
+        "category": "crud-flags",
+        "entity": "costCenter",
+        "runner": "node",
+        "description": "CRUD flags for 'costCenter' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-costCenter-active",
+        "category": "default-value-type",
+        "entity": "costCenter",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in costCenter should be a string"
+      },
+      {
+        "id": "t-field-presence-costCenter-active",
+        "category": "field-presence",
+        "entity": "costCenter",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in costCenter"
+      },
+      {
+        "id": "t-field-presence-costCenter-description",
+        "category": "field-presence",
+        "entity": "costCenter",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in costCenter"
+      },
+      {
+        "id": "t-field-presence-costCenter-name",
+        "category": "field-presence",
+        "entity": "costCenter",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in costCenter"
+      },
+      {
+        "id": "t-field-presence-costCenter-searchKey",
+        "category": "field-presence",
+        "entity": "costCenter",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in costCenter"
+      },
+      {
+        "id": "t-field-type-costCenter-active",
+        "category": "field-type",
+        "entity": "costCenter",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in costCenter"
+      },
+      {
+        "id": "t-field-type-costCenter-description",
+        "category": "field-type",
+        "entity": "costCenter",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in costCenter"
+      },
+      {
+        "id": "t-field-type-costCenter-name",
+        "category": "field-type",
+        "entity": "costCenter",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in costCenter"
+      },
+      {
+        "id": "t-field-type-costCenter-searchKey",
+        "category": "field-type",
+        "entity": "costCenter",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in costCenter"
+      },
+      {
+        "id": "t-rule-declared-cost-center-Cost-Center-C-Costcenter-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "cost-center-Cost Center-C_Costcenter_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'cost-center-Cost Center-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-costCenter-name",
+        "category": "searchable-filters",
+        "entity": "costCenter",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for costCenter"
+      },
+      {
+        "id": "t-searchable-filters-costCenter-searchKey",
+        "category": "searchable-filters",
+        "entity": "costCenter",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-client",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-createdBy",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-creationDate",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-id",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-organization",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-summaryLevel",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-updated",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-system-field-costCenter-updatedBy",
+        "category": "system-field",
+        "entity": "costCenter",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for costCenter"
+      },
+      {
+        "id": "t-visibility-costCenter",
+        "category": "visibility",
+        "entity": "costCenter",
+        "runner": "node",
+        "description": "Entity 'costCenter' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 22,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 1,
+        "field-presence": 4,
+        "field-type": 4,
+        "rule-declared": 1,
+        "searchable-filters": 2,
+        "system-field": 8,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 22,
+        "junit": 0
+      }
+    }
+  }
+}

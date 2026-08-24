@@ -1,7 +1,6 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -14,6 +13,7 @@ import {
   isEtendoTrue,
   normalizeEtendoBoolean,
   normalizeVerifactuTaxType,
+  parseApiError,
   VERIFACTU_TAX_TYPE_OPTIONS,
 } from './fiscalConfig.utils.js';
 
@@ -37,7 +37,9 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
 
   const [form, setForm] = useState({
     tAXType:   normalizeVerifactuTaxType(record?.tAXType) ?? '',
-    defaultQR: normalizeEtendoBoolean(record?.defaultQR),
+    // ETP-4783: preserve the DB value so the PUT never overrides what the user
+    // set in Classic. Falls back to 'Y' only when the record has no value at all.
+    defaultQR: normalizeEtendoBoolean(record?.defaultQR ?? 'Y'),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -67,10 +69,11 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildVerifactuUpdatePayload(form)),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);
@@ -109,14 +112,6 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
                 ))}
               </select>
             )}
-          </div>
-          <div className="flex items-center gap-2 pb-1">
-            <Switch
-              checked={isEtendoTrue(form.defaultQR)}
-              onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
-              disabled={isLocked}
-              data-testid="Switch__e30816" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.verifactu.field.qr')}</span>
           </div>
         </div>
       </SectionRow>
