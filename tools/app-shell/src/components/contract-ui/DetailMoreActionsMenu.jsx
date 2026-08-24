@@ -68,15 +68,18 @@ export function DetailMoreActionsMenu({
   if (visibleActions.length === 0 && !hasCustomContent) return null;
   const currentId = data?.id || recordId;
   const runDocumentAction = async (action) => {
-    // ETP-4783: Flush any pending header edits before running the document action
-    // so the server sees the latest field values. Without this, fields that are
-    // intentionally editable on a completed document (e.g. aeatsiiErrorRegistral)
-    // cannot be saved — the "Guardar" button is disabled for completed invoices —
-    // and the DB-level doc-action validator reads the stale value and blocks the
-    // action. Mirrored from the maybeSaveBeforeProcess pattern (ETP-4542).
-    if (hook?.isDirtyHeader) {
-      const saved = await hook.handleSave?.({ silent: true });
-      if (!saved) return false;
+    // ETP-4783 / ETP-4940: Flush any pending header edit before running the document
+    // action (Complete/Void/etc., and before any preUnpost) so the server sees the
+    // latest field values. Without this, fields that are intentionally editable on a
+    // completed document (e.g. aeatsiiErrorRegistral) cannot be saved — the "Guardar"
+    // button is disabled for completed invoices — and the DB-level doc-action validator
+    // reads the stale value and blocks the action; for windows without draftMode, an
+    // edit made without clicking Save first was also silently discarded, the action
+    // running against the last-persisted value. Mirrored from the maybeSaveBeforeProcess
+    // pattern (ETP-4542). handleSave already surfaced the error on failure — abort
+    // without running preUnpost or the action.
+    if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
+      return false;
     }
     if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
       const unpostResult = await neoAction.execute(currentId, 'unpost');
@@ -84,14 +87,6 @@ export function DetailMoreActionsMenu({
         toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
         return false;
       }
-    }
-    // ETP-4940 — this kebab-menu documentAction path (Complete/Void/etc. for windows
-    // without draftMode) used to fire docAction.execute directly, with zero dirty-state
-    // check: an edit made without clicking Save first was silently discarded, the action
-    // running against the last-persisted value. Persist any pending header edit first;
-    // handleSave already surfaced the error on failure — abort without running the action.
-    if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
-      return false;
     }
     try {
       await docAction.execute(currentId, action.documentAction);
