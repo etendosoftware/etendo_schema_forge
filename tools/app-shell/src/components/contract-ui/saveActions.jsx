@@ -109,7 +109,7 @@ function renderDraftModeSaveActions({
 }) {
   return (
     <>
-      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+      <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -122,7 +122,7 @@ function renderDraftModeSaveActions({
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
-      <GateTooltip title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
+      <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
         {ui(draftMode.label) || draftMode.label || ui('process')}
       </Button></GateTooltip>
@@ -181,7 +181,7 @@ function renderNewRecordSaveActions({
   const saveCls = hasExternalPrimaryAction ? `${saveBtnCls} ${SECONDARY_SAVE_CLS}` : saveBtnCls;
   return (
     <>
-      <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(hasExternalPrimaryAction ? { variant: 'outline' } : {})} size="default" className={saveCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+      <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(hasExternalPrimaryAction ? { variant: 'outline' } : {})} size="default" className={saveCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
         if (!(await flushPendingLines())) return;
         const saved = await hook.handleSave(data);
         if (saved?.id && isNew) {
@@ -196,7 +196,7 @@ function renderNewRecordSaveActions({
         {ui('save')}
       </Button></GateTooltip>
       {!isProcessed && hook.children.length > 0 && (
-        <GateTooltip title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={async () => {
+        <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={async () => {
           if (!(await flushPendingLines())) return;
           const saved = await hook.handleSaveAndProcess(draftMode);
           await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
@@ -219,7 +219,7 @@ function renderExistingRecordSaveAction({
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
 }) {
   return (
-    <GateTooltip title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
