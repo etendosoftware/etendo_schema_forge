@@ -12,7 +12,7 @@ export function useOrderPdf(orderId, apiBaseUrl, currencyData = null, cacheConfi
     colQty:          ui('orderPdfColQty'),
   });
   const buildSalesOrderData = useCallback(
-    (recordId, base, tk) => buildOrderData('sales-order', recordId, base, tk, currencyData),
+    (recordId, base) => buildOrderData('sales-order', recordId, base, currencyData),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );

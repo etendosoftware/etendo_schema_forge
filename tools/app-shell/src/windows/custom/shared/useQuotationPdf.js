@@ -90,7 +90,7 @@ export function useQuotationPdf(quotationId, apiBaseUrl, currencyData = null, ca
     colQty:          ui('quotationPdfColQty'),
   });
   const buildData = useCallback(
-    (recordId, base, tk) => buildQuotationData(recordId, base, tk, currencyData),
+    (recordId, base) => buildQuotationData(recordId, base, currencyData),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );

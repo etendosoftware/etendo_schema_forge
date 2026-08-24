@@ -12,7 +12,7 @@ export function usePurchaseOrderPdf(orderId, apiBaseUrl, currencyData = null, ca
     colQty:          ui('orderPdfColQty'),
   });
   const buildPurchaseOrderData = useCallback(
-    (recordId, base, tk) => buildOrderData('purchase-order', recordId, base, tk, currencyData),
+    (recordId, base) => buildOrderData('purchase-order', recordId, base, currencyData),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
