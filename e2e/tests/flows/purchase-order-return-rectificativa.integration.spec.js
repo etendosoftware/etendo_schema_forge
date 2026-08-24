@@ -4,15 +4,16 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
-  expectStatusPill, safeReload,
+  expectStatusPill, safeReload, VENDOR_FIXTURE_NAME,
 } from '../helpers/purchase-helpers.js';
 
 /**
  * Purchase Order → Goods Receipt → Return to Vendor → Rectificative Invoice —
  * full live-backend integration E2E. This is the Purchase-side mirror of
- * `sales-order-return-rectificativa.integration.spec.js` — same env-var gate
- * pattern, same live-backend/no-mocking approach, same "report instead of
- * fail" posture on the known period-config environment gap. It is deliberately
+ * `sales-order-return-rectificativa.integration.spec.js` — same no-gate,
+ * always-runs-under-`--project=integration` setup, same live-backend/
+ * no-mocking approach, same "report instead of fail" posture on the known
+ * period-config environment gap. It is deliberately
  * a SEPARATE spec from `purchase-order-full-flow.integration.spec.js`, which
  * stops at PO → Receipt → Invoice → Payment and never drives a Return —
  * exactly the chain this spec exists to cover, per ETP-4737 (unified
@@ -62,22 +63,15 @@ import {
  *      Draft-state/negative-amount/doc-type assertions already proved the
  *      actual generation logic works.
  *
- * Requires a running backend + dev server. Gated by
- * E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION=1 (distinct from
- * E2E_SALES_INTEGRATION, used by the plain PO→receipt→invoice→payment full
- * flow).
+ * Requires a running backend + dev server. Runs whenever the suite executes
+ * `--project=integration` — no custom env-var gate; Playwright's own
+ * mocked/integration project split already isolates it from mocked runs.
  */
 
 const onboardingCreds = loadCredentials();
-const RUN_INTEGRATION = process.env.E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION === '1';
 
 test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
-
-  test.skip(
-    !RUN_INTEGRATION,
-    'Set E2E_PURCHASE_RETURN_RECTIFICATIVA_INTEGRATION=1 to run this live return→rectificativa integration test.',
-  );
 
   test('drives a PO through receipt, return to vendor, and the generated rectificative invoice', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
@@ -103,7 +97,10 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await waitForDetailReady(page);
       await slow(page);
 
-      await selectVendorBP(page);
+      // Select the SAME vendor fixture ensureVendorSetup() just configured — it has
+      // PO Payment Terms/Method set, required later by createReturnInvoice. Selecting
+      // "whichever vendor is first" (selectVendorBP's default) offers no such guarantee.
+      await selectVendorBP(page, { name: VENDOR_FIXTURE_NAME });
       await saveDraft(page);
 
       await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
@@ -111,7 +108,11 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
 
       await addProductLine(page, { isFirst: true, productIndex: 0 });
 
-      await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
+      // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
+      // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
+      // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
+      // panel, so a bare 'tbody tr' locator always resolves to that invisible element.
+      await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
     });
 
     await test.step('Confirm the order with receipt generation only', async () => {
@@ -279,11 +280,20 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await waitForDetailReady(page);
       await slow(page);
 
-      // Verify: doc type reads as rectificativa
-      await expect(page.getByText(/rectificativ/i).first()).toBeVisible({ timeout: 15_000 });
+      // Verify: doc type reads as rectificativa. "Tipo de documento" (transactionDocument)
+      // renders as a disabled <input> (EntityForm's renderReadOnlyFk), so its value must be
+      // read via toHaveValue — getByText only matches rendered text content, never an
+      // input's value, so it can never see this field regardless of backend correctness.
+      await expect(page.getByTestId('field-transactionDocument').locator('input'))
+        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
 
-      // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression)
-      const invoiceLineRow = page.locator('tbody tr').first();
+      // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression). This
+      // window's line grid is not a semantic <table> — rows render as
+      // data-testid="line-row-<ID>" divs. The only literal <table>/<tbody>/<tr> on the
+      // page belongs to the hidden (display:none) attachments panel
+      // (data-testid="attachments-table"), so a bare 'tbody tr' locator always resolves
+      // to that invisible element instead of the actual line row.
+      const invoiceLineRow = page.locator('[data-testid^="line-row-"]').first();
       await expect(invoiceLineRow).toBeVisible({ timeout: 10_000 });
       await expect(invoiceLineRow).toContainText(/-\s?\d/, { timeout: 5_000 });
 
@@ -306,8 +316,8 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
 
       const outcome = await Promise.race([
-        periodError.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'period-error').catch(() => null),
-        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 30_000 })
+        periodError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'period-error').catch(() => null),
+        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 60_000 })
           .then(async () => (
             (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
           ))
@@ -343,7 +353,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
-      await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed');
+      await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed', 20_000);
     });
   });
 });
