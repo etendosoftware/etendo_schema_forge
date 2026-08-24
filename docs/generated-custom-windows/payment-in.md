@@ -165,6 +165,28 @@ plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Ch
 added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
 already used by the `draftMode` Confirm button elsewhere in the app.
 
+**Draft banner gating (ETP-4895).** `PaymentDraftBanner.jsx` no longer keeps its own copy of the
+deposited-status list and no longer reasons by elimination ("not deposited, therefore a draft"),
+which announced "Borrador — sin impacto en caja" on a rejected `ETGOERR` payment. It gates on the
+shared `paymentDisplayState` rule instead, with `RPAE` kept as a draft here — as it already was, and
+as `PaymentDetailSidebarBase` reads it for collections. Collections cannot reach `ETGOERR` today
+(PIS is payments-out only), so this is alignment rather than a visible fix on this window; the
+behavior it corrects is documented in `payment-out.md`.
+
+**Toolbar order actually shipped (ETP-4895).** The `saveBeforeProcesses` key above never reached the
+UI: the published `schema_forge_core` still drops it in `resolve-curated.js`'s window-key whitelist,
+so it is absent from `contract.json` and from the generated page, and the toolbar kept rendering
+**Confirmar** to the left of **Guardar**. Rather than block on a core publish, `DetailView.jsx` now
+takes a presentational `saveActionsFirst` prop — order only, defaulting to `saveBeforeProcesses` so
+no existing window changes — and both payment windows pass it from a thin custom wrapper:
+`tools/app-shell/src/windows/custom/payment-out/index.jsx` and the new
+`tools/app-shell/src/windows/custom/payment-in/index.jsx` (registered in
+`tools/app-shell/src/windows/registry.js`; `payment-in` had no custom wrapper before). Save now
+renders to the left and **Confirmar** is the right-most button. The windows deliberately do NOT opt
+into `saveBeforeProcesses` itself — they only want the order, not the flush-pending-edits-before-
+running-the-process behavior. When the core key does land, it will imply the same order and the
+wrapper prop becomes redundant rather than conflicting.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the

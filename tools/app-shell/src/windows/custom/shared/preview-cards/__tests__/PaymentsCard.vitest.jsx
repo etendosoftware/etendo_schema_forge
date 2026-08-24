@@ -47,6 +47,22 @@ describe('PaymentsCard', () => {
     expect(onAddPayment).toHaveBeenCalledTimes(1);
   });
 
+  it('shows an inert add-payment label when the drafts already reserve the outstanding', () => {
+    const onAddPayment = vi.fn();
+    render(
+      <PaymentsCard
+        addPaymentBlockedByDraft
+        onAddPayment={onAddPayment}
+        payments={[]}
+        totalOutstanding={100}
+      />,
+    );
+    const label = screen.getByText('previewCardAddPayment');
+    expect(label).toHaveAttribute('title', 'cpAddPaymentBlockedByDraft');
+    fireEvent.click(label);
+    expect(onAddPayment).not.toHaveBeenCalled();
+  });
+
   it('shows check icon when isFullyPaid=true and canAddPayment=false', () => {
     const { container } = render(<PaymentsCard isFullyPaid payments={[]} totalOutstanding={0} />);
     // Check icon from lucide renders as svg
@@ -205,6 +221,30 @@ describe('PaymentsCard', () => {
       const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'DR' }];
       render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
       expect(screen.getByText('statusDraft')).toBeInTheDocument();
+    });
+
+    it('shows a bank transfer the bank only authorized as in progress, not deposited (ETP-4895)', () => {
+      // This card and the invoice's payment modal are fed by the same invoicePayments action, so
+      // they see the identical row — yet this one used to read "Depositado" for a transfer the
+      // modal was already reporting as "Pago en progreso".
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'PPM', processed: true, viaPis: true, pisPending: true }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByTestId('payments-card-state-in-progress')).toHaveTextContent('cpPaymentStateInProgress');
+      expect(screen.queryByText('statusDeposited')).toBeNull();
+    });
+
+    it('goes back to deposited once the transfer is executed and the bank transaction exists', () => {
+      // Core moves the payment off PPM to PWNC when the withdrawal is recorded, so no extra
+      // signal is needed for the reverse direction.
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'PWNC', processed: true, viaPis: true, pisPending: false }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByText('statusDeposited')).toBeInTheDocument();
+    });
+
+    it('shows a rejected bank transfer as an error', () => {
+      const payments = [{ id: '1', amount: 10, paymentDate: '2026-01-01', documentNo: 'DOC-1', status: 'ETGOERR' }];
+      render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+      expect(screen.getByTestId('payments-card-state-error')).toHaveTextContent('cpPaymentStateError');
     });
   });
 

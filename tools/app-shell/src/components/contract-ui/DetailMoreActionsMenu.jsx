@@ -68,6 +68,16 @@ export function DetailMoreActionsMenu({
   if (visibleActions.length === 0 && !hasCustomContent) return null;
   const currentId = data?.id || recordId;
   const runDocumentAction = async (action) => {
+    // ETP-4783: Flush any pending header edits before running the document action
+    // so the server sees the latest field values. Without this, fields that are
+    // intentionally editable on a completed document (e.g. aeatsiiErrorRegistral)
+    // cannot be saved — the "Guardar" button is disabled for completed invoices —
+    // and the DB-level doc-action validator reads the stale value and blocks the
+    // action. Mirrored from the maybeSaveBeforeProcess pattern (ETP-4542).
+    if (hook?.isDirtyHeader) {
+      const saved = await hook.handleSave?.({ silent: true });
+      if (!saved) return false;
+    }
     if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
       const unpostResult = await neoAction.execute(currentId, 'unpost');
       if (!unpostResult.success) {

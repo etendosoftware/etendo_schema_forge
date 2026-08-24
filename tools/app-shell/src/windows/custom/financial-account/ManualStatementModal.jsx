@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
@@ -258,7 +259,7 @@ function LinesHeader({ ui }) {
 }
 
 /** A statement line — always inline-editable, cell by cell (no edit/display toggle). */
-function EditRow({ row, onChange, onRemove, ui, currencySym }) {
+function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSide = true }) {
   const set = (field) => (e) => onChange(row.id, field, e.target.value);
   const setVal = (field) => (value) => onChange(row.id, field, value);
   const amountCell = (field, testId) => (
@@ -266,8 +267,9 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
       <input
         type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
         placeholder={ui('financeAccountAmountPlaceholder')}
-        className={cn(cellAmount, 'pr-7')} data-testid={testId} />
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]">
+        className={cn(cellAmount, currencySymRightSide ? 'pr-7' : 'pl-7')} data-testid={testId} />
+      <span
+        className={`pointer-events-none absolute ${currencySymRightSide ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]`}>
         {currencySym}
       </span>
     </div>
@@ -333,7 +335,7 @@ function LineEditHint({ ui }) {
   );
 }
 
-function EditableLines({ rows, setRows, ui, currencySym }) {
+function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide }) {
   // The row whose cell currently has focus — drives the inline keyboard hint.
   const [focusedId, setFocusedId] = useState(null);
 
@@ -376,6 +378,7 @@ function EditableLines({ rows, setRows, ui, currencySym }) {
               onRemove={remove}
               ui={ui}
               currencySym={currencySym}
+              currencySymRightSide={currencySymRightSide}
               data-testid="EditRow__6b4086" />
             {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
           </div>
@@ -577,6 +580,8 @@ export function ManualStatementModal({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const money = useMemo(() => makeMoneyFormatter(accountCurrency), [accountCurrency, bcpLocale]);
   const currencySym = useMemo(() => getCurrencySymbol(accountCurrency), [accountCurrency]);
+  // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
+  const currencySymRightSide = isCurrencySymbolRightSide(accountCurrency);
 
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
@@ -735,6 +740,7 @@ export function ManualStatementModal({
               setRows={setRowsDirty}
               ui={ui}
               currencySym={currencySym}
+              currencySymRightSide={currencySymRightSide}
               data-testid="EditableLines__6b4086" />
           </div>
 

@@ -94,3 +94,7 @@ flag-debt.html
 # push-to-neo --dump-delta diagnostic output (derived mirror, never committed)
 artifacts/*/neo-delta.json
 e2e/.auth-credentials-*.json
+
+# Brainstorming / downtime plans — never versioned. Move a draft up to
+# docs/plans/ when it graduates into real work.
+docs/plans/drafts/
