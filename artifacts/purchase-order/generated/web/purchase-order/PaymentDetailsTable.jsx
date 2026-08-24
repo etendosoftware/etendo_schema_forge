@@ -8,7 +8,7 @@ const columns = [
   { key: 'paymentMethod', column: 'Fin_Paymentmethod_ID', type: 'selector', label: 'Payment Method' },
   { key: 'expected', column: 'Expected', type: 'amount', label: 'Expected Amount' },
   { key: 'paidAmount', column: 'Paidamt', type: 'amount', label: 'Paid Amount', required: true },
-  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc' }, required: true },
+  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' }, required: true },
 ];
 // @sf-generated-end columns:paymentDetails
 
