@@ -282,8 +282,6 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 11. Click a Pending (PE) status pill on an SII row — confirm `InvoicePreviewModal` opens. Click a Pending (Pendiente) status pill on a TBAI row — confirm the same modal opens for that invoice.
 12. In the debug panel, select TBAI (or SII+TBAI) and enable mock data — confirm rows `t4` and `t8` (Rechazado) and `t6` (Error) show red error-reason text below the status pill, with `t8` showing two lines. Confirm accepted (`Recibido`) and pending rows show no error text.
 
-
-
 ## Automated evidence
 
 - `artifacts/fiscal-monitor/decisions.json` — `layoutType: "custom"`, window registered.
