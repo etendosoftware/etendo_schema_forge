@@ -628,6 +628,23 @@ report-stop: ## Stop jsreport Docker container
 report-preview: ## Preview Business Partner listing report
 	$(SF) sf-report-preview --artifact business-partner --report listing
 
+# report-server is the deployed service behind POST /api/reports/:id/render. It
+# needs server.js from schema_forge_core AND artifacts/ + templates/ from here,
+# so neither repo can build it alone. See scripts/assemble-report-server-context.sh
+# and docs/ops/cloudfront-alb-routing.md.
+REPORT_SERVER_CTX ?= .report-server-context
+CORE_DIR ?= ../schema_forge_core
+
+report-server-context: ## Assemble the report-server Docker build context (CORE_DIR=, REPORT_SERVER_CTX=)
+	CORE_DIR=$(CORE_DIR) ./scripts/assemble-report-server-context.sh $(REPORT_SERVER_CTX) --clean
+
+report-server-image: report-server-context ## Build the report-server image locally (TAG=report-server:local)
+	docker build -f $(REPORT_SERVER_CTX)/tools/report-server/Dockerfile \
+		-t $(or $(TAG),report-server:local) $(REPORT_SERVER_CTX)
+
+report-server-verify: report-server-image ## Build, boot the image and assert the current artifacts are inside it
+	@./scripts/verify-report-server-image.sh $(or $(TAG),report-server:local)
+
 # --- Static Analysis (SonarQube) ---
 
 sonar: ## Run SonarQube analysis on Schema Forge JS/JSX code
