@@ -24,7 +24,7 @@
         "es_ES": "Clave"
       },
       "type": "string",
-      "width": "15%",
+      "width": "12%",
       "sortable": true
     },
     {
@@ -34,7 +34,7 @@
         "es_ES": "Producto"
       },
       "type": "string",
-      "width": "30%",
+      "width": "22%",
       "sortable": true
     },
     {
@@ -44,24 +44,24 @@
         "es_ES": "UdM"
       },
       "type": "string",
-      "width": "10%",
+      "width": "8%",
       "sortable": true
     },
     {
       "field": "qtyOnHand",
       "label": {
         "en_US": "Qty on Hand",
-        "es_ES": "Cantidad"
+        "es_ES": "Stock Disponible"
       },
       "type": "amount",
-      "width": "15%",
+      "width": "14%",
       "sortable": true
     },
     {
       "field": "unitCost",
       "label": {
         "en_US": "Unit Cost",
-        "es_ES": "Costo Unitario"
+        "es_ES": "Coste Unitario"
       },
       "type": "amount",
       "width": "12%",
@@ -71,10 +71,30 @@
       "field": "totalValuation",
       "label": {
         "en_US": "Total Valuation",
-        "es_ES": "Valorizacion Total"
+        "es_ES": "Valoración"
       },
       "type": "amount",
       "width": "18%",
+      "sortable": true
+    },
+    {
+      "field": "warehouse",
+      "label": {
+        "en_US": "Warehouse",
+        "es_ES": "Almacen"
+      },
+      "type": "string",
+      "width": "14%",
+      "sortable": true
+    },
+    {
+      "field": "category",
+      "label": {
+        "en_US": "Category",
+        "es_ES": "Categoría"
+      },
+      "type": "string",
+      "width": "14%",
       "sortable": true
     }
   ],
@@ -88,6 +108,22 @@
     }
   ],
   "filters": [],
+  "sections": [
+    {
+      "id": "alcance",
+      "label": {
+        "en_US": "Scope",
+        "es_ES": "Alcance"
+      }
+    },
+    {
+      "id": "agrupacion",
+      "label": {
+        "en_US": "Grouping",
+        "es_ES": "Agrupación"
+      }
+    }
+  ],
   "parameters": [
     {
       "name": "M_Product_ID",
@@ -97,7 +133,11 @@
       },
       "type": "search",
       "selector": "product",
-      "multi": true
+      "multi": true,
+      "inputStyle": "popup",
+      "section": "alcance",
+      "groupByValue": "product",
+      "groupByField": "product"
     },
     {
       "name": "M_Warehouse_ID",
@@ -108,7 +148,44 @@
       "type": "search",
       "selector": "warehouse",
       "multi": true,
-      "inputStyle": "dropdown"
+      "inputStyle": "popup",
+      "section": "alcance",
+      "groupByValue": "warehouse",
+      "groupByField": "warehouse"
+    },
+    {
+      "name": "M_Product_Category_ID",
+      "label": {
+        "en_US": "Category",
+        "es_ES": "Categoría"
+      },
+      "type": "search",
+      "selector": "product-category",
+      "multi": true,
+      "inputStyle": "popup",
+      "section": "alcance",
+      "groupByValue": "category",
+      "groupByField": "category"
+    },
+    {
+      "name": "includeZeroStock",
+      "label": {
+        "en_US": "Include products without stock",
+        "es_ES": "Incluir productos sin stock"
+      },
+      "type": "toggle",
+      "default": false,
+      "section": "alcance"
+    },
+    {
+      "name": "groupBy",
+      "label": {
+        "en_US": "Group results by",
+        "es_ES": "Agrupar por"
+      },
+      "type": "select",
+      "default": "warehouse",
+      "section": "agrupacion"
     }
   ],
   "defaultSort": {

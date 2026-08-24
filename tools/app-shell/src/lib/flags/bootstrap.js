@@ -87,7 +87,7 @@ export function buildEvaluationContext({ username, clientId, accountId, accountE
 
 /**
  * Parses `VITE_FEATURE_FLAGS` — a JSON map of flag key to boolean, e.g.
- * `{"tenant-upgrade":true}`. Returns an empty map when unset or malformed, so
+ * `{"proof-of-concept-menu":true}`. Returns an empty map when unset or malformed, so
  * a bad value degrades to the declared defaults instead of breaking startup.
  */
 export function parseFlagConfig(raw, logger = console) {

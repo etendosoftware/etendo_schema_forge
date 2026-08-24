@@ -15,25 +15,11 @@
   "features": [
     {
       "id": "paid-second-tenant",
-      "description": "Gates the paid upgrade flow that turns a trial account into a second, productive tenant: the frontend entry point plus the backend paywall that authorises it.",
+      "description": "The paid upgrade flow that turns a trial account into a productive environment — a new one or the one it is already in: the frontend entry point plus the backend paywall that authorises it and the plan marker that records it. Shipped unconditionally; no longer gated.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-4686",
       "created": "2026-07-27",
-      "flag": {
-        "key": "tenant-upgrade",
-        "defaultValue": false,
-        "ttl": "2026-10-25",
-        "ttlNote": "PLACEHOLDER — created + 90 days. Nobody has committed to this sunset date yet; the flag owner must replace it with the real removal target.",
-        "symbols": [
-          "tenant-upgrade",
-          "TENANT_UPGRADE",
-          "etendo.go.flags.tenant-upgrade",
-          "ETGO_FLAG_TENANT_UPGRADE",
-          "UpgradePage",
-          "lib/upgrade"
-        ],
-        "$symbolsComment": "Grep terms that find every reference to this flag. The last two are needed because a touch point may reach the flag's code without naming the flag: runtime-routes.jsx only lazy-imports UpgradePage."
-      },
+      "$flagRetiredComment": "SHIPPED — the `flag` object was removed in ETP-4966, not the entry: the feature keeps scoring its paths, specs and open items. `tenant-upgrade` did not retire because its TTL came due; it retired because it caused an incident. The browser resolved the key through ConfigCat while the backend resolved it through local properties that were unset in experimental, staging and production, so the checkout was offered and the payment was then ignored — a charged account received a Demo environment with no error anywhere. The capability is now unconditional and cannot be switched off. Re-grepped after removal: the only remaining matches of the old symbols are the `menu-tenant-upgrade` test id, the e2e spec filename, and comments that record the retirement.",
       "paths": {
         "frontend": [
           "tools/app-shell/src/lib/upgrade/",
@@ -44,12 +30,12 @@
         ]
       },
       "$pathsComment": "Owned paths only — code that exists because this flag exists and is deleted with it. src/com/etendoerp/go/rest/EtendoGoJwtServlet.java is a touch point, not owned.",
-      "$knownGapComment": "USER-ACCEPTED VISIBLE DEBT (scorecard demo). src/com/etendoerp/go/payment/TenantPlanService.java. markProductive: zero coverage — the paid-plan marker is entirely unexercised. resolvePlan: only the exception-swallow path executes (returns 'free' on failure); every distinguishing path (preference found productive/other, null query, blank-clientId guard) is untested. The only covered branch is the one that hides failures — exactly how a paying tenant would silently appear free. Coverage arrives transitively, not deliberately: EtendoGoJwtDalHelper holds a static TenantPlanService (line 72), so EtendoGoJwtDalHelperTest.BuildEnvironmentJson calls resolvePlan, its unstubbed Preference query NPEs into the catch, and reportsFreePlanWithoutMarker asserts the resulting 'free'. The unit spec below is declared acceptedDebt and is intentionally not being written, so this flag carries a per-item tests penalty on purpose rather than reading as a clean sheet. Asserting the AD_Preference persistence itself stays integration scope and is NOT what the deferred unit spec would cover.",
+      "$knownGapComment": "CLOSED in ETP-4966 — recorded here because the prediction was exact and the cost was real. The accepted debt read: 'markProductive: zero coverage… The only covered branch is the one that hides failures — exactly how a paying tenant would silently appear free.' That is verbatim the defect that was later reported from production: an account paid through Stripe and its environment stayed badged Demo. TenantPlanServiceTest now exists and covers markProductive (write, blank tenant, missing tenant, failed write) and resolvePlan (marker present, other value, absent, blank id, lookup failure), plus the write/read agreement on AD_Preference.Attribute whose silent divergence produces the same symptom. Asserting the AD_Preference persistence against a real database remains integration scope and is still not covered here.",
       "deferredItems": [
         {
           "id": "targeting-key-divergence",
           "kind": "precondition",
-          "note": "The two ends bucket users on different identities: the frontend sends localStorage.sf_auth_user (the ERP admin username) as OpenFeature's targetingKey, while the backend targets the account email. Harmless today because the local InMemoryProvider ignores the targeting key entirely, and a CORRECTNESS BLOCKER the moment a targeting-aware control plane lands — wiring Mixpanel first would bake per-user bucketing divergence into live rollouts, where it is invisible in aggregate. Must be closed BEFORE the swap, not after.",
+          "note": "The two ends bucket users on different identities: the frontend sends localStorage.sf_auth_user (the ERP admin username) as OpenFeature's targetingKey, while the backend targets the account email. It no longer affects THIS feature — ETP-4966 retired its flag, so there is nothing left for the two ends to disagree about — but it remains a CORRECTNESS BLOCKER for the next targeting-aware control plane: wiring Mixpanel with this open would bake per-user bucketing divergence into live rollouts, where it is invisible in aggregate. Kept on this entry because this is where the trap was discovered, and because ETP-4966 is the proof that a flag whose two ends read different control planes fails silently and expensively. Must be closed BEFORE the swap, not after.",
           "refs": [
             "docs/feature-flags.md — 'Open: targeting keys do not match'",
             "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — section 'Targeting key — OPEN, must be settled before a targeting-aware provider lands', and Mixpanel migration checklist step 4 (commit bd068495)"
@@ -58,7 +44,7 @@
         {
           "id": "real-payment-readiness",
           "kind": "precondition",
-          "note": "The paid flow is a mock: MockPaymentService checks the token's SHAPE, nothing is charged, and no gateway exists. The components split by TRIGGER. Gateway-triggered — gap-replay, gap-check-then-act, gap-payment-provisioning-atomicity, and qa-in-flight-submit-guard — are latent until money is real (the last one can already duplicate a tenant, but only by script; a human double-click cannot reach it). Flag-on — qa-navigation-guard, qa-clientname-unbounded and qa-session-expiry-reported-late — bite as soon as the flag is enabled for anyone, gateway or not: they are UX and validation defects in a flow users can complete today. Bundled because they share one owner decision and one review moment, not because they share a trigger. PROMOTION CONDITION (Alex, review of a7cb81333): if the flag ever pilots before a gateway exists, the three flag-on components must be promoted to their own deferredItem — at that point they are scheduled work, not part of the real-payments decision, and the bundle-a-theme-split-a-schedule rule applies.",
+          "note": "THE TRIGGER HAS FIRED. MockPaymentService is gone: the flow runs on real Stripe hosted checkout with real charges, and ETP-4966 removed the flag, so every component below is live rather than latent. What was written as 'gateway-triggered, latent until money is real' — gap-replay, gap-check-then-act, gap-payment-provisioning-atomicity, qa-in-flight-submit-guard — now describes open exposure against actual money. The three 'flag-on' components (qa-navigation-guard, qa-clientname-unbounded, qa-session-expiry-reported-late) bite unconditionally now that the entry point is always offered. AND THEREFORE: this bundle no longer represents one deferred decision about whether to take real payments — that decision was made — so its PROMOTION CONDITION (Alex, review of a7cb81333) is met and each component is scheduled work needing its own item and owner. Left bundled in ETP-4966 only because splitting it is a planning decision, not a code change; it must not be read as still-deferred-by-choice.",
           "components": [
             {
               "id": "qa-in-flight-submit-guard",
@@ -112,12 +98,12 @@
           ]
         },
         {
-          "id": "plan-badge-in-env-picker",
-          "kind": "cosmetic",
-          "note": "The environment picker does not show which plan a tenant is on. The backend already ships the data — GET /sws/go/environments returns a per-environment 'plan' field (EtendoGoJwtDalHelper.java:346, via TenantPlanService.resolvePlan). Rendering it needs a change in the @etendosoftware/etendo-go-core package plus a version bump here, which is why it is deferred rather than done inline.",
+          "id": "payment-registry-not-durable",
+          "kind": "precondition",
+          "note": "CheckoutPaymentRegistry keeps confirmed payments in a static ConcurrentHashMap, so a payment lives only in the JVM that received the Stripe webhook. On ECS a task recycle or a redeploy between the payment and POST /sws/go/onboarding loses it: the account is charged and provisioning answers PAYMENT_DECLINED, with no refund or retry-with-credit path. Its EVENTS idempotency map also grows without eviction, so webhook replay protection degrades over uptime. AND THEREFORE: the paid flow cannot be considered production-grade at volume until this is persisted, and any incident of this shape is unrecoverable from the customer's side. Proposed in ETP-4966 while fixing the plan derivation; NOT accepted debt — it needs an owner decision and its own task.",
           "refs": [
-            "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java:346",
-            "npm @etendosoftware/etendo-go-core (env picker component)"
+            "com.etendoerp.go src/com/etendoerp/go/payment/CheckoutPaymentRegistry.java — PAYMENTS and EVENTS",
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — 'Open risk — CheckoutPaymentRegistry is process-local'"
           ]
         }
       ],
@@ -126,26 +112,19 @@
         "unit": [
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/payment/MockPaymentServiceTest.java"
-          },
-          {
-            "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/TenantPaywallServiceTest.java"
           },
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java",
-            "acceptedDebt": true,
-            "note": "user-accepted debt — markProductive unexercised; of resolvePlan only the failure-swallowing branch runs, transitively via EtendoGoJwtDalHelperTest"
+            "path": "src-test/src/com/etendoerp/go/payment/TenantPlanServiceTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/HostedCheckoutServiceTest.java"
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/lib/__tests__/upgrade-api.test.js",
-            "expected": true
-          },
-          {
-            "root": "frontend",
-            "path": "tools/app-shell/src/lib/__tests__/upgrade-mockPayment.test.js",
             "expected": true
           },
           {
