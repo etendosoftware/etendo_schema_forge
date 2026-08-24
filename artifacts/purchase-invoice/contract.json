@@ -1,8 +1,8 @@
 {
-  "version": "0.88.0",
+  "version": "0.89.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-21T15:01:11.129Z",
-  "checksum": "2bc1ba41ea421614",
+  "updatedAt": "2026-08-24T22:21:43.649Z",
+  "checksum": "5899759e2ffede67",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -3647,7 +3647,10 @@
               },
               {
                 "value": "ETGOERR",
-                "name": "Payment Error"
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
+                }
               }
             ],
             "validation": {

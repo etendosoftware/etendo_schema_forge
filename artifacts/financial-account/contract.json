@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.30.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-19T19:35:51.607Z",
-  "checksum": "06325b4a1816a96e",
+  "updatedAt": "2026-08-24T23:01:50.861Z",
+  "checksum": "bb1b268d8c529150",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1045,6 +1045,13 @@
                 "name": "Payment Cleared",
                 "labels": {
                   "es_ES": "Conciliado"
+                }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
                 }
               }
             ],
@@ -3733,6 +3740,14 @@
             "column": "pendingCount",
             "type": "integer",
             "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
+            "type": "integer",
+            "visibility": "system",
             "required": false
           }
         ],
@@ -11496,6 +11511,14 @@
         "description": "System field 'creditLimit' should exist in backend but not frontend for account"
       },
       {
+        "id": "t-system-field-account-eTGOPendingCount",
+        "category": "system-field",
+        "entity": "account",
+        "field": "eTGOPendingCount",
+        "runner": "node",
+        "description": "System field 'eTGOPendingCount' should exist in backend but not frontend for account"
+      },
+      {
         "id": "t-system-field-account-genericAccountNo",
         "category": "system-field",
         "entity": "account",
@@ -12674,7 +12697,7 @@
       }
     ],
     "summary": {
-      "total": 853,
+      "total": 854,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
@@ -12687,11 +12710,11 @@
         "readonlylogic-valid": 33,
         "rule-declared": 226,
         "selector-endpoint": 28,
-        "system-field": 150,
+        "system-field": 151,
         "visibility": 7
       },
       "byRunner": {
-        "node": 853,
+        "node": 854,
         "junit": 0
       }
     }
