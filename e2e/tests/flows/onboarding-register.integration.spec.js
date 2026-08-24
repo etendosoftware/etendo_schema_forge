@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { waitForEmail, verificationTokenFromEmail } from '../helpers/email-sink.js';
 
 /**
  * Onboarding — Real integration E2E: register a new user, complete profile,
@@ -54,6 +55,40 @@ async function goToRegister(page) {
   await expect(page.locator('#reg-name')).toBeVisible({ timeout: 10_000 });
 }
 
+const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025';
+
+/**
+ * ETP-4798 — clears the confirm-your-email wall that now sits between registration and step 1.
+ *
+ * Waits for whichever screen actually appears, because BOTH are correct depending on the
+ * environment. The backend only leaves a confirmation pending when the welcome mail was accepted
+ * for delivery; with no email sink (or no provider) it drops the token and leaves the account
+ * ungated, and registration lands on the profile step exactly as it did before this feature. So
+ * the wall is asserted when it is there and skipped when it is not — this mirrors the backend's
+ * own fail-open rather than papering over it.
+ *
+ * When the wall IS shown, this confirms the address the way a user would: it reads the link out of
+ * the real welcome mail in the sink and follows it. That keeps the gate under test instead of
+ * disabling it for the E2E run.
+ */
+async function passEmailConfirmationWall(page, request, email) {
+  const wall = page.getByTestId('verify-email-step');
+  const profile = page.getByText(/vamos a dejar todo listo/i);
+  await expect(wall.or(profile).first()).toBeVisible({ timeout: 15_000 });
+  if (!(await wall.isVisible())) {
+    return;
+  }
+
+  const message = await waitForEmail(request, {
+    recipient: email,
+    template: 'custom',
+    baseURL: EMAIL_SINK_URL,
+  });
+  // Straight to the app's own route with the token: the flow reads it off the query string,
+  // confirms it, strips it from the address bar and drops into onboarding.
+  await page.goto(`/onboarding?verifyToken=${encodeURIComponent(verificationTokenFromEmail(message))}`);
+}
+
 test.describe('Onboarding — Register new user (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
 
@@ -62,7 +97,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     'Set E2E_ONBOARDING_INTEGRATION=1 to run this live onboarding integration test.',
   );
 
-  test('registers new users from the configured account count', async ({ page, context }) => {
+  test('registers new users from the configured account count', async ({ page, context, request }) => {
     for (let accountNumber = 1; accountNumber <= ONBOARDING_ACCOUNT_COUNT; accountNumber += 1) {
     const suffix = uniqueSuffix();
     const userName = `E2E User ${accountNumber} ${suffix}`;
@@ -89,6 +124,12 @@ test.describe('Onboarding — Register new user (integration)', () => {
 
     await page.getByTestId('action-register-submit').click();
     await slow(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 2b: Confirm the email address (ETP-4798), when the wall is shown
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 3: Profile step — verify greeting contains the user name
@@ -316,14 +357,17 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // CORNER CASE 4: Empty name on profile step — Continuar disabled
   // ═════════════════════════════════════════════════════════════════════════
 
-  test('cannot continue on profile step with empty name', async ({ page }) => {
+  test('cannot continue on profile step with empty name', async ({ page, request }) => {
     const suffix = uniqueSuffix();
+    const userEmail = `e2e-profile-${suffix}@test-onboarding.com`;
     await goToRegister(page);
 
     await page.locator('#reg-name').fill(`Profile User ${suffix}`);
-    await page.locator('#reg-email').fill(`e2e-profile-${suffix}@test-onboarding.com`);
+    await page.locator('#reg-email').fill(userEmail);
     await page.locator('#reg-password').fill(`E2e-${suffix}-Pass!99`);
     await page.getByTestId('action-register-submit').click();
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
 
@@ -346,7 +390,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // CORNER CASE 5: Provisioning failure — backend error during environment creation
   // ═════════════════════════════════════════════════════════════════════════
 
-  test('shows error and stays on onboarding when provisioning fails', async ({ page }) => {
+  test('shows error and stays on onboarding when provisioning fails', async ({ page, request }) => {
     const suffix = uniqueSuffix();
     const userName = `E2E ProvFail ${suffix}`;
     const userEmail = `e2e-provfail-${suffix}@test-onboarding.com`;
@@ -360,6 +404,8 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-email').fill(userEmail);
     await page.locator('#reg-password').fill(userPassword);
     await page.getByTestId('action-register-submit').click();
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
 
