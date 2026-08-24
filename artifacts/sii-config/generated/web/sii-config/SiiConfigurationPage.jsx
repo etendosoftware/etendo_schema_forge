@@ -77,13 +77,17 @@ export const api = {
     "logHash": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-config/logHash",
       "detailUrl": "/sws/neo/sii-config/logHash/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [],

@@ -56,9 +56,17 @@ const CURRENCY_ROWS = [
   { id: '100', name: 'USD' },
 ];
 
-// Entity defaults envelope — `defaults.currency` is the session default the
-// wizard pre-selects.
-const ENTITY_DEFAULTS = { defaults: { currency: '102' } };
+// Entity defaults envelope — `defaults.currency`/`defaults.country` are the session defaults
+// AccountFormStep pre-selects. Both are REQUIRED for submit to enable (ETP-4896 made Country a
+// mandatory field alongside Currency), so a defaults mock missing either one leaves the "Añadir
+// cuenta" button permanently disabled — that is what timed out here before `country` was added.
+// `countryIbanRules` is a sibling of `defaults`, not nested in it: it is the ≤45-country
+// IBAN-metadata catalog AccountFormStep cross-checks the typed IBAN against. Spain matches the
+// Spanish IBAN literals used throughout this file, so the cross-check still passes.
+const ENTITY_DEFAULTS = {
+  defaults: { currency: '102', country: '106', country$_identifier: 'Spain' },
+  countryIbanRules: [{ id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 }],
+};
 
 /**
  * Installs the financial-account mocks (generic W endpoints, ETP-4239). All of

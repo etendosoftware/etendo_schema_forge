@@ -44,3 +44,29 @@ export function getContractGridColumns(entityName) {
       columnType: f.columnType,
     }));
 }
+
+/**
+ * Fields an entity declares for the expandable "more info" panel (the row a
+ * table expands to show extra read-only detail, e.g. the account movements'
+ * accounting dimensions): fields with `dimensionsPanel: true`, sorted by
+ * `seq`. Same decisions-driven contract as `getContractGridColumns` — a field
+ * is added to, removed from, reordered, or relabelled in the panel via a
+ * `decisions.json` edit + regen, no JSX change.
+ *
+ * @param {string} entityName - contract entity key (e.g. 'transaction')
+ * @returns {Array<{ name: string, column?: string, label: string, type?: string,
+ *   gridLabelKey?: string }>}
+ */
+export function getContractPanelFields(entityName) {
+  const fields = contract?.frontendContract?.entities?.[entityName]?.fields ?? [];
+  return fields
+    .filter((f) => f.dimensionsPanel === true)
+    .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+    .map((f) => ({
+      name: f.name,
+      column: f.column,
+      label: f.label ?? f.name,
+      type: f.type,
+      gridLabelKey: f.gridLabelKey,
+    }));
+}

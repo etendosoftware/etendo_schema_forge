@@ -33,6 +33,7 @@ vi.mock('../use349Pdf.js', () => ({
 // FmCommon.jsx lives at fiscal-models/ (3 levels up)
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   // KpiWidget must render the value prop so count/total KPI tests can read it.
   KpiWidget: ({ value, valueColor }) => (
     React.createElement('span', { className: 'test-kpi-value', style: { color: valueColor } }, value)
@@ -59,8 +60,6 @@ vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
-  FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 
 vi.mock('lucide-react', () => ({
@@ -100,6 +99,7 @@ vi.mock('lucide-react', () => ({
   X: () => null,
   Check: () => null,
   Checkbox: () => null,
+  FileCheck: () => null,
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────

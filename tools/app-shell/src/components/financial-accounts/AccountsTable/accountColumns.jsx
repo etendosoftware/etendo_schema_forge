@@ -103,6 +103,18 @@ export function TypeCell({ account, ui }) {
   );
 }
 
+/** Plain "País" column (ETP-4896) — `countryName` is populated server-side for every account by
+ *  `FinancialAccountHandler.enrichRecord`; falls back to the ISO code and finally an em dash for
+ *  accounts that predate ETP-4896 or were never assigned one. */
+export function CountryCell({ account }) {
+  const label = account.countryName || account.countryIso || '';
+  return (
+    <span className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]">
+      {label || '—'}
+    </span>
+  );
+}
+
 export function BalanceCell({ account }) {
   const isNegative = Number(account.currentBalance) < 0;
   return (

@@ -2,8 +2,9 @@ import { useRef, useState, lazy, Suspense } from 'react';
 import { FileText, Loader2, Paperclip, AlertCircle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
-import { usePreviewAttachment, ACCEPTED_TYPES, ACCEPT_ATTR } from './usePreviewAttachment.js';
+import { useMainAttachment } from './useMainAttachment.js';
 import { useLocation } from 'react-router-dom';
+import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 const LazyPdfViewer = lazy(() => import('./PdfViewer.jsx'));
@@ -42,17 +43,16 @@ function FileTab(props) {
 }
 
 /**
- * Edit-mode view: renders the record's **document slot** and lets the user fill
- * it (ETP-4855).
+ * Edit-mode view: renders the record's marked "main" Attachment and lets the
+ * user fill it (ETP-4855).
  *
- * The slot — `/sws/neo/preview-file`, one file per record — is the OCR source
- * document, which is why this panel and the grid preview show the same single
- * file and nothing else. Invoices captured by hand have no slot file, so the
- * panel stays empty; other files the user adds through the Attachments tab do
- * not surface here.
- *
- * Storing also mirrors the file into the record's attachments (the `tableName`
- * argument below), so it appears in the Attachments tab as the ticket requires.
+ * Backed by `useMainAttachment` (ETP-4315) — the same real, marked `Attachment`
+ * row the grid preview shows, identified by `tableName` alone. Because it is
+ * the record's actual attachment (not a separate cache), storing here already
+ * appears in the Attachments tab with no mirroring step: attaching from this
+ * panel and attaching from the Attachments tab write the same record.
+ * Invoices captured by hand have nothing marked yet, so the panel stays empty
+ * until the user attaches a file here or from the preview.
  */
 function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
   const ui = useUI();
@@ -63,13 +63,12 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
 
   const {
     storedFile, isBusy, storeFailed, storeFile,
-  } = usePreviewAttachment({
+  } = useMainAttachment({
     documentId: recordId,
-    specName: docTypeId,
+    tableName,
     storeCondition: true,
     token,
     apiBaseUrl,
-    tableName,
   });
 
   const canAttach = !!(recordId && tableName && token && docTypeId);

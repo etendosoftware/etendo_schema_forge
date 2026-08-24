@@ -5,7 +5,7 @@ import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
-import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
+import PaymentTopbarActions from '../../../custom/PaymentTopbarActions';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
@@ -33,7 +33,7 @@ const processes = [
   { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
     displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
   { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
-    displayLogicRaw: "@status@ != 'RPAP'" },
+    displayLogicRaw: "@status@ != 'RPAP' & @pisLocked@ = 'N'" },
 ];
 // @sf-generated-end processes:header
 
@@ -448,11 +448,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         hideFormCard
         notesField="description"
         bottomSection={PaymentOutBottomPanel}
-        topbarExtra={PaymentConciliadoBadge}
+        topbarExtra={PaymentTopbarActions}
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
-        statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
+        statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"cpPaymentStateInProgress","ETGOERR":"cpPaymentStateError","PWNC":"pagoDepositado"}}
         sendDocument
         {...props} window={effectiveWindow}
       />

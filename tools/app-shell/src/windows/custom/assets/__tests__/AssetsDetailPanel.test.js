@@ -116,16 +116,18 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.doesNotMatch(src, /key: 'currency'[\s\S]*?readOnly: true/);
   });
 
-  it('defines only Project as a dimension field candidate (ETP-4529)', () => {
-    // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
-    // for Activo (Amortizaciones); Contacto and Centro de costo are "Nunca" and were
-    // dropped as candidates entirely. Producto is "Siempre" (corrected follow-up) —
-    // it lives in group1Fields as a plain always-visible field, never a dimension
+  it('defines Project and Cost Center as dimension field candidates (ETP-4914)', () => {
+    // ETP-4914 — corrected matrix: Centro de costo is also "Por config" for Activo
+    // (Amortizaciones), not "Nunca" as ETP-4529 originally recorded — its raw AD
+    // DisplayLogic is already correctly wired, same pattern as Proyecto's. Contacto
+    // remains dropped (still "Nunca"-equivalent in this pass; its own "Por config"
+    // fix is deferred pending an AD-metadata change). Producto is "Siempre" — it
+    // lives in group1Fields as a plain always-visible field, never a dimension
     // candidate, so this array-scoped check doesn't need to mention it.
     const candidatesBlock = src.match(/dimensionFieldCandidates = \[[\s\S]*?\];/)[0];
     assert.match(candidatesBlock, /'C_Project_ID'/);
-    // The 2 previously-kept-but-now-"Nunca" dimensions are no longer candidates.
-    assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Costcenter_ID'/);
+    assert.match(candidatesBlock, /'EM_Etadas_Costcenter_ID'/);
+    // Contacto is still not a candidate (deferred).
     assert.doesNotMatch(candidatesBlock, /'C_BPartner_ID'/);
     // The 5 out-of-scope dimensions were removed from the panel.
     assert.doesNotMatch(candidatesBlock, /'EM_Etadas_User1_ID'/);

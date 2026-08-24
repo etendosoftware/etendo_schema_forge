@@ -136,3 +136,40 @@ hooks_verify_commit() {
   fi
   return 2
 }
+
+# hooks_rebase_base <sha>... → the commit to pass to `git rebase --exec`, i.e.
+# the nearest ancestor of every given commit that is not itself one of them.
+# Prints "--root" when the oldest offender is the root commit, since a rebase
+# that must include the root needs the flag instead of a base sha.
+#
+# Two topologies, one answer each:
+#   linear   — the octopus merge-base of the set IS its oldest member, so the
+#              base is that member's parent.
+#   branched — the merge-base is already older than every member, so it IS the
+#              base and taking its parent would needlessly rewrite one extra
+#              commit.
+# Callers must tolerate an empty result: on any git failure this prints nothing
+# rather than a wrong base, and the message falls back to a `<base>` placeholder.
+hooks_rebase_base() {
+  local mb sha
+  [ $# -eq 0 ] && return 0
+  if [ $# -eq 1 ]; then
+    mb="$1"
+  else
+    mb="$(git merge-base --octopus "$@" 2>/dev/null)" || return 0
+  fi
+  [ -z "$mb" ] && return 0
+
+  # Is the merge-base itself one of the offenders? Then step back one commit.
+  for sha in "$@"; do
+    if [ "$(git rev-parse "$sha" 2>/dev/null)" = "$(git rev-parse "$mb" 2>/dev/null)" ]; then
+      if git rev-parse -q --verify "${mb}^" >/dev/null 2>&1; then
+        git rev-parse --short "${mb}^" 2>/dev/null || return 0
+      else
+        printf '%s' '--root'
+      fi
+      return 0
+    fi
+  done
+  git rev-parse --short "$mb" 2>/dev/null || return 0
+}

@@ -35,10 +35,22 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 }));
 
 // ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
+// ETP-4888 — index.jsx now also reads selectedOrg from useAuth() (via
+// useTaxSifLineRowActions -> useFiscalConfig) to resolve the org's fiscal
+// profile for the tax-SIF line trigger. Mirrors the convention already used by
+// sales-invoice/__tests__/index.vitest.jsx and PurchaseInvoiceHeaderTable.vitest.jsx
+// / PurchaseInvoiceTopbar.vitest.jsx for the same @/auth/AuthContext.jsx +
+// useFiscalConfig.js pair.
 let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
   useWindowAccess: () => currentWindowAccessTier,
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
+let fiscalProfile = null;
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
 }));
 
 let rowDeleteConfig;
@@ -107,8 +119,10 @@ vi.mock('../PurchaseInvoiceHeaderTable.jsx', () => ({
 }));
 
 vi.mock('../../shared/InvoicePreview.jsx', () => ({
-  default: ({ invoice, specName, windowName }) => (
-    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName} />
+  default: ({ invoice, specName, windowName, onInvoiceUpdated }) => (
+    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName}>
+      <button type="button" onClick={onInvoiceUpdated}>invoice updated</button>
+    </div>
   ),
 }));
 
@@ -342,6 +356,18 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     act(() => {
       rowDeleteConfig.onSuccess();
     });
+    expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
+  });
+
+  // ETP-4832: the grid was not refreshing after confirming a payment from the
+  // side panel. Mirrors the equivalent sales-invoice/index.jsx wiring — the
+  // InvoicePreview render prop must forward onInvoiceUpdated into a refreshKey
+  // bump so ListView's refreshTrigger increments and the grid refetches.
+  it('refreshes the list when the invoice preview reports an update', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    const beforeRefresh = lastListViewProps.refreshTrigger;
+    fireEvent.click(screen.getByText('invoice updated'));
     expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
   });
 

@@ -922,6 +922,11 @@ export function isDeleteButtonVisible({
   // signal (e.g. Amortization) — it wins over everything else, including the
   // deleteAction lifecycle bypass below.
   if (hideDeleteButton) return false;
+  // Checked ahead of the deleteAction bypass below: that bypass exists because such a delete
+  // reactivates server-side first, which is exactly what must NOT happen to a payment whose bank
+  // transfer is live (ETP-4895). Same record-level flag RowQuickActions honours, so the grid and
+  // the form agree.
+  if (data?.pisLocked === true) return false;
   // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
   // (the action reactivates server-side before removing), so it ignores
   // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
@@ -1018,9 +1023,9 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
   return true;
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
-  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {
@@ -1078,14 +1083,13 @@ function renderNewRecordSaveActions({
  */
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, blockSaveForBalance,
+  ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
     <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
     }}>
       {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
@@ -1287,7 +1291,7 @@ export function DetailView({
   requiredHeaderFields = null,
   showDetailFooterTotals = undefined,
   onAfterSave,
-  onAfterCreate,
+  onAfterCreate, onAfterExistingSave,
   additionalDirtyState = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
@@ -1306,6 +1310,11 @@ export function DetailView({
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
   saveBeforeProcesses = false,
+  // Toolbar order only: when true, Save renders to the LEFT of the process buttons, so the
+  // primary action (Confirm) is the right-most button. `saveBeforeProcesses` implies it — that
+  // flag has always reordered as a side effect — but a window can ask for the order alone,
+  // without opting into the save-before-process behavior.
+  saveActionsFirst = saveBeforeProcesses,
   // ETP-4542: opt-in per window. When true, a header process button whose action is
   // currently running shows a spinner + "Generating..." label and is disabled to
   // prevent duplicate executions. Windows that don't pass it keep the current behavior
@@ -1313,8 +1322,7 @@ export function DetailView({
   showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
-  formScrollPaddingB = 'pb-6',
-  secondaryTabContentPaddingT = 'pt-3',
+  formScrollPaddingB = 'pb-6', secondaryTabContentPaddingT = 'pt-3',
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
@@ -1327,7 +1335,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [],
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -2918,7 +2926,7 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal,
   };
@@ -3048,8 +3056,8 @@ export function DetailView({
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
-              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
-              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
+              {saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
@@ -3135,7 +3143,7 @@ export function DetailView({
                   );
                 })}
 
-              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
             </div>
           </div>
@@ -3167,6 +3175,8 @@ export function DetailView({
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
+          apiBaseUrl,
+          () => hook.fetchById?.(data?.id || recordId),
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3513,7 +3523,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={lineHiddenColumns}
+                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{

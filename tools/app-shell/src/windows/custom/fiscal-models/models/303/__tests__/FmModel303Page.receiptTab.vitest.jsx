@@ -25,6 +25,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -42,7 +43,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
   KpiWidget: () => null,
 }));
 vi.mock('../../../FmTabContent.jsx', () => ({
-  SourcesTab: () => null, IncidentsTab: () => null, FilesTab: () => null, HistoryTab: () => null,
+  SourcesTab: () => null, IncidentsTab: () => null, HistoryTab: () => null,
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // AeatSubmitFlow mock: exposes a button that triggers `onAttached` (mirroring how
@@ -231,7 +232,7 @@ describe('FmModel303Page — handlePresent uploads acuse-de-recibo (ETP-4456 fix
 
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(uploadMock).toHaveBeenCalledWith(FILE_FIXTURE);
-    expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack');
+    expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack', 'manual_ack');
   });
 
   it('calls useAttachments with the ETGO_Fiscal_Decl table and decl.id', () => {
@@ -250,7 +251,7 @@ describe('FmModel303Page — handlePresent uploads acuse-de-recibo (ETP-4456 fix
     fireEvent.click(screen.getByTestId('present-confirm-ack-no-file'));
 
     expect(uploadMock).not.toHaveBeenCalled();
-    expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack');
+    expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack', 'manual_ack');
   });
 
   it('does not upload for the submitted path', () => {

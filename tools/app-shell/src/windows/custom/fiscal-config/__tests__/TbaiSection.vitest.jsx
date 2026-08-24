@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -41,6 +41,7 @@ vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
   normalizeDateInputValue: vi.fn((v) => v ?? ''),
+  parseApiError: async (res) => res.text().then(t => { try { return JSON.parse(t)?.error?.message ?? t; } catch { return t; } }),
   normalizeEtendoBoolean: vi.fn((v) => v === 'Y'),
   serializeBooleanFields: vi.fn((form) => form),
 }));
@@ -58,10 +59,10 @@ const BASE_RECORD = {
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('TbaiSection — rendering', () => {
-  it('renders section labels', () => {
+  it('renders section labels (ETP-4783: technical section removed)', () => {
     render(<TbaiSection {...PROPS} />);
     expect(screen.getByText('fiscal.tbai.legend.billing')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.tbai.legend.technical')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.tbai.legend.technical')).not.toBeInTheDocument();
   });
 
   it('renders the CertSection when hideCert is false', () => {
@@ -86,23 +87,16 @@ describe('TbaiSection — rendering', () => {
 });
 
 describe('TbaiSection — validation', () => {
-  it('shows date error when tbaisystemdate is empty', async () => {
+  it('does not validate tbaisystemdate: save succeeds even with empty value (ETP-4783: removed from UI)', async () => {
+    const onSave = vi.fn();
     const ref = createRef();
-    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.tbai.err.enrollDate')).toBeInTheDocument();
-    });
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: '' }} onSave={onSave} ref={ref} />);
+    await ref.current.save();
+    // If tbaisystemdate validation were still active, save() would throw before calling onSave
+    expect(onSave).toHaveBeenCalled();
+    expect(screen.queryByText('fiscal.tbai.err.enrollDate')).not.toBeInTheDocument();
   });
 
-  it('shows description error when invoiceDescription is empty', async () => {
-    const ref = createRef();
-    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, invoiceDescription: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.tbai.err.invoiceDesc')).toBeInTheDocument();
-    });
-  });
 });
 
 describe('TbaiSection — save', () => {
@@ -112,5 +106,54 @@ describe('TbaiSection — save', () => {
     render(<TbaiSection {...PROPS} onSave={onSave} ref={ref} />);
     await ref.current.save();
     expect(onSave).toHaveBeenCalled();
+  });
+
+  // ETP-4783 (final design): productionEnv / uSEAsproductDesc / validatePreviousInvoice are
+  // NOT included in the PUT body from the Go UI at all. They live only in the DB record and
+  // are maintained via the backend / Classic. Including them and hardcoding values would
+  // silently revert any change the user made in Classic (e.g. productionEnv='N' for testing).
+  // The onboarding wizard sets correct defaults at creation time.
+  it('does not include productionEnv in the PUT body (managed by backend, not overridden)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, productionEnv: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('productionEnv');
+  });
+
+  it('does not include uSEAsproductDesc in the PUT body (managed by backend, not overridden)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, uSEAsproductDesc: 'Y' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('uSEAsproductDesc');
+  });
+
+  it('does not include validatePreviousInvoice in the PUT body (managed by backend, not overridden)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, validatePreviousInvoice: 'Y' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('validatePreviousInvoice');
+  });
+
+  it('always sends a truthy tbaisystemdate in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.tbaisystemdate).toBeTruthy();
   });
 });

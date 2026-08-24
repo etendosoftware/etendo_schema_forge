@@ -253,15 +253,23 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     return { readOnly, visibility };
   }
 
-  // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
-  // (config-gated) for Activo (Amortizaciones); Contacto and Centro de costo are
-  // "Nunca" (never applicable) and are intentionally NOT candidates here at all —
-  // see decisions.json (businessPartner/eTADASCostCenter are discarded) and
-  // docs/generated-custom-windows/assets.md. Producto is "Siempre" (always visible,
-  // rendered unconditionally in group1Fields above) — it is not a GL-config-gated
-  // dimension, so it is deliberately excluded from this candidates list too.
+  // ETP-4914 — correction to the ETP-4529 matrix: Centro de costo is also "Por
+  // config" (config-gated) for Activo (Amortizaciones) Cabecera, not "Nunca" as
+  // originally recorded — its raw AD DisplayLogic (@$Element_CC@='Y' &
+  // @IsDepreciated@='Y') is already correctly wired, same pattern as Proyecto's.
+  // So eTADASCostCenter is now a candidate here too — see decisions.json
+  // (eTADASCostCenter is now editable) and docs/generated-custom-windows/assets.md.
+  // Contacto is also "Por config" per the corrected matrix, but is deliberately
+  // deferred from this pass: its raw AD_Field.DisplayLogic is only
+  // @IsDepreciated@='Y' (missing the @$Element_BP@ dimension term), so fixing it
+  // properly requires an AD-level metadata edit first — tracked separately. It
+  // stays discarded in decisions.json until that follow-up lands. Producto is
+  // "Siempre" (always visible, rendered unconditionally in group1Fields above) —
+  // it is not a GL-config-gated dimension, so it is deliberately excluded from
+  // this candidates list too.
   const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
+    { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
   ];
   // Config-driven visibility via the shared evaluate-display evaluator (was: always
   // shown whenever depreciate === true, regardless of the client's accounting-

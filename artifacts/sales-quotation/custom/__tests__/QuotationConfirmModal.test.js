@@ -114,4 +114,44 @@ describe('QuotationConfirmModal', () => {
       assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('sqSaveBeforeConfirmError'\)\);/);
     });
   });
+
+  // ETP-4779 — QA regression: the "Documentos" related-docs section did not
+  // show the newly created Sales Order / Invoice without a full page reload.
+  // Fix: dispatch a sales-quotation:document-created custom event (mirroring
+  // the sales-order:document-created / purchase-order:document-created
+  // convention) right after each conversion action succeeds, and refresh the
+  // header state via the new onRefresh prop instead of window.location.reload.
+  describe('partial refresh instead of full page reload (ETP-4779)', () => {
+    it('accepts an onRefresh prop', () => {
+      assert.match(src, /export default function QuotationConfirmModal\(\{[\s\S]*?onRefresh,?[\s\S]*?\}\)/);
+    });
+
+    it('never calls window.location.reload', () => {
+      assert.doesNotMatch(src, /window\.location\.reload/);
+    });
+
+    it('handleCloseAfterCreate calls onRefresh instead of reloading', () => {
+      assert.match(
+        src,
+        /const handleCloseAfterCreate = \(\) => \{\s*onClose\(\);\s*onRefresh\?\.\(\);\s*\};/,
+      );
+    });
+
+    it('dispatches sales-quotation:document-created right after the order conversion succeeds', () => {
+      const convertIdx = src.indexOf('Convertquotation');
+      const dispatchIdx = src.indexOf("dispatchEvent(new CustomEvent('sales-quotation:document-created'))");
+      assert.ok(convertIdx >= 0 && dispatchIdx >= 0);
+      assert.ok(dispatchIdx > convertIdx);
+      // ...and before the createdDoc order fetch/state update that follows it.
+      const orderFetchIdx = src.indexOf('Fetch created order by quotation link');
+      assert.ok(orderFetchIdx > dispatchIdx);
+    });
+
+    it('dispatches sales-quotation:document-created right after the invoice conversion succeeds', () => {
+      const invoicePostIdx = src.indexOf('createDraftInvoice');
+      const matches = [...src.matchAll(/dispatchEvent\(new CustomEvent\('sales-quotation:document-created'\)\)/g)];
+      assert.ok(matches.length >= 2, `Expected at least 2 dispatch calls (order + invoice paths); found ${matches.length}`);
+      assert.ok(matches[matches.length - 1].index > invoicePostIdx);
+    });
+  });
 });

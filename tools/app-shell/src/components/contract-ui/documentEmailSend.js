@@ -1,6 +1,24 @@
+import { uploadAndMarkMainAttachment } from '../copilot/ocr/listAttachments.js';
+
 export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }
+
+// ETP-4315 — physical Attachment table (C_File) per window, mirroring the
+// attachmentConfig.tableName wired on each window's Preview component. Windows
+// not listed here never pass a real pdfBlob/pdfBlobUrl into SendDocumentModal
+// (no caching to do), so cacheDocumentPreviewFile skips them instead of
+// falling back to the retired preview-file cache.
+export const WINDOW_ATTACHMENT_TABLE = {
+  'sales-invoice': 'C_Invoice',
+  'purchase-invoice': 'C_Invoice',
+  'sales-order': 'C_Order',
+  'purchase-order': 'C_Order',
+  'sales-quotation': 'C_Order',
+  'goods-shipment': 'M_InOut',
+  'return-to-vendor-shipment': 'M_InOut',
+  'return-material-receipt': 'M_InOut',
+};
 
 export function resolveDocumentEmailContract(windowName) {
   return `${windowName}-send`;
@@ -34,15 +52,6 @@ export async function readEmailContractResponse(res) {
   } catch {
     return {};
   }
-}
-
-export async function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 export function buildPreviewFileName(specName, documentNo, documentId) {
@@ -96,25 +105,20 @@ export async function cacheDocumentPreviewFile({
   pdfBlob,
   pdfBlobUrl,
 }) {
+  const tableName = WINDOW_ATTACHMENT_TABLE[specName];
+  if (!tableName) return { skipped: true };
   const previewBlob = await resolvePreviewBlob(pdfBlob, pdfBlobUrl);
   if (!previewBlob) return { skipped: true };
-  const fileData = await blobToBase64(previewBlob);
-  const res = await fetch(`${resolveNeoBaseUrl(apiBaseUrl)}/preview-file`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      specName,
-      recordId: documentId,
-      fileName: buildPreviewFileName(specName, documentNo, documentId),
-      mimeType: previewBlob.type || 'application/pdf',
-      fileData,
-    }),
+  const created = await uploadAndMarkMainAttachment({
+    token,
+    tableName,
+    recordId: documentId,
+    file: previewBlob,
+    fileName: buildPreviewFileName(specName, documentNo, documentId),
+    apiBaseUrl,
   });
-  if (!res.ok) {
-    throw new Error(`Preview file cache failed (${res.status})`);
+  if (!created || !created.id) {
+    throw new Error('Preview file cache failed');
   }
   return { skipped: false };
 }

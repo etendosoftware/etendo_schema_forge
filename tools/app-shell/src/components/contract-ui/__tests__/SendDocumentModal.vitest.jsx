@@ -249,6 +249,10 @@ describe('SendDocumentModal', () => {
     expect(toast.success).toHaveBeenCalledWith('sendModalSentSuccess:{"documentType":"Invoice"}');
   });
 
+  // ETP-4315 — preview caching before send now uploads the blob as a real,
+  // marked Attachment (uploadAndMarkMainAttachment, multipart FormData) keyed
+  // by WINDOW_ATTACHMENT_TABLE['sales-invoice'] === 'C_Invoice', instead of
+  // POSTing base64 JSON to the retired /preview-file endpoint.
   it('caches the generated preview before sending when preview caching is enabled by default', async () => {
     const user = userEvent.setup();
     global.fetch
@@ -256,7 +260,7 @@ describe('SendDocumentModal', () => {
         ok: true,
         blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
       })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { id: 'att-1' } } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'SENT' }) });
 
     render(
@@ -275,7 +279,7 @@ describe('SendDocumentModal', () => {
     });
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8080/etendo/neo/preview-file',
+      'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/doc-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(global.fetch).toHaveBeenNthCalledWith(

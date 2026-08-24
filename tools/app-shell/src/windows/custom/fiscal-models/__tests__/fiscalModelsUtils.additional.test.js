@@ -545,11 +545,15 @@ describe('compute349Operators — mock fallback (no token)', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('generate349File', () => {
-  it('returns false when token or apiBaseUrl is missing', async () => {
-    assert.equal(await generate349File({ year: 2026, period: 'T1' }, {}), false);
+  // Contract changed from a raw boolean to { ok, error, serverMessage? } — same
+  // shape as generate303File (see 'generate303File — error paths' above).
+  it('returns { ok: false, error: "no_token" } when token or apiBaseUrl is missing', async () => {
+    const result = await generate349File({ year: 2026, period: 'T1' }, {});
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'no_token');
   });
 
-  it('returns true and triggers a download on success, with phone and contact set', async () => {
+  it('returns { ok: true } and triggers a download on success, with phone and contact set', async () => {
     let capturedBody;
     globalThis.fetch = async (url, opts) => {
       capturedBody = opts.body;
@@ -560,33 +564,34 @@ describe('generate349File', () => {
       { year: 2026, period: 'T1' },
       { token: 'tok', apiBaseUrl: '/x', phone: '600123456', contact: 'Jane Doe' }
     );
-    assert.equal(result, true);
+    assert.equal(result.ok, true);
     assert.match(capturedBody, /phone=600123456/);
     assert.match(capturedBody, /contact=Jane(\+|%20)Doe/);
   });
 
-  it('returns true without phone/contact params when they are absent', async () => {
+  it('returns { ok: true } without phone/contact params when they are absent', async () => {
     let capturedBody;
     globalThis.fetch = async (url, opts) => {
       capturedBody = opts.body;
       return { ok: true, blob: async () => new Blob(['349-data']) };
     };
     const result = await generate349File({ year: 2026, period: 'T1' }, { token: 'tok', apiBaseUrl: '/x' });
-    assert.equal(result, true);
+    assert.equal(result.ok, true);
     assert.doesNotMatch(capturedBody, /phone=/);
     assert.doesNotMatch(capturedBody, /contact=/);
   });
 
-  it('returns false when the response is not ok', async () => {
-    globalThis.fetch = async () => ({ ok: false, status: 500 });
+  it('returns { ok: false, error: "http_500" } when the response is not ok', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => '' });
     const result = await generate349File({ year: 2026, period: 'T1' }, { token: 'tok', apiBaseUrl: '/x' });
-    assert.equal(result, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'http_500');
   });
 
-  it('returns false when fetch throws', async () => {
+  it('returns { ok: false, error: "network" } when fetch throws', async () => {
     globalThis.fetch = async () => { throw new Error('offline'); };
     const result = await generate349File({ year: 2026, period: 'T1' }, { token: 'tok', apiBaseUrl: '/x' });
-    assert.equal(result, false);
+    assert.deepEqual(result, { ok: false, error: 'network' });
   });
 });
 
@@ -634,4 +639,56 @@ describe('computeUpcomingDeadlines — unrecognized period format', () => {
     const decls = [{ id: 'x', model: '390', year: 2026, period: 'anual', status: 'draft' }];
     assert.equal(computeUpcomingDeadlines(decls).length, 0);
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// getDeadlineDate (indirectly, via computeUpcomingDeadlines) — monthly rules
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('computeUpcomingDeadlines — 303 monthly deadlines', () => {
+  const D = (model, year, period, status) => ({ id: `${model}-${year}-${period}`, model, year, period, status });
+
+  it('303 non-January monthly period (05) → deadline is day 30 of the following month', () => {
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, '05', 'draft')]);
+    assert.equal(deadline.getFullYear(), 2026);
+    assert.equal(deadline.getMonth(), 5); // June
+    assert.equal(deadline.getDate(), 30);
+  });
+
+  it('303 January monthly period, non-leap year (2026) → deadline is Feb 28', () => {
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, '01', 'draft')]);
+    assert.equal(deadline.getFullYear(), 2026);
+    assert.equal(deadline.getMonth(), 1); // February
+    assert.equal(deadline.getDate(), 28);
+  });
+
+  it('303 January monthly period, leap year (2028) → deadline is Feb 29', () => {
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2028, '01', 'draft')]);
+    assert.equal(deadline.getFullYear(), 2028);
+    assert.equal(deadline.getMonth(), 1); // February
+    assert.equal(deadline.getDate(), 29);
+  });
+});
+
+describe('computeUpcomingDeadlines — 349 monthly deadlines', () => {
+  const D = (model, year, period, status) => ({ id: `${model}-${year}-${period}`, model, year, period, status });
+
+  it('349 July (07) → deadline is September 20, not August 20 (consolidated with August)', () => {
+    const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '07', 'draft')]);
+    assert.equal(deadline.getFullYear(), 2026);
+    assert.equal(deadline.getMonth(), 8); // September
+    assert.equal(deadline.getDate(), 20);
+  });
+});
+
+describe('computeUpcomingDeadlines — 303 vs 349 quarterly parity', () => {
+  const D = (model, year, period, status) => ({ id: `${model}-${year}-${period}`, model, year, period, status });
+
+  for (const period of ['T1', 'T2', 'T3', 'T4']) {
+    it(`${period} deadline is identical for 303 and 349`, () => {
+      const [{ deadline: d303 }] = computeUpcomingDeadlines([D('303', 2025, period, 'draft')]);
+      const [{ deadline: d349 }] = computeUpcomingDeadlines([D('349', 2025, period, 'draft')]);
+      assert.equal(d303.getTime(), d349.getTime());
+    });
+  }
 });

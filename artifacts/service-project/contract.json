@@ -1,0 +1,2070 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-08-14T11:30:57.119Z",
+  "updatedAt": "2026-08-14T11:53:13.719Z",
+  "checksum": "d1665ad7a0539ef9",
+  "frontendContract": {
+    "window": {
+      "id": "800001",
+      "name": "Service Project",
+      "primaryEntity": "serviceProject",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "labelOverrides": {
+        "es_ES": {
+          "Isactive": "Activo"
+        },
+        "es_AR": {
+          "Isactive": "Activo"
+        }
+      },
+      "noHeaderBorder": true,
+      "layoutType": "default"
+    },
+    "entities": {
+      "serviceProject": {
+        "tableName": "C_Project",
+        "tabId": "800002",
+        "tabName": "Service Project",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "textarea",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "seq": 3,
+            "span": 2,
+            "rows": 1,
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "defaultValue": "Y",
+            "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          }
+        ],
+        "searchableFields": [
+          "searchKey",
+          "name"
+        ],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "800001",
+      "name": "Service Project",
+      "primaryEntity": "serviceProject",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "labelOverrides": {
+        "es_ES": {
+          "Isactive": "Activo"
+        },
+        "es_AR": {
+          "Isactive": "Activo"
+        }
+      },
+      "noHeaderBorder": true
+    },
+    "entities": {
+      "serviceProject": {
+        "tableName": "C_Project",
+        "tabId": "800002",
+        "tabName": "Service Project",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "IsSummary",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "phase",
+            "apiKey": "phase",
+            "column": "Projectphase",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "startingDate",
+            "apiKey": "startingDate",
+            "column": "Startdate",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "contractDate",
+            "apiKey": "contractDate",
+            "column": "DateContract",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "endingDate",
+            "apiKey": "endingDate",
+            "column": "DateFinish",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceToProject",
+            "apiKey": "invoiceToProject",
+            "column": "Invoice_ToProject",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "personInCharge",
+            "apiKey": "personInCharge",
+            "column": "Responsible_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "locationAddress",
+            "apiKey": "locationAddress",
+            "column": "C_Location_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "textarea",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "plannedAmount",
+            "apiKey": "plannedAmount",
+            "column": "PlannedAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "plannedQuantity",
+            "apiKey": "plannedQuantity",
+            "column": "PlannedQty",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "plannedMargin",
+            "apiKey": "plannedMargin",
+            "column": "PlannedMarginAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "legallyBindingContract",
+            "apiKey": "legallyBindingContract",
+            "column": "IsCommitment",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "priceCeiling",
+            "apiKey": "priceCeiling",
+            "column": "IsCommitCeiling",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "contractAmount",
+            "apiKey": "contractAmount",
+            "column": "CommittedAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "contractQuantity",
+            "apiKey": "contractQuantity",
+            "column": "CommittedQty",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "serviceRevenue",
+            "apiKey": "serviceRevenue",
+            "column": "Servrevenue",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "plannedExpenses",
+            "apiKey": "plannedExpenses",
+            "column": "Expexpenses",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "serviceCost",
+            "apiKey": "serviceCost",
+            "column": "Servcost",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "reinvoicedExpenses",
+            "apiKey": "reinvoicedExpenses",
+            "column": "Expreinvoicing",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "serviceMargin",
+            "apiKey": "serviceMargin",
+            "column": "Servmargin",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "expensesMargin",
+            "apiKey": "expensesMargin",
+            "column": "Expmargin",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "partnerAddress",
+            "apiKey": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "paymentMethod",
+            "apiKey": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "paymentTerms",
+            "apiKey": "paymentTerms",
+            "column": "C_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "createTemporaryPriceList",
+            "apiKey": "createTemporaryPriceList",
+            "column": "Createtemppricelist",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "priceList",
+            "apiKey": "priceList",
+            "column": "M_PriceList_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "changeProjectStatus",
+            "apiKey": "changeProjectStatus",
+            "column": "ChangeProjectStatus",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "copyFrom",
+            "apiKey": "copyFrom",
+            "column": "CopyFrom",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "generateOrder",
+            "apiKey": "generateOrder",
+            "column": "GenerateOrder",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "projectStatus",
+            "apiKey": "projectStatus",
+            "column": "Projectstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Project_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "projectPhase",
+            "apiKey": "projectPhase",
+            "column": "C_ProjectPhase_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "plannedPoAmount",
+            "apiKey": "plannedPoAmount",
+            "column": "PlannedPOAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "initiativeType",
+            "apiKey": "initiativeType",
+            "column": "Publicprivate",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "workType",
+            "apiKey": "workType",
+            "column": "Projectkind",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceAddress",
+            "apiKey": "invoiceAddress",
+            "column": "BillTo_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "Note",
+            "type": "text",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "priceListVersion",
+            "apiKey": "priceListVersion",
+            "column": "M_PriceList_Version_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "generateTo",
+            "apiKey": "generateTo",
+            "column": "GenerateTo",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "standardPhase",
+            "apiKey": "standardPhase",
+            "column": "C_Phase_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "projectType",
+            "apiKey": "projectType",
+            "column": "C_ProjectType_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceQuantity",
+            "apiKey": "invoiceQuantity",
+            "column": "InvoicedQty",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "invoiceAmount",
+            "apiKey": "invoiceAmount",
+            "column": "InvoicedAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "projectBalance",
+            "apiKey": "projectBalance",
+            "column": "ProjectBalanceAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "projectCategory",
+            "apiKey": "projectCategory",
+            "column": "ProjectCategory",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "lastPlannedProposalDate",
+            "apiKey": "lastPlannedProposalDate",
+            "column": "LastPlannedProposalDate",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "accountNo",
+            "apiKey": "accountNo",
+            "column": "AccountNo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "numberOfCopies",
+            "apiKey": "numberOfCopies",
+            "column": "Document_Copies",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "setProjectType",
+            "apiKey": "setProjectType",
+            "column": "Setprojecttype",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "outsourcedCost",
+            "apiKey": "outsourcedCost",
+            "column": "Servoutcost",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "servicesProvidedCost",
+            "apiKey": "servicesProvidedCost",
+            "column": "Servsercost",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/serviceProject",
+        "entity": "serviceProject",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/serviceProject/:id",
+        "entity": "serviceProject",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/serviceProject",
+        "entity": "serviceProject",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/serviceProject/:id",
+        "entity": "serviceProject",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/serviceProject/:id",
+        "entity": "serviceProject",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "service-project",
+    "baseUrl": "/sws/neo/service-project",
+    "crud": {
+      "serviceProject": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/service-project/serviceProject",
+        "detailUrl": "/sws/neo/service-project/serviceProject/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "entity": "serviceProject",
+        "field": "changeProjectStatus",
+        "column": "ChangeProjectStatus",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/changeProjectStatus",
+        "processId": "800002",
+        "processType": "classic"
+      },
+      {
+        "entity": "serviceProject",
+        "field": "copyFrom",
+        "column": "CopyFrom",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/copyFrom",
+        "processId": "212",
+        "processType": "classic"
+      },
+      {
+        "entity": "serviceProject",
+        "field": "generateOrder",
+        "column": "GenerateOrder",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/generateOrder",
+        "processId": "800005",
+        "processType": "classic"
+      },
+      {
+        "entity": "serviceProject",
+        "field": "generateTo",
+        "column": "GenerateTo",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/generateTo",
+        "processId": "164",
+        "processType": "classic"
+      },
+      {
+        "entity": "serviceProject",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/processNow",
+        "processId": "227",
+        "processType": "classic"
+      },
+      {
+        "entity": "serviceProject",
+        "field": "setProjectType",
+        "column": "Setprojecttype",
+        "url": "/sws/neo/service-project/serviceProject/{id}/action/setProjectType",
+        "processId": "215",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Isactive": "Activo"
+      },
+      "es_AR": {
+        "Isactive": "Activo"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-serviceProject-changeProjectStatus",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "changeProjectStatus",
+        "runner": "node",
+        "description": "Action endpoint for 'changeProjectStatus' in serviceProject should exist"
+      },
+      {
+        "id": "t-action-endpoint-serviceProject-copyFrom",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "copyFrom",
+        "runner": "node",
+        "description": "Action endpoint for 'copyFrom' in serviceProject should exist"
+      },
+      {
+        "id": "t-action-endpoint-serviceProject-generateOrder",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "generateOrder",
+        "runner": "node",
+        "description": "Action endpoint for 'generateOrder' in serviceProject should exist"
+      },
+      {
+        "id": "t-action-endpoint-serviceProject-generateTo",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "Action endpoint for 'generateTo' in serviceProject should exist"
+      },
+      {
+        "id": "t-action-endpoint-serviceProject-processNow",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in serviceProject should exist"
+      },
+      {
+        "id": "t-action-endpoint-serviceProject-setProjectType",
+        "category": "action-endpoint",
+        "entity": "serviceProject",
+        "field": "setProjectType",
+        "runner": "node",
+        "description": "Action endpoint for 'setProjectType' in serviceProject should exist"
+      },
+      {
+        "id": "t-crud-flags-serviceProject",
+        "category": "crud-flags",
+        "entity": "serviceProject",
+        "runner": "node",
+        "description": "CRUD flags for 'serviceProject' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-serviceProject-active",
+        "category": "default-value-type",
+        "entity": "serviceProject",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in serviceProject should be a string"
+      },
+      {
+        "id": "t-field-presence-serviceProject-active",
+        "category": "field-presence",
+        "entity": "serviceProject",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in serviceProject"
+      },
+      {
+        "id": "t-field-presence-serviceProject-description",
+        "category": "field-presence",
+        "entity": "serviceProject",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in serviceProject"
+      },
+      {
+        "id": "t-field-presence-serviceProject-name",
+        "category": "field-presence",
+        "entity": "serviceProject",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in serviceProject"
+      },
+      {
+        "id": "t-field-presence-serviceProject-searchKey",
+        "category": "field-presence",
+        "entity": "serviceProject",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in serviceProject"
+      },
+      {
+        "id": "t-field-type-serviceProject-active",
+        "category": "field-type",
+        "entity": "serviceProject",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in serviceProject"
+      },
+      {
+        "id": "t-field-type-serviceProject-description",
+        "category": "field-type",
+        "entity": "serviceProject",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in serviceProject"
+      },
+      {
+        "id": "t-field-type-serviceProject-name",
+        "category": "field-type",
+        "entity": "serviceProject",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in serviceProject"
+      },
+      {
+        "id": "t-field-type-serviceProject-searchKey",
+        "category": "field-type",
+        "entity": "serviceProject",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in serviceProject"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-Trx-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Org Trx Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Org Trx Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-User-C-BPartner-User-Contacts",
+        "category": "rule-declared",
+        "rule": "AD_User C_BPartner User/Contacts",
+        "runner": "node",
+        "description": "Rule 'AD_User C_BPartner User/Contacts' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-BPartner-Location",
+        "category": "rule-declared",
+        "rule": "C_BPartner Location",
+        "runner": "node",
+        "description": "Rule 'C_BPartner Location' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-BPartner-Location-Bill-To",
+        "category": "rule-declared",
+        "rule": "C_BPartner Location - Bill To",
+        "runner": "node",
+        "description": "Rule 'C_BPartner Location - Bill To' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-BPartner-Location-Ship-To",
+        "category": "rule-declared",
+        "rule": "C_BPartner Location - Ship To",
+        "runner": "node",
+        "description": "Rule 'C_BPartner Location - Ship To' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Phase-of-Project-Type",
+        "category": "rule-declared",
+        "rule": "C_Phase of Project Type",
+        "runner": "node",
+        "description": "Rule 'C_Phase of Project Type' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Project-C-Currency-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Project-C_Currency_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Project-C_Currency_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Project-Createtemppricelist-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Project-Createtemppricelist-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Project-Createtemppricelist-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Project-M-PriceList-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Project-M_PriceList_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Project-M_PriceList_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-ProjectPhase-of-Project",
+        "category": "rule-declared",
+        "rule": "C_ProjectPhase of Project",
+        "runner": "node",
+        "description": "Rule 'C_ProjectPhase of Project' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Change-Project-Status",
+        "category": "rule-declared",
+        "rule": "Change Project Status",
+        "runner": "node",
+        "description": "Rule 'Change Project Status' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Close-Project",
+        "category": "rule-declared",
+        "rule": "Close Project",
+        "runner": "node",
+        "description": "Rule 'Close Project' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Copy-Details",
+        "category": "rule-declared",
+        "rule": "Copy Details",
+        "runner": "node",
+        "description": "Rule 'Copy Details' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Copy-Project-Lines",
+        "category": "rule-declared",
+        "rule": "Copy Project Lines",
+        "runner": "node",
+        "description": "Rule 'Copy Project Lines' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Create-Purchase-Order-from-Project",
+        "category": "rule-declared",
+        "rule": "Create Purchase Order from Project",
+        "runner": "node",
+        "description": "Rule 'Create Purchase Order from Project' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Create-Sales-Order-from-Project",
+        "category": "rule-declared",
+        "rule": "Create Sales Order from Project",
+        "runner": "node",
+        "description": "Rule 'Create Sales Order from Project' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-FIN-PaymentMethodsWithAccount",
+        "category": "rule-declared",
+        "rule": "FIN_PaymentMethodsWithAccount",
+        "runner": "node",
+        "description": "Rule 'FIN_PaymentMethodsWithAccount' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Generate-Order",
+        "category": "rule-declared",
+        "rule": "Generate Order",
+        "runner": "node",
+        "description": "Rule 'Generate Order' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Get-Price",
+        "category": "rule-declared",
+        "rule": "Get Price",
+        "runner": "node",
+        "description": "Rule 'Get Price' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Process-a-Winning-Bid",
+        "category": "rule-declared",
+        "rule": "Process a Winning Bid",
+        "runner": "node",
+        "description": "Rule 'Process a Winning Bid' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Proposal-print-Jr",
+        "category": "rule-declared",
+        "rule": "Proposal print Jr",
+        "runner": "node",
+        "description": "Rule 'Proposal print Jr' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Purchase-Pricelist",
+        "category": "rule-declared",
+        "rule": "Purchase Pricelist",
+        "runner": "node",
+        "description": "Rule 'Purchase Pricelist' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Project-BPartner-C-BPartner-ID",
+        "category": "rule-declared",
+        "rule": "SE_Project_BPartner_C_BPartner_ID",
+        "runner": "node",
+        "description": "Rule 'SE_Project_BPartner_C_BPartner_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-ProjectLine-Value-M-Product-ID",
+        "category": "rule-declared",
+        "rule": "SE_ProjectLine_Value_M_Product_ID",
+        "runner": "node",
+        "description": "Rule 'SE_ProjectLine_Value_M_Product_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Proposal-BPartner-C-BPartner-ID",
+        "category": "rule-declared",
+        "rule": "SE_Proposal_BPartner_C_BPartner_ID",
+        "runner": "node",
+        "description": "Rule 'SE_Proposal_BPartner_C_BPartner_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Supplier-BPartner-C-BPartner-ID",
+        "category": "rule-declared",
+        "rule": "SE_Supplier_BPartner_C_BPartner_ID",
+        "runner": "node",
+        "description": "Rule 'SE_Supplier_BPartner_C_BPartner_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Proposal-PaymentRule-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Proposal-PaymentRule-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Proposal-PaymentRule-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Proposal-Projectwon-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Proposal-Projectwon-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Proposal-Projectwon-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-AD-User-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-AD_User_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-AD_User_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-C-BPartner-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-C_BPartner_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-C_BPartner_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-C-BPartner-Location-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-C_BPartner_Location_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-C_BPartner_Location_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-C-Currency-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-C_Currency_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-C_Currency_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-C-PaymentTerm-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-C_PaymentTerm_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-C_PaymentTerm_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-ChangeProjectStatus-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-ChangeProjectStatus-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-ChangeProjectStatus-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-CommittedAmt-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-CommittedAmt-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-CommittedAmt-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-CommittedQty-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-CommittedQty-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-CommittedQty-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-CopyFrom-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-CopyFrom-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-CopyFrom-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-DateContract-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-DateContract-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-DateContract-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-DateFinish-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-DateFinish-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-DateFinish-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-FIN-Paymentmethod-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-FIN_Paymentmethod_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-FIN_Paymentmethod_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-GenerateOrder-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-GenerateOrder-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-GenerateOrder-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-InvoicedAmt-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-InvoicedAmt-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-InvoicedAmt-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-InvoicedQty-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-InvoicedQty-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-InvoicedQty-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-IsCommitCeiling-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-IsCommitCeiling-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-IsCommitCeiling-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-IsCommitment-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-IsCommitment-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-IsCommitment-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-M-PriceList-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-M_PriceList_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-M_PriceList_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-PaymentRule-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-PaymentRule-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-PaymentRule-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-PlannedAmt-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-PlannedAmt-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-PlannedAmt-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-PlannedMarginAmt-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-PlannedMarginAmt-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-PlannedMarginAmt-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-PlannedQty-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-PlannedQty-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-PlannedQty-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-POReference-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-POReference-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-POReference-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-ProjectBalanceAmt-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-ProjectBalanceAmt-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-ProjectBalanceAmt-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-Responsible-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-Responsible_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-Responsible_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Service-Project-SalesRep-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Service Project-SalesRep_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Service Project-SalesRep_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-service-project-Supplier-GenerateOrder-displayLogic",
+        "category": "rule-declared",
+        "rule": "service-project-Supplier-GenerateOrder-displayLogic",
+        "runner": "node",
+        "description": "Rule 'service-project-Supplier-GenerateOrder-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Set-Project-Type",
+        "category": "rule-declared",
+        "rule": "Set Project Type",
+        "runner": "node",
+        "description": "Rule 'Set Project Type' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Expexpenses",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Expexpenses",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Expexpenses' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Expmargin",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Expmargin",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Expmargin' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Expreinvoicing",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Expreinvoicing",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Expreinvoicing' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Servcost",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Servcost",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Servcost' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Servmargin",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Servmargin",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Servmargin' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Margin-Servrevenue",
+        "category": "rule-declared",
+        "rule": "SL_Project_Margin_Servrevenue",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Margin_Servrevenue' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Planned-PlannedMarginAmt",
+        "category": "rule-declared",
+        "rule": "SL_Project_Planned_PlannedMarginAmt",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Planned_PlannedMarginAmt' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Planned-Plannedpoprice",
+        "category": "rule-declared",
+        "rule": "SL_Project_Planned_Plannedpoprice",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Planned_Plannedpoprice' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Planned-PlannedPrice",
+        "category": "rule-declared",
+        "rule": "SL_Project_Planned_PlannedPrice",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Planned_PlannedPrice' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Planned-PlannedQty",
+        "category": "rule-declared",
+        "rule": "SL_Project_Planned_PlannedQty",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Planned_PlannedQty' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-PriceList-M-PriceList-ID",
+        "category": "rule-declared",
+        "rule": "SL_Project_PriceList_M_PriceList_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Project_PriceList_M_PriceList_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Service-Servoutcost",
+        "category": "rule-declared",
+        "rule": "SL_Project_Service_Servoutcost",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Service_Servoutcost' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Service-Servsercost",
+        "category": "rule-declared",
+        "rule": "SL_Project_Service_Servsercost",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Service_Servsercost' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Project-Type-AD-Org-ID",
+        "category": "rule-declared",
+        "rule": "SL_Project_Type_AD_Org_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Project_Type_AD_Org_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Proposal-Product-M-Product-ID",
+        "category": "rule-declared",
+        "rule": "SL_Proposal_Product_M_Product_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Proposal_Product_M_Product_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-serviceProject-name",
+        "category": "searchable-filters",
+        "entity": "serviceProject",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for serviceProject"
+      },
+      {
+        "id": "t-searchable-filters-serviceProject-searchKey",
+        "category": "searchable-filters",
+        "entity": "serviceProject",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-accountNo",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "accountNo",
+        "runner": "node",
+        "description": "System field 'accountNo' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-businessPartner",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-changeProjectStatus",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "changeProjectStatus",
+        "runner": "node",
+        "description": "System field 'changeProjectStatus' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-client",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-comments",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "comments",
+        "runner": "node",
+        "description": "System field 'comments' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-contractAmount",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "contractAmount",
+        "runner": "node",
+        "description": "System field 'contractAmount' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-contractDate",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "contractDate",
+        "runner": "node",
+        "description": "System field 'contractDate' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-contractQuantity",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "contractQuantity",
+        "runner": "node",
+        "description": "System field 'contractQuantity' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-copyFrom",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "copyFrom",
+        "runner": "node",
+        "description": "System field 'copyFrom' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-createdBy",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-createTemporaryPriceList",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "createTemporaryPriceList",
+        "runner": "node",
+        "description": "System field 'createTemporaryPriceList' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-creationDate",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-currency",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "currency",
+        "runner": "node",
+        "description": "System field 'currency' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-endingDate",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "System field 'endingDate' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-expensesMargin",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "expensesMargin",
+        "runner": "node",
+        "description": "System field 'expensesMargin' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-formOfPayment",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "formOfPayment",
+        "runner": "node",
+        "description": "System field 'formOfPayment' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-generateOrder",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "generateOrder",
+        "runner": "node",
+        "description": "System field 'generateOrder' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-generateTo",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "System field 'generateTo' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-id",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-initiativeType",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "initiativeType",
+        "runner": "node",
+        "description": "System field 'initiativeType' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-invoiceAddress",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "System field 'invoiceAddress' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-invoiceAmount",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "invoiceAmount",
+        "runner": "node",
+        "description": "System field 'invoiceAmount' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-invoiceQuantity",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "invoiceQuantity",
+        "runner": "node",
+        "description": "System field 'invoiceQuantity' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-invoiceToProject",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "invoiceToProject",
+        "runner": "node",
+        "description": "System field 'invoiceToProject' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-lastPlannedProposalDate",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "lastPlannedProposalDate",
+        "runner": "node",
+        "description": "System field 'lastPlannedProposalDate' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-legallyBindingContract",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "legallyBindingContract",
+        "runner": "node",
+        "description": "System field 'legallyBindingContract' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-locationAddress",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "locationAddress",
+        "runner": "node",
+        "description": "System field 'locationAddress' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-numberOfCopies",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "numberOfCopies",
+        "runner": "node",
+        "description": "System field 'numberOfCopies' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-orderReference",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "System field 'orderReference' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-organization",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-outsourcedCost",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "outsourcedCost",
+        "runner": "node",
+        "description": "System field 'outsourcedCost' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-partnerAddress",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "System field 'partnerAddress' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-paymentMethod",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "System field 'paymentMethod' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-paymentTerms",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "paymentTerms",
+        "runner": "node",
+        "description": "System field 'paymentTerms' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-personInCharge",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "personInCharge",
+        "runner": "node",
+        "description": "System field 'personInCharge' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-phase",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "phase",
+        "runner": "node",
+        "description": "System field 'phase' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-plannedAmount",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "plannedAmount",
+        "runner": "node",
+        "description": "System field 'plannedAmount' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-plannedExpenses",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "plannedExpenses",
+        "runner": "node",
+        "description": "System field 'plannedExpenses' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-plannedMargin",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "plannedMargin",
+        "runner": "node",
+        "description": "System field 'plannedMargin' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-plannedPoAmount",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "plannedPoAmount",
+        "runner": "node",
+        "description": "System field 'plannedPoAmount' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-plannedQuantity",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "plannedQuantity",
+        "runner": "node",
+        "description": "System field 'plannedQuantity' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-priceCeiling",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "priceCeiling",
+        "runner": "node",
+        "description": "System field 'priceCeiling' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-priceList",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "priceList",
+        "runner": "node",
+        "description": "System field 'priceList' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-priceListVersion",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "priceListVersion",
+        "runner": "node",
+        "description": "System field 'priceListVersion' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-processed",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-processNow",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-projectBalance",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "projectBalance",
+        "runner": "node",
+        "description": "System field 'projectBalance' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-projectCategory",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "projectCategory",
+        "runner": "node",
+        "description": "System field 'projectCategory' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-projectPhase",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "projectPhase",
+        "runner": "node",
+        "description": "System field 'projectPhase' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-projectStatus",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "projectStatus",
+        "runner": "node",
+        "description": "System field 'projectStatus' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-projectType",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "projectType",
+        "runner": "node",
+        "description": "System field 'projectType' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-reinvoicedExpenses",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "reinvoicedExpenses",
+        "runner": "node",
+        "description": "System field 'reinvoicedExpenses' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-salesCampaign",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-salesRepresentative",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "salesRepresentative",
+        "runner": "node",
+        "description": "System field 'salesRepresentative' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-serviceCost",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "serviceCost",
+        "runner": "node",
+        "description": "System field 'serviceCost' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-serviceMargin",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "serviceMargin",
+        "runner": "node",
+        "description": "System field 'serviceMargin' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-serviceRevenue",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "serviceRevenue",
+        "runner": "node",
+        "description": "System field 'serviceRevenue' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-servicesProvidedCost",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "servicesProvidedCost",
+        "runner": "node",
+        "description": "System field 'servicesProvidedCost' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-setProjectType",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "setProjectType",
+        "runner": "node",
+        "description": "System field 'setProjectType' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-standardPhase",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "standardPhase",
+        "runner": "node",
+        "description": "System field 'standardPhase' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-startingDate",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "System field 'startingDate' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-summaryLevel",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-updated",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-updatedBy",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-userContact",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "userContact",
+        "runner": "node",
+        "description": "System field 'userContact' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-warehouse",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "System field 'warehouse' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-system-field-serviceProject-workType",
+        "category": "system-field",
+        "entity": "serviceProject",
+        "field": "workType",
+        "runner": "node",
+        "description": "System field 'workType' should exist in backend but not frontend for serviceProject"
+      },
+      {
+        "id": "t-visibility-serviceProject",
+        "category": "visibility",
+        "entity": "serviceProject",
+        "runner": "node",
+        "description": "Entity 'serviceProject' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 157,
+      "byCategory": {
+        "action-endpoint": 6,
+        "crud-flags": 1,
+        "default-value-type": 1,
+        "field-presence": 4,
+        "field-type": 4,
+        "rule-declared": 71,
+        "searchable-filters": 2,
+        "system-field": 67,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 157,
+        "junit": 0
+      }
+    }
+  }
+}

@@ -59,7 +59,7 @@ const addLineFields = {
     { key: 'etsgDateOperation', column: 'EM_Etsg_Date_Operation', type: 'date', label: 'Fecha operación', defaultValue: '@DateInvoiced@' },
     { key: 'accountingDate', column: 'DateAcct', type: 'date', required: true, label: 'Accounting Date' },
     { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, lookup: true, label: 'Business Partner', reference: 'BPartner', inputMode: 'search' },
-    { key: 'aeatsiiClaveTipo', column: 'EM_Aeatsii_Clave_Tipo', type: 'select', label: 'Invoice type key', defaultValue: '@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,\'LE\') FROM dual))=\'Y\') THEN \'F1\' ELSE null END FROM dual' },
+    { key: 'aeatsiiClaveTipo', column: 'EM_Aeatsii_Clave_Tipo', type: 'select', label: 'Invoice type key', defaultValue: '@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,\'LE\') FROM dual) AND c.isactive = \'Y\')=\'Y\') THEN \'F1\' ELSE null END FROM dual' },
     { key: 'aeatsiiMotivoRectif', column: 'EM_Aeatsii_Motivo_Rectif', type: 'select', label: 'Rectification reason' },
     { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', required: true, label: 'Payment Method', reference: 'Paymentmethod', inputMode: 'selector' },
     { key: 'aeatsiiSend', column: 'EM_Aeatsii_Send', type: 'text', required: true, label: 'Send to SII', defaultValue: 'N' },

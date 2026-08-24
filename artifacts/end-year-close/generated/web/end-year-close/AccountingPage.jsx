@@ -52,13 +52,17 @@ export const api = {
     "accounting": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/end-year-close/accounting",
       "detailUrl": "/sws/neo/end-year-close/accounting/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [],

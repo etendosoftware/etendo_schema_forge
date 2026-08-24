@@ -92,6 +92,19 @@ describe('useAccountMutations', () => {
     expect(body).not.toHaveProperty('swiftCode');
     expect(body).not.toHaveProperty('iBAN');
     expect(body).not.toHaveProperty('type');
+    expect(body).not.toHaveProperty('country');
+  });
+
+  it('createAccount maps countryId to country (ETP-4896)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.createAccount({ name: 'BBVA', currencyId: '102', countryId: '106' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ name: 'BBVA', currency: '102', country: '106' });
   });
 
   it('createAccount returns the first record of the W envelope', async () => {
@@ -214,6 +227,18 @@ describe('useAccountMutations', () => {
       eTGODateTolerance: 3,
       eTGOAmountTolerance: 0,
     });
+  });
+
+  it('updateAccount PUTs only { country } for a country-only edit (ETP-4896)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { countryId: '106' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ country: '106' });
   });
 
   it('updateAccount omits both tolerance keys when neither is in the payload', async () => {
@@ -403,7 +428,55 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '€' }],
       defaultCurrencyId: '102',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
+  });
+
+  it('fetchDefaults reads defaults.country into defaultCountryId (ETP-4896)', async () => {
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102', country: '106' } },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.defaultCountryId).toBe('106');
+  });
+
+  it('fetchDefaults reads the countryIbanRules catalog (ETP-4896)', async () => {
+    const rules = [{ id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 }];
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' }, countryIbanRules: rules },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.countryIbanRules).toEqual(rules);
+  });
+
+  it('fetchDefaults tolerates a missing countryIbanRules payload', async () => {
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' } },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    let defaults;
+    await act(async () => {
+      defaults = await result.current.fetchDefaults();
+    });
+
+    expect(defaults.countryIbanRules).toEqual([]);
   });
 
   it('fetchDefaults maps selector rows from the response.data envelope shape', async () => {
@@ -426,6 +499,8 @@ describe('useAccountMutations', () => {
         { id: '102', iso: 'EUR', symbol: '' },
       ],
       defaultCurrencyId: '100',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 
@@ -462,6 +537,8 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '' }],
       defaultCurrencyId: '',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 
@@ -480,6 +557,8 @@ describe('useAccountMutations', () => {
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '' }],
       defaultCurrencyId: '',
+      defaultCountryId: '',
+      countryIbanRules: [],
     });
   });
 

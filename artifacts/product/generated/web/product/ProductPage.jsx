@@ -114,13 +114,17 @@ export const api = {
     "costing": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/costing",
       "detailUrl": "/sws/neo/product/costing/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "transactionAdjustments": {
       "get": true,
@@ -136,13 +140,17 @@ export const api = {
     "transactions": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/transactions",
       "detailUrl": "/sws/neo/product/transactions/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "productCharacteristic": {
       "get": true,
@@ -158,13 +166,17 @@ export const api = {
     "stock": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/stock",
       "detailUrl": "/sws/neo/product/stock/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "categoryPriceRuleVersion": {
       "get": true,
@@ -594,7 +606,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"required":false,"type":"string","target":"price","aliases":["precio"],"label":"Price"}]}}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"required":false,"type":"string","target":"price","aliases":["precio"],"label":"Price"},{"required":false,"type":"string","target":"categoryCode","aliases":["codigocategoria","códigocategoría","codigo_categoria","código_categoría","category_code"],"label":"Category Code"},{"required":false,"type":"string","target":"categoryName","aliases":["nombrecategoria","nombrecategoría","nombre_categoria","nombre_categoría","category_name"],"label":"Category Name"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría"],"label":"Category"}]}}
       {...props} window={effectiveWindow}
     />
   );

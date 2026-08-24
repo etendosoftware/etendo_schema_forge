@@ -127,16 +127,17 @@ async function buildShipmentData(shipmentId, base, token) {
  * @param {string|null} shipmentId — the shipment record ID
  * @param {string}      apiBaseUrl — e.g. "/sws/neo/goods-shipment"
  * @param {string}      token      — Bearer token
+ * @param {Object}      [cacheConfig] — see usePdfGenerator's cacheConfig doc (pdfUtils.js)
  * @returns {{ pdfUrl, pdfBlob, loading, error }}
  */
-export function useShipmentPdf(shipmentId, apiBaseUrl, token) {
+export function useShipmentPdf(shipmentId, apiBaseUrl, token, cacheConfig = null) {
   const ui = useUI();
   return usePdfGenerator(shipmentId, apiBaseUrl, token, (id, base, tok) => {
     const labels = getShipmentPdfLabels(ui);
     return buildShipmentData(id, base, tok).then((data) =>
       renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels }),
     );
-  });
+  }, cacheConfig);
 }
 
 export function getShipmentPdfLabels(ui) {

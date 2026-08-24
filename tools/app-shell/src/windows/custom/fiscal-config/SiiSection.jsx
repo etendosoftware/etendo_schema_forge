@@ -1,6 +1,5 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
-import { DateField } from '@/components/ui/date-field';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
@@ -8,7 +7,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
 import SectionSaveButton from './SectionSaveButton.jsx';
-import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, serializeBooleanFields } from './fiscalConfig.utils.js';
+import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, normalizeDateInputValue, parseApiError, serializeBooleanFields } from './fiscalConfig.utils.js';
 
 const SII_ENTITY = 'siiConfiguration';
 
@@ -35,7 +34,6 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
   function validate() {
-    if (!form.plazoLmiteDeEnvoASII) return ui('fiscal.sii.err.deadline');
     return null;
   }
 
@@ -51,15 +49,25 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
     setSaving(true);
     setError(null);
     try {
+      const today = new Date().toISOString().slice(0, 10);
       const res = await apiFetch(`/sii-config/${SII_ENTITY}/${recordId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serializeBooleanFields(form, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'postedInvoices', 'recc', 'redeme'])),
+        body: JSON.stringify(serializeBooleanFields({
+          ...form,
+          // Preserve existing dates; fall back to today only if the record has none.
+          // Do NOT hardcode acogidaAlSII/entornoDeProduccin/adjuntarArchivosXML here —
+          // form already reflects the DB values via mapSiiRecordToForm(record), and
+          // overriding them would silently revert any change the user made in Classic. (ETP-4783)
+          fechaAcogidaSII:   normalizeDateInputValue(record?.fechaAcogidaSII) || today,
+          monitordate:       normalizeDateInputValue(record?.monitordate) || today,
+        }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'redeme'])),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);
@@ -70,126 +78,9 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
 
   return (
     <div>
-      {/* Estado */}
-      <SectionRow
-        label={ui('fiscal.sii.legend.status')}
-        noBorderTop
-        data-testid="SectionRow__fcb159">
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="space-y-1 w-[376px]">
-              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.enrollDate')}</Label>
-              <DateField
-                value={form.fechaAcogidaSII}
-                onChange={(iso) => set('fechaAcogidaSII', iso)}
-                data-testid="DateField__fcb159" />
-            </div>
-            <div className="space-y-1 w-[376px]">
-              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.monitorDate')}</Label>
-              <DateField
-                value={form.monitordate}
-                onChange={(iso) => set('monitordate', iso)}
-                data-testid="DateField__fcb159" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={isEtendoTrue(form.acogidaAlSII)}
-              onCheckedChange={v => set('acogidaAlSII', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.enrolled')}</span>
-          </div>
-        </div>
-      </SectionRow>
-      {/* Entorno */}
-      <SectionRow label={ui('fiscal.sii.legend.env')} data-testid="SectionRow__fcb159">
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.entornoDeProduccin)}
-              onCheckedChange={v => set('entornoDeProduccin', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.production')}</span>
-          </div>
-          <div className="flex items-center gap-2 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.adjuntarArchivosXML)}
-              onCheckedChange={v => set('adjuntarArchivosXML', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.attachXml')}</span>
-          </div>
-        </div>
-      </SectionRow>
-      {/* Envíos */}
-      <SectionRow label={ui('fiscal.sii.legend.sends')} data-testid="SectionRow__fcb159">
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="space-y-1 w-[376px]">
-              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.deadline')}</Label>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  min={0}
-                  value={form.plazoLmiteDeEnvoASII}
-                  onChange={e => set('plazoLmiteDeEnvoASII', e.target.value)}
-                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[hsl(var(--border-control))] px-3 text-sm bg-card [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => set('plazoLmiteDeEnvoASII', Math.max(0, +form.plazoLmiteDeEnvoASII - 1))}
-                  className="h-10 w-9 border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set('plazoLmiteDeEnvoASII', +form.plazoLmiteDeEnvoASII + 1)}
-                  className="h-10 w-9 rounded-r-lg border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1 w-[376px]">
-              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadenceSale')}</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.cadenciaEnvoFacturasVentaASII}
-                onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)}
-                className="bg-card"
-                data-testid="Input__fcb159" />
-            </div>
-            <div className="space-y-1 w-[376px]">
-              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadencePurchase')}</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.cadenciaEnvoFacturasCompraASII}
-                onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)}
-                className="bg-card"
-                data-testid="Input__fcb159" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={isEtendoTrue(form.postedInvoices)}
-              onCheckedChange={v => set('postedInvoices', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.postedOnly')}</span>
-          </div>
-        </div>
-      </SectionRow>
       {/* Régimen especial */}
       <SectionRow label={ui('fiscal.sii.legend.special')} data-testid="SectionRow__fcb159">
         <div className="flex flex-wrap gap-4 items-start">
-          <div className="flex items-center gap-2 pt-1 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.recc)}
-              onCheckedChange={v => set('recc', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.recc')}</span>
-          </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.redeme)}
@@ -197,8 +88,13 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               data-testid="Switch__fcb159" />
             <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.redeme')}</span>
           </div>
+        </div>
+      </SectionRow>
+      {/* Autorizaciones especiales AEAT */}
+      <SectionRow label={ui('fiscal.sii.legend.specialAuth')} data-testid="SectionRow__fcb159">
+        <div className="flex flex-wrap gap-4 items-start">
           <div className="space-y-1 w-[376px]">
-            <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authno')}</Label>
+            <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authRegNo')}</Label>
             <Input
               value={form.authorizationno}
               onChange={e => set('authorizationno', e.target.value)}

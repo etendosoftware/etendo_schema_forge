@@ -133,9 +133,13 @@ const CONNECTED = {
   id: 'acc-1', name: 'BBVA', type: 'B', currentBalance: 0,
   currencyIso: 'EUR', pendingCount: 2, bankConnected: true, active: true,
 };
-/** Offline bank account: exposes the "connect" affordances instead. */
+/**
+ * Offline bank account: exposes the "connect" affordances instead.
+ * countryIso ES on purpose — those affordances are Spain-only since ETP-4896
+ * (see saltEdgeEligibility.js), so without it they would not render at all.
+ */
 const OFFLINE = {
-  id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0,
+  id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0, countryIso: 'ES',
   currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true,
 };
 /** ETP-4871 — zero dependent records anywhere: the row kebab offers a real delete. */

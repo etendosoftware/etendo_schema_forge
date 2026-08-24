@@ -1,0 +1,108 @@
+{{!-- Excel-only template — flat, calculation-friendly export (same convention as
+      report-general-ledger's template-excel.hbs, ETP-4898).
+      Two shapes, matching the two views the on-screen HTML/PDF report itself
+      renders (the drill-down modal — clicking a contact — re-requests THIS
+      SAME report with showDetails=true + a bPartnerId filter, so its own
+      Excel/CSV buttons hit these same templates):
+        - meta.showDetails true  → one row per DOCUMENT (contact repeated on
+          every line, general-ledger-style), plus one subtotal row per contact
+          for the aggregates (credits/net) a single document doesn't carry.
+        - meta.showDetails false → one row per CONTACT (the summary shown on
+          the main report), unchanged from before.
+      Never a grouped/banded layout — that's what the HTML view is for; Excel
+      needs to be summable/pivotable.
+      Amount cells use data-cell-type="number" with round2 (this report's
+      helpers.js) — never formatCurrency: html-to-xlsx does
+      `parseFloat(cell.innerText)` for that type, so a formatted amount would
+      silently truncate at the thousands separator. round2 stays a plain
+      Number (max 2 decimals, no forced trailing zeros/grouping) purely to
+      strip the extra decimal noise the backend's unscaled BigDecimal amounts
+      can carry — it does not reformat the value like formatCurrency would. --}}
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  table { border-collapse: collapse; font-family: sans-serif; font-size: 10pt; }
+  th { font-weight: bold; text-align: left; background: #f1f5f9; }
+  th, td { padding: 1px 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <table>
+    {{#if meta.showDetails}}
+    <thead><tr>
+      <th>{{meta.labels.bPartner}}</th>
+      <th>{{meta.labels.documentNo}}</th>
+      <th>{{meta.labels.documentDate}}</th>
+      <th>{{meta.labels.current}}</th>
+      <th>1-{{meta.column1}}</th>
+      {{#if meta.showBucket2}}<th>{{meta.column1}}-{{meta.column2}}</th>{{/if}}
+      {{#if meta.showBucket3}}<th>{{meta.column2}}-{{meta.column3}}</th>{{/if}}
+      {{#if meta.showBucket4}}<th>{{meta.column3}}-{{meta.column4}}</th>{{/if}}
+      <th>{{meta.lastBucketLabel}}</th>
+      <th>{{meta.labels.credits}}</th>
+      <th>{{meta.labels.net}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      {{#each docs}}
+      <tr>
+        <td>{{../bPartner}}</td>
+        <td>{{docNo}}</td>
+        <td>{{formatDateDisplay dateInvoiced}}</td>
+        <td data-cell-type="number">{{round2 current}}</td>
+        <td data-cell-type="number">{{round2 days30}}</td>
+        {{#if @root.meta.showBucket2}}<td data-cell-type="number">{{round2 days60}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td data-cell-type="number">{{round2 days90}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td data-cell-type="number">{{round2 days120}}</td>{{/if}}
+        <td data-cell-type="number">{{round2 days150plus}}</td>
+        <td></td>
+        <td></td>
+      </tr>
+      {{/each}}
+      <tr>
+        <td>{{bPartner}}</td>
+        <td></td>
+        <td></td>
+        <td data-cell-type="number">{{round2 current}}</td>
+        <td data-cell-type="number">{{round2 days30}}</td>
+        {{#if @root.meta.showBucket2}}<td data-cell-type="number">{{round2 days60}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td data-cell-type="number">{{round2 days90}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td data-cell-type="number">{{round2 days120}}</td>{{/if}}
+        <td data-cell-type="number">{{round2 days150plus}}</td>
+        <td data-cell-type="number">{{round2 credits}}</td>
+        <td data-cell-type="number">{{round2 net}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+    {{else}}
+    <thead><tr>
+      <th>{{meta.labels.bPartner}}</th>
+      <th>{{meta.labels.current}}</th>
+      <th>1-{{meta.column1}}</th>
+      {{#if meta.showBucket2}}<th>{{meta.column1}}-{{meta.column2}}</th>{{/if}}
+      {{#if meta.showBucket3}}<th>{{meta.column2}}-{{meta.column3}}</th>{{/if}}
+      {{#if meta.showBucket4}}<th>{{meta.column3}}-{{meta.column4}}</th>{{/if}}
+      <th>{{meta.lastBucketLabel}}</th>
+      <th>{{meta.labels.total}}</th>
+      <th>{{meta.labels.credits}}</th>
+      <th>{{meta.labels.net}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td>{{lookup this 'bPartner'}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'current')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'days30')}}</td>
+        {{#if @root.meta.showBucket2}}<td data-cell-type="number">{{round2 (lookup this 'days60')}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td data-cell-type="number">{{round2 (lookup this 'days90')}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td data-cell-type="number">{{round2 (lookup this 'days120')}}</td>{{/if}}
+        <td data-cell-type="number">{{round2 (lookup this 'days150plus')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'total')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'credits')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'net')}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+    {{/if}}
+  </table>
+</body></html>

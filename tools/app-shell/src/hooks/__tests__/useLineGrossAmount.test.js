@@ -726,6 +726,25 @@ describe('computeUnitPriceForPost', () => {
     assert.equal(lineData.unitPrice, -90);
   });
 
+  // ETP-4727 (backend counterpart): listPrice explicitly edited to 0 on an existing
+  // line must still derive unitPrice=0. Before this fix, the `listPrice !== 0` guard
+  // left unitPrice at its stale pre-edit value in the outgoing PATCH body, which the
+  // backend's own fallback (NeoCommercialLinePolicy.injectLineGrossAmountIfMissing)
+  // then read as "price wasn't really changed" and recomputed a nonzero
+  // lineGrossAmount from it — clobbering the correct 0 the frontend had computed and
+  // sent for the exact same edit.
+  it('order config: listPrice explicitly 0 derives unitPrice=0 (not left stale)', () => {
+    const lineData = { listPrice: 0, discount: 0 };
+    computeUnitPriceForPost(lineData, ORDER_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, 0);
+  });
+
+  it('invoice config: listPrice explicitly 0 derives unitPrice=0 (not left stale)', () => {
+    const lineData = { listPrice: 0, etgoDiscount: 0 };
+    computeUnitPriceForPost(lineData, INVOICE_LINE_CONFIG);
+    assert.equal(lineData.unitPrice, 0);
+  });
+
 });
 
 // ─── LINE_CONFIGS shape ───────────────────────────────────────────────────────

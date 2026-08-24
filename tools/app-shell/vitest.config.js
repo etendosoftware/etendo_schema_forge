@@ -89,6 +89,15 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // ETP-4918: vitest's 5s default is too tight for THIS suite's shape, not for any single
+    // test in it. 671 jsdom files run through the forks pool below, and cumulative environment
+    // setup alone is 8-23 minutes of wall time — enough fork starvation that whichever test
+    // happens to be unlucky trips the limit. Observed twice in a row on different files
+    // (SatisfactionRating, then FiscalConfigDebugPanel), each passing in ~300ms when run alone,
+    // and each blocking a push. 15s keeps a genuine hang detectable while removing the false
+    // negative; if a test ever needs more than this, that test is the problem.
+    testTimeout: 15000,
+    hookTimeout: 15000,
     setupFiles: ['./src/test/setup.js'],
     include: ['src/**/*.vitest.{js,jsx}', 'src/**/*.spec.{js,jsx}'],
     css: false,

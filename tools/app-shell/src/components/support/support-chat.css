@@ -47,11 +47,14 @@
 }
 
 /* ---- FAB launcher -------------------------------------------------------- */
-.sc-fab {
+.sc-fab-wrap {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 70;
+}
+.sc-fab {
+  position: relative;
   width: 52px;
   height: 52px;
   border-radius: 999px;
@@ -81,6 +84,30 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 0 2px hsl(var(--card));
+}
+/* Dismiss ("x"): hidden until the launcher is hovered/focused, so it doesn't clutter the
+   bubble's icon at rest — discoverable, not in-your-face. */
+.sc-fab-dismiss {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: var(--sc-fg-2);
+  border: 1px solid var(--sc-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+  box-shadow: 0 1px 4px hsl(var(--foreground) / .15);
+}
+.sc-fab-wrap:hover .sc-fab-dismiss,
+.sc-fab-dismiss:focus-visible {
+  opacity: 1;
 }
 
 /* ---- Panel overlay ------------------------------------------------------ */
@@ -637,9 +664,9 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 180px;
-  background: var(--sc-bg);
-  border: 1px solid var(--sc-border);
+  min-width: 230px;
+  background: hsl(var(--card));
+  border: 1px solid var(--sc-border-1);
   border-radius: 8px;
   box-shadow: 0 4px 16px hsl(var(--foreground) / .12);
   z-index: 200;
@@ -656,6 +683,7 @@
   text-align: left;
   font-size: 13px;
   color: var(--sc-fg-1);
+  white-space: nowrap;
   cursor: pointer;
   transition: background .12s;
 }
@@ -807,6 +835,63 @@
   color: var(--sc-fg-1);
 }
 .sc-quick-replies button:hover { background: var(--sc-bg-subtle); }
+
+/* "Talk to a human" bar — a fixed sibling between the header and the scrollable thread
+   (not part of the scroll itself), so once ValerIA has offered escalation the option stays
+   glued right under the header and visible at all times, with no scroll-position dependency. */
+.sc-escalate-bar {
+  display: flex;
+  justify-content: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--sc-border-1);
+  background: hsl(var(--card));
+  flex-shrink: 0;
+}
+.sc-escalate-bar-inner {
+  position: relative;
+  display: inline-flex;
+}
+/* Escalate CTA: a deliberate brand-navy color matching a specific reference design — checked
+   the --primary/--foreground token families, neither covers this exact navy (--primary in
+   light mode collapses to near-black, not this blue). Same "no existing semantic precedent"
+   situation as the AEAT-349 purple case in semanticThemeUsage.test.js — kept as a literal via
+   its DATA_COLOR_LITERALS entry rather than inventing an unvetted token. */
+.sc-escalate-btn {
+  font: 600 12px/18px 'Inter', sans-serif;
+  color: hsl(var(--background));
+  background: #202452;
+  border: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(32,36,82,.32), 0 1px 2px rgba(32,36,82,.2);
+}
+.sc-escalate-btn:hover { background: #2c3168; }
+/* Dismiss ("x"): same discoverable-on-hover pattern as the FAB's own dismiss — hidden until
+   the bar is hovered/focused, so the user who doesn't mind it sees a clean pill button. */
+.sc-escalate-dismiss {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: var(--sc-fg-2);
+  border: 1px solid var(--sc-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+  box-shadow: 0 1px 4px hsl(var(--foreground) / .15);
+}
+.sc-escalate-bar-inner:hover .sc-escalate-dismiss,
+.sc-escalate-dismiss:focus-visible {
+  opacity: 1;
+}
 
 /* Day divider */
 .sc-day-divider { display: flex; align-items: center; justify-content: center; margin: 8px 0 4px; }

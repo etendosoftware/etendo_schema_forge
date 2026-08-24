@@ -25,6 +25,64 @@ const completed = (grandTotalAmount, outstandingAmount, extra = {}) => ({
   ...extra,
 });
 
+describe('resolveInvoicePaymentBadge — payment state overrides the amount (ETP-4895)', () => {
+  it('reports a rejected transfer instead of "Pagada"', () => {
+    // The payment is applied even though it failed, so the outstanding is zero and the amount
+    // branches would render this invoice as settled for money that never moved.
+    assert.deepEqual(
+      resolveInvoicePaymentBadge(completed(100, 0, { pisPaymentState: 'error' })),
+      { kind: 'transfer-error', amount: 0, isCredit: false },
+    );
+  });
+
+  it('reports a transfer in progress instead of "Pagada"', () => {
+    assert.deepEqual(
+      resolveInvoicePaymentBadge(completed(100, 0, { pisPaymentState: 'inProgress' })),
+      { kind: 'transfer-in-progress', amount: 0, isCredit: false },
+    );
+  });
+
+  it('steps aside for a partial transfer in flight: the remainder is real and payable', () => {
+    // Invoice 6,05 with a 3,00 transfer in progress still owes 3,05. Showing "Pago en progreso"
+    // there hid a genuine amount the user has to pay (ETP-4895).
+    const badge = resolveInvoicePaymentBadge(completed(6.05, 3.05, { pisPaymentState: 'inProgress' }));
+    assert.equal(badge.kind, 'partial');
+    assert.equal(badge.amount, 3.05);
+  });
+
+  it('wins over a genuine remaining amount, so the error is not buried', () => {
+    // A partial transfer that failed leaves a real 70 outstanding. Showing the figure would tell
+    // the user to pay, and say nothing about the 30 that went wrong.
+    assert.equal(
+      resolveInvoicePaymentBadge(completed(100, 70, { pisPaymentState: 'error' })).kind,
+      'transfer-error',
+    );
+  });
+
+  it('leaves invoices without the field exactly as before', () => {
+    // Sales invoices and every other window: the backend never emits it, so this stays inert.
+    assert.equal(resolveInvoicePaymentBadge(completed(100, 0)).kind, 'paid');
+    assert.equal(resolveInvoicePaymentBadge(completed(100, 40)).kind, 'partial');
+    assert.equal(
+      resolveInvoicePaymentBadge(completed(100, 0, { pisPaymentState: null })).kind, 'paid');
+  });
+
+  it('never overrides a credit instrument', () => {
+    // A negative total is money owed back by the supplier — a different axis entirely.
+    assert.equal(
+      resolveInvoicePaymentBadge(completed(-100, -100, { pisPaymentState: 'error' })).kind,
+      'credit-available',
+    );
+  });
+
+  it('says nothing on a draft, which has no payments yet', () => {
+    assert.equal(
+      resolveInvoicePaymentBadge({ documentStatus: 'DR', grandTotalAmount: 100, pisPaymentState: 'error' }).kind,
+      'draft',
+    );
+  });
+});
+
 describe('resolveInvoicePaymentBadge — draft (documentStatus !== CO)', () => {
   const NON_CO_STATUSES = ['DR', 'CL', 'VO', 'IP', '', 'co', 'CO ', null, undefined];
 

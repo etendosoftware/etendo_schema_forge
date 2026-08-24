@@ -9,15 +9,28 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
-    "listViewOptions": { "hidePrint": true },
+    "hidePrintWhen": {
+      "documentStatus": {
+        "notEquals": "CO"
+      }
+    },
+    "listViewOptions": {
+      "hidePrint": true
+    },
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"
     },
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
+    },
     "linesLayout": "inlineEditable",
+    "lineTaxSifTrigger": {
+      "enabled": true,
+      "_note": "ETP-4888 point 5. NOT yet wired through generate-frontend.js (that generator lives in schema_forge_core, out of reach from this repo) — consumed directly by this window's hand-written index.jsx via a local LINE_TAX_SIF_TRIGGER_ENABLED constant, so flipping this value alone does nothing today; the index.jsx constant must be edited by hand too, in sync. See docs/decisions-reference.md's lineTaxSifTrigger row and docs/ui-customization.md §14d for the full mechanism. Follow-up: wire this through generate-frontend.js once convenient (per Alex's review)."
+    },
     "extraTabs": [
       {
         "key": "sif",
@@ -425,9 +438,32 @@
           "visibility": "editable",
           "form": false
         },
-        "aeatsiiDescription": {
+        "aeatsiiTipoRectif": {
+          "visibility": "editable",
+          "form": false,
+          "defaultValue": "I"
+        },
+        "aeatsiiMotivoRectif": {
           "visibility": "editable",
           "form": false
+        },
+        "tbaiIsreverseinvoice": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicetype": {
+          "visibility": "editable",
+          "form": false
+        },
+        "tbaiReverseinvoicecode": {
+          "visibility": "editable",
+          "form": false,
+          "defaultExpr": "\"\"",
+          "displayLogic": "@tbaiConfigActive@='Y'",
+          "displayLogicJs": "record['tbaiConfigActive'] === 'Y'"
+        },
+        "aeatsiiDescription": {
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
@@ -441,6 +477,18 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiFechaRegCont": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
+          "form": false
+        },
         "aeatsiiIssent": {
           "visibility": "readOnly",
           "form": false
@@ -450,8 +498,16 @@
           "form": false,
           "grid": true
         },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "tbaiIssent": {
-          "visibility": "discarded",
+          "visibility": "system",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -472,16 +528,14 @@
           "form": false
         },
         "etvfacSimpinvart7273": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacInvNoIDArt61d": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "etvfacReverseinvtype": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "system",
+          "derivation": { "type": "hardcoded", "value": "I" }
         },
         "etvfacDateIssue": {
           "visibility": "discarded"
@@ -493,15 +547,14 @@
           "visibility": "discarded"
         },
         "etvfacIssueDescription": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiSequence": {
           "visibility": "discarded",

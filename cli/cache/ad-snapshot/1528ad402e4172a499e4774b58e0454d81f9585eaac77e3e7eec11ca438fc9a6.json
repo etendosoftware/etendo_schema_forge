@@ -145,7 +145,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "898da2a5545a8bc31e607cad6c5685f8f4f234ef8de40a9fc53ccb6567ae3eda",
+      "checksum": "e293aae8ca66d775da688d4c8ffd52f3461ac64bbe54c4084a27c32f1a94485b",
       "params": [
         "143"
       ],
@@ -155,7 +155,7 @@
           "ad_tab_id": "186",
           "name": "AEATSII_AcogidaSII4",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'N') FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "9FF4321DE0E5487B8A649A444F3F64BC",
@@ -392,7 +392,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "a774d083acdbe2a6eeeeddc734a5f3e9d860d249b8bea24886e7de9f9d1abd13",
+      "checksum": "278765e1db5b278918f72952ca1213f5b35279f686762278b48b7bbe4bfa9c36",
       "params": [
         "167"
       ],
@@ -402,7 +402,7 @@
           "ad_tab_id": "263",
           "name": "AEATSII_AcogidaSII",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'N') FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "7A6DD0A1AF304BE288BBFBE305EA1227",
@@ -631,7 +631,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "61a10694908e4c7da61b5392d43814983a00bb42d32a40a47274ed855053a259",
+      "checksum": "5233bc023cc0812cc27ad48961239daefdbda11955061d1ebf83ff3c51eed2fb",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -644,18 +644,18 @@
           "validation_code": "APP"
         },
         {
-          "ad_auxiliarinput_id": "BB2C006C5ADE411D95E5F62141A706E1",
-          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
-          "name": "FIN_ISRECEIPT",
-          "tab_name": "Header",
-          "validation_code": "N"
-        },
-        {
           "ad_auxiliarinput_id": "40289DEF2E1E98E4012E1EE6C6CD002E",
           "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
           "name": "FinancialAccountCurrencyId",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "BB2C006C5ADE411D95E5F62141A706E1",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "N"
         },
         {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E27DC86DE016C",
@@ -716,7 +716,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "d5e27d65e51366aaff28013d0b03df57dd0607203a0376cc2d967e5770a21043",
+      "checksum": "178638c32ae636902e46b89d2509db239779d171073e59edee105c01db44aebd",
       "params": [
         "183"
       ],
@@ -726,21 +726,21 @@
           "ad_tab_id": "290",
           "name": "AEATSII_AcogidaSII2",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'N') FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "2CEB169F0BBD4923B98F905CA3B96501",
           "ad_tab_id": "290",
           "name": "AEATSII_InSIIAndPostedInvoices",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT COALESCE((CASE WHEN (SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)) = 'N' THEN 'Y' ELSE (SELECT conf.posted_invoices FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)) END),'Y') FROM dual)"
+          "validation_code": "@SQL=(SELECT COALESCE((CASE WHEN (SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y') = 'N' THEN 'Y' ELSE (SELECT conf.posted_invoices FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y') END),'Y') FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "2EECDD832E0E4F01B551D9B1B7CDBB65",
           "ad_tab_id": "290",
           "name": "AEATSII_PreSII_Invoice",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT (CASE WHEN to_date(to_char((SELECT i.dateacct from c_invoice i where i.c_invoice_id = @C_Invoice_ID@),'YYYY-MM-DD'),'YYYY-MM-DD') < to_date(to_char((SELECT conf.insiisystemdate FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'YYYY-MM-DD'),'YYYY-MM-DD') THEN 'Y' ELSE 'N' END) FROM dual)"
+          "validation_code": "@SQL=(SELECT (CASE WHEN to_date(to_char((SELECT i.dateacct from c_invoice i where i.c_invoice_id = @C_Invoice_ID@),'YYYY-MM-DD'),'YYYY-MM-DD') < to_date(to_char((SELECT conf.insiisystemdate FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'YYYY-MM-DD'),'YYYY-MM-DD') THEN 'Y' ELSE 'N' END) FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "68CD2AFDCEAB45ADB0690B33067B7940",
@@ -1225,7 +1225,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
-      "checksum": "83f831fe4f3f71ef8f2d4a714013f31578ed6bf7f78f407563a192853efa73f1",
+      "checksum": "153f19af802807fb3f198d9a511ea848eedca84faea945e4b6467e1499cd98e5",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -1238,18 +1238,18 @@
           "validation_code": "ARR"
         },
         {
-          "ad_auxiliarinput_id": "78C534BFE24E45779C5F0B874C5B00E9",
-          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
-          "name": "FIN_ISRECEIPT",
-          "tab_name": "Header",
-          "validation_code": "Y"
-        },
-        {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E2772F0B2003B",
           "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
           "name": "FinancialAccountCurrencyId",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "78C534BFE24E45779C5F0B874C5B00E9",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "Y"
         },
         {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E27DDC44E0170",
@@ -1546,6 +1546,13 @@
         }
       ]
     },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": []
+    },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -1581,6 +1588,28 @@
         "108"
       ],
       "rows": []
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "99aa8a18868e28758aa42864fe02c0fa54f97860ba10f33534ebeab7268fbed7",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "800032",
+          "ad_tab_id": "800002",
+          "name": "PREPROJECTCATEGORY",
+          "tab_name": "Service Project",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "800023",
+          "ad_tab_id": "800005",
+          "name": "ISSOTRXTAB",
+          "tab_name": "Supplier",
+          "validation_code": "N"
+        }
+      ]
     },
     "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
       "checksum": "7a787161c3b9406d71762d43d1b07a5325079eb6e34b85e5aacc4aadb2d46c2c",
@@ -1705,7 +1734,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "5ba92422c6f1be4eadd29bbd8f1f068380315ec58dd409ec107138405f155c34",
+      "checksum": "c46d74894dae1a09379b35ce1504aa8b2eb762560bb8285659d56fbef8dc2067",
       "params": [
         "181"
       ],
@@ -1715,7 +1744,7 @@
           "ad_tab_id": "294",
           "name": "AEATSII_AcogidaSII3",
           "tab_name": "Header",
-          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual) AND conf.isactive = 'Y'),'N') FROM dual)"
         },
         {
           "ad_auxiliarinput_id": "874CCFB2FE7B40D79D2B0AE27951853F",

@@ -135,4 +135,39 @@ describe('ConfirmInOutModal', () => {
     fireEvent.click(screen.getByText('Confirm'));
     await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
   });
+
+  // ── ETP-4848: invoiceAction gating + default-checked toggle ────────────────
+
+  it('does not render the invoice toggle or info row when invoiceAction is omitted', () => {
+    const { invoiceAction, ...propsWithoutInvoiceAction } = BASE_PROPS;
+    render(<ConfirmInOutModal {...propsWithoutInvoiceAction} />);
+    expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByText('You are about to confirm')).not.toBeInTheDocument();
+  });
+
+  it('does not render the invoice toggle when invoiceAction is undefined explicitly', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction={undefined} />);
+    expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+  });
+
+  it('confirm button still works and calls only documentAction (no invoice call) when invoiceAction is omitted', async () => {
+    const onConfirmed = vi.fn();
+    const { invoiceAction, ...propsWithoutInvoiceAction } = BASE_PROPS;
+    render(<ConfirmInOutModal {...propsWithoutInvoiceAction} onConfirmed={onConfirmed} />);
+    fireEvent.click(screen.getByText('Confirm'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ invoice: null }));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch.mock.calls[0][0]).toContain('/action/documentAction');
+  });
+
+  it('toggle renders checked (aria-checked="true") by default when invoiceAction is provided and defaultCreateInvoice=true', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createInvoice" defaultCreateInvoice={true} />);
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('toggle renders unchecked (aria-checked="false") by default when invoiceAction is provided and defaultCreateInvoice=false', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createInvoice" defaultCreateInvoice={false} />);
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  });
 });

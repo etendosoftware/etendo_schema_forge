@@ -25,13 +25,18 @@ import { getApSubtype } from './purchaseInvoiceSubtype';
  * what the user sees matches what gets persisted; there is no +/- choice in
  * the popup by design — a positive correction is made by hand after import.
  *
- * After import, this modal best-effort PATCHes the header's `originInvoice`
+ * After import, this modal best-effort PATCHes the header's `originInvoices`
  * virtual field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`,
- * com.etendoerp.go) so the rectificative invoice is linked back to its source
- * via `C_Invoice_Reverse` — the same relationship `enrichOriginInvoice`
- * reads back on GET. This is independent of, and does not touch, the
- * separate "Reversed Invoices" / 349-boxes tab (`ReversedInvoicesPanel.jsx`),
- * which manages its own rows on the same table for Modelo 349 reporting.
+ * com.etendoerp.go) with the FULL set of ids imported in this run, so the
+ * rectificative invoice stays linked to EVERY source invoice it was imported
+ * from — not just the last one (ETP-4919: importing from a second source
+ * invoice used to silently drop the link to the first, both because of the
+ * `size !== 1` guard removed below and because the backend used to
+ * delete-then-single-create). Surfaced back on GET via
+ * `enrichOriginInvoice`/`originInvoices`. This is independent of, and does
+ * not touch, the separate "Reversed Invoices" / 349-boxes tab
+ * (`ReversedInvoicesPanel.jsx`), which manages its own rows on the same
+ * table for Modelo 349 reporting.
  *
  * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
  * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
@@ -146,13 +151,14 @@ const getDocDisplay = (doc) => ({
 });
 
 const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
-  if (importedDocIds.size !== 1) return;
-  const [sourceInvoiceId] = importedDocIds;
+  // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
+  // the ones already imported — send the FULL set, not just guard on exactly one.
+  if (importedDocIds.size === 0) return;
   try {
     await fetch(`${base}/purchase-invoice/header/${invoiceId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ originInvoice: sourceInvoiceId }),
+      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
     });
   } catch {
     // best-effort — the lines are already imported regardless of this link.

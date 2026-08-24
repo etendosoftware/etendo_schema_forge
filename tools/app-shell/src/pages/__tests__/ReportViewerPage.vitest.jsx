@@ -644,16 +644,38 @@ describe('ReportViewer (viewer sub-component)', () => {
   it('renders the ReportViewer when searchParams has report=id', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      // ReportViewer renders the sidebar with "reportBuilder" label
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      // ReportViewer renders the sidebar header — anchored on its "Cancelar" action
+      // (ETP-4898 replaced the old "reportBuilder" label with this action + the
+      // "customizeReport" header block below it).
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
   });
 
   it('displays the report title in the viewer', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
+  });
+
+  it('renders the "customizeReport" header with its hint subtitle', async () => {
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('customizeReport')).toBeInTheDocument();
+    });
+    expect(screen.getByText('customizeReportHint')).toBeInTheDocument();
+  });
+
+  it('clicking the sidebar Cancelar action clears the report from searchParams', async () => {
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('action-cancel'));
+    expect(mockSetSearchParams).toHaveBeenCalled();
+    const paramsArg = mockSetSearchParams.mock.calls.at(-1)[0];
+    expect(paramsArg.has('report')).toBe(false);
   });
 
   it('renders ReportSidebar with parameter sections', async () => {
@@ -700,14 +722,15 @@ describe('ReportViewer (viewer sub-component)', () => {
     expect(screen.getByText('resetFilters')).toBeInTheDocument();
   });
 
-  it('renders format action buttons (preview, PDF, Excel, CSV)', async () => {
+  it('renders format action buttons (PDF, Excel, CSV) without a preview button', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('preview')).toBeInTheDocument();
+      expect(screen.getByText('PDF')).toBeInTheDocument();
     });
-    expect(screen.getByText('PDF')).toBeInTheDocument();
     expect(screen.getByText('Excel')).toBeInTheDocument();
     expect(screen.getByText('CSV')).toBeInTheDocument();
+    // "Vista Previa" was intentionally removed from the format actions bar (ETP-4898).
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
   it('renders the print button', async () => {
@@ -882,14 +905,14 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('Aging Report')).toBeInTheDocument();
     });
     // The viewer-specific UI should NOT be present
-    expect(screen.queryByText('reportBuilder')).toBeNull();
+    expect(screen.queryByTestId('action-cancel')).toBeNull();
   });
 
   it('renders with category filter in searchParams', async () => {
     mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
   });
 
@@ -906,7 +929,7 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('reportBuilder')).toBeInTheDocument();
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
     });
     // No parameter sections should appear, but the run button is still there
     expect(screen.getByText('runReport')).toBeInTheDocument();
@@ -964,6 +987,124 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
+  // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call
+  // renderReport(format) directly, bypassing the required-field validation
+  // that the sidebar's "Generate Report" button already ran — so an empty
+  // required field would still hit the backend and surface a raw NEO 400
+  // error instead of the sidebar's usual red "Required" state. validateRequired()
+  // must now gate all three top-bar buttons too, not just the sidebar submit.
+  it('blocks the top-bar PDF button and shows the required error when a required field is empty', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('PDF')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('PDF'));
+
+    // Validation must fire and block the request BEFORE any /render fetch happens.
+    await waitFor(() => {
+      expect(screen.getByText('required')).toBeInTheDocument();
+    });
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
+  });
+
+  it('blocks the top-bar Excel button when a required field is empty (not just PDF)', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Excel')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Excel'));
+
+    await waitFor(() => {
+      expect(screen.getByText('required')).toBeInTheDocument();
+    });
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
+  });
+
+  it('lets the top-bar PDF button through (no regression) once the required field is filled', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('<html><body>ok</body></html>'),
+          blob: () => Promise.resolve(new Blob(['pdf-data'], { type: 'application/pdf' })),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-pdf');
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Important Field')).toBeInTheDocument();
+      });
+
+      const input = screen.getByText('Important Field').closest('div').querySelector('input');
+      await user.type(input, 'some value');
+
+      await user.click(screen.getByText('PDF'));
+
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+        const pdfCall = renderCalls.find(([, opts]) => {
+          const body = JSON.parse(opts?.body || '{}');
+          return body.format === 'pdf';
+        });
+        expect(pdfCall).toBeTruthy();
+      });
+      expect(screen.queryByText('required')).not.toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+    }
+  });
+
   it('clicking reset clears parameters and increments resetKey', async () => {
     const user = userEvent.setup();
     render(<ReportViewerPage />);
@@ -1001,9 +1142,12 @@ describe('ReportViewer (viewer sub-component)', () => {
     await waitFor(() => {
       expect(screen.getByText('Group By')).toBeInTheDocument();
     });
-    // Select element should have options
-    const selectEl = screen.getByRole('combobox');
+    // ETP-4898: rendered as a CreatableSearchSelect (input[role=combobox]) rather
+    // than a native <select>. Query by testid so the assertion stays unambiguous
+    // if another combobox-based parameter is ever added to the same sidebar.
+    const selectEl = screen.getByTestId('field-groupBy');
     expect(selectEl).toBeInTheDocument();
+    expect(selectEl).toHaveAttribute('role', 'combobox');
   });
 
   it('renders hidden parameters without showing them', async () => {
@@ -1070,13 +1214,15 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
-  it('clicking preview button triggers render with html format', async () => {
+  it('clicking Run Report triggers render with html format (auto preview, no dedicated button)', async () => {
+    // ETP-4898 removed the standalone "Vista Previa" button; the html preview is
+    // still produced automatically via ReportSidebar's onSubmit={() => renderReport('html')}.
     const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => {
-      expect(screen.getByText('preview')).toBeInTheDocument();
+      expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    await user.click(screen.getByText('preview'));
+    await user.click(screen.getByText('runReport'));
     await waitFor(() => {
       const renderCalls = globalThis.fetch.mock.calls.filter(
         ([url]) => typeof url === 'string' && url.includes('/render')
@@ -1228,7 +1374,7 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
   });
 
-  it('shows record count after successful html render', async () => {
+  it('renders the report iframe after successful html render (no record-count row)', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (typeof url === 'string' && url === '/api/reports') {
         return Promise.resolve({
@@ -1252,9 +1398,10 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
     await user.click(screen.getByText('runReport'));
     await waitFor(() => {
-      // The i18n mock returns the key as-is, so recordsFound is rendered literally
-      expect(screen.getByText('recordsFound')).toBeInTheDocument();
+      expect(document.querySelector('iframe')).toBeInTheDocument();
     });
+    // ETP-4898: the "X records found" row above the iframe was intentionally removed.
+    expect(screen.queryByText('recordsFound')).not.toBeInTheDocument();
   });
 
   it('renders sidebar with multiple sections when report has all parameter sections', async () => {
@@ -1264,6 +1411,95 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('refineDimensions')).toBeInTheDocument();
       expect(screen.getByText('displayOptions')).toBeInTheDocument();
     });
+  });
+
+  // --- ETP-4898 regression: PDF/download clicked directly, without a prior
+  // "Run Report" (HTML preview), must not leave the "ready to go" overlay
+  // stuck floating on top of the rendered content forever. Root cause: the
+  // overlay's visibility used to depend on previewHtmlRef.current, which is
+  // only ever set for format 'html'/'preview' — never for 'pdf'. Fixed via
+  // the independent hasGenerated state (see ReportViewerPage.jsx).
+
+  it('hides the "report ready" overlay after a direct PDF click, without generating a preview first', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-pdf');
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+
+      await user.click(screen.getByText('PDF'));
+
+      // Before the fix, these two nodes would remain in the document forever,
+      // floating on top of the (successfully loaded) PDF iframe.
+      await waitFor(() => {
+        expect(screen.queryByText('reportReadyTitle')).not.toBeInTheDocument();
+      });
+      expect(screen.queryByText('reportReadyHint')).not.toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+    }
+  });
+
+  it('keeps the "report ready" overlay visible after a direct Excel click (pure download, no iframe content)', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-xlsx');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('Excel'));
+
+      // Excel/CSV are pure downloads — they never touch the iframe, so the
+      // overlay must stay exactly as informative as before (unchanged behavior).
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+      globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  });
+
+  it('keeps the "report ready" overlay visible after a direct CSV click (pure download, no iframe content)', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-csv');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    try {
+      const user = userEvent.setup();
+      render(<ReportViewerPage />);
+      await waitFor(() => {
+        expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('CSV'));
+
+      await waitFor(() => {
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
+    } finally {
+      globalThis.URL.createObjectURL = originalCreateObjectURL;
+      globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+    }
   });
 
   it('renders running state on submit button when loading', async () => {

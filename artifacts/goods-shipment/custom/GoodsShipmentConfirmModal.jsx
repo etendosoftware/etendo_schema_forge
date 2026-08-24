@@ -11,7 +11,7 @@ export default function GoodsShipmentConfirmModal({ base, headers, recordId, dat
       specName="goods-shipment"
       entityName="goodsShipment"
       invoiceAction="createDraftInvoice"
-      defaultCreateInvoice={false}
+      defaultCreateInvoice={true}
       title={ui('goodsShipment.confirmModal.title')}
       docInfo={{
         documentNo: data?.documentNo,

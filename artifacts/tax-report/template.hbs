@@ -38,19 +38,19 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   </div>
 
   <div class="report-info-grid">
-    <div><span>From Date: </span><strong>{{formatDateDisplay meta.params.dateFrom}}</strong></div>
-    <div><span>To Date: </span><strong>{{formatDateDisplay meta.params.dateTo}}</strong></div>
-    <div><span>Date Type: </span><strong>{{#if (eq meta.params.dateType 'acct')}}Accounting Date{{else}}Operation Date{{/if}}</strong></div>
+    <div><span>{{meta.labels.dateFrom}}: </span><strong>{{formatDateDisplay meta.params.dateFrom}}</strong></div>
+    <div><span>{{meta.labels.dateTo}}: </span><strong>{{formatDateDisplay meta.params.dateTo}}</strong></div>
+    <div><span>{{meta.labels.dateType}}: </span><strong>{{#if (eq meta.params.dateType 'acct')}}{{meta.labels.accountingDate}}{{else}}{{meta.labels.operationDate}}{{/if}}</strong></div>
     {{#if meta.params._display_currencyId}}
-    <div><span>Currency: </span><strong>{{meta.params._display_currencyId}}</strong></div>
+    <div><span>{{meta.labels.currencyId}}: </span><strong>{{meta.params._display_currencyId}}</strong></div>
     {{/if}}
     {{#if meta.params._display_bPartnerId}}
-    <div><span>Business Partner: </span><strong>{{meta.params._display_bPartnerId}}</strong></div>
+    <div><span>{{meta.labels.bPartnerId}}: </span><strong>{{meta.params._display_bPartnerId}}</strong></div>
     {{/if}}
-    <div><span>Transaction Type: </span><strong>
-      {{#if (eq meta.params.transactionType 'S')}}Sales / Receipts
-      {{else}}{{#if (eq meta.params.transactionType 'P')}}Purchases / Payments
-      {{else}}Both{{/if}}{{/if}}
+    <div><span>{{meta.labels.transactionType}}: </span><strong>
+      {{#if (eq meta.params.transactionType 'S')}}{{meta.labels.salesReceipts}}
+      {{else}}{{#if (eq meta.params.transactionType 'P')}}{{meta.labels.purchasesPayments}}
+      {{else}}{{meta.labels.both}}{{/if}}{{/if}}
     </strong></div>
   </div>
 
@@ -58,24 +58,24 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   {{!-- REGION 1: DETAIL                                                 --}}
   {{!-- ================================================================ --}}
   {{#if meta.showDetails}}
-  <div class="region-title">Detail</div>
+  <div class="region-title">{{meta.labels.detail}}</div>
 
   {{#if (eq meta.params.transactionType 'P')}}
     {{#if rows.purchase.detail.length}}
-      {{> detailSection sectionRows=rows.purchase.detail label="Purchases / Payments" groupByBp=meta.groupByBp}}
+      {{> detailSection sectionRows=rows.purchase.detail label=meta.labels.purchasesPayments groupByBp=meta.groupByBp}}
     {{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'S')}}
     {{#if rows.sales.detail.length}}
-      {{> detailSection sectionRows=rows.sales.detail label="Sales / Receipts" groupByBp=meta.groupByBp}}
+      {{> detailSection sectionRows=rows.sales.detail label=meta.labels.salesReceipts groupByBp=meta.groupByBp}}
     {{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'B')}}
     {{#if rows.purchase.detail.length}}
-      {{> detailSection sectionRows=rows.purchase.detail label="Purchases / Payments" groupByBp=meta.groupByBp}}
+      {{> detailSection sectionRows=rows.purchase.detail label=meta.labels.purchasesPayments groupByBp=meta.groupByBp}}
     {{/if}}
     {{#if rows.sales.detail.length}}
-      {{> detailSection sectionRows=rows.sales.detail label="Sales / Receipts" groupByBp=meta.groupByBp}}
+      {{> detailSection sectionRows=rows.sales.detail label=meta.labels.salesReceipts groupByBp=meta.groupByBp}}
     {{/if}}
   {{/if}}
 
@@ -84,37 +84,37 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   {{!-- ================================================================ --}}
   {{!-- REGION 2: SUMMARY BY TAX CATEGORY                               --}}
   {{!-- ================================================================ --}}
-  <div class="region-title">Summary by Tax Category</div>
+  <div class="region-title">{{meta.labels.summaryByTaxCategory}}</div>
 
   {{#if (eq meta.params.transactionType 'P')}}
-    {{#if rows.purchase.summaryByCategory.length}}{{> categorySection groups=rows.purchase.summaryByCategory label="Purchases / Payments"}}{{/if}}
+    {{#if rows.purchase.summaryByCategory.length}}{{> categorySection groups=rows.purchase.summaryByCategory label=meta.labels.purchasesPayments}}{{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'S')}}
-    {{#if rows.sales.summaryByCategory.length}}{{> categorySection groups=rows.sales.summaryByCategory label="Sales / Receipts"}}{{/if}}
+    {{#if rows.sales.summaryByCategory.length}}{{> categorySection groups=rows.sales.summaryByCategory label=meta.labels.salesReceipts}}{{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'B')}}
-    {{#if rows.purchase.summaryByCategory.length}}{{> categorySection groups=rows.purchase.summaryByCategory label="Purchases / Payments"}}{{/if}}
-    {{#if rows.sales.summaryByCategory.length}}{{> categorySection groups=rows.sales.summaryByCategory label="Sales / Receipts"}}{{/if}}
+    {{#if rows.purchase.summaryByCategory.length}}{{> categorySection groups=rows.purchase.summaryByCategory label=meta.labels.purchasesPayments}}{{/if}}
+    {{#if rows.sales.summaryByCategory.length}}{{> categorySection groups=rows.sales.summaryByCategory label=meta.labels.salesReceipts}}{{/if}}
   {{/if}}
 
   {{!-- ================================================================ --}}
   {{!-- REGION 3: SUMMARY BY TAX RATE                                   --}}
   {{!-- ================================================================ --}}
-  <div class="region-title">Summary by Tax Rate</div>
+  <div class="region-title">{{meta.labels.summaryByTaxRate}}</div>
 
   {{#if (eq meta.params.transactionType 'P')}}
-    {{#if rows.purchase.summaryByRate.length}}{{> rateSection groups=rows.purchase.summaryByRate label="Purchases / Payments"}}{{/if}}
+    {{#if rows.purchase.summaryByRate.length}}{{> rateSection groups=rows.purchase.summaryByRate label=meta.labels.purchasesPayments}}{{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'S')}}
-    {{#if rows.sales.summaryByRate.length}}{{> rateSection groups=rows.sales.summaryByRate label="Sales / Receipts"}}{{/if}}
+    {{#if rows.sales.summaryByRate.length}}{{> rateSection groups=rows.sales.summaryByRate label=meta.labels.salesReceipts}}{{/if}}
   {{/if}}
   {{#if (eq meta.params.transactionType 'B')}}
-    {{#if rows.purchase.summaryByRate.length}}{{> rateSection groups=rows.purchase.summaryByRate label="Purchases / Payments"}}{{/if}}
-    {{#if rows.sales.summaryByRate.length}}{{> rateSection groups=rows.sales.summaryByRate label="Sales / Receipts"}}{{/if}}
+    {{#if rows.purchase.summaryByRate.length}}{{> rateSection groups=rows.purchase.summaryByRate label=meta.labels.purchasesPayments}}{{/if}}
+    {{#if rows.sales.summaryByRate.length}}{{> rateSection groups=rows.sales.summaryByRate label=meta.labels.salesReceipts}}{{/if}}
   {{/if}}
 
   <div class="report-footer">
-    <div>Generated by Etendo Go</div>
+    <div>{{meta.ui.generatedBy}}</div>
   </div>
 
 </div>
@@ -126,17 +126,17 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
 <div class="section-banner">{{label}}</div>
 <table class="report-table">
   <thead><tr>
-    <th style="width:16%">Tax Name</th>
-    <th style="width:9%">Doc No.</th>
-    <th style="width:8%">Doc Type</th>
-    <th style="width:8%">Doc Date</th>
-    <th style="width:8%">Acct Date</th>
-    <th style="width:14%">Business Partner</th>
-    <th style="width:6%">Country</th>
-    <th style="width:6%">Region</th>
-    <th style="width:8%" class="cell-amount">Tax Base</th>
-    <th style="width:8%" class="cell-amount">Tax Amt.</th>
-    <th style="width:9%" class="cell-amount">Total</th>
+    <th style="width:16%">{{@root.meta.labels.taxName}}</th>
+    <th style="width:9%">{{@root.meta.labels.docNo}}</th>
+    <th style="width:8%">{{@root.meta.labels.docType}}</th>
+    <th style="width:8%">{{@root.meta.labels.docDate}}</th>
+    <th style="width:8%">{{@root.meta.labels.acctDate}}</th>
+    <th style="width:14%">{{@root.meta.labels.bPartnerId}}</th>
+    <th style="width:6%">{{@root.meta.labels.country}}</th>
+    <th style="width:6%">{{@root.meta.labels.region}}</th>
+    <th style="width:8%" class="cell-amount">{{@root.meta.labels.taxBaseAmt}}</th>
+    <th style="width:8%" class="cell-amount">{{@root.meta.labels.taxAmt}}</th>
+    <th style="width:9%" class="cell-amount">{{@root.meta.labels.totalAmt}}</th>
   </tr></thead>
   <tbody>
     {{#each sectionRows}}
@@ -164,7 +164,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
         <td class="cell-amount">{{formatCurrency totalAmt}}</td>
       </tr>{{/each}}
       <tr class="bp-total-row">
-        <td></td><td colspan="7">Total {{bPartner}}</td>
+        <td></td><td colspan="7">{{@root.meta.ui.total}} {{bPartner}}</td>
         <td class="cell-amount">{{formatCurrency taxBaseAmt}}</td>
         <td class="cell-amount">{{formatCurrency taxAmt}}</td>
         <td class="cell-amount">{{formatCurrency totalAmt}}</td>
@@ -186,7 +186,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
       </tr>{{/each}}
     {{/if}}
     <tr class="tax-group-total">
-      <td colspan="8">Total {{taxName}}</td>
+      <td colspan="8">{{@root.meta.ui.total}} {{taxName}}</td>
       <td class="cell-amount">{{formatCurrency taxBaseAmt}}</td>
       <td class="cell-amount">{{formatCurrency taxAmt}}</td>
       <td class="cell-amount">{{formatCurrency totalAmt}}</td>
@@ -194,7 +194,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
     {{/each}}
   </tbody>
   <tfoot><tr>
-    <td colspan="8">TOTAL:</td>
+    <td colspan="8">{{@root.meta.ui.totals}}</td>
     <td class="cell-amount">{{formatCurrency (sumField sectionRows 'taxBaseAmt')}}</td>
     <td class="cell-amount">{{formatCurrency (sumField sectionRows 'taxAmt')}}</td>
     <td class="cell-amount">{{formatCurrency (sumField sectionRows 'totalAmt')}}</td>
@@ -209,16 +209,16 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
 <div class="section-banner">{{label}}</div>
 <table class="report-table">
   <thead><tr>
-    <th style="width:28%">Tax Name</th>
-    <th style="width:8%" class="cell-amount">Rate %</th>
-    <th style="width:16%" class="cell-amount">Tax Base</th>
-    <th style="width:16%" class="cell-amount">Tax Amount</th>
-    <th style="width:16%" class="cell-amount">Total</th>
-    <th style="width:10%" class="cell-amount">No. Partners</th>
+    <th style="width:28%">{{@root.meta.labels.taxName}}</th>
+    <th style="width:8%" class="cell-amount">{{@root.meta.labels.rate}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.taxBaseAmt}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.taxAmt}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.totalAmt}}</th>
+    <th style="width:10%" class="cell-amount">{{@root.meta.labels.noPartners}}</th>
   </tr></thead>
   <tbody>
     {{#each groups}}
-    <tr class="cat-header"><td colspan="6">Total by Tax Category - {{taxCategoryName}}</td></tr>
+    <tr class="cat-header"><td colspan="6">{{@root.meta.labels.totalByTaxCategory}} - {{taxCategoryName}}</td></tr>
     {{#each taxes}}<tr class="cat-row">
       <td>{{taxName}}</td>
       <td class="cell-amount">{{formatNumber rate}}</td>
@@ -228,7 +228,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
       <td class="cell-amount">{{bpCount}}</td>
     </tr>{{/each}}
     <tr class="cat-total">
-      <td colspan="2">TOTALS</td>
+      <td colspan="2">{{@root.meta.ui.totals}}</td>
       <td class="cell-amount">{{formatCurrency (sumField taxes 'taxBaseAmt')}}</td>
       <td class="cell-amount">{{formatCurrency (sumField taxes 'taxAmt')}}</td>
       <td class="cell-amount">{{formatCurrency (sumField taxes 'totalAmt')}}</td>
@@ -246,19 +246,19 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
 <div class="section-banner">{{label}}</div>
 <table class="report-table">
   <thead><tr>
-    <th style="width:26%">Business Partner / Tax Name</th>
-    <th style="width:8%" class="cell-amount">Rate %</th>
-    <th style="width:16%" class="cell-amount">Tax Base</th>
-    <th style="width:16%" class="cell-amount">Tax Amount</th>
-    <th style="width:16%" class="cell-amount">Total</th>
-    <th style="width:10%" class="cell-amount">No. Partners</th>
+    <th style="width:26%">{{@root.meta.labels.bPartnerId}} / {{@root.meta.labels.taxName}}</th>
+    <th style="width:8%" class="cell-amount">{{@root.meta.labels.rate}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.taxBaseAmt}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.taxAmt}}</th>
+    <th style="width:16%" class="cell-amount">{{@root.meta.labels.totalAmt}}</th>
+    <th style="width:10%" class="cell-amount">{{@root.meta.labels.noPartners}}</th>
   </tr></thead>
   <tbody>
     {{#each groups}}
     <tr class="rate-header"><td colspan="6">{{formatNumber rate}}%</td></tr>
     {{#each bpGroups}}
     <tr class="bp-header-row">
-      <td colspan="2"><strong>{{bPartner}}</strong>{{#if bpTaxId}} <span style="color:#666;font-size:10px;">Tax ID: {{bpTaxId}}</span>{{/if}}</td>
+      <td colspan="2"><strong>{{bPartner}}</strong>{{#if bpTaxId}} <span style="color:#666;font-size:10px;">{{@root.meta.labels.bpTaxId}}: {{bpTaxId}}</span>{{/if}}</td>
       <td class="cell-amount">{{formatCurrency taxBaseAmt}}</td>
       <td class="cell-amount">{{formatCurrency taxAmt}}</td>
       <td class="cell-amount">{{formatCurrency totalAmt}}</td>
@@ -274,7 +274,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
     </tr>{{/each}}
     {{/each}}
     <tr class="rate-total">
-      <td colspan="2">TOTALS</td>
+      <td colspan="2">{{@root.meta.ui.totals}}</td>
       <td class="cell-amount">{{formatCurrency taxBaseAmt}}</td>
       <td class="cell-amount">{{formatCurrency taxAmt}}</td>
       <td class="cell-amount">{{formatCurrency totalAmt}}</td>

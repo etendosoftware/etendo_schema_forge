@@ -15,7 +15,7 @@
       "sidePanel": "PaymentDetailSidebar",
       "bottomSection": "PaymentOutBottomPanel",
       "processConfirmModal": "ReactivarConfirmModal",
-      "topbarExtra": "PaymentConciliadoBadge",
+      "topbarExtra": "PaymentTopbarActions",
       "sidePanelStyle": {
         "order": -1,
         "borderLeft": "none",
@@ -50,7 +50,7 @@
         "columnName": "etprReactivatePayment",
         "label": "processReactivate",
         "style": "ghost-danger",
-        "displayLogicRaw": "@status@ != 'RPAP'"
+        "displayLogicRaw": "@status@ != 'RPAP' & @pisLocked@ = 'N'"
       }
     },
     "statusEnumLabels": {
@@ -58,7 +58,8 @@
       "RPR": "pagoDepositado",
       "RDNC": "pagoDepositado",
       "RPPC": "pagoDepositado",
-      "PPM": "pagoDepositado",
+      "PPM": "cpPaymentStateInProgress",
+      "ETGOERR": "cpPaymentStateError",
       "PWNC": "pagoDepositado"
     },
     "statusFieldLabel": null,

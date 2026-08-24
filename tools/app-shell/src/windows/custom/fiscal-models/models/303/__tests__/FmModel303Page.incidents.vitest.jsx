@@ -27,6 +27,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -51,7 +52,6 @@ vi.mock('../../../FmCommon.jsx', () => ({
 }));
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
-  FilesTab: () => null,
   HistoryTab: () => null,
   IncidentsTab: ({ decl, blocking, warning }) => React.createElement(
     'div',

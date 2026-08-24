@@ -108,7 +108,14 @@ global.fetch = async (url, options) => {
 
   if (ctx) {
     const urlStr = String(url);
-    if (urlStr.includes('/preview-file')) {
+    // ETP-4315 — the PDF-cache write now goes through the NEO attachments
+    // endpoint (POST .../attachments/{tableName}/{recordId}?markAsMain=true)
+    // instead of the retired /sws/neo/preview-file. The `markAsMain=true`
+    // query param is unique to this write, so it won't false-positive on the
+    // other attachment traffic the same app makes (plain GET/POST reads at
+    // .../attachments/{table}/{id}, .../attachments/{table}/{id}/main, or
+    // .../attachments/file/{id}).
+    if (urlStr.includes('markAsMain=true')) {
       ctx.previewCacheAttempted = true;
     } else if (urlStr.includes('/email-contracts/')) {
       ctx.sendEmailAttempted = true;
@@ -121,7 +128,7 @@ global.fetch = async (url, options) => {
 
     if (ctx) {
       const urlStr = String(url);
-      if (urlStr.includes('/preview-file')) {
+      if (urlStr.includes('markAsMain=true')) {
         ctx.previewCacheStatus = res.status;
         ctx.previewCacheOk = res.ok;
       } else if (urlStr.includes('/email-contracts/')) {
@@ -139,7 +146,7 @@ global.fetch = async (url, options) => {
     if (timeoutId) clearTimeout(timeoutId);
     if (ctx) {
       const urlStr = String(url);
-      if (urlStr.includes('/preview-file')) {
+      if (urlStr.includes('markAsMain=true')) {
         ctx.previewCacheError = err;
       } else if (urlStr.includes('/email-contracts/')) {
         ctx.sendEmailError = err;

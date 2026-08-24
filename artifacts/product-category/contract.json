@@ -1,8 +1,8 @@
 {
   "version": "0.17.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-08-05T12:15:02.258Z",
-  "checksum": "95f98b7caec0a2aa",
+  "updatedAt": "2026-08-19T19:35:57.328Z",
+  "checksum": "d7fa736c2a1b6509",
   "frontendContract": {
     "window": {
       "id": "144",
@@ -1033,6 +1033,13 @@
         "description": "Rule 'Relate Products to a Service Product' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-Situaci-n-Inmueble-IGIC",
+        "category": "rule-declared",
+        "rule": "Situación Inmueble IGIC",
+        "runner": "node",
+        "description": "Rule 'Situación Inmueble IGIC' (validation) should be declared"
+      },
+      {
         "id": "t-rule-declared-SL-Product-Type-ProductType",
         "category": "rule-declared",
         "rule": "SL_Product_Type_ProductType",
@@ -1364,21 +1371,21 @@
       }
     ],
     "summary": {
-      "total": 76,
+      "total": 77,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 2,
         "default-value-type": 1,
         "field-presence": 9,
         "field-type": 9,
-        "rule-declared": 16,
+        "rule-declared": 17,
         "searchable-filters": 2,
         "selector-endpoint": 4,
         "system-field": 30,
         "visibility": 2
       },
       "byRunner": {
-        "node": 76,
+        "node": 77,
         "junit": 0
       }
     }

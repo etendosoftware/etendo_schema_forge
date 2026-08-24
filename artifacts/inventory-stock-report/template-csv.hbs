@@ -1,0 +1,17 @@
+{{!-- CSV-only template (ETP-4901) — genuine comma-separated text, not the HTML/PDF
+      page dumped verbatim (recipe 'text' streams whatever this template compiles to,
+      byte for byte). Same flat, one-row-per-(product,warehouse) shape as
+      template-excel.hbs — ALL THREE dimension columns (Producto/Almacén/Categoría)
+      always present, unlike the HTML preview, which hides whichever one matches the
+      current "Agrupar por" choice (a space-saving trick with no CSV equivalent).
+      Amounts go through round2 (this report's helpers.js, max 2 decimals — never
+      formatCurrency, CSV is locale-independent by convention, like the Excel
+      export): m_costing.cost (the Average Costing algorithm's running
+      weighted-average) can otherwise carry more than 2 decimal digits. Every text
+      field goes through csvField (this report's helpers.js) so a value containing a
+      comma/quote/newline gets quoted correctly — and every csvField call MUST be
+      triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes double-stash
+      output by default, which turns csvField's own escaped `""` into
+      `&quot;&quot;`, corrupting the CSV. --}}{{#with meta}}{{{csvField labels.productSearchKey}}},{{{csvField labels.product}}},{{{csvField labels.warehouse}}},{{{csvField labels.category}}},{{{csvField labels.uom}}},{{{csvField labels.qtyOnHand}}},{{{csvField labels.unitCost}}},{{{csvField labels.totalValuation}}}
+{{/with}}{{#each rows}}{{{csvField (lookup this 'productSearchKey')}}},{{{csvField (lookup this 'product')}}},{{{csvField (lookup this 'warehouse')}}},{{{csvField (lookup this 'category')}}},{{{csvField (lookup this 'uom')}}},{{round2 (lookup this 'qtyOnHand')}},{{round2 (lookup this 'unitCost')}},{{round2 (lookup this 'totalValuation')}}
+{{/each}}

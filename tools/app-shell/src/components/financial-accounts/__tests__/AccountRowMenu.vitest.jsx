@@ -6,7 +6,9 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 
-const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B' };
+// countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
+// (see saltEdgeEligibility.js), so a fixture without it would hide that item.
+const baseAccount = { id: 'acc-1', name: 'BBVA', type: 'B', countryIso: 'ES' };
 
 /** Radix opens on pointerdown, not click. */
 function openMenu(id = 'acc-1') {
@@ -121,6 +123,25 @@ describe('AccountRowMenu', () => {
       expect(screen.getByTestId('account-row-menu-connect-acc-1')).toBeInTheDocument();
       expect(screen.queryByTestId('account-row-menu-reconnect-acc-1')).toBeNull();
       expect(screen.queryByTestId('account-row-menu-delete-connection-acc-1')).toBeNull();
+    });
+
+    // ETP-4896 Test Case 6 — Salt Edge is Spain-only. Hidden rather than disabled here: this menu
+    // has no disabled-item styling and conditionally renders every other inapplicable action.
+    it('hides connect for a non-Spanish account', () => {
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('hides connect when the account country is unknown', () => {
+      openMenu({ ...baseAccount, countryIso: '', bankConnected: false });
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('still offers disconnect on a non-Spanish account that is already linked', () => {
+      // The rule gates CONNECTING, not managing an existing link — an account connected before
+      // the restriction existed must still be releasable.
+      openMenu({ ...baseAccount, countryIso: 'IT', bankConnected: true });
+      expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
     });
 
     it('dispatches deleteConnection with the account', () => {

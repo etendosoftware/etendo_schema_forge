@@ -22,35 +22,59 @@
   ],
   "groups": [],
   "filters": [],
+  "sections": [
+    { "id": "periodo", "label": { "en_US": "Period", "es_ES": "Periodo" } },
+    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" } },
+    { "id": "alcance", "label": { "en_US": "Scope", "es_ES": "Alcance" } }
+  ],
   "parameters": [
     { "name": "orgId",           "label": { "en_US": "Organization",       "es_ES": "Organización"        }, "type": "search",  "selector": "org",       "inputStyle": "popup-single", "required": true,  "hidden": true, "autoDefault": true },
+    { "name": "dateFrom",        "label": { "en_US": "From Date",          "es_ES": "Desde Fecha"         }, "type": "date",    "required": true,  "section": "periodo" },
+    { "name": "dateTo",          "label": { "en_US": "To Date",            "es_ES": "Hasta Fecha"         }, "type": "date",    "required": true,  "section": "periodo" },
     { "name": "dateType",        "label": { "en_US": "Date Type",          "es_ES": "Tipo de Fecha"       }, "type": "select",  "options": [
       { "value": "acct",      "label": { "en_US": "Accounting Date", "es_ES": "Fecha Contable"      } },
       { "value": "operation", "label": { "en_US": "Operation Date",  "es_ES": "Fecha de Operación"  } }
-    ], "default": "acct", "section": "primary" },
-    { "name": "dateFrom",        "label": { "en_US": "From Date",          "es_ES": "Desde Fecha"         }, "type": "date",    "required": true,  "default": "__FIRST_OF_YEAR__", "section": "primary" },
-    { "name": "dateTo",          "label": { "en_US": "To Date",            "es_ES": "Hasta Fecha"         }, "type": "date",    "required": true,  "default": "__TODAY__",         "section": "primary" },
-    { "name": "currencyId",      "label": { "en_US": "Currency",           "es_ES": "Moneda"              }, "type": "search",  "selector": "currency",  "inputStyle": "popup-single", "required": true, "autoDefault": true, "section": "primary" },
-    { "name": "bPartnerId",      "label": { "en_US": "Contacts",           "es_ES": "Contactos"           }, "type": "search",  "selector": "bpartner",  "inputStyle": "popup",        "section": "primary" },
-    { "name": "bpNameType",      "label": { "en_US": "Contact Name", "es_ES": "Nombre de Contacto" }, "type": "select",  "options": [
-      { "value": "commercial", "label": { "en_US": "Commercial", "es_ES": "Comercial" } },
-      { "value": "legal",      "label": { "en_US": "Legal",      "es_ES": "Legal"     } }
-    ], "default": "commercial", "section": "primary" },
+    ], "default": "acct", "section": "periodo" },
+    { "name": "bPartnerId",      "label": { "en_US": "Contact",            "es_ES": "Contacto"            }, "type": "search",  "selector": "bpartner",  "inputStyle": "popup",        "section": "dimensiones" },
     { "name": "transactionType", "label": { "en_US": "Transaction Type",   "es_ES": "Tipo de Transacción" }, "type": "select",  "options": [
       { "value": "S", "label": { "en_US": "Sales / Receipts",       "es_ES": "Ventas / Cobros"    } },
       { "value": "P", "label": { "en_US": "Purchases / Payments",   "es_ES": "Compras / Pagos"    } },
       { "value": "B", "label": { "en_US": "Both",                   "es_ES": "Ambos"               } }
-    ], "default": "B", "section": "primary" },
+    ], "default": "S", "section": "alcance" },
     { "name": "taxType",         "label": { "en_US": "Tax Type",           "es_ES": "Tipo Impuesto"       }, "type": "select",  "options": [
       { "value": "tax",         "label": { "en_US": "Tax",         "es_ES": "Impuesto"  } },
       { "value": "withholding", "label": { "en_US": "Withholding", "es_ES": "Retención" } }
-    ], "default": "tax", "section": "options" },
-    { "name": "taxId",           "label": { "en_US": "Tax Rate",           "es_ES": "Impuesto / Retención" }, "type": "search", "selector": "tax", "inputStyle": "popup-single", "section": "options" },
-    { "name": "showDetails",     "label": { "en_US": "Show Details",       "es_ES": "Mostrar Detalle"     }, "type": "boolean", "section": "options" },
-    { "name": "groupByBp",       "label": { "en_US": "Group by Contact", "es_ES": "Agrupar por Contacto" }, "type": "boolean", "section": "options" }
+    ], "default": "tax", "section": "alcance" },
+    { "name": "bpNameType",      "label": { "en_US": "Contact Name", "es_ES": "Nombre de Contacto" }, "type": "select",  "options": [
+      { "value": "commercial", "label": { "en_US": "Commercial", "es_ES": "Comercial" } },
+      { "value": "legal",      "label": { "en_US": "Legal",      "es_ES": "Legal"     } }
+    ], "default": "commercial", "section": "alcance" },
+    { "name": "currencyId",      "label": { "en_US": "Currency",           "es_ES": "Moneda"              }, "type": "search",  "selector": "currency",  "inputStyle": "popup-single", "required": true, "autoDefault": true, "section": "alcance" },
+    { "name": "showDetails",     "label": { "en_US": "Show Details",       "es_ES": "Mostrar Detalle"     }, "type": "toggle", "default": true, "hidden": true, "section": "opciones" },
+    { "name": "groupByBp",       "label": { "en_US": "Group by Contact", "es_ES": "Agrupar por Contacto" }, "type": "toggle", "default": false, "hidden": true, "section": "opciones" }
   ],
   "defaultSort": { "field": "taxName", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],
   "summary": { "totalRows": true },
+  "labels": {
+    "docNo": { "en_US": "Doc No.", "es_ES": "Nº Doc." },
+    "docType": { "en_US": "Doc Type", "es_ES": "Tipo Doc." },
+    "docDate": { "en_US": "Doc Date", "es_ES": "Fecha Doc." },
+    "acctDate": { "en_US": "Acct Date", "es_ES": "Fecha Contable" },
+    "country": { "en_US": "Country", "es_ES": "País" },
+    "region": { "en_US": "Region", "es_ES": "Región" },
+    "noPartners": { "en_US": "No. Contacts", "es_ES": "Nº Contactos" },
+    "bpTaxId": { "en_US": "Tax ID", "es_ES": "NIF/CIF" },
+    "taxCategory": { "en_US": "Tax Category", "es_ES": "Categoría de Impuesto" },
+    "detail": { "en_US": "Detail", "es_ES": "Detalle" },
+    "summaryByTaxCategory": { "en_US": "Summary by Tax Category", "es_ES": "Resumen por Categoría de Impuesto" },
+    "summaryByTaxRate": { "en_US": "Summary by Tax Rate", "es_ES": "Resumen por Tasa de Impuesto" },
+    "totalByTaxCategory": { "en_US": "Total by Tax Category", "es_ES": "Total por Categoría de Impuesto" },
+    "salesReceipts": { "en_US": "Sales / Receipts", "es_ES": "Ventas / Cobros" },
+    "purchasesPayments": { "en_US": "Purchases / Payments", "es_ES": "Compras / Pagos" },
+    "both": { "en_US": "Both", "es_ES": "Ambos" },
+    "accountingDate": { "en_US": "Accounting Date", "es_ES": "Fecha Contable" },
+    "operationDate": { "en_US": "Operation Date", "es_ES": "Fecha de Operación" }
+  },
   "mockDataFile": "mock-data.json"
 }

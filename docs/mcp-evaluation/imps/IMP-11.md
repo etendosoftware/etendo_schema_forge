@@ -1,0 +1,418 @@
+# IMP-11 — Close the `visibility` / `userRequired` contract
+
+**Priority:** P1 · **Points:** 5 · **Cohort:** C2 · **Class:** ⚙️ signature change
+**Repos:** `schema_forge_core` **only** — the registry row still says `+ com.etendoerp.go`; that is
+wrong, see §4
+**Status:** see [the registry](../mcp-improvements-registry.md) §3 — never here
+**Evidence:** A10, A13, B6 · run reports
+[2026-08-05](../mcp-comparison-post-audit-2026-08-05.md),
+[2026-08-06](../mcp-comparison-post-audit-2026-08-06.md)
+**Investigated:** 2026-08-06 (read-only DB + source inspection, no code changed)
+
+---
+
+## 1. The defect, as an agent experiences it
+
+`neo_schema` tells the agent, in two separate places, to filter on two keys that are never present.
+
+The response `hint`, verbatim:
+
+> "Fields with **userRequired=true**: MUST be provided in neo_create. Fields with
+> **visibility=system** are auto-derived by Etendo callouts — omit them. Fields with
+> **visibility=discarded** are excluded — do not send them. Fields with readOnly=true are
+> auto-generated (DocumentNo, IDs). […]"
+
+And the `neo_schema` tool description advertises `visibility (editable/readOnly/system/discarded)`.
+
+On `sales-invoice/header` (157 fields): **0 carry `visibility`, 0 carry `userRequired`.**
+
+So the only signal left is `required` — the raw AD `IsMandatory` — which on that entity is `true`
+for **52 fields**, including `id` and `documentNo` (both `readOnly`), **10 buttons**, 6 computed
+totals, and ~20 fields belonging to unrelated localisation modules (`aeatsii*`, `etvfac*`, `tbai*`,
+`etblkp*`). An agent that obeys `required` sends garbage; an agent that obeys the `hint` gets an
+empty set and has to guess.
+
+**This is why M2 is 40 % and not higher.** It is upstream of the whole write path: B11's failed
+`neo_create` is a direct consequence.
+
+## 2. Hypotheses, and which one survived
+
+I stated on 2026-08-06 that this was *"a single change in the field builder"*. **That was wrong**, and
+the correction changes which repo does the work. Recorded here rather than overwritten, because the
+wrong guess is the informative part: the Java looks guilty and is not.
+
+Three candidates:
+
+| # | Hypothesis | Verdict |
+|---|---|---|
+| H1 | The Java serializer never emits the keys | ❌ **Refuted** — it emits both, correctly |
+| H2 | `ETGO_SF_FIELD.visibility` is never populated | ✅ **Confirmed** — 6340 / 6340 rows NULL |
+| H3 | The rows are not linked to `AD_Column`, so the map keys never match | ❌ Refuted — 6235 / 6340 linked |
+| H4 | The webhook that writes the rows accepts no such param | ❌ Refuted — that webhook is `@deprecated` and off this path |
+| H5 | The writer omits the column, and the value is collapsed before it gets there | ✅ **Confirmed** — two defects, both in `schema_forge_core` |
+
+### H1 — the serializer is already correct
+
+`com.etendoerp.go/src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java:564-568`:
+
+```java
+private static void addVisibility(JSONObject fieldObj, String visibility, boolean mandatory)
+    throws JSONException {
+  if (visibility != null) {
+    fieldObj.put("visibility", visibility);
+    fieldObj.put("userRequired", "editable".equals(visibility) && mandatory);
+  }
+  // …
+}
+```
+
+Both keys are emitted, and `userRequired` is derived exactly as the contract promises
+(`editable` **and** mandatory). The guard `visibility != null` is the entire behaviour: with no
+stored visibility, **both** keys vanish silently — including `userRequired`, which is why the two
+symptoms always appear together.
+
+The value comes from `loadFieldMetadata()` (same file, `:145-166`), which builds
+`visibilityByColumnId` from `ETGO_SF_FIELD` rows keyed by `AD_COLUMN_ID`, skipping null/blank values:
+
+```java
+String visibility = (String) sfField.get("visibility");
+if (visibility != null && !visibility.trim().isEmpty()) {
+  visibilityByColumnId.put(colId, visibility.trim());
+}
+```
+
+### H2 — the column exists and is entirely NULL (confirmed)
+
+Read-only queries against the local Etendo DB, 2026-08-06:
+
+```
+-- the column is there, and nullable
+etgo_sf_field.visibility  →  character varying, is_nullable = YES
+
+-- and it is empty, everywhere
+select coalesce(visibility,'<NULL>'), count(*) from etgo_sf_field group by 1;
+  <NULL>  |  6340        ← every row, no exceptions
+
+-- so it is not a linkage problem
+select count(*) total, count(ad_column_id) with_ad_column,
+       count(*) filter (where isactive='Y') active from etgo_sf_field;
+  total 6340 | with_ad_column 6235 | active 6340
+```
+
+The 105 rows without `ad_column_id` are a separate, smaller question (computed/virtual fields) and
+are **not** the cause here — even the 6235 linked rows carry no visibility.
+
+### The writer-side gap — located exactly
+
+**Correction (same day, before any code was written).** My first write-up of this section blamed the
+`SFUpsertField` webhook
+(`com.etendoerp.go/src/com/etendoerp/go/schemaforge/webhooks/SFUpsertField.java`) for not accepting a
+`Visibility` param. That is true of the class but **irrelevant to this bug**: `buildWebhookUrl` in the
+pusher is marked `@deprecated Use direct DB writes via neo-writer.js instead`
+(`schema_forge_core/cli/src/push-to-neo.js:72`). The webhook is not on this path anymore. Kept
+visible because it is the kind of near-miss that survives a careless review — the guilty-looking
+class was one hop off the real one.
+
+The real writer is `schema_forge_core/cli/src/neo-writer.js`, and there are **two** independent
+defects, both in the core repo. Neither is in Java.
+
+**Defect 1 — the value is destroyed before it is ever sent.** `push-to-neo.js:55-68`:
+
+```js
+export function mapVisibility(visibility) {
+  switch (visibility) {
+    case 'editable':  return { isIncluded: 'Y', isReadOnly: 'N' };
+    case 'readOnly':  return { isIncluded: 'Y', isReadOnly: 'Y' };
+    case 'system':    return { isIncluded: 'Y', isReadOnly: 'Y' };   // ← identical to readOnly
+    case 'discarded': return { isIncluded: 'N', isReadOnly: 'N' };
+    default:          return { isIncluded: 'N', isReadOnly: 'N' };   // ← identical to discarded
+  }
+}
+```
+
+Four domain values are collapsed into two booleans, **lossily**: `readOnly` and `system` produce the
+exact same pair, as do `discarded` and an unrecognised value. `buildFieldUpdateParams`
+(`push-to-neo.js:433-444`) forwards only that pair — the original `f.visibility` string is read on
+line 434 and then discarded.
+
+The collapsed distinction is precisely the one the `hint` asks the agent to act on: *"`visibility=system`
+are auto-derived by Etendo callouts — **omit them**"* versus *"`readOnly=true` are auto-generated"*.
+Even if the column were populated from `isReadOnly`, `system` and `readOnly` would be indistinguishable.
+
+**Defect 2 — the column is not in the statement.** `neo-writer.js:319-330` inserts 18 columns:
+
+```
+etgo_sf_field_id, etgo_sf_entity_id, ad_column_id, ad_module_id,
+isincluded, isreadonly, isbusinesscritical, defaultvalue, java_qualifier, seqno,
+ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby, agent_prompt
+```
+
+**`visibility` is absent.** The partial `UPDATE` path (`:264-296`) never sets it either — its
+`setClauses` cover `isincluded`, `isreadonly`, and optionally `ad_column_id`, `defaultvalue`,
+`agent_prompt`, `java_qualifier`, `seqno`, `isbusinesscritical`. `upsertField`'s own javadoc
+(`:229-245`) documents no `visibility` param.
+
+So: 6340 rows, 6340 NULLs, every push. That is the whole mechanism.
+
+## 2.1 Blast radius — who else reads the column
+
+**Exactly one consumer, in the whole Java codebase:**
+
+```
+grep -rn 'PROPERTY_VISIBILITY|get("visibility")|getVisibility()' src/
+→ src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java:158
+```
+
+Nothing in `NeoServlet`, the CRUD handlers, the selectors, the defaults service or the frontend reads
+it. So populating the column **cannot change runtime API behaviour** — it changes the `neo_schema`
+response and nothing else. That is what makes this a safe first item: maximum unblocking, no blast
+radius.
+
+The persistence layer is complete end-to-end and has been all along. The generated entity class
+(`{etendo_root}/src-gen/com/etendoerp/go/schemaforge/data/SFField.java`) already declares
+`PROPERTY_VISIBILITY` (`:108`), `getVisibility()` (`:332`) and `setVisibility(String)` (`:339`); the
+column is registered in `AD_COLUMN`, `AD_ELEMENT` and `AD_FIELD`; and
+`McpSchemaFieldBuilderTest.java:474-512` already tests `addVisibility`, including
+`nullVisibilityOmitsKeys` — the current behaviour is deliberate and pinned. **Only the value was ever
+missing.**
+
+*Nit worth fixing while we are here:* line 158 reads `sfField.get("visibility")` — a magic string —
+two lines above `sfField.isBusinessCritical()`, which uses the generated typed getter. `getVisibility()`
+exists; use it. Functionally identical, but the dynamic form fails at runtime instead of compile time.
+
+## 2.2 What actually gets written
+
+No DDL, no migration, no model change: `ETGO_SF_FIELD.VISIBILITY VARCHAR(20)`, `required="false"`,
+is already in `src-db/database/model/tables/ETGO_SF_FIELD.xml:68`. The rows already exist too. The
+change is NULL → one of four string values on rows that are already there.
+
+Distribution the pusher would write, counted from the 68 local `backendContract`s (179 entities,
+5851 field rows):
+
+| visibility | rows | share |
+|---|---:|---:|
+| `system` | 2982 | 51 % |
+| `editable` | 1261 | 22 % |
+| `discarded` | 1071 | 18 % |
+| `readOnly` | 537 | 9 % |
+
+**69 % of all fields are `system` or `discarded`** — precisely the set the `hint` tells the agent to
+omit, and precisely what it cannot currently identify.
+
+On `sales-invoice/header` (164 fields in the backend contract): 95 `discarded`, 29 `system`,
+24 `editable`, 16 `readOnly`. `required: true` on 59 — but **`editable` AND `required` on 11**. That
+11-vs-59 gap is the fix, in one number: the agent goes from a 50-plus-field required set full of
+buttons and localisation columns to eleven fields it can actually send.
+
+*(The 59 here and the 52 counted in B6 are different measurements — the local contract includes
+`discarded` fields that never reach `neo_schema`. Not a discrepancy; do not merge them.)*
+
+## 3. Why the data is not the hard part
+
+The value is not missing from the system — it is missing only from the *runtime tables*.
+
+`visibility` (`editable` / `readOnly` / `system` / `discarded`) is a **core domain concept** of this
+repo: it is authored per field in `decisions.json`, documented in
+[`field-visibility-types.md`](../../field-visibility-types.md) and
+[`decisions-reference.md`](../../decisions-reference.md), and resolved into `contract.json`. Every
+one of the 6340 rows has a known visibility on the Schema Forge side. It is dropped in the last hop,
+at the push.
+
+That makes this a plumbing fix, not a data-authoring project — unlike IMP-13 (`businessCritical` +
+`namedFilters`), where the values genuinely do not exist yet and someone has to decide them. Worth
+keeping the two apart when sequencing: IMP-11 is cheap, IMP-13 is not.
+
+## 4. What a fix has to touch
+
+Three pieces, in dependency order, **all three in `schema_forge_core`**. Steps 1 and 2 are
+**implemented** (core commit `0c3f13d2b`) — see §4.1 for what landed and how it differs from this
+proposal. Step 3 (backfill) is not done, and until it is, the response is unchanged.
+
+`com.etendoerp.go` needs **no change at all**: the reader is already correct and the webhook is off
+this path. That is a second correction to my first write-up, which listed the repo as
+`schema_forge_core` + `com.etendoerp.go` (as does the registry row — worth fixing there too).
+
+1. **`neo-writer.js` — persist the column.** Add `visibility` to `upsertField`: the `INSERT` column
+   list (`:319-330`) and the partial `UPDATE` (`:264-296`, as an `if ('visibility' in params)`
+   clause, matching how `agentPrompt` is handled). Validate against the four legal values so a typo
+   fails loudly instead of storing garbage the reader would then serve as truth.
+2. **`push-to-neo.js` — stop discarding it.** `buildFieldUpdateParams` (`:433-444`) already has
+   `f.visibility` in hand; pass it through **alongside** the `mapVisibility` pair, not instead of it.
+   `isIncluded`/`isReadOnly` stay exactly as they are — they drive NEO's runtime behaviour and are not
+   ours to redefine here. Mirror it into `reportDryRunPlan` (`:462-474`) so `--dry-run` does not lie
+   about what a real push would write.
+3. **Backfill.** New pushes fix themselves; the 6340 existing rows do not. Either re-push every spec
+   or write a data-fix. A re-push is preferable — it exercises the new path instead of working around
+   it.
+
+Tests belong with step 1 and 2 (Tester's job per the delegation rule): `mapVisibility` is already an
+exported pure function, and `buildFieldUpdateParams` is exported too, so both are unit-testable
+without a DB. The regression worth pinning is that `system` and `readOnly` produce **different**
+stored visibility while still producing the **same** `isIncluded`/`isReadOnly` pair.
+
+**Deliberately out of scope:** changing the Java `addVisibility` guard. Emitting
+`visibility: "unknown"` or defaulting `userRequired` when nothing is stored would make the response
+*look* compliant while carrying no information — worse than the current honest omission, because an
+agent cannot tell the difference. The guard is right; feed it.
+
+**Open question, still open:** whether `readOnly` visibility should also suppress
+the field from the create-oriented view, which overlaps IMP-12's `view:"create"` projection. If
+IMP-12 lands first the two fixes compose; if IMP-11 lands first, IMP-12 gets a cheaper filter to
+write. Either order works — but doing them in the same wave avoids specifying the interaction twice.
+
+## 4.1 What landed — core `0c3f13d2b`
+
+Steps 1 and 2 shipped together, deliberately: persisting the column without passing the value (or
+the reverse) leaves the DB NULL and the response unchanged while looking done in the diff.
+
+| File | Change |
+|---|---|
+| `cli/src/neo-writer.js` | `visibility` added to `upsertField`'s `INSERT` column list (18 → 19 columns) and to the partial `UPDATE` as an `if ('visibility' in params)` clause. New exported `FIELD_VISIBILITIES` + `normalizeVisibility()` |
+| `cli/src/push-to-neo.js` | `buildFieldUpdateParams` forwards `f.visibility ?? null` alongside the `mapVisibility` pair; `reportDryRunPlan` mirrors it |
+| `cli/test/neo-writer-upsert-field.test.js` | 8 new cases + 2 rewritten (see below) |
+| `cli/test/push-to-neo-helpers.test.js` | 4 new cases on the passthrough |
+
+Two decisions worth recording, both narrower than the proposal:
+
+- **NULL stays legal and means "not classified".** The obvious reading of "validate against the four
+  legal values" is to reject everything else including NULL — which would break `populateSpec`, since
+  it creates one row per AD column *before* any contract is applied. So `normalizeVisibility` maps
+  `null`/`undefined`/`''` → `null` and throws only on a non-empty value outside the vocabulary. It is
+  case-sensitive: `'readonly'` is a typo, not an alias.
+- **The Java typed-getter nit was dropped from this wave.** `McpSchemaFieldBuilder.java:158` still
+  reads `sfField.get("visibility")` by magic string where `sfField.getVisibility()` exists. Correct
+  but purely cosmetic, and touching Java costs the user a compile + deploy for zero behaviour change.
+  Keeping the wave inside one repo is worth more than the nit; it is now a standalone cleanup.
+
+**One pre-existing test was wrong and is rewritten, not deleted.** Two `agent_prompt` cases asserted
+`params[params.length - 1]` — "the last INSERT param". That passed only because `agent_prompt`
+happened to be last, and appending `visibility` moved it silently onto the wrong column. They now
+resolve the index from the SQL column list, so the next appended column cannot break them. Full core
+suite: **2825 / 2825 passing**.
+
+**Still required before any status moves:** the backfill (step 3). 6340 rows are NULL today, so
+`neo_schema` output is byte-identical to B6 until every spec is re-pushed. This also means the
+`ETGO_SF_FIELD.xml` sourcedata diff will gain ~6340 `<VISIBILITY>` lines on the next
+`export.database` — the largest part of the change by line count, and not code.
+
+## 4.2 Backfill done — verified live on `etendo-go-local` (2026-08-06)
+
+The user ran `make regen … PUSH_TO_NEO=1` on the 0.3.28 preview, then `export.database`. Verified
+read-only (SELECT probes + `neo_schema` calls), no records mutated.
+
+- **The column is populated.** 4343 rows classified: `system` 1881, `discarded` 1027, `editable` 1016,
+  `readOnly` 419. The sourcedata diff is exactly 4343 `<VISIBILITY>` additions, `0` deletions, no
+  other column touched (committed in `com.etendoerp.go` as `356e77c5`).
+- **The collapse is confirmed, and now recoverable.** 2300 rows share the same `Y/Y`
+  `isIncluded`/`isReadOnly` pair while splitting `system` (1881) from `readOnly` (419) — the exact
+  distinction the `hint` asks agents to act on, and the reason the two booleans were never enough.
+- **The response carries it.** `neo_schema(purchase-invoice)` now returns `"visibility": "system"`
+  and `"userRequired": true` per field, with no Java rebuild — the reader was always correct.
+- **`sales-invoice/header`: 157/157 fields classified**, 24 `editable` of which 11 mandatory, versus
+  59 `required: true` before. That is the §5 target reached for curated entities.
+
+Two residual gaps, split by whether the MCP can see them:
+
+- **105 orphan `ETGO_SF_FIELD` rows — no MCP impact, left alone.** They have `ad_column_id`,
+  `java_qualifier` and `seqno` all NULL, and `updated` still `2026-06-23` where classified siblings
+  show `2026-08-06`; `upsertSingleField` matches by `columnname`, so they are unaddressable. They
+  never reach an agent: `McpToolRouterSupport.editablePropertyNames` drops any row whose column is
+  null. Measured — `neo_schema(purchase-invoice, basicDiscounts)` reports `fieldCount: 5` where the
+  DB holds 9 rows. This also explains all 5 "mixed" entities, so e.g. `sales-order/header` still
+  serves 97 fully-classified fields.
+
+  **Null-safety audited 2026-08-07** — "left alone" is only safe if every reader tolerates the null
+  column, so all 15 files touching `SFField` were checked. All 105 rows were created on
+  `2026-06-17`, the table's first day, and sit in just two specs (`sales-order` header/lines 56,
+  `purchase-invoice` lines/tax/basicDiscounts 49); every one of the 6235 rows written since has a
+  column. Each `getADColumn()` call site guards: `McpResourceProvider:412`, `ToolRegistry:794`,
+  `McpQuerySupport:211`, `McpSchemaFieldBuilder:158`/`:191`, `NeoDefaultsService:136`/`:464`/`:1301`,
+  `NeoSelectorService:97`/`:150`/`:392` skip or null-check explicitly, and
+  `NeoProcessService:250` delegates to `collectColumnInfo`, which null-checks first.
+
+  One site dereferences without a guard — `NeoDefaultsService:182`, pass 2 over `sequenceSFFields`
+  — and is safe only because pass 1 populates that list *after* its own `adColumn == null` check
+  ~45 lines earlier. It cannot NPE today, but the invariant is invisible at the point of use, so a
+  future reordering of the two passes would turn these inert rows into a 500 on
+  `neo_defaults(sales-order, header)`. A comment now marks the dependency.
+- **1892 fields across 105 *uncurated* entities — real impact, out of IMP-11's scope.** No contract
+  covers them, and the writer loop iterates `extractFieldsFromContract`, so a regen has nothing to
+  refresh them from. `neo_schema(sales-invoice, ticketbai)` returns 4 fields with **no**
+  `visibility`/`userRequired` while carrying the same `hint` that tells agents to filter on them. The
+  hazard is new: absence used to be uniform, so it carried no signal; it is now non-uniform, which
+  invites the inference "no visibility ⇒ editable". Two cheap remedies — stop exposing uncurated
+  entities, or make the `hint` conditional on the keys actually being present. Neither belongs here;
+  worth its own registry item.
+
+**A stale javadoc this created.** `McpToolRouterSupport.java:585-589` still asserts the column "is
+never stored on `ETGO_SF_FIELD` as a literal string". Its *logic* is unchanged and still correct
+(deriving editability from the two booleans is right), but the comment is now false. Cosmetic, and
+deferred with the `:158` typed-getter nit for the same reason: it costs a compile for zero behaviour.
+
+## 5. Done when
+
+> **Semantics moved after this was written.** [IMP-12](IMP-12.md) §9.2 narrowed
+> `userRequired` to *editable AND mandatory AND no AD default*. The re-verification below must
+> therefore assert the **new** rule, not the one this item shipped: on `sales-invoice/header` the
+> expected `userRequired: true` set is 6 fields, not 11.
+
+- [ ] `neo_schema` on `sales-invoice/header` returns `visibility` on all 157 fields and
+      `userRequired` on the editable-and-mandatory-and-undefaulted subset.
+- [ ] The `userRequired: true` set is small and *sendable* — no buttons, no `id`/`documentNo`, no
+      computed totals, no foreign-module compliance fields.
+- [ ] An agent following the `hint` verbatim can build a valid `neo_create` payload for
+      `sales-invoice/header` **on the first call** (this is the M2 measurement, re-run via
+      `/mcp-comparison`).
+- [ ] The `hint` and the tool description are no longer aspirational — they describe behaviour that
+      exists.
+- [ ] Verified on `etendo-go-local` after a user-run deploy, then re-verified on staging before the
+      registry status moves to ✅.
+
+Writer side (§4.1) and backfill (§4.2) are both done and verified on `etendo-go-local`. What remains
+before the registry row moves off ⏳ is the M2 first-call measurement via `/mcp-comparison`, and
+re-verification on staging once the wave is released.
+
+## 6. Blockers — none
+
+My first write-up recorded this as blocked on `schema_forge_core` not being cloned. **It is cloned**,
+at `/Users/futit/Workspace/etendo_develop/schema_forge_core`, already on branch `feature/ETP-4793`
+(`87a8afecd`). Commands opt into the local core with `LOCAL_CORE=1` (e.g. `make regen ONLY=… LOCAL_CORE=1`),
+or `./cli/sf-local` for the CLI bins — see [`repo-topology.md`](../../repo-topology.md).
+
+The earlier claim was wrong, not merely stale: I had not looked. Recorded because the cost of a
+fabricated blocker is a wave that never starts.
+
+The half-shipping hazard from that note still stands on its own terms, just relocated: steps 1 and 2
+are both in the same repo now, but persisting the column without passing the value (or the reverse)
+leaves the DB NULL and the response unchanged while looking done in the diff. They land together or
+not at all.
+
+**Real prerequisites:** the user builds and deploys (never `gradlew` / `update.database` /
+`export.database` / Tomcat from here), and step 3's re-push must be followed by
+`./gradlew export.database` so the config survives a rebuild.
+
+---
+
+## 2026-08-13 — re-measured by a `/mcp-comparison` run (job B); registry row moved ⚠️ → ✅
+
+The measurement this file was waiting on has happened, on `etendo-go-local`, build `8f0d1cce`. Every
+field descriptor on an **uncurated** spec now carries both keys — the case the writer fix was aimed at:
+
+```json
+{"name":"searchKey","column":"Value","label":"Search Key","type":"string","required":true,
+ "readOnly":false,"visibility":"editable","userRequired":true,"businessCritical":false,
+ "description":"A fast method for finding a particular record."}
+```
+
+So the response `hint` and the `neo_schema` tool description no longer promise a key the payload
+omits, which was the whole of this item. Registry §3 moved the row ⚠️ → ✅ and 2.5 → 5/5. Note the
+outstanding condition this file recorded — *staging re-verification* — is **still outstanding**: the
+run probed local only, so the ✅ holds on local. A run against staging would tell us whether it is
+released.
+
+**What the same probe found, and why it is not held against this item:** `visibility` and `readOnly`
+can now *disagree* on the same field (`{"visibility":"readOnly","readOnly":false}` on
+`product/header`'s price fields). Emitting the key was this item; making the two keys agree is a new
+defect, registered as **IMP-28 (P1)**. Closing IMP-11 by suppressing `visibility` again would have
+"fixed" IMP-28 by regressing this one — worth stating, because the two are one line apart in the
+serializer.

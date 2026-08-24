@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
@@ -314,7 +315,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       ]);
 
       if (outcome === 'period-error') {
-        await page.screenshot({
+        await captureScreenshot(page, {
           path: 'e2e/test-results/purchase-rectificativa-period-error.png',
           fullPage: true,
         }).catch(() => {});

@@ -21,12 +21,12 @@ This window has no standalone custom UI. All custom rendering, validation, and s
 
 | Field | Notes |
 |-------|-------|
-| `acogidaAlSII` | Boolean — enrolled in SII |
+| `acogidaAlSII` | Boolean — enrolled in SII. Set to `'N'` (not enrolled) by `buildOnboardingPayloads` during wizard onboarding; enrollment is confirmed separately through the tax authority. |
 | `fechaAcogidaSII` | SII enrollment date |
 | `monitordate` | SII monitor start date |
-| `plazoLmiteDeEnvoASII` | Submission deadline (days) |
-| `cadenciaEnvoFacturasVentaASII` | Sales invoice cadence (days) |
-| `cadenciaEnvoFacturasCompraASII` | Purchase invoice cadence (days) |
+| `plazoLmiteDeEnvoASII` | Submission deadline (days) — stored in DB but **not exposed** in `SiiSection` UI |
+| `cadenciaEnvoFacturasVentaASII` | Sales invoice cadence (days) — stored in DB but **not exposed** in `SiiSection` UI |
+| `cadenciaEnvoFacturasCompraASII` | Purchase invoice cadence (days) — stored in DB but **not exposed** in `SiiSection` UI |
 | `entornoDeProduccin` | Production vs test environment flag |
 | `adjuntarArchivosXML` | Attach XML files to submissions |
 | `recc` | RECC special regime |

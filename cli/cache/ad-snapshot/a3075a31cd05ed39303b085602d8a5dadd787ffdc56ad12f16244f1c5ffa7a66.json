@@ -463,7 +463,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "9ff0e22b0dbd2360456a6f4a70bffefe73bef51b614f4b469cf5527b70ddba7e",
+      "checksum": "2819af3edeace939556d56a89d01acfb1f5d8281b4ee4bdcd48fe4d445d0486b",
       "params": [
         "167"
       ],
@@ -474,13 +474,6 @@
           "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Glitem",
           "callout_name": "SL_Invoice_Glitem",
           "columnname": "Account_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
         },
         {
           "ad_callout_id": "105",
@@ -588,6 +581,13 @@
           "columnname": "C_Aum"
         },
         {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
+        },
+        {
           "ad_callout_id": "2E6FBBBAB13C4A66A36D5D0774522C3C",
           "ad_table_id": "43393FBD706A441D837C5CBA07D10ABE",
           "callout_class": "com.etendoerp.verifactu.ad_callouts.PaymentWarning",
@@ -658,10 +658,10 @@
           "columnname": "DateInvoiced"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
@@ -780,7 +780,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "9ff0e22b0dbd2360456a6f4a70bffefe73bef51b614f4b469cf5527b70ddba7e",
+      "checksum": "2819af3edeace939556d56a89d01acfb1f5d8281b4ee4bdcd48fe4d445d0486b",
       "params": [
         "183"
       ],
@@ -791,13 +791,6 @@
           "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_Glitem",
           "callout_name": "SL_Invoice_Glitem",
           "columnname": "Account_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
         },
         {
           "ad_callout_id": "105",
@@ -905,6 +898,13 @@
           "columnname": "C_Aum"
         },
         {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
+        },
+        {
           "ad_callout_id": "2E6FBBBAB13C4A66A36D5D0774522C3C",
           "ad_table_id": "43393FBD706A441D837C5CBA07D10ABE",
           "callout_class": "com.etendoerp.verifactu.ad_callouts.PaymentWarning",
@@ -975,10 +975,10 @@
           "columnname": "DateInvoiced"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
@@ -1126,7 +1126,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
-      "checksum": "ca30b700d68e52a45bf3600b28f2c9fc7bf906e924a45531604e4f5190f01651",
+      "checksum": "5c3ce7e72672d4d3cad46ae65afc0e3b86358f2362a256843ec67065bdf63914",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -1136,34 +1136,6 @@
           "ad_table_id": "318",
           "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
           "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
-          "columnname": "C_BPartner_ID"
-        },
-        {
-          "ad_callout_id": "105",
-          "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_BPartner",
-          "callout_name": "SE_Invoice_BPartner",
           "columnname": "FIN_Paymentmethod_ID"
         },
         {
@@ -1242,6 +1214,34 @@
           "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Invoice_PriceList",
           "callout_name": "SL_Invoice_PriceList",
           "columnname": "M_PriceList_ID"
+        },
+        {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "1BB5B3446CC7480E85082E7B5E2D3B03",
+          "ad_table_id": "318",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiAutoSetSIIKEYByDefault",
+          "callout_name": "SiiAutoSetSIIKEYByDefault",
+          "columnname": "C_BPartner_ID"
         },
         {
           "ad_callout_id": "323C7EF38A754A5980DABC1482680EE3",
@@ -1447,31 +1447,31 @@
           "columnname": "DateInvoiced"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
-          "ad_callout_id": "D5BB7D2FC23F4D2E9A39E9292055A2FB",
+          "ad_callout_id": "D07E6A38CAFC42B49163942C4E0D2026",
           "ad_table_id": "318",
-          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization",
-          "callout_name": "SE_Invoice_Organization",
+          "callout_class": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout",
+          "callout_name": "SiiInvoiceOrganizationCallout",
           "columnname": "AD_Org_ID"
         },
         {
@@ -2160,6 +2160,13 @@
         }
       ]
     },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": []
+    },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -2222,6 +2229,147 @@
           "callout_class": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port",
           "callout_name": "EmailConfiguration_Port",
           "columnname": "Smtpconnectionsecurity"
+        }
+      ]
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "c26c159ae98479b3d61d057869fce40ef369f45c36e2194c91be9c82f24fdc52",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "ad_callout_id": "06C51928923E4B7EB2F3B406EA9A0FE9",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Type",
+          "callout_name": "SL_Project_Type",
+          "columnname": "AD_Org_ID"
+        },
+        {
+          "ad_callout_id": "1000400000",
+          "ad_table_id": "800002",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Supplier_BPartner",
+          "callout_name": "SE_Supplier_BPartner",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Expexpenses"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Expmargin"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Expreinvoicing"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Servcost"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Servmargin"
+        },
+        {
+          "ad_callout_id": "1000400002",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Margin",
+          "callout_name": "SL_Project_Margin",
+          "columnname": "Servrevenue"
+        },
+        {
+          "ad_callout_id": "1000400003",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_PriceList",
+          "callout_name": "SL_Project_PriceList",
+          "columnname": "M_PriceList_ID"
+        },
+        {
+          "ad_callout_id": "109",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Project_BPartner",
+          "callout_name": "SE_Project_BPartner",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "110",
+          "ad_table_id": "434",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_ProjectLine_Value",
+          "callout_name": "SE_ProjectLine_Value",
+          "columnname": "M_Product_ID"
+        },
+        {
+          "ad_callout_id": "111",
+          "ad_table_id": "800003",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SE_Proposal_BPartner",
+          "callout_name": "SE_Proposal_BPartner",
+          "columnname": "C_BPartner_ID"
+        },
+        {
+          "ad_callout_id": "149",
+          "ad_table_id": "434",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Planned",
+          "callout_name": "SL_Project_Planned",
+          "columnname": "PlannedMarginAmt"
+        },
+        {
+          "ad_callout_id": "149",
+          "ad_table_id": "434",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Planned",
+          "callout_name": "SL_Project_Planned",
+          "columnname": "PlannedPrice"
+        },
+        {
+          "ad_callout_id": "149",
+          "ad_table_id": "434",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Planned",
+          "callout_name": "SL_Project_Planned",
+          "columnname": "PlannedQty"
+        },
+        {
+          "ad_callout_id": "149",
+          "ad_table_id": "434",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Planned",
+          "callout_name": "SL_Project_Planned",
+          "columnname": "Plannedpoprice"
+        },
+        {
+          "ad_callout_id": "150",
+          "ad_table_id": "800004",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Proposal_Product",
+          "callout_name": "SL_Proposal_Product",
+          "columnname": "M_Product_ID"
+        },
+        {
+          "ad_callout_id": "4B3FBD8DE0C045EEB9E540BF4C873B6E",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Service",
+          "callout_name": "SL_Project_Service",
+          "columnname": "Servoutcost"
+        },
+        {
+          "ad_callout_id": "4B3FBD8DE0C045EEB9E540BF4C873B6E",
+          "ad_table_id": "203",
+          "callout_class": "org.openbravo.erpCommon.ad_callouts.SL_Project_Service",
+          "callout_name": "SL_Project_Service",
+          "columnname": "Servsercost"
         }
       ]
     },

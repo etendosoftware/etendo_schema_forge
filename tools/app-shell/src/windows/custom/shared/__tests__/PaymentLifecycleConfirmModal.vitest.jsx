@@ -149,6 +149,42 @@ describe('PaymentLifecycleConfirmModal — 3-tier sub/warning key derivation', (
       expect(screen.getByText(expectedSub)).toBeInTheDocument();
       expect(screen.getByText('paymentConfirmWarning')).toBeInTheDocument();
     });
+
+    // ETP-4895: reactivate had no tier-3 entry at all, because until ETGOERR existed only a
+    // deposited or reconciled payment could be reactivated. Reading it threw
+    // (`undefined[dir]`) and took the whole window down with a blank screen.
+    it.each([
+      ['in', 'paymentConfirmReactivateSubInDraft'],
+      ['out', 'paymentConfirmReactivateSubOutDraft'],
+    ])('dir=%s reactivate -> sub=%s (rejected transfer: nothing to undo)', (dir, expectedSub) => {
+      render(
+        <PaymentLifecycleConfirmModal
+          dir={dir}
+          action="reactivate"
+          data={{ status: 'ETGOERR', posted: 'N' }}
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(expectedSub)).toBeInTheDocument();
+      // No transaction and no journal entry behind an errored payment, so neither is announced.
+      expect(screen.queryByText('reactivarItem2Title')).toBeNull();
+      expect(screen.queryByText('reactivarItem3Title')).toBeNull();
+    });
+
+    // A missing string must never cost the user the screen again.
+    it('falls back to the generic warning for a combination that has no subtitle', () => {
+      render(
+        <PaymentLifecycleConfirmModal
+          dir="out"
+          action="somethingNobodyMapped"
+          data={{ status: 'ETGOERR' }}
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(screen.getAllByText('paymentConfirmWarning').length).toBeGreaterThan(0);
+    });
   });
 });
 

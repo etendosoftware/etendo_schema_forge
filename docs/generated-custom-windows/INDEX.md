@@ -66,6 +66,8 @@ This folder is the entry point for documentation that describes how generated an
 | [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
+| [cost-center.md](cost-center.md) | Generated cost-center master window (ETP-4892) — flat accounting-dimension catalog, no hierarchy |
+| [service-project.md](service-project.md) | Generated Project master window (ETP-4892) — minimal Search Key/Name/Description/Active view of AD window "Service Project" (`C_Project`), sub-tabs and ~65 other header columns excluded |
 | [calendar.md](calendar.md) | Custom unified Calendar window (ETP-4478) — merges the retired Fiscal Calendar + Periods windows into one: Create Periods, Periods/Accounting secondary tabs with inline period→document expand, and Close Year/Undo Close Year via a server-guarded legacy-servlet reflection handler. No spec of its own — aggregates `fiscal-calendar`, `open-close-period-control` (unchanged), and a new backend-only `end-year-close` spec (same no-menu/no-route shape as `transaction-type.md`) |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
 | [asset-group.md](asset-group.md) | Generated asset-category master/detail flow — header with conditional depreciation-policy fields (`displayLogicJs`), inline-editable accounting accounts subtab |
@@ -101,7 +103,7 @@ This folder is the entry point for documentation that describes how generated an
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow (accounting tab pending `businessPartnerCategoryAccountingHandler`; ETP-4402) |
-| [user.md](user.md) | Generated user window with roles child surface and defaults dependencies |
+| [user.md](user.md) | Generated user window — multi-role template composition with a live permission-preview matrix (ETP-4906) and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |
 | [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |

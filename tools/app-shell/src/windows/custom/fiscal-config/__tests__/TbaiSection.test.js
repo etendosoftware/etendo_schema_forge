@@ -23,13 +23,25 @@ describe('TbaiSection — structure', () => {
 });
 
 describe('TbaiSection — form fields', () => {
-  it('renders the enroll date (tbaisystemdate) field', () => {
-    assert.match(src, /fiscal\.tbai\.field\.enrollDate/);
-    assert.match(src, /tbaisystemdate/);
+  it('does not render the enroll date (tbaisystemdate) field (ETP-4783: always set to creation date)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.enrollDate/);
   });
 
-  it('renders the production environment toggle', () => {
-    assert.match(src, /productionEnv/);
+  it('tbaisystemdate is still sent in the PUT body from the record (not editable)', () => {
+    assert.match(src, /tbaisystemdate/);
+    assert.match(src, /record\?\.tbaisystemdate/);
+  });
+
+  it('does not render the production environment toggle (ETP-4783: managed by backend only)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.production/);
+  });
+
+  it('does not render the validatePreviousInvoice toggle (ETP-4783: managed by backend only)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.validatePrev/);
+  });
+
+  it('does not render the uSEAsproductDesc toggle (ETP-4783: managed by backend only)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.useAsProduct/);
   });
 
   it('renders the invoice description field', () => {
@@ -38,14 +50,20 @@ describe('TbaiSection — form fields', () => {
 });
 
 describe('TbaiSection — validation', () => {
-  it('validates tbaisystemdate is present before saving', () => {
-    assert.match(src, /tbaisystemdate/);
-    assert.match(src, /fiscal\.tbai\.err\.enrollDate/);
+  it('does not validate tbaisystemdate (removed from UI, ETP-4783)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.err\.enrollDate/);
   });
 
-  it('validates invoiceDescription is present before saving', () => {
+  // ETP-4783: invoiceDescription validation was removed — the field is no longer
+  // shown in the UI and instead uses a fallback value ('Descripcion Factura') in the
+  // PUT body. No error is thrown when the field is absent.
+  // ETP-4783: invoiceDescription validation was removed — the field is no longer
+  // shown in the UI. It is still sent in the PUT body with a fallback value so
+  // the backend never receives a blank description.
+  it('invoiceDescription is preserved from record in the PUT body with a fallback (no UI validation)', () => {
     assert.match(src, /invoiceDescription/);
-    assert.match(src, /fiscal\.tbai\.err\.invoiceDesc/);
+    assert.match(src, /'Descripcion Factura'/);
+    assert.doesNotMatch(src, /fiscal\.tbai\.err\.invoiceDesc/);
   });
 });
 

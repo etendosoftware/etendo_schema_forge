@@ -59,4 +59,42 @@ describe('persistDeclarationStatus', () => {
     const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
     expect(result).toEqual({ ok: false, error: 'network' });
   });
+
+  describe('submissionMethod (ETP-4755)', () => {
+    it('includes submissionMethod in the PUT body when provided', async () => {
+      fetch.mockResolvedValueOnce({ ok: true });
+      await persistDeclarationStatus('303-2026-T2', 'submitted_ack', { ...OPTS, submissionMethod: 'manual_ack' });
+
+      const [, init] = fetch.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({ status: 'submitted_ack', submissionMethod: 'manual_ack' });
+    });
+
+    it('omits submissionMethod from the PUT body when not provided', async () => {
+      fetch.mockResolvedValueOnce({ ok: true });
+      await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
+
+      const [, init] = fetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(body).toEqual({ status: 'submitted' });
+      expect(body).not.toHaveProperty('submissionMethod');
+    });
+
+    it('omits submissionMethod from the PUT body when explicitly undefined', async () => {
+      fetch.mockResolvedValueOnce({ ok: true });
+      await persistDeclarationStatus('303-2026-T2', 'submitted_ack', { ...OPTS, submissionMethod: undefined });
+
+      const [, init] = fetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(body).not.toHaveProperty('submissionMethod');
+    });
+
+    it('omits submissionMethod from the PUT body when it is an empty string (falsy)', async () => {
+      fetch.mockResolvedValueOnce({ ok: true });
+      await persistDeclarationStatus('303-2026-T2', 'submitted_ack', { ...OPTS, submissionMethod: '' });
+
+      const [, init] = fetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(body).not.toHaveProperty('submissionMethod');
+    });
+  });
 });

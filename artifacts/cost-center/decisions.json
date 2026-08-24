@@ -1,0 +1,69 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Cost Center",
+    "noHeaderBorder": true,
+    "hidePrint": true,
+    "hideLink": true,
+    "labelOverrides": {
+      "es_ES": { "Isactive": "Activo" },
+      "es_AR": { "Isactive": "Activo" }
+    }
+  },
+  "entities": {
+    "costCenter": {
+      "orderBy": [{ "field": "searchKey", "direction": "ASC" }],
+      "fields": {
+        "searchKey": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "seq": 1
+        },
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "seq": 2
+        },
+        "description": {
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "type": "textarea",
+          "span": 2,
+          "rows": 1,
+          "seq": 3
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "seq": 4,
+          "badge": true,
+          "badgeLabels": {
+            "true": { "es_ES": "Sí", "en_US": "Yes" },
+            "false": { "es_ES": "No", "en_US": "No" }
+          }
+        },
+        "summaryLevel": {
+          "visibility": "discarded",
+          "reason": "Organization-tree/hierarchy behavior not part of this window's scope (ETP-4892) — Cost Center is a flat list, not a tree like Chart of Accounts."
+        },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

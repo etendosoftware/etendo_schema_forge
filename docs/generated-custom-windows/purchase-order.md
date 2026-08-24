@@ -73,6 +73,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 - Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`.
 - Preview panel behavior: clicking a row in the purchase-order list opens a lateral `OrderPreview` panel via `GenericPreviewModal` with `specName='purchase-order'`. The preview has three tabs: `General`, `Messages` (placeholder), and `History` (placeholder). The General tab stacks: `SummaryCard` (totals, status, contact, date, invoice/delivery percents — each rendered as a `PercentBar`: `w-16 h-1.5` track, emerald/amber/slate fill matching the grid columns), `EmailsCard` (placeholder). Unlike the sales-order preview, no `RelatedDocumentsCard` is shown for purchase orders. The right preview panel reads the saved header `grandTotalAmount` directly, while the generated PDF recomputes the printed lines and totals from the same order line fields used by `DocumentTotalsPanel` (`listPrice`, `discount`, `lineGrossAmount`, and `etgoTotalDiscount`) so the printout matches the detail totals when line discounts or header total discounts exist. The left panel renders a generated PDF via `usePurchaseOrderPdf`, which fetches from `purchase-order/header/:id` and `purchase-order/lines?parentId=:id`, then renders the shared `DOCUMENT_TEMPLATE` via jsreport. For non-draft orders (`documentStatus !== 'DR'`), the PDF is auto-cached on first open via `ETGO_PREVIEW_FILE` (`storeCondition: true, sourceBlob: pdfBlob, autoFetch: true`); drafts always regenerate live. The PDF includes discount breakdown rows (`Subtotal without discount`, `Discount per product`, `Total discount (X%)`) that auto-appear when discounts exist. The PDF price column is labeled `Precio tarifa` / `List Price`. All numeric amounts in the PDF use period as the decimal separator (`en-US` locale in the shared `fmt` Handlebars helper), consistent with the form view. Both `useOrderPdf` and `usePurchaseOrderPdf` are always called per React rules of hooks — the inactive one receives `null` as the order ID to prevent execution.
 - The contract exposes `lineTax` and `paymentDetails`, but the current purchase-order-specific documentation evidence does not show custom interactions for editing those child datasets beyond their availability in the generated detail flow.
+- Read-only child entities: `lineTax` (`C_OrderLineTax`), `reservedStock` (`M_Reservation_Stock`) and `paymentDetails` (`FIN_Payment_Detail_V`) are declared `"readOnly": true` in `decisions.json`, so the contract grants them only `GET` + `GETBYID`. All three are derived — two are populated by the tax engine and the reservation engine, and `paymentDetails` is a SQL view where an INSERT is impossible — and each had zero writable fields, so the previously advertised `POST`/`PUT`/`PATCH`/`DELETE` could not carry a value and failed at the DAL instead of returning a clean `405`. Reads are unchanged. The live `ETGO_SF_ENTITY` flags follow on the next `make regen ONLY=purchase-order PUSH_TO_NEO=1` + `./gradlew export.database`.
 - Save button dirty-state tracking: the "Save" and "Save Draft" buttons are disabled whenever there are no pending unsaved changes (`isDirty = false`). Four independent sources make `isDirty` true: (1) any header field value differs from the last-saved record; (2) an add-row form is open on the primary lines tab; (3) an add-row form is open on a secondary child tab; (4) a sidebar line edit is open. The "Confirm" button in draftMode is never blocked by dirty state — completing an order is always allowed regardless of whether header changes are pending. New records always have Save active because backend defaults populate the form immediately on open. After a successful save, `selected` syncs to the server response and the button disables automatically. Reverting a changed field back to its original value also disables the button. When a line is added, `refreshHeaderTotals` updates server-computed totals in `editing` without overwriting fields the user explicitly changed, so pending header edits survive line operations.
 - Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
@@ -278,3 +279,46 @@ detail/record route goes through the generated component), so the generator's li
 list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
 this file's own `<ListView>` call, matching the existing pattern already used there for
 `dateFilterKey` and other generator-derived list props.
+
+## Related Documents auto-refresh — ETP-4779
+
+The "Documentos" tab (`artifacts/purchase-order/custom/RelatedDocuments.jsx`) did not update
+after confirming a Purchase Order and generating a Goods Receipt / Purchase Invoice — it required
+the manual 🔄 button. This turned out to be **two separate bugs**, found in two passes (the first
+pass fixed only the first one, which manual QA retesting on `localhost:3100` then showed was not
+sufficient):
+
+1. **Missing listener.** `PurchaseOrderActions.jsx` (this window's `topbarRight` component)
+   already dispatched a `purchase-order:document-created` `window` `CustomEvent` after generating
+   a derived document, mirroring the `sales-order:document-created` convention — but nothing was
+   listening for it. Fixed by having `RelatedDocuments.jsx` listen for that event and bump its
+   local `refreshKey` (the same key that drives its `fetchByCriteria`/`fetchChild` effect).
+
+2. **Premature dispatch (found via live reproduction after the listener fix alone didn't resolve
+   the bug in manual testing).** In `ConfirmModal.handleConfirm` — the "Confirmar" flow used to
+   confirm a still-Draft order and optionally generate its receipt/invoice in the same modal —
+   the event was dispatched right after **Step 1** (`documentAction=CO`, confirming the order),
+   *before* **Steps 2/3** (`createGoodsReceipt` / `createPurchaseInvoice`) had even run. The
+   listener added in the previous fix reacted correctly and refetched immediately, but at that
+   point neither derived document existed yet, so the refetch always came back empty — and
+   because nothing dispatched the event again afterward, the panel never learned about the
+   documents Steps 2/3 went on to create. Symptom when reproduced live: confirming with both
+   "Crear albarán de proveedor" and "Crear factura" checked showed the success modal with both
+   documents listed, but the "Documentos" row behind it stayed on "Sin documentos relacionados"
+   forever (not merely delayed) — matching the original bug reports exactly. `CreateDocsModal`
+   (used for the already-`CO` "Gestionar factura"/"Gestionar recepción" flow, a separate modal in
+   the same file) did **not** have this bug — it already dispatched once, after its POST(s)
+   resolved, which is why that flow worked correctly and briefly made the earlier fix look
+   sufficient.
+
+   Fixed by moving the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle,
+   right before `onConfirmed(result)` — mirroring `CreateDocsModal.handleCreate`'s already-correct
+   placement — and guarding it to only fire when a receipt or invoice actually exists
+   (`finalReceipt || finalInvoice`). Also added the same guarded dispatch to `handleClose`'s
+   partial-failure path (e.g. the receipt POST succeeds but the invoice POST then fails and the
+   user closes instead of retrying), which previously could leave a successfully-created receipt
+   with no event at all.
+
+Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
+checkboxes shows both the new Recibo and Factura chips in the "Documentos" row immediately,
+before even closing the success modal — no reload, no lag.

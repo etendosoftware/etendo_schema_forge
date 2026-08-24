@@ -48,4 +48,12 @@ describe('PaymentSummaryCard', () => {
   it('returns null when there is no data (guard clause before any hooks-derived rendering)', () => {
     assert.match(src, /if \(!data\) return null;/);
   });
+
+  it('refetches when the payment is announced as changed, not only on a different payment', () => {
+    // Editing a payment leaves its id untouched, and `Updated` is not a NEO field on this entity,
+    // so an effect keyed on the payload alone kept showing pre-save amounts until a full reload.
+    assert.match(src, /useRecordRefreshSignal\(data\?\.id\)/);
+    assert.match(src, /\[data\?\.id, refreshSignal, token, apiBaseUrl\]/);
+  });
+
 });

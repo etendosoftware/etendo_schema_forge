@@ -2,10 +2,7 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
 {{{css}}}
-.report-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin: 8px 0 16px; font-size: 12px; }
-.report-info-grid span { color: #555; }
-.report-info-grid strong { color: #111; }
-tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
+tfoot tr td { font-weight: bold; border-top: 2px solid #333; text-transform: uppercase; }
 .bp-header-row td { font-weight: bold; font-size: 13px; padding-top: 12px; padding-bottom: 2px; border: none; background: transparent; }
 .bp-subtotal-row td { font-weight: bold; border-top: 1px solid #aaa; border-bottom: 2px solid #333; }
 .doc-row td { border: none; font-size: 11px; }
@@ -21,16 +18,6 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
     <div class="report-title">{{meta.title}}</div>
   </div>
 
-  <div class="report-info-grid">
-    <div><span>As of Date: </span><strong>{{formatDateDisplay meta.params.currentDate}}</strong></div>
-    {{#if meta.params._display_glId}}
-    <div><span>General Ledger: </span><strong>{{meta.params._display_glId}}</strong></div>
-    {{/if}}
-    {{#if meta.params._display_bPartnerId}}
-    <div><span>Contacts: </span><strong>{{meta.params._display_bPartnerId}}</strong></div>
-    {{/if}}
-  </div>
-
   {{#if rows.length}}
 
   {{#if meta.showDetails}}
@@ -38,17 +25,17 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   {{!-- DETAIL VIEW: document rows grouped by business partner --}}
   <table class="report-table">
     <thead><tr>
-      <th style="width:18%">Contacts</th>
-      <th style="width:14%">Document No.</th>
-      <th style="width:10%">Document Date</th>
-      <th style="width:8%" class="cell-amount">Current</th>
+      <th style="width:18%">{{meta.labels.bPartner}}</th>
+      <th style="width:14%">{{meta.labels.documentNo}}</th>
+      <th style="width:10%">{{meta.labels.documentDate}}</th>
+      <th style="width:8%" class="cell-amount">{{meta.labels.current}}</th>
       <th style="width:8%" class="cell-amount">1-{{meta.column1}}</th>
       {{#if meta.showBucket2}}<th style="width:8%" class="cell-amount">{{meta.column1}}-{{meta.column2}}</th>{{/if}}
       {{#if meta.showBucket3}}<th style="width:8%" class="cell-amount">{{meta.column2}}-{{meta.column3}}</th>{{/if}}
       {{#if meta.showBucket4}}<th style="width:8%" class="cell-amount">{{meta.column3}}-{{meta.column4}}</th>{{/if}}
       <th style="width:8%" class="cell-amount">{{meta.lastBucketLabel}}</th>
-      <th style="width:7%" class="cell-amount">Credits</th>
-      <th style="width:7%" class="cell-amount">Net</th>
+      <th style="width:7%" class="cell-amount">{{meta.labels.credits}}</th>
+      <th style="width:7%" class="cell-amount">{{meta.labels.net}}</th>
     </tr></thead>
     <tbody>
       {{#each rows}}
@@ -59,7 +46,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
       {{!-- Individual document rows --}}
       {{#each docs}}<tr class="doc-row">
         <td></td>
-        <td><span class="doc-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{invoiceId}}'},'*')">{{docNo}}</span></td>
+        <td><span class="doc-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{invoiceId}}',docWindow:'purchase-invoice'},'*')">{{docNo}}</span></td>
         <td>{{formatDateDisplay dateInvoiced}}</td>
         <td class="cell-amount">{{formatCurrency current}}</td>
         <td class="cell-amount">{{formatCurrency days30}}</td>
@@ -87,7 +74,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
       {{/each}}
     </tbody>
     <tfoot><tr>
-      <td colspan="3">TOTAL:</td>
+      <td colspan="3">{{meta.ui.total}}:</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'current')}}</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'days30')}}</td>
       {{#if meta.showBucket2}}<td class="cell-amount">{{formatCurrency (sumField rows 'days60')}}</td>{{/if}}
@@ -104,16 +91,16 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   {{!-- SUMMARY VIEW: one row per business partner --}}
   <table class="report-table">
     <thead><tr>
-      <th style="width:20%">Contacts</th>
-      <th style="width:10%" class="cell-amount">Current</th>
+      <th style="width:20%">{{meta.labels.bPartner}}</th>
+      <th style="width:10%" class="cell-amount">{{meta.labels.current}}</th>
       <th style="width:9%" class="cell-amount">1-{{meta.column1}}</th>
       {{#if meta.showBucket2}}<th style="width:9%" class="cell-amount">{{meta.column1}}-{{meta.column2}}</th>{{/if}}
       {{#if meta.showBucket3}}<th style="width:9%" class="cell-amount">{{meta.column2}}-{{meta.column3}}</th>{{/if}}
       {{#if meta.showBucket4}}<th style="width:9%" class="cell-amount">{{meta.column3}}-{{meta.column4}}</th>{{/if}}
       <th style="width:9%" class="cell-amount">{{meta.lastBucketLabel}}</th>
-      <th style="width:10%" class="cell-amount">Total</th>
-      <th style="width:8%" class="cell-amount">Credits</th>
-      <th style="width:8%" class="cell-amount">Net</th>
+      <th style="width:10%" class="cell-amount">{{meta.labels.total}}</th>
+      <th style="width:8%" class="cell-amount">{{meta.labels.credits}}</th>
+      <th style="width:8%" class="cell-amount">{{meta.labels.net}}</th>
     </tr></thead>
     <tbody>
       {{#each rows}}<tr>
@@ -130,7 +117,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
       </tr>{{/each}}
     </tbody>
     <tfoot><tr>
-      <td>TOTAL:</td>
+      <td>{{meta.ui.total}}:</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'current')}}</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'days30')}}</td>
       {{#if meta.showBucket2}}<td class="cell-amount">{{formatCurrency (sumField rows 'days60')}}</td>{{/if}}
@@ -148,14 +135,14 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
   {{else}}
 
   <div class="report-empty">
-    <p>No data found for the selected filters.</p>
+    <p>{{meta.labels.noData}}</p>
   </div>
 
   {{/if}}
 
   <div class="report-footer">
-    <div>{{meta.recordCount}} records</div>
-    <div>Generated by Etendo Go</div>
+    <div>{{meta.recordCount}} {{meta.ui.records}}</div>
+    <div>{{meta.ui.generatedBy}}</div>
   </div>
 
 </div></body></html>

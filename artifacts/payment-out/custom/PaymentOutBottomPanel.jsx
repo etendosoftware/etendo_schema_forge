@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefreshSignal';
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
@@ -121,6 +122,7 @@ const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
   const [lines, setLines] = useState(null);
+  const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
@@ -136,7 +138,11 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
       } catch { if (!cancelled) setLines([]); }
     })();
     return () => { cancelled = true; };
-  }, [data?.id, token, apiBaseUrl]);
+  // The refresh signal is in the deps on purpose: the record id never changes when the payment
+  // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload
+  // moves for this effect to react to. Without it the panel kept showing the amounts from
+  // before the save until the whole window was reloaded.
+  }, [data?.id, refreshSignal, token, apiBaseUrl]);
 
   // Line amounts are stored in the payment's own currency (see fmtAmt).
   const currency = data?.['currency$_identifier'];

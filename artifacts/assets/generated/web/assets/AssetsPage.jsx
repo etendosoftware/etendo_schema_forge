@@ -124,6 +124,14 @@ export const api = {
       "url": "/sws/neo/assets/assets/selectors/project"
     },
     {
+      "entity": "assets",
+      "field": "eTADASCostCenter",
+      "column": "EM_Etadas_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
+    },
+    {
       "entity": "amortizationLine",
       "field": "amortization",
       "column": "A_Amortization_ID",

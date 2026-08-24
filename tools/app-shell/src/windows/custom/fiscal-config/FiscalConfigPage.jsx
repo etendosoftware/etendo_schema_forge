@@ -162,7 +162,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      if (!err?._sectionHandled) setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }

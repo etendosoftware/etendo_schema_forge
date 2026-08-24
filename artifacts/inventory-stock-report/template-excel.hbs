@@ -1,0 +1,53 @@
+{{!-- Excel-only template (ETP-4901) — flat, calculation-friendly export, same
+      convention as report-general-ledger's template-excel.hbs: unlike
+      template.hbs (HTML preview, which hides whichever of Producto/Almacén/
+      Categoría matches the CURRENT "Agrupar por" choice — that's purely an
+      HTML-preview space-saving trick, and its dark group-header band has no
+      Excel equivalent), this is a plain one-row-per-(product,warehouse) dump
+      with ALL THREE dimension columns always present, so the sheet can be
+      pivoted directly in Excel regardless of which grouping was selected on
+      screen.
+      Amount cells use data-cell-type="number" with round2 (this report's
+      helpers.js) — never formatCurrency: html-to-xlsx does
+      `parseFloat(cell.innerText)` for that type, so a formatted amount would
+      silently truncate at the thousands separator. round2 stays a plain
+      Number (max 2 decimals, no forced trailing zeros/grouping) purely to
+      strip the extra decimal noise m_costing.cost (the Average Costing
+      algorithm's running weighted-average) can carry — it does not
+      reformat the value like formatCurrency would. --}}
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  table { border-collapse: collapse; font-family: sans-serif; font-size: 10pt; }
+  th { font-weight: bold; text-align: left; background: #f1f5f9; }
+  th, td { padding: 1px 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.productSearchKey}}</th>
+      <th>{{meta.labels.product}}</th>
+      <th>{{meta.labels.warehouse}}</th>
+      <th>{{meta.labels.category}}</th>
+      <th>{{meta.labels.uom}}</th>
+      <th>{{meta.labels.qtyOnHand}}</th>
+      <th>{{meta.labels.unitCost}}</th>
+      <th>{{meta.labels.totalValuation}}</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td>{{lookup this 'productSearchKey'}}</td>
+        <td>{{lookup this 'product'}}</td>
+        <td>{{lookup this 'warehouse'}}</td>
+        <td>{{lookup this 'category'}}</td>
+        <td>{{lookup this 'uom'}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'qtyOnHand')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'unitCost')}}</td>
+        <td data-cell-type="number">{{round2 (lookup this 'totalValuation')}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</body></html>
