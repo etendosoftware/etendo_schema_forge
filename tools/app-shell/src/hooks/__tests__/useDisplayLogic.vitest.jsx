@@ -1,5 +1,45 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
+// From the `sessionCredentials` leaf, not the `./auth` barrel: the barrel
+// re-exports AuthContext.jsx and drags JSX into every graph that reaches it.
+import {
+  CREDENTIAL_MODES,
+  setSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { useDisplayLogic, __resetDisplayLogicCacheForTests } from '../useDisplayLogic';
+
+const TEST_BEARER = 'test-token';
+const TEST_CSRF = 'test-csrf';
+
+/**
+ * Which credential scheme is live is a backend preference, so BOTH are reachable
+ * at runtime and neither may be the one the suite happens to inherit. The global
+ * test setup resets to the `bearer` default before every test, so a credential
+ * assertion that does not declare a scheme is only ever exercising that default —
+ * it passes by omission, not by proving anything. Every scheme-sensitive case
+ * below therefore runs once per scheme and states what each must send.
+ */
+const SCHEMES = [
+  {
+    name: 'bearer',
+    declare: () => setSessionCredentials({
+      mode: CREDENTIAL_MODES.bearer, token: TEST_BEARER, csrfToken: TEST_CSRF,
+    }),
+    assertCredential: (headers) => {
+      expect(headers.Authorization).toBe(`Bearer ${TEST_BEARER}`);
+      expect(headers['X-Go-CSRF'], 'bearer sends no CSRF proof').toBeUndefined();
+    },
+  },
+  {
+    name: 'cookie',
+    declare: () => setSessionCredentials({
+      mode: CREDENTIAL_MODES.cookie, token: TEST_BEARER, csrfToken: TEST_CSRF,
+    }),
+    assertCredential: (headers) => {
+      expect(headers['X-Go-CSRF']).toBe(TEST_CSRF);
+      expect(headers.Authorization, 'the cookie scheme sends no bearer').toBeUndefined();
+    },
+  },
+];
 
 describe('useDisplayLogic', () => {
   const opts = { token: 'test-token', apiBaseUrl: 'http://localhost/api' };
@@ -41,25 +81,58 @@ describe('useDisplayLogic', () => {
       await vi.runAllTimersAsync();
     });
 
-    // ETP-4576 — the credential is whatever the active scheme yields, not a bearer
-    // this hook builds from a `token` argument. Under `cookie` the browser attaches
-    // the `__Host-` session and the proof rides in `X-Go-CSRF`, so what is asserted
-    // here is the shape every migrated call site shares: an unsafe POST that sends
-    // credentials and declares JSON.
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost/api/header/evaluate-display',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-        }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ fieldValues }),
       }),
     );
-    const [, init] = globalThis.fetch.mock.calls.at(-1);
-    expect(init.headers.Authorization, 'no hand-built bearer').toBeUndefined();
   });
+
+  for (const scheme of SCHEMES) {
+    it(`sends the ${scheme.name} credential the active scheme yields`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: {} }),
+      });
+
+      renderHook(() => useDisplayLogic('header', { id: '123' }, opts));
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [, init] = globalThis.fetch.mock.calls.at(-1);
+      scheme.assertCredential(init.headers);
+    });
+
+    it(`still evaluates under ${scheme.name} when the caller passes no token`, async () => {
+      scheme.declare();
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ readOnly: {}, visibility: {} }),
+      });
+
+      renderHook(() =>
+        useDisplayLogic('header', { id: '1' }, { token: '', apiBaseUrl: 'http://localhost' })
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+        await vi.runAllTimersAsync();
+      });
+
+      // The `token` argument is no longer what authorises the call under either
+      // scheme; a `!token` gate here cancelled it silently under cookie.
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+  }
 
   it('returns readOnly and visibility from the response', async () => {
     vi.useRealTimers();
@@ -111,33 +184,6 @@ describe('useDisplayLogic', () => {
     });
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  /**
-   * ETP-4576 regression guard, inverted on purpose.
-   *
-   * This used to assert that a missing token SKIPS the evaluation. Under a cookie
-   * session no token is ever held, so that gate cancelled every call: no request,
-   * no error, and the display logic simply never resolved — which is how the
-   * assets and amortization integration specs ended up timing out waiting for a
-   * POST the gate had already decided not to send.
-   */
-  it('still evaluates when no token is held (cookie session)', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ readOnly: {}, visibility: {} }),
-    });
-
-    renderHook(() =>
-      useDisplayLogic('header', { id: '1' }, { token: '', apiBaseUrl: 'http://localhost' })
-    );
-
-    await act(async () => {
-      vi.advanceTimersByTime(300);
-      await vi.runAllTimersAsync();
-    });
-
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('still skips when the entity or base url is missing', async () => {
