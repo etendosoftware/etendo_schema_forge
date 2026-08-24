@@ -6,7 +6,6 @@ import { RoleFilterControl } from './RoleFilterControl.jsx';
 import { useUserDebugMode } from './useUserDebugMode.js';
 import UserDebugPanel from './UserDebugPanel.jsx';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
-import OwnerBadge from './OwnerBadge.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -55,6 +54,15 @@ import OwnerBadge from './OwnerBadge.jsx';
  * `label` needs the `ui()` hook, which — unlike the 5 columns above, which never call
  * `ui()` for their headers — is only available inside the component render, not at
  * module scope.
+ *
+ * **`isOwner` (ETP-4830 item #4) is NOT a grid column at all** — human call, after first
+ * shipping one: at most ONE user per client is ever flagged owner, so a whole column was
+ * disproportionate space for something that rare. Instead it renders as a small inline pill
+ * on the `name` cell, via `renderDefaultCell`'s existing `col.pill` mechanism
+ * (`DataTable.cellRenderers.jsx` — `{ when(row), label, className? }`, already built and
+ * tested for exactly "badge on the first visible string column", so no new render function
+ * was needed). See `nameColumnWithOwnerPill` below. The detail header keeps its own separate
+ * `OwnerBadge` (`./OwnerBadge.jsx`) — that surface has room for a real pill, unlike a grid row.
  */
 const columns = [
   { key: 'name', column: 'Name', type: 'string', required: true },
@@ -141,25 +149,27 @@ export default function UserHeaderTable(props) {
     ),
   }), [ui]);
 
-  // ETP-4830 item #4 — "Owner" column, next to the invitation column: same "administrative/
-  // onboarding-state indicator" grouping rationale invitationColumn's own comment documents.
-  // `isOwner` (like `invitationStatus`) has no AD `column:` value — it's a backend-contract-only
-  // boolean the `user` NeoHandler attaches to every GET response, never a real `AD_User` field —
-  // so there is nothing for the pipeline to emit here either.
-  const ownerColumn = useMemo(() => ({
-    key: 'isOwner',
-    type: 'custom',
-    label: ui('usersGridOwnerColumn'),
-    render: (row) => (
-      <OwnerBadge
-        isOwner={row?.isOwner}
-        data-testid="OwnerBadge__grid" />
-    ),
+  // ETP-4830 item #4 — human call, after first shipping a dedicated "Owner" grid column:
+  // there is at most ONE owner per client, so a whole column was disproportionate real estate
+  // for something that rare. Reworked into a small inline pill on the "name" cell instead —
+  // `renderDefaultCell`'s existing `col.pill` mechanism (`{ when, label, className? }`,
+  // `DataTable.cellRenderers.jsx`), already built and tested for exactly this "badge attached to
+  // the first visible string column" shape, so no new render function or column is needed here.
+  // `name` stays `type: 'string'` (unchanged) — `col.pill` is additive, it doesn't touch
+  // filtering/sorting/label resolution.
+  const nameColumnWithOwnerPill = useMemo(() => ({
+    ...columns[0],
+    pill: { when: (row) => Boolean(row?.isOwner), label: ui('ownerBadge') },
   }), [ui]);
 
+  const baseColumns = useMemo(
+    () => [nameColumnWithOwnerPill, ...columns.slice(1)],
+    [nameColumnWithOwnerPill],
+  );
+
   const tableColumns = useMemo(
-    () => [...columns, invitationColumn, ownerColumn, roleColumn],
-    [invitationColumn, ownerColumn, roleColumn],
+    () => [...baseColumns, invitationColumn, roleColumn],
+    [baseColumns, invitationColumn, roleColumn],
   );
 
   // Client-side role filter, applied over the rows already loaded for this page —

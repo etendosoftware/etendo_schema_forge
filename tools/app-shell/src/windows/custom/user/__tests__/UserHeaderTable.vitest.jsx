@@ -132,13 +132,13 @@ describe('UserHeaderTable — layout', () => {
     expect(await screen.findByTestId('stub-role-filter-count')).toHaveTextContent('3');
   });
 
-  it('appends invitationStatus, isOwner, and defaultRole (all custom) after the hand-mirrored base columns', async () => {
+  it('appends invitationStatus and defaultRole (both custom) after the hand-mirrored base columns', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
     await screen.findByTestId('data-table');
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'isOwner', 'defaultRole',
+      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'defaultRole',
     ]);
   });
 
@@ -366,37 +366,44 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
 });
 
 /**
- * ETP-4830 item #4 — the isOwner grid column's cell render. The exhaustive
- * isOwner → visual-treatment mapping has its own dedicated suite
- * (`OwnerBadge.vitest.jsx`) — these tests only confirm this column genuinely wires
- * that shared component in per-row.
+ * ETP-4830 item #4 (reworked after human feedback — see `UserHeaderTable.jsx`'s own doc
+ * comment) — `isOwner` is NOT a dedicated grid column, it's a small inline pill on the `name`
+ * cell via `renderDefaultCell`'s existing `col.pill` mechanism (`DataTable.cellRenderers.jsx`,
+ * already unit-tested for the generic `{when, label}` shape in
+ * `DataTable.renderCellValue.vitest.jsx`) — these tests only confirm `UserHeaderTable` wires
+ * the right `when`/`label` onto the `name` column's `pill` config.
  */
-describe('UserHeaderTable — isOwner column cell render (ETP-4830 item #4)', () => {
-  async function getOwnerColumn() {
+describe('UserHeaderTable — owner pill on the name column (ETP-4830 item #4)', () => {
+  async function getNameColumn() {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
     await screen.findByTestId('data-table');
-    return tableProps.columns.find((c) => c.key === 'isOwner');
+    return tableProps.columns.find((c) => c.key === 'name');
   }
 
-  it('renders the neutral (gray) pill for isOwner true', async () => {
-    const col = await getOwnerColumn();
-    const { getByTestId } = render(col.render({ id: 'row-1', isOwner: true }));
-
-    const pill = getByTestId('document-status-pill');
-    expect(pill).toHaveAttribute('data-tone', 'neutral');
-    expect(pill).toHaveAttribute('data-status', 'OWNER');
+  it('declares a pill config on the name column with the translated owner label', async () => {
+    const col = await getNameColumn();
+    expect(col.pill).toBeDefined();
+    expect(col.pill.label).toBe('ownerBadge');
   });
 
-  it('renders a blank cell (no crash) for isOwner false', async () => {
-    const col = await getOwnerColumn();
-    const { container } = render(col.render({ id: 'row-1', isOwner: false }));
-
-    expect(container).toBeEmptyDOMElement();
+  it('pill.when reads true for the owner row', async () => {
+    const col = await getNameColumn();
+    expect(col.pill.when({ id: 'row-1', isOwner: true })).toBe(true);
   });
 
-  it('renders a blank cell (no crash) when the row itself is undefined', async () => {
-    const col = await getOwnerColumn();
-    expect(() => render(col.render(undefined))).not.toThrow();
+  it.each([
+    ['isOwner false', { id: 'row-1', isOwner: false }],
+    ['isOwner absent', { id: 'row-1' }],
+  ])('pill.when reads false for %s', async (_label, row) => {
+    const col = await getNameColumn();
+    expect(col.pill.when(row)).toBe(false);
+  });
+
+  it('the rest of the name column is unchanged (type/column/required preserved)', async () => {
+    const col = await getNameColumn();
+    expect(col.type).toBe('string');
+    expect(col.column).toBe('Name');
+    expect(col.required).toBe(true);
   });
 });
