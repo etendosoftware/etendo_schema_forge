@@ -7,10 +7,11 @@ import { isEtendoTrue } from '../fiscal-config/fiscalConfig.utils.js';
 // `AD_OrgInfo` already carries 3 server-maintained Y/N flags — no need to
 // fetch+filter sii-config/tbai-config lists to infer whether SII/TicketBAI
 // apply to a Business Partner's organization, a single getById does it.
-// NOTE: the spec's real kebab-cased name is `organizaci-n` (the kebab-caser
-// trips on "Organización"'s accents) — see artifacts/organization/contract.json
-// (apiPrediction.specName / baseUrl), not `organization`.
-const ORG_INFO_SPEC = 'organizaci-n';
+// NOTE: the live spec name in NEO is `organization` (confirmed via
+// GET /sws/neo/organization/information/{orgId} → 200). Do NOT trust
+// artifacts/organization/contract.json's specName — it was stale (never
+// regenerated after the last real push-to-neo for that window).
+const ORG_INFO_SPEC = 'organization';
 const ORG_INFO_ENTITY = 'information';
 
 /**
@@ -30,7 +31,10 @@ async function fetchOrganizationInfo(apiFetch, orgId) {
   try {
     const url = `/${ORG_INFO_SPEC}/${ORG_INFO_ENTITY}/${encodeURIComponent(orgId)}`;
     const res = await apiFetch(url, { headers: { 'Content-Type': 'application/json' } });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[fiscalDefaults] organization info fetch failed: ${res.status} ${url}`);
+      return null;
+    }
     const body = await res.json();
     return body?.response?.data ?? null;
   } catch {
@@ -43,7 +47,7 @@ async function fetchOrganizationInfo(apiFetch, orgId) {
  * Detects whether SII and/or TicketBAI are actively configured for the given
  * Business Partner organization, so `FiscalDefaultsSection` can show only
  * the sub-block(s) that apply. Reads the 3 server-maintained flags off
- * `AD_OrgInfo` (`organizaci-n/information/{orgId}`) instead of fetching and
+ * `AD_OrgInfo` (`organization/information/{orgId}`) instead of fetching and
  * filtering the `sii-config`/`tbai-config` lists.
  *
  * - SII "active": `etsgHasSIIConfig` is truthy.

@@ -3,7 +3,7 @@
  * active-config detection for FiscalDefaultsSection, plus resolveOrganizationId.
  *
  * As of the follow-up simplification, the hook does a SINGLE GET to
- * `/organizaci-n/information/{orgId}` and reads the 3 server-maintained
+ * `/organization/information/{orgId}` and reads the 3 server-maintained
  * `AD_OrgInfo` flags (`etsgHasSIIConfig` / `etsgHasTbaiConfig` /
  * `etsgHasVfactuConfig`) instead of fetching+filtering the sii-config/
  * tbai-config lists.
@@ -59,7 +59,7 @@ describe('useSiiTbaiActive', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
     expect(mockApiFetch).toHaveBeenCalledWith(
-      '/organizaci-n/information/org-1',
+      '/organization/information/org-1',
       expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/json' }) }),
     );
   });

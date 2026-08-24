@@ -501,10 +501,15 @@ auto-generated Organization form while making them available on the backend cont
 
 **`useSiiTbaiActive(organizationId, apiBaseUrl)` rewritten** in
 `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js`: a single
-`GET {apiBase}/organizaci-n/information/{organizationId}` (note: the `organization` spec's
-real kebab-cased name is `organizaci-n` — the kebab-caser trips on "Organización"'s accents;
-always read `apiPrediction.specName`/`baseUrl` off `artifacts/organization/contract.json`
-rather than assuming). Resolves `{ loading, sii, tbai, vfactuActive }`:
+`GET {apiBase}/organization/information/{organizationId}` (note: this is the *live* spec
+name registered in NEO — confirmed via a direct call returning 200. Do NOT trust
+`apiPrediction.specName`/`baseUrl` in `artifacts/organization/contract.json` blindly: as of
+ETP-4784 that field is stale — a regen still derives `organizaci-n` from the AD window's
+current Spanish name `"Organización"` via the kebab-caser, which mangles the accented `ó`,
+but the live NEO registration predates that and is `organization`. This is a real drift
+between the pipeline's current derivation and the live config, not something a plain regen
+fixes — see the `fetchOrganizationInfo()` `console.warn` added on non-ok responses as the
+early-warning signal if this drifts again). Resolves `{ loading, sii, tbai, vfactuActive }`:
 - `sii` = `isEtendoTrue(response.etsgHasSIIConfig)`
 - `tbai` = `isEtendoTrue(response.etsgHasTbaiConfig)`
 - `vfactuActive` = `isEtendoTrue(response.etsgHasVfactuConfig)` — exposed for a future
@@ -519,6 +524,6 @@ already the "is it active" answer, no trace-row filtering required). `FiscalDefa
 itself needed no changes: it only reads `loading/sii/tbai` off the hook, same shape as before.
 
 Verified with `npx vitest run src/windows/custom/contacts` — `fiscalDefaults.utils.vitest.js`
-rewritten to mock the single `organizaci-n/information/{id}` call (covers both active, only
+rewritten to mock the single `organization/information/{id}` call (covers both active, only
 SII, only TBAI, neither, fetch rejection, and 404); `FiscalDefaultsSection.vitest.jsx` mocks
 `useSiiTbaiActive` directly and required no behavioral changes.
