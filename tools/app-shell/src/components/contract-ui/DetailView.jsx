@@ -2006,7 +2006,7 @@ export function DetailView({
   }, [hook.items, recordId, isNew]);
 
   useEffect(() => {
-    if (isNew && !hook.editing) {
+    if (isNew && (!hook.editing || hook.editing.id)) { // ETP-4830: also reset a stale OTHER record's `editing` (no remount guarantee across recordId changes)
       hook.handleNew();
     }
   }, [isNew, hook.editing, hook.handleNew]);
@@ -4334,4 +4334,3 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
     }
   }
 }
-
