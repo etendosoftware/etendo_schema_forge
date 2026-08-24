@@ -7,9 +7,7 @@ import {
 } from '../fiscalModelsUtils.js';
 
 describe('STATUSES — enum completeness', () => {
-  it('has exactly 7 statuses', () => assert.equal(STATUSES.length, 7));
-  it('includes skipped', () => assert.ok(STATUSES.includes('skipped')));
-  it('includes pending', () => assert.ok(STATUSES.includes('pending')));
+  it('has exactly 5 statuses', () => assert.equal(STATUSES.length, 5));
   it('includes draft', () => assert.ok(STATUSES.includes('draft')));
   it('includes ready', () => assert.ok(STATUSES.includes('ready')));
   it('includes submitted', () => assert.ok(STATUSES.includes('submitted')));
@@ -18,13 +16,13 @@ describe('STATUSES — enum completeness', () => {
 });
 
 describe('STATUS_COLOR — all statuses have colors', () => {
-  for (const s of ['skipped','pending','draft','ready','submitted','submitted_ext','submitted_ack']) {
+  for (const s of ['draft','ready','submitted','submitted_ext','submitted_ack']) {
     it(`${s} has a color`, () => assert.ok(typeof STATUS_COLOR[s] === 'string'));
   }
 });
 
 describe('STATUS_ORDER — free transitions', () => {
-  it('contains all 7 statuses', () => assert.equal(STATUS_ORDER.length, 7));
+  it('contains all 5 statuses', () => assert.equal(STATUS_ORDER.length, 5));
   it('is an array', () => assert.ok(Array.isArray(STATUS_ORDER)));
 });
 
@@ -108,11 +106,11 @@ describe('computeUpcomingDeadlines', () => {
     assert.equal(deadline.getMonth(), 9);
     assert.equal(deadline.getDate(), 20);
   });
-  it('T4 deadline is January 20 of next year', () => {
+  it('T4 deadline is January 30 of next year', () => {
     const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'pending')]);
     assert.equal(deadline.getFullYear(), 2026);
     assert.equal(deadline.getMonth(), 0);
-    assert.equal(deadline.getDate(), 20);
+    assert.equal(deadline.getDate(), 30);
   });
   it('monthly period 04 deadline is May 20', () => {
     const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '04', 'pending')]);

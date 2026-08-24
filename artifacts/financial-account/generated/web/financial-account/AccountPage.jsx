@@ -63,7 +63,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:account
 
 // @sf-generated-start requiredHeaderFields:account
-const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance'];
+const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance', 'country'];
 // @sf-generated-end requiredHeaderFields:account
 
 
@@ -141,13 +141,17 @@ export const api = {
     "clearedItems": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/clearedItems",
       "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [
@@ -166,6 +170,14 @@ export const api = {
       "reference": "Glitem",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
+    },
+    {
+      "entity": "account",
+      "field": "country",
+      "column": "C_Country_ID",
+      "reference": "Country",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/account/selectors/country"
     },
     {
       "entity": "account",
@@ -198,6 +210,14 @@ export const api = {
       "reference": "BPartner",
       "inputMode": "search",
       "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
+    },
+    {
+      "entity": "transaction",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/transaction/selectors/product"
     },
     {
       "entity": "transaction",
@@ -254,6 +274,14 @@ export const api = {
       "reference": "User2",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+    },
+    {
+      "entity": "transaction",
+      "field": "eTGOFinaccTransDest",
+      "column": "EM_ETGO_Finacc_Trans_Dest",
+      "reference": "Finacc_Transaction",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
     },
     {
       "entity": "accountingConfiguration",

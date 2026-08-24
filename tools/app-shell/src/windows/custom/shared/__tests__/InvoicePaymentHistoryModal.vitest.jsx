@@ -23,8 +23,9 @@ vi.mock('lucide-react', async (importOriginal) => {
 });
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({
-  default: ({ onClose, onSaved }) => (
-    <div data-testid="new-payment-entry-modal" onClick={e => e.stopPropagation()}>
+  default: ({ onClose, onSaved, outstanding }) => (
+    <div data-testid="new-payment-entry-modal" data-outstanding={String(outstanding)}
+      onClick={e => e.stopPropagation()}>
       <button onClick={onClose}>Close entry</button>
       <button onClick={() => onSaved({}, 'deposited')}>Save entry</button>
     </div>
@@ -56,6 +57,20 @@ function makeApiFetch(payments = []) {
     ok: true,
     json: () => Promise.resolve({ response: { data: payments } }),
   });
+}
+
+/**
+ * Like `makeApiFetch`, but answers `/paymentPlan` with an empty list so the outstanding amount
+ * keeps coming from `invoiceData.outstandingAmount`. The shared mock replies with the payments
+ * array on every URL, which the modal would read as installments carrying no outstanding at all.
+ */
+function makeApiFetchWithoutPlan(payments = []) {
+  return vi.fn((url) => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({
+      response: { data: String(url).includes('/paymentPlan') ? [] : payments },
+    }),
+  }));
 }
 
 /**
@@ -208,6 +223,59 @@ describe('InvoicePaymentHistoryModal', () => {
       expect(screen.getByTestId('InvoicePaymentHistoryModal__empty')).toBeInTheDocument(),
     );
     expect(screen.getByTestId('InvoicePaymentHistoryModal__add-btn')).toBeInTheDocument();
+  });
+
+  it('disables add-btn when a draft already covers the whole outstanding amount', async () => {
+    // A draft does not reduce the invoice's outstanding, so the invoice still reads "pendiente 500"
+    // while a 500 draft sits on it. Offering a second payment there over-covers the invoice the
+    // moment both are confirmed.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '500.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    const addBtn = screen.getByTestId('InvoicePaymentHistoryModal__add-btn');
+    // Disabled rather than hidden: the user has to see what unblocks it.
+    expect(addBtn).toBeDisabled();
+    expect(addBtn).toHaveAttribute('title', 'cpAddPaymentBlockedByDraft');
+  });
+
+  it('keeps add-btn usable when the draft only covers part of the invoice', async () => {
+    // 500 outstanding with a 200 draft still leaves 300 to allocate.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '200.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    expect(screen.getByTestId('InvoicePaymentHistoryModal__add-btn')).not.toBeDisabled();
+  });
+
+  it('offers the new payment only what the drafts left free', async () => {
+    // Seeding it with the raw outstanding would default the second payment to 500 on an invoice
+    // that only has 300 left.
+    useApiFetch.mockReturnValue(makeApiFetchWithoutPlan([
+      { id: 'p1', documentNo: 'PAY-1', amount: '200.00', status: 'RPAP', processed: false },
+    ]));
+    render(
+      <InvoicePaymentHistoryModal
+        invoiceId="42" invoiceData={INVOICE_DATA} specName="sales-invoice"
+        apiBaseUrl="http://host/sws/neo/sales-invoice" onClose={vi.fn()} />,
+    );
+
+    await screen.findByTestId('InvoicePaymentHistoryModal__row');
+    fireEvent.click(screen.getByTestId('InvoicePaymentHistoryModal__add-btn'));
+    expect(await screen.findByTestId('new-payment-entry-modal'))
+      .toHaveAttribute('data-outstanding', '300');
   });
 
   it('hides add-btn when outstandingAmt is 0', async () => {
@@ -951,5 +1019,128 @@ describe('InvoicePaymentHistoryModal', () => {
     await waitFor(() =>
       expect(screen.queryByTestId('InvoicePaymentHistoryModal__delete-confirm-panel')).toBeNull(),
     );
+  });
+  describe('PIS transfer states (ETP-4895)', () => {
+    const PROPS = {
+      invoiceId: '42',
+      invoiceData: INVOICE_DATA,
+      specName: 'purchase-invoice',
+      apiBaseUrl: 'http://host/sws/neo/purchase-invoice',
+      onClose: vi.fn(),
+    };
+
+    it('shows "Error" for a payment whose bank transfer was rejected, not "Borrador"', async () => {
+      // ETGOERR is set on an UNPROCESSED payment, so without its own branch the row would fall
+      // through to the draft pill and the user could not tell the transfer had failed.
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__error')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__draft')).toBeNull();
+    });
+
+    it('shows "in progress" while the transfer is authorized but the funds have not landed', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PPM', processed: true, viaPis: true, pisPending: true, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__inProgress')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__deposited')).toBeNull();
+    });
+
+    it('still shows a settled transfer as deposited', async () => {
+      // PWNC ("Withdrawn not Cleared"), not PPM: once Salt Edge reports the transfer executed the
+      // bank transaction is created and Core moves the payment off PPM. A settled transfer sitting
+      // in PPM is not a state the backend can produce (ETP-4895).
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'PWNC', processed: true, viaPis: true, pisPending: false, pisPaymentId: 'pis-1' },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      expect(await screen.findByTestId('PaymentStateTag__deposited')).toBeInTheDocument();
+      expect(screen.queryByTestId('PaymentStateTag__inProgress')).toBeNull();
+    });
+
+    it('offers Retry only on a failed transfer', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+        { id: 'p2', documentNo: 'PAY-2', amount: '50.00', status: 'PPM', processed: true },
+      ]));
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      await screen.findByTestId('PaymentStateTag__error');
+      expect(screen.getAllByTestId('InvoicePaymentHistoryModal__retry-btn')).toHaveLength(1);
+      // The actions column must fit BOTH icon buttons (26px each + a 4px gap). Sized for the
+      // delete icon alone it overflowed leftwards and covered the amount's currency symbol.
+      const retryBtn = screen.getByTestId('InvoicePaymentHistoryModal__retry-btn');
+      const actionsCell = retryBtn.parentElement;
+      const gridRow = actionsCell.parentElement;
+      const columns = gridRow.style.gridTemplateColumns;
+      expect(columns.split(' ').pop()).toBe('56px');
+      // And the document number keeps a floor instead of absorbing every widening of the others:
+      // as the leftover `1fr` column it had collapsed far enough to ellipsize its own header.
+      expect(columns.startsWith('minmax(120px, 1fr)')).toBe(true);
+    });
+
+    it('retries against the PIS attempt and reopens the bank window', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const fetchMock = vi.fn((url) => {
+        if (url.includes('/paymentPlan')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+        }
+        if (url.includes('action/retryPisPayment')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ response: { data: { pisPaymentUrl: 'https://saltedge.example/w/2' } } }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [
+            { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+          ] } }),
+        });
+      });
+      useApiFetch.mockReturnValue(fetchMock);
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      fireEvent.click(await screen.findByTestId('InvoicePaymentHistoryModal__retry-btn'));
+
+      await waitFor(() => expect(openSpy).toHaveBeenCalledWith(
+        'https://saltedge.example/w/2', 'saltEdgePisWidget', expect.any(String)));
+      // The retry targets the PIS attempt, not the payment — a retry starts a brand-new transfer.
+      const retryCall = fetchMock.mock.calls.find(([u]) => u.includes('retryPisPayment'));
+      expect(JSON.parse(retryCall[1].body)).toEqual({ pisPaymentId: 'pis-1' });
+      openSpy.mockRestore();
+    });
+
+    it('surfaces an inline error when the retry is rejected, without opening a window', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const fetchMock = vi.fn((url) => {
+        if (url.includes('/paymentPlan')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+        }
+        if (url.includes('action/retryPisPayment')) {
+          return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [
+            { id: 'p1', documentNo: 'PAY-1', amount: '100.00', status: 'ETGOERR', processed: false, viaPis: true, pisPaymentId: 'pis-1' },
+          ] } }),
+        });
+      });
+      useApiFetch.mockReturnValue(fetchMock);
+      render(<InvoicePaymentHistoryModal {...PROPS} />);
+
+      fireEvent.click(await screen.findByTestId('InvoicePaymentHistoryModal__retry-btn'));
+
+      expect(await screen.findByTestId('InvoicePaymentHistoryModal__retry-error')).toBeInTheDocument();
+      expect(openSpy).not.toHaveBeenCalled();
+      openSpy.mockRestore();
+    });
   });
 });

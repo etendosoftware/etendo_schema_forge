@@ -1,8 +1,8 @@
 {
   "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-10T11:24:59.285Z",
-  "checksum": "cc53b8a90aa98594",
+  "updatedAt": "2026-08-20T21:51:20.364Z",
+  "checksum": "4d3d4a22a8301944",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -169,12 +169,52 @@
             "type": "string"
           },
           {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigo categoria",
+              "código categoría",
+              "codigo de categoria",
+              "código de categoría",
+              "codigocategoria",
+              "códigocategoría"
+            ],
+            "label": "Contact Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombre categoria",
+              "nombre categoría",
+              "nombre de categoria",
+              "nombre de categoría",
+              "nombrecategoria",
+              "nombrecategoría"
+            ],
+            "label": "Contact Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto"
+            ],
+            "label": "Contact Category"
+          },
+          {
             "target": "etgoFirstname",
             "aliases": [
               "nombre"
             ],
             "label": "First Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -184,7 +224,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -206,6 +246,47 @@
               "teléfono"
             ],
             "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoWeb",
+            "aliases": [
+              "web",
+              "website",
+              "sitio web",
+              "pagina web",
+              "página web"
+            ],
+            "label": "Website (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "oBTIKTaxIDKey",
+            "aliases": [
+              "clave nif pais residencia",
+              "clave nif país residencia",
+              "tipo identificacion fiscal",
+              "tipo identificación fiscal",
+              "tax id type"
+            ],
+            "label": "Tax ID Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "taxID",
+            "aliases": [
+              "cif/nif",
+              "cif",
+              "nif",
+              "tax id",
+              "taxid",
+              "identificacion fiscal",
+              "identificación fiscal"
+            ],
+            "label": "CIF/NIF",
             "required": false,
             "type": "string"
           },
@@ -5161,12 +5242,52 @@
             "type": "string"
           },
           {
+            "required": false,
+            "type": "string",
+            "target": "categoryCode",
+            "aliases": [
+              "codigo categoria",
+              "código categoría",
+              "codigo de categoria",
+              "código de categoría",
+              "codigocategoria",
+              "códigocategoría"
+            ],
+            "label": "Contact Category Code"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "categoryName",
+            "aliases": [
+              "nombre categoria",
+              "nombre categoría",
+              "nombre de categoria",
+              "nombre de categoría",
+              "nombrecategoria",
+              "nombrecategoría"
+            ],
+            "label": "Contact Category Name"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto"
+            ],
+            "label": "Contact Category"
+          },
+          {
             "target": "etgoFirstname",
             "aliases": [
               "nombre"
             ],
             "label": "First Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -5176,7 +5297,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -5198,6 +5319,47 @@
               "teléfono"
             ],
             "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoWeb",
+            "aliases": [
+              "web",
+              "website",
+              "sitio web",
+              "pagina web",
+              "página web"
+            ],
+            "label": "Website (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "oBTIKTaxIDKey",
+            "aliases": [
+              "clave nif pais residencia",
+              "clave nif país residencia",
+              "tipo identificacion fiscal",
+              "tipo identificación fiscal",
+              "tax id type"
+            ],
+            "label": "Tax ID Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "taxID",
+            "aliases": [
+              "cif/nif",
+              "cif",
+              "nif",
+              "tax id",
+              "taxid",
+              "identificacion fiscal",
+              "identificación fiscal"
+            ],
+            "label": "CIF/NIF",
             "required": false,
             "type": "string"
           },

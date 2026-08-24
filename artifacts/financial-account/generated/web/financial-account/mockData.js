@@ -13,6 +13,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 38907,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -52,6 +53,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 9306,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -91,6 +93,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 11544,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -130,6 +133,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 11872,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -169,6 +173,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 48460,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -208,6 +213,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 45418,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -247,6 +253,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 33840,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -286,6 +293,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 25716,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -325,6 +333,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 44780,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -364,6 +373,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 12483,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -403,6 +413,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 46022,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -442,6 +453,7 @@ export const account = [
     "aprmGlitemDiff": "Sample aprmGlitemDiff",
     "iBAN": "Sample iBAN",
     "swiftCode": "Sample swiftCode",
+    "country": "Sample country",
     "writeofflimit": 38634,
     "aPRMImportBankFile": "Sample aPRMImportBankFile",
     "aPRMMatchTransactions": "Sample aPRMMatchTransactions",
@@ -486,6 +498,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Acme Corp",
+    "product": "Laptop Pro 15",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -496,6 +509,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-001"
   },
   {
@@ -512,6 +526,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "TechFlow Inc",
+    "product": "USB-C Cable",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -522,6 +537,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-002"
   },
   {
@@ -538,6 +554,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Global Trade Ltd",
+    "product": "Wireless Mouse",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -548,6 +565,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-003"
   },
   {
@@ -564,6 +582,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Summit Industries",
+    "product": "Mechanical Keyboard",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -574,6 +593,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-004"
   },
   {
@@ -590,6 +610,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Pacific Partners",
+    "product": "Monitor 27\"",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -600,6 +621,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-005"
   },
   {
@@ -616,6 +638,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Alpine Solutions",
+    "product": "Webcam HD",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -626,6 +649,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-006"
   },
   {
@@ -642,6 +666,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Meridian Group",
+    "product": "Headset Pro",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -652,6 +677,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-007"
   },
   {
@@ -668,6 +694,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Vertex Systems",
+    "product": "Docking Station",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -678,6 +705,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-008"
   },
   {
@@ -694,6 +722,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Atlas Manufacturing",
+    "product": "SSD 1TB",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -704,6 +733,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-009"
   },
   {
@@ -720,6 +750,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Nova Enterprises",
+    "product": "RAM 16GB",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -730,6 +761,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-010"
   },
   {
@@ -746,6 +778,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Pinnacle Services",
+    "product": "Power Supply 750W",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -756,6 +789,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-011"
   },
   {
@@ -772,6 +806,7 @@ export const transaction = [
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Horizon Labs",
+    "product": "Network Switch",
     "project": "Sample project",
     "costCenter": "Sample costCenter",
     "salesCampaign": "Sample salesCampaign",
@@ -782,6 +817,7 @@ export const transaction = [
     "etblkpBulkposting": "Sample etblkpBulkposting",
     "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
+    "eTGOFinaccTransDest": "Sample eTGOFinaccTransDest",
     "accountId": "mock-account-012"
   }
 ];

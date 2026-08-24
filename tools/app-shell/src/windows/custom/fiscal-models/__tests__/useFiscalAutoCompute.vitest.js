@@ -102,7 +102,7 @@ describe('useFiscalAutoCompute — initial compute', () => {
 
 describe('useFiscalAutoCompute — sessionStorage cache', () => {
   const CACHED_RESULT = { boxes: BOXES, summary: SUMMARY };
-  const CACHE_KEY = `fiscal_ac_v2_${DECL_A.id}`;
+  const CACHE_KEY = `fiscal_ac_v3_${DECL_A.id}`;
   const CACHED_AT = Date.now() - 60_000; // 1 minute ago
 
   // Stable array refs: prevent effect re-runs caused by a new array reference on

@@ -11,6 +11,18 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const navigate = useNavigate();
   const ui = useUI();
 
+  // ETP-4779 — QuotationConfirmModal dispatches this event right after
+  // converting the quotation into a sales order / invoice (see
+  // ../QuotationConfirmModal.jsx handleConfirm), mirroring the
+  // sales-order:document-created / purchase-order:document-created convention
+  // so this panel refetches automatically instead of requiring the manual 🔄
+  // refresh button.
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('sales-quotation:document-created', handler);
+    return () => window.removeEventListener('sales-quotation:document-created', handler);
+  }, []);
+
   useEffect(() => {
     if (!recordId) { setLoading(false); return; }
     setLoading(true);

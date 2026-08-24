@@ -13,7 +13,7 @@ import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceCon
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
-export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api }) {
+export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const navigate = useNavigate();
@@ -208,7 +208,12 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           onClose={() => {
             setInvoiceResult(null);
             setTimeout(() => {
-              if (!resultNavigatedRef.current) window.location.reload();
+              // ETP-4779 — partial refresh instead of a full page reload: refetch
+              // the header (badge/readonly state) via onRefresh; the "Documentos"
+              // section (RelatedDocuments.jsx, derived from `data.linkedInvoices`)
+              // picks up the newly created invoice automatically once `data`
+              // updates. Skipped when the user navigated away instead of closing.
+              if (!resultNavigatedRef.current) onRefresh?.();
               resultNavigatedRef.current = false;
             }, 0);
           }}
@@ -244,7 +249,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           if (returnData?.id) {
             navigate(`/return-material-receipt/${returnData.id}`);
           } else {
-            window.location.reload();
+            // ETP-4779 — partial refresh (see rationale above) instead of a full
+            // page reload when there's no id to navigate to.
+            onRefresh?.();
           }
         }}
         onError={(msg) => toast.error(msg)}

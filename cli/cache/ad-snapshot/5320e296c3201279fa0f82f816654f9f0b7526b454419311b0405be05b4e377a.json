@@ -2417,7 +2417,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "259d72828a97003ca4468495e3d7fdd9b8e7787c0b2f9475776c14d14458ad4d",
+      "checksum": "5021b0399e127cb4cfbd1fbe1b004e8d7e17d5d8b3fe05db57e72101e2ddedf4",
       "params": [
         "167"
       ],
@@ -2900,7 +2900,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateInvoiced",
@@ -2908,7 +2908,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DaysTillDue",
@@ -3711,6 +3711,14 @@
           "readonlylogic": null
         },
         {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Order Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+        },
+        {
           "columnname": "PaidConverted",
           "displaylogic": "@C_Currency_ID@!@FinAcc_Currency_ID@",
           "displaylogic_server": null,
@@ -4481,7 +4489,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "3935bdaec57909fa5ccbad24ec70ff050c11a8e18cb598b2d107b773189379b9",
+      "checksum": "e20fe6eef26262aada0cbbefaf1e28e622c2cc4ad28995ee391eda9c8f2d5f7e",
       "params": [
         "183"
       ],
@@ -4940,7 +4948,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateInvoiced",
@@ -4948,7 +4956,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DaysTillDue",
@@ -5605,6 +5613,14 @@
           "displaylogicgrid": null,
           "name": "Total Outstanding",
           "readonlylogic": null
+        },
+        {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Supplier Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
         },
         {
           "columnname": "PaidConverted",
@@ -7080,7 +7096,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
-      "checksum": "b4748c661a45bb543809da94f9630f082a54e79107db72ca05abc22322c41af8",
+      "checksum": "82bfbfebfb4e2f05b61f93595df789794f217691f2fa7ef959eef5586c27792b",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -7187,7 +7203,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateAcct",
@@ -7195,7 +7211,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateAcct",
@@ -7203,7 +7219,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateAcct",
@@ -7211,7 +7227,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Accounting Date",
-          "readonlylogic": "@Posted@='Y'"
+          "readonlylogic": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')"
         },
         {
           "columnname": "DateInvoiced",
@@ -7219,7 +7235,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DateInvoiced",
@@ -7227,7 +7243,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DateInvoiced",
@@ -7235,7 +7251,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DateInvoiced",
@@ -7243,7 +7259,7 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Invoice Date",
-          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))"
+          "readonlylogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')"
         },
         {
           "columnname": "DocumentNo",
@@ -7716,6 +7732,22 @@
           "displaylogicgrid": null,
           "name": "Payment Method",
           "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Order Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+        },
+        {
+          "columnname": "POReference",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Order Reference",
+          "readonlylogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
         },
         {
           "columnname": "Send",
@@ -11299,6 +11331,22 @@
         }
       ]
     },
+    "d662d14030fac3baa877a952c407845b671ac76cf66c642a820067d5b864d82a": {
+      "checksum": "35dcfc8230e3bfaae17f07c294d55508edd6ee9bfda9c19621af56d3a023e8d7",
+      "params": [
+        "79FC23AB84F04384B4B7CCCADCDD2942"
+      ],
+      "rows": [
+        {
+          "columnname": "C_Costcenter_ID",
+          "displaylogic": "@ACCT_DIMENSION_DISPLAY@",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Cost Center",
+          "readonlylogic": null
+        }
+      ]
+    },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
       "checksum": "ea314959162320b5e79903aad446a42cdbed220ab3535adcd923ad391cd39f3f",
       "params": [
@@ -11400,6 +11448,254 @@
           "displaylogicgrid": null,
           "name": "Valid Until",
           "readonlylogic": "true"
+        }
+      ]
+    },
+    "db2f858b6d66ba6428bd124f96e59ed83a42311651c5f99ec0075a4d010465d5": {
+      "checksum": "42e03c342fd01dad8a3669caedb4681f27296dfa37dd5a352d0335719c23d0cd",
+      "params": [
+        "800001"
+      ],
+      "rows": [
+        {
+          "columnname": "AD_User_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "User/Contact",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "C_BPartner_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Business Partner",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "C_BPartner_Location_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Partner Address",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "C_Currency_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Currency",
+          "readonlylogic": "@ProjectCategory@='S' | @Projectstatus@!'OP'"
+        },
+        {
+          "columnname": "C_PaymentTerm_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Payment Terms",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "ChangeProjectStatus",
+          "displaylogic": "@Processed@='N' & @ProjectStatus@!'OC'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Change Project Status",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CommittedAmt",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Contract Amount",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CommittedQty",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Contract Quantity",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CopyFrom",
+          "displaylogic": "@IsSummary@='N' & @Processed@='N' & @ProjectStatus@!'OC'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Copy Details",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Createtemppricelist",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Temporary Price List",
+          "readonlylogic": "@Projectstatus@!'OP'"
+        },
+        {
+          "columnname": "DateContract",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Planned End Date",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "DateFinish",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Real End Date",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "FIN_Paymentmethod_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Payment Method",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "GenerateOrder",
+          "displaylogic": "@ProjectStatus@!'OP'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Purchase Order from Project",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "GenerateOrder",
+          "displaylogic": "@Processed@='N' & @ProjectStatus@!'OC'& @ProjectStatus@!'OP'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Sales Order from Project",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "InvoicedAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Invoice Amount",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "InvoicedQty",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Invoice Quantity",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IsCommitCeiling",
+          "displaylogic": "@IsSummary@='N' & @IsCommitment@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Price Ceiling",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IsCommitment",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Legally Binding Contract",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "M_PriceList_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Price List",
+          "readonlylogic": "@Projectstatus@!'OP'"
+        },
+        {
+          "columnname": "POReference",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Order Reference",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PaymentRule",
+          "displaylogic": "@IsSummary@='N' & @FinancialManagement@=''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Form of Payment",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PaymentRule",
+          "displaylogic": "@FinancialManagement@=''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Form of Payment",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PlannedAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Planned Amount",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PlannedMarginAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Planned Margin",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "PlannedQty",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Planned Quantity",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "ProjectBalanceAmt",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Project Balance",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Projectwon",
+          "displaylogic": "@ProjectStatus@='OP' & @IsActive@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Process a Winning Bid",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Responsible_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Person in Charge",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "SalesRep_ID",
+          "displaylogic": "@IsSummary@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Sales Representative",
+          "readonlylogic": null
         }
       ]
     },
@@ -13148,7 +13444,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "88c22d2b291a05a1860851bf685afa4df2448339e543c6e03c1a56eb42fd52e0",
+      "checksum": "bcbae15c1c01b511ce900e164d14226cb75b51be8fd90dbf1b47ed3e0808044c",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -13695,6 +13991,14 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Transaction Process",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_ETGO_Finacc_Trans_Dest",
+          "displaylogic": "@EM_ETGO_Finacc_Trans_Dest@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Destination Financial Account",
           "readonlylogic": null
         },
         {

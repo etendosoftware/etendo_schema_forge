@@ -23,6 +23,7 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349', 'data-kpi-label': label },
@@ -47,8 +48,6 @@ vi.mock('../../../FmCommon.jsx', () => ({
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
-  FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
@@ -66,6 +65,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
   OctagonAlert: () => null, ArrowLeft: () => null, FileText: () => null,
   Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
+  FileCheck: () => null,
 }));
 
 import FmModel349Page from '../FmModel349Page.jsx';
@@ -185,7 +185,7 @@ describe('FmModel349Page — rectifications empty state', () => {
 // ── (c) compute path ─────────────────────────────────────────────────────────
 
 describe('FmModel349Page — compute result refreshes the rectifications tab', () => {
-  it('Recalcular applies compute349Operators().rectifications to KPI, badge and table', async () => {
+  it('Calcular applies compute349Operators().rectifications to KPI, badge and table', async () => {
     compute349Operators.mockResolvedValue({
       operators: [],
       invoices: [],
@@ -194,12 +194,24 @@ describe('FmModel349Page — compute result refreshes the rectifications tab', (
     const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     expect(rectifKpiValue()).toBe('0');
 
+    // The mount-time auto-compute (ETP-4755) already fires `compute349Operators`
+    // once on mount (this declaration has no precomputed data). Wait for it to
+    // settle back to idle before finding+clicking the button ourselves, so this
+    // test's own click is a deliberate SECOND call verifying that clicking
+    // Calcular again refreshes the tab.
+    await waitFor(() => {
+      const btn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent === 'fm.action.compute');
+      expect(btn).toBeTruthy();
+    });
+    expect(compute349Operators).toHaveBeenCalledTimes(1);
+
     const recalc = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent.includes('fm.action.recalc'));
+      .find(b => b.textContent.includes('fm.action.compute'));
     fireEvent.click(recalc);
 
-    await waitFor(() => expect(rectifKpiValue()).toBe('2'));
-    expect(compute349Operators).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(compute349Operators).toHaveBeenCalledTimes(2));
+    expect(rectifKpiValue()).toBe('2');
     expect(rectifTab()).toHaveAttribute('data-badge', '2');
 
     fireEvent.click(rectifTab());

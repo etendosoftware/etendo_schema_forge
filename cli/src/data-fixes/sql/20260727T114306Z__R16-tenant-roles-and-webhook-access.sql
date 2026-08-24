@@ -16,6 +16,15 @@
 -- file's old Step 3 are harmless leftovers (the Webhooks module dispatch path still exists and still
 -- honors them), not cleaned up retroactively.
 
+-- FOLLOW-UP (2026-08-21, ETP-4968): those "harmless leftover" grant rows had a second-order effect
+-- for GOClient specifically -- 12 SMFWHE_DEFINEDWEBHOOK_ROLE rows for SFWindowAccessMap/
+-- SFRolesOverview leaked from referencedata/sampledata/GOClient/SMFWHE_DEFINEDWEBHOOK_ROLE.xml into
+-- com.etendoerp.go/src-db/database/sourcedata/SMFWHE_DEFINEDWEBHOOK_ROLE.xml (the module's universal
+-- baseline, loaded on every fresh install) via an unrelated commit's `export.database` run against a
+-- dev DB that had GOClient's sample tenant loaded. That broke CI's from-scratch `update.database`
+-- with an AD_CLIENT FK violation. Both copies were cleaned directly under ETP-4968 -- a source-file
+-- edit, not a data-fix, since this was contaminated reference data rather than live-tenant state.
+
 -- Background
 -- --------------------------------------------------------------------------------------------
 -- This closes two layered gaps together, both surfaced 2026-07-27 manually testing ETP-4513/

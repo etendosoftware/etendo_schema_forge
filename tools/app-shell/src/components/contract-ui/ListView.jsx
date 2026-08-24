@@ -760,29 +760,36 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
-  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
-  // standardized delete UX:
+  // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
+  // (succeeded, failed) rows, per the standardized delete UX:
   //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
   //   - partial failure → refetch (succeeded rows disappear) + keep only the
   //     failed rows selected, both in our own state and in DataTable's
   //     internal checkbox Set (via deselectTrigger/deselectRowIds).
   //   - all failed      → no refetch, selection untouched.
+  // Extracted so it can be reused both by the generic "Delete selected" button
+  // below (via useBulkRowDelete's onSuccess) AND by a custom
+  // selectionBarRightActions consumer that runs its own delete loop but still
+  // wants the same reselect-only-the-failed-rows behavior (see
+  // `reselectFailed` passed into selectionBarRightActions further down).
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
+    if (succeeded.length > 0) hook.refresh();
+    if (failed.length === 0) {
+      clearSelection();
+    } else {
+      setSelectedRows(failed);
+      if (succeeded.length > 0) {
+        setDeselectRowIds(succeeded.map((r) => r.id));
+        setDeselectTrigger((c) => c + 1);
+      }
+    }
+  }, [hook.refresh, clearSelection]);
+
   const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
     apiBaseUrl,
     entity: entity || 'header',
     token,
-    onSuccess: (succeeded, failed) => {
-      if (succeeded.length > 0) hook.refresh();
-      if (failed.length === 0) {
-        clearSelection();
-      } else {
-        setSelectedRows(failed);
-        if (succeeded.length > 0) {
-          setDeselectRowIds(succeeded.map((r) => r.id));
-          setDeselectTrigger((c) => c + 1);
-        }
-      }
-    },
+    onSuccess: applyBulkDeleteOutcome,
   });
 
   // Register this list view with the current-window context so the Copilot
@@ -996,6 +1003,14 @@ export function ListView({
                   token,
                   apiBaseUrl,
                   onDataMutated: hook.refresh,
+                  // ETP-4656 — additive only: gives a custom
+                  // selectionBarRightActions consumer running its OWN delete
+                  // loop (e.g. Contacts) the same "reselect only the failed
+                  // rows" outcome handling the generic "Delete selected"
+                  // button gets for free via useBulkRowDelete's onSuccess.
+                  // No existing consumer reads this field, so this changes
+                  // nothing for any other window.
+                  reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
             </div>

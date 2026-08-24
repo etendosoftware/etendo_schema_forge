@@ -275,6 +275,45 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
 // closes on failure (the `finally` regression case), stays hidden for
 // draftMode configs without processingModal (SII/TBAI/no-fiscal-config,
 // other draftMode windows), and cannot be dismissed via Escape.
+describe('DetailView toolbar order — saveActionsFirst', () => {
+  beforeEach(resetHook);
+
+  // One process button ("Confirm") next to the Save button, which is what the payment windows
+  // show on a draft record.
+  const PROCESSES = [{ name: 'process', label: 'Confirm', columnName: 'aPRMProcessPayment', style: 'positive' }];
+
+  /** Save vs the process button, in document order. */
+  function orderOf() {
+    const save = screen.getByTestId('action-save');
+    const process = screen.getByText('Confirm').closest('button');
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4
+    const saveComesFirst = Boolean(save.compareDocumentPosition(process) & 4);
+    return saveComesFirst ? ['save', 'process'] : ['process', 'save'];
+  }
+
+  it('renders Save after the process buttons by default', () => {
+    render(<DetailView {...BASE_PROPS} processes={PROCESSES} />);
+    expect(orderOf()).toEqual(['process', 'save']);
+  });
+
+  it('renders Save before the process buttons when saveActionsFirst is set', () => {
+    render(<DetailView {...BASE_PROPS} processes={PROCESSES} saveActionsFirst />);
+    expect(orderOf()).toEqual(['save', 'process']);
+  });
+
+  it('keeps saveBeforeProcesses implying the same order, so no window regresses', () => {
+    render(<DetailView {...BASE_PROPS} processes={PROCESSES} saveBeforeProcesses />);
+    expect(orderOf()).toEqual(['save', 'process']);
+  });
+
+  // The order is presentational: a window can put Save first without opting into the
+  // save-before-process behavior, and vice versa.
+  it('lets saveActionsFirst=false override the order saveBeforeProcesses would impose', () => {
+    render(<DetailView {...BASE_PROPS} processes={PROCESSES} saveBeforeProcesses saveActionsFirst={false} />);
+    expect(orderOf()).toEqual(['process', 'save']);
+  });
+});
+
 describe('DetailView draftMode processingModal (Verifactu-style loading modal)', () => {
   beforeEach(resetHook);
 
