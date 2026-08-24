@@ -13,20 +13,16 @@ import { refreshAccountIdentity } from './bootstrap.js';
  * flips once the account arrives corrects itself without a reload.
  */
 export function useAccountIdentity() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    const platformToken = localStorage.getItem('sf_platform_token');
-    if (!token && !platformToken) return;
-    // The environment JWT can be stale after an environment switch or a credential rotation.
-    // Retry with the account token so ConfigCat still receives accountEmail even when the active
-    // tenant session has expired. This is identity discovery only; API authorization remains
-    // governed by each endpoint's own token checks.
-    refreshAccountIdentity({ token: token || platformToken, apiBase: getApiBase() }).then(identity => {
-      if (!identity && platformToken && platformToken !== token) {
-        return refreshAccountIdentity({ token: platformToken, apiBase: getApiBase() });
-      }
-      return identity;
-    });
-  }, [token]);
+    if (!isAuthenticated) return;
+    // ETP-4576 — one credential, one attempt. This used to read
+    // `sf_platform_token` from localStorage and retry with it when the
+    // environment JWT was stale, because two separate tokens could be held at
+    // once. A session carries exactly one credential, chosen by the active
+    // scheme, so there is no second one to fall back to and nothing to compare.
+    // Identity discovery only; each endpoint still enforces its own access.
+    refreshAccountIdentity({ apiBase: getApiBase() });
+  }, [isAuthenticated]);
 }

@@ -1,6 +1,7 @@
 import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
+import { readCredentialHeaders } from '../sessionHeaders.js';
 
 /**
  * Feature-flag bootstrap.
@@ -257,12 +258,19 @@ export async function setFeatureFlagContext(
  * previous context in place rather than dropping the user out of their bucket.
  */
 export async function refreshAccountIdentity(
-  { token, apiBase = '', fetchImpl = globalThis.fetch, logger = console, storage = globalThis.localStorage } = {}
+  { apiBase = '', fetchImpl = globalThis.fetch, logger = console, storage = globalThis.localStorage } = {}
 ) {
-  if (!token || typeof fetchImpl !== 'function') return undefined;
+  // ETP-4576 — no `token` parameter and no `!token` gate. The credential comes
+  // from the active session scheme, so under `cookie` there is no token to hand
+  // in and the old gate skipped identity discovery entirely: flags kept
+  // targeting the ERP admin username the backend never sees, and a rule keyed
+  // on the account then evaluated differently on each end. Silent, and visible
+  // only as a flag that reads wrong.
+  if (typeof fetchImpl !== 'function') return undefined;
   try {
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      headers: readCredentialHeaders(),
     });
     if (!res?.ok) return undefined;
     const session = await res.json();

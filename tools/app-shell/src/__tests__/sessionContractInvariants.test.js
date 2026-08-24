@@ -162,7 +162,6 @@ const G1_DEBT = new Set([
   'components/copilot/ocr/strategies.js',
   'components/dashboard/TopClientsList.jsx',
   'hooks/useCashClose.js',
-  'lib/flags/bootstrap.js',
   'lib/surveys/survey-config.js',
   'windows/custom/amortization/AmortizationLinesTable.jsx',
   'windows/custom/assets/AssetsAmortizationPanel.jsx',
@@ -194,7 +193,6 @@ const G1_DEBT = new Set([
   'windows/custom/shared/PaymentHeaderTableBase.jsx',
   'windows/custom/shared/ReturnWindowShell.jsx',
   'windows/custom/shared/useConfirmWithCredit.js',
-  'windows/custom/user/InviteUserDialog.jsx',
   'windows/custom/warehouse/WarehouseCustomTable.jsx',
   'windows/custom/warehouse/index.jsx',
   'windows/custom/warehouse/useWarehouseStock.js',
@@ -222,8 +220,6 @@ const G2_DEBT = new Set([
   'hooks/useDisplayLogic.js',
   'hooks/useSurveyEngine.js',
   'hooks/useWidget.js',
-  'lib/flags/bootstrap.js',
-  'lib/flags/useAccountIdentity.js',
   'lib/observability/providers/mixpanel.js',
   'lib/surveys/survey-config.js',
   'pages/InviteAcceptancePage.jsx',
@@ -239,7 +235,6 @@ const G2_DEBT = new Set([
   'windows/custom/product/ProductSidebar.jsx',
   'windows/custom/purchase-invoice/PaymentDetailsPanelCustom.jsx',
   'windows/custom/shared/PaymentDetailSidebarBase.jsx',
-  'windows/custom/user/InviteUserDialog.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
   // Arrived with the epic (ETP-4783). Absorbed, not migrated: nothing the merge
   // did breaks it, and fresh foreign code is its author's to move.
@@ -295,7 +290,6 @@ const G3_DEBT = new Set([
   'windows/custom/shared/PaymentHeaderTableBase.jsx',
   'windows/custom/shared/pdfUtils.js',
   'windows/custom/shared/useConfirmWithCredit.js',
-  'windows/custom/user/InviteUserDialog.jsx',
   'windows/custom/warehouse/index.jsx',
   'windows/spike-apps-host/AppIframeHost.jsx',
   // Arrived with the epic (ETP-4783). Absorbed, not migrated: nothing the merge

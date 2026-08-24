@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import {
   Dialog,
   DialogContent,
@@ -61,17 +62,15 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
 
     setLoading(true);
     try {
-      const token =
-        globalThis.localStorage?.getItem('sf_auth_token') ||
-        globalThis.localStorage?.getItem('sf_platform_token') ||
-        '';
-
+      // ETP-4576 — writeHeaders(), not a localStorage read. This is a POST, so
+      // it needs the write proof: under `cookie` the request carries `X-Go-CSRF`
+      // and the browser attaches the session, and it used to carry NEITHER —
+      // the hand-built bearer came from a key nothing writes any more, so the
+      // header was simply absent and the invitation 401'd or 403'd.
       const response = await fetch(`${apiBase}/sws/go/company-invitations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: 'include',
+        headers: writeHeaders(),
         body: JSON.stringify({ email: trimmed }),
       });
 
