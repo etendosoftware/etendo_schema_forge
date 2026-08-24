@@ -83,4 +83,25 @@ describe('TbaiMonitorSection — error reason rendering (real isErrorStatus)', (
   it('does not crash when validationResults is undefined', () => {
     expect(() => render(<TbaiMonitorSection {...baseProps} mockRows={[ROWS[1]]} />)).not.toThrow();
   });
+
+  it('joins each row to its own validation results only when multiple invoices are mixed', () => {
+    // Regression guard for the tbaiSyncinvoiceID join: rendering all three rows
+    // together must not leak Rechazado's reason onto Error's cell (or vice versa),
+    // and the accepted row must render none.
+    render(<TbaiMonitorSection {...baseProps} mockRows={ROWS} validationResults={VALIDATION_RESULTS} />);
+
+    const recibidoRow = screen.getByText('FA-1').closest('tr');
+    const rechazadoRow = screen.getByText('FA-2').closest('tr');
+    const errorRow = screen.getByText('FA-3').closest('tr');
+
+    expect(recibidoRow.querySelector('.fm-err-text')).toBeNull();
+
+    expect(rechazadoRow.textContent).toMatch(/\[5040\]/);
+    expect(rechazadoRow.textContent).not.toMatch(/\[1001\]/);
+    expect(rechazadoRow.textContent).not.toMatch(/\[1002\]/);
+
+    expect(errorRow.textContent).toMatch(/\[1001\]/);
+    expect(errorRow.textContent).toMatch(/\[1002\]/);
+    expect(errorRow.textContent).not.toMatch(/\[5040\]/);
+  });
 });
