@@ -96,6 +96,46 @@ The Invoice number column renders `invoiceIdentifier ?? invoice` — the Etendo 
 
 KPI card "Con error / Rechazadas" aggregates both `rechazado` and `error` counts.
 
+### Error reason (ETP-4784)
+
+Rows in `Rechazado`/`Error` status show their error reason(s) below the status pill,
+in red — the same visual pattern as `SiiMonitorSection`'s `[errorCode] errorMessage`
+text. There's no per-invoice error field on `sincronización` itself; the reason comes
+from a separate entity:
+
+- **Entity:** `resultadoValidación` (table `Tbai_Valcode`), same spec `tbai-facturas-enviadas`.
+- **Fields:** `codigo` + `descripcion`.
+- **Join key:** `resultadoValidación.tbaiSyncinvoiceID` → `sincronización` row `id`
+  (both are `Tbai_Syncinvoice_ID`). A `sincronización` row can have **0..N** validation
+  results — all are rendered, one line per result.
+
+`useFiscalMonitor.js` fetches the full `resultadoValidación` set for the org (up to
+9999 rows, `_startRow`/`_endRow`, mirroring the `csvMap` pattern in `SiiMonitorSection`)
+in parallel with the existing TBAI count fetches, and exposes it as
+`tbaiValidationResults` in the hook's return value. `FiscalMonitorPage` threads it down
+to `TbaiMonitorSection` as the `validationResults` prop (both the standalone `tbai` and
+the `sii+tbai` combined render sites). `TbaiMonitorSection` builds a
+`tbaiSyncinvoiceID → [{codigo, descripcion}]` map with `buildValidationMap` (memoized
+via `useMemo`) and looks up `validationMap[row.id]` for `Rechazado`/`Error` rows only
+(`isErrorStatus`). The CSV export (`buildTbaiExportCols(validationMap)`) joins the same
+map into an "Error Reason" column, `[codigo] descripcion` entries joined with ` | `.
+
+No `decisions.json` or contract changes were needed — `resultadoValidación` was already
+published in NEO (`ETGO_SF_ENTITY.isget=Y`, GET-only, no `java_qualifier`).
+
+Debug/mock mode: `MOCK_TBAI_VALIDATION_RESULTS` in `fiscalMonitorMockData.js` provides
+matching mock reasons for `MOCK_TBAI_ROWS` (`t4`, `t6`, `t8` — `t8` carries two reasons
+to exercise the 0..N render path). `FiscalMonitorPage`'s `useDebugState` swaps in this
+mock array when the debug panel's mock-data toggle is on.
+
+**Coverage of the ticket's three error states:** `Rechazada` and `No enviada` (failed
+send) both map to TBAI's `Rechazado`/`Error` statuses, covered above. `Parcialmente
+aceptada` has no TBAI equivalent — it is a VERI\*FACTU-only concept, already covered by
+`VerifactuMonitorSection`'s "Error reason" column. SII already showed its own error
+reason (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) for all three of its own error states
+(`IN` Rechazada, `EE` No enviada, `AE` Parcialmente aceptada) before this change — no
+gap found there.
+
 ## Verifactu section (`VerifactuMonitorSection`)
 
 **Status tabs:** Aceptadas | Parcialmente aceptadas | Rechazadas | Inválidas
@@ -240,17 +280,20 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 9. Open `/fiscal-config` with debug mode active — confirm `FiscalConfigDebugPanel` appears and delete buttons work.
 10. In the debug panel, enable "45d warn" — confirm the amber subtle strip appears below the OrgLead bar. Enable "20d crit" — confirm it turns red and the dismiss button disappears.
 11. Click a Pending (PE) status pill on an SII row — confirm `InvoicePreviewModal` opens. Click a Pending (Pendiente) status pill on a TBAI row — confirm the same modal opens for that invoice.
+12. In the debug panel, select TBAI (or SII+TBAI) and enable mock data — confirm rows `t4` and `t8` (Rechazado) and `t6` (Error) show red error-reason text below the status pill, with `t8` showing two lines. Confirm accepted (`Recibido`) and pending rows show no error text.
+
+
 
 ## Automated evidence
 
 - `artifacts/fiscal-monitor/decisions.json` — `layoutType: "custom"`, window registered.
 - `tools/app-shell/src/windows/registry.js` — `fiscal-monitor` in `customLoaders` at `customLoaders['fiscal-monitor']`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx` — profile-routing orchestrator; debug mode integration.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitor.utils.js` — `buildMonitorFetchPlan`, `computeKpis` (pure functions, fully tested).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalKpiCards.jsx` — clickable metric cards per system variant.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx` — emitidas/recibidas × actual/anterior; `onTabChange` callback with combined key.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx` — server-side criteria filter per status; `onFilterChange` callback.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx` — server-side criteria filter per status; `onFilterChange` callback; `buildValidationMap`/`validationResults` prop joins `resultadoValidación` error reasons onto `Rechazado`/`Error` rows (see "Error reason (ETP-4784)" above); `buildTbaiExportCols` joins the same reasons into the CSV export.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/VerifactuMonitorSection.jsx` — entity-per-status tab; `onTabChange` callback.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fmtDateUtils.js` — pure `fmtDate` helper (no React deps); converts `YYYY-MM-DD` → `DD/MM/YYYY`, passes through already-formatted dates, returns `'—'` for falsy input. Importable in Node.js tests without any alias setup.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FmPrimitives.jsx` — shared `StatusPill`, `NumFactura`, `Pager`, `RowActionBtn` primitives; `isPendingStatus`/`PENDING_STATUSES` and error-status helpers; re-exports `fmtDate` from `fmtDateUtils.js` and `PAGE_SIZE = 20`.
@@ -260,14 +303,17 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `tools/app-shell/src/windows/custom/fiscal-config/CertExpiryBanner.jsx` — cert expiry warning strip/card; `variant="subtle"` used here, `variant="prominent"` in fiscal-config.
 - `tools/app-shell/src/windows/custom/shared/SifSendingModal.jsx` — shared confirm/sending/results modal with simulated progress bar; used by `SendToSifButton` and `InvoicePreviewModal`.
 - `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigDebugPanel.jsx` — config record deletion panel (shared debug mode).
-- `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitorMockData.js` — realistic multi-system mock rows + matching KPI counts.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitorMockData.js` — realistic multi-system mock rows + matching KPI counts; `MOCK_TBAI_VALIDATION_RESULTS` — mock error reasons joined to `MOCK_TBAI_ROWS` by `tbaiSyncinvoiceID`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fiscal-monitor.css` — `.fm-*` design-system CSS; `overflow-y: auto` on `.fm-page` for scroll in fixed shell.
 - `cli/test/fiscal-monitor.utils.test.js` — 18 tests covering `buildMonitorFetchPlan` and `computeKpis` for all profiles and edge cases.
 - `cli/test/fiscal-monitor.mockdata.test.js` — mock data integrity tests: KPI counts match actual row arrays; all rows have required fields.
 - `cli/test/useFiscalMonitor.test.js` — 22 tests covering source guards (named export, Promise.all × ≥2, computeKpis/detectProfile wiring, entity constant exports), `get` helper (URL encoding, `useApiFetch` usage instead of manual Authorization headers, response parsing, error handling), `fetchCount` (totalRows extraction, zero fallback), `fetchSiiMonitorData` (4 parallel calls, correct entity names), `fetchVerifactuMonitorData` (4 parallel calls), and `fetchTbaiData` (5 calls: total + Recibido + Rechazado + Error + Pendiente, criteria filter with `estado` fieldName).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/FiscalKpiCards.test.js` — 16 component source-guard tests: SII/TBAI/Verifactu variants, `activeKey` active-class logic, `onPick` callback dispatch, `de-DE` number formatting.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/SiiMonitorSection.test.js` — 21 component source-guard tests: tab/period state, `initialTab` derivation, `mockRows` bypass, data fetching, pending-pill → `onInvoiceOpen` wiring.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/TbaiMonitorSection.test.js` — expanded with pending-pill → `onInvoiceOpen` wiring tests (TBAI sales-only).
+- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/TbaiMonitorSection.test.js` — expanded with pending-pill → `onInvoiceOpen` wiring tests (TBAI sales-only); `buildValidationMap`/`buildTbaiExportCols` source guards for the error-reason join.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/TbaiMonitorSection.errorReason.vitest.jsx` — 6 render tests: no reason text for accepted rows, `[codigo] descripcion` line for a single reason, all N lines for a multi-reason row, no line for an error row with no matching result, `fm-err-text` class present, no crash when `validationResults` is undefined.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/FiscalMonitorPage.tbaiValidation.vitest.jsx` — verifies `FiscalMonitorPage` threads `tbaiValidationResults` from `useFiscalMonitor` to `TbaiMonitorSection`'s `validationResults` prop (standalone `tbai` profile).
+- `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/fiscalMonitorMockData.test.js` — `MOCK_TBAI_VALIDATION_RESULTS` integrity: every `tbaiSyncinvoiceID` resolves to an existing `MOCK_TBAI_ROWS` row in `Rechazado`/`Error` state, every entry has `codigo`+`descripcion`, at least one row has >1 result.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/fmtDateUtils.test.js` — 12 tests: exports guard, null/falsy → `'—'`, ISO→DD/MM/YYYY conversion, already-formatted pass-through, invalid/non-date inputs. Imports `fmtDate` from the real module (no local copy).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/__tests__/FmPrimitives.test.js` — 41 source-guard tests: `isErrorStatus` (SII/TBAI/Verifactu/edge), `isPendingStatus`/`PENDING_STATUSES` export + status coverage, `StatusPill` onClick/title-prop guards, `fmtDate` re-export guard (matches `export.*fmtDate`), `PAGE_SIZE`, `WipBadge` i18n keys.
 - `tools/app-shell/src/windows/custom/shared/__tests__/SifSendingModal.test.js` — 22 component source-guard tests: props contract (no `headers` — auth via `useApiFetch`), three-phase state machine, progress bar formula/cap/snap, `callProcess` action columns, results display, `onAfterSend` callback.

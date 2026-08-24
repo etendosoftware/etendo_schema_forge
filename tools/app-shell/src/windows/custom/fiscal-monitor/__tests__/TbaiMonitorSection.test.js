@@ -98,12 +98,9 @@ describe('TbaiMonitorSection — CSV export wiring', () => {
     assert.match(src, /fetchCsvAndDownload.*from.*FmPrimitives/);
   });
 
-  it('declares TBAI_EXPORT_COLS constant', () => {
-    assert.match(src, /const TBAI_EXPORT_COLS/);
-  });
-
-  it('TBAI_EXPORT_COLS is an array with at least one column definition', () => {
-    assert.match(src, /TBAI_EXPORT_COLS\s*=\s*\[/);
+  it('declares buildTbaiExportCols factory returning column defs', () => {
+    assert.match(src, /function buildTbaiExportCols\(validationMap\)/);
+    assert.match(src, /buildTbaiExportCols[\s\S]*?return\s*\[/);
   });
 
   it('declares exporting state with useState', () => {
@@ -118,11 +115,44 @@ describe('TbaiMonitorSection — CSV export wiring', () => {
     assert.match(src, /disabled=\{loading \|\| exporting\}/);
   });
 
-  it('handleExport calls fetchCsvAndDownload with TBAI_EXPORT_COLS', () => {
-    assert.match(src, /fetchCsvAndDownload[\s\S]*?TBAI_EXPORT_COLS/);
+  it('handleExport calls fetchCsvAndDownload with buildTbaiExportCols(validationMap)', () => {
+    assert.match(src, /fetchCsvAndDownload[\s\S]*?buildTbaiExportCols\(validationMap\)/);
   });
 
   it('handleExport builds criteria params from the active filter', () => {
     assert.match(src, /params\.criteria\s*=|params\[.criteria.\]\s*=/);
+  });
+});
+
+// Guards: TBAI error-reason join (resultadoValidación → sincronización by tbaiSyncinvoiceID)
+describe('TbaiMonitorSection — validation results (error reason) join', () => {
+  it('declares a validationResults prop', () => {
+    assert.match(src, /validationResults\b/);
+  });
+
+  it('builds a lookup map keyed by tbaiSyncinvoiceID', () => {
+    assert.match(src, /function buildValidationMap\(validationResults\)/);
+    assert.match(src, /r\.tbaiSyncinvoiceID/);
+  });
+
+  it('memoizes the validation map with useMemo', () => {
+    assert.match(src, /useMemo\(\(\)\s*=>\s*buildValidationMap\(validationResults\)/);
+  });
+
+  it('renders error reason(s) only for error-status rows', () => {
+    assert.match(src, /isErrorStatus\(row\.estado\)\s*&&\s*\(validationMap\[row\.id\]/);
+  });
+
+  it('renders one line per validation result, formatted as [codigo] descripcion', () => {
+    assert.match(src, /v\.codigo\s*\?\s*`\[\$\{v\.codigo\}\]\s*`\s*:\s*''/);
+    assert.match(src, /\{v\.descripcion\}/);
+  });
+
+  it('applies the fm-err-text class — same visual pattern as SiiMonitorSection', () => {
+    assert.match(src, /className="fm-err-text"/);
+  });
+
+  it('exported CSV column joins error reasons via the same validationMap', () => {
+    assert.match(src, /validationMap\[r\.id\]/);
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -6,19 +6,47 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
 import { TBAI_SPEC, TBAI_ENTITY } from './useFiscalMonitor.js';
 
+/**
+ * Groups resultadoValidación rows by tbaiSyncinvoiceID (FK → sincronización row id).
+ * A sincronización row can have 0..N validation results — all are kept and shown.
+ */
+function buildValidationMap(validationResults) {
+  const map = {};
+  for (const r of (validationResults ?? [])) {
+    const key = r.tbaiSyncinvoiceID;
+    if (!key) continue;
+    (map[key] ??= []).push({ codigo: r.codigo, descripcion: r.descripcion });
+  }
+  return map;
+}
+
 const STATUS_FIELD = 'estado';
 
 const FILTER_ALL      = 'all';
 const FILTER_SENT     = 'sent';
 const FILTER_REJECTED = 'rejected';
 
-const TBAI_EXPORT_COLS = [
-  { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
-  { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
-  { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
-  { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
-  { label: 'Status',      get: r => r.estado ?? '' },
-];
+/**
+ * Builds the CSV column defs for TBAI export. `validationMap` (tbaiSyncinvoiceID
+ * → validation results) is joined in so exported rows carry the same error
+ * reason(s) shown in the table — same shape as the "Error Reason" join used
+ * for the on-screen rows.
+ */
+function buildTbaiExportCols(validationMap) {
+  return [
+    { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
+    { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
+    { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
+    { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
+    { label: 'Status',      get: r => r.estado ?? '' },
+    {
+      label: 'Error Reason',
+      get: r => (validationMap[r.id] ?? [])
+        .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
+        .join(' | '),
+    },
+  ];
+}
 
 function parseIdentifier(row) {
   const raw = row['invoice$_identifier'] ?? row.invoiceIdentifier ?? null;
@@ -59,10 +87,12 @@ export default function TbaiMonitorSection({
   orgId, apiBaseUrl, initialFilter = 'all', mockRows, onFilterChange,
   refreshKey = 0, onInvoiceOpen, onBpClick, onErrorClick,
   kpis,
+  validationResults,
   noWrap,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
+  const validationMap = useMemo(() => buildValidationMap(validationResults), [validationResults]);
   const [filter, setFilter]       = useState(FILTER_ALL);
   const [page, setPage]           = useState(1);
   const [rows, setRows]           = useState([]);
@@ -120,7 +150,7 @@ export default function TbaiMonitorSection({
         `/${TBAI_SPEC}/${encodeURIComponent(TBAI_ENTITY)}`,
         params,
         `tbai_${filter}`,
-        TBAI_EXPORT_COLS,
+        buildTbaiExportCols(validationMap),
       );
     } finally {
       setExporting(false);
@@ -232,6 +262,11 @@ export default function TbaiMonitorSection({
                         onClick={pillClick}
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
                         data-testid="StatusPill__dd7710" />
+                      {isErrorStatus(row.estado) && (validationMap[row.id] ?? []).map((v, vi) => (
+                        <div className="fm-err-text" key={vi}>
+                          {v.codigo ? `[${v.codigo}] ` : ''}{v.descripcion}
+                        </div>
+                      ))}
                     </td>
                   </tr>
                 );
