@@ -5,9 +5,12 @@
  * names a `cellType` per grid field and this window-scoped registry resolves it to a cell
  * body. Two properties are load-bearing and covered here:
  *
- *  - `resolveCellType` must fall back to VIRTUAL_FIELD_CELL_TYPES for `pendingCount`,
- *    because `appendVirtualFields` (resolve-curated.js) copies a closed 10-key whitelist
- *    that does not include `cellType` — a virtual field can never declare one;
+ *  - `resolveCellType` is a plain `col.cellType` read. It used to nullish-coalesce onto a
+ *    VIRTUAL_FIELD_CELL_TYPES map, because while "Por conciliar" was a virtual field
+ *    `appendVirtualFields` (resolve-curated.js) copied a closed whitelist that excluded
+ *    `cellType`. It is the `EM_ETGO_Pending_Count` stored computed column now and declares
+ *    its own, so that fallback is gone and must not come back — a name-keyed map would
+ *    silently outrank a declared cellType;
  *  - an unknown cellType must resolve to `undefined`, so AccountsHeaderTable leaves the
  *    column without a `render` and DataTable falls back to its generic type renderer.
  *    Degradation, never a crash.
@@ -21,11 +24,8 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
-import {
-  ACCOUNT_CELL_TYPES,
-  VIRTUAL_FIELD_CELL_TYPES,
-  resolveCellType,
-} from '../accountCellTypes.jsx';
+import * as registry from '../accountCellTypes.jsx';
+import { ACCOUNT_CELL_TYPES, resolveCellType } from '../accountCellTypes.jsx';
 
 const ACCOUNT = {
   id: 'acc-1',
@@ -38,7 +38,9 @@ const ACCOUNT = {
   countryIso: 'ES',
   countryName: 'Spain',
   iban: 'ES1212340000000000000001',
-  pendingCount: 3,
+  // The key the W spec's generic CRUD serves for EM_ETGO_Pending_Count. The pill's own
+  // prop is still called `pendingCount`; the registry is what bridges the two.
+  eTGOPendingCount: 3,
   bankConnected: true,
 };
 
@@ -163,7 +165,7 @@ describe('ACCOUNT_CELL_TYPES — reconcilePill', () => {
   });
 
   it('renders the reconciled badge when nothing is pending', () => {
-    renderCell('reconcilePill', { ...ACCOUNT, pendingCount: 0 }, { onReconcile: vi.fn() });
+    renderCell('reconcilePill', { ...ACCOUNT, eTGOPendingCount: 0 }, { onReconcile: vi.fn() });
 
     expect(screen.getByTestId('reconcile-status-reconciled')).toBeInTheDocument();
   });
@@ -201,21 +203,30 @@ describe('resolveCellType', () => {
       .toBe('accountBalance');
   });
 
-  it('falls back to the virtual-field map for pendingCount', () => {
-    expect(resolveCellType({ name: 'pendingCount' })).toBe('reconcilePill');
-    // The contract emits `cellType: null` (not undefined) for a virtual field, so the
-    // fallback has to be nullish-coalescing rather than a plain `||`-free lookup.
-    expect(resolveCellType({ name: 'pendingCount', cellType: null })).toBe('reconcilePill');
+  it('reads the pending column cellType off the contract like any other', () => {
+    expect(resolveCellType({ name: 'eTGOPendingCount', cellType: 'reconcilePill' }))
+      .toBe('reconcilePill');
   });
 
-  it('lets a declared cellType win over the virtual-field fallback', () => {
-    expect(resolveCellType({ name: 'pendingCount', cellType: 'accountBalance' }))
-      .toBe('accountBalance');
+  // Regression guard for the retired fallback: no field name may imply a renderer, or a
+  // future decisions.json change to `cellType` would be silently ignored.
+  it('infers nothing from the field name', () => {
+    expect(resolveCellType({ name: 'eTGOPendingCount' })).toBeUndefined();
+    expect(resolveCellType({ name: 'pendingCount' })).toBeUndefined();
+    // The resolver forwards the declared value verbatim, so an explicit null stays null
+    // rather than becoming undefined. What matters is that neither binds a renderer.
+    expect(resolveCellType({ name: 'eTGOPendingCount', cellType: null })).toBeNull();
+    expect(ACCOUNT_CELL_TYPES[resolveCellType({ name: 'eTGOPendingCount' })]).toBeUndefined();
+    expect(ACCOUNT_CELL_TYPES[resolveCellType({ name: 'eTGOPendingCount', cellType: null })])
+      .toBeUndefined();
   });
 
-  it('returns undefined for a column with neither a declared nor an inferred cellType', () => {
+  it('binds no renderer for a column with no declared cellType', () => {
     expect(resolveCellType({ name: 'description' })).toBeUndefined();
-    expect(resolveCellType({ name: 'description', cellType: null })).toBeUndefined();
+    expect(resolveCellType({ name: 'description', cellType: null })).toBeNull();
+    expect(ACCOUNT_CELL_TYPES[resolveCellType({ name: 'description' })]).toBeUndefined();
+    expect(ACCOUNT_CELL_TYPES[resolveCellType({ name: 'description', cellType: null })])
+      .toBeUndefined();
   });
 
   // The graceful-degradation path: AccountsHeaderTable does
@@ -228,14 +239,16 @@ describe('resolveCellType', () => {
   });
 });
 
-describe('VIRTUAL_FIELD_CELL_TYPES', () => {
-  it('covers exactly the virtual fields the account entity declares', () => {
-    expect(VIRTUAL_FIELD_CELL_TYPES).toEqual({ pendingCount: 'reconcilePill' });
+describe('module surface', () => {
+  // The account entity has no virtual fields left, so nothing needs a name-keyed cellType
+  // map. Asserted on the module surface so reintroducing the export fails here.
+  it('no longer exports a virtual-field cellType map', () => {
+    expect(registry.VIRTUAL_FIELD_CELL_TYPES).toBeUndefined();
   });
 
-  it('only maps onto cellTypes the registry can actually render', () => {
-    for (const cellType of Object.values(VIRTUAL_FIELD_CELL_TYPES)) {
-      expect(ACCOUNT_CELL_TYPES[cellType], `${cellType} has no renderer`).toBeTypeOf('function');
+  it('every exposed cellType resolves to a renderer function', () => {
+    for (const [cellType, renderer] of Object.entries(ACCOUNT_CELL_TYPES)) {
+      expect(renderer, `${cellType} has no renderer`).toBeTypeOf('function');
     }
   });
 });
