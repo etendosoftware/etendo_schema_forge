@@ -413,11 +413,43 @@ or the bank rejects leaves the invoice untouched with nothing to undo.
 | `failed` **before** `authorized` | nothing is created; the modal reports it and the user retries |
 | `failed` **after** `authorized` | the payment already exists → flagged **`ETGOERR`** ("Error"), kept processed, offered for retry |
 
-To keep config and runtime aligned, connecting an account to its bank **from Etendo Go** clears the
-transfer method's **Automatic Withdrawn** flag (`FinancialAccountBankConnectionHandler`) — Payment OUT
-only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers. That flag is
-what makes `PPM` mean "confirmed but not withdrawn": the bank transaction appears only when Salt Edge
+The bank-transfer payment method **never** has **Automatic Withdrawn** set — Payment OUT only;
+Automatic Deposit is left as configured, since PIS only initiates outbound transfers. That is what
+makes `PPM` mean "confirmed but not withdrawn": the bank transaction appears only when Salt Edge
 reports execution, via the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
+
+Since **ETP-4891** this is an invariant of the method rather than a consequence of the account's
+connection state. It is enforced in three places: the sampledata seeds `FIN_PAYMENTMETHOD` /
+`FIN_FINACC_PAYMENTMETHOD` with `N`, `FinancialAccountSupport.createLink` forces `false` for a
+transfer method regardless of what the template says, and data-fix **R24** repairs existing tenants.
+`FinancialAccountBankConnectionHandler` no longer touches the flag at all — it used to clear it on
+connect and *restore it to `Y`* on a permanent disconnect, so an account that was connected and then
+disconnected silently went back to auto-withdrawing.
+
+**A transfer needs a live PSD2 connection.** The payment modal splits the account's three connection
+states (see `financial-account.md`): connected → the full PIS form; **`bankReconnectable`** (connected
+once, then switched off, Salt Edge link still alive) → the form is hidden and a warning links to
+*Editar Cuenta* to reconnect, with Confirm disabled (Save draft stays available — a draft moves no
+money); never connected → the ordinary manual payment flow, unchanged. `invoiceAccounts` therefore
+emits `bankReconnectable` alongside `bankConnected`, and `invoicePaymentMethods` emits
+`isBankTransfer` so the gate reads the real `EM_PSD2_Is_Bank_Transfer` flag instead of guessing from
+the method name — a hard block must not be triggered by something merely *called* "Transferencia".
+
+**A never-connected account confirms with `"D"`, not `"P"`.** Automatic Withdrawn used to be the
+signal Core's `FIN_AddPayment.processPayment` checks (`FIN_Utility.isAutomaticDepositWithdrawn`) to
+auto-create the `FIN_Finacc_Transaction` on the `"P"` ("Process Made Payment(s)") action. Since
+ETP-4891 turned that flag permanently off for the transfer method, `"P"` alone no longer creates
+anything — Classic's Add Payment dialog exposes this exact fork as its "Action Regarding Document"
+dropdown (`"Process Made Payment(s)"` vs `"Process Made Payment(s) and Withdrawal"`). Etendo Go picks
+between them in `PaymentRegistrationService.resolveProcessAction`: a transfer payment OUT gets
+`"D"` (create the transaction now) UNLESS the account is actively PSD2-connected, in which case it
+stays `"P"` and defers to the Salt Edge callback above — creating it here too would double the
+movement. Receipts and every other payment method are unaffected (their own Automatic
+Deposit/Withdrawn configuration still governs `"P"` exactly as before). This applies to every
+confirm path that can reach a transfer payment: the two-step modal (`doRegisterPaymentAdvanced`),
+the older single-click quick-pay, a confirmed draft, the New Movement wizard's embedded payment
+(`AddPaymentService`), and bank reconciliation — the last two, plus the quick-pay and draft-confirm
+paths, never initiate PIS at all, so they always get `"D"` regardless of connection state.
 
 The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
 in a popup, locks its own form (`inert`) so the values in flight cannot be edited, and polls the

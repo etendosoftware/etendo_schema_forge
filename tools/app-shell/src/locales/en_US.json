@@ -18019,6 +18019,8 @@
     "cpRetryTransferDone": "The bank processed the payment.",
     "cpRetryTransferRejected": "The bank rejected the payment again.",
     "cpPisConfirmButton": "Continue to bank",
+    "cpPsd2InactiveBody": "The bank connection for this account is inactive, so the transfer cannot be executed. Reconnect it from the account settings to continue.",
+    "cpPsd2InactiveAction": "Edit account",
     "cpPisStatusRequested": "Requested",
     "cpPisStatusAuthorizing": "Authorizing",
     "cpPisStatusAuthorized": "Authorized",

@@ -103,7 +103,9 @@ export function FinancialAccountDetail({ recordId }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'movements');
   // Edit modal (ETP-4530): reachable from the detail view too, not just the accounts-list kebab.
-  const [editOpen, setEditOpen] = useState(false);
+  // ETP-4891 added the `?edit=true` deep link, used by the payment modal's "PSD2 inactive" warning
+  // to send the user straight to where Reconectar lives.
+  const [editOpen, setEditOpen] = useState(() => searchParams.get('edit') === 'true');
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   // The automatch modal opens whenever the user enters the Reconciliation tab — either via the
@@ -127,7 +129,7 @@ export function FinancialAccountDetail({ recordId }) {
     }
   }, []);
 
-  // Apply deep-link params (tab / autoMatch / txn) and clear them. Reacts to searchParams changes
+  // Apply deep-link params (tab / autoMatch / txn / newMovement / edit) and clear them. Reacts to searchParams changes
   // — not just mount — because navigating within the SAME account (e.g. from the reconciled-txns
   // modal to the Movements tab) updates the URL without remounting this window.
   useEffect(() => {
@@ -135,11 +137,13 @@ export function FinancialAccountDetail({ recordId }) {
     const txn = searchParams.get('txn');
     const autoMatch = searchParams.get('autoMatch');
     const newMovement = searchParams.get('newMovement');
-    if (!tab && !txn && !autoMatch && !newMovement) return;
+    const edit = searchParams.get('edit');
+    if (!tab && !txn && !autoMatch && !newMovement && !edit) return;
     if (tab) setActiveTab(tab);
     if (txn) setHighlightTxnId(txn);
     if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchOpen(true);
     if (newMovement === 'true') setAutoOpenNewMovement(true);
+    if (edit === 'true') setEditOpen(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);

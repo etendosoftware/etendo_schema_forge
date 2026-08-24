@@ -18262,6 +18262,8 @@
     "cpRetryTransferDone": "El banco procesó el pago.",
     "cpRetryTransferRejected": "El banco volvió a rechazar el pago.",
     "cpPisConfirmButton": "Continuar al banco",
+    "cpPsd2InactiveBody": "La conexión bancaria de esta cuenta está inactiva, por lo que no se puede ejecutar la transferencia. Reconéctala desde la configuración de la cuenta para continuar.",
+    "cpPsd2InactiveAction": "Editar cuenta",
     "cpPisStatusRequested": "Iniciado",
     "cpPisStatusAuthorizing": "Autorizando",
     "cpPisStatusAuthorized": "Autorizado",

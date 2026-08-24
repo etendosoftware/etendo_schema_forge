@@ -391,6 +391,39 @@
   provisioning-gap taxonomy (A=accounting, B=org tree, C=period, D=legal entity, E=session,
   F=default customer/org info). Used `@gap: G1` for R14 and noted it in the map §4. Future
   payment-config gaps continue the `G` series.
+- **2026-08-21 — `Automatic Withdrawn` on the bank-transfer method is an invariant, not a
+  connection-state consequence (ETP-4891, `@gap: G3`, R24).** Etendo GO pays transfers over PIS: the
+  `FIN_Finacc_Transaction` is created by the Salt Edge callback once the bank reports execution, so
+  auto-withdrawing on processing duplicates the movement AND destroys `PPM`'s meaning of "confirmed
+  but not withdrawn" (what the payment windows render as "Pago en progreso"). ETP-4406 patched this
+  dynamically in `FinancialAccountBankConnectionHandler` — clear on connect, **restore to `'Y'` on a
+  permanent disconnect** — which left two holes: a connected-then-disconnected account drifted back
+  to `'Y'`, and an account never connected was never touched. Both call sites and the 3 private
+  helpers are now deleted; the flag is off for the method, always. **Apply:** when a flag's correct
+  value does not actually depend on the state being tracked, do not track it — the inverse operation
+  is where the drift lives. Preventive front is dataset-only (`FIN_PAYMENTMETHOD.xml` +
+  `FIN_FINACC_PAYMENTMETHOD.xml`, both already whitelisted in `OnboardingDatasetDefinition`), plus a
+  runtime guard in `FinancialAccountSupport.createLink` so a legacy template still on `'Y'` cannot
+  propagate it to a new link. Only Payment OUT — `automatic_deposit` is untouched, PIS initiates
+  outbound transfers only. No `ONBOARDING_PROVISIONED_THROUGH` bump (same reasoning as G1/R14).
+- **2026-08-21 — Live sweep behind R24: the flag predicate is now sufficient on its own.** Counting
+  by the R14/R15 predicate: `fin_paymentmethod` had **45 rows in `'Y'` across 44 tenants and ZERO in
+  `'N'`** (i.e. every tenant's template was wrong), `fin_finacc_paymentmethod` 61 in `'Y'` / 8 in
+  `'N'` across 2 tenants (exactly the tenants that had connected an account from the SPA, i.e. the
+  old connect-time clear). Separately verified that NO method is matched by the name arm alone
+  (`name IN (...) AND em_psd2_is_bank_transfer <> 'Y'` → 0 rows), so R15 has normalised the flag
+  fleet-wide and the name fallback in R24 is belt-and-braces for a tenant that has not had R15
+  applied. **Apply:** keep the name arm anyway — it costs nothing and the four copies of this
+  predicate (R14, R15, R24, `isBankTransferMethod`) must stay in lockstep. Validated on GOClient in a
+  rolled-back tx: `@check` 15 rows → `@apply` 1 template + 14 links → `@check` 0.
+- **2026-08-21 — A name regex is fine for OFFERING a feature and wrong for BLOCKING one.** The
+  payment modal decided "is this a transfer?" with `/transfer|transferencia/i` on the method label.
+  Harmless while it only added an optional PIS section; once the same predicate started blocking a
+  payment (transfer + inactive PSD2 connection → cannot pay), a method called "Transferencia interna"
+  would have blocked a legitimate payment. `invoicePaymentMethods` now emits `isBankTransfer` from
+  `EM_PSD2_Is_Bank_Transfer` and the regex survives only as a fallback for older backends. **Apply:**
+  when tightening a heuristic-gated feature into a hard gate, re-derive the gate from real data first
+  — the failure mode inverts from "missing nicety" to "blocked user".
 
 ---
 

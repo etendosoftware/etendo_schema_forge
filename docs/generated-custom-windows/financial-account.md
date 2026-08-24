@@ -353,10 +353,18 @@ It is a separate flag rather than a tri-state `bankConnected` because several SP
   "Conectar banco" here would create a second connection and orphan the surviving one.
 - no link → Conectar banco
 
+The `bankReconnectable` state is also what makes the payment modal refuse a **transfer**: with the
+connection switched off there is no channel to execute one, so the modal hides the payment form and
+points the user back here to *Reconectar* (**ETP-4891**). It arrives there as a deep link,
+`/financial-account/<id>?edit=true`, which opens the Editar Cuenta modal directly — the same param
+family as `?tab=`, `?autoMatch=true`, `?txn=` and `?newMovement=true`.
+
 `disconnect` reports what actually happened (`permanent` / `reconnectable`) rather than echoing the
 request: a Salt Edge connection shared by several accounts is always unlinked, even when a soft
-disconnect was asked for, since deactivating it would break the sibling accounts. The
-`Automatic Withdrawn` restore (ETP-4406) therefore runs only on the permanent path.
+disconnect was asked for, since deactivating it would break the sibling accounts. Neither path
+touches `Automatic Withdrawn` any more (**ETP-4891**): the flag is now an invariant of the
+bank-transfer payment method — always off — instead of something connect cleared and a permanent
+disconnect restored, which is how a reconnected-then-disconnected account drifted back to `Y`.
 
 **Reconnect is a two-step handshake.** `reconnect` only returns the Salt Edge URL; the popup then
 redirects to the SPA callback route, which relays the connection id back to the opener. The SPA

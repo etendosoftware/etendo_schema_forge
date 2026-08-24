@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { AlertTriangle } from 'lucide-react';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -202,6 +205,10 @@ function mapAccounts(json) {
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
     bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
+    // ETP-4891: bank connection established and then switched off, link still alive. Distinct
+    // from "never connected" (both flags false), which keeps the ordinary manual flow. Absent on
+    // older backends → false, i.e. degrade to "don't block", never to a payment nobody can make.
+    bankReconnectable: !!a.bankReconnectable,
     // ETP-4797 write-off cap. Absent when unconfigured → null, read as "no limit".
     writeoffLimit: a.writeoffLimit ?? null,
   }));
@@ -226,6 +233,21 @@ function mapPisTemplates(json) {
 /** True when a payment method's display name looks like a bank transfer (mirrors the backend heuristic). */
 function looksLikeTransfer(methodName) {
   return /transfer|transferencia/i.test(methodName || '');
+}
+
+/**
+ * True when `method` IS the bank-transfer payment method.
+ *
+ * Prefers the backend's own `EM_PSD2_Is_Bank_Transfer` flag (ETP-4891) and falls back to the name
+ * regex only when the field is absent, i.e. on a backend predating that change. The flag matters
+ * because this predicate no longer just decides whether to OFFER the PIS section: it also decides
+ * whether a payment is BLOCKED outright, and a method merely named "Transferencia interna" must
+ * not block one.
+ */
+function isTransferMethod(method) {
+  return typeof method?.isBankTransfer === 'boolean'
+    ? method.isBankTransfer
+    : looksLikeTransfer(method?.name);
 }
 
 /**
@@ -270,7 +292,13 @@ function accountSupportsMethod(account, methodId) {
 
 function mapMethods(json) {
   const items = json?.items || json?.response?.data || [];
-  return items.map(m => ({ id: m.id, name: m.label || m._identifier || m.name }));
+  return items.map(m => ({
+    id: m.id, name: m.label || m._identifier || m.name,
+    // ETP-4891: authoritative EM_PSD2_Is_Bank_Transfer from the backend. `undefined` on an older
+    // backend, which is why every read goes through isTransferMethod() below rather than reading
+    // the field directly — the name heuristic stays as the fallback for those deployments only.
+    isBankTransfer: m.isBankTransfer,
+  }));
 }
 
 function mapSources(json) {
@@ -341,9 +369,16 @@ function extractSaveError(json, ui) {
 
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+  // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
+  // states split three ways here, and only for Payment OUT (PIS never initiates inbound money):
+  //   connected            → pisEligible, full PIS form
+  //   reconnectable        → psd2Blocked, warning instead of the form (revive it from Editar Cuenta)
+  //   never connected      → neither, ordinary manual payment as before
+  const isTransfer = isTransferMethod(selectedMethodObj);
+  const psd2Blocked = dir === 'out' && isTransfer && !!selectedAccount?.bankReconnectable;
   const pisEligible = dir === 'out'
     && !!selectedAccount?.bankConnected
-    && looksLikeTransfer(selectedMethodObj?.name)
+    && isTransfer
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
   // rate — otherwise the backend would silently apply 1:1 and post the wrong ledger amount.
@@ -363,9 +398,15 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
     iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
   });
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling || !pisReady;
+  // Only Confirm is gated on psd2Blocked. Saving a DRAFT stays allowed on purpose: with Automatic
+  // Withdrawn off for transfers (ETP-4891) a draft moves no money and creates no bank transaction,
+  // so there is nothing to protect the user from — and losing the typed values would be worse.
+  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling
+    || !pisReady || psd2Blocked;
   const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
-  return { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel };
+  return {
+    pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
+  };
 }
 
 function Check({ checked, size = 18 }) {
@@ -615,6 +656,39 @@ function PisTextField({ label, value, onChange, placeholder, testid }) {
         />
       </div>
     </Field>
+  );
+}
+
+/**
+ * Warning shown instead of the payment form when a transfer is aimed at an account whose PSD2
+ * connection was switched off (ETP-4891).
+ *
+ * A transfer is executed by the bank over PIS, so with the connection down there is no channel to
+ * execute it — the payment cannot proceed until the account is reconnected. The button navigates
+ * to the account's own window with `?edit=true`, which opens the Editar Cuenta modal where the
+ * Reconectar action lives; the payment modal is discarded in the process, which costs nothing
+ * because the payment was blocked anyway.
+ */
+function Psd2InactiveWarning({ ui, accountId }) {
+  const navigate = useNavigate();
+  return (
+    <InfoBanner
+      tone="warning"
+      icon={AlertTriangle}
+      data-testid="cp-psd2-inactive-warning"
+    >
+      <span>{ui('cpPsd2InactiveBody')}</span>
+      {accountId && (
+        <button
+          type="button"
+          onClick={() => navigate(`/financial-account/${accountId}?edit=true`)}
+          data-testid="cp-psd2-inactive-edit-account"
+          style={{ marginLeft: 8, padding: 0, border: 'none', background: 'none', outline: 'none', cursor: 'pointer', font: '600 14px/20px Inter', color: 'inherit', textDecoration: 'underline' }}
+        >
+          {ui('cpPsd2InactiveAction')}
+        </button>
+      )}
+    </InfoBanner>
   );
 }
 
@@ -1141,8 +1215,9 @@ export default function NewPaymentEntryModal({
 
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
-  const { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel } =
-    computePaymentModalState({
+  const {
+    pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
+  } = computePaymentModalState({
       dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId,
       accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber,
       pisSortCode, ui,
@@ -1301,6 +1376,10 @@ export default function NewPaymentEntryModal({
     }, [pisPolling]);
   // ── save / confirm ────────────────────────────────────────────────────────
   const submit = useCallback(async (process) => {
+    // The Confirm button is already disabled here, but a confirm must never depend on the button
+    // alone: it would hand a payment to a bank channel that is switched off (ETP-4891). A draft
+    // stays allowed — it moves no money.
+    if (psd2Blocked && process === 'confirm') return;
     if (!date) { setDateInvalid(true); setError(ui('paymentDateRequired')); return; }
     if (!scheduleId) { setError(ui('paymentRequestFailed')); return; }
     if (!accountId) { setError(ui('paymentAccountRequired')); return; }
@@ -1362,7 +1441,8 @@ export default function NewPaymentEntryModal({
       setSaving(false);
     }
   }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved,
-    pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, isForeign, rate]);
+    pisEligible, psd2Blocked, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode,
+    isForeign, rate]);
 
   // Cancel a pending PIS wait: the payment was already processed to PPM (so the invoice shows as
   // paid), but the transfer was never authorized — so we ask the backend to reactivate + delete it
@@ -1482,8 +1562,11 @@ export default function NewPaymentEntryModal({
             </div>
           </div>
 
-          {/* 4 compact fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
+          {/* 4 compact fields — Método and Cuenta survive a psd2Blocked render (ETP-4891) so the
+              user can pick a different account and carry on paying without reopening the modal;
+              Importe and Fecha go with the rest of the form body. */}
+          <div style={{ display: 'grid', gridTemplateColumns: psd2Blocked ? '1fr 1fr' : '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
+            {!psd2Blocked && (<>
             <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
               <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 {(() => {
@@ -1508,6 +1591,7 @@ export default function NewPaymentEntryModal({
                 className={dateInvalid ? 'border-destructive focus-within:ring-destructive' : ''}
                 data-testid="DateField__7727b3" />
             </Field>
+            </>)}
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
               {loading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-method-select-skeleton" />
@@ -1540,6 +1624,13 @@ export default function NewPaymentEntryModal({
             </Field>
           </div>
 
+          {psd2Blocked && (
+            <div style={{ padding: '0 20px' }}>
+              <Psd2InactiveWarning ui={ui} accountId={accountId} data-testid="Psd2InactiveWarning__7727b3" />
+            </div>
+          )}
+
+          {!psd2Blocked && (<>
           {/* multi-currency conversion (ETP-4504) — only when invoice currency ≠ account currency */}
           <ConversionFields
             visible={isForeign}
@@ -1630,6 +1721,7 @@ export default function NewPaymentEntryModal({
               canLeaveCredit={canLeaveCredit}
               data-testid="ExcessBand__7727b3" />
           </div>
+          </>)}
           {error && <div style={{ padding: '0 20px', font: '500 12px/16px Inter', color: RED_FG }}>{error}</div>}
         </div>
 

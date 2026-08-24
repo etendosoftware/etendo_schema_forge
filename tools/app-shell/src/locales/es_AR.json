@@ -17936,6 +17936,8 @@
     "cpAmountInAccount": "Importe en moneda de la cuenta",
     "cpConversionRateRequired": "Ingresá la tasa de conversión",
     "cpConversionRateInvalid": "La tasa de conversión debe ser distinta de 1",
+    "cpPsd2InactiveBody": "La conexión bancaria de esta cuenta está inactiva, por lo que no se puede ejecutar la transferencia. Reconectala desde la configuración de la cuenta para continuar.",
+    "cpPsd2InactiveAction": "Editar cuenta",
     "financeAccountTransferReceiveAmount": "La cuenta destino recibirá",
     "financeAccountTransferBankFee": "Aplicar comisión bancaria",
     "financeAccountTransferBankFeeFrom": "Comisión · origen",
