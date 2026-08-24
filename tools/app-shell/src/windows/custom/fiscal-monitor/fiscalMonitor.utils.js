@@ -62,3 +62,34 @@ export function computeKpis(profile, monitorData) {
 
   return kpis;
 }
+
+/**
+ * Builds an invoice → most-recent `motivo` lookup from a list of `*SiiData`
+ * rows (aeatsii_facturas). A single invoice can have several rows (resends);
+ * this picks the one with the highest recency key.
+ *
+ * ETP-4784 fix: the C_Invoice header field (EM_Aeatsii_Error_Msg) can be
+ * empty for an "Error" (EE) invoice even though the related aeatsii_facturas
+ * row(s) carry the real reason in `motivo`. Recency is read from
+ * `fechaltimaModificacinSII` (Fecha_Ultima_Modif_Sii) with a fallback to the
+ * generic `updated`/`created` audit columns when that field is blank — all
+ * three are lexically-sortable ISO-like strings, so a plain string comparison
+ * is timezone-safe (no Date parsing involved).
+ *
+ * @param {Array<object>} siiDataRows - rows from an `*SiiData` entity response
+ * @returns {Record<string, string|null>} invoice id → motivo
+ */
+export function pickMostRecentMotivo(siiDataRows) {
+  const motivoMap = {};
+  const recencyByInvoice = {};
+  for (const row of (siiDataRows ?? [])) {
+    if (!row?.invoice) continue;
+    const recencyKey = row.fechaltimaModificacinSII || row.updated || row.created || '';
+    const currentBest = recencyByInvoice[row.invoice];
+    if (currentBest === undefined || recencyKey > currentBest) {
+      recencyByInvoice[row.invoice] = recencyKey;
+      motivoMap[row.invoice] = row.motivo ?? null;
+    }
+  }
+  return motivoMap;
+}

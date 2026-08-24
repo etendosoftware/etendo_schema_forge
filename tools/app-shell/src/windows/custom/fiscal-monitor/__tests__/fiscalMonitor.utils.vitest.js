@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMonitorFetchPlan, computeKpis } from '../fiscalMonitor.utils.js';
+import { buildMonitorFetchPlan, computeKpis, pickMostRecentMotivo } from '../fiscalMonitor.utils.js';
 
 // ---------------------------------------------------------------------------
 // buildMonitorFetchPlan
@@ -147,5 +147,66 @@ describe('computeKpis — null / unknown profile', () => {
     expect(computeKpis('sii', null)).toEqual({
       sii: { issued: 0, received: 0, issuedPrevious: 0, receivedPrevious: 0 },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickMostRecentMotivo (ETP-4784 — "Motivo error" header-empty fallback)
+// ---------------------------------------------------------------------------
+
+describe('pickMostRecentMotivo', () => {
+  it('returns the single motivo when an invoice has one SiiData row', () => {
+    const rows = [
+      { invoice: 'inv-1', motivo: 'NIF no identificado', fechaltimaModificacinSII: '2026-01-10' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'NIF no identificado' });
+  });
+
+  it('picks the most recent motivo by fechaltimaModificacinSII when an invoice has 2+ rows', () => {
+    const rows = [
+      { invoice: 'inv-1', motivo: 'Motivo antiguo', fechaltimaModificacinSII: '2026-01-01' },
+      { invoice: 'inv-1', motivo: 'Motivo reciente', fechaltimaModificacinSII: '2026-01-15' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'Motivo reciente' });
+  });
+
+  it('falls back to updated/created when fechaltimaModificacinSII is blank on all rows (real-world sample)', () => {
+    // Mirrors the real ETP-4784 sample: invoice 10000053 has 2 rows, both with the
+    // same motivo and an empty Fecha_Ultima_Modif_Sii — recency falls back to `updated`.
+    const rows = [
+      { invoice: 'inv-53', motivo: '[4104]. Error en la cabecera.', fechaltimaModificacinSII: null, updated: '2026-02-01T10:00:00Z' },
+      { invoice: 'inv-53', motivo: '[4104]. Error en la cabecera.', fechaltimaModificacinSII: null, updated: '2026-02-03T10:00:00Z' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-53': '[4104]. Error en la cabecera.' });
+  });
+
+  it('falls back to created when both fechaltimaModificacinSII and updated are blank', () => {
+    const rows = [
+      { invoice: 'inv-2', motivo: 'Motivo A', created: '2026-01-01T00:00:00Z' },
+      { invoice: 'inv-2', motivo: 'Motivo B', created: '2026-01-05T00:00:00Z' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-2': 'Motivo B' });
+  });
+
+  it('returns an empty map when there are no rows for the invoice', () => {
+    expect(pickMostRecentMotivo([])).toEqual({});
+  });
+
+  it('handles null/undefined input gracefully', () => {
+    expect(pickMostRecentMotivo(null)).toEqual({});
+    expect(pickMostRecentMotivo(undefined)).toEqual({});
+  });
+
+  it('skips rows without an invoice FK', () => {
+    const rows = [{ motivo: 'Orphan row', fechaltimaModificacinSII: '2026-01-01' }];
+    expect(pickMostRecentMotivo(rows)).toEqual({});
+  });
+
+  it('keeps separate motivos for different invoices', () => {
+    const rows = [
+      { invoice: 'inv-1', motivo: 'Motivo 1', fechaltimaModificacinSII: '2026-01-01' },
+      { invoice: 'inv-2', motivo: 'Motivo 2', fechaltimaModificacinSII: '2026-01-02' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'Motivo 1', 'inv-2': 'Motivo 2' });
   });
 });

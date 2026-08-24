@@ -6,6 +6,7 @@ import { formatAmount } from '@/lib/formatAmount.js';
 import { FileUp, FileDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { pickMostRecentMotivo } from './fiscalMonitor.utils.js';
 import {
   SII_SPEC,
   SII_EMITIDAS_ENTITY,
@@ -93,21 +94,26 @@ async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
 
-  // Build invoice → cdigoCSV lookup from the SiiData entity
+  // Build invoice → cdigoCSV lookup, and invoice → most-recent motivo lookup
+  // (ETP-4784: fallback for the "Motivo error" column when the header field
+  // EM_Aeatsii_Error_Msg is empty) from the SiiData entity.
   const csvMap = {};
+  let motivoMap = {};
   if (siiRes.ok) {
     const siiJson = await siiRes.json();
-    for (const r of (siiJson?.response?.data ?? [])) {
+    const siiDataRows = siiJson?.response?.data ?? [];
+    for (const r of siiDataRows) {
       if (r.invoice) csvMap[r.invoice] = r.cdigoCSV ?? null;
     }
+    motivoMap = pickMostRecentMotivo(siiDataRows);
   }
 
-  return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0, csvMap };
+  return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0, csvMap, motivoMap };
 }
 
 function SiiTableContent({
   ui, tab, period, rows, loading, error, totalRows, page, onLoadMore,
-  onInvoiceOpen, onBpClick, csvMap = {},
+  onInvoiceOpen, onBpClick, csvMap = {}, motivoMap = {},
   selectedIds, onToggleAll, onToggleRow,
 }) {
   const allSelected  = rows.length > 0 && rows.every(r => selectedIds.has(r.id));
@@ -166,6 +172,10 @@ function SiiTableContent({
             } else if (isPendingStatus(row.aeatsiiEstado) && row[INVOICE_FK_FIELD]) {
               pillClick = () => onInvoiceOpen?.(row[INVOICE_FK_FIELD], specHint);
             }
+            // ETP-4784: the header EM_Aeatsii_Error_Msg can be empty for an
+            // "Error" (EE) invoice — fall back to the most-recent aeatsii_facturas
+            // `motivo` for the same invoice (see pickMostRecentMotivo()).
+            const errorMsg = row.aeatsiiErrorMsg || motivoMap[row.id] || null;
             return (
               <tr key={row.id ?? i}>
                 <td><Checkbox
@@ -191,8 +201,8 @@ function SiiTableContent({
                     title={isPendingStatus(row.aeatsiiEstado) ? ui('fiscalMonitor.openInvoice') : undefined}
                     data-testid="StatusPill__be1aa5" />
                 </td>
-                <td style={{ color: row.aeatsiiErrorMsg ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
-                  {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{row.aeatsiiErrorMsg ?? '—'}
+                <td style={{ color: errorMsg ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                  {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{errorMsg ?? '—'}
                 </td>
                 <td className="mono">{row.cdigoCSV ?? csvMap[row.id] ?? '—'}</td>
               </tr>
@@ -230,6 +240,7 @@ export default function SiiMonitorSection({
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [csvMap, setCsvMap]       = useState({});
+  const [motivoMap, setMotivoMap] = useState({});
   const { selectedIds, setSelectedIds, handleToggleAll, handleToggleRow } = useFmSelection(rows);
   const [exporting, setExporting] = useState(false);
 
@@ -267,6 +278,7 @@ export default function SiiMonitorSection({
       setRows(filtered);
       setTotalRows(filtered.length);
       setCsvMap(map);
+      setMotivoMap({});
       setLoading(false);
       setError(null);
       return;
@@ -280,17 +292,18 @@ export default function SiiMonitorSection({
     setLoading(true);
     setError(null);
     fetchSubtab(apiFetch, entityKey, parentId, orgId, page)
-      .then(({ data, totalRows, csvMap: newCsvMap }) => {
+      .then(({ data, totalRows, csvMap: newCsvMap, motivoMap: newMotivoMap }) => {
         setRows(prev => page === 1 ? data : [...prev, ...data]);
         setTotalRows(totalRows);
         setCsvMap(prev => page === 1 ? newCsvMap : { ...prev, ...newCsvMap });
+        setMotivoMap(prev => page === 1 ? newMotivoMap : { ...prev, ...newMotivoMap });
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [parentId, orgId, entityKey, page, apiFetch, mockRows, refreshKey]);
 
   // Reset to first page, rows and selection when tab/period changes
-  useEffect(() => { setPage(1); setRows([]); setCsvMap({}); setSelectedIds(new Set()); }, [tab, period, setSelectedIds]);
+  useEffect(() => { setPage(1); setRows([]); setCsvMap({}); setMotivoMap({}); setSelectedIds(new Set()); }, [tab, period, setSelectedIds]);
 
   async function handleExport() {
     if (exporting) return;
@@ -419,6 +432,7 @@ export default function SiiMonitorSection({
         onInvoiceOpen={onInvoiceOpen}
         onBpClick={onBpClick}
         csvMap={csvMap}
+        motivoMap={motivoMap}
         selectedIds={selectedIds}
         onToggleAll={handleToggleAll}
         onToggleRow={handleToggleRow}
