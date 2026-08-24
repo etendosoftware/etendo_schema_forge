@@ -838,7 +838,11 @@ export default function reportApiPlugin() {
                   select: `SELECT c_bpartner_id AS id, name, name AS label`
                 },
                 'product': {
-                  fromWhere: `FROM m_product WHERE isactive='Y' ${byClient('ad_client_id')} AND (name ILIKE $1 OR value ILIKE $1)`,
+                  // ETP-4967: excludes products under a category flagged EM_Etgo_IsSystemCategory='Y'
+                  // (e.g. ETGO_DTO, category "Discounts") — mirrors ReportSelectorsServlet.buildProductQuery
+                  // (com.etendoerp.go). This dev-only mock hits Postgres directly, so the real Java
+                  // fix never runs against it; keep both in sync.
+                  fromWhere: `FROM m_product WHERE isactive='Y' ${byClient('ad_client_id')} AND (name ILIKE $1 OR value ILIKE $1) AND NOT EXISTS (SELECT 1 FROM m_product_category mpc WHERE mpc.m_product_category_id = m_product.m_product_category_id AND mpc.em_etgo_issystemcategory = 'Y')`,
                   orderBy: 'ORDER BY value, name',
                   select: `SELECT m_product_id AS id, value AS "searchKey", name, value || ' - ' || name AS label`
                 },
@@ -848,7 +852,8 @@ export default function reportApiPlugin() {
                   select: `SELECT m_warehouse_id AS id, name, name AS label`
                 },
                 'product-category': {
-                  fromWhere: `FROM m_product_category WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
+                  // ETP-4967: mirrors ReportSelectorsServlet.buildProductCategoryQuery (see note above).
+                  fromWhere: `FROM m_product_category WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1 AND COALESCE(em_etgo_issystemcategory, 'N') <> 'Y'`,
                   orderBy: 'ORDER BY name',
                   select: `SELECT m_product_category_id AS id, name, name AS label`
                 },
