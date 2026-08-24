@@ -40,6 +40,12 @@ const SUBTAB_ENTITIES = {
  * column matches the on-screen fallback (ETP-4784): the header
  * EM_Aeatsii_Error_Msg can be empty for an "Error" (EE) invoice even though
  * the related aeatsii_facturas row(s) carry the real reason in `motivo`.
+ *
+ * ETP-4784 correction #4: both the header message and the `motivoMap`
+ * fallback are gated by the invoice's CURRENT `aeatsiiEstado` (via
+ * `isErrorStatus()`) — `*SiiData` keeps the full history of past send
+ * attempts, so a currently-accepted invoice (`CO`) must never export a
+ * motivo, no matter what an old failed attempt in its history says.
  */
 function buildSiiExportCols(motivoMap) {
   return [
@@ -52,7 +58,7 @@ function buildSiiExportCols(motivoMap) {
     { label: 'Status',           get: r => r.aeatsiiEstado ?? '' },
     { label: 'CSV',              get: r => r.cdigoCSV ?? '' },
     { label: 'Error Code',       get: r => r.aeatsiiErrorCode ?? '' },
-    { label: 'Error',            get: r => r.aeatsiiErrorMsg || motivoMap[r.id] || '' },
+    { label: 'Error',            get: r => (isErrorStatus(r.aeatsiiEstado) ? (r.aeatsiiErrorMsg || motivoMap[r.id]) : null) || '' },
   ];
 }
 
@@ -184,7 +190,13 @@ function SiiTableContent({
             // ETP-4784: the header EM_Aeatsii_Error_Msg can be empty for an
             // "Error" (EE) invoice — fall back to the most-recent aeatsii_facturas
             // `motivo` for the same invoice (see pickMostRecentMotivo()).
-            const errorMsg = row.aeatsiiErrorMsg || motivoMap[row.id] || null;
+            // Correction #4: `*SiiData` holds the full send-attempt HISTORY, so
+            // both sources are only trusted when the invoice's CURRENT status
+            // is an error status — otherwise a stale motivo from a past failed
+            // attempt would keep showing after the invoice was later accepted.
+            const errorMsg = isErrorStatus(row.aeatsiiEstado)
+              ? (row.aeatsiiErrorMsg || motivoMap[row.id] || null)
+              : null;
             return (
               <tr key={row.id ?? i}>
                 <td><Checkbox

@@ -42,6 +42,8 @@ const stableSelectedIds = new Set();
 
 // Real fetchCsvAndDownload/buildCsvAndDownload from FmPrimitives — only the
 // display-only bits are stubbed — so the actual CSV-building code path runs.
+// isErrorStatus is kept REAL (not overridden): correction #4 gates the
+// exported "Error" column by the invoice's CURRENT aeatsiiEstado.
 vi.mock('../FmPrimitives.jsx', async () => {
   const actual = await vi.importActual('../FmPrimitives.jsx');
   return {
@@ -49,7 +51,6 @@ vi.mock('../FmPrimitives.jsx', async () => {
     StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
     NumFactura: ({ n }) => <span>{n}</span>,
     ScrollSentinel: () => null,
-    isErrorStatus: () => false,
     isPendingStatus: () => false,
     fmtDate: (d) => d ?? '',
     useFmSelection: () => ({
@@ -130,5 +131,27 @@ describe('SiiMonitorSection — CSV export "Error" column fallback (ETP-4784 #3)
     await waitFor(() => expect(getCsv()).not.toBeNull());
     expect(getCsv()).toContain('Header error message');
     expect(getCsv()).not.toContain('Should not be exported');
+  });
+
+  // ETP-4784 correction #4 — same real-world case as the on-screen test
+  // (purchase invoice 10000009): a stale motivo in *SiiData history must not
+  // leak into the export once the invoice's CURRENT status is Aceptado (CO).
+  it('excludes the SiiData motivo from the export when the invoice CURRENT status is Aceptado (CO)', async () => {
+    currentApiFetch = mockApiFetch(
+      [invoiceRow({ aeatsiiEstado: 'CO', aeatsiiErrorCode: null, aeatsiiErrorMsg: null })],
+      [{
+        invoice: 'inv-1',
+        motivo: 'La factura de compra debe contener información en el campo Referencia del proveedor.',
+        fechaltimaModificacinSII: '2026-01-01',
+      }],
+    );
+    const getCsv = captureDownloadedCsv();
+
+    render(<SiiMonitorSection {...baseProps} initialTab="received" />);
+    const btn = await screen.findByRole('button', { name: /fiscalMonitor\.export/ });
+    await userEvent.click(btn);
+
+    await waitFor(() => expect(getCsv()).not.toBeNull());
+    expect(getCsv()).not.toContain('Referencia del proveedor');
   });
 });

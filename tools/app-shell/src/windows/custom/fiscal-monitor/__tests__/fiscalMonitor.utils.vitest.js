@@ -209,4 +209,40 @@ describe('pickMostRecentMotivo', () => {
     ];
     expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'Motivo 1', 'inv-2': 'Motivo 2' });
   });
+
+  // ETP-4784 correction #4 — defense-in-depth: a *SiiData row's own
+  // estadoRegistro (the outcome of THAT send attempt) is CO (Correcto), so
+  // it is never a valid motivo source, even in isolation from the caller's
+  // header-status gate.
+  it('skips a row whose own estadoRegistro is not an error status (CO)', () => {
+    const rows = [
+      { invoice: 'inv-1', motivo: 'Stale motivo from a reused row', estadoRegistro: 'CO', fechaltimaModificacinSII: '2026-01-01' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({});
+  });
+
+  it('still picks the motivo of a row whose own estadoRegistro IS an error status', () => {
+    const rows = [
+      { invoice: 'inv-1', motivo: 'Real reason', estadoRegistro: 'EE', fechaltimaModificacinSII: '2026-01-01' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'Real reason' });
+  });
+
+  it('picks the most-recent ERROR row, skipping a later successful (CO) row', () => {
+    // Reproduces the reported case at the row-history level: an old failed
+    // attempt (EE, real motivo) followed by a newer successful resend (CO)
+    // for the same invoice — the CO row must not "win" the map with a null
+    // motivo, so the caller's header-status gate (row.aeatsiiEstado) is what
+    // ultimately decides whether anything is shown for a currently-CO invoice.
+    const rows = [
+      { invoice: 'inv-1', motivo: 'Referencia del proveedor', estadoRegistro: 'EE', fechaltimaModificacinSII: '2026-01-01' },
+      { invoice: 'inv-1', motivo: null, estadoRegistro: 'CO', fechaltimaModificacinSII: '2026-01-15' },
+    ];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'Referencia del proveedor' });
+  });
+
+  it('treats a missing estadoRegistro as unknown and still considers the row (back-compat)', () => {
+    const rows = [{ invoice: 'inv-1', motivo: 'No status field on this row', fechaltimaModificacinSII: '2026-01-01' }];
+    expect(pickMostRecentMotivo(rows)).toEqual({ 'inv-1': 'No status field on this row' });
+  });
 });

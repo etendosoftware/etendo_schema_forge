@@ -213,6 +213,17 @@ describe('SiiMonitorSection — CSV export wiring', () => {
   });
 
   it('the exported Error column falls back to motivoMap when header msg is empty', () => {
-    assert.match(src, /aeatsiiErrorMsg \|\| motivoMap\[r\.id\] \|\| ''/);
+    assert.match(src, /aeatsiiErrorMsg \|\| motivoMap\[r\.id\]/);
+  });
+
+  // ETP-4784 correction #4: the header/motivoMap fallback must be gated by
+  // the invoice's CURRENT status, so a stale historical motivo in *SiiData
+  // never resurfaces once the invoice is no longer in an error state.
+  it('the exported Error column is gated by isErrorStatus(r.aeatsiiEstado)', () => {
+    assert.match(src, /isErrorStatus\(r\.aeatsiiEstado\)[\s\S]*?aeatsiiErrorMsg \|\| motivoMap\[r\.id\]/);
+  });
+
+  it('the on-screen errorMsg is gated by isErrorStatus(row.aeatsiiEstado)', () => {
+    assert.match(src, /isErrorStatus\(row\.aeatsiiEstado\)\s*\n?\s*\?\s*\(row\.aeatsiiErrorMsg \|\| motivoMap\[row\.id\] \|\| null\)/);
   });
 });

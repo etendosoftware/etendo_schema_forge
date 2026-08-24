@@ -38,11 +38,13 @@ const stableToggleAll = () => {};
 const stableToggleRow = () => {};
 const stableSelectedIds = new Set();
 
+// Real SII error-status matching (IN/EE/AE) is required here: correction #4
+// gates the "Motivo error" fallback by the invoice's CURRENT aeatsiiEstado.
 vi.mock('../FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
   NumFactura: ({ n }) => <span>{n}</span>,
   ScrollSentinel: () => null,
-  isErrorStatus: () => false,
+  isErrorStatus: (estado) => estado === 'IN' || estado === 'EE' || estado === 'AE',
   isPendingStatus: () => false,
   fmtDate: (d) => d ?? '',
   PAGE_SIZE: 20,
@@ -113,5 +115,36 @@ describe('SiiMonitorSection — "Motivo error" header-empty fallback (ETP-4784)'
       const row = screen.getByText('EV-2026-0001').closest('tr');
       expect(row.textContent).toMatch(/—/);
     });
+  });
+
+  // ETP-4784 correction #4 — reproduces the real-world case reported against
+  // purchase invoice 10000009 (Facturas recibidas): a past send attempt left
+  // a "Referencia del proveedor" motivo in *SiiData, the invoice was then
+  // corrected and is now Aceptado (CO) — the stale motivo must NOT resurface.
+  it('hides the SiiData motivo when the invoice CURRENT status is Aceptado (CO), not an error', async () => {
+    currentApiFetch = mockApiFetch(
+      [invoiceRow({ aeatsiiEstado: 'CO' })],
+      [{
+        invoice: 'inv-1',
+        motivo: 'La factura de compra debe contener información en el campo Referencia del proveedor.',
+        fechaltimaModificacinSII: '2026-01-01',
+      }],
+    );
+    render(<SiiMonitorSection {...baseProps} initialTab="received" />);
+    await waitFor(() => expect(screen.getByTestId('fm-data-table')).toBeInTheDocument());
+    await waitFor(() => {
+      const row = screen.getByText('EV-2026-0001').closest('tr');
+      expect(row.textContent).toMatch(/—/);
+    });
+    expect(screen.queryByText(/Referencia del proveedor/)).toBeNull();
+  });
+
+  it('still shows the SiiData motivo when the invoice CURRENT status is an error (EE)', async () => {
+    currentApiFetch = mockApiFetch(
+      [invoiceRow({ aeatsiiEstado: 'EE' })],
+      [{ invoice: 'inv-1', motivo: 'NIF no identificado en el censo', fechaltimaModificacinSII: '2026-01-01' }],
+    );
+    render(<SiiMonitorSection {...baseProps} />);
+    await waitFor(() => expect(screen.getByText(/NIF no identificado en el censo/)).toBeInTheDocument());
   });
 });
