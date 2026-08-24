@@ -19,7 +19,7 @@
 const EPSILON = 0.001;
 
 /**
- * @typedef {'draft'|'credit-available'|'credit-applied'|'paid'|'partial'|'pending'} PaymentBadgeKind
+ * @typedef {'draft'|'credit-available'|'credit-applied'|'transfer-error'|'transfer-in-progress'|'paid'|'partial'|'pending'} PaymentBadgeKind
  * @typedef {{ kind: PaymentBadgeKind, amount: number, isCredit: boolean }} PaymentBadge
  *   `amount` is always non-negative and is the figure to display for that state:
  *   the remaining credit for `credit-available`, the amount still owed for
@@ -61,6 +61,25 @@ export function resolveInvoicePaymentBadge(record) {
 
   if (record?.documentStatus !== 'CO') {
     return { kind: 'draft', amount: 0, isCredit };
+  }
+
+  // Ahead of the paid/pending arithmetic on purpose: a payment that is in progress or was
+  // rejected is APPLIED either way, so the outstanding is zero and the amount branches below
+  // would render "Pagada" for money that never moved. The state is what the user needs, and the
+  // figures stay one click away in the payments modal (ETP-4895).
+  //
+  // Read off the record, not computed: the backend resolves the worst state among the invoice's
+  // payments (`pisPaymentState`), and only the purchase-invoice read emits it — so sales invoices,
+  // where the bank-transfer flow does not apply, are untouched by construction.
+  const transferState = record?.pisPaymentState;
+  if (!isCredit && transferState === 'error') {
+    return { kind: 'transfer-error', amount: 0, isCredit: false };
+  }
+  // Only when the invoice has nothing left to pay. With a remainder the figure is not a lie — it
+  // is exactly what the user still owes and can act on — so a partial transfer in flight keeps
+  // showing it, and the transfer's own state stays one click away in the payments modal.
+  if (!isCredit && transferState === 'inProgress' && outstanding <= EPSILON) {
+    return { kind: 'transfer-in-progress', amount: 0, isCredit: false };
   }
 
   if (isCredit) {

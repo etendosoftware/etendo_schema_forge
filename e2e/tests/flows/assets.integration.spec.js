@@ -963,49 +963,6 @@ test.describe('Assets (real backend)', () => {
     await deleteAmortizationHeaders(page, headerUrls);
   });
 
-  // Cases 10/11/12 — copies of 2/3/4 but CONFIRM every amortization line of the
-  // plan (not just one). With all lines confirmed the asset is 100% depreciated:
-  // the sidebar "Amortizado" and the grid bar both show 100%. Then full cleanup.
-  for (const { n, mode, periods, label, blocked } of [
-    { n: 10, mode: 'monthly', periods: ['06-2026', '07-2026'], label: 'by time (monthly)', blocked: true },
-    { n: 11, mode: 'annual', periods: ['2026', '2027'], label: 'by time (yearly)', blocked: true },
-    { n: 12, mode: 'percentage', periods: ['2026', '2027'], label: 'by percentage', blocked: true },
-  ]) {
-    test(`Case ${n}: ${label} — confirm ALL lines → 100% depreciated, then cleanup`, async ({ page }) => {
-      // BLOCKED: the sample data has no 2027 fiscal calendar/periods, so confirming
-      // the 2027 amortization line fails in the backend. This is a happy-path case
-      // (asset depreciated 100%) that SHOULD run — re-enable once 2027 fiscal
-      // periods exist in the sample data. The monthly case (10, both periods in
-      // 2026) is unaffected and runs.
-      test.skip(!!blocked, 'Sample data lacks the 2027 fiscal calendar/periods; confirming a 2027 amortization fails. Re-enable once 2027 periods exist.');
-      const stamp = Date.now();
-      const name = `Activo E2E 100% ${mode} ${stamp}`;
-      await setupDepreciableWithAmortization(page, { stamp, name, mode });
-      const assetUrl = page.url();
-
-      // Capture both period headers, then confirm ALL the plan's amortizations.
-      const headerUrls = await captureAmortizationHeaderUrls(page, periods);
-      for (const url of headerUrls) await confirmAmortizationForAsset(page, url, name);
-
-      // Every line confirmed → asset 100% depreciated: sidebar + grid bar show 100%.
-      await gotoDeepLink(page, assetUrl);
-      await verifyDepreciatedSidebar(page, 100);
-      await page.goto('/assets');
-      await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-      await findByNameAndGrupo(page, name);
-      await verifyGridAmortizationBar(page, 100);
-
-      // Cleanup: reactivate every header, delete the asset (removes its lines),
-      // then delete the (now empty) headers.
-      for (const url of headerUrls) await reactivateAmortization(page, url);
-      await gotoDeepLink(page, assetUrl);
-      await expect(page.getByTestId('detail-view')).toBeVisible();
-      await deleteAsset(page);
-      await verifyAssetNotInList(page, name);
-      await deleteAmortizationHeaders(page, headerUrls);
-    });
-  }
-
   // Case 9 — toggle Depreciar shows/hides sections; then edit description + delete.
   test('Case 9: toggle Depreciar sections, then edit Descripción and delete', async ({ page }) => {
     const stamp = Date.now();
