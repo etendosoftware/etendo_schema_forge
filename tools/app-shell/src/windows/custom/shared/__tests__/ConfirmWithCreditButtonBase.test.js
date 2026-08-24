@@ -106,15 +106,37 @@ describe('ConfirmWithCreditButtonBase', () => {
     );
   });
 
-  it('accepts onSave and isDirty props', () => {
-    assert.match(src, /onSave, isDirty/);
+  it('accepts onSave, isDirty and saveGate props', () => {
+    assert.match(src, /onSave, isDirty, saveGate/);
   });
 
   it('guards the DR confirm click with maybeSaveBeforeConfirm before opening the modal', () => {
-    const drButton = src.match(/action-confirm-with-credit[\s\S]*?disabled=\{confirmDisabled\}/);
+    const drButton = src.match(/action-confirm-with-credit[\s\S]*?disabled=\{confirmBlocked\}/);
     assert.ok(drButton, 'expected the DR confirm button block');
     assert.match(drButton[0], /maybeSaveBeforeConfirm\(\{ isDirty, handleSave: onSave \}\)/);
     assert.match(drButton[0], /setShowModal\(true\)/);
+  });
+
+  // ETP-4933: this button saves before it confirms, so leaving it outside the
+  // required-field gate turns the gate into a no-op — Save blocked, Confirm persists
+  // the incomplete record anyway.
+  it('folds the required-field gate into the DR confirm blocked condition', () => {
+    assert.match(src, /const confirmBlocked = confirmDisabled \|\| Boolean\(saveGate\?\.blocked\)/);
+  });
+
+  it('inherits ONLY the gate verdict, never isDirty (confirming an unmodified saved doc is normal)', () => {
+    const decl = src.match(/const confirmBlocked = .*/)[0];
+    assert.ok(!/isDirty/.test(decl), 'confirmBlocked must not consult isDirty');
+  });
+
+  it('explains the block on hover instead of showing a silently dead button', () => {
+    const drButton = src.match(/action-confirm-with-credit[\s\S]*?\{confirmDrLabel\}/)[0];
+    assert.match(drButton, /title=\{saveGate\?\.blocked \? saveGate\.title : undefined\}/);
+  });
+
+  it('gates the click handler too, not just the disabled attribute', () => {
+    const drButton = src.match(/action-confirm-with-credit[\s\S]*?\{confirmDrLabel\}/)[0];
+    assert.match(drButton, /if \(confirmBlocked\) return;/);
   });
 
 });

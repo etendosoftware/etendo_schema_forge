@@ -29,5 +29,6 @@ const fields = [
 export default function TransactionForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+TransactionForm.fields = fields;
 
 // @sf-generated-end component:TransactionForm

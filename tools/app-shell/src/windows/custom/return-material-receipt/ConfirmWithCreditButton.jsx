@@ -2,7 +2,7 @@ import { useUI } from '@/i18n';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
-export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty }) {
+export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate }) {
   const ui = useUI();
   return (
     <>
@@ -21,6 +21,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         apiBaseUrl={apiBaseUrl}
         onSave={onSave}
         isDirty={isDirty}
+        saveGate={saveGate}
         entitySegment="returnMaterialReceipt"
         invoiceRoute="/sales-invoice/"
         invoiceType="facturaVenta"

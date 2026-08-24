@@ -47,6 +47,21 @@ const COMPLETED_INVOICE = {
   outstandingAmount: 100.0,
 };
 
+// ETP-4933's regen surfaced an AD readOnlyLogic on orderReference that this file
+// predates: it locks POReference once the invoice has been submitted to the AEAT
+// SII (`aeatsiiIssent === true`, and only for purchase — not sales — transactions,
+// i.e. `salesTransaction !== true`). Confirmed correct with Gremiger. It does not
+// conflict with the "editable when completed" guard above (COMPLETED_INVOICE):
+// `processed: true` alone must still leave orderReference editable — only SII
+// submission locks it. See artifacts/purchase-invoice/__tests__/contract-integrity.test.js
+// for the contract/generated-source assertions of the same rule.
+const SII_SENT_INVOICE = {
+  ...COMPLETED_INVOICE,
+  id: 'inv-co-sii-001',
+  aeatsiiIssent: true,
+  salesTransaction: false,
+};
+
 const DRAFT_INVOICE = {
   id: INV_DR_ID,
   orderReference: 'SUPPLIER-REF-456',
@@ -192,6 +207,22 @@ test.describe('Purchase Invoice — readOnlyLogic when processed (mocked)', () =
     // The testid is placed directly on the <input> element for text-type fields,
     // so fieldRoot itself is the control to assert against.
     await expect(fieldRoot).toBeEnabled({ timeout: 5_000 });
+  });
+
+  // ETP-4933: the new-to-this-suite locked state. Distinct from the `processed`-only
+  // COMPLETED_INVOICE case above (which asserts orderReference stays editable) —
+  // here the invoice has ALSO been declared to the AEAT SII, which is the only
+  // thing that locks it per the AD rule confirmed by Gremiger.
+  test('orderReference is disabled once the invoice has been submitted to the SII (aeatsiiIssent: true)', async ({ page }) => {
+    await login(page);
+    await installMocks(page, SII_SENT_INVOICE);
+
+    await page.goto(`/purchase-invoice/${SII_SENT_INVOICE.id}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const fieldRoot = page.getByTestId('field-orderReference');
+    await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
+    await expect(fieldRoot).toBeDisabled({ timeout: 5_000 });
   });
 
   test('draft invoice has editable businessPartner (contrast check)', async ({ page }) => {
