@@ -41,16 +41,24 @@ describe('useDisplayLogic', () => {
       await vi.runAllTimersAsync();
     });
 
+    // ETP-4576 — the credential is whatever the active scheme yields, not a bearer
+    // this hook builds from a `token` argument. Under `cookie` the browser attaches
+    // the `__Host-` session and the proof rides in `X-Go-CSRF`, so what is asserted
+    // here is the shape every migrated call site shares: an unsafe POST that sends
+    // credentials and declares JSON.
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost/api/header/evaluate-display',
       expect.objectContaining({
         method: 'POST',
+        credentials: 'include',
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          'Content-Type': 'application/json',
         }),
         body: JSON.stringify({ fieldValues }),
       }),
     );
+    const [, init] = globalThis.fetch.mock.calls.at(-1);
+    expect(init.headers.Authorization, 'no hand-built bearer').toBeUndefined();
   });
 
   it('returns readOnly and visibility from the response', async () => {
@@ -105,10 +113,36 @@ describe('useDisplayLogic', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('skips evaluation when token is missing', async () => {
+  /**
+   * ETP-4576 regression guard, inverted on purpose.
+   *
+   * This used to assert that a missing token SKIPS the evaluation. Under a cookie
+   * session no token is ever held, so that gate cancelled every call: no request,
+   * no error, and the display logic simply never resolved — which is how the
+   * assets and amortization integration specs ended up timing out waiting for a
+   * POST the gate had already decided not to send.
+   */
+  it('still evaluates when no token is held (cookie session)', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ readOnly: {}, visibility: {} }),
+    });
+
     renderHook(() =>
       useDisplayLogic('header', { id: '1' }, { token: '', apiBaseUrl: 'http://localhost' })
     );
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await vi.runAllTimersAsync();
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still skips when the entity or base url is missing', async () => {
+    renderHook(() => useDisplayLogic('header', { id: '1' }, { apiBaseUrl: '' }));
+    renderHook(() => useDisplayLogic('', { id: '1' }, { apiBaseUrl: 'http://localhost' }));
 
     await act(async () => {
       vi.advanceTimersByTime(300);

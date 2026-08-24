@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+// Relative, not `@/lib/...`: this hook is reachable from plain `node --test`
+// through DetailView's source-reading suites, and Node cannot resolve the alias.
+import { writeHeaders } from '../lib/sessionHeaders.js';
 
 /**
  * Module-level "last known good" cache for the subset of evaluate-display keys a caller
@@ -69,6 +72,10 @@ export function __resetDisplayLogicCacheForTests() {
  *   record load exactly as before, so this only smooths the FIRST paint, it never skips
  *   or delays re-checking the real answer.
  */
+// `token` is still accepted so the ~dozen call sites keep their current shape, but
+// it no longer reaches the request: the credential comes from the active scheme.
+// It stays in the memo deps below only because removing it would change nothing —
+// under the cookie scheme it is permanently undefined.
 export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cacheableKeys }) {
   const cacheKeySet = cacheableKeys ? new Set(cacheableKeys) : null;
   const cacheKey = apiBaseUrl && entity ? `${apiBaseUrl}/${entity}` : null;
@@ -86,7 +93,13 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
   cacheRef.current = { cacheKey, cacheKeySet };
 
   const evaluate = useCallback(async (values) => {
-    if (!values || !token || !apiBaseUrl || !entity) return;
+    // ETP-4576 — no `!token` here. Under a cookie session the client holds no
+    // token, so this gate cancelled every evaluate-display call: no request, no
+    // error, and the fields display logic governs simply never resolved. It read
+    // as "not authenticated yet" and behaved as "silently do nothing" — the
+    // assets/amortization integration specs time out waiting for a POST that the
+    // gate had already decided not to send.
+    if (!values || !apiBaseUrl || !entity) return;
     // A brand-new record (no id) has no persisted state, so plain record-dependent
     // logic (e.g. readOnly gated on `posted`/`processed`) has nothing meaningful to
     // evaluate yet — skip in that case. But `cacheableKeys` callers (the accounting
@@ -99,10 +112,9 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/evaluate-display`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        credentials: 'include',
+        // Unsafe method, so it carries the write proof under the cookie scheme.
+        headers: writeHeaders(),
         body: JSON.stringify({ fieldValues: values }),
       });
       if (res.ok) {
