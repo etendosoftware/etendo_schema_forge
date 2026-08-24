@@ -6,6 +6,7 @@ import { RoleFilterControl } from './RoleFilterControl.jsx';
 import { useUserDebugMode } from './useUserDebugMode.js';
 import UserDebugPanel from './UserDebugPanel.jsx';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
+import OwnerBadge from './OwnerBadge.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -140,9 +141,25 @@ export default function UserHeaderTable(props) {
     ),
   }), [ui]);
 
+  // ETP-4830 item #4 — "Owner" column, next to the invitation column: same "administrative/
+  // onboarding-state indicator" grouping rationale invitationColumn's own comment documents.
+  // `isOwner` (like `invitationStatus`) has no AD `column:` value — it's a backend-contract-only
+  // boolean the `user` NeoHandler attaches to every GET response, never a real `AD_User` field —
+  // so there is nothing for the pipeline to emit here either.
+  const ownerColumn = useMemo(() => ({
+    key: 'isOwner',
+    type: 'custom',
+    label: ui('usersGridOwnerColumn'),
+    render: (row) => (
+      <OwnerBadge
+        isOwner={row?.isOwner}
+        data-testid="OwnerBadge__grid" />
+    ),
+  }), [ui]);
+
   const tableColumns = useMemo(
-    () => [...columns, invitationColumn, roleColumn],
-    [invitationColumn, roleColumn],
+    () => [...columns, invitationColumn, ownerColumn, roleColumn],
+    [invitationColumn, ownerColumn, roleColumn],
   );
 
   // Client-side role filter, applied over the rows already loaded for this page —

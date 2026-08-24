@@ -469,6 +469,39 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
   });
 });
 
+describe('UserWindow — owner badge (ETP-4830 item #4, detail-header topbarExtra)', () => {
+  it('renders the neutral owner pill when isOwner is true', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', isOwner: true }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('ownerBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'OWNER');
+  });
+
+  it('renders nothing when isOwner is false (the normal case)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', isOwner: false }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when isOwner is absent (e.g. an existing pre-ETP-4830 response shape)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('coexists with the pending-invitation pill without a testid collision when both render', () => {
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', isOwner: true, invitationStatus: 'SENT' }} />,
+    );
+
+    const pills = screen.getAllByTestId('document-status-pill');
+    expect(pills).toHaveLength(2);
+    expect(pills.map((p) => p.getAttribute('data-status')).sort()).toEqual(['OWNER', 'SENT']);
+  });
+});
+
 describe('UserWindow — "Activo" active/inactive toggle (ETP-4830, detail-header topbarExtra)', () => {
   afterEach(() => {
     globalThis.fetch = undefined;

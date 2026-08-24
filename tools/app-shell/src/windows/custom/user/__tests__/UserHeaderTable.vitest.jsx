@@ -132,13 +132,13 @@ describe('UserHeaderTable — layout', () => {
     expect(await screen.findByTestId('stub-role-filter-count')).toHaveTextContent('3');
   });
 
-  it('appends invitationStatus and defaultRole (both custom) after the hand-mirrored base columns', async () => {
+  it('appends invitationStatus, isOwner, and defaultRole (all custom) after the hand-mirrored base columns', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
     await screen.findByTestId('data-table');
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'defaultRole',
+      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'isOwner', 'defaultRole',
     ]);
   });
 
@@ -361,6 +361,42 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
 
   it('renders a blank cell (no crash) when the row itself is undefined', async () => {
     const col = await getInvitationColumn();
+    expect(() => render(col.render(undefined))).not.toThrow();
+  });
+});
+
+/**
+ * ETP-4830 item #4 — the isOwner grid column's cell render. The exhaustive
+ * isOwner → visual-treatment mapping has its own dedicated suite
+ * (`OwnerBadge.vitest.jsx`) — these tests only confirm this column genuinely wires
+ * that shared component in per-row.
+ */
+describe('UserHeaderTable — isOwner column cell render (ETP-4830 item #4)', () => {
+  async function getOwnerColumn() {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+    return tableProps.columns.find((c) => c.key === 'isOwner');
+  }
+
+  it('renders the neutral (gray) pill for isOwner true', async () => {
+    const col = await getOwnerColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', isOwner: true }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'OWNER');
+  });
+
+  it('renders a blank cell (no crash) for isOwner false', async () => {
+    const col = await getOwnerColumn();
+    const { container } = render(col.render({ id: 'row-1', isOwner: false }));
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders a blank cell (no crash) when the row itself is undefined', async () => {
+    const col = await getOwnerColumn();
     expect(() => render(col.render(undefined))).not.toThrow();
   });
 });

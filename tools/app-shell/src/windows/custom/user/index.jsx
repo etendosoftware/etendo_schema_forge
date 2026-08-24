@@ -14,6 +14,7 @@ import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
+import OwnerBadge from './OwnerBadge.jsx';
 
 // ETP-4830 item #2 — the set of invitationStatus values a "Resend invitation" click is
 // meaningful for. Matches CompanyInvitationService#resendInvitation's own server-side
@@ -143,21 +144,26 @@ function ResendInvitationButton({ data, recordId, onRefresh }) {
 }
 
 /**
- * ETP-4830 — composite `topbarExtra` component: pending-invitation pill, then the
- * resend button (item #2), then the active/inactive toggle, matching the reference
- * screenshot's visual order (pill-then-toggle is the reasonable default absent a
- * pixel-exact mockup; resend sits next to the pill it acts on, per this ticket's own
- * design decision). Both `ActiveStatusToggle` and `ResendInvitationButton` read
- * straight off the same props `DetailView.jsx` passes into `topbarExtra` (`data`,
- * `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread straight through.
- * `PendingInvitationPill` (`./PendingInvitationPill.jsx`, extracted so the Users LIST
- * GRID can render the identical pill per row — see that file's own doc comment) only
- * needs the raw status value, so only `data?.invitationStatus` is pulled out of `props`
- * for it, rather than spreading the whole prop bag.
+ * ETP-4830 — composite `topbarExtra` component: the owner badge (item #4) first — a
+ * static identity marker about the account, not a workflow state — then the
+ * pending-invitation pill, then the resend button (item #2), then the active/inactive
+ * toggle, matching the reference screenshot's visual order for the latter three
+ * (pill-then-toggle is the reasonable default absent a pixel-exact mockup; resend sits
+ * next to the pill it acts on, per this ticket's own design decision). `ActiveStatusToggle`
+ * and `ResendInvitationButton` read straight off the same props `DetailView.jsx` passes
+ * into `topbarExtra` (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread
+ * straight through. `PendingInvitationPill`/`OwnerBadge` (each extracted into their own
+ * file so the Users LIST GRID can render the identical pill/badge per row — see each
+ * file's own doc comment) only need their own raw value, so only `data?.invitationStatus`/
+ * `data?.isOwner` are pulled out of `props` for them, rather than spreading the whole prop
+ * bag.
  */
 function TopbarExtra(props) {
   return (
     <div className="flex items-center gap-3" data-testid="UserTopbarExtra">
+      <OwnerBadge
+        isOwner={props.data?.isOwner}
+        data-testid="OwnerBadge__toolbar" />
       <PendingInvitationPill
         status={props.data?.invitationStatus}
         data-testid="PendingInvitationPill__toolbar" />
