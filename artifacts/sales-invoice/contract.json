@@ -1,8 +1,8 @@
 {
   "version": "0.84.1",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-20T15:53:05.006Z",
-  "checksum": "7d0872c484db4fb7",
+  "updatedAt": "2026-08-24T17:03:23.330Z",
+  "checksum": "90659cb1f9ed8b57",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -71,9 +71,6 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -2855,9 +2852,6 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {

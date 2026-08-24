@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-08-13T16:50:51.856Z",
-  "checksum": "f2a01a2be5960d95",
+  "updatedAt": "2026-08-24T17:03:22.868Z",
+  "checksum": "dccfd81bd2721d93",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -44,9 +44,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
@@ -2688,6 +2685,13 @@
                 "labels": {
                   "es_ES": "Conciliado"
                 }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
+                }
               }
             ],
             "validation": {
@@ -2742,9 +2746,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
