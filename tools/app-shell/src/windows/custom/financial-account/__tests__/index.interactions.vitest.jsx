@@ -70,10 +70,22 @@ vi.mock('@/hooks/useBankStatements', () => ({
   useBankStatements: () => ({ statements: [{ id: 's1' }], loading: false, reload: vi.fn() }),
 }));
 const autoMatchCalls = [];
+// ETP-4922: the modal's open decision now depends on the *fresh* groups/loading pair coming back
+// from `useAutoMatch`, so — same pattern as `currentMovements` / `mockMovementsApi` above — these
+// are module-level `let`s a test can flip mid-run (typically via `rerender()`) to simulate the
+// loading:true -> loading:false transition the real `useNeoResource` goes through.
+let currentAutoMatchGroups = [];
+let currentAutoMatchLoading = false;
 vi.mock('@/hooks/useReconciliation', () => ({
   useAutoMatch: (id) => {
     autoMatchCalls.push(id);
-    return { groups: [], kpis: {}, loading: false, error: null, reload: reloadAutoMatchMock };
+    return {
+      groups: currentAutoMatchGroups,
+      kpis: {},
+      loading: currentAutoMatchLoading,
+      error: null,
+      reload: reloadAutoMatchMock,
+    };
   },
 }));
 
@@ -198,6 +210,8 @@ beforeEach(() => {
   mockStatementsApi = { selected: [], filtered: [] };
   windowAccessCalls.length = 0;
   autoMatchCalls.length = 0;
+  currentAutoMatchGroups = [];
+  currentAutoMatchLoading = false;
   movementsTabProps = null;
   bankFlowOptions = null;
   setSearchParamsMock.mockClear();
@@ -253,17 +267,30 @@ describe('FinancialAccountDetail — deep-link query params', () => {
     expect(screen.getByTestId('tab-movements')).toBeInTheDocument();
     expect(movementsTabProps.highlightTxnId).toBe('txn-77');
     expect(movementsTabProps.autoOpenNewMovement).toBe(true);
-    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'true');
+    // ETP-4922: `autoMatch=true` arms the check, but the tab stays on Movements — the engine is
+    // only ever queried with a real account id while ON the reconciliation tab, so nothing ever
+    // fetches here and the modal never gets a fresh response to open on. It stays closed.
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
     expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
   });
 
-  it('opens the automatch modal for a deep link to the reconciliation tab', () => {
+  it('opens the automatch modal for a deep link to the reconciliation tab once suggestions land (ETP-4922)', () => {
     currentSearchParams = new URLSearchParams('tab=reconciliation');
-    render(<FinancialAccountDetail recordId="acc-1" />);
+    currentAutoMatchLoading = true;
+    const { rerender } = render(<FinancialAccountDetail recordId="acc-1" />);
 
     expect(screen.getByTestId('tab-reconciliation')).toBeInTheDocument();
+    // Still fetching — must not pop the modal before a response has actually landed.
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+
+    // The fetch resolves with at least one suggestion group.
+    currentAutoMatchGroups = [{ groupKey: 'g1' }];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+
+    // Entering the tab is what triggers the fetch; it's the FRESH response that decides whether
+    // the modal opens, not the tab switch itself.
     expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'true');
-    // The automatch data is only fetched while the modal is open.
     expect(autoMatchCalls).toContain('acc-1');
   });
 
@@ -289,16 +316,65 @@ describe('FinancialAccountDetail — deep-link query params', () => {
 });
 
 describe('FinancialAccountDetail — automatch modal', () => {
-  it('opens the automatch modal from the toolbar button on the reconciliation tab', () => {
+  it('does not auto-open when entering the reconciliation tab finds zero suggestions, but the manual button still opens it (ETP-4922)', () => {
+    currentAutoMatchGroups = [];
     render(<FinancialAccountDetail recordId="acc-1" />);
 
     fireEvent.click(screen.getByTestId('detail-tab-reconciliation'));
-    // Switching INTO the tab already opens it; close it to prove the button reopens it.
-    fireEvent.click(screen.getByTestId('stub-automatch-close'));
+    // Entering the tab with zero suggestions must NOT auto-open the modal.
     expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
 
+    // The manual button bypasses the armed/loading gate entirely — it always opens, showing the
+    // empty state when there is nothing to suggest.
     fireEvent.click(screen.getByTestId('financial-account-automatch'));
 
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('fetches automatch data while the tab is active but does not open the modal when the response has zero suggestions (ETP-4922)', () => {
+    currentSearchParams = new URLSearchParams('tab=reconciliation');
+    currentAutoMatchLoading = true;
+    const { rerender } = render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+
+    currentAutoMatchGroups = [];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+
+    // The engine WAS queried for this account — it just found nothing to suggest.
+    expect(autoMatchCalls).toContain('acc-1');
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('re-arms the automatch check after leaving and returning to the reconciliation tab (ETP-4922)', () => {
+    const { rerender } = render(<FinancialAccountDetail recordId="acc-1" />);
+
+    currentAutoMatchLoading = true;
+    fireEvent.click(screen.getByTestId('detail-tab-reconciliation'));
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+
+    currentAutoMatchGroups = [{ groupKey: 'g1' }];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'true');
+
+    // Close it manually, then leave the tab — this must disarm the stale "fetched" state so a
+    // late-resolving response from the previous visit can't pop it back open later.
+    fireEvent.click(screen.getByTestId('stub-automatch-close'));
+    fireEvent.click(screen.getByTestId('detail-tab-movements'));
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+
+    // Coming back with a fresh, non-empty response must reopen it — proves re-arming works, not
+    // just the initial-mount path.
+    currentAutoMatchGroups = [];
+    currentAutoMatchLoading = true;
+    fireEvent.click(screen.getByTestId('detail-tab-reconciliation'));
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+
+    currentAutoMatchGroups = [{ groupKey: 'g2' }];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
     expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'true');
   });
 
