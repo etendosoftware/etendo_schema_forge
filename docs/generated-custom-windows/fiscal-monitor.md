@@ -122,6 +122,8 @@ export proceeds with the header-only Error column rather than failing the whole 
 
 Real-world repro (used for the regression tests): purchase invoice 10000009, Facturas recibidas, `*SiiData` motivo history mentioning "Referencia del proveedor", current status Aceptado (`CO`) — verified to render/export a dash, not the historical motivo.
 
+This same invoice was re-checked manually against the running app (`localhost:3100`, real org data, no mocks) after correction #4 landed: the "Motivo error" column and the CSV export both showed a dash for invoice 10000009 instead of the stale "Referencia del proveedor" text. Corrections #1–#3 (dedicated column layout, header-empty fallback, CSV export parity) were verified the same way in the same manual pass. This manual confirmation is in addition to, not a replacement for, the automated tests listed under "Automated evidence" below.
+
 ## TBAI section (`TbaiMonitorSection`)
 
 **Filter tabs:** Todas | Enviadas (Recibido) | Rechazadas | Con error | Pendientes
