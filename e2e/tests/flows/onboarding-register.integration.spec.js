@@ -71,12 +71,38 @@ const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025'
  * the real welcome mail in the sink and follows it. That keeps the gate under test instead of
  * disabling it for the E2E run.
  */
-async function passEmailConfirmationWall(page, request, email) {
+async function emailSinkIsReachable(request) {
+  try {
+    const response = await request.get(`${EMAIL_SINK_URL}/health`, { timeout: 2_000 });
+    return response.ok();
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves to true when registration stopped at the wall, false when it went straight to step 1. */
+async function registrationStoppedAtWall(page) {
   const wall = page.getByTestId('verify-email-step');
   const profile = page.getByText(/vamos a dejar todo listo/i);
   await expect(wall.or(profile).first()).toBeVisible({ timeout: 15_000 });
-  if (!(await wall.isVisible())) {
+  return wall.isVisible();
+}
+
+async function passEmailConfirmationWall(page, request, email) {
+  if (!(await registrationStoppedAtWall(page))) {
     return;
+  }
+
+  if (!(await emailSinkIsReachable(request))) {
+    throw new Error(
+      'Registration stopped at the ETP-4798 confirm-your-email wall, and there is no email sink at '
+      + `${EMAIL_SINK_URL} to read the confirmation link from. This environment needs one of:\n`
+      + '  - point etendo.go.email.provider.baseUrl at the local sink and run with '
+      + 'E2E_EMAIL_SINK=1 (keeps the gate under test), or\n'
+      + '  - set etendo.go.email.provider.enabled=false, so the backend cannot deliver the mail, '
+      + 'drops the token and leaves the account ungated (skips the gate).\n'
+      + 'See docs/e2e-testing-guide.md.',
+    );
   }
 
   const message = await waitForEmail(request, {
@@ -266,7 +292,10 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-email').fill(email);
     await page.locator('#reg-password').fill(password);
     await page.getByTestId('action-register-submit').click();
-    await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
+    // ETP-4798: this test is about the SECOND registration being refused, so it only needs the
+    // first one to have gone through. Either landing screen proves that, and accepting both keeps
+    // it from needing a mail round-trip it has no use for.
+    await registrationStoppedAtWall(page);
     await slow(page);
 
     // Clear session so we land on the register form again

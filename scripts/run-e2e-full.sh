@@ -139,7 +139,13 @@ if [ "$SUITE" != "mocked" ]; then
     selection_note=""
   fi
   echo "==> Playwright E2E — integration specs (${integration_workers} workers${integration_note}${selection_note})..."
+  # ETP-4798: the email sink is on by default for the integration suite. Registration now stops at
+  # the confirm-your-email wall, and the only way past it is to read the link out of the mail the
+  # backend actually sent — which means the Etendo Go instance must have
+  # etendo.go.email.provider.baseUrl pointed at this sink. See docs/e2e-testing-guide.md.
+  # Set E2E_EMAIL_SINK=0 to run against an already-running sink (Playwright will not manage it).
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$PASSWORD" BASE_URL="$BASE_URL" \
+      E2E_EMAIL_SINK="${E2E_EMAIL_SINK:-1}" \
       E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 E2E_FINANCE_INTEGRATION=1 \
       "${integration_test_args[@]}" )
 else
