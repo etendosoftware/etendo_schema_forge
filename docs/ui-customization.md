@@ -131,7 +131,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
@@ -142,6 +142,8 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
 ---
 
@@ -174,6 +176,8 @@ Adds actions to the triple-dot menu in the detail view. Visibility can be gated 
 | `component` | string | Imports a custom component from `windows/custom/{window}/` and opens it as a detail-menu modal. The component receives `currentRecord`, `token`, `apiBaseUrl`, `onClose`, and `onSaved`. |
 
 Handler precedence: `documentAction` > `columnName` > `action` > `component` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+
+**Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 

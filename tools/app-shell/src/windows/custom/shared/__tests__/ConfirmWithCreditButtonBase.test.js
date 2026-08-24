@@ -97,4 +97,24 @@ describe('ConfirmWithCreditButtonBase', () => {
     assert.match(src, /ui\('createReturnInvoice'\)/);
   });
 
+  // ── ETP-4940 follow-up: save pending edits before confirm ─────────────────
+
+  it('imports maybeSaveBeforeConfirm from detailViewHelpers', () => {
+    assert.match(
+      src,
+      /import \{ maybeSaveBeforeConfirm \} from '@\/components\/contract-ui\/detailViewHelpers\.jsx'/,
+    );
+  });
+
+  it('accepts onSave and isDirty props', () => {
+    assert.match(src, /onSave, isDirty/);
+  });
+
+  it('guards the DR confirm click with maybeSaveBeforeConfirm before opening the modal', () => {
+    const drButton = src.match(/action-confirm-with-credit[\s\S]*?disabled=\{confirmDisabled\}/);
+    assert.ok(drButton, 'expected the DR confirm button block');
+    assert.match(drButton[0], /maybeSaveBeforeConfirm\(\{ isDirty, handleSave: onSave \}\)/);
+    assert.match(drButton[0], /setShowModal\(true\)/);
+  });
+
 });

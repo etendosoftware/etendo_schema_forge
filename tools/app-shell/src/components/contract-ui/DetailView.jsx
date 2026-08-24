@@ -98,13 +98,13 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
 export {
-  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
+  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
 } from './detailViewHelpers.jsx';
 
 /**
@@ -954,6 +954,33 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
  * All identifiers are destructured with the SAME names used inside the component
  * so closure-equivalent logic and the dirty-state regression substrings stay intact.
  */
+// ETP-4940: draftMode "Confirm" click extracted to module level (like its
+// sibling renderers below) so this branch-heavy flow doesn't count toward
+// renderDraftModeSaveActions's cognitive complexity.
+async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal }) {
+  if (!(await flushPendingLines())) return;
+  if (typeof draftMode.onConfirm === 'function') {
+    // onConfirm fully bypasses handleSaveAndProcess (below), which already
+    // saves first. Persist any pending header edit before handing off.
+    if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: hook.handleSave }))) return;
+    draftMode.onConfirm();
+    return;
+  }
+  const showProcessing = Boolean(draftMode.processingModal);
+  if (showProcessing) setShowProcessingModal(true);
+  try {
+    const saved = await hook.handleSaveAndProcess(draftMode);
+    if (!saved) return;
+    if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+    if (onAfterSave) return navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+    if (saved.id && isNew) { hook.primeSaved?.(saved); return navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } }); }
+    if (saved.id) return hook.fetchById?.(saved.id);
+    reportUnnavigableSave({ saved, isNew, windowName, ui });
+  } finally {
+    if (showProcessing) setShowProcessingModal(false);
+  }
+}
+
 function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
@@ -974,30 +1001,7 @@ function renderDraftModeSaveActions({
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button>
-      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const showProcessing = Boolean(draftMode.processingModal);
-        if (showProcessing) setShowProcessingModal(true);
-        try {
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          if (saved) {
-            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-            if (onAfterSave) {
-              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-            } else if (saved.id && isNew) {
-              hook.primeSaved?.(saved);
-              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-            } else if (saved.id) {
-              hook.fetchById?.(saved.id);
-            } else {
-              reportUnnavigableSave({ saved, isNew, windowName, ui });
-            }
-          }
-        } finally {
-          if (showProcessing) setShowProcessingModal(false);
-        }
-      }}>
+      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
         {ui(draftMode.label) || draftMode.label || ui('process')}
       </Button>
@@ -1153,25 +1157,6 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   } finally {
     setExecutingDetailProcess(false);
   }
-}
-
-/**
- * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
- * `saveBeforeProcesses` participate; every other window keeps the previous behavior
- * (returns true immediately, no save). When the form has pending changes (`isDirty`,
- * the same signal that drives the Save button), the changes are persisted silently
- * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
- * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
- * violation, or a backend error — `handleSave` has already surfaced the error and returns
- * a record without an id; this returns false so the caller aborts without opening the
- * confirm modal, param dialog, or firing the process POST.
- *
- * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
- */
-export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
-  if (!saveBeforeProcesses || !isDirty) return true;
-  const saved = await handleSave?.({ silent: true });
-  return !!saved?.id;
 }
 
 // Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
@@ -2987,7 +2972,7 @@ export function DetailView({
                     api={api}
                     onProcess={hook.handleProcess}
                     onRefresh={() => hook.fetchById?.(data?.id || recordId)}
-                    onSave={() => hook.handleSave({ silent: true })}
+                    onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
                     data-testid="TopbarRightComponent__fa3275" />
                 );
               })()}
@@ -3939,7 +3924,7 @@ export function DetailView({
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
                               onRefresh={() => { hook.fetchChildren?.(data?.id || recordId); hook.fetchById?.(data?.id || recordId); }}
-                              isNew={isNew}
+                              isNew={isNew} isDirty={isDirty}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
                                 if (saved?.id && isNew) {

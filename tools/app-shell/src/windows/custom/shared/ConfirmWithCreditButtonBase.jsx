@@ -4,12 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import { maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
 
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   specName, entityName,
+  onSave, isDirty,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
@@ -38,7 +40,17 @@ export default function ConfirmWithCreditButtonBase({
     <>
       {status === 'DR' && (
         <button type="button" data-testid="action-confirm-with-credit"
-          onClick={() => !confirmDisabled && setShowModal(true)}
+          onClick={async () => {
+            if (confirmDisabled) return;
+            // ETP-4940 follow-up: this button fires its own documentAction POST
+            // (inside ConfirmInOutModal) that never went through DetailView's
+            // draftMode/kebab save-before-confirm guards — an edit made without
+            // clicking Save first was silently discarded, confirming the
+            // last-persisted value. Persist any pending edit before opening the
+            // modal; abort on save failure (handleSave already surfaced the error).
+            if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: onSave }))) return;
+            setShowModal(true);
+          }}
           disabled={confirmDisabled}
           style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
           {confirmDrLabel}
