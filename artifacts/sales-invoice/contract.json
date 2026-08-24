@@ -1,8 +1,8 @@
 {
-  "version": "0.84.1",
+  "version": "0.84.2",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-20T15:53:05.006Z",
-  "checksum": "7d0872c484db4fb7",
+  "updatedAt": "2026-08-24T19:58:45.927Z",
+  "checksum": "0d3c49070b3f78bf",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -3446,7 +3446,7 @@
             "apiKey": "etvfacQRURL",
             "column": "EM_Etvfac_Qr_Url",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

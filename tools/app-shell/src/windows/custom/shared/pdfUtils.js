@@ -179,6 +179,33 @@ export function downloadBlobAsFile(blob, filename) {
 // ---------------------------------------------------------------------------
 // Shared jsreport renderer (A4, chrome-pdf, handlebars)
 // ---------------------------------------------------------------------------
+/**
+ * Same template, same helpers, same data as `renderPdf` — but asks jsreport for the
+ * compiled HTML instead of a PDF (`recipe: 'html'`).
+ *
+ * Needed by the list view's multi-document print: that flow concatenates one document's
+ * markup after another with page breaks and sends the whole thing to chrome-pdf once, so
+ * it needs HTML per document, not a PDF per document. Handlebars compilation stays on
+ * jsreport's side, so the browser bundle does not grow a template engine.
+ *
+ * @returns {Promise<string>} the rendered HTML
+ */
+export async function renderHtml(content, css, helpers, data) {
+  const res = await fetch('/jsreport/api/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      template: { content, engine: 'handlebars', recipe: 'html', helpers },
+      data: { css, ...data },
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`jsreport ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res.text();
+}
+
 export async function renderPdf(content, css, helpers, data) {
   const payload = {
     template: {
@@ -331,6 +358,15 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
             isCancelled: () => cancelled,
           });
           if (cancelled) return;
+        }
+        // Which of the two paths produced this PDF is invisible from the outside —
+        // both end up as the same pdfUrl — yet it is the difference between seeing
+        // the current document and seeing whatever was cached earlier. There is no
+        // cache invalidation yet (ETP-4787), so make the choice observable.
+        if (blob) {
+          console.info(`[pdf] ${cacheTableName}/${recordId}: served from cached attachment (no re-render)`);
+        } else {
+          console.info(`[pdf] ${cacheTableName ?? 'no-cache'}/${recordId}: rendering fresh${cacheStoreCondition ? ' (cache miss)' : ' (cache disabled)'}`);
         }
         if (!blob) {
           blob = await buildRef.current(recordId, base, token);

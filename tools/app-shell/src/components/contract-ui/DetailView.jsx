@@ -4264,6 +4264,7 @@ export function DetailView({
         windowName={windowName}
         documentIds={getDocumentIds(recordId)}
         token={token}
+        apiBaseUrl={apiBaseUrl}
         data-testid="DocumentPrintDrawer__fa3275" />
       {deleteConfirmModal ? (
         showDeleteConfirm && (

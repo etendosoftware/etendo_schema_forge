@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { hasClientPdf, buildClientPdfBlob } from '@/windows/custom/shared/documentPdfRegistry.js';
 import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
@@ -341,6 +342,35 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  */
 export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
+
+  // ETP-4912 — most callers hand over the PDF their own useXxxPdf hook produced. The
+  // generic one (ListView's fallback modal) has no hook, so it used to leave this empty
+  // and the modal both PREVIEWED and ATTACHED the print-* artifact — a different document
+  // than the one on screen. When the window can render itself (documentPdfRegistry), build
+  // that same PDF here instead. Windows outside the registry keep the old behaviour.
+  const [ownPdfUrl, setOwnPdfUrl] = useState(null);
+  const [ownPdfLoading, setOwnPdfLoading] = useState(false);
+  useEffect(() => {
+    if (pdfBlobUrl || pdfBlob || !documentId || !token) return undefined;
+    if (!hasClientPdf(windowName)) return undefined;
+    let cancelled = false;
+    let url = null;
+    setOwnPdfLoading(true);
+    buildClientPdfBlob({ windowName, documentId, apiBaseUrl, token, ui })
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setOwnPdfUrl(url);
+      })
+      .catch((err) => console.warn('[SendDocumentModal] client PDF failed:', err?.message))
+      .finally(() => { if (!cancelled) setOwnPdfLoading(false); });
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowName, documentId, apiBaseUrl, token, pdfBlobUrl, pdfBlob]);
+
+  const effectivePdfUrl = pdfBlobUrl || ownPdfUrl;
+  const effectivePdfLoading = pdfBlobLoading || ownPdfLoading;
+
   const policy = useMemo(() => ({ ...DEFAULT_SEND_POLICY, ...(sendPolicy || {}) }), [sendPolicy]);
   const editableRecipients = policy.editableRecipients !== false;
   const initialEmail = resolveInitialEmail(bpEmail);
@@ -408,10 +438,10 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(!pdfBlobUrl);
+  const [pdfLoading, setPdfLoading] = useState(!effectivePdfUrl);
   // True while the parent is still generating the blob via useInvoicePdf — suppress
   // the fallback report-render fetch and show a spinner instead of the error card.
-  const waitingForBlob = pdfBlobLoading && !pdfBlobUrl;
+  const waitingForBlob = effectivePdfLoading && !effectivePdfUrl;
   const [pdfError, setPdfError] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -421,22 +451,22 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     if (!node) return;
     renderPdfPreviewNode({
       node,
-      pdfBlobUrl,
-      pdfBlobLoading,
+      pdfBlobUrl: effectivePdfUrl,
+      pdfBlobLoading: effectivePdfLoading,
       documentId,
       token,
       reportId,
       setPdfError,
       setPdfLoading,
     });
-  }, [documentId, token, reportId, pdfBlobUrl, pdfBlobLoading]);
+  }, [documentId, token, reportId, effectivePdfUrl, effectivePdfLoading]);
 
   const handleDownload = async () => {
     if (downloading) return;
 
     // If a blob URL is already available, download it directly
-    if (pdfBlobUrl) {
-      downloadExistingPdfBlobUrl(pdfBlobUrl, windowName, documentNo);
+    if (effectivePdfUrl) {
+      downloadExistingPdfBlobUrl(effectivePdfUrl, windowName, documentNo);
       return;
     }
 
@@ -471,7 +501,11 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         windowName,
         documentNo,
         pdfBlob,
-        pdfBlobUrl,
+        // The attached PDF must be the one the modal is showing — including when it was
+        // built here from the registry rather than handed in (ETP-4912). This value is
+        // what cacheDocumentPreviewFile uploads as the record's marked attachment, i.e.
+        // it IS the file the customer receives.
+        pdfBlobUrl: effectivePdfUrl,
         cachePreviewBeforeSend,
         documentType,
         ui,

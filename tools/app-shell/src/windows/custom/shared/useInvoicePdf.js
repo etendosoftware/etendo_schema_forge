@@ -10,11 +10,12 @@ import {
   computeDiscountBreakdown,
   useDocumentPdf,
 } from './documentPdf.js';
+import { computeDocumentQrDataUrl } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Build invoice data for the template
 // ---------------------------------------------------------------------------
-async function buildInvoiceData(invoiceId, base, token) {
+export async function buildInvoiceData(invoiceId, base, token) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/sales-invoice/header/${invoiceId}`, token),
     fetchAll(`${base}/sales-invoice/lines?parentId=${invoiceId}`, token),
@@ -53,6 +54,24 @@ async function buildInvoiceData(invoiceId, base, token) {
   const hasAnyDiscount = hasLineDiscount || etgoTotalDiscount > 0;
   const hasTotalDiscount = etgoTotalDiscount > 0;
 
+  // ETP-4912 — Verifactu tax QR. The AEAT validation URL is computed and stored by
+  // the classic Verifactu module when the Registro de Facturacion is generated
+  // (C_Invoice.EM_Etvfac_Qr_Url); we only encode it. Reuses the SAME helper the
+  // print-* pipeline uses, so the QR is byte-identical on every render path.
+  // Empty until the RF exists -> no QR block at all, never a non-AEAT QR on a
+  // Verifactu invoice. A QR failure must not break the whole PDF.
+  let verifactuQrDataUrl = null;
+  if (header.etvfacQRURL) {
+    try {
+      verifactuQrDataUrl = await computeDocumentQrDataUrl({
+        qr_mode: 'verifactu',
+        verifactu_qr_url: header.etvfacQRURL,
+      }) || null;
+    } catch (err) {
+      console.warn('[useInvoicePdf] Verifactu QR generation failed:', err?.message);
+    }
+  }
+
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation, header.bpAddress),
     documentNo: header.documentNo || '',
@@ -73,20 +92,32 @@ async function buildInvoiceData(invoiceId, base, token) {
     totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
     hasAnyDiscount,
     hasTotalDiscount,
+    verifactuQrDataUrl,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {
-  const ui = useUI();
-  const labels = buildDocumentPdfLabels(ui, {
+/**
+ * The invoice's label overrides, as a plain function of `ui` rather than inlined in the
+ * hook — so a non-React caller (the print drawer, via `documentPdfRegistry.js`) builds
+ * the very same labels instead of a near-copy that drifts.
+ *
+ * @param {(key: string) => string} ui
+ */
+export function buildInvoicePdfLabels(ui) {
+  return buildDocumentPdfLabels(ui, {
     title:           ui('invoicePdfTitle'),
     documentNo:      ui('invoicePdfDocumentNo'),
     documentSection: ui('invoicePdfInvoiceSection'),
     date:            ui('invoicePdfDate'),
     colQty:          ui('invoicePdfColQty'),
   });
+}
+
+export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {
+  const ui = useUI();
+  const labels = buildInvoicePdfLabels(ui);
   return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels, cacheConfig);
 }

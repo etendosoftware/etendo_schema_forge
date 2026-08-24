@@ -12,6 +12,7 @@ import {
   fetchLocationAddress,
   fetchImageDataUrl,
   renderPdf,
+  renderHtml,
   usePdfGenerator,
 } from './pdfUtils.js';
 
@@ -44,6 +45,17 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
   flex-direction:column;
   gap:24px;
 }
+
+/* Verifactu tax QR (ETP-4912). Geometry mandated by the AEAT spec v0.4.7:
+   a 40x40mm symbol (art. 21.1) and a quiet zone of at least 2mm, 6mm recommended
+   (section 3) — expressed here in px because this document is laid out at 96dpi
+   (794px = A4 width), so 40mm = 151px and 6mm = 23px. The label and caption must be
+   legible and no smaller than the rest of the invoice data (art. 20.1.b); the body is
+   13px, so these must not go below it. */
+.inv-verifactu-qr { text-align:center; }
+.inv-verifactu-qr-label { font-size:14px; font-weight:600; color:var(--fg-1); }
+.inv-verifactu-qr-img { width:151px; height:151px; padding:23px; box-sizing:content-box; background:#fff; display:block; margin:0 auto; }
+.inv-verifactu-qr-caption { font-size:13px; color:var(--fg-1); line-height:17px; }
 
 /* Shared company atom */
 .inv-company-name { font-weight:700; font-size:16px; line-height:22px; letter-spacing:-0.01em; color:var(--fg-1); }
@@ -126,6 +138,20 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><style>{{{css}}}</style></head>
 <body>
 <div class="invoice">
+
+  {{!-- Verifactu tax QR (ETP-4912) — AEAT spec v0.4.7, Orden arts. 20-21 + section 3.
+       Rendered at the very top of the invoice, centred between the margins, and only
+       when the AEAT URL has been issued. The label and the phrase are hardcoded Spanish
+       legal literals (they match classic's AD messages ETVFAC_fiscal_QR /
+       ETVFAC_verifiable_AEAT, whose en_US translation is identical), so they are NOT
+       routed through {{labels}}. --}}
+  {{#if verifactuQrDataUrl}}
+  <div class="inv-verifactu-qr">
+    <div class="inv-verifactu-qr-label">QR Tributario:</div>
+    <img class="inv-verifactu-qr-img" src="{{verifactuQrDataUrl}}" alt="QR Tributario">
+    <div class="inv-verifactu-qr-caption">Factura verificable en la sede electrónica de la AEAT</div>
+  </div>
+  {{/if}}
 
   <!-- Header B: logo | company data | document meta -->
   <div class="inv-header-b{{#unless companyLogoDataUrl}} no-logo{{/unless}}">
@@ -350,6 +376,21 @@ export async function renderDocumentPdf(data) {
   const helpers = buildJsreportHelpersString('', { minimumFractionDigits: rateDecimals, maximumFractionDigits: rateDecimals }, getCurrencyFormatConfig())
     + '\n\n' + COMMON_HANDLEBARS_HELPERS;
   return renderPdf(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
+}
+
+export async function renderDocumentHtml(data) {
+  // HTML twin of renderDocumentPdf, for the list view's multi-document print (which
+  // concatenates markup before making one PDF). Keep the two in step: same helpers,
+  // same data shape — only the recipe differs.
+  // Currency/amount formatting in DOCUMENT_TEMPLATE MUST go through the
+  // {{formatCurrency}} helper built below — never add a template-local
+  // formatter (see CLAUDE.md § Currency & Amount Formatting).
+  // rateDecimals is only meaningful when exchangeRate is present, but it's
+  // harmless to bake it into formatNumber's precision unconditionally.
+  const rateDecimals = (typeof data.rateDecimals === 'number' && data.rateDecimals >= 0) ? data.rateDecimals : 4;
+  const helpers = buildJsreportHelpersString('', { minimumFractionDigits: rateDecimals, maximumFractionDigits: rateDecimals }, getCurrencyFormatConfig())
+    + '\n\n' + COMMON_HANDLEBARS_HELPERS;
+  return renderHtml(DOCUMENT_TEMPLATE, DOCUMENT_CSS, helpers, data);
 }
 
 // ---------------------------------------------------------------------------
