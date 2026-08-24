@@ -1135,8 +1135,17 @@ same "preventive-only, corrective not yet done" shape as **A2c**/**K1** above, n
 — the retroactive "who is the real owner" heuristic for an already-provisioned tenant is a data
 judgment call, not something safe to infer and apply silently.
 
-**Where it should be fixed:** a one-time backfill data-fix (Remedy's domain,
-`cli/src/data-fixes/`), **NOT yet written as of this writing.** Candidate heuristic — **NOT yet
+**Where it should be fixed:** consolidated into **ETP-4877** (the existing-tenant
+system-role-templates retrofit) rather than run as a separate, uncoordinated backfill — a
+same-session ETP-4830 follow-up found the two retrofits would otherwise disagree with each other,
+since ETP-4877 also needs to decide, per existing user, whether to mint a personal role (its own
+item 5.1) — and the owner is the one existing user who must NOT get one (5.2: an owner's role is
+the pre-existing, auto-granted `is_client_admin='Y'` "Company Admin" role, not a personal
+composition role). ETP-4877's Jira description was rewritten to own owner-detection and
+personal-role backfill as mutually-exclusive steps of the same script, resolving the owner FIRST
+and excluding them from the personal-role pass. This is still a one-time backfill data-fix
+(Remedy's domain, `cli/src/data-fixes/`), **NOT yet written as of this writing** — ETP-4877 remains
+in **Defined** status, ticket text only. Candidate owner-detection heuristic — **NOT yet
 human-confirmed; do not run against real tenant data before it is sanity-checked** — the
 earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED` ascending.
 
@@ -1148,7 +1157,8 @@ uses, per this repo's own root `CLAUDE.md` convention ("Etendo AD findings go in
 `docs/etendo-ad/`, NOT in per-window artifacts").
 
 **Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **NOT YET
-IMPLEMENTED** — flagged here per this document's own "flag, don't silently skip" convention.
+IMPLEMENTED**, scope consolidated into and now tracked entirely under **ETP-4877** (Defined,
+2026-08-24) — flagged here per this document's own "flag, don't silently skip" convention.
 
 ---
 
