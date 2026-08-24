@@ -17825,7 +17825,7 @@
     "billingPreferences": "Billing Preferences",
     "billingPreferencesDesc": "Customer and vendor billing configuration.",
     "billingPreferencesAfterSave": "Save the contact to configure billing preferences.",
-    "fiscalDefaults": "Default fiscal values",
+    "fiscalDefaults": "SIF Defaults",
     "fiscalDefaultsDescription": "Used as defaults when sending this customer's invoices to SII/TicketBAI.",
     "validationRequiredField": "The field \"{field}\" is required.",
     "validationRequiredGeneric": "A required field is missing.",
