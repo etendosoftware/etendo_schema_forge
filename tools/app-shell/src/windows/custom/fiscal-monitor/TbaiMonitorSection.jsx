@@ -212,12 +212,13 @@ export default function TbaiMonitorSection({
                 <th>{ui('fiscalMonitor.col.description')}</th>
                 <th>{ui('fiscalMonitor.col.signature')}</th>
                 <th>{ui('fiscalMonitor.col.status')}</th>
+                <th>{ui('fiscalMonitor.col.errorReason')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
+                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 7 cols: checkbox + 6 data */}
                     {ui('fiscalMonitor.empty')}
                   </td>
                 </tr>
@@ -262,11 +263,13 @@ export default function TbaiMonitorSection({
                         onClick={pillClick}
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
                         data-testid="StatusPill__dd7710" />
-                      {isErrorStatus(row.estado) && (validationMap[row.id] ?? []).map((v, vi) => (
-                        <div className="fm-err-text" key={vi}>
-                          {v.codigo ? `[${v.codigo}] ` : ''}{v.descripcion}
-                        </div>
-                      ))}
+                    </td>
+                    <td style={{ color: (validationMap[row.id]?.length) ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                      {(validationMap[row.id] ?? []).length > 0
+                        ? (validationMap[row.id] ?? [])
+                            .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
+                            .join(' | ')
+                        : '—'}
                     </td>
                   </tr>
                 );

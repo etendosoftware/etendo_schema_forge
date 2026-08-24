@@ -139,17 +139,21 @@ describe('TbaiMonitorSection — validation results (error reason) join', () => 
     assert.match(src, /useMemo\(\(\)\s*=>\s*buildValidationMap\(validationResults\)/);
   });
 
-  it('renders error reason(s) only for error-status rows', () => {
-    assert.match(src, /isErrorStatus\(row\.estado\)\s*&&\s*\(validationMap\[row\.id\]/);
+  it('reads validation results for the row from the map, keyed by row.id', () => {
+    assert.match(src, /validationMap\[row\.id\]/);
   });
 
-  it('renders one line per validation result, formatted as [codigo] descripcion', () => {
-    assert.match(src, /v\.codigo\s*\?\s*`\[\$\{v\.codigo\}\]\s*`\s*:\s*''/);
-    assert.match(src, /\{v\.descripcion\}/);
+  it('renders a dedicated Error Reason column, joined with " | " for multiple results', () => {
+    assert.match(src, /v\.codigo\s*\?\s*`\[\$\{v\.codigo\}\]\s*\$\{v\.descripcion\}`\s*:\s*v\.descripcion/);
+    assert.match(src, /join\(' \| '\)/);
   });
 
-  it('applies the fm-err-text class — same visual pattern as SiiMonitorSection', () => {
-    assert.match(src, /className="fm-err-text"/);
+  it('renders the Error Reason column header, same label as Verifactu', () => {
+    assert.match(src, /fiscalMonitor\.col\.errorReason/);
+  });
+
+  it('shows an empty-cell dash when a row has no validation results', () => {
+    assert.match(src, /:\s*'—'/);
   });
 
   it('exported CSV column joins error reasons via the same validationMap', () => {

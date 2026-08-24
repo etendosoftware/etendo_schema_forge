@@ -51,9 +51,11 @@ const VALIDATION_RESULTS = [
 ];
 
 describe('TbaiMonitorSection — error reason rendering (real isErrorStatus)', () => {
-  it('renders no error text for a Recibido (accepted) row', () => {
+  it('renders a dash in the error reason column for a Recibido (accepted) row', () => {
     render(<TbaiMonitorSection {...baseProps} mockRows={[ROWS[0]]} validationResults={VALIDATION_RESULTS} />);
     expect(screen.queryByText(/5040/)).toBeNull();
+    const recibidoRow = screen.getByText('FA-1').closest('tr');
+    expect(recibidoRow.textContent).toMatch(/—/);
   });
 
   it('renders the [codigo] descripcion line for a Rechazado row', () => {
@@ -70,14 +72,18 @@ describe('TbaiMonitorSection — error reason rendering (real isErrorStatus)', (
     expect(screen.getByText(/Certificado caducado/)).toBeInTheDocument();
   });
 
-  it('renders nothing extra for an error-status row with no matching validation result', () => {
+  it('shows a dash for an error-status row with no matching validation result', () => {
     render(<TbaiMonitorSection {...baseProps} mockRows={[{ id: 'no-match', estado: 'Rechazado' }]} validationResults={VALIDATION_RESULTS} />);
     expect(screen.queryByText(/\[/)).toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
-  it('applies the fm-err-text class to the rendered reason line', () => {
-    const { container } = render(<TbaiMonitorSection {...baseProps} mockRows={[ROWS[1]]} validationResults={VALIDATION_RESULTS} />);
-    expect(container.querySelector('.fm-err-text')).toBeTruthy();
+  it('renders the error reason in its own dedicated table column (not under the status pill)', () => {
+    render(<TbaiMonitorSection {...baseProps} mockRows={[ROWS[1]]} validationResults={VALIDATION_RESULTS} />);
+    expect(screen.getByText('fiscalMonitor.col.errorReason')).toBeInTheDocument();
+    const cell = screen.getByText(/\[5040\]/).closest('td');
+    const pillCell = screen.getByTestId('status-pill').closest('td');
+    expect(cell).not.toBe(pillCell);
   });
 
   it('does not crash when validationResults is undefined', () => {
@@ -94,7 +100,7 @@ describe('TbaiMonitorSection — error reason rendering (real isErrorStatus)', (
     const rechazadoRow = screen.getByText('FA-2').closest('tr');
     const errorRow = screen.getByText('FA-3').closest('tr');
 
-    expect(recibidoRow.querySelector('.fm-err-text')).toBeNull();
+    expect(recibidoRow.textContent).toMatch(/—/);
 
     expect(rechazadoRow.textContent).toMatch(/\[5040\]/);
     expect(rechazadoRow.textContent).not.toMatch(/\[1001\]/);

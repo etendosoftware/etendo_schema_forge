@@ -143,13 +143,14 @@ function SiiTableContent({
             <th>{ui('fiscalMonitor.col.type')}</th>
             <th className="num">{ui('fiscalMonitor.col.total')}</th>
             <th>{ui('fiscalMonitor.col.status')}</th>
+            <th>{ui('fiscalMonitor.col.errorReason')}</th>
             <th>{ui('fiscalMonitor.col.csv')}</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
+              <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 9 cols: checkbox + 8 data */}
                 {ui('fiscalMonitor.empty')}
               </td>
             </tr>
@@ -189,11 +190,9 @@ function SiiTableContent({
                     onClick={pillClick}
                     title={isPendingStatus(row.aeatsiiEstado) ? ui('fiscalMonitor.openInvoice') : undefined}
                     data-testid="StatusPill__be1aa5" />
-                  {row.aeatsiiErrorMsg && (
-                    <div className="fm-err-text">
-                      {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{row.aeatsiiErrorMsg}
-                    </div>
-                  )}
+                </td>
+                <td style={{ color: row.aeatsiiErrorMsg ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                  {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{row.aeatsiiErrorMsg ?? '—'}
                 </td>
                 <td className="mono">{row.cdigoCSV ?? csvMap[row.id] ?? '—'}</td>
               </tr>
