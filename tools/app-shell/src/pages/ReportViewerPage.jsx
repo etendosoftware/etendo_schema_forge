@@ -25,6 +25,65 @@ const ETENDO_BASE = getEtendoBase();
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
 const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
 
+// Purely decorative mini report-page preview shown above each card — a
+// NARROWER "page" (card surface, shadowed), horizontally centered with
+// visible margin on both sides, sitting inside a muted frame — so it reads
+// as "a document floating in a preview area", not content stretched edge to
+// edge. Left/right insets are deliberately much bigger than top/bottom (a
+// portrait-ish page inside a landscape frame), unlike a plain `inset-*` on
+// all sides. Inside: two stacked title bars + a couple of short metadata
+// lines top-right, a thin divider, then a handful of lines of varying width
+// (a couple bolder ones standing in for section bands) laid out with
+// `justify-between` — so, unlike a plain `space-y-*` stack of fixed-height
+// bars, they spread across whatever height the body actually gets and keep
+// reaching toward the bottom of the page instead of clumping at the top with
+// blank space below. Colors are the same semantic tokens the file's own
+// "report ready" loading skeleton further down already uses for this exact
+// two-tone bar pattern (`border-subtle` for the darker tone, `muted` for the
+// lighter one) — see semanticThemeUsage.test.js, which forbids raw palette
+// literals in application UI outside its documented exceptions. Proportions
+// otherwise match the Figma "Card With Image Tags" component's Imagen layer
+// (313:180 aspect). It never reflects a report's real columns/content.
+function ReportCardPreview() {
+  return (
+    <div
+      className="relative w-full aspect-[313/180] rounded-lg bg-muted overflow-hidden pointer-events-none select-none"
+      aria-hidden="true"
+    >
+      <div className="absolute left-[16%] right-[16%] top-3 bottom-3 rounded bg-card shadow-sm p-2.5 overflow-hidden flex flex-col">
+        <div className="flex items-start justify-between gap-3 shrink-0">
+          <div className="space-y-1">
+            <div className="h-2 w-16 rounded bg-border-subtle" />
+            <div className="h-1.5 w-11 rounded bg-border-subtle" />
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+            <div className="h-1 w-7 rounded bg-muted" />
+            <div className="h-1 w-5 rounded bg-muted" />
+          </div>
+        </div>
+        <div className="border-t border-border-subtle mt-1.5 mb-1.5 shrink-0" />
+        <div className="flex-1 flex flex-col justify-between">
+          <div className="h-1.5 w-full rounded bg-border-subtle" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1 w-[92%] rounded bg-muted" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1.5 w-full rounded bg-border-subtle" />
+          <div className="h-1 w-[88%] rounded bg-muted" />
+          <div className="h-1 w-full rounded bg-muted" />
+          <div className="h-1 w-[95%] rounded bg-muted" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Matches the Figma "Card With Image Tags" component's proportions (radii,
+// spacing, type scale) — see the CSS the design handed off for every layer —
+// but through this app's semantic theme tokens rather than the design's raw
+// hex values, per semanticThemeUsage.test.js (no undocumented palette
+// literals in application UI): card surface + border, muted frame, and
+// foreground/muted-foreground text, all resolved from the current theme
+// instead of Figma's light-mode-only colors.
 function ReportCard({ report, onRun }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -32,20 +91,23 @@ function ReportCard({ report, onRun }) {
   return (
     <button
       onClick={() => onRun(report)}
-      className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
+      className="flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
     >
-      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        <FileText className="h-5 w-5 text-primary" data-testid="FileText__3c998a" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground">{reportTitle}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+      <ReportCardPreview data-testid="ReportCardPreview__3c998a" />
+      <div className="flex flex-col items-stretch gap-1 p-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-card border border-input shadow-sm">
+            <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__3c998a" />
+          </div>
+          <h3 className="text-base font-medium text-foreground min-w-0 truncate">{reportTitle}</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
           {report.type === 'grouped-listing' ? ui('Grouped Report') : ui('Listing Report')}
           {report.orientation === 'landscape' ? ` — ${ui('Landscape')}` : ''}
         </p>
-        <div className="flex gap-1 mt-2">
+        <div className="flex gap-2 flex-wrap pt-1">
           {(report.outputs || []).map(o => (
-            <span key={o} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-medium">{o}</span>
+            <span key={o} className="inline-flex items-center px-2 py-1 rounded-lg bg-muted text-xs font-normal text-muted-foreground uppercase">{o}</span>
           ))}
         </div>
       </div>
@@ -1645,7 +1707,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
     );
   } else {
     reportListContent = (
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6">
         {Object.entries(grouped).map(([cat, catReports]) => (
           <div key={cat}>
             {!categoryFilter && Object.keys(grouped).length > 1 && (
@@ -1653,7 +1715,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
               </h2>
             )}
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {catReports.map(r => (
                 <ReportCard
                   key={r.id}
