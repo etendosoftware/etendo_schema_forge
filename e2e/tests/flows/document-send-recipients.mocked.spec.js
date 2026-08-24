@@ -4,11 +4,16 @@ import { login } from '../helpers/auth.js';
 /**
  * Editable email recipients — send modal (mocked). ETP-4226.
  *
- * Validates the editable To/CC recipient flow on the generic SendDocumentModal
- * that ListView mounts for documental windows (sales-order, purchase-order).
+ * Validates the editable To/CC recipient flow on `SendDocumentModal` for the
+ * row-hover "Send" envelope on sales-order and purchase-order. For these two
+ * windows the envelope is wired through `useRowEmailModal` (ETP-4372), which
+ * mounts `SendDocumentModal` WITH a real client-rendered PDF (`pdfBlobUrl`
+ * from `useOrderPdf`/`usePurchaseOrderPdf`) rather than through ListView's own
+ * "no PDF" fallback mount — see `installAttachmentUploadMock` below for why
+ * that PDF matters to this spec even though the assertions never look at it.
  *
  * Flow under test:
- *   1. Row hover → email quick action opens the generic SendDocumentModal.
+ *   1. Row hover → email quick action opens SendDocumentModal.
  *   2. The To chip editor is pre-populated with the contact email resolved from
  *      the mocked /contacts/businessPartner/{id} endpoint.
  *   3. The user adds an extra To address and a CC address via the chip editor.
@@ -93,6 +98,52 @@ async function installContactsMock(page) {
 }
 
 /**
+ * Mocks the attachment-caching endpoint the send flow silently exercises for
+ * sales-order/purchase-order.
+ *
+ * Root cause (investigated 2026-08-19): both windows wire their row-hover
+ * "Send" envelope through `useRowEmailModal` (ETP-4372), which calls
+ * `useOrderPdf`/`usePurchaseOrderPdf` to render a REAL client-side PDF via
+ * jsreport and passes it into `SendDocumentModal` as `pdfBlobUrl` — this is
+ * not the "no-PDF" generic modal path the spec's original docblock assumed.
+ * Because `WINDOW_ATTACHMENT_TABLE` (documentEmailSend.js) lists both
+ * `sales-order` and `purchase-order` → `'C_Order'`, `cacheDocumentPreviewFile`
+ * does NOT take its `{ skipped: true }` early return: `resolvePreviewBlob`
+ * resolves the real blob and `uploadAndMarkMainAttachment` POSTs to
+ * `/sws/neo/attachments/{tableName}/{recordId}?markAsMain=true` BEFORE the
+ * actual send request fires.
+ *
+ * Without this mock, that POST falls through to login()'s generic `/sws/**`
+ * catch-all, whose POST shape (`{ id, data: {}, success: true }`) was designed
+ * for record-save responses, not attachments. `uploadAndMarkMainAttachment`'s
+ * parsing (`json?.response?.data ?? json?.data ?? json`) prefers the empty
+ * `json.data` over the top-level `json.id`, resolving `{}` — `.id` missing —
+ * so `cacheDocumentPreviewFile` throws `Preview file cache failed`. That
+ * throw is never caught inside `sendDocumentEmail`, so it aborts the whole
+ * send attempt before the real `POST .../email-contracts/{spec}-send/send`
+ * this spec waits for is ever issued — exactly the 15s `waitForResponse`
+ * timeout this fixes. This is a test-mocking gap introduced by ETP-4315
+ * tightening `cacheDocumentPreviewFile`'s success check from a bare `res.ok`
+ * (the retired `/preview-file` endpoint, which this spec's mocks never
+ * needed to cover either — the generic catch-all's 200 was already enough)
+ * to requiring `.id` on the created attachment — not a behavioral regression
+ * in the app itself; requiring `.id` on a real create response is correct.
+ */
+async function installAttachmentUploadMock(page) {
+  await page.route('**/sws/neo/attachments/**', async (route) => {
+    if (route.request().method() !== 'POST') {
+      route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'mock-attachment-id', name: 'mock-preview.pdf' }),
+    });
+  });
+}
+
+/**
  * Capture + mock the send endpoint. Returns a getter for the parsed request
  * body so tests can assert the command shape. Responds 200 SENT.
  */
@@ -166,6 +217,7 @@ for (const spec of SPECS) {
       await login(page);
       await installListMock(page, spec);
       await installContactsMock(page);
+      await installAttachmentUploadMock(page);
       await page.goto(`/${spec}`);
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     });

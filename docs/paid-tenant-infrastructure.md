@@ -1,6 +1,13 @@
 # Paid Tenant Infrastructure — Consolidated Narrative
 
-**Status:** Active · **Feature:** `tenant-upgrade` · **Jira:** ETP-4686, epic ETP-3504
+**Status:** Active · **Feature:** paid productive environment (registry id `paid-second-tenant`) · **Jira:** ETP-4686, ETP-4966, epic ETP-3504
+
+> **Two things in this document changed after it was written, and both inverted:** the checkout is
+> **real Stripe with real charges**, and the `tenant-upgrade` flag **no longer exists** (ETP-4966).
+> Sections that describe a mock payment or a flag-off path are historical. The flag retired because
+> it caused an incident: the browser resolved it through ConfigCat while the backend resolved it
+> through local properties that were unset in every deployed environment, so accounts were charged
+> and then handed a Demo environment.
 
 **About this document.** This is a single linear account of one feature: how a user on a
 free Etendo GO tenant gets a second, paid, productive one — and of the two systems built
@@ -40,20 +47,27 @@ A second tenant, described in the UI as **productive**, created through a checko
 while the original free tenant stays exactly as it was. Nothing is migrated, nothing is
 upgraded in place. The account ends up owning two tenants with different purposes.
 
-The whole path is behind a feature flag called `tenant-upgrade`, which is **off by
-default**. With the flag off, the product behaves precisely as it did before.
+The whole path is **unconditional**. It was behind a feature flag called `tenant-upgrade`, retired in
+ETP-4966; there is no way to switch the capability off, by design.
 
-The money is not real. The checkout is a mock — no payment processor is involved, nothing is
-charged, and this is stated plainly everywhere it could be mistaken for otherwise. What is
-real is everything around it: the flag evaluation on both ends, the paywall decision that
-gates provisioning, and the record of which plan a tenant is on.
+**The money is real.** Checkout is Stripe hosted checkout with a live secret key and a signed
+webhook, and a card is charged. Everything around it is real too: the paywall decision that gates
+provisioning, the confirmed-payment correlation that authorises it, and the record of which plan an
+environment is on.
+
+Two consequences follow, and neither is hypothetical:
+
+- Every gap listed under *real payment readiness* in `flags-registry.json` is now exposure against
+  actual charges, not a precondition for some future gateway.
+- A payment confirmed by the webhook is the **only** thing that marks an environment productive. It
+  used to be inferred from the paywall decision, which is what made a charged account read back as
+  free once the flag was unset.
 
 ## 1.3 The end-to-end flow, step by step
 
 1. **The user is signed in** to their free tenant and opens the avatar menu in the top bar.
-2. **The menu shows an upgrade entry — or not.** The web app asks the flag system whether
-   `tenant-upgrade` is on for this user. If it is off, the menu item is simply absent and the
-   story stops here.
+2. **The menu shows the upgrade entry.** Always — it is not gated. Since ETP-4966 the web app asks
+   no flag system anything here.
 3. **The user selects the upgrade entry** and lands on the `/upgrade` page.
 4. **The page asks the backend which tenants this account already owns.** This decides which
    of three things it shows next.
@@ -100,14 +114,24 @@ gates provisioning, and the record of which plan a tenant is on.
     chosen at sign-in, and there is no in-app tenant switcher in this version. Signing out is
     the shortest honest route to the new tenant.
 20. **At the next sign-in the environment picker lists both tenants** — the original free one
-    and the new productive one — and the user chooses which to enter.
+    and the new productive one, each badged with its plan and productive ones sorted first — and
+    the user chooses which to enter.
 
-## 1.4 What the user does *not* see yet
+## 1.4 The plan is visible in the picker
 
-The picker at step 20 does not indicate which tenant is on which plan, even though the
-backend already sends that information with every environment. The picker component lives in
-a shared npm package rather than in this application, so displaying it needs a change and a
-release on that package. It is recorded as an open item; see Part 4.
+The company switcher badges each environment *Demo* or *Productivo* from the per-environment
+`plan` field that `GET /sws/go/environments` returns, and it sorts productive environments first.
+This closed the open item that Part 4 recorded as `plan-badge-in-env-picker`.
+
+That badge is also where ETP-4966 surfaced. It was reported as "I paid with Stripe and it still says
+Demo", and the badge was telling the truth: the backend really had recorded the environment as free,
+because the productive marker was gated on a flag that resolved to off on the server. The lesson is
+in the direction of the fix — the badge was not the bug, and changing what it displays would have
+hidden a genuine billing error instead of correcting it.
+
+One related subtlety: the badge is withheld, rather than shown as *Demo*, when the current
+environment cannot be resolved at all (a session with no platform token cannot list environments).
+Labelling that case *Demo* would report a plan derived from a missing value.
 
 ---
 
@@ -158,10 +182,12 @@ installed.
 
 ## 2.3 The three rules that hold regardless of provider
 
-1. **The safe default lives in code**, and it must describe *today's shipped behaviour*. The
-   default for `tenant-upgrade` is `false`, so with no configuration anywhere the product is
-   exactly what it was before this feature. A broken control plane degrades to the current
-   product rather than exposing unfinished work.
+1. **The safe default lives in code**, and it must describe *today's shipped behaviour*. Every
+   flag defaults to `false`, so with no configuration anywhere a gated feature stays hidden and a
+   broken control plane degrades to the current product rather than exposing unfinished work.
+   ETP-4966 is the counter-example that bounds this rule: defaulting to `false` also makes "nobody
+   configured this" indistinguishable from "deliberately off", so a flag must never be the only
+   thing standing between a payment and its effect.
 2. **Flags never block rendering.** Flag startup is fire-and-forget and never rejects; flag
    reads are synchronous. A component renders immediately with the default and re-renders if
    and when the value arrives.
@@ -187,13 +213,19 @@ is no naming convention to keep in sync. Unset, empty, malformed, or non-boolean
 back to the declared defaults.
 
 ```bash
-VITE_FEATURE_FLAGS='{"tenant-upgrade":true}' make dev
+VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
 ```
 
 **Backend:** a property per flag, resolved in priority order — JVM system property, then the
-Etendo properties file, then an environment variable. For this flag: `etendo.go.flags.tenant-upgrade`,
-or `ETGO_FLAG_TENANT_UPGRADE`. Accepted affirmatives are `true`, `Y`, `yes`, `1`; negatives
-are `false`, `N`, `no`, `0`; case-insensitive.
+Etendo properties file, then an environment variable: `etendo.go.flags.<key>` or
+`ETGO_FLAG_<KEY>`. Accepted affirmatives are `true`, `Y`, `yes`, `1`; negatives
+are `false`, `N`, `no`, `0`; case-insensitive. No backend flag is declared today.
+
+**These two are different control planes, and that is the trap ETP-4966 fell into.** The deployed
+frontend reads its flags from ConfigCat, the backend from the properties above, and nothing compares
+them. `ETGO_FLAG_TENANT_UPGRADE` was never set in experimental, staging or production while ConfigCat
+had the same key on — so the browser sold environments the backend gave away. Either both ends read
+the same control plane, or the backend is the only evaluator and the browser asks it.
 
 A value that is present but not parseable as a boolean resolves to the code default *and
 records a parse error on the evaluation*, so a typo is visible rather than silently reading
@@ -248,10 +280,11 @@ paths and only means anything if those paths contain the flag's code and nothing
 **cheap removal at end of life**, which should be *delete the owned directories, then remove
 the touch points a grep finds*. Code smeared across shared files turns that into archaeology.
 
-*Snapshot of `flags-registry.json`, which is canonical:* `tenant-upgrade` owns a frontend
-`lib/upgrade/` directory and the upgrade page, plus a backend `payment` package. Its touch
+*Snapshot of `flags-registry.json`, which is canonical:* the `paid-second-tenant` feature owns a
+frontend `lib/upgrade/` directory and the upgrade page, plus a backend `payment` package. Its touch
 points are the route registration, the avatar menu, and the backend servlet that enforces the
-paywall.
+paywall. Its `flag` object was removed when the flag retired — the entry itself stays, so the feature
+keeps scoring its paths, specs and open items as shipped.
 
 ---
 
@@ -280,11 +313,12 @@ this reason, so a 402 never reaches the stream reader.
 The paywall is a standalone, directly testable unit rather than inline servlet code, because
 it is the authoritative permission check.
 
-1. **Is the `tenant-upgrade` flag off?** → **Allowed.** Pre-feature behaviour, byte for byte:
-   no token is read, no ownership lookup runs, no payment is ever demanded.
-2. **Does the account own no tenants at all?** → **Allowed.** A first tenant is always free.
-3. **Does the request name a tenant the account already owns?** → **Allowed.** That is the
-   *resume* path — a partially provisioned environment being reconciled — not a new tenant, so
+1. **Is this a conversion of an existing environment (`upgradeAction=convert-demo`)?** → it skips
+   both free paths below and goes straight to the payment check. A conversion is a purchase, and
+   without this it would look exactly like an ordinary resume and pass for free.
+2. **Does the account own no environments at all?** → **Allowed.** A first environment is always free.
+3. **Does the request name an environment the account already owns?** → **Allowed.** That is the
+   *resume* path — a partially provisioned environment being reconciled — not a new one, so
    it is not charged again.
 4. **Otherwise, the payment token decides.** Approved → allowed. Absent → refused as
    `PAYMENT_REQUIRED`. Rejected → refused as `PAYMENT_DECLINED`. Both refusals answer 402 with

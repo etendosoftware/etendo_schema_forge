@@ -12,9 +12,12 @@ vi.mock('lucide-react', () => ({
   Pencil: () => null,
 }));
 vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) =>
+  // Forwards `disabled` straight through, matching the real Checkbox
+  // component's contract (node_modules/@etendosoftware/app-shell-core/src/
+  // components/ui/checkbox.jsx passes `disabled` to the native input as-is).
+  Checkbox: ({ checked, disabled, onChange }) =>
     React.createElement('input', {
-      type: 'checkbox', checked: !!checked,
+      type: 'checkbox', checked: !!checked, disabled,
       onChange: onChange ?? (() => {}),
     }),
 }));
@@ -913,5 +916,269 @@ describe('FmBoxes303 — identificacion visibleWhen conditions', () => {
     const dateInput = container.querySelector('input[type="date"]');
     fireEvent.change(dateInput, { target: { value: '2026-01-01' } });
     expect(onIdentChange).toHaveBeenCalledWith('fecha_concurso', '2026-01-01');
+  });
+});
+
+// ── readOnly prop (submitted declarations must be fully locked down) ─────────
+// isSubmitted statuses (submitted / submitted_ext / submitted_ack) pass
+// readOnly={true} down from FmModel303Page's CasillasTab. Every interactive
+// surface — box-value inputs, the identificacion select, edit-pencil buttons,
+// checkboxes and inline text/date inputs — must become non-interactive, and
+// the edit-pencil buttons must be entirely absent (not just disabled), since
+// they are the only way to enter cell-edit mode.
+
+describe('FmBoxes303 — readOnly prop', () => {
+  describe('renderIdentSelectField select', () => {
+    it('disables the tipo_declaracion select when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ tipo_declaracion: 'I' }}
+          readOnly
+        />
+      );
+      const select = container.querySelector('select');
+      expect(select).toBeTruthy();
+      expect(select.disabled).toBe(true);
+    });
+
+    it('leaves the tipo_declaracion select enabled when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ tipo_declaracion: 'I' }}
+        />
+      );
+      const select = container.querySelector('select');
+      expect(select).toBeTruthy();
+      expect(select.disabled).toBe(false);
+    });
+  });
+
+  describe('grid edit-pencil buttons', () => {
+    it('hides the edit-pencil button for an editable grid cell when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 76: 100 }}
+          sectionIds={['resultado_final']}
+          readOnly
+        />
+      );
+      expect(container.querySelector('.fm-aeat-cell__edit-btn')).toBeNull();
+    });
+
+    it('shows the edit-pencil button for the same editable grid cell when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 76: 100 }}
+          sectionIds={['resultado_final']}
+        />
+      );
+      expect(container.querySelectorAll('.fm-aeat-cell__edit-btn').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('bicolumn infobox edit-pencil button (resolveEditable path)', () => {
+    it('hides the edit-pencil button for the always-editable reg_anual infobox (box 68) when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 68: 50 }}
+          sectionIds={['resultado_final']}
+          readOnly
+        />
+      );
+      const infobox = Array.from(container.querySelectorAll('.fm-aeat-infobox'))
+        .find(el => el.textContent.includes('fm.box.row.reg_anual'));
+      expect(infobox).toBeTruthy();
+      expect(infobox.querySelector('.fm-aeat-cell__edit-btn')).toBeNull();
+    });
+
+    it('shows the edit-pencil button for the reg_anual infobox when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 68: 50 }}
+          sectionIds={['resultado_final']}
+        />
+      );
+      const infobox = Array.from(container.querySelectorAll('.fm-aeat-infobox'))
+        .find(el => el.textContent.includes('fm.box.row.reg_anual'));
+      expect(infobox).toBeTruthy();
+      expect(infobox.querySelector('.fm-aeat-cell__edit-btn')).toBeTruthy();
+    });
+  });
+
+  describe('box-value number input', () => {
+    it('the box-value input is enabled (not disabled) while editing under readOnly=false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 76: 100 }}
+          sectionIds={['resultado_final']}
+          readOnly={false}
+        />
+      );
+      fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+      const input = container.querySelector('.fm-aeat-cell__input');
+      expect(input).toBeTruthy();
+      expect(input.disabled).toBe(false);
+    });
+
+    // The pencil is fully hidden under readOnly, so edit mode cannot normally
+    // be entered while readOnly is true. Exercises the component's own
+    // `useEffect(() => { if (readOnly) setEditingCell(null); }, [readOnly])`
+    // guard: a cell mid-edit under readOnly=false is force-closed the moment
+    // readOnly flips to true (same mounted instance, via rerender), so the
+    // number input is never left dangling open/editable on a submitted doc.
+    it('closes an in-progress edit (input disappears) the moment readOnly becomes true', () => {
+      const { container, rerender } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 76: 100 }}
+          sectionIds={['resultado_final']}
+          readOnly={false}
+        />
+      );
+      fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+      expect(container.querySelector('.fm-aeat-cell__input')).toBeTruthy();
+
+      rerender(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{ 76: 100 }}
+          sectionIds={['resultado_final']}
+          readOnly
+        />
+      );
+      expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+    });
+  });
+
+  describe('Checkbox instances', () => {
+    it('disables identificacion checkboxes when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ redeme: true }}
+          readOnly
+        />
+      );
+      const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+      expect(checkboxes.length).toBeGreaterThan(0);
+      checkboxes.forEach(cb => expect(cb.disabled).toBe(true));
+    });
+
+    it('leaves identificacion checkboxes enabled when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ redeme: true }}
+        />
+      );
+      const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+      expect(checkboxes.length).toBeGreaterThan(0);
+      checkboxes.forEach(cb => expect(cb.disabled).toBe(false));
+    });
+
+    it('disables the rectificativa (meta-section) checkbox when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['rectificativa']}
+          identification={{ rectificativa: false }}
+          readOnly
+        />
+      );
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.disabled).toBe(true);
+    });
+  });
+
+  describe('inline text/date inputs', () => {
+    it('disables the fecha_concurso date input (main identificacion section) when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ concurso: true }}
+          readOnly
+        />
+      );
+      const dateInput = container.querySelector('input[type="date"]');
+      expect(dateInput).toBeTruthy();
+      expect(dateInput.disabled).toBe(true);
+    });
+
+    it('leaves the fecha_concurso date input enabled when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['identificacion']}
+          identification={{ concurso: true }}
+        />
+      );
+      const dateInput = container.querySelector('input[type="date"]');
+      expect(dateInput).toBeTruthy();
+      expect(dateInput.disabled).toBe(false);
+    });
+
+    it('disables the bank_iban text input (meta section, aligned layout) when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['datos_bancarios']}
+          identification={{ tipo_declaracion: 'D' }}
+          readOnly
+        />
+      );
+      const textInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+      expect(textInput).toBeTruthy();
+      expect(textInput.disabled).toBe(true);
+    });
+
+    it('leaves the bank_iban text input enabled when readOnly is false/omitted', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['datos_bancarios']}
+          identification={{ tipo_declaracion: 'D' }}
+        />
+      );
+      const textInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+      expect(textInput).toBeTruthy();
+      expect(textInput.disabled).toBe(false);
+    });
+
+    it('disables the nro_justificante text input (rectificativa meta section) when readOnly is true', () => {
+      const { container } = render(
+        <FmBoxes303
+          {...BASE_PROPS}
+          boxes={{}}
+          sectionIds={['rectificativa']}
+          identification={{ rectificativa: true }}
+          readOnly
+        />
+      );
+      const textInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+      expect(textInput).toBeTruthy();
+      expect(textInput.disabled).toBe(true);
+    });
   });
 });

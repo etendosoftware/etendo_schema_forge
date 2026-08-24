@@ -30,13 +30,12 @@ import {
 } from '../bootstrap.js';
 import {
   PROOF_OF_CONCEPT_MENU,
-  TENANT_UPGRADE,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from '../flag-keys.js';
 import { resetExposureCache } from '../flag-exposure.js';
 
-const FLAG_ON = JSON.stringify({ [TENANT_UPGRADE]: true });
+const FLAG_ON = JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true });
 const silentLogger = { warn: vi.fn(), error: vi.fn() };
 
 async function resetOpenFeature() {
@@ -61,10 +60,6 @@ afterEach(async () => {
 });
 
 describe('flag-keys — declared defaults', () => {
-  it('declares tenant-upgrade as off, matching shipped behaviour', () => {
-    expect(FLAG_DEFAULTS[TENANT_UPGRADE]).toBe(false);
-  });
-
   it('declares proof-of-concept-menu as off, hiding internal tooling by default', () => {
     expect(FLAG_DEFAULTS[PROOF_OF_CONCEPT_MENU]).toBe(false);
   });
@@ -76,11 +71,6 @@ describe('flag-keys — declared defaults', () => {
 
 describe('useFeatureFlag — GATE 1: default with the flag unset', () => {
   it('returns false when no provider has been registered', () => {
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
-    expect(result.current).toBe(false);
-  });
-
-  it('hides the Proof of Concept menu when no provider has been registered', () => {
     const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
@@ -89,7 +79,7 @@ describe('useFeatureFlag — GATE 1: default with the flag unset', () => {
     await act(async () => {
       await initFeatureFlags({ env: {}, logger: silentLogger });
     });
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
 
@@ -104,7 +94,7 @@ describe('useFeatureFlag — GATE 2: flag on via VITE_FEATURE_FLAGS', () => {
     await act(async () => {
       await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: FLAG_ON }, logger: silentLogger });
     });
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(true);
   });
 
@@ -119,7 +109,7 @@ describe('useFeatureFlag — GATE 2: flag on via VITE_FEATURE_FLAGS', () => {
    * would not catch a regression.
    */
   it('re-renders an already-mounted component when the provider becomes ready', async () => {
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
 
     await act(async () => {
@@ -137,7 +127,7 @@ describe('useFeatureFlag — GATE 2: flag on via VITE_FEATURE_FLAGS', () => {
     await act(async () => {
       await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: FLAG_ON }, logger: silentLogger });
     });
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(true);
   });
 
@@ -157,18 +147,6 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     expect(name).toBe('none');
     expect(logger.warn).toHaveBeenCalled();
 
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
-    expect(result.current).toBe(false);
-  });
-
-  it('keeps the Proof of Concept menu hidden when provider startup fails', async () => {
-    vi.spyOn(OpenFeature, 'setProviderAndWait').mockRejectedValue(new Error('control plane unreachable'));
-
-    await initFeatureFlags({
-      env: { VITE_FEATURE_FLAGS: JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true }) },
-      logger: { warn: vi.fn() },
-    });
-
     const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
@@ -182,7 +160,7 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     const name = await initFeatureFlags({ env: {}, logger: silentLogger, storage: hostileStorage });
     expect(name).toBe('in-memory');
 
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
 
@@ -193,7 +171,7 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     });
     expect(logger.warn).toHaveBeenCalled();
 
-    const { result } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(false);
   });
 
@@ -201,7 +179,7 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     await act(async () => {
       await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: FLAG_ON }, logger: silentLogger });
     });
-    const { result, unmount } = renderHook(() => useFeatureFlag(TENANT_UPGRADE));
+    const { result, unmount } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(true);
     expect(() => unmount()).not.toThrow();
   });
@@ -233,7 +211,7 @@ describe('parseFlagConfig', () => {
 describe('buildInMemoryConfiguration', () => {
   it('seeds every declared flag even when the env names none', () => {
     const config = buildInMemoryConfiguration();
-    expect(config[TENANT_UPGRADE]).toEqual({
+    expect(config[PROOF_OF_CONCEPT_MENU]).toEqual({
       variants: { on: true, off: false },
       defaultVariant: 'off',
       disabled: false,
@@ -241,14 +219,14 @@ describe('buildInMemoryConfiguration', () => {
   });
 
   it('lets an override flip the declared default', () => {
-    const config = buildInMemoryConfiguration({ [TENANT_UPGRADE]: true });
-    expect(config[TENANT_UPGRADE].defaultVariant).toBe('on');
+    const config = buildInMemoryConfiguration({ [PROOF_OF_CONCEPT_MENU]: true });
+    expect(config[PROOF_OF_CONCEPT_MENU].defaultVariant).toBe('on');
   });
 
   it('adds flags present only in the override', () => {
     const config = buildInMemoryConfiguration({ 'future-flag': true });
     expect(config['future-flag'].defaultVariant).toBe('on');
-    expect(config[TENANT_UPGRADE].defaultVariant).toBe('off');
+    expect(config[PROOF_OF_CONCEPT_MENU].defaultVariant).toBe('off');
   });
 });
 

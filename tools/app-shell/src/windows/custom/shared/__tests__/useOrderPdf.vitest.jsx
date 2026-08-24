@@ -29,6 +29,7 @@ describe('useOrderPdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 
@@ -63,6 +64,7 @@ describe('useOrderPdf', () => {
       'tok',
       expect.any(Function),
       expect.any(Object),
+      null,
     );
   });
 });

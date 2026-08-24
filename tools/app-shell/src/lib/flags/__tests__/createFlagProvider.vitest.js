@@ -26,7 +26,7 @@ import {
   initFeatureFlags,
   CONFIGCAT_PROVIDER_NAME,
 } from '../bootstrap.js';
-import { TENANT_UPGRADE } from '../flag-keys.js';
+import { PROOF_OF_CONCEPT_MENU } from '../flag-keys.js';
 import { resetExposureCache } from '../flag-exposure.js';
 
 vi.mock('@/lib/observability.js', () => ({ track: vi.fn() }));
@@ -219,7 +219,7 @@ describe('createFlagProvider — the ConfigCat branch reports a build-independen
     // The pin is scoped to the ConfigCat branch; nothing else may inherit it.
     const declaredDefaults = await createFlagProvider({ env: {}, logger: silentLogger() });
     const localOverride = await createFlagProvider({
-      env: { VITE_FEATURE_FLAGS: JSON.stringify({ [TENANT_UPGRADE]: true }) },
+      env: { VITE_FEATURE_FLAGS: JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true }) },
       logger: silentLogger(),
     });
 
@@ -231,7 +231,7 @@ describe('createFlagProvider — the ConfigCat branch reports a build-independen
 
 describe('createFlagProvider — branch 1: a local override beats the remote plane', () => {
   const bothConfigured = {
-    VITE_FEATURE_FLAGS: JSON.stringify({ [TENANT_UPGRADE]: true }),
+    VITE_FEATURE_FLAGS: JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true }),
     VITE_CONFIGCAT_SDK_KEY: PLACEHOLDER_SDK_KEY,
   };
 
@@ -258,7 +258,7 @@ describe('createFlagProvider — branch 1: a local override beats the remote pla
   it('resolves the overridden value, not the provider default', async () => {
     const provider = await createFlagProvider({ env: bothConfigured, logger: silentLogger() });
     await OpenFeature.setProviderAndWait(provider);
-    expect(OpenFeature.getClient().getBooleanValue(TENANT_UPGRADE, false)).toBe(true);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(true);
   });
 
   it('falls through to ConfigCat when the override is malformed', async () => {
@@ -331,7 +331,7 @@ describe('a ConfigCat provider that fails to initialize', () => {
     await initFeatureFlags({ env: envWithKey, logger: silentLogger() });
     // Safe default: an unreachable control plane must never reveal unfinished
     // work, so the gated feature stays hidden.
-    expect(OpenFeature.getClient().getBooleanValue(TENANT_UPGRADE, false)).toBe(false);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
   });
 
   it('never blocks startup, whatever the provider does', async () => {
@@ -388,7 +388,7 @@ describe('a healthy ConfigCat provider', () => {
       logger: silentLogger(),
     });
     // `fakeProvider` resolves every boolean to false with reason STATIC.
-    const details = OpenFeature.getClient().getBooleanDetails(TENANT_UPGRADE, true);
+    const details = OpenFeature.getClient().getBooleanDetails(PROOF_OF_CONCEPT_MENU, true);
     expect(details.value).toBe(false);
     expect(details.reason).toBe('STATIC');
   });

@@ -34,8 +34,8 @@ describe('VerifactuSection — locked/unlocked state', () => {
     assert.match(src, /isLocked/);
   });
 
-  it('disables the switches when record is locked', () => {
-    assert.match(src, /disabled=\{isLocked\}/);
+  it('does not allow form changes when record is locked (set() guard)', () => {
+    assert.match(src, /if \(isLocked\) return/);
   });
 
   it('passes locked state to save button', () => {
@@ -53,8 +53,11 @@ describe('VerifactuSection — form fields', () => {
     assert.match(src, /getVerifactuTaxTypeLabel/);
   });
 
-  it('renders the QR code toggle', () => {
-    assert.match(src, /fiscal\.verifactu\.field\.qr/);
+  it('QR code toggle hidden from UI but defaultQR preserved from DB record (ETP-4783)', () => {
+    // The QR label key must NOT appear in the JSX — the toggle is not rendered
+    assert.doesNotMatch(src, /fiscal\.verifactu\.field\.qr/);
+    // defaultQR IS read from the DB record and included in form state so that
+    // buildVerifactuUpdatePayload can forward the value as-is (no forced override)
     assert.match(src, /defaultQR/);
   });
 

@@ -58,7 +58,14 @@
       }
     ],
     "lineEntityConfig": "invoice",
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
+    },
     "linesLayout": "inlineEditable",
+    "lineTaxSifTrigger": {
+      "enabled": true,
+      "_note": "ETP-4888 point 5. NOT yet wired through generate-frontend.js (that generator lives in schema_forge_core, out of reach from this repo) — consumed directly by this window's hand-written index.jsx via a local LINE_TAX_SIF_TRIGGER_ENABLED constant, so flipping this value alone does nothing today; the index.jsx constant must be edited by hand too, in sync. See docs/decisions-reference.md's lineTaxSifTrigger row and docs/ui-customization.md §14d for the full mechanism. Follow-up: wire this through generate-frontend.js once convenient (per Alex's review)."
+    },
     "extraTabs": [
       {
         "key": "sif",
@@ -462,8 +469,7 @@
           "form": false
         },
         "aeatsiiPurDescription": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
@@ -477,6 +483,10 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiAuthorizationno": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "aeatsiiIssent": {
           "visibility": "readOnly",
           "form": false
@@ -486,21 +496,31 @@
           "form": false,
           "grid": true
         },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "etsgDateOperation": {
           "visibility": "editable",
           "form": false
         },
         "aeatsiiFechaRegCont": {
-          "visibility": "readOnly",
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
           "form": false
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiIssent": {
           "visibility": "discarded",
@@ -762,6 +782,7 @@
       }
     },
     "tax": {
+      "readOnly": true,
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
@@ -829,6 +850,7 @@
       }
     },
     "accounting": {
+      "readOnly": true,
       "name": "accounting",
       "fields": {
         "account": {
@@ -1051,6 +1073,9 @@
         }
       },
       "javaQualifier": "invoiceExchangeRateHandler"
+    },
+    "batuz": {
+      "readOnly": true
     }
   },
   "rules": {

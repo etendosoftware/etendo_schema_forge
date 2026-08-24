@@ -105,6 +105,20 @@ This window's `decisions.json` also got `"saveBeforeProcesses": true` so `Confir
 (`processOverrides.aPRMProcessPayment`) renders after `Guardar` instead of before it, and its
 `PaymentDraftBanner.jsx` got the same background/text-color and bold-text-split fix.
 
+**Toolbar order actually shipped (ETP-4895).** The `saveBeforeProcesses` key above never reached the
+UI: the published `schema_forge_core` still drops it in `resolve-curated.js`'s window-key whitelist,
+so it is absent from `contract.json` and from the generated page, and the toolbar kept rendering
+**Confirmar** to the left of **Guardar**. Rather than block on a core publish, `DetailView.jsx` now
+takes a presentational `saveActionsFirst` prop — order only, defaulting to `saveBeforeProcesses` so
+no existing window changes — and both payment windows pass it from a thin custom wrapper:
+`tools/app-shell/src/windows/custom/payment-out/index.jsx` and the new
+`tools/app-shell/src/windows/custom/payment-in/index.jsx` (registered in
+`tools/app-shell/src/windows/registry.js`; `payment-in` had no custom wrapper before). Save now
+renders to the left and **Confirmar** is the right-most button. The windows deliberately do NOT opt
+into `saveBeforeProcesses` itself — they only want the order, not the flush-pending-edits-before-
+running-the-process behavior. When the core key does land, it will imply the same order and the
+wrapper prop becomes redundant rather than conflicting.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which places a real
@@ -180,3 +194,203 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 (`artifacts/payment-in/custom/PaymentBottomPanel.jsx`, fixed identically). The existing
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
+
+## `PPM` reads as "Pago en progreso", not "Pago depositado" — ETP-4895
+
+`PPM` ("Payment Made") is Core's status for a payment that is **confirmed but not yet withdrawn**
+from its financial account, so no `FIN_Finacc_Transaction` exists for it. Core moves it on to `PWNC`
+once the withdrawal is recorded. Labelling it "Pago depositado" was therefore wrong in every case —
+the money has not left the account — and visibly wrong for a Salt Edge transfer, which sits in `PPM`
+for the whole wait between the bank authorizing it and the funds actually moving.
+
+The accounts Etendo Go pays from over PIS are configured **without Automatic Withdrawn** precisely so
+the transaction only appears on execution, which is what makes `PPM` a reliable "in progress" signal
+here rather than an edge case.
+
+Three places in this window changed:
+
+| Surface | Before | Now |
+| --- | --- | --- |
+| Header status pill | "Pago depositado" (green) | "Pago en progreso" (amber) |
+| Pagos grid, Estado column | "Pago depositado" | "Pago en progreso" |
+| Activity timeline | "Pago confirmado · depositado" | "Pago confirmado · en progreso" |
+
+The pill and the grid come from `statusEnumLabels` (`decisions.json` → contract → `HeaderPage.jsx`),
+now mapping `PPM` to `cpPaymentStateInProgress`. The amber tone comes from `getStatusTone` in
+`lib/statusBadge.js`, where `ppm` moved out of the success bucket — a green pill under the words
+"en progreso" would contradict itself.
+
+The four surfaces that show a payment (this window, the Pagos grid, the invoice payment modal and
+the invoice preview card) now share one rule, `paymentDisplayState` in
+`windows/custom/shared/paymentStatuses.js`. Each previously carried its own copy of the status list,
+which is how the same transfer read "Pago en progreso" in the invoice modal and "Pago depositado"
+here at the same time. `PaymentDetailSidebarBase`'s copy was also missing `RPAE`, so an
+"Awaiting Execution" payment showed as a draft in the timeline while every other surface showed it
+as confirmed; adopting the shared rule fixes that too.
+
+**Scope:** payments out only. `PPM` is an outbound status — a receipt confirms to `RPR`/`RDNC` — so
+Payment In keeps its previous labels and its previous `RPAE` reading, and the two direction-scoped
+guards live in `PaymentHeaderTableBase` (`isOut`) and `PaymentDetailSidebarBase` (`isIn`). The
+`RPAE`-in-the-timeline inconsistency therefore still stands on the collections side, deliberately
+left for its own task.
+
+Nothing about *processing* changed: a `PPM` payment is still processed, so it keeps its **Reactivar**
+action, is not offered for deletion, and still counts toward the sidebar's confirmed totals.
+
+## Retrying a rejected bank transfer — ETP-4895
+
+A Salt Edge transfer that reaches `authorized` creates the payment (status `PPM`, "Pago en
+progreso"). If the bank later refuses it, the payment is flagged **`ETGOERR`** and this window
+offers **"Reintentar transferencia"** in the topbar, next to where the "Conciliado" badge appears.
+
+The button (`PaymentRetryTransferButton`, reached through the `PaymentTopbarActions` topbar slot)
+renders only when the payment is `ETGOERR` **and** the backend sent a `pisPaymentId` — the rejected
+attempt to replay, injected into the single-record GET by `ReactivatePaymentHandler`. A payment
+that is merely in progress must never offer it: a second order there would pay the invoice twice.
+
+The retry reuses this payment rather than registering a second one, so it posts against the payment
+record itself (`/payment-out/header/{id}/action/retryPisPayment`) and needs no invoice context. The
+payment returns to `PPM` while the new attempt is in flight.
+
+**The retry follows its own attempt.** It used to end at `window.open`: nothing watched the new
+transfer, because the invoice modal's poll belongs to the modal, Salt Edge's webhook cannot reach a
+server that is not publicly addressable, and PSD2's `Refresh Pending Payments` is not scheduled by
+default. The attempt sat at `requested` and the payment read as "en progreso" long after the bank
+had executed it — and the PSD2 row's `description`, which is only written when the Salt Edge
+response is read back, stayed empty for the same reason. `PaymentRetryTransferButton` now polls
+`pisPaymentStatus` every 3s (10 min ceiling) for the attempt the retry returned, and on a resolutive
+status closes the bank popup, announces the record and toasts the outcome. Reaching the ceiling is
+not an error: whoever opens the payment next reconciles it. The action is routed on the payment
+entity by `ReactivatePaymentHandler` (it reads the transfer from the body and ignores the record it
+is posted to, so no invoice is involved), and the Salt Edge status lists plus the `pisOutcome`
+classifier moved to `paymentStatuses.js` so the modal and the button read a status the same way.
+Only a status recognized as resolutive stops the poll — an unknown one, or no answer at all, keeps
+waiting, so a network blip is never reported as a rejection.
+
+**A retry is logged as a retry.** `PaymentDetailSidebarBase` mapped every `neo:processSuccess` that
+was not a reactivation to a confirmation, so retrying added a second "Pago confirmado" for an event
+that confirmed nothing. `EVENT_TYPE_BY_PROCESS` now maps `retryPisPayment` to its own `retried`
+event — "Transferencia reintentada", amber dot, the same reading the in-progress confirmation gets.
+
+Opening this window also reconciles the payment against whatever Salt Edge status is already
+stored (`reconcileAttemptsFor`), which is how a rejection that arrived after the payment modal had
+closed gets noticed at all — the SPA's poll is long gone by then, and the PSD2 refresh that saw it
+does not touch Etendo Go's payment. No Salt Edge call is made on that path.
+
+A rejection only flags the payment while it still describes it (`isStaleAttempt`). Both writers that
+can set `ETGOERR` — the `PisRejectedPaymentHandler` observer and `markPaymentAsFailed` — skip a
+rejected row in three cases: a **newer attempt exists** (a retry is in flight and the rejected row is
+just its audit trail), the payment is **no longer processed** (the user reactivated it: a draft is
+not a payment whose transfer failed), or the payment **changed after the attempt last did** (it was
+reactivated and confirmed again, possibly by another method). Without these,
+`reconcileAttemptsFor` — which walks *every* attempt each time a screen opens — kept dragging the
+payment back: a retry read as failed again on the next window load, and a reactivated payment came
+back from the server still flagged, half draft (`processed = N`) and half errored. PSD2's refresh
+makes it worse by firing an update event even when the status it rewrites is unchanged. If a newer
+attempt is refused in turn, that one flags the payment.
+
+**Reactivating clears the flag first (`clearTransferErrorFlag`).** Core decides whether to give the
+invoice its outstanding back by comparing the payment's status against the one its payment method
+implies — `seqnumberpaymentstatus(payment.getStatus()) == seqnumberpaymentstatus(invoicePaymentStatus(payment))`
+in `FIN_PaymentProcess`. `ETGOERR` is not in that sequence (`aprm_seqnumberpaymentstatus` answers 70
+for anything unknown, against 40 for `PPM`), so the comparison never held and reactivating left the
+payment in draft with its invoice still reading as fully paid. `ReactivatePaymentHandler` now
+restores `FIN_Utility.invoicePaymentStatus(payment)` — the value Core is about to compare against,
+which is also correct for an account with automatic withdrawal on, where the flagged payment had
+been `PWNC` and not `PPM` — before delegating. Nothing is lost: the user is explicitly abandoning
+that transfer, and the rejected `PSD2_PIS_PAYMENT` row stays as the audit trail.
+
+**How an `ETGOERR` payment reads.** The draft banner and the activity timeline both used to
+describe it as something else: the banner announced "Borrador — sin impacto en caja" (it kept its
+own copy of the deposited-status list and reasoned by elimination, so anything not deposited was a
+draft), and the timeline showed a green "Pago confirmado · depositado" under a red "Pago con error"
+pill. The banner now gates on the shared `paymentDisplayState` rule, and the timeline has an error
+branch of its own — `pagoConfirmadoRechazado` / `cobroConfirmadoRechazado` ("Pago confirmado ·
+rechazado por el banco") with a `--destructive` dot, mirroring how the in-progress state already
+overrides that label.
+
+**Known gap:** an `ETGOERR` payment is deliberately not reactivated, so it stays applied and its
+invoice keeps reading as paid until the retry succeeds.
+
+## Reactivar y Eliminar quedan fuera mientras la transferencia está viva — ETP-4895
+
+A payment produced by a Salt Edge transfer belongs to that transfer, not to the user: reactivating or
+deleting it behind the bank's back would leave Salt Edge holding an order for a payment that no
+longer exists and — once executed — money that moved with nothing recording it. So both actions are
+withdrawn while the transfer is live.
+
+The single exception is **`ETGOERR`**: there the bank refused the transfer, no money moved and
+nothing is in flight, so the payment is the user's again to retry or discard.
+
+Payments that never went through PIS are **never** locked, so cash and manual transfers behave
+exactly as before.
+
+### How it is enforced
+
+The backend answers the question once, as a derived boolean `pisLocked`
+(`PisDeferredPaymentService.isLifecycleLockedByTransfer`), and `ReactivatePaymentHandler` emits it on
+**both** the single-record GET and every list row. Two surfaces offer these actions, and a rule
+enforced in only one of them is a rule the user can walk around.
+
+| Surface | Action | Gate |
+| --- | --- | --- |
+| Detail toolbar | Reactivar | `processOverrides.etprReactivatePayment.displayLogicRaw` → `@status@ != 'RPAP' & @pisLocked@ = 'N'` |
+| Detail toolbar | Eliminar | `isDeleteButtonVisible` — checked **ahead of** the `deleteAction` bypass |
+| Grid kebab | Reactivar | `PaymentHeaderTableBase.menuActions` returns `[]` |
+| Grid row actions | Eliminar | `isDeleteVisibleForRecord`, shared with the detail form |
+
+Two details worth keeping in mind:
+
+**The flag is read off the record, not the window config.** It is a per-record fact the backend owns,
+and no other window emits it, so the shared components are inert unless a backend opts in.
+
+**The delete check had to jump ahead of the `deleteAction` bypass.** That bypass (ETP-4479) exists
+because such a delete reactivates server-side before removing — which is exactly what must not
+happen here.
+
+**The list injection is batched.** One query resolves which payments of the page have a transfer;
+asking per row turned a grid page into fifty round trips.
+
+## Confirmar abre el editor del pago, no un diálogo
+
+A draft payment — typically one that was just reactivated — used to offer a yes/no dialog: *"El pago
+pasará a estado confirmado y depositado"*. That was the only thing this window could offer, because
+it has no form of its own: `hideFormCard` is on and all 31 header fields are `form: false`, so
+"Datos del pago" is read-only text and Guardar is permanently disabled. A user who reactivated a
+payment to fix its amount could only re-confirm it unchanged.
+
+Confirmar now opens the **invoice's own payment editor** (`NewPaymentEntryModal`), with the draft's
+amount, date, method, account and PIS block loaded — the same modal the invoice opens, so the user
+can correct the payment and then either **Guardar** (stays a draft) or **Confirmar**. Both surfaces
+that offer the action do it: the detail toolbar and the grid's kebab.
+
+### How it is wired
+
+`PaymentEditModalLauncher` sits in the window's `processConfirmModal` slot, routed by
+`ReactivarConfirmModal` on `columnName === 'aPRMProcessPayment'`. That slot only renders a
+component — nothing forces it to call `onConfirm` — so a window can replace a process button's
+behaviour outright without touching `generate-frontend.js` in `schema_forge_core`. The slot gained
+two props for this (`apiBaseUrl`, `onRefresh`): a modal that acts on its own never goes through
+`handleProcess`, so nothing else would reload the record.
+
+Everything the editor needs comes from endpoints that already exist:
+
+| Step | Source |
+| --- | --- |
+| which invoice | `invoiceId`, injected on the payment record by `ReactivatePaymentHandler` |
+| currency, document number, outstanding | `GET /purchase-invoice/header/{invoiceId}` |
+| the payment, in the editor's own shape | `POST /purchase-invoice/header/{invoiceId}/action/invoicePayments` |
+
+That last one matters: `invoicePayments` is the **only** endpoint that returns `creditSourcesUsed`,
+so rebuilding the object by hand would silently drop the credits the draft consumed.
+
+`PaymentRegistrationService.invoiceIdsByPayment` resolves the whole page in one query and counts
+**only positive applications**. A payment that spends a credit carries a negative application
+against the credit note's own installment; that is the credit being spent, not a second invoice, and
+the editor already models it as a source.
+
+### Fallback
+
+When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
+a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
+the editor never opens on a record it could not save correctly.
