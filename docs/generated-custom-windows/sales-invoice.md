@@ -84,6 +84,8 @@ Each invoice line carries an `etgoDiscount` field (stored as `EM_Etgo_Discount` 
 
 In the generated PDF (`useInvoicePdf.js`), each line row reads `l.etgoDiscount` for the DESC.% column and `l.listPrice ?? l.unitPrice` for the P. UNITARIO column — `listPrice` is preferred so the column always shows the gross price before any discount is applied, falling back to `unitPrice` only when `listPrice` is absent. The TOTAL column uses `l.grossAmount ?? l.lineNetAmount`, where `grossAmount` is the server-computed amount including tax.
 
+**CÓD. column (ETP-4941).** The leftmost lines-table column in the PDF shows the product's SKU (search key), via the shared `resolveProductCode(line)` helper in `tools/app-shell/src/windows/custom/shared/documentPdf.js` (`line.productCode || line['product$_value'] || '—'`). Before this fix the column fell back to the line's 1-based position (`String(idx + 1)`) whenever the product had no SKU, so a product without a search key printed a plain line number instead — indistinguishable from a real code. The helper now falls back to an em-dash (`—`) instead, so a missing SKU is visibly a missing SKU. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/useInvoicePdf.test.js` and the shared-helper coverage in `documentPdfHelpers.vitest.jsx`.
+
 ### Total discount (`etgoTotalDiscount`)
 
 The header field `etgoTotalDiscount` (stored as `EM_Etgo_Total_Discount` on `C_Invoice`) holds a document-level discount percentage applied on top of line subtotals. In the UI this is managed by the interactive section in `DocumentTotalsPanel` (see the `Reactive behavior and dependencies` section above).

@@ -1120,3 +1120,40 @@ scoped the way the create-POST listener now is in
 **Context:** surfaced while closing the `ensureVendorSetup` regression. Pre-existing — it is not
 caused by the vendor-fixture or derived-field changes, both of which were verified green in the same
 run (2 passed, 1 flaky, 0 failed).
+
+---
+
+## Latent CÓD. column bug still present in 3 shipment/return PDFs (2026-08-21, ETP-4941)
+
+**Status:** open, deferred. Out of scope for ETP-4941 — flagged for a follow-up ticket.
+
+**Component:** `useShipmentPdf.js` (goods-shipment), `useReturnToVendorPdf.js`
+(return-to-vendor-shipment), `useReturnReceiptPdf.js` (return-material-receipt).
+
+**Symptom:** ETP-4941 fixed the printable PDF's "CÓD." (product code) column for Sales Quotation,
+Sales Order, Sales Invoice, and Purchase Order, which were showing the line's 1-based position number
+instead of the product's SKU whenever the product had no search key. The same bug — same root
+cause, same fallback expression shape — is still present, unchanged, in these three other document
+PDFs, each of which builds its line's `productCode` independently instead of going through the
+shared helper:
+
+```js
+productCode: l.productCode || l['product$_value'] || String(idx + 1),
+```
+
+**Root cause:** each of these three hooks predates the shared `resolveProductCode(line)` helper added
+in `tools/app-shell/src/windows/custom/shared/documentPdf.js` by ETP-4941, and none of them were
+migrated to it — they still inline the old no-SKU fallback (`String(idx + 1)`), so a product with no
+SKU on a goods shipment, return-to-vendor shipment, or return-material-receipt still prints the
+line's position number where the SKU should be, indistinguishable from a real code.
+
+**Fix:** not applied here — deliberately out of scope for ETP-4941 (different tickets, different
+windows). The correct fix is the same pattern already shipped: replace the inline expression above
+with `resolveProductCode(l)` imported from `documentPdf.js` in each of the three files, so the
+fallback becomes `'—'` instead of the line position, matching the four documents already fixed.
+
+**Lesson:** when a shared helper is extracted to fix a bug (`resolveProductCode`), grep for the
+literal buggy pattern being replaced (`String(idx + 1)` fallback for a product-code column) across
+the whole `windows/custom/**` tree before closing the ticket — sibling files with the identical
+bug, one call short of using the new helper, are easy to miss when the fix only touches the windows
+named in the ticket's acceptance criteria.
