@@ -53,7 +53,11 @@ vi.mock('../PdfViewer.jsx', () => ({
 }));
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({
-  default: () => <div data-testid="new-payment-entry-modal" />,
+  default: ({ onSaved }) => (
+    <div data-testid="new-payment-entry-modal">
+      <button type="button" onClick={onSaved}>save payment</button>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
@@ -70,6 +74,11 @@ vi.mock('../SifSendingModal.jsx', () => ({
   default: () => <div data-testid="sif-modal" />,
 }));
 
+// ETP-4315 follow-up (2026-08-18) — useInvoicePreview.js (mocked wholesale here)
+// is where pdfCacheConfig is actually computed and passed to useInvoicePdf, not
+// this component. That wiring is covered by the dedicated useInvoicePreview.vitest.jsx
+// hook test, since mocking useInvoicePreview here would make any such assertion
+// in this file exercise the mock, not the real cacheConfig logic.
 vi.mock('../useInvoicePreview.js', () => ({
   useInvoicePreview: vi.fn(),
 }));
@@ -121,8 +130,9 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getLatestInstallmentDueDate: () => null,
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import InvoicePreview from '../InvoicePreview.jsx';
+import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
@@ -501,6 +511,96 @@ describe('InvoicePreview', () => {
       renderHidden: () => renderSalesInvoiceWithPdf('DR'),
       renderShown: () => renderSalesInvoiceWithPdf('CO'),
       findElement: () => screen.getByTestId('Download__cf88e6').closest('button'),
+    });
+  });
+
+  // ── ETP-4315: attachmentConfig wiring (real Attachment, C_Invoice table) ──
+  describe('attachmentConfig wiring (ETP-4315 — real Attachment, tableName C_Invoice)', () => {
+    function lastAttachmentConfig() {
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    describe('sales-invoice branch (draft-gated)', () => {
+      it('sets storeCondition: false and sourceBlob: null when documentStatus is DR (draft)', () => {
+        const invoice = { ...defaultInvoice, documentStatus: 'DR' };
+        useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+          displayInvoice: invoice, isSalesInvoice: true, isDraft: true,
+        }));
+        renderInvoicePreview({ specName: 'sales-invoice', invoice });
+        const cfg = lastAttachmentConfig();
+        expect(cfg.tableName).toBe('C_Invoice');
+        expect(cfg.documentId).toBe(invoice.id);
+        expect(cfg.storeCondition).toBe(false);
+        expect(cfg.sourceBlob).toBeNull();
+      });
+
+      it('sets storeCondition: true and sourceBlob=pdfBlob when documentStatus is CO (non-draft)', () => {
+        const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+        const invoice = { ...defaultInvoice, documentStatus: 'CO' };
+        useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+          displayInvoice: invoice, isSalesInvoice: true, isDraft: false, pdfBlob,
+        }));
+        renderInvoicePreview({ specName: 'sales-invoice', invoice });
+        const cfg = lastAttachmentConfig();
+        expect(cfg.storeCondition).toBe(true);
+        expect(cfg.sourceBlob).toBe(pdfBlob);
+        expect(cfg.autoFetch).toBe(true);
+      });
+    });
+
+    describe('purchase-invoice branch (unconditional)', () => {
+      it('sets storeCondition: true and autoFetch: false regardless of documentStatus', () => {
+        useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+          displayInvoice: defaultInvoice, isSalesInvoice: false,
+        }));
+        renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+        const cfg = lastAttachmentConfig();
+        expect(cfg.tableName).toBe('C_Invoice');
+        expect(cfg.documentId).toBe(defaultInvoice.id);
+        expect(cfg.storeCondition).toBe(true);
+        expect(cfg.autoFetch).toBe(false);
+      });
+
+      it('stays storeCondition: true even for a draft purchase-invoice (unconditional branch)', () => {
+        const invoice = { ...defaultInvoice, documentStatus: 'DR' };
+        useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+          displayInvoice: invoice, isSalesInvoice: false, isDraft: true,
+        }));
+        renderInvoicePreview({ specName: 'purchase-invoice', invoice });
+        const cfg = lastAttachmentConfig();
+        expect(cfg.storeCondition).toBe(true);
+        expect(cfg.autoFetch).toBe(false);
+      });
+    });
+  });
+
+  // ── ETP-4832: grid does not refresh after confirming a payment/collection ──
+  // from the side panel. `NewPaymentEntryModal`'s onSaved handler only called
+  // fetchPayments() (which is why the panel's own PaymentsCard correctly shows
+  // Pagada/Cobrada), but never refetchInvoice() — the only function that
+  // dispatches the `${specName}:invoice-updated` event / calls onInvoiceUpdated,
+  // which is what tells the hosting list view to refresh the grid row. Mirrors
+  // the already-correct SifSendingModal.onAfterSend pattern in this same file.
+  describe('payment modal onSaved refetches the invoice (ETP-4832)', () => {
+    it('calls refetchInvoice (not just fetchPayments) when a payment/collection is saved', async () => {
+      const refetchInvoice = vi.fn().mockResolvedValue(undefined);
+      const fetchPayments = vi.fn();
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        showPaymentModal: true,
+        canAddPayment: true,
+        refetchInvoice,
+        fetchPayments,
+      }));
+
+      renderInvoicePreview();
+      await act(async () => {
+        fireEvent.click(screen.getByText('save payment'));
+      });
+
+      expect(refetchInvoice).toHaveBeenCalled();
+      expect(fetchPayments).toHaveBeenCalled();
     });
   });
 

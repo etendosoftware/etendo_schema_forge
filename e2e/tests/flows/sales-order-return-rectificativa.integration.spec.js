@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -383,7 +384,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       ]);
 
       if (outcome === 'period-error') {
-        await page.screenshot({
+        await captureScreenshot(page, {
           path: 'e2e/test-results/rectificativa-period-error.png',
           fullPage: true,
         }).catch(() => {});

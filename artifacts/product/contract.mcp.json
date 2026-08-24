@@ -2,7 +2,7 @@
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
   "updatedAt": "2026-07-31T19:26:59.908Z",
-  "contractChecksum": "c5aa960de3723932",
+  "contractChecksum": "4ea2c3b3435699fa",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -71,13 +71,17 @@
       "costing": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/costing",
         "detailUrl": "/sws/neo/product/costing/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "transactionAdjustments": {
         "get": true,
@@ -93,13 +97,17 @@
       "transactions": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/transactions",
         "detailUrl": "/sws/neo/product/transactions/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "productCharacteristic": {
         "get": true,
@@ -115,13 +123,17 @@
       "stock": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/stock",
         "detailUrl": "/sws/neo/product/stock/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "categoryPriceRuleVersion": {
         "get": true,
@@ -1074,5 +1086,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ef6d3b34680e4841"
+  "checksum": "376161ffad8a1699"
 }

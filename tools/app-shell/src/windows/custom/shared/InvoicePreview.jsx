@@ -36,10 +36,10 @@ function isCreditNote(invoice) {
  * File persistence (drop zone + PDF caching) is delegated to GenericPreviewModal
  * via attachmentConfig. The left panel is:
  *   - sales invoice, draft:     PDF viewer (regenerated on every open)
- *   - sales invoice, completed: managed by GenericPreviewModal (cached via ETGO_PREVIEW_FILE)
+ *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
   const ui = useUI();
   return (
     <>
@@ -70,6 +70,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!canAddPayment}
         onClick={canAddPayment ? onAddPayment : undefined}
+        title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
         data-testid="Button__cf88e6">
         <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
         {ui('invoicePreviewAddPayment')}
@@ -101,7 +102,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -168,6 +169,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         currencyCode={currencyCode}
         totalOutstanding={totalOutstanding}
         canAddPayment={canAddPayment}
+        addPaymentBlockedByDraft={addPaymentBlockedByDraft}
         isFullyPaid={isFullyPaid}
         isCreditNote={isNC}
         loading={loadingPayments}
@@ -244,9 +246,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // matching the Grid row quick-action and Form-view topbar gates. The
   // existing purchase-invoice exclusion stays: this window never sends email.
   const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  // ETP-4315 — real, marked Attachment (C_Invoice, shared with purchase-invoice
+  // below). Draft gate unchanged.
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
     storeCondition: !isDraft,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
@@ -254,16 +258,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
   } : {
+    // ETP-4315 — real, marked Attachment shared with OcrSidePanel/"Adjuntos".
+    // C_Invoice is the physical table for both sales and purchase invoices;
+    // this branch only runs for purchase. A purchase invoice has no generated
+    // report, so its document slot holds the supplier's own document (the OCR
+    // source) — unlike the sales branch above, which caches something we
+    // generated ourselves and nobody attached.
     documentId: invoice.id,
-    specName,
+    tableName: 'C_Invoice',
     storeCondition: true,
     autoFetch: false,
-    // ETP-4855 — a purchase invoice has no generated report, so its document slot
-    // holds the supplier's own document (the OCR source). Declaring the table
-    // mirrors that file into the record's attachments as well, so it shows up in
-    // the Attachments tab. The sales branch above deliberately omits it: that PDF
-    // is a cache of something we generated and nobody attached it.
-    tableName: 'C_Invoice',
     token,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
@@ -301,6 +305,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           loadingPayments={p.loadingPayments}
           totalOutstanding={p.totalOutstanding}
           canAddPayment={p.canAddPayment}
+          addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
           isCreditNote={isCreditNote(p.displayInvoice)}
@@ -331,6 +336,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       canSendToSif={p.canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={p.canAddPayment}
+      addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
@@ -357,10 +363,18 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           specName={specName}
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
-          outstanding={p.totalOutstanding}
+          outstanding={p.freeToAllocate}
           apiBaseUrl={apiBaseUrl}
           onClose={() => p.setShowPaymentModal(false)}
-          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          onSaved={async () => {
+            p.setShowPaymentModal(false);
+            // ETP-4832: refetchInvoice is what dispatches the invoice-updated event /
+            // calls onInvoiceUpdated, which is what tells the hosting list view to
+            // refresh the grid row — fetchPayments alone only updates this panel's
+            // own PaymentsCard, mirrors the working SifSendingModal.onAfterSend pattern below.
+            await p.refetchInvoice();
+            p.fetchPayments();
+          }}
           data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (

@@ -26,6 +26,20 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 | `make test-e2e-record` | Open recorder — you click, it generates code |
 | `make test-e2e-onboarding-integration` | Run the live onboarding integration spec only (requires a live backend, see below) |
 
+### Screenshot capture
+
+Playwright runs do not write functional screenshots by default. This keeps normal
+test runs from modifying delivery evidence or producing PNG artifacts. To capture
+screenshots explicitly, opt in for that invocation:
+
+```bash
+E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
+```
+
+`E2E_CAPTURE_SCREENSHOTS` accepts `1`, `true`, or `yes`. When enabled, both the
+explicit evidence screenshots and Playwright's automatic failure screenshots are
+available. The default is disabled; `0` and any other value also leave capture off.
+
 ---
 
 ## Etendo GO Contextual Selector Smoke
@@ -67,9 +81,38 @@ See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own uni
 
 ---
 
+## NEO Backend Contract Smokes (ETP-4793)
+
+Three API-level specs validate NEO Headless backend contracts directly against the `request`
+fixture (no browser UI) — `neo-batch-atomicity.integration.spec.js` (IMP-23: a persist-time
+failure inside `/sws/neo/batch` must leave every earlier op durably rolled back, checked by
+re-fetching the DB, not just reading the response), `neo-readonly-field-rejection.integration.spec.js`
+(IMP-28 clause 2: creating with a value for a field that is read-only, has no AD default, and
+whose entity has no `Java_Qualifier` must answer a structured 422, not a silent 200), and
+`neo-defaults-canonical-format.integration.spec.js` (IMP-16: every date default is ISO
+`yyyy-MM-dd`, never `dd-MM-yyyy`, and every boolean default is a real JSON boolean, never
+`"Y"`/`"N"`). All three write real records (tagged `E2E-ETP4793` in a free-text field) and
+delete them in an `afterAll`/at the end of the test.
+
+They are skipped by default because they need a live Etendo GO backend with a loaded F&B
+dataset. Run them explicitly:
+
+```bash
+cd e2e
+E2E_NEO_ETP4793_CONTRACTS=1 ETENDO_URL=http://localhost:8080/etendo npx playwright test \
+  tests/flows/neo-batch-atomicity.integration.spec.js \
+  tests/flows/neo-readonly-field-rejection.integration.spec.js \
+  tests/flows/neo-defaults-canonical-format.integration.spec.js
+```
+
+Like the contextual-selector smoke above, they get a bearer JWT through
+`scripts/neo-token-groupadmin.sh` unless `E2E_ETENDOGO_JWT` is already set.
+
+---
+
 ## Onboarding Register Integration Smoke
 
-`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
+`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). The successful registration test is repeatable: `e2e/onboarding-accounts.json` contains a JSON count (`2` by default), and the test runs that same happy path sequentially for each account, writing `.auth-credentials-1.json`, `.auth-credentials-2.json`, and so on for downstream cross-tenant E2E setup. Set `E2E_ONBOARDING_ACCOUNT_COUNT` or `E2E_ONBOARDING_ACCOUNTS_FILE` to override it. It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
 
 Run it explicitly:
 

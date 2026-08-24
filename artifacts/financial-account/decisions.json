@@ -31,14 +31,14 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 4
+          "gridOrder": 5
         }
       ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
         "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
-        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
         "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
         "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
@@ -54,7 +54,7 @@
         "default": { "visibility": "readOnly", "grid": false },
         "genericAccountNo": { "visibility": "discarded" },
         "iNENo": { "visibility": "discarded" },
-        "country": { "visibility": "system" },
+        "country": { "visibility": "editable", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColCountry", "cellType": "accountCountry", "required": true, "displayLogic": null, "reason": "ETP-4896 — country was backend-only (derived from the IBAN and overwritten on every write), leaving cash/card/IBAN-less bank accounts with no country and no way for the user to set one. Now user-editable and always required — pre-filled with the organization's country, never locked (no readOnlyLogic). displayLogic explicitly nulled: the raw AD field carries '@Type@='B'' (IBAN's own display logic), which would otherwise hide Country outside Bank accounts. Grid column added right after Type (gridOrder 3, ETP-4896 follow-up) — Balance/Pending bumped to 4/5." },
         "bankFormat": { "visibility": "discarded" },
         "typewriteoff": { "visibility": "discarded" },
         "writeofflimit": { "visibility": "editable" },
@@ -236,6 +236,7 @@
       }
     },
     "clearedItems": {
+      "readOnly": true,
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "accountingDate": {

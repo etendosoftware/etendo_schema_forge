@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -15,6 +15,28 @@ import { resolve } from 'node:path';
 
 const RUN_INTEGRATION = process.env.E2E_ONBOARDING_INTEGRATION === '1';
 const SLOW_MS = Number(process.env.E2E_SLOW_MS || 0);
+
+function loadOnboardingAccountCount() {
+  const configuredPath = process.env.E2E_ONBOARDING_ACCOUNTS_FILE
+    || resolve(import.meta.dirname, '../../onboarding-accounts.json');
+  let configuredValue = 1;
+
+  try {
+    configuredValue = JSON.parse(readFileSync(configuredPath, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  const count = Number(process.env.E2E_ONBOARDING_ACCOUNT_COUNT
+    || (typeof configuredValue === 'number' ? configuredValue : configuredValue?.count)
+    || 1);
+  if (!Number.isInteger(count) || count < 1 || count > 10) {
+    throw new Error(`E2E onboarding account count must be an integer between 1 and 10, got: ${count}`);
+  }
+  return count;
+}
+
+const ONBOARDING_ACCOUNT_COUNT = loadOnboardingAccountCount();
 
 function uniqueSuffix() {
   return randomBytes(4).toString('hex');
@@ -40,9 +62,10 @@ test.describe('Onboarding — Register new user (integration)', () => {
     'Set E2E_ONBOARDING_INTEGRATION=1 to run this live onboarding integration test.',
   );
 
-  test('registers a new user, selects Autónomo, and verifies greeting', async ({ page }) => {
+  test('registers new users from the configured account count', async ({ page, context }) => {
+    for (let accountNumber = 1; accountNumber <= ONBOARDING_ACCOUNT_COUNT; accountNumber += 1) {
     const suffix = uniqueSuffix();
-    const userName = `E2E User ${suffix}`;
+    const userName = `E2E User ${accountNumber} ${suffix}`;
     const userEmail = `e2e-${suffix}@test-onboarding.com`;
     const userPassword = `E2e-${suffix}-Pass!99`;
 
@@ -163,9 +186,28 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/dashboard/);
 
-    // Save credentials so downstream integration tests (e.g. contacts) can reuse this user
-    const credentialsPath = resolve(import.meta.dirname, '../../.auth-credentials.json');
-    writeFileSync(credentialsPath, JSON.stringify({ email: userEmail, password: userPassword }, null, 2));
+    // Keep the first account in the legacy location for downstream integration tests.
+    // Numbered files make every generated admin available to cross-client E2E setup.
+    const credentials = { email: userEmail, password: userPassword };
+    const credentialsDir = resolve(import.meta.dirname, '../..');
+    writeFileSync(
+      resolve(credentialsDir, `.auth-credentials-${accountNumber}.json`),
+      JSON.stringify(credentials, null, 2),
+    );
+    if (accountNumber === 1) {
+      writeFileSync(
+        resolve(credentialsDir, '.auth-credentials.json'),
+        JSON.stringify(credentials, null, 2),
+      );
+    }
+
+    if (accountNumber < ONBOARDING_ACCOUNT_COUNT) {
+      // Each iteration must start as an anonymous visitor so the same
+      // onboarding flow provisions an independent account and tenant.
+      await context.clearCookies();
+      await page.evaluate(() => localStorage.clear());
+    }
+    }
   });
 
   // ═════════════════════════════════════════════════════════════════════════

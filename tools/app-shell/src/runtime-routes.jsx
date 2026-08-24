@@ -27,6 +27,7 @@ const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx')
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
 const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
+const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
 
@@ -47,6 +48,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { index: true, public: false, element: <Navigate to="/dashboard" replace data-testid="Navigate__e8c60d" /> },
     { path: 'onboarding', public: true, element: (
         <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
+      ) },
+    { path: 'invite', public: true, element: (
+        <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><InviteAcceptancePage data-testid="InviteAcceptancePage__e8c60d" /></Suspense>
       ) },
     { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
     { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },

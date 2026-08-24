@@ -1,8 +1,8 @@
 {
   "version": "0.28.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-14T04:23:52.377Z",
-  "checksum": "92833d67e61cd70a",
+  "updatedAt": "2026-08-19T19:35:51.607Z",
+  "checksum": "06325b4a1816a96e",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -206,7 +206,7 @@
             "defaultValue": "0",
             "cellType": "accountBalance",
             "gridLabelKey": "financeAccountsColBalance",
-            "gridOrder": 3,
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 12
@@ -265,6 +265,27 @@
             "displayLogic": {
               "raw": "@Type@='B'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "country",
+            "apiKey": "country",
+            "column": "C_Country_ID",
+            "label": "Country",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Country",
+            "inputMode": "selector",
+            "cellType": "accountCountry",
+            "gridLabelKey": "financeAccountsColCountry",
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -822,7 +843,7 @@
             "grid": true,
             "form": false,
             "section": "other",
-            "gridOrder": 4
+            "gridOrder": 5
           }
         ],
         "searchableFields": [],
@@ -3383,8 +3404,8 @@
             "apiKey": "country",
             "column": "C_Country_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": false
+            "visibility": "editable",
+            "required": true
           },
           {
             "name": "bankFormat",
@@ -4027,14 +4048,6 @@
             "required": true
           },
           {
-            "name": "eTGOFinaccTransDest",
-            "apiKey": "eTGOFinaccTransDest",
-            "column": "EM_ETGO_Finacc_Trans_Dest",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4089,6 +4102,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOFinaccTransDest",
+            "apiKey": "eTGOFinaccTransDest",
+            "column": "EM_ETGO_Finacc_Trans_Dest",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "document-posting"
@@ -5577,13 +5598,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -5602,6 +5627,14 @@
         "reference": "Glitem",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
+      },
+      {
+        "entity": "account",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/country"
       },
       {
         "entity": "account",
@@ -7529,6 +7562,14 @@
         "description": "Field 'branchCode' should be present in account"
       },
       {
+        "id": "t-field-presence-account-country",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Field 'country' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-currency",
         "category": "field-presence",
         "entity": "account",
@@ -8335,6 +8376,14 @@
         "field": "branchCode",
         "runner": "node",
         "description": "Field 'branchCode' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-country",
+        "category": "field-type",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Field 'country' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-currency",
@@ -11159,6 +11208,14 @@
         "description": "Selector endpoint for 'aprmGlitemDiff' in account should exist"
       },
       {
+        "id": "t-selector-endpoint-account-country",
+        "category": "selector-endpoint",
+        "entity": "account",
+        "field": "country",
+        "runner": "node",
+        "description": "Selector endpoint for 'country' in account should exist"
+      },
+      {
         "id": "t-selector-endpoint-account-currency",
         "category": "selector-endpoint",
         "entity": "account",
@@ -11413,14 +11470,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for account"
-      },
-      {
-        "id": "t-system-field-account-country",
-        "category": "system-field",
-        "entity": "account",
-        "field": "country",
-        "runner": "node",
-        "description": "System field 'country' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-createdBy",
@@ -12625,24 +12674,24 @@
       }
     ],
     "summary": {
-      "total": 851,
+      "total": 853,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
         "displaylogic-evaluable": 52,
         "displaylogic-valid": 52,
-        "field-presence": 101,
-        "field-type": 101,
+        "field-presence": 102,
+        "field-type": 102,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
-        "selector-endpoint": 27,
-        "system-field": 151,
+        "selector-endpoint": 28,
+        "system-field": 150,
         "visibility": 7
       },
       "byRunner": {
-        "node": 851,
+        "node": 853,
         "junit": 0
       }
     }

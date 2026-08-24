@@ -209,26 +209,30 @@ export default function AttachmentsTable({
               <TableCell className={dataCell} data-testid="TableCell__e868a0">{uploadedByName || ui('attachmentsUnknownUser')}</TableCell>
               <TableCell className="px-3 py-0" data-testid="TableCell__e868a0">
                 <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    data-testid={`attachment-download-${item.id}`}
-                    onClick={() => onDownload?.(item)}
-                    className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
-                    aria-label={ui('attachmentsDownload')}
-                    title={ui('attachmentsDownload')}
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__e868a0" />
-                  </button>
-                  <button
-                    type="button"
-                    data-testid={`attachment-delete-${item.id}`}
-                    onClick={() => onDelete?.(item)}
-                    className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
-                    aria-label={ui('delete')}
-                    title={ui('delete')}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" data-testid="Trash2__e868a0" />
-                  </button>
+                  {onDownload && (
+                    <button
+                      type="button"
+                      data-testid={`attachment-download-${item.id}`}
+                      onClick={() => onDownload(item)}
+                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
+                      aria-label={ui('attachmentsDownload')}
+                      title={ui('attachmentsDownload')}
+                    >
+                      <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__e868a0" />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      data-testid={`attachment-delete-${item.id}`}
+                      onClick={() => onDelete(item)}
+                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
+                      aria-label={ui('delete')}
+                      title={ui('delete')}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" data-testid="Trash2__e868a0" />
+                    </button>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

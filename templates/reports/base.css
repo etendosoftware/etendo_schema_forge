@@ -27,7 +27,7 @@ body {
 }
 
 .report-container {
-  padding: 20mm 15mm;
+  padding: 40px;
 }
 
 /* Header */
@@ -100,11 +100,28 @@ body {
   background: var(--color-bg-stripe);
 }
 
+/* tfoot cells had no padding rule of their own, so they fell back to the
+   browser's default td padding (~1px) instead of tbody's 1.5mm/3mm — the
+   footer's numbers sat closer to the cell edge than the data rows above,
+   reading as "not aligned" even though it's the same table/columns. */
+.report-table tfoot td {
+  padding: 1.5mm 3mm;
+  vertical-align: top;
+}
+
 /* Type-specific cell styles */
 .cell-number, .cell-amount {
   text-align: right;
   font-family: var(--font-mono);
   font-size: 8.5pt;
+}
+
+/* Numeric column headers right-align to match their cells below (same idea as
+   DataTable.jsx's NUMERIC_FIELD_TYPES check applying text-right to both header
+   and cell) — scoped to thead so it doesn't inherit the body cell's mono font/size. */
+.report-table thead th.cell-amount,
+.report-table thead th.cell-number {
+  text-align: right;
 }
 
 .cell-boolean {
