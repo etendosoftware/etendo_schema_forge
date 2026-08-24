@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
+// From the `sessionCredentials` leaf, not the `./auth` barrel — the barrel
+// re-exports AuthContext.jsx and drags JSX into every graph that reaches it.
+import { CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 import AppLayout from './layout/AppLayout.jsx';
@@ -290,6 +293,16 @@ export default function App() {
           loginPath: '/login',
           unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />,
           fetchWindowAccess,
+          // ETP-4576 — the session IS the `__Host-` cookie, so the scheme has to say
+          // so. This was left at the `bearer` default while `restoreSession` was
+          // already wired for cookies, and that combination is not a safe fallback,
+          // it is a false declaration: `mapRestoredSession` drops the token on
+          // purpose, so under `bearer` writeHeaders() has no bearer to send AND
+          // skips `X-Go-CSRF` (it only adds the proof under `cookie`). Reads still
+          // worked — the browser attaches the cookie — so every unsafe request went
+          // out with no credential at all and came back 403 "CSRF validation
+          // failed", which is what took down 19 integration specs.
+          credentialMode: CREDENTIAL_MODES.cookie,
           restoreSession,
           // ETP-4576 — with `restoreSession` wired, boot is asynchronous: AuthGate
           // renders this while `status === 'booting'`. Without it the prop defaults
