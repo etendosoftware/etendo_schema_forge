@@ -350,9 +350,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Checkbox in the Financial tab → **Default fiscal values** section, `FiscalDefaultsSection.jsx`, visible only when the Customer flag is enabled |
-| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same section, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Checkbox in the same **Default fiscal values** section, `FiscalDefaultsSection.jsx` |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` (visibility superseded in part 3 below — gated on active SII config, not on the Customer flag) |
+| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` (visibility superseded in part 3 below — gated on active TicketBAI config) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. Deliberately
@@ -425,3 +425,63 @@ task on top of the already-working part 2 wiring. Verified with `make regen ONLY
 `tbaiIssimplifiedinv`, `BusinessPartnerPage.jsx`'s `requiredHeaderFields` array dropped it,
 and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 `FiscalDefaultsSection.vitest.jsx`, `ContactsFinancialPanel.vitest.jsx`) pass.
+
+## ETP-4784 (part 3, UX follow-up) — Split into conditional SII / TicketBAI blocks + toggle switch
+
+Human feedback on part 2's single "SIF Defaults" section: it always showed all 3 fields
+regardless of whether the contact's organization actually has SII or TicketBAI configured,
+and the two checkboxes used the square `SquareCheckbox` control instead of the app's
+canonical pill switch. Two changes:
+
+**1. Two independently-gated sub-blocks, whole section hidden when neither applies.**
+`FiscalDefaultsSection.jsx` no longer gates on `data.customer` — the `aeatsiiDefaultsiikey`
+gate on the Customer flag from part 2 is dropped in favor of a real fiscal-configuration
+check. The section is now split into:
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — rendered only when the
+  contact's organization has an **active** `sii-config/siiConfiguration` record with
+  `acogidaAlSII` truthy.
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — rendered only when the organization has
+  an **active** `tbai-config/header` record. TicketBAI has no "enabled" boolean of its own;
+  the mere existence of an active config record for that org IS the signal, same convention
+  already used by `useFiscalConfig.js`/`useFiscalMonitor.js`.
+
+If neither system is configured for the organization, the entire "SIF Defaults" section
+(title, description, both blocks) renders nothing — `FiscalDefaultsSection` returns `null`.
+
+**New detection hook — `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js`
+→ `useSiiTbaiActive(organizationId, apiBaseUrl)`.** Fetches both config entities in parallel
+via `useApiFetch`, filters to the active row with `isActiveRecord()` (reused from
+`fiscal-config/fiscalConfig.utils.js` — same "Change SIF" trace-row problem as the Monitor
+Fiscal window), and resolves `{ loading, sii, tbai }`. **Fail-safe by design:** any fetch
+error, rejected promise, or non-ok response (404 = module not installed for that org) resolves
+to `sii: false, tbai: false` — the block is hidden rather than risk showing stale or incorrect
+defaults. This mirrors the same non-fatal try/catch degradation pattern `useFiscalMonitor.js`
+already uses for its own config fetches. `organizationId` is resolved off
+`data.organization` (the Business Partner's `AD_Org_ID`, exposed as the `organization` field
+on the `businessPartner` entity) via the module's `resolveOrganizationId()` helper, which
+accepts a raw id, a `{id}`/`{value}` FK object, or `null`.
+
+**2. Canonical `PillToggle` switch instead of `SquareCheckbox`/`EntityForm` checkbox.**
+`aeatsiiDefaultsiikey` and `tbaiIssimplifiedinv` are pulled out of the `EntityForm`-driven
+`fields` array entirely and rendered by hand through a local `FiscalToggle` wrapper —
+the same label-above/switch-below pattern as `BlockingToggle` in
+`BillingPreferencesForm.jsx` (customer/vendor "Bloquear" toggles). Each toggle's
+`onCheckedChange` calls `onChange(key, next, adColumnName)` directly (e.g.
+`onChange('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')`), the same 3-argument
+`onChange` contract `BlockingToggle` already uses for `customerBlocking`/`vendorBlocking`.
+`aeatsiiSiikeylist` is a `select`, not a checkbox, so it is unaffected — it stays wired
+through `EntityForm` exactly as before, still hidden-not-cleared behind
+`aeatsiiDefaultsiikey` via the same `displayLogic`. Both toggle labels are resolved via
+`useLabel()`/`t(column)` against the AD dictionary, unchanged from part 2.
+
+**New i18n keys (`genericLabels`, both `en_US.json`/`es_ES.json`):** `fiscalDefaultsSiiBlock`
+("SII" / "SII") and `fiscalDefaultsTbaiBlock` ("TicketBAI" / "TicketBAI") — the two sub-block
+titles.
+
+No `decisions.json` or generator change was needed — this is a pure custom-component UX
+change on top of the already-working part 2/3 wiring; the underlying fields, their
+`visibility`/`form` flags, and the pipeline chain are untouched. Verified with
+`npx vitest run src/windows/custom/contacts` (all Contacts suites, including the new
+`fiscalDefaults.utils.vitest.js` covering `useSiiTbaiActive`'s active/inactive/fail-safe
+paths, and the rewritten `FiscalDefaultsSection.vitest.jsx` covering all 4 combinations of
+SII/TicketBAI active plus the toggle wiring).

@@ -18015,6 +18015,8 @@
     "billingPreferencesAfterSave": "Guarda el contacto para configurar preferencias de facturación.",
     "fiscalDefaults": "Valores por Defecto SIF",
     "fiscalDefaultsDescription": "Se usan como valores por defecto al enviar las facturas de este cliente a SII/TicketBAI.",
+    "fiscalDefaultsSiiBlock": "SII",
+    "fiscalDefaultsTbaiBlock": "TicketBAI",
     "validationRequiredField": "El campo \"{field}\" es obligatorio.",
     "validationRequiredGeneric": "Falta un campo obligatorio.",
     "validationDuplicateRecord": "Ya existe un registro con el mismo valor.",

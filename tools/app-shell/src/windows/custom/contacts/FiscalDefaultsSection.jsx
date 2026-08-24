@@ -1,26 +1,17 @@
 import { EntityForm } from '@/components/contract-ui';
-import { useUI } from '@/i18n';
+import { PillToggle } from '@/components/PillToggle';
+import { useUI, useLabel } from '@/i18n';
+import { useSiiTbaiActive, resolveOrganizationId } from './fiscalDefaults.utils.js';
 
 // ── SII (AEAT) / TicketBAI invoicing defaults — read at invoicing time in
-// Classic, no callout of their own here. Grouped into a single visual block
-// (ETP-4784 part 2 UX fix) regardless of the Classic tab each field
-// originally lived in (Customer vs. header/General): all three are plain
-// C_BPartner columns consumed later by the SII trigger / TBAI XML builder,
-// so splitting them across the header form and a nested Customer block (as
-// shipped in part 2) made them read as unrelated stray fields instead of one
-// coherent "fiscal defaults" concept.
+// Classic, no callout of their own here. (ETP-4784 part 2 UX fix, further
+// split into two conditional sub-blocks in the follow-up UX pass below.)
 //
 // "Invoice type key" only makes sense once "Default Key" is on, mirroring
 // the AD displayLogic @EM_Aeatsii_Defaultsiikey@='Y' (see
 // artifacts/contacts/contract.json, entity "customer"). Option value/labels
 // copied from that same contract — AD_Ref_List values are static, not
 // derived per-record.
-const tbaiSimplifiedInvoiceField = [
-  { key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv', type: 'checkbox', section: 'principal' },
-];
-const aeatsiiDefaultKeyField = [
-  { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', section: 'principal' },
-];
 const aeatsiiKeyListField = [
   {
     key: 'aeatsiiSiikeylist',
@@ -37,19 +28,47 @@ const aeatsiiKeyListField = [
   },
 ];
 
+// ── Blocking-style toggle (canonical PillToggle switch) ─────────────────────
+// Same wrapper as the Billing Preferences "Bloquear" toggles — label above,
+// switch below. Used here instead of EntityForm's SquareCheckbox for
+// `aeatsiiDefaultsiikey` / `tbaiIssimplifiedinv` per the UX ask (ETP-4784).
+function FiscalToggle({ label, value, onCheckedChange, testId }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
+      <div className="flex items-center gap-3 h-10">
+        <PillToggle
+          checked={value}
+          onCheckedChange={onCheckedChange}
+          aria-label={label}
+          data-testid={testId} />
+      </div>
+    </div>
+  );
+}
+
 // ── Fiscal defaults section ──────────────────────────────────────────────
 // Groups the 3 Business Partner fields used as billing-time defaults by the
-// Classic AEAT SII / TicketBAI modules under one clearly-labeled block, so
-// they read as a single configuration concept instead of 3 loose fields.
-// `tbaiIssimplifiedinv` always applies (it was previously auto-rendered in
-// the header form — see `decisions.json → entities.businessPartner.fields.
-// tbaiIssimplifiedinv.form: false`). `aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`
-// keep the pre-existing "only meaningful for customers" gate on `data.customer`,
-// unchanged from the block they were extracted out of in `BillingPreferencesForm`.
-
+// Classic AEAT SII / TicketBAI modules into two independently-gated
+// sub-blocks, so a contact only sees the defaults relevant to the fiscal
+// system(s) actually active for its organization:
+//   - "SII" block (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`): shown only
+//     when the org has an active SII configuration (`acogidaAlSII`).
+//   - "TicketBAI" block (`tbaiIssimplifiedinv`): shown only when the org has
+//     an active TicketBAI configuration record (existence IS the signal).
+// If neither applies, the whole section (title + description) is hidden —
+// see `useSiiTbaiActive` for the detection + fail-safe-hide logic.
 export default function FiscalDefaultsSection(props) {
   const ui = useUI();
-  const { data } = props;
+  const t = useLabel();
+  const { data, onChange, apiBaseUrl } = props;
+
+  const organizationId = resolveOrganizationId(data?.organization);
+  const { loading, sii: siiActive, tbai: tbaiActive } = useSiiTbaiActive(organizationId, apiBaseUrl);
+
+  // Fail-safe: while we don't yet know (loading) or once we know neither
+  // system applies, render nothing at all — no title, no description.
+  if (loading || (!siiActive && !tbaiActive)) return null;
 
   return (
     <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
@@ -57,28 +76,40 @@ export default function FiscalDefaultsSection(props) {
         <div className="text-sm font-semibold text-text-primary">{ui('fiscalDefaults')}</div>
         <div className="text-xs text-text-secondary">{ui('fiscalDefaultsDescription')}</div>
       </div>
-      <div className="flex-1 flex flex-col gap-3">
-        <EntityForm
-          {...props}
-          fields={tbaiSimplifiedInvoiceField}
-          cols={1}
-          data-testid="EntityForm__fiscal-tbai" />
-        {data?.customer && (
-          <div className="flex flex-row gap-5 items-start">
-            <div className="flex-1 min-w-0">
-              <EntityForm
-                {...props}
-                fields={aeatsiiDefaultKeyField}
-                cols={1}
-                data-testid="EntityForm__fiscal-aeatsii-default" />
+      <div className="flex-1 flex flex-col gap-4">
+        {siiActive && (
+          <div className="flex flex-col gap-3" data-testid="FiscalDefaultsSection__sii-block">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+              {ui('fiscalDefaultsSiiBlock')}
             </div>
-            <div className="flex-1 min-w-0">
-              <EntityForm
-                {...props}
-                fields={aeatsiiKeyListField}
-                cols={1}
-                data-testid="EntityForm__fiscal-aeatsii-keylist" />
+            <div className="flex flex-row gap-5 items-start">
+              <div className="flex-1 min-w-0">
+                <FiscalToggle
+                  label={t('EM_Aeatsii_Defaultsiikey')}
+                  value={data?.aeatsiiDefaultsiikey}
+                  onCheckedChange={(next) => onChange?.('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')}
+                  testId="FiscalToggle__aeatsii-default" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <EntityForm
+                  {...props}
+                  fields={aeatsiiKeyListField}
+                  cols={1}
+                  data-testid="EntityForm__fiscal-aeatsii-keylist" />
+              </div>
             </div>
+          </div>
+        )}
+        {tbaiActive && (
+          <div className="flex flex-col gap-3" data-testid="FiscalDefaultsSection__tbai-block">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+              {ui('fiscalDefaultsTbaiBlock')}
+            </div>
+            <FiscalToggle
+              label={t('EM_Tbai_Issimplifiedinv')}
+              value={data?.tbaiIssimplifiedinv}
+              onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
+              testId="FiscalToggle__tbai-simplified" />
           </div>
         )}
       </div>
