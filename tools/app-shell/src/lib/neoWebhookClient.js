@@ -12,7 +12,7 @@
  * etc.) — that documentation stays in each caller's own file, next to the function
  * that actually implements it.
  */
-import { jsonHeaders } from './sessionHeaders.js';
+import { readCredentialHeaders } from './sessionHeaders.js';
 
 
 /**
@@ -42,8 +42,9 @@ export const NEO_BASE = `${detectBase()}/sws/neo`;
  * The Content-Type is stripped on purpose, preserving this module's existing
  * convention: these are GETs with no body, and `application/json` is not a
  * CORS-safelisted value, so sending it would trigger a preflight OPTIONS on
- * every call whenever `VITE_API_BASE` points at another origin. `jsonHeaders()`
- * always sets it, so the credential is taken and the rest dropped.
+ * every call whenever `VITE_API_BASE` points at another origin. That strip is
+ * exactly what `readCredentialHeaders()` does, so this delegates to it rather
+ * than keeping a second copy of the same three lines.
  *
  * Still read at request time, never cached at module scope — a login, a logout
  * or a preference flip takes effect without a reload, which is exactly what the
@@ -52,8 +53,7 @@ export const NEO_BASE = `${detectBase()}/sws/neo`;
  * caller's own role, whichever scheme carried the session here.
  */
 export function credentialHeaders() {
-  const { 'Content-Type': _contentType, ...credential } = jsonHeaders();
-  return credential;
+  return readCredentialHeaders();
 }
 
 /**

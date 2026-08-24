@@ -66,13 +66,20 @@ import {
  * the cookie scheme requires, and sending a proof on a GET would be a bug in the
  * other direction.
  */
-export function readCredentialHeaders() {
-  const { 'Content-Type': _ignored, ...credential } = jsonHeaders();
+// The omit-by-destructuring idiom (`const { 'Content-Type': _x, ...rest }`) reads
+// as an unused variable to Sonar (S1481), so the key is stripped explicitly. Same
+// result, and it keeps the two exports below down to one line each.
+function withoutContentType(headers) {
+  const credential = { ...headers };
+  delete credential['Content-Type'];
   return credential;
+}
+
+export function readCredentialHeaders() {
+  return withoutContentType(jsonHeaders());
 }
 
 /** The unsafe-method counterpart of {@link readCredentialHeaders}. */
 export function writeCredentialHeaders() {
-  const { 'Content-Type': _ignored, ...credential } = writeHeaders();
-  return credential;
+  return withoutContentType(writeHeaders());
 }
