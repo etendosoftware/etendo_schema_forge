@@ -238,20 +238,35 @@ describe('OnboardingPage', () => {
     });
   };
 
-  // ETP-4576 — every key the pre-cookie session used to write. The migrated flow
-  // must never write any of them again: the session is the `__Host-` cookie and
-  // the CSRF proof lives in memory only. app-shell-core purges this same list.
-  const LEGACY_AUTH_KEYS = [
+  // ETP-4576 — every CREDENTIAL key the pre-cookie session used to write. The
+  // migrated flow must never write any of them again: the session is the
+  // `__Host-` cookie and the CSRF proof lives in memory only.
+  //
+  // `sf_platform_auth_method` is deliberately NOT in this list. It was, and that
+  // was wrong: it is not a credential, it records how the user signed in, and
+  // UserAvatarButton reads it to hide the change-password action from SSO users.
+  // Banning it meant an SSO user was offered a password they never set. Logout
+  // still purges it (app-shell-core's session purge covers a wider list than
+  // this one) — clearing it on the way out is unrelated to writing it on the way
+  // in, and conflating the two is what hid the regression.
+  const LEGACY_CREDENTIAL_KEYS = [
     'sf_auth_token', 'sf_auth_user', 'sf_auth_client_id', 'sf_auth_client_name',
     'sf_auth_rolelist', 'sf_auth_selected_role', 'sf_auth_selected_org',
-    'sf_platform_token', 'sf_platform_auth_method',
+    'sf_platform_token',
   ];
 
+  const AUTH_METHOD_KEY = 'sf_platform_auth_method';
+
   const expectNoCredentialPersisted = () => {
-    for (const key of LEGACY_AUTH_KEYS) {
+    for (const key of LEGACY_CREDENTIAL_KEYS) {
       expect(localStorage.setItem).not.toHaveBeenCalledWith(key, expect.anything());
       expect(localStorage.getItem(key)).toBeNull();
     }
+  };
+
+  /** The one thing authentication still records, and what the host reads it for. */
+  const expectAuthMethodRecorded = (method) => {
+    expect(localStorage.setItem).toHaveBeenCalledWith(AUTH_METHOD_KEY, method);
   };
 
   // ETP-4576 — the flow's boot is asynchronous now. It no longer reads a token
@@ -747,6 +762,7 @@ describe('OnboardingPage', () => {
       expect(screen.getByLabelText(/onboardingFullNameLabel/)).toBeInTheDocument();
     });
     expectNoCredentialPersisted();
+    expectAuthMethodRecorded('password');
   });
 
   it('persists no credential artifact after a successful SSO credential login', async () => {
@@ -773,6 +789,7 @@ describe('OnboardingPage', () => {
       );
     });
     expectNoCredentialPersisted();
+    expectAuthMethodRecorded('sso');
   });
 
   it('tracks login exceptions', async () => {
