@@ -65,12 +65,18 @@ function tierRank(tier) {
  * different access levels for the same window). `GENERAL_ROWS` below always
  * passes every column the same `tier: 'full'`, so `disagree` is always `false`
  * for those rows by construction — they render exactly as before, unaffected.
+ *
+ * When several columns tie at the highest rank, only the LEFT-MOST one is the
+ * "winner" (`winnerIndex`, via `Array.indexOf`'s first-match semantics) — a
+ * later human design revision of the original "mark every tied column" pass,
+ * to keep exactly one marker per disagreeing row instead of one per tied column.
  */
 function resolveRowWinner(cellsForRow) {
   const ranks = cellsForRow.map((cell) => tierRank(cell.tier));
   const maxRank = Math.max(...ranks);
   const minRank = Math.min(...ranks);
-  return { disagree: maxRank !== minRank, maxRank };
+  const disagree = maxRank !== minRank;
+  return { disagree, winnerIndex: disagree ? ranks.indexOf(maxRank) : -1 };
 }
 
 /**
@@ -398,13 +404,13 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               // always returns `disagree: false` here, so this row renders exactly
               // as it did before item 5 (no tooltip marker).
               const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
-              const { disagree, maxRank } = resolveRowWinner(cellsForRow);
+              const { winnerIndex } = resolveRowWinner(cellsForRow);
               return (
                 <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
                   <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
                   {columns.map((role, i) => {
                     const { tier, text } = cellsForRow[i];
-                    const isWinner = disagree && tierRank(tier) === maxRank;
+                    const isWinner = i === winnerIndex;
                     return (
                       <MatrixRoleCell
                         key={role.id}
@@ -434,13 +440,13 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
               </tr>
               {group.rows.map((row) => {
                 const cellsForRow = columns.map((role) => cellValue(row, role));
-                const { disagree, maxRank } = resolveRowWinner(cellsForRow);
+                const { winnerIndex } = resolveRowWinner(cellsForRow);
                 return (
                   <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
                     <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
                     {columns.map((role, i) => {
                       const { tier, text } = cellsForRow[i];
-                      const isWinner = disagree && tierRank(tier) === maxRank;
+                      const isWinner = i === winnerIndex;
                       return (
                         <MatrixRoleCell
                           key={role.id}

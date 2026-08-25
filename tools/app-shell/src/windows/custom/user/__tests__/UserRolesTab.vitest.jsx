@@ -349,6 +349,11 @@ describe('UserRolesTab', () => {
   // get NO visual marker at all — they render exactly like a cell in a row where every
   // role agrees (plain `TierPill`, `font-medium`, no badge). The earlier strikethrough
   // treatment (`line-through text-muted-foreground/50`) was dropped as too visually harsh.
+  // A later design revision (left-most tie-break): when several columns TIE at the
+  // highest rank, only the LEFT-MOST tied column (lowest `columns` index) is marked as
+  // the winner — every other column tied at that same rank renders exactly like a
+  // losing cell (no badge, `font-medium`, not `font-bold`). Only ONE cell per
+  // disagreeing row can ever carry the marker now.
   describe('winner/loser indicator (ETP-4999 item 5)', () => {
     beforeEach(() => {
       fetchMenuTree.mockResolvedValue(MENU_TREE);
@@ -448,11 +453,13 @@ describe('UserRolesTab', () => {
       expect(pillSpanIn(cells[2])).toBeNull(); // Sales — no access, no pill at all
     });
 
-    it('marks every column tied at the top rank as a winner when two roles share the highest tier and a third trails', async () => {
+    it('marks only the left-most column tied at the top rank as winner when two roles share the highest tier and a third trails', async () => {
       // 3-column row: Finance and Sales both 'full' on w1 (tied at the top rank),
-      // Purchasing only 'readonly' — `resolveRowWinner` marks BOTH tied columns as
-      // winners (isWinner is per-column: `tierRank(tier) === maxRank`, not "exactly
-      // one"), and Purchasing alone loses (rendered plainly, font-medium, no badge).
+      // Purchasing only 'readonly' — `resolveRowWinner` marks only the LEFT-MOST tied
+      // column (Finance, `columns` index 0) as the winner (`winnerIndex` via
+      // `ranks.indexOf(maxRank)`'s first-match semantics). Sales ties at the same rank
+      // but is NOT the left-most, so it renders exactly like a losing cell (no badge,
+      // font-medium). Purchasing loses outright (lower rank, rendered plainly too).
       fetchTemplateRoles.mockResolvedValueOnce({
         roles: [
           { id: 'role-fin', name: 'Finance', windows: [{ id: 'w1', tier: 'full' }] },
@@ -464,12 +471,14 @@ describe('UserRolesTab', () => {
 
       const row = await screen.findByTestId('UserRolesTab__row-w1');
       expect(screen.getByTestId('WinnerBadge__w1-role-fin')).toBeInTheDocument();
-      expect(screen.getByTestId('WinnerBadge__w1-role-sales')).toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w1-role-sales')).not.toBeInTheDocument();
       expect(screen.queryByTestId('WinnerBadge__w1-role-purchasing')).not.toBeInTheDocument();
       const cells = within(row).getAllByRole('cell');
-      expect(pillSpanIn(cells[1]).className).toContain('font-bold'); // Finance — wins
-      expect(pillSpanIn(cells[2]).className).toContain('font-bold'); // Sales — wins
-      expect(pillSpanIn(cells[3]).className).toContain('font-medium'); // Purchasing — loses, plain
+      expect(pillSpanIn(cells[1]).className).toContain('font-bold'); // Finance — left-most tied, wins
+      expect(pillSpanIn(cells[1]).className).not.toContain('font-medium');
+      expect(pillSpanIn(cells[2]).className).toContain('font-medium'); // Sales — tied but not left-most, loses
+      expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
+      expect(pillSpanIn(cells[3]).className).toContain('font-medium'); // Purchasing — lower rank, loses, plain
       expect(pillSpanIn(cells[3]).className).not.toContain('font-bold');
     });
   });
