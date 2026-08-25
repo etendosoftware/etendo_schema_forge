@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertProductCodeMappedInHookSource,
+  assertResolveProductCodeFallsBackToDash,
+} from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useQuotationPdf.js'), 'utf8');
@@ -64,14 +68,13 @@ describe('useQuotationPdf', () => {
   // ETP-4941 — the printed "CÓD." column must show the product SKU
   // (product$_value), not the line number.
   it('ETP-4941: maps productCode via the shared resolveProductCode helper', () => {
-    assert.match(src, /productCode: resolveProductCode\(l\)/);
-    assert.match(src, /resolveProductCode/, 'imports resolveProductCode from documentPdf.js');
+    assertProductCodeMappedInHookSource(assert, src);
   });
 
   it('ETP-4941: resolveProductCode falls back to "—" (never the line index) when no SKU is available', () => {
     // AC: a product with no SKU must render an empty/em-dash cell, not a digit
     // indistinguishable from the original line-number bug.
-    assert.match(sharedSrc, /function resolveProductCode\(line\)\s*\{\s*return line\.productCode \|\| line\['product\$_value'\] \|\| '—';/);
+    assertResolveProductCodeFallsBackToDash(assert, sharedSrc);
   });
 
   it('includes validUntil in the returned data derived from header.validUntil', () => {

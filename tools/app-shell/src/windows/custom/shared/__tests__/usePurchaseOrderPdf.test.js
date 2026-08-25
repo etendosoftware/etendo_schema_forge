@@ -4,6 +4,11 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertPersistedTaxDerivation } from './testUtils/documentPdfPersistedTotalsAssertions.js';
+import {
+  assertProductCodeMappedInSharedSource,
+  assertResolveProductCodeFallsBackToDash,
+  assertCodeColumnRendersProductCode,
+} from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'usePurchaseOrderPdf.js'), 'utf8');
@@ -81,19 +86,17 @@ describe('usePurchaseOrderPdf', () => {
   // ETP-4941 — the printed "CÓD." column must show the product SKU
   // (product$_value), not the line number. Shared buildOrderData/template.
   it('ETP-4941: maps productCode via the shared resolveProductCode helper', () => {
-    assert.match(sharedSrc, /productCode: resolveProductCode\(l\)/);
+    assertProductCodeMappedInSharedSource(assert, sharedSrc);
   });
 
   it('ETP-4941: resolveProductCode falls back to "—" (never the line index) when no SKU is available', () => {
     // AC: a product with no SKU must render an empty/em-dash cell, not a digit
     // indistinguishable from the original line-number bug.
-    assert.match(sharedSrc, /function resolveProductCode\(line\)\s*\{\s*return line\.productCode \|\| line\['product\$_value'\] \|\| '—';/);
-    assert.doesNotMatch(sharedSrc, /resolveProductCode[\s\S]{0,120}String\(idx/);
+    assertResolveProductCodeFallsBackToDash(assert, sharedSrc, { checkNoLineIndexFallback: true });
   });
 
   it('ETP-4941: renders productCode (not lineNo) in the code column', () => {
-    assert.match(sharedSrc, /<td class="code">\{\{this\.productCode\}\}<\/td>/);
-    assert.doesNotMatch(sharedSrc, /<td class="code">\{\{this\.lineNo\}\}<\/td>/);
+    assertCodeColumnRendersProductCode(assert, sharedSrc);
   });
 
   it('imports computeDocumentTotals to derive printed totals', () => {
