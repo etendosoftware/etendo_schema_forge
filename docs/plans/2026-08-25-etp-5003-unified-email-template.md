@@ -175,7 +175,7 @@ This keeps one block vocabulary for every email and removes per-tenant asset hos
 All three provider-branded templates are migrated (F2/F3), so after this work there is exactly one
 answer to "what does an Etendo email look like", and it is versioned in this repo. Decide in F2
 whether `login-alert` gets a producer at all — it currently has none in either repo
-(`docs/email-inventory.md` §4).
+(`docs/email-inventory.md` §5).
 
 ## 8. Dark mode
 

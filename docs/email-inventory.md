@@ -93,7 +93,58 @@ graph LR
 scope. The four module emails and the alert rules stay on their own bodies by decision, not by
 omission.
 
-## 2. The two delivery stacks
+## 2. Map — which action sends which email
+
+Read left to right: what a person does, and what lands in an inbox because of it.
+
+```mermaid
+graph LR
+  subgraph SIGNUP["Sign-up and onboarding"]
+    S1(["User registers"]) --> E1["✅ new-account<br/><i>Welcome</i>"]
+    S2(["User completes onboarding<br/>client + org + dataset created"]) --> E2["✅ environment-ready<br/><i>Your environment is ready</i>"]
+    S1 --> S2
+  end
+
+  subgraph PWD["Credentials"]
+    P1(["User clicks 'forgot my password'"]) --> E3["✅ reset-password<br/><i>30-minute link</i>"]
+    E3 --> P2(["User sets the new password"])
+    P2 --> E4["✅ password-changed<br/><i>Security notice</i>"]
+    P3(["User signs in from a new IP"]) -.-> E5["✅ login-alert<br/><i>nothing calls this yet</i>"]
+  end
+
+  subgraph TEAM["Team"]
+    T1(["Admin invites a user"]) --> E6["✅ company-invitation<br/><i>7-day link</i>"]
+    T2(["Admin clicks Resend"]) --> E6
+    E6 --> T3(["Invitee accepts and joins"])
+  end
+
+  subgraph BUSINESS["Business documents"]
+    B1(["Operator opens a document<br/>and clicks Send"]) --> E7["⬜ {window}-send<br/><i>invoice, order, quotation,<br/>shipment, purchase order, return</i>"]
+    E7 --> B2(["Customer or vendor<br/>gets the PDF link"])
+  end
+
+  subgraph BACKOFFICE["Backoffice and system"]
+    K1(["Operator uses Print &amp; Send"]) --> E8["⬜ document with attachments"]
+    K2(["Admin grants portal access"]) --> E9["⬜ portal: new user"]
+    K3(["Portal account is cancelled"]) --> E10["⬜ portal: account cancelled"]
+    K4(["An alert rule matches"]) --> E11["⬜ [OB Alert]"]
+    K5(["TicketBAI / currency sync fails"]) --> E12["⬜ error notice"]
+  end
+
+  classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef todo fill:#f1f5f9,stroke:#94a3b8,color:#334155
+  classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
+  class E1,E2,E3,E4,E5,E6 done
+  class E7,E8,E9,E10,E11,E12 todo
+  class S1,S2,P1,P2,P3,T1,T2,T3,B1,B2,K1,K2,K3,K4,K5 act
+```
+
+Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
+environment-ready once the client, organization and dataset exist and again issues the reset link,
+`handleChangePassword` sends the security notice, `CompanyInvitationService` covers both invite and
+resend. `login-alert` is drawn dotted because no code path reaches it.
+
+## 3. The two delivery stacks
 
 | | Stack A — GO email contracts | Stack B — Core SMTP |
 |---|---|---|
@@ -111,7 +162,7 @@ template). It is a *fallback, not an override* — SMTP, when configured, still 
 
 ---
 
-## 3. Master table — every email
+## 4. Master table — every email
 
 ### 2.A — Etendo GO: document emails ("send this invoice to the customer")
 
@@ -177,7 +228,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 4. Where does the format live? (the question behind the question)
+## 5. Where does the format live? (the question behind the question)
 
 | Format source | Which emails | What it means for changing the copy |
 |---|---|---|
@@ -196,7 +247,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 5. Related existing docs
+## 6. Related existing docs
 
 - `modules/com.etendoerp.go/docs/transactional-email-contracts.md`
 - `modules/com.etendoerp.go/docs/document-email-contract-implementation.md`
