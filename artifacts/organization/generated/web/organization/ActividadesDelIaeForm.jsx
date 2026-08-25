@@ -13,5 +13,6 @@ const fields = [
 export default function ActividadesDelIaeForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ActividadesDelIaeForm.fields = fields;
 
 // @sf-generated-end component:ActividadesDelIaeForm

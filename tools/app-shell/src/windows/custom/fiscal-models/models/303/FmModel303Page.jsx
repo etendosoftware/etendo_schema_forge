@@ -206,22 +206,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const ui = useUI();
   const t = ui;
   // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
-  // (see handleGenerate) and are wrapped the same way AeatSubmitFlow.jsx wraps
-  // them: called unconditionally every render (rules-of-hooks safe), but a
-  // missing Router/Auth provider degrades to a no-op instead of crashing the
-  // render — several existing tests mount this page with no <Router> at all.
-  let navigate;
-  try {
-    navigate = useNavigate();
-  } catch (_) {
-    navigate = () => {};
-  }
-  let selectedOrg;
-  try {
-    selectedOrg = useAuth().selectedOrg;
-  } catch (_) {
-    selectedOrg = null;
-  }
+  // (see handleGenerate). Requires a Router/AuthProvider ancestor — every test
+  // that mounts this page must wrap it in both, or mock `react-router-dom`'s
+  // `useNavigate` and `@/auth/AuthContext.jsx`'s `useAuth`.
+  const navigate = useNavigate();
+  const { selectedOrg } = useAuth();
   const [status, setStatus] = useState(decl.status);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated

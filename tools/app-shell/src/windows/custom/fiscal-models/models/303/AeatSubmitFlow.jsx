@@ -59,6 +59,55 @@ export function isMissingDefaultIaeActivity(rows) {
   return !rows.some(r => (r?.default === true || r?.default === 'Y') && r?.epiaeCode);
 }
 
+/**
+ * Runs the ETP-4975 missing-default-IAE-activity pre-flight guard, extracted
+ * out of `handleSubmit` to keep its cognitive complexity within limits
+ * (S3776) — behavior is unchanged from the inline version. Mirrors the IBAN
+ * guard next to its call site. The last period of the fiscal year (4T
+ * quarterly or month 12 monthly) needs the organization to have at least one
+ * `actividadesDelIae` row with `default = true` AND `epiaeCode` set; without
+ * it, GO's backend (reusing Classic's Modelo 303 code via reflection) throws
+ * an untranslated `IndexOutOfBoundsException` instead of a translated error —
+ * confirmed live: period=12 -> HTTP 500, period=8/11 -> 200 OK. Only runs for
+ * the last period (the only period the backend actually needs this for) and
+ * only when an organization id is resolvable; on any fetch/network error (or
+ * a non-ok response) it fails OPEN (lets the submission proceed) rather than
+ * blocking a submission that might otherwise succeed — same reasoning as
+ * NeoExchangeRateService.hasRate (neo-headless.md §5, ETP-4838): a flaky
+ * pre-check must never manufacture a false block, and the backend's own
+ * (even if untranslated) guard remains the final authority.
+ *
+ * `apiFetch`'s base is already `neoBase(apiBaseUrl)` (the true `/sws/neo`
+ * root — `apiBaseUrl` itself is scoped to this window's OWN spec, e.g.
+ * `/sws/neo/fiscal-models`), so it reaches the `organization` spec's
+ * `actividadesDelIae` entity the same way `useActividadesIae.js` does for
+ * the Organization window itself, and reuses this file's existing auth
+ * wiring instead of a second, parallel raw `fetch`.
+ *
+ * Returns `{ blocked: true, message }` when the submission must be stopped,
+ * or `{ blocked: false }` for every other case (not the last period, no
+ * resolvable org id, a non-ok response, no missing activity, or a
+ * fetch/network error).
+ */
+export async function checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t }) {
+  if (!isLastPeriodOfYear(decl?.period) || !selectedOrg?.id) return { blocked: false };
+  try {
+    const iaeRes = await apiFetch(`/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`);
+    if (iaeRes.ok) {
+      const iaeRows = (await iaeRes.json())?.response?.data ?? [];
+      if (isMissingDefaultIaeActivity(iaeRows)) {
+        return {
+          blocked: true,
+          message: t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.',
+        };
+      }
+    }
+  } catch (_) {
+    // fail open — see docstring above.
+  }
+  return { blocked: false };
+}
+
 /** Maps a /fiscal303/submit response to one of the 3 result-screen outcomes. */
 export function classifySubmitOutcome(data) {
   if (!data || typeof data !== 'object') return 'unknown';
@@ -170,21 +219,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
   const navigate = useNavigate();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   // `selectedOrg` (AuthContext) is only needed for the IAE-activity guard below.
-  // Every other prop/hook in this file is intentionally provider-free (token,
-  // apiBaseUrl, decl, orgIdent, identChecks — all plain props; even `apiFetch`
-  // is fully mockable via `@/auth/useApiFetch.js`, see AeatSubmitFlow.vitest.jsx),
-  // which is what lets this whole flow render in tests with no AuthProvider at
-  // all. `useAuth()` itself throws without one, so it is called unconditionally
-  // (never skipping the hook call itself — rules-of-hooks safe) but wrapped so a
-  // missing provider degrades to "no org id" rather than crashing the render;
-  // that in turn just skips the guard below, the same fail-open behavior the
-  // guard already applies to a network/fetch error.
-  let selectedOrg;
-  try {
-    selectedOrg = useAuth().selectedOrg;
-  } catch (_) {
-    selectedOrg = null;
-  }
+  // Requires an AuthProvider ancestor (`useAuth()` throws without one) — every
+  // test that mounts this component must wrap it in one, or mock
+  // `@/auth/AuthContext.jsx`, the same way it must already provide a Router
+  // for `useNavigate()` above.
+  const { selectedOrg } = useAuth();
 
   const localData = buildLocalDeclarationData({ decl, orgIdent, identChecks, summary });
 
@@ -207,41 +246,15 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
     setConnError(null);
     setMissingIaeGuard(false);
     try {
-      // ETP-4975 pre-flight guard — mirrors the IBAN guard right below it. The
-      // last period of the fiscal year (4T quarterly or month 12 monthly) needs
-      // the organization to have at least one `actividadesDelIae` row with
-      // `default = true` AND `epiaeCode` set; without it, GO's backend (reusing
-      // Classic's Modelo 303 code via reflection) throws an untranslated
-      // `IndexOutOfBoundsException` instead of a translated error — confirmed
-      // live: period=12 -> HTTP 500, period=8/11 -> 200 OK. Only runs for the
-      // last period (the only period the backend actually needs this for) and
-      // only when an organization id is resolvable; on any fetch/network error
-      // it fails OPEN (lets the submission proceed) rather than blocking a
-      // submission that might otherwise succeed — same reasoning as
-      // NeoExchangeRateService.hasRate (neo-headless.md §5, ETP-4838): a flaky
-      // pre-check must never manufacture a false block, and the backend's own
-      // (even if untranslated) guard remains the final authority.
-      if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
-        try {
-          // `apiFetch`'s base is already `neoBase(apiBaseUrl)` (the true `/sws/neo`
-          // root — `apiBaseUrl` itself is scoped to this window's OWN spec, e.g.
-          // `/sws/neo/fiscal-models`), so it reaches the `organization` spec's
-          // `actividadesDelIae` entity the same way `useActividadesIae.js` does
-          // for the Organization window itself, and reuses this file's existing
-          // auth wiring instead of a second, parallel raw `fetch`.
-          const iaeRes = await apiFetch(`/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`);
-          if (iaeRes.ok) {
-            const iaeRows = (await iaeRes.json())?.response?.data ?? [];
-            if (isMissingDefaultIaeActivity(iaeRows)) {
-              setMissingIaeGuard(true);
-              setConnError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
-              setSubmitting(false);
-              return;
-            }
-          }
-        } catch (_) {
-          // fail open — see comment above.
-        }
+      // ETP-4975 pre-flight guard — see checkMissingIaeGuard's docstring for
+      // the full rationale (fail-open semantics, why it only runs on the last
+      // period, etc.).
+      const iaeGuard = await checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t });
+      if (iaeGuard.blocked) {
+        setMissingIaeGuard(true);
+        setConnError(iaeGuard.message);
+        setSubmitting(false);
+        return;
       }
       const tipo = localData.declarationType || decl?.result?.kind || 'N';
       // Mirrors fm303Layouts.js's datos_bancarios.sectionVisibleWhen anyOf (ETP-4456 follow-up):

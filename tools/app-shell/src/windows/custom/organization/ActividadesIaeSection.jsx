@@ -146,6 +146,113 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     );
   }
 
+  function renderRowsBody() {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
+          </td>
+        </tr>
+      );
+    }
+    if (rows.length === 0 && !addingRow) {
+      return (
+        <tr>
+          <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
+            {ui('orgIaeEmpty')}
+          </td>
+        </tr>
+      );
+    }
+    return rows.map(row => {
+      const rowDefault = isDefaultTrue(row.default);
+      const missingCode = rowDefault && !row.epiaeCode;
+      const rowSaving = savingId === row.id;
+      return (
+        <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
+          <td className="py-1.5 px-2 align-middle">
+            <CreatableSearchSelect
+              field={EPGRAFE_FIELD}
+              value={row.epgrafeIAE ?? ''}
+              displayValue={row['epgrafeIAE$_identifier'] ?? ''}
+              onChange={(val, label) => handleSelectorChange(row, EPGRAFE_FIELD, val, label)}
+              resolvedLabel=""
+              selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
+              token={token}
+              serverSearch
+              data-testid="CreatableSearchSelect__iaeEpgrafe" />
+          </td>
+          <td className="py-1.5 px-2 align-middle">
+            <CreatableSearchSelect
+              field={TYPE_FIELD}
+              value={row.epiaeType ?? ''}
+              displayValue={row['epiaeType$_identifier'] ?? ''}
+              onChange={(val, label) => handleSelectorChange(row, TYPE_FIELD, val, label)}
+              resolvedLabel=""
+              selectorUrl={selectorUrlFor(TYPE_FIELD)}
+              token={token}
+              serverSearch
+              data-testid="CreatableSearchSelect__iaeType" />
+          </td>
+          <td className="py-1.5 px-2 align-middle">
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 min-w-0">
+                <CreatableSearchSelect
+                  field={CODE_FIELD}
+                  value={row.epiaeCode ?? ''}
+                  displayValue={row['epiaeCode$_identifier'] ?? ''}
+                  onChange={(val, label) => handleSelectorChange(row, CODE_FIELD, val, label)}
+                  resolvedLabel=""
+                  selectorUrl={selectorUrlFor(CODE_FIELD)}
+                  token={token}
+                  serverSearch
+                  data-testid="CreatableSearchSelect__iaeCode" />
+              </div>
+              {missingCode && (
+                <TooltipProvider data-testid="TooltipProvider__iaeMissingCode">
+                  <Tooltip data-testid="Tooltip__iaeMissingCode">
+                    <TooltipTrigger asChild data-testid="TooltipTrigger__iaeMissingCode">
+                      <span className="inline-flex items-center text-[var(--status-warning-fg)]" tabIndex={0} aria-label={ui('orgIaeMissingCodeWarning')}>
+                        <TriangleAlert size={14} data-testid="TriangleAlert__iaeMissingCode" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] text-xs" data-testid="TooltipContent__iaeMissingCode">
+                      {ui('orgIaeMissingCodeWarning')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          </td>
+          <td className="py-1.5 px-2 align-middle">
+            <Checkbox
+              checked={rowDefault}
+              disabled={rowSaving}
+              onChange={() => handleDefaultToggle(row, !rowDefault)}
+              aria-label={ui('orgIaeDefaultLabel')}
+              data-testid="Checkbox__iaeDefault" />
+          </td>
+          <td className="py-1.5 px-2 align-middle text-right">
+            {rowSaving || deletingId === row.id ? (
+              <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleDelete(row)}
+                aria-label={ui('deleteRowTooltip')}
+                title={ui('deleteRowTooltip')}
+                className="h-7 w-7 inline-flex items-center justify-center rounded-full text-destructive hover:bg-destructive/10 transition-colors"
+                data-testid="ActividadesIaeSection__delete">
+                <Trash2 className="h-4 w-4" data-testid="Trash2__iaeDelete" />
+              </button>
+            )}
+          </td>
+        </tr>
+      );
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3" data-testid="ActividadesIaeSection__root">
       <div className="overflow-x-auto rounded-lg border border-border">
@@ -170,106 +277,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
-                </td>
-              </tr>
-            ) : rows.length === 0 && !addingRow ? (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
-                  {ui('orgIaeEmpty')}
-                </td>
-              </tr>
-            ) : (
-              rows.map(row => {
-                const rowDefault = isDefaultTrue(row.default);
-                const missingCode = rowDefault && !row.epiaeCode;
-                const rowSaving = savingId === row.id;
-                return (
-                  <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
-                    <td className="py-1.5 px-2 align-middle">
-                      <CreatableSearchSelect
-                        field={EPGRAFE_FIELD}
-                        value={row.epgrafeIAE ?? ''}
-                        displayValue={row['epgrafeIAE$_identifier'] ?? ''}
-                        onChange={(val, label) => handleSelectorChange(row, EPGRAFE_FIELD, val, label)}
-                        resolvedLabel=""
-                        selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
-                        token={token}
-                        serverSearch
-                        data-testid="CreatableSearchSelect__iaeEpgrafe" />
-                    </td>
-                    <td className="py-1.5 px-2 align-middle">
-                      <CreatableSearchSelect
-                        field={TYPE_FIELD}
-                        value={row.epiaeType ?? ''}
-                        displayValue={row['epiaeType$_identifier'] ?? ''}
-                        onChange={(val, label) => handleSelectorChange(row, TYPE_FIELD, val, label)}
-                        resolvedLabel=""
-                        selectorUrl={selectorUrlFor(TYPE_FIELD)}
-                        token={token}
-                        serverSearch
-                        data-testid="CreatableSearchSelect__iaeType" />
-                    </td>
-                    <td className="py-1.5 px-2 align-middle">
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex-1 min-w-0">
-                          <CreatableSearchSelect
-                            field={CODE_FIELD}
-                            value={row.epiaeCode ?? ''}
-                            displayValue={row['epiaeCode$_identifier'] ?? ''}
-                            onChange={(val, label) => handleSelectorChange(row, CODE_FIELD, val, label)}
-                            resolvedLabel=""
-                            selectorUrl={selectorUrlFor(CODE_FIELD)}
-                            token={token}
-                            serverSearch
-                            data-testid="CreatableSearchSelect__iaeCode" />
-                        </div>
-                        {missingCode && (
-                          <TooltipProvider data-testid="TooltipProvider__iaeMissingCode">
-                            <Tooltip data-testid="Tooltip__iaeMissingCode">
-                              <TooltipTrigger asChild data-testid="TooltipTrigger__iaeMissingCode">
-                                <span className="inline-flex items-center text-[var(--status-warning-fg)]" tabIndex={0} aria-label={ui('orgIaeMissingCodeWarning')}>
-                                  <TriangleAlert size={14} data-testid="TriangleAlert__iaeMissingCode" />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-[240px] text-xs" data-testid="TooltipContent__iaeMissingCode">
-                                {ui('orgIaeMissingCodeWarning')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-1.5 px-2 align-middle">
-                      <Checkbox
-                        checked={rowDefault}
-                        disabled={rowSaving}
-                        onChange={() => handleDefaultToggle(row, !rowDefault)}
-                        aria-label={ui('orgIaeDefaultLabel')}
-                        data-testid="Checkbox__iaeDefault" />
-                    </td>
-                    <td className="py-1.5 px-2 align-middle text-right">
-                      {rowSaving || deletingId === row.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(row)}
-                          aria-label={ui('deleteRowTooltip')}
-                          title={ui('deleteRowTooltip')}
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-full text-destructive hover:bg-destructive/10 transition-colors"
-                          data-testid="ActividadesIaeSection__delete">
-                          <Trash2 className="h-4 w-4" data-testid="Trash2__iaeDelete" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+            {renderRowsBody()}
             {addingRow && (
               <tr className="bg-status-info/40 border-t-2 border-primary/20" data-testid="ActividadesIaeSection__addRow">
                 <td className="py-1.5 px-2 align-middle">
