@@ -414,7 +414,13 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
         src,
         /const pisReady = !pisEligible \|\| pisFieldsComplete\(pisTemplate, \{\s*iban: pisIban,[\s\S]*?\}\);/,
       );
-      assert.match(src, /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling \|\| !pisReady;/);
+      // ETP-4891 wrapped the expression and appended `|| psd2Blocked` (a transfer aimed at an
+      // account whose PSD2 connection is inactive), so the whole chain is matched across lines
+      // rather than pinned to one.
+      assert.match(
+        src,
+        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
+      );
     });
 
     it('buildPisPaymentFields normalizes the creditor IBAN with normalizeIban before sending it', () => {

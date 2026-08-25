@@ -342,9 +342,13 @@ test.describe('User role assignment — detail form (existing user)', () => {
     // A second, unrelated save (no role selection change) must not re-fire the webhook —
     // `index.jsx`'s `sameIdSet` no-op guard — verified via an unrelated field edit, which
     // is the only way to re-enable Guardar without changing roles again. (`firstName`/
-    // `lastName` were discarded from the User window in DEV wave 12 — `email` is the
-    // still-present editable field used here instead.)
-    await page.getByTestId('field-email').fill('ipsen.updated@example.com');
+    // `lastName` were discarded from the User window in DEV wave 12; `email` is ALSO no
+    // longer a valid fallback as of ETP-4830, which added `readOnlyLogicJs: "!!record.id"`
+    // to the `email` field — it locks read-only for any already-persisted user, since
+    // email seeds username + the linked account row at creation only. `name` is the
+    // standard, always-editable field used instead — see `USER_ROW` above, which carries
+    // a `name`.)
+    await page.getByTestId('field-name').fill('Ipsen Updated');
     await expect(page.getByTestId('action-save')).toBeEnabled();
     await page.getByTestId('action-save').click();
     await page.waitForTimeout(500);

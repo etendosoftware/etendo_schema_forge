@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { useEntity } from '../useEntity';
+import { useEntity, RECORD_SAVE_TOAST_ID } from '../useEntity';
 import { toast } from 'sonner';
 
 /**
@@ -62,7 +62,7 @@ describe('useEntity — handleSave silent + handleSaveAndProcess (ETP-4005)', ()
     act(() => { result.current.handleChange('name', 'Created'); });
     await act(async () => { await result.current.handleSave(); });
 
-    expect(toast.success).toHaveBeenCalledWith('recordCreated');
+    expect(toast.success).toHaveBeenCalledWith('recordCreated', { id: RECORD_SAVE_TOAST_ID });
     expect(toast.success).toHaveBeenCalledTimes(1);
   });
 
@@ -163,8 +163,8 @@ describe('useEntity — handleSave silent + handleSaveAndProcess (ETP-4005)', ()
     // Exactly one success toast — the post-process one.
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith('recordProcessed');
-    expect(toast.success).not.toHaveBeenCalledWith('recordCreated');
-    expect(toast.success).not.toHaveBeenCalledWith('recordSaved');
+    expect(toast.success).not.toHaveBeenCalledWith('recordCreated', expect.anything());
+    expect(toast.success).not.toHaveBeenCalledWith('recordSaved', expect.anything());
   });
 
   it('handleSaveAndProcess posts to the /action/{processField} endpoint with fieldValues', async () => {
@@ -254,8 +254,8 @@ describe('useEntity — handleSave silent + handleSaveAndProcess (ETP-4005)', ()
 
     expect(returned).toBeNull();
     // Save was silent → no success toast even though the POST returned 200.
-    expect(toast.success).not.toHaveBeenCalledWith('recordCreated');
-    expect(toast.success).not.toHaveBeenCalledWith('recordSaved');
+    expect(toast.success).not.toHaveBeenCalledWith('recordCreated', expect.anything());
+    expect(toast.success).not.toHaveBeenCalledWith('recordSaved', expect.anything());
     // Process failure surfaces an error toast.
     expect(toast.error).toHaveBeenCalled();
   });
