@@ -18028,6 +18028,7 @@
     "cpPisAuthorizedRegistered": "Payment registered. Your bank is processing the transfer.",
     "cpPisStillInProgress": "The transfer is still being processed by your bank. The payment will update on its own.",
     "cpPisConnectionLost": "Could not check the status — retrying",
+    "cpPisVerifying": "Verifying the payment…",
     "cpPisRejectedNoPayment": "The bank rejected the transfer. No payment was created — you can try again.",
     "cpPisFailedError": "The bank transfer could not be completed. Please try again.",
     "cpPisWindowClosed": "You closed the bank window before authorizing",
