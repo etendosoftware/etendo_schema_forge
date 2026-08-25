@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-20T15:39:16.471Z",
-  "contractChecksum": "f26d6514b2858ce6",
+  "updatedAt": "2026-08-25T13:57:01.202Z",
+  "contractChecksum": "1f22932d2c0ac365",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -19,19 +19,6 @@
         "supportedFilters": [
           "name",
           "email"
-        ]
-      },
-      "emailConfiguration": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/user/emailConfiguration",
-        "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
-        "supportedFilters": [
-          "smtpServer"
         ]
       }
     },
@@ -180,28 +167,6 @@
         ],
         "processId": "97FFD59B991D49BFB5153C309B009272",
         "processType": "obuiapp"
-      },
-      {
-        "name": "smtpconnectiontest",
-        "actionType": "utilityAction",
-        "entity": "emailConfiguration",
-        "column": "Smtpconnectiontest",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -260,50 +225,6 @@
             "defaultValue": "@#Date@"
           }
         }
-      },
-      "emailConfiguration": {
-        "fields": {
-          "active": {
-            "required": true
-          },
-          "smtpServer": {
-            "required": true
-          },
-          "sMTPAuthentification": {
-            "required": true
-          },
-          "smtpServerAccount": {},
-          "smtpServerPassword": {},
-          "smtpServerSenderAddress": {},
-          "smtpConnectionSecurity": {
-            "required": true
-          },
-          "smtpPort": {
-            "required": true,
-            "defaultValue": "25"
-          },
-          "smtpConnectionTimeout": {
-            "defaultValue": "600"
-          },
-          "fromName": {},
-          "replyToAddress": {},
-          "testSuccessful": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "lastTestDate": {
-            "readOnly": true
-          },
-          "smtpconnectiontest": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "defaultConfiguration": {
-            "required": true,
-            "defaultValue": "N"
-          }
-        }
       }
     },
     "requiredSessionVariables": [],
@@ -320,18 +241,8 @@
         "active",
         "email"
       ],
-      "lineFields": [
-        "active",
-        "smtpServer",
-        "sMTPAuthentification",
-        "smtpConnectionSecurity",
-        "smtpPort",
-        "smtpconnectiontest",
-        "defaultConfiguration"
-      ],
       "recommendedOrder": [
-        "createHeader",
-        "createLines"
+        "createHeader"
       ]
     },
     "selectorContexts": [
@@ -402,5 +313,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "2a405710a28dd162"
+  "checksum": "56cefe9e4b1dbf39"
 }

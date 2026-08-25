@@ -112,11 +112,16 @@ vi.mock('@generated/user/generated/web/user/UserPage', () => ({
   },
 }));
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -228,6 +233,38 @@ describe('UserWindow — customTabs wiring', () => {
     const [rolesTab, attachmentsTab] = lastUserPageProps.customTabs;
     expect(rolesTab.tabOrder).toBe(0);
     expect(attachmentsTab.tabOrder).toBeUndefined();
+  });
+
+  // ETP-4999 — "Configuración del correo electrónico" was removed from this window's
+  // tab strip entirely (human-confirmed not relevant to this window). The exact-equality
+  // check above (`customTabs` === ['roles', 'attachments']) already proves no THIRD
+  // custom tab slipped back in, but that native secondary tab was never a `customTabs`
+  // entry to begin with — it was generated from `decisions.json`'s `entities.
+  // emailConfiguration` into the generated `UserPage.jsx`'s own `detailEntity`/
+  // `DetailTable`/`DetailForm` props (a pipeline-generated file this suite deliberately
+  // does not test directly, per the repo's Generated Files Policy). This test instead
+  // anchors the removal in the one hand-authored source of truth: a regression here
+  // (someone dropping the `exclude: true`) would silently resurrect the email-config tab
+  // on the next `make regen ONLY=user`, without changing a single line this file covers.
+  it('declares entities.emailConfiguration.exclude: true in decisions.json', () => {
+    const decisions = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'user', 'decisions.json'), 'utf8'),
+    );
+    expect(decisions.entities.emailConfiguration.exclude).toBe(true);
+  });
+
+  // ETP-4999 item 3 (Print button removal, Users window) — QA-flagged gap: nothing
+  // in the repo asserted these two decisions.json keys, so a future `make regen` that
+  // silently dropped either would go undetected until manual QA caught the button
+  // reappearing. Mirrors the emailConfiguration.exclude pattern directly above: read
+  // decisions.json itself rather than the pipeline-generated UserPage.jsx (per the
+  // repo's Generated Files Policy).
+  it('declares window.hidePrint and window.listViewOptions.hidePrint: true in decisions.json', () => {
+    const decisions = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'user', 'decisions.json'), 'utf8'),
+    );
+    expect(decisions.window.hidePrint).toBe(true);
+    expect(decisions.window.listViewOptions.hidePrint).toBe(true);
   });
 
   it('passes onAfterExistingSave through to the generated UserPage', async () => {
@@ -453,8 +490,17 @@ describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => 
     expect(pill).toHaveAttribute('data-status', 'EXPIRED');
   });
 
-  it.each(['ACCEPTED', 'REVOKED'])('renders nothing when invitationStatus is %s (terminal, non-actionable state)', (status) => {
-    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+  it('renders a green accepted pill when invitationStatus is ACCEPTED (ETP-4999)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'ACCEPTED' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationAcceptedBadge');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+    expect(pill).toHaveAttribute('data-status', 'ACCEPTED');
+  });
+
+  it('renders nothing when invitationStatus is REVOKED (terminal, non-actionable state)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'REVOKED' }} />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
   });
 
