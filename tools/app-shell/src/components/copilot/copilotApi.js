@@ -77,9 +77,15 @@ export async function copilotRequest(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const unsafe = method !== 'GET' && method !== 'HEAD';
   const multipart = options.body instanceof FormData;
-  const base = multipart
-    ? (unsafe ? writeCredentialHeaders() : readCredentialHeaders())
-    : (unsafe ? writeHeaders() : jsonHeaders());
+  // One builder per (multipart, unsafe) pair. A lookup rather than nested
+  // ternaries so each of the four combinations is named where it is chosen.
+  const BUILDERS = {
+    'multipart:write': writeCredentialHeaders,
+    'multipart:read': readCredentialHeaders,
+    'json:write': writeHeaders,
+    'json:read': jsonHeaders,
+  };
+  const base = BUILDERS[`${multipart ? 'multipart' : 'json'}:${unsafe ? 'write' : 'read'}`]();
 
   const headers = new Headers(base);
   // Caller-supplied headers last so a call site can still override, e.g. a
