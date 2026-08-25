@@ -355,7 +355,10 @@ pending manual verification (steps below) rather than a follow-up ticket.
 | "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
-and already pushed to NEO from earlier work — only the UI wiring was missing. Deliberately
+and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
+(part 4 below):** that classification was only correct for the `customer` entity; the fields
+were never declared for `businessPartner`, which is the entity the UI actually persists
+through, so saves were silently discarded until part 4's fix. Deliberately
 **not** declared with an explicit `fieldGroup`/entity-level customization in `decisions.json`:
 the generated `CustomerForm.jsx` for the `customer` entity is never imported by
 `BusinessPartnerPage.jsx` or any custom component — every `customer`/`vendor` entity field in
@@ -468,3 +471,41 @@ custom-component revert. Verified with `npx vitest run src/windows/custom/contac
 Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
 visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
 to `onChange`).
+
+## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
+
+**Bug:** editing "Clave por Defecto" (`aeatsiiDefaultsiikey`) or "Clave tipo factura"
+(`aeatsiiSiikeylist`) in `FiscalDefaultsSection.jsx` and saving appeared to succeed (`PATCH`
+returned `200 OK`), but reloading the record showed the old value — the change never
+persisted.
+
+**Root cause:** part 2 above documented these two fields against entity `customer`, but that
+was only true for their *read* classification. `FiscalDefaultsSection.jsx` is mounted by
+`ContactsFinancialPanel.jsx` on the `businessPartner` entity's own `data`/`onChange` — it
+writes through `PATCH /businessPartner/{id}`, not `/customer`. In `artifacts/contacts/decisions.json`
+neither field was explicitly declared under `entities.businessPartner.fields`, so both fell
+back to the extractor's default classification for that entity/tab: `visibility: "system"`
+(a leftover from pre-ETP-4784 classification). `system` visibility maps to
+`ETGO_SF_FIELD.isreadonly='Y'`, so NEO's `businessPartner` PATCH handler accepted the request,
+silently dropped the two fields (not in the writable set), and returned 200 — masking the
+failure. The sibling `customer` entity (a different sub-tab on the same `C_BPartner` table)
+happened to classify the same two columns as `editable`, which is why part 2 wrongly assumed
+the fields were already correctly configured end-to-end.
+
+**Fix:** declared `aeatsiiDefaultsiikey` and `aeatsiiSiikeylist` explicitly under
+`entities.businessPartner.fields` in `artifacts/contacts/decisions.json` with
+`visibility: "editable"`, `form: false` (rendered by hand in `FiscalDefaultsSection.jsx`, not
+by the auto-generated form), matching the existing `tbaiIssimplifiedinv` entry right above
+them. Regenerated with `make regen ONLY=contacts PUSH_TO_NEO=1`; confirmed in
+`ETGO_SF_FIELD` that both columns now have `isreadonly='N'` for the `businessPartner` entity,
+and confirmed end-to-end with a live `PATCH` + `GET` against
+`/sws/neo/contacts/businessPartner/{id}` that the new value survives a reload.
+
+No frontend code changed — `FiscalDefaultsSection.jsx` was already reading/writing the right
+entity; this was purely a backend field-classification gap. `npx vitest run
+src/windows/custom/contacts` still passes unchanged (167 passed, 1 skipped).
+
+**Lesson:** an entity table in this doc records *where a field is rendered*, not *which
+entity's PATCH endpoint persists it*. When a custom component reads `data`/`onChange` from a
+different entity than the one implied by a field's original Classic tab, always verify the
+`decisions.json` classification against the entity the component is actually mounted on.

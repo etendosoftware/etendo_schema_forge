@@ -1,7 +1,8 @@
 {
-  "version": "0.49.1",
+  "version": "0.50.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "checksum": "0a0be75dab0ccbbc",
+  "updatedAt": "2026-08-25T14:29:05.431Z",
+  "checksum": "343749d019eef977",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1139,6 +1140,80 @@
             }
           },
           {
+            "name": "aeatsiiDefaultsiikey",
+            "apiKey": "aeatsiiDefaultsiikey",
+            "column": "EM_Aeatsii_Defaultsiikey",
+            "label": "SII Default Key",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiSiikeylist",
+            "apiKey": "aeatsiiSiikeylist",
+            "column": "EM_Aeatsii_Siikeylist",
+            "label": "SII Key List",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
+            },
+            "enumValues": [
+              {
+                "value": "R",
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
+              },
+              {
+                "value": "F1",
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
+              },
+              {
+                "value": "F2",
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
+              },
+              {
+                "value": "F4",
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
+              }
+            ],
+            "defaultValue": "F1",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
             "name": "account",
             "apiKey": "account",
             "column": "FIN_Financial_Account_ID",
@@ -1480,6 +1555,20 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiDefaultsiikey",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiSiikeylist",
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
             }
           },
           {
@@ -6069,7 +6158,7 @@
             "apiKey": "aeatsiiDefaultsiikey",
             "column": "EM_Aeatsii_Defaultsiikey",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -6077,7 +6166,7 @@
             "apiKey": "aeatsiiSiikeylist",
             "column": "EM_Aeatsii_Siikeylist",
             "type": "enum",
-            "visibility": "system",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -12174,6 +12263,22 @@
         "description": "Default value for 'active' in businessPartner should be a string"
       },
       {
+        "id": "t-default-value-type-businessPartner-aeatsiiDefaultsiikey",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiDefaultsiikey' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-aeatsiiSiikeylist",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiSiikeylist' in businessPartner should be a string"
+      },
+      {
         "id": "t-default-value-type-businessPartner-businessPartnerCategory",
         "category": "default-value-type",
         "entity": "businessPartner",
@@ -13550,6 +13655,22 @@
         "description": "Field 'active' should be present in businessPartner"
       },
       {
+        "id": "t-field-presence-businessPartner-aeatsiiDefaultsiikey",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Field 'aeatsiiDefaultsiikey' should be present in businessPartner"
+      },
+      {
+        "id": "t-field-presence-businessPartner-aeatsiiSiikeylist",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Field 'aeatsiiSiikeylist' should be present in businessPartner"
+      },
+      {
         "id": "t-field-presence-businessPartner-bPCurrencyID",
         "category": "field-presence",
         "entity": "businessPartner",
@@ -14684,6 +14805,22 @@
         "field": "active",
         "runner": "node",
         "description": "Field 'active' should have type 'boolean' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-aeatsiiDefaultsiikey",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Field 'aeatsiiDefaultsiikey' should have type 'boolean' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-aeatsiiSiikeylist",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Field 'aeatsiiSiikeylist' should have type 'string' in businessPartner"
       },
       {
         "id": "t-field-type-businessPartner-bPCurrencyID",
@@ -17046,14 +17183,6 @@
         "description": "System field 'acquisitionCost' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-system-field-businessPartner-aeatsiiDefaultsiikey",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "aeatsiiDefaultsiikey",
-        "runner": "node",
-        "description": "System field 'aeatsiiDefaultsiikey' should exist in backend but not frontend for businessPartner"
-      },
-      {
         "id": "t-system-field-businessPartner-aeatsiiMenor",
         "category": "system-field",
         "entity": "businessPartner",
@@ -17068,14 +17197,6 @@
         "field": "aeatsiiRepTaxid",
         "runner": "node",
         "description": "System field 'aeatsiiRepTaxid' should exist in backend but not frontend for businessPartner"
-      },
-      {
-        "id": "t-system-field-businessPartner-aeatsiiSiikeylist",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "aeatsiiSiikeylist",
-        "runner": "node",
-        "description": "System field 'aeatsiiSiikeylist' should exist in backend but not frontend for businessPartner"
       },
       {
         "id": "t-system-field-businessPartner-bankAccount",
@@ -21016,23 +21137,23 @@
       }
     ],
     "summary": {
-      "total": 1149,
+      "total": 1153,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 48,
+        "default-value-type": 50,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 142,
-        "field-type": 142,
+        "field-presence": 144,
+        "field-type": 144,
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 518,
+        "system-field": 516,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1149,
+        "node": 1153,
         "junit": 0
       }
     }
