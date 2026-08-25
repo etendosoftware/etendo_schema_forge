@@ -1,11 +1,9 @@
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI, useLabel } from '@/i18n';
-import { useSiiTbaiActive, resolveOrganizationId } from './fiscalDefaults.utils.js';
 
 // ── SII (AEAT) / TicketBAI invoicing defaults — read at invoicing time in
-// Classic, no callout of their own here. (ETP-4784 part 2 UX fix, further
-// split into two conditional sub-blocks in the follow-up UX pass below.)
+// Classic, no callout of their own here. (ETP-4784)
 //
 // "Invoice type key" only makes sense once "Default Key" is on, mirroring
 // the AD displayLogic @EM_Aeatsii_Defaultsiikey@='Y' (see
@@ -49,26 +47,19 @@ function FiscalToggle({ label, value, onCheckedChange, testId }) {
 
 // ── Fiscal defaults section ──────────────────────────────────────────────
 // Groups the 3 Business Partner fields used as billing-time defaults by the
-// Classic AEAT SII / TicketBAI modules into two independently-gated
-// sub-blocks, so a contact only sees the defaults relevant to the fiscal
-// system(s) actually active for its organization:
+// Classic AEAT SII / TicketBAI modules into two blocks. Faithful to Classic:
+// the real AD DisplayLogic for these 3 fields does not depend on whether the
+// organization has SII/TicketBAI actually configured, so this component does
+// not gate on that either (no "is SII/TBAI active" lookup).
 //   - "SII" block (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`): shown only
-//     when the org has an active SII configuration (`acogidaAlSII`).
-//   - "TicketBAI" block (`tbaiIssimplifiedinv`): shown only when the org has
-//     an active TicketBAI configuration record (existence IS the signal).
-// If neither applies, the whole section (title + description) is hidden —
-// see `useSiiTbaiActive` for the detection + fail-safe-hide logic.
+//     when `data.customer` is true — mirrors the same Customer-flag gate
+//     `BillingPreferencesForm.jsx` uses for its own Cliente block, which is
+//     where these two fields originally lived in Classic.
+//   - "TicketBAI" block (`tbaiIssimplifiedinv`): always shown, unconditional.
 export default function FiscalDefaultsSection(props) {
   const ui = useUI();
   const t = useLabel();
-  const { data, onChange, apiBaseUrl } = props;
-
-  const organizationId = resolveOrganizationId(data?.organization);
-  const { loading, sii: siiActive, tbai: tbaiActive } = useSiiTbaiActive(organizationId, apiBaseUrl);
-
-  // Fail-safe: while we don't yet know (loading) or once we know neither
-  // system applies, render nothing at all — no title, no description.
-  if (loading || (!siiActive && !tbaiActive)) return null;
+  const { data, onChange } = props;
 
   return (
     <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
@@ -77,7 +68,7 @@ export default function FiscalDefaultsSection(props) {
         <div className="text-xs text-text-secondary">{ui('fiscalDefaultsDescription')}</div>
       </div>
       <div className="flex-1 flex flex-col gap-4">
-        {siiActive && (
+        {data?.customer && (
           <div className="flex flex-col gap-3" data-testid="FiscalDefaultsSection__sii-block">
             <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
               {ui('fiscalDefaultsSiiBlock')}
@@ -100,18 +91,16 @@ export default function FiscalDefaultsSection(props) {
             </div>
           </div>
         )}
-        {tbaiActive && (
-          <div className="flex flex-col gap-3" data-testid="FiscalDefaultsSection__tbai-block">
-            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
-              {ui('fiscalDefaultsTbaiBlock')}
-            </div>
-            <FiscalToggle
-              label={t('EM_Tbai_Issimplifiedinv')}
-              value={data?.tbaiIssimplifiedinv}
-              onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
-              testId="FiscalToggle__tbai-simplified" />
+        <div className="flex flex-col gap-3" data-testid="FiscalDefaultsSection__tbai-block">
+          <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+            {ui('fiscalDefaultsTbaiBlock')}
           </div>
-        )}
+          <FiscalToggle
+            label={t('EM_Tbai_Issimplifiedinv')}
+            value={data?.tbaiIssimplifiedinv}
+            onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
+            testId="FiscalToggle__tbai-simplified" />
+        </div>
       </div>
     </div>
   );

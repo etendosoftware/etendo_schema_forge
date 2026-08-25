@@ -1,13 +1,14 @@
 /**
  * Tests for FiscalDefaultsSection — the grouped SII/TicketBAI fiscal-defaults
- * block (ETP-4784). Split into two independently-gated sub-blocks (SII /
- * TicketBAI) driven by `useSiiTbaiActive`; the whole section hides when
- * neither system is actively configured for the contact's organization.
+ * block (ETP-4784). Faithful to Classic: no "SII/TBAI active" gating — the
+ * SII block (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) shows only when
+ * `data.customer` is true (same gate as `BillingPreferencesForm.jsx`'s
+ * Cliente block), and the TicketBAI block (`tbaiIssimplifiedinv`) always
+ * renders.
  */
 import { render, screen } from '@testing-library/react';
 import FiscalDefaultsSection from '../FiscalDefaultsSection';
 import { EntityForm } from '@/components/contract-ui';
-import { useSiiTbaiActive } from '../fiscalDefaults.utils.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
@@ -18,10 +19,6 @@ vi.mock('@/components/contract-ui', () => ({
     <div data-testid="entity-form">{fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>
   )),
 }));
-vi.mock('../fiscalDefaults.utils.js', () => ({
-  useSiiTbaiActive: vi.fn(),
-  resolveOrganizationId: (v) => (v == null ? null : String(typeof v === 'object' ? v.id : v)),
-}));
 
 function findFieldsCall(fieldKey) {
   return EntityForm.mock.calls.find(([props]) =>
@@ -29,71 +26,50 @@ function findFieldsCall(fieldKey) {
   );
 }
 
-function mockActive({ loading = false, sii = false, tbai = false, vfactuActive = false } = {}) {
-  // vfactuActive is returned by the hook (ETP-4784 follow-up) but not yet
-  // consumed by FiscalDefaultsSection — included here for shape parity only.
-  vi.mocked(useSiiTbaiActive).mockReturnValue({ loading, sii, tbai, vfactuActive });
-}
-
 describe('FiscalDefaultsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('section visibility', () => {
-    it('renders nothing while the active-detection is loading', () => {
-      mockActive({ loading: true });
-      const { container } = render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
-      expect(container).toBeEmptyDOMElement();
-    });
-
-    it('hides the whole section (title + description) when neither SII nor TBAI is active', () => {
-      mockActive({ loading: false, sii: false, tbai: false });
-      const { container } = render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
-      expect(container).toBeEmptyDOMElement();
-      expect(screen.queryByText('fiscalDefaults')).not.toBeInTheDocument();
-      expect(screen.queryByText('fiscalDefaultsDescription')).not.toBeInTheDocument();
-    });
-
-    it('renders the section title and description when SII is active', () => {
-      mockActive({ sii: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
-      expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsDescription')).toBeInTheDocument();
-    });
+  it('always renders the section title and description', () => {
+    render(<FiscalDefaultsSection data={{}} onChange={vi.fn()} />);
+    expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
+    expect(screen.getByText('fiscalDefaultsDescription')).toBeInTheDocument();
   });
 
-  describe('SII block — shown only when SII is active', () => {
-    it('renders the SII block title and fields when sii is active and tbai is not', () => {
-      mockActive({ sii: true, tbai: false });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+  describe('SII block — shown only when data.customer is true', () => {
+    it('renders the SII block title and fields when customer is true', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
       expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
-      expect(screen.queryByText('fiscalDefaultsTbaiBlock')).not.toBeInTheDocument();
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeTruthy();
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
     });
 
-    it('does not render the SII block when sii is not active', () => {
-      mockActive({ sii: false, tbai: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+    it('does not render the SII block when customer is false', () => {
+      render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
       expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
+      expect(screen.queryByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).not.toBeInTheDocument();
+    });
+
+    it('does not render the SII block when customer is undefined', () => {
+      render(<FiscalDefaultsSection data={{}} onChange={vi.fn()} />);
+
+      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
     });
 
     it('wires the aeatsiiDefaultsiikey toggle to onChange with the AD column name', () => {
-      mockActive({ sii: true });
       const onChange = vi.fn();
-      render(<FiscalDefaultsSection data={{ organization: 'org-1', aeatsiiDefaultsiikey: false }} onChange={onChange} />);
+      render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: false }} onChange={onChange} />);
 
       screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' }).click();
       expect(onChange).toHaveBeenCalledWith('aeatsiiDefaultsiikey', true, 'EM_Aeatsii_Defaultsiikey');
     });
 
     it('exposes the aeatsiiSiikeylist select with exactly the four AEAT invoice-type codes', () => {
-      mockActive({ sii: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
       const call = findFieldsCall('aeatsiiSiikeylist');
       const field = call[0].fields.find((f) => f.key === 'aeatsiiSiikeylist');
@@ -104,8 +80,7 @@ describe('FiscalDefaultsSection', () => {
     });
 
     it('the aeatsiiSiikeylist displayLogic mirrors @EM_Aeatsii_Defaultsiikey@=\'Y\' (visible only when the toggle is on)', () => {
-      mockActive({ sii: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
       const call = findFieldsCall('aeatsiiSiikeylist');
       const field = call[0].fields.find((f) => f.key === 'aeatsiiSiikeylist');
@@ -114,38 +89,26 @@ describe('FiscalDefaultsSection', () => {
     });
   });
 
-  describe('TicketBAI block — shown only when TBAI is active', () => {
-    it('renders the TicketBAI block title and toggle when tbai is active and sii is not', () => {
-      mockActive({ sii: false, tbai: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+  describe('TicketBAI block — always shown', () => {
+    it('renders the TicketBAI block title and toggle regardless of customer', () => {
+      render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
       expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
     });
 
-    it('does not render the TicketBAI block when tbai is not active', () => {
-      mockActive({ sii: true, tbai: false });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
-
-      expect(screen.queryByText('fiscalDefaultsTbaiBlock')).not.toBeInTheDocument();
-      expect(screen.queryByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).not.toBeInTheDocument();
-    });
-
     it('wires the tbaiIssimplifiedinv toggle to onChange with the AD column name', () => {
-      mockActive({ tbai: true });
       const onChange = vi.fn();
-      render(<FiscalDefaultsSection data={{ organization: 'org-1', tbaiIssimplifiedinv: false }} onChange={onChange} />);
+      render(<FiscalDefaultsSection data={{ tbaiIssimplifiedinv: false }} onChange={onChange} />);
 
       screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' }).click();
       expect(onChange).toHaveBeenCalledWith('tbaiIssimplifiedinv', true, 'EM_Tbai_Issimplifiedinv');
     });
   });
 
-  describe('both systems active', () => {
-    it('renders both blocks simultaneously', () => {
-      mockActive({ sii: true, tbai: true });
-      render(<FiscalDefaultsSection data={{ organization: 'org-1' }} onChange={vi.fn()} />);
+  describe('both blocks visible', () => {
+    it('renders both blocks simultaneously when customer is true', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
       expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
       expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();

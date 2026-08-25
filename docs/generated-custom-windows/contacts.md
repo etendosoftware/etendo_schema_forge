@@ -350,9 +350,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` (visibility superseded in part 3 below — gated on active SII config, not on the Customer flag) |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
 | "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` (visibility superseded in part 3 below — gated on active TicketBAI config) |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. Deliberately
@@ -426,104 +426,45 @@ task on top of the already-working part 2 wiring. Verified with `make regen ONLY
 and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 `FiscalDefaultsSection.vitest.jsx`, `ContactsFinancialPanel.vitest.jsx`) pass.
 
-## ETP-4784 (part 3, UX follow-up) — Split into conditional SII / TicketBAI blocks + toggle switch
+## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
 
-Human feedback on part 2's single "SIF Defaults" section: it always showed all 3 fields
-regardless of whether the contact's organization actually has SII or TicketBAI configured,
-and the two checkboxes used the square `SquareCheckbox` control instead of the app's
-canonical pill switch. Two changes:
+Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
+explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
+had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
+lists, then by reading 3 server-maintained flags off `AD_OrgInfo`
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`). **That gating was reverted.**
 
-**1. Two independently-gated sub-blocks, whole section hidden when neither applies.**
-`FiscalDefaultsSection.jsx` no longer gates on `data.customer` — the `aeatsiiDefaultsiikey`
-gate on the Customer flag from part 2 is dropped in favor of a real fiscal-configuration
-check. The section is now split into:
-- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — rendered only when the
-  contact's organization has an **active** `sii-config/siiConfiguration` record with
-  `acogidaAlSII` truthy.
-- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — rendered only when the organization has
-  an **active** `tbai-config/header` record. TicketBAI has no "enabled" boolean of its own;
-  the mere existence of an active config record for that org IS the signal, same convention
-  already used by `useFiscalConfig.js`/`useFiscalMonitor.js`.
+Investigation of the real `AD_FIELD.DisplayLogic` in Classic for the 3 fields
+(`aeatsiiDefaultsiikey`, `aeatsiiSiikeylist`, `tbaiIssimplifiedinv`) confirmed **none of them
+depend on whether the organization has SII/TicketBAI active** — they are shown whenever the
+containing tab is visible. Human decision: **"be faithful to Classic, don't invent
+show/hide logic"**. `FiscalDefaultsSection.jsx` final behavior:
 
-If neither system is configured for the organization, the entire "SIF Defaults" section
-(title, description, both blocks) renders nothing — `FiscalDefaultsSection` returns `null`.
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — shown only when
+  `data.customer` is true. This is the same `data.customer` gate `BillingPreferencesForm.jsx`
+  uses for its own Cliente block, and matches where these two fields live in Classic (the
+  Customer tab). `aeatsiiSiikeylist` still stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` via `displayLogic` (unchanged, see part 2 above).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — always shown, unconditional. No
+  organization-level or Customer/Vendor gating at all.
+- The section title/description (`fiscalDefaults`/`fiscalDefaultsDescription`) always render
+  — no `loading` state, no early `return null`.
 
-**New detection hook — `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js`
-→ `useSiiTbaiActive(organizationId, apiBaseUrl)`.** Fetches both config entities in parallel
-via `useApiFetch`, filters to the active row with `isActiveRecord()` (reused from
-`fiscal-config/fiscalConfig.utils.js` — same "Change SIF" trace-row problem as the Monitor
-Fiscal window), and resolves `{ loading, sii, tbai }`. **Fail-safe by design:** any fetch
-error, rejected promise, or non-ok response (404 = module not installed for that org) resolves
-to `sii: false, tbai: false` — the block is hidden rather than risk showing stale or incorrect
-defaults. This mirrors the same non-fatal try/catch degradation pattern `useFiscalMonitor.js`
-already uses for its own config fetches. `organizationId` is resolved off
-`data.organization` (the Business Partner's `AD_Org_ID`, exposed as the `organization` field
-on the `businessPartner` entity) via the module's `resolveOrganizationId()` helper, which
-accepts a raw id, a `{id}`/`{value}` FK object, or `null`.
+**Removed:** `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js` (the
+`useSiiTbaiActive`/`resolveOrganizationId` hook and its `organization/information/{orgId}`
+fetch) and its test file — deleted outright, nothing else in the repo imported them.
+`FiscalDefaultsSection.jsx` no longer takes an `apiBaseUrl`-driven network dependency; it is
+now a pure presentational component driven entirely by `data`/`onChange`, same contract as
+`BillingPreferencesForm.jsx`.
 
-**2. Canonical `PillToggle` switch instead of `SquareCheckbox`/`EntityForm` checkbox.**
-`aeatsiiDefaultsiikey` and `tbaiIssimplifiedinv` are pulled out of the `EntityForm`-driven
-`fields` array entirely and rendered by hand through a local `FiscalToggle` wrapper —
-the same label-above/switch-below pattern as `BlockingToggle` in
-`BillingPreferencesForm.jsx` (customer/vendor "Bloquear" toggles). Each toggle's
-`onCheckedChange` calls `onChange(key, next, adColumnName)` directly (e.g.
-`onChange('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')`), the same 3-argument
-`onChange` contract `BlockingToggle` already uses for `customerBlocking`/`vendorBlocking`.
-`aeatsiiSiikeylist` is a `select`, not a checkbox, so it is unaffected — it stays wired
-through `EntityForm` exactly as before, still hidden-not-cleared behind
-`aeatsiiDefaultsiikey` via the same `displayLogic`. Both toggle labels are resolved via
-`useLabel()`/`t(column)` against the AD dictionary, unchanged from part 2.
+The `organization` spec's 3 `AD_OrgInfo` flags added in the discarded intermediate design
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`, `system` visibility) were
+**kept as-is** in `artifacts/organization/decisions.json` — they remain legitimate
+Organization-window information exposed on the backend contract, just no longer consumed
+from Contacts. See `docs/generated-custom-windows/organization.md` for that side.
 
-**New i18n keys (`genericLabels`, both `en_US.json`/`es_ES.json`):** `fiscalDefaultsSiiBlock`
-("SII" / "SII") and `fiscalDefaultsTbaiBlock` ("TicketBAI" / "TicketBAI") — the two sub-block
-titles.
-
-No `decisions.json` or generator change was needed — this is a pure custom-component UX
-change on top of the already-working part 2/3 wiring; the underlying fields, their
-`visibility`/`form` flags, and the pipeline chain are untouched. Verified with
-`npx vitest run src/windows/custom/contacts` (all Contacts suites, including the new
-`fiscalDefaults.utils.vitest.js` covering `useSiiTbaiActive`'s active/inactive/fail-safe
-paths, and the rewritten `FiscalDefaultsSection.vitest.jsx` covering all 4 combinations of
-SII/TicketBAI active plus the toggle wiring).
-
-## ETP-4784 (part 4) — Detection simplified to a single `AD_OrgInfo` read
-
-Part 3's `useSiiTbaiActive` inferred SII/TicketBAI activation by fetching and filtering the
-`sii-config`/`tbai-config` lists (two calls, `isActiveRecord()` trace-row filtering). Human
-feedback: `AD_OrgInfo` already carries 3 server-maintained Y/N flags per organization —
-`EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`, `EM_Etsg_Has_Vfactu_Config` — so the whole
-detection collapses to **one `getById` call**, no filtering needed.
-
-**Backend side (see `docs/generated-custom-windows/organization.md`):** the 3 flags were
-exposed as `system`-visibility fields on the `organization` spec's `information` entity
-(`AD_OrgInfo`, 1:1 by `AD_Org_ID`) — previously `discarded`. `system` keeps them out of the
-auto-generated Organization form while making them available on the backend contract/API.
-
-**`useSiiTbaiActive(organizationId, apiBaseUrl)` rewritten** in
-`tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js`: a single
-`GET {apiBase}/organization/information/{organizationId}` (note: this is the *live* spec
-name registered in NEO — confirmed via a direct call returning 200. Do NOT trust
-`apiPrediction.specName`/`baseUrl` in `artifacts/organization/contract.json` blindly: as of
-ETP-4784 that field is stale — a regen still derives `organizaci-n` from the AD window's
-current Spanish name `"Organización"` via the kebab-caser, which mangles the accented `ó`,
-but the live NEO registration predates that and is `organization`. This is a real drift
-between the pipeline's current derivation and the live config, not something a plain regen
-fixes — see the `fetchOrganizationInfo()` `console.warn` added on non-ok responses as the
-early-warning signal if this drifts again). Resolves `{ loading, sii, tbai, vfactuActive }`:
-- `sii` = `isEtendoTrue(response.etsgHasSIIConfig)`
-- `tbai` = `isEtendoTrue(response.etsgHasTbaiConfig)`
-- `vfactuActive` = `isEtendoTrue(response.etsgHasVfactuConfig)` — exposed for a future
-  Verifactu block, **not yet consumed** by `FiscalDefaultsSection.jsx` (out of scope here).
-
-Same fail-safe contract as before: any fetch rejection, non-ok response (404 — org info not
-found / module not installed), or falsy `organizationId` degrades to
-`{ sii: false, tbai: false, vfactuActive: false }`, hiding both blocks rather than risking
-stale/incorrect defaults. `isActiveRecord()` and the `sii-config`/`tbai-config` fetch/filter
-logic were removed from `fiscalDefaults.utils.js` — no longer needed (the Y/N flags are
-already the "is it active" answer, no trace-row filtering required). `FiscalDefaultsSection.jsx`
-itself needed no changes: it only reads `loading/sii/tbai` off the hook, same shape as before.
-
-Verified with `npx vitest run src/windows/custom/contacts` — `fiscalDefaults.utils.vitest.js`
-rewritten to mock the single `organization/information/{id}` call (covers both active, only
-SII, only TBAI, neither, fetch rejection, and 404); `FiscalDefaultsSection.vitest.jsx` mocks
-`useSiiTbaiActive` directly and required no behavioral changes.
+No `decisions.json` or generator change was needed for this simplification — pure
+custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all
+Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
+visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
+to `onChange`).
