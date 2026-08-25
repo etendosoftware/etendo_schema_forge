@@ -1,5 +1,7 @@
-// Vitest coverage for the ETP-4907 role summary card (icon, name, window-count
-// badge, "N Users" headline — headline/badge swapped by ETP-4999).
+// Vitest coverage for the ETP-4907 role summary card (icon, name, "N Users"
+// headline). ETP-4999 removed the window-count badge from this card entirely
+// (see RoleSummaryCard.jsx's own ETP-4999 doc comment) — the card now shows
+// only icon + name + the userCount headline.
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 
@@ -14,10 +16,6 @@ vi.mock('@/i18n', () => ({
 vi.mock('@/components/ui/card', () => ({
   Card: ({ children, ...props }) => <div {...props}>{children}</div>,
   CardContent: ({ children, ...props }) => <div {...props}>{children}</div>,
-}));
-
-vi.mock('lucide-react', () => ({
-  LayoutGrid: (p) => <span data-testid={p['data-testid']} {...p} />,
 }));
 
 import { render, screen } from '@testing-library/react';
@@ -44,17 +42,22 @@ describe('RoleSummaryCard', () => {
     expect(screen.getByTestId('RoleSummaryCard__finance').textContent).toContain('roleNameFinance');
   });
 
-  // ETP-4999: the user count is now the headline (primary), the window count
-  // moved to the small top-right badge (supplementary) — the reverse of the
-  // original ETP-4907 layout. See RoleSummaryCard.jsx's ETP-4999 doc comment.
+  // ETP-4999: the user count is the card's only headline/content line now that
+  // the window-count badge was removed entirely. See RoleSummaryCard.jsx's own
+  // ETP-4999 doc comment.
   it('renders the user count as the interpolated headline', () => {
     render(<RoleSummaryCard role={{ id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 }} Icon={DummyIcon} />);
     expect(screen.getByTestId('RoleSummaryCard__userCount-sales').textContent).toBe('3 Users');
   });
 
-  it('renders the window count as a bare-number badge (supplementary, not the headline)', () => {
+  // ETP-4999 regression guard — a window-count badge (and its icon) used to sit
+  // top-right of the card; the Figma spec dropped it from this card altogether.
+  // `role.windowCount` is no longer read by the component at all, so this must
+  // hold even when the field is present (and non-zero) on the role object.
+  it('does not render a window-count badge or icon (ETP-4999 — removed entirely)', () => {
     render(<RoleSummaryCard role={{ id: 'inventory', name: 'Inventory', windowCount: 13, userCount: 1 }} Icon={DummyIcon} />);
-    expect(screen.getByTestId('RoleSummaryCard__windowCount-inventory').textContent).toContain('13');
+    expect(screen.queryByTestId('RoleSummaryCard__windowCount-inventory')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('RoleSummaryCard__windowsIcon-inventory')).not.toBeInTheDocument();
   });
 
   it('renders the given icon', () => {
@@ -67,15 +70,9 @@ describe('RoleSummaryCard', () => {
     expect(screen.getByTestId('RoleSummaryCard__sales')).toBeTruthy();
   });
 
-  // ETP-4907 QA: a role can legitimately have zero windows/users (e.g. a
-  // newly-provisioned system-template fallback nobody has composed yet, or a
-  // role with no AD_Window_Access rows) — the card must render "0", not blank
-  // or NaN, for both figures.
-  it('renders "0" (not blank/NaN) in the window-count badge for a role with windowCount: 0', () => {
-    render(<RoleSummaryCard role={{ id: 'purchasing', name: 'Purchasing', windowCount: 0, userCount: 2 }} Icon={DummyIcon} />);
-    expect(screen.getByTestId('RoleSummaryCard__windowCount-purchasing').textContent).toContain('0');
-  });
-
+  // ETP-4907 QA: a role can legitimately have zero users (e.g. a
+  // newly-provisioned system-template fallback nobody has composed yet) — the
+  // card must render "0", not blank or NaN, for the headline.
   it('renders "0 Users" (not blank/NaN) in the user-count headline for a role with userCount: 0', () => {
     render(<RoleSummaryCard role={{ id: 'inventory', name: 'Inventory', windowCount: 5, userCount: 0 }} Icon={DummyIcon} />);
     expect(screen.getByTestId('RoleSummaryCard__userCount-inventory').textContent).toBe('0 Users');

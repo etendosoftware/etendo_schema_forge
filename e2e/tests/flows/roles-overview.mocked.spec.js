@@ -244,11 +244,11 @@ test.describe('Roles overview — admin/client-admin', () => {
       await expect(card).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__content-${role.id}`)).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__userCount-${role.id}`)).toContainText(String(role.userCount));
-      await expect(page.getByTestId(`RoleSummaryCard__windowsIcon-${role.id}`)).toBeVisible();
-      // `rolesWindowCount` is i18n'd ("{count} Windows"/"{count} Ventanas") —
-      // assert the interpolated count is present rather than hardcoding the
-      // rendered locale string.
-      await expect(page.getByTestId(`RoleSummaryCard__windowCount-${role.id}`)).toContainText(String(role.windowCount));
+      // ETP-4999 — the window-count badge/icon was removed from the card
+      // entirely (Figma spec); `RoleSummaryCard__windowsIcon-*`/
+      // `RoleSummaryCard__windowCount-*` no longer exist in the DOM at all, so
+      // the assertions that used to check them here are gone (the fixture
+      // still carries `role.windowCount`, unused by this component now).
     }
 
     // Real DOM order of the card grid's direct children — a direct proxy for

@@ -1,28 +1,22 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { LayoutGrid } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 
 /**
  * ETP-4907 — one of the 5 summary cards atop the "Configuración > Roles"
- * overview: role icon + name, a small badge top-right, and a headline line
- * below. Role name resolution reuses `roleNameI18n.js` exactly like the
- * pre-ETP-4907 version of `RolesOverviewPage.jsx` did (the admin role is
- * identified via `role.isClientAdmin`, never its literal name, since that
- * name varies per tenant) — so e.g. the Finance role always reads
- * "Finanzas" here too, consistent with the rest of the app, even though the
- * ETP-4907 reference screenshot itself labels that card "Financiero".
+ * overview: role icon + name, and a headline line below. Role name resolution
+ * reuses `roleNameI18n.js` exactly like the pre-ETP-4907 version of
+ * `RolesOverviewPage.jsx` did (the admin role is identified via
+ * `role.isClientAdmin`, never its literal name, since that name varies per
+ * tenant) — so e.g. the Finance role always reads "Finanzas" here too,
+ * consistent with the rest of the app, even though the ETP-4907 reference
+ * screenshot itself labels that card "Financiero".
  *
- * **ETP-4999 — headline precedence + size:** QA flagged that the window
- * count ("23 ventanas") dominated the headline while the user count sat in
- * a small badge, backwards from what matters to an admin deciding who can
- * do what in this role. The user count is now always the headline (e.g. "2
- * usuarios") and the window count moved to the small top-right badge as
- * supplementary context — it isn't removed, just demoted, since it's still
- * useful, just not the number that should compete visually with the rest of
- * the page. The card was also shrunk slightly (`p-4` → `p-3`, headline
- * `text-2xl` → `text-xl`) for the same reason: this card is supplementary
- * information, not the page's primary content.
+ * **ETP-4999 — window count removed entirely.** A prior pass demoted the
+ * window count from headline to a small top-right badge (QA feedback that the
+ * user count should be the headline). The Figma spec then dropped it from
+ * this card altogether — the card now shows only role icon + name + user
+ * count, nothing else; `role.windowCount` is no longer read here at all.
  */
 export default function RoleSummaryCard({ role, Icon }) {
   const ui = useUI();
@@ -31,24 +25,14 @@ export default function RoleSummaryCard({ role, Icon }) {
   return (
     <Card data-testid={`RoleSummaryCard__${role.id}`}>
       <CardContent className="p-3" data-testid={`RoleSummaryCard__content-${role.id}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            {Icon && (
-              <Icon
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                data-testid={`RoleSummaryCard__icon-${role.id}`}
-              />
-            )}
-            <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
-          </div>
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-            title={ui('rolesColWindows')}
-            data-testid={`RoleSummaryCard__windowCount-${role.id}`}
-          >
-            <LayoutGrid className="h-3 w-3" data-testid={`RoleSummaryCard__windowsIcon-${role.id}`} />
-            {role.windowCount}
-          </span>
+        <div className="flex min-w-0 items-center gap-2">
+          {Icon && (
+            <Icon
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              data-testid={`RoleSummaryCard__icon-${role.id}`}
+            />
+          )}
+          <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
         </div>
         <p
           className="mt-2.5 text-xl font-semibold text-foreground"
