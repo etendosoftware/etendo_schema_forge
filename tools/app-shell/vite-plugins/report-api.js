@@ -16,10 +16,17 @@ import { REPORT_UI_STRINGS, pickLabel, buildContractLabels } from '@etendosoftwa
 import { resolveGrouping, buildNestedGroups, buildAccountReportTree }
   from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
 import { applyPlaceholders } from '@etendosoftware/schema-forge-cli/src/report-sql.js';
+import { hydrateDocumentBranding } from './report-branding.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
+const REPORT_PARTIALS_DIR = resolve(ROOT, 'templates', 'reports');
+
+function expandReportPartials(templateContent) {
+  const brandingPartial = readFileSync(join(REPORT_PARTIALS_DIR, 'document-branding.hbs'), 'utf8');
+  return templateContent.replace(/\{\{>\s*document-branding\s*\}\}/g, brandingPartial);
+}
 
 // ETP-4314 — instance-wide currency separators, fetched once from the same
 // NEO Headless config endpoint the browser reads (currencyFormatConfig.js),
@@ -229,10 +236,21 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       }
 
       const headerSql = replacePlaceholders(contract.sql.header);
+      // Keep branding generic for document contracts: existing reports use
+      // `org` as the organization alias, while newer contracts may expose
+      // `org_logo_id` explicitly. The fallback lets older print artifacts opt
+      // into the shared branding partial without duplicating this subquery.
+      const brandedHeaderSql = headerSql.includes('org_logo_id')
+        ? headerSql
+        : headerSql.replace(/^SELECT\s+/i,
+          'SELECT (SELECT oi.your_company_document_image FROM ad_orginfo oi WHERE oi.ad_org_id = org.ad_org_id) AS org_logo_id, ');
       const linesSql = replacePlaceholders(contract.sql.lines);
 
-      const headerResult = await pool.query(headerSql);
-      const header = headerResult.rows[0] || {};
+      const headerResult = await pool.query(brandedHeaderSql);
+      const header = await hydrateDocumentBranding(headerResult.rows[0] || {}, {
+        authToken,
+        etendoBase: process.env.ETENDO_URL || 'http://localhost:8080/etendo',
+      });
 
       const linesResult = await pool.query(linesSql);
       const lines = linesResult.rows;
@@ -677,7 +695,7 @@ export default function reportApiPlugin() {
             const templatePath = (perFormatTemplatePath && existsSync(perFormatTemplatePath))
               ? perFormatTemplatePath
               : join(artifactDir, 'template.hbs');
-            const templateContent = readFileSync(templatePath, 'utf8');
+            const templateContent = expandReportPartials(readFileSync(templatePath, 'utf8'));
             const helpersPath = join(artifactDir, 'helpers.js');
             const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
             const cssPath = join(ROOT, 'templates', 'reports', 'base.css');
