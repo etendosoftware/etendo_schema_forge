@@ -9,6 +9,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
@@ -230,16 +231,11 @@ function looksLikeTransfer(methodName) {
 
 /**
  * Opens the Salt Edge SCA widget in a centered popup WINDOW (not a browser tab), matching the
- * Classic "Generate Bank Payment" behaviour. Passing window features (and a named target, so a
- * second confirm reuses the same window) makes the browser open a popup instead of a tab.
+ * Classic "Generate Bank Payment" behaviour — 70% of the screen, same as every other Salt Edge
+ * popup (see lib/popupWindow.js). A named target lets a second confirm reuse the same window.
  */
 function openPisPopup(url) {
-  const w = 500;
-  const h = 720;
-  const left = Math.max(0, (window.screen?.width || 1024) / 2 - w / 2);
-  const top = Math.max(0, (window.screen?.height || 768) / 2 - h / 2);
-  const features = `popup=yes,width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`;
-  return window.open(url, 'saltEdgePisWidget', features);
+  return openCenteredPopup(url, 'saltEdgePisWidget', 'popup=yes,resizable=yes,scrollbars=yes');
 }
 
 /**
