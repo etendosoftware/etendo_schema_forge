@@ -15,6 +15,7 @@ import { registerReportHelpers, buildJsreportHelpersString, computeDocumentQrDat
 import { REPORT_UI_STRINGS, pickLabel, buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { resolveGrouping, buildNestedGroups, buildAccountReportTree }
   from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
+import { applyPlaceholders } from '@etendosoftware/schema-forge-cli/src/report-sql.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -289,79 +290,15 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     max: 3,
   });
 
-  // Shared __PLACEHOLDER__ substitution — same rules the main query already used (client id,
-  // per-param values with comma→IN rewriting, contract defaults, optional-clause stripping,
-  // AD_CLIENT_ID/AD_ORG_ID/AD_LANGUAGE rewrites). Extracted so a report's optional secondary
-  // queries (e.g. `sql.openingQuery`) can reuse it identically instead of duplicating it.
-  // Deletes every `AND ('__X__' = '' OR ...)` optional-filter clause whose
-  // placeholder was left blank (never substituted above, so the literal
-  // `'__X__' = ''` text still sits in the query). A plain regex can't do this
-  // safely on its own: it has to find the clause's OWN matching close-paren,
-  // and once a report's optional clause contains a nested subquery/function
-  // call — e.g. Profit & Loss's reference-period BETWEEN, which repeats its
-  // placeholder inside two `(SELECT MIN/MAX ...)` subqueries (ETP-4899) — a
-  // naive `[^)]*\)` stops at the FIRST inner `)` it meets, truncating the
-  // match and leaving a dangling fragment behind (`syntax error at or near
-  // ")"`). This walks real paren depth from the clause's own opening `(` to
-  // find its true matching close, so it's correct regardless of how much
-  // nesting or how many repeated placeholder occurrences the clause has.
-  function stripBlankOptionalClauses(q) {
-    const startRe = /AND\s*\(\s*'__(\w+)__'\s*=\s*''\s*OR\s*/gi;
-    let result = '';
-    let lastEnd = 0;
-    let m;
-    while ((m = startRe.exec(q))) {
-      if (m.index < lastEnd) continue; // already consumed by a previous match
-      const clauseStart = m.index;
-      const openParenIdx = q.indexOf('(', m.index);
-      let depth = 0;
-      let closeIdx = -1;
-      for (let i = openParenIdx; i < q.length; i++) {
-        if (q[i] === '(') depth++;
-        else if (q[i] === ')') {
-          depth--;
-          if (depth === 0) { closeIdx = i; break; }
-        }
-      }
-      if (closeIdx === -1) continue; // unbalanced — leave untouched rather than corrupt it
-      result += q.slice(lastEnd, clauseStart);
-      lastEnd = closeIdx + 1;
-      startRe.lastIndex = lastEnd;
-    }
-    result += q.slice(lastEnd);
-    return result;
-  }
-
-  function applyPlaceholders(rawSql, clientId) {
-    let q = rawSql.replace(/__CLIENT_ID__/g, clientId);
-    for (const [key, value] of Object.entries(params)) {
-      if (key.startsWith('_display_')) continue; // Skip display-only params
-      if (value !== undefined && value !== null && value !== '') {
-        const escaped = String(value).replace(/'/g, "''");
-        q = q.replace(new RegExp(`__${key.toUpperCase()}__`, 'g'), escaped);
-      }
-    }
-    for (const p of (contract.parameters || [])) {
-      if (p.default !== undefined && p.default !== null && p.default !== '') {
-        q = q.replace(new RegExp(`__${p.name.toUpperCase()}__`, 'g'), String(p.default));
-      }
-    }
-    q = q.replace(/=\s*'([^']*,[^']*)'/g, (match, ids) => {
-      const inList = ids.split(',').map(id => `'${id.trim()}'`).join(',');
-      return `IN (${inList})`;
-    });
-    q = stripBlankOptionalClauses(q);
-    q = q.replace(/AD_CLIENT_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi, `AD_CLIENT_ID IN ('${clientId}')`);
-    q = q.replace(/AD_ORG_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi,
-      `AD_ORG_ID IN (SELECT AD_ORG_ID FROM AD_ORG WHERE AD_CLIENT_ID = '${clientId}' AND ISACTIVE = 'Y')`);
-    q = q.replace(/AD_LANGUAGE\s*=\s*'[^']+'/gi, `AD_LANGUAGE = 'en_US'`);
-    return q;
-  }
+  // __PLACEHOLDER__ substitution and SQL scoping live in the shared module
+  // (report-sql.js) so the production report-server applies the IDENTICAL
+  // rules — the optional-clause stripper used to be fixed here only, which
+  // broke Balance Sheet and Profit & Loss on every server.
 
   try {
     const clientId = getClientIdFromRequest({ headers: { authorization: authToken ? `Bearer ${authToken}` : '' } }) || '0';
 
-    sql = applyPlaceholders(sql, clientId);
+    sql = applyPlaceholders(sql, { clientId, params, contract });
 
     // Inject date filters for Jasper SQL queries that don't have __PLACEHOLDER__ tokens.
     // The contract can specify a dateColumn (e.g., "dateColumn": "DATEACCT" or "O.DATEORDERED").
@@ -405,7 +342,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     // Same placeholder rules as the main query, just no LIMIT — it's already pre-aggregated.
     let openingRows = null;
     if (contract.sql?.openingQuery) {
-      const openingSql = applyPlaceholders(contract.sql.openingQuery, clientId);
+      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract });
       openingRows = (await pool.query(openingSql)).rows;
     }
 
@@ -414,7 +351,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     // consumed by buildAccountReportTree(), never rendered directly.
     let operandRows = null;
     if (contract.sql?.operandsQuery) {
-      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, clientId);
+      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract });
       operandRows = (await pool.query(operandsSql)).rows;
     }
 
