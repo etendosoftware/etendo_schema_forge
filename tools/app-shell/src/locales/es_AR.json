@@ -16995,7 +16995,7 @@
     "commercialDescription": "Configuración comercial secundaria del producto.",
     "availability": "Disponibilidad",
     "stockManagement": "Gestión de stock",
-    "productStocked": "Almacenado",
+    "productStocked": "Almacenable",
     "productReturnable": "Retornable",
     "categoryConfiguration": "Configuración",
     "categoryDefault": "Valor por defecto",
