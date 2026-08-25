@@ -1347,6 +1347,157 @@ have no AD backing) and consumes real NEO endpoints directly.
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
 
+## Conciliación empty state (ETP-4921)
+
+Both panels' tables share `renderRows`, whose empty state is a circled icon + title + hint,
+deliberately mirroring the right panel's own "Selecciona un movimiento". One line of centered
+copy in a full-height table read as a rendering failure rather than an intentional state, and
+having two visually different empty states on one screen made it worse.
+
+| Key | Copy |
+|---|---|
+| `financeReconcileEmpty` | "No se han encontrado movimientos" |
+| `financeReconcileEmptyHint` | points at the date range / status filter |
+
+The hint names the way out rather than nudging the user to create something: the list in these
+panels is always a filter result (status + date range + search), so there is nothing to create.
+That is the opposite of the Movimientos tab, whose own empty copy is paired with a
+"+ Nuevo movimiento" hint — which is why these two tabs deliberately do not share a key.
+
+## Column sorting (ETP-4921)
+
+Two different mechanisms, because the LIST and the DETAIL tabs are two different kinds of grid.
+
+### The Cuentas list — server-side
+
+The list is a generic `DataTable` inside the `AccountsHeaderTable` slot, so it sorts the way
+every other window does: `ListView` owns the state, `useEntity` turns it into NEO's `_sortBy`
+(`resolveBackendSort`, `lib/gridQuery.js`), and the whole dataset is ordered — not just the
+loaded page. `DataTable` treats `sortable` as **opt-out** (`col.sortable !== false`), and the
+slot now declares `sortable: true` on every data column; only the trailing `_rowActions` column
+stays `false`.
+
+This is why "Por conciliar" had to become the `EM_ETGO_Pending_Count` stored computed column
+first. A value injected in `afterHandle` can only ever be reordered *inside the page the SQL
+already selected* (`BATCH_SIZE = 75` + infinite-scroll `loadMore`), which is not the same as
+ordering the dataset — so the column was unsortable by construction.
+
+**Two sort affordances, both present:**
+
+- **Clickable column headers**, cycling none → asc → desc → back to the list's default.
+- **The toolbar "Ordenar por" popover** (`components/contract-ui/ListSortPopover.jsx`). Every
+  other list gets this from `ListView`'s idle bar, which this window suppresses
+  (`hideListBar: true`) in favour of its own toolbar — so the control was silently missing here.
+  It was extracted out of `ListView`'s inline JSX rather than copied, and `AccountsToolbar` takes
+  it through a `sortControl` node prop so the toolbar stays presentational. `ListView` forwards
+  `onSortSelect` / `onClearSort` / `isDefaultSort` in `tableProps` alongside `onSort` for exactly
+  this: the popover must NOT reuse the header's cycle, since a menu entry that can silently clear
+  the sort reads as a no-op.
+
+**The resting order stays in code.** `sortAccounts` reproduces the retired page's
+`ORDER BY fa.isdefault DESC, fa.name ASC`, which `listSortBy` cannot express —
+`ListView.parseListSortBy` parses a SINGLE column. So `decisions.json` declares
+`window.listSortBy: "name asc"` and the slot applies its two-key sort **only while the sort state
+still equals that default** (`RESTING_SORT`). Without that gate the arrows would render and
+appear to do nothing, because the local sort used to re-order unconditionally on every render.
+
+Related generic fix: `ListView.handleColumnSort`'s reset arm used to hardcode
+`creationDate desc`, so for any window declaring its own `listSortBy` the third click switched to
+a *different* order than the one the list opened in — and a slot keying off "is the sort at rest"
+could never get back to it. It now resets to `initialSortColumn` / `initialSortDirection`.
+
+### The Tipo column — two sortable segments
+
+The Tipo cell shows **two** values (the account type, and the IBAN under it), so one header could
+only ever sort by one of them. `decisions.json` declares a `multiField` decorator on the `type`
+field with `parts: [type, iBAN]`, which is the same mechanism the Product list uses for
+"Identificador & Nombre" — `DataTable.renderMultiFieldHeaderCell` renders N independently
+sortable segments, each issuing `_sortBy` on its own field.
+
+- The **cell body is untouched**: `DataTable`'s `col.render` wins over the multiField cell
+  renderer, so `cellType: accountType` still draws `TypeCell` (type label + chunked IBAN).
+- Part labels go through a `labelKey` resolved via `ui()`, not the literal `labels` map Product
+  declares inline, so no user-visible string is versioned in `decisions.json`.
+- Both parts carry `searchable: true`. Validator rule **F18** blocks a sort-enabled part that is
+  not queryable, and it reads queryability off `searchableFields` / `supportedFilters` — which
+  were empty for this entity. Neither list is consumed by the frontend, so this has no visible
+  side effect; it documents that NEO accepts a filter/sort on those columns.
+- Generic fix this needed: `renderMultiFieldHeaderCell` built its own `<th>` and **dropped
+  `col.headClass`**, which the single-label branch honours. This window pins column widths, so
+  its Tipo column collapsed to auto width the moment its header gained segments. No Product test
+  caught it because Product declares no `headClass`.
+
+### The Movimientos / Reconciliaciones / Extractos tabs — client-side
+
+These three are **not** `DataTable` grids: Movimientos is a hand-rolled `<table>`, the other two
+are CSS-grid `div role="table"` layouts, and each is fed by a single unpaged `useNeoResource`
+fetch whose filtering is already a client-side `useMemo`. Two of the three go through bespoke
+Java handlers that accept no sort parameter at all, so sorting belongs in the same place the
+filtering already does.
+
+| Piece | Where |
+|---|---|
+| Pure comparator | `lib/clientSort.js` — `compareCellValues`, `sortRows` |
+| State + none→asc→desc→none cycle | `hooks/useClientSort.js`, mirroring `ListView.handleColumnSort` |
+| The clickable label | `components/financial-accounts/SortableHeaderLabel.jsx` |
+
+`SortableHeaderLabel` renders only the label + arrow, never the cell — one consumer has
+`<TableHead>` cells and two have `<span>` cells, so a component owning the cell could not serve
+both. Returning to "none" on the third click (rather than to a default column) is what keeps the
+backend's own order reachable: movements arrive newest-first, reconciliations `transactionDate
+desc`.
+
+**The sort state lives in the TAB, not the table.** Each of the three toolbars also hosts the
+same `ListSortPopover` the Cuentas list uses, and a toolbar is the table's *sibling*, not its
+child — so the state has to sit above both. Same split as `ListView`/`DataTable`: the container
+owns it, the grid receives `sortKey` / `sortDirection` / `onSort`. Each table module exports what
+the tab needs to build it, derived from its own renderer registry rather than duplicated:
+
+| Table | Exports |
+|---|---|
+| `MovementsTable` | `useTrxTypeLabel`, `buildMovementSortCtx`, `buildMovementSortAccessors`, `buildMovementSortColumns` |
+| `StatementsTable` | `buildStatementSortAccessors`, `buildStatementSortColumns` |
+| `ReconciliationListTable` | `buildReconciliationSortAccessors`, `buildReconciliationSortColumns` |
+
+Each toolbar takes the control as a rendered `sortControl` node rather than sort props, so the
+toolbars stay presentational — the same shape `AccountsToolbar` uses.
+
+`useClientSort` therefore returns both cycles: `toggleSort` for the headers
+(none → asc → desc → none) and `selectSort` / `clearSort` / `isDefaultSort` for the popover,
+mirroring `ListView`'s own split between `handleColumnSort` and
+`handleSortSelect` / `handleClearSort`. A menu entry that could silently clear the sort would
+read as a no-op.
+
+**Sort values are co-located with the cell renderers**, as an optional `sortValue(row, ctx)` on
+each registry entry. That is deliberate: the contract field name and the payload key routinely
+differ (`transactionDate` renders from `row.date`, `businessPartner` from `row.contact`), and the
+translated pills must sort by what the reader sees, not by the raw code — every non-`RPPC`
+payment status collapses into "Sin conciliar" on screen, so sorting by code would scatter them.
+Dates sort on the raw ISO string, since `formatDate` yields `dd/mm/yyyy`, which would order by
+day-of-month.
+
+**Movimientos → Tipo also has two segments.** That cell stacks the transaction type over the
+posting status, so like the Cuentas list's Tipo it splits into "Tipo & Contabilizado". The
+`multiField` decorator is not available here — it is a contract decorator consumed by
+`DataTable` — so the hand-rolled equivalent is `SortableHeaderSegments`, fed by an optional
+`parts` array on the registry entry. `posted` is not a contract grid column of its own; it only
+ever appears inside that cell, which is why it contributes an accessor but no column.
+
+**Two deliberate exclusions:**
+
+- **Movimientos → Balance has no sort control at all.** It is a *running* balance, anchored to
+  `FIN_Financial_Account.currentbalance` and computed as `currentbalance − SUM(subsequent)` over
+  `statementdate ASC, line ASC`. It is order-dependent by construction, so reordering the grid by
+  anything else turns that column into a meaningless number. `Amount` sorts fine.
+- **Extractos → Lines / Out / In / Status ARE sortable** even though no AD field backs them:
+  they are computed aggregates, but they travel *with* the row, so sorting them client-side is
+  exactly as correct as sorting a contract column.
+
+`lib/clientSort.js` deliberately does **not** use `parseCalendarDate`. Lexicographic order on
+ISO-8601 is chronological, so the comparator only ever orders two instants against each other —
+it never reads a local-time getter and never buckets by day, which are the two things that helper
+exists to protect. See the date-only section of `CLAUDE.md`, which calls out this exact non-case.
+
 ## Payment status mapping (two states)
 
 The movement status was reduced to **two user-facing states**: a payment is either reconciled against a bank statement (`RPPC`) or not. Every other backend `FIN_Payment.Status` code collapses into "Sin conciliar".
@@ -1390,17 +1541,22 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
 - `components/financial-accounts/contractColumns.js` → `getContractGridColumns(entity)` reads `@generated/financial-account/contract.json` and returns the ordered, grid-flagged fields for an entity (`account`, `transaction`, `importedBankStatements`, `bankStatementLines`), forwarding `column`, `gridLabelKey`, `cellType` and `columnType` along with the name/label/type.
 - Field-level config lives in `artifacts/financial-account/decisions.json`. Per field: `grid` / `gridOrder` (which columns and in what order), `gridLabelKey` (the header's i18n key) and `cellType` (which renderer draws the cell). Edit decisions → `make regen ONLY=financial-account SKIP_EXTRACT=1` regenerates `contract.json`; the grids pick up the change with no JSX edits.
-- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `accountCountry`, `accountBalance`, `reconcilePill`). `accountCountry` (ETP-4896 follow-up) is the **País** column, inserted at `gridOrder: 3` right after Tipo — which bumped `currentBalance` to 4 and the `pendingCount` virtual field to 5. It renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
-- **`pendingCount` ("Por conciliar") is a `virtualFields[]` entry** on `entities.account`. It has no AD column: `FinancialAccountHandler.afterHandle` injects it per row. Same mechanism `payment-in`, `payment-out`, `return-material-receipt` and `return-to-vendor-shipment` already use. Caveat: `appendVirtualFields` (`resolve-curated.js`, in `schema_forge_core`) copies a closed whitelist, so **two** of the per-field knobs above do not reach a virtual field and each needs its own route:
-  - `cellType` is excluded → its renderer is bound through `VIRTUAL_FIELD_CELL_TYPES` in `accountCellTypes.jsx`.
-  - `gridLabelKey` is excluded too → its header is translated through **`window.labelOverrides`** instead, which `resolveColumnLabel` consults at priority 3 (`translate(col.column)`), outranking the raw English `label` the virtual field carries at priority 4. Declaring `gridLabelKey` on a virtual field is silently dropped and leaves the header in English — that is how this column shipped reading "Pending" in Spanish (fixed in ETP-4658). The `financeAccountsColPending` key still exists in both locale files for the other consumers of that wording.
+- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `accountCountry`, `accountBalance`, `reconcilePill`). `accountCountry` (ETP-4896 follow-up) is the **País** column, inserted at `gridOrder: 3` right after Tipo — which bumped `currentBalance` to 4 and `eTGOPendingCount` to 5. It renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
+- **"Por conciliar" is `eTGOPendingCount`, a stored computed column** (`EM_ETGO_Pending_Count` on `FIN_FINANCIAL_ACCOUNT`, EPL-1807 engine). It used to be an `entities.account.virtualFields[]` entry that `FinancialAccountHandler.afterHandle` injected per row — the same mechanism `payment-in`, `payment-out`, `return-material-receipt` and `return-to-vendor-shipment` still use.
 
-  Remove both workarounds if the whitelist ever widens.
-  - Its contract `type` is `"integer"` (it genuinely counts pending lines), but `DataTable` right-aligns header **and** cell for any column whose `type` is in its numeric set — which only ever fights the `reconcilePill` renderer, since the column never displays a raw number. `AccountsHeaderTable`'s `GRID_TYPE_OVERRIDE` map forces this one column's DataTable-facing `type` to `"string"` so it stays left-aligned like every other status cell (ETP-4764 follow-up). Presentation-only: the column stays non-sortable/non-form, so nothing about the real contract type changes.
+  **Why it had to stop being virtual:** a value injected in `afterHandle` can only be reordered *within the page the SQL already selected* (`BATCH_SIZE = 75` + infinite-scroll `loadMore`), and NEO's generic `orderby` sorts by DAL properties, which an aggregate over other tables is not. So the column was unsortable by construction. As a physical column maintained by the engine it is a plain column read — indexable, sortable and filterable.
 
-  **`pendingCount` counts two different things, one per account type (ETP-4795).** `PENDING_BY_ACCOUNT_SQL` in `FinancialAccountsPageHandler` used to have a single branch: unmatched `fin_bankstatementline` rows. A cash drawer never imports a bank statement, so for every cash account the figure was **structurally zero** — not "nothing pending", but "this query cannot see cash". It blinded three surfaces at once: the list's *Por conciliar* column, the sidebar's *Cuentas con pendientes* filter, and the Conciliación tab badge. A second `UNION ALL` branch now counts unreconciled cash movements (`processed='Y'`, `fin_reconciliation_id IS NULL`, `status <> 'RPPC'`, `fa.type='C'`), so a cash account reports the movements awaiting their next close.
+  Configuration: `Computation_Mode = 'S'`, `Computation_Function = etgo_account_pending_count`, `Refresh_Mode = 'S'` (synchronous — recomputed inside the same transaction just before commit, so the badge is exact the moment the user reconciles), `Computation_Sequence_Number = 10`, `AD_Reference` 11 (Integer). Four dependencies: `FIN_BankStatementLine` (walk-back to the account via `fin_bankstatement`), `FIN_BankStatement`, `FIN_Finacc_Transaction`, and a **self-dependency** on `FIN_Financial_Account.Type` — safe because the engine's `my.scd_refreshing` guard hides its own writes from the dependency triggers. Engine reference: `../modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`; in-repo precedent `docs/plans/product-price-stock-stored-computed-columns.md` (ETP-4603).
 
-  Two things this costs, both handled: the query now binds **four** parameters (client + orgs, twice), reusing one `java.sql.Array`; and because the branches group independently, an account matching both would return two rows — the read loop uses `Map.merge(..., Integer::sum)`, not `put`, so neither is dropped.
+  Becoming a real field **retired two workarounds** that existed only because `appendVirtualFields` (`resolve-curated.js`, in `schema_forge_core`) copies a closed whitelist excluding `cellType` and `gridLabelKey`: the `VIRTUAL_FIELD_CELL_TYPES` map in `accountCellTypes.jsx` is gone (`resolveCellType` is now a plain `col.cellType` read), and `window.labelOverrides` is gone (the header resolves through the normal `gridLabelKey` → `financeAccountsColPending` path). Keep those two routes in mind for any *other* virtual field, and re-read this note before adding one.
+
+  What did **not** change: its contract `type` is still `"integer"`, and `DataTable` right-aligns header **and** cell for any column whose `type` is in its numeric set — which only ever fights the `reconcilePill` renderer, since the column never displays a raw number. `AccountsHeaderTable`'s `GRID_TYPE_OVERRIDE` still forces this one column's DataTable-facing `type` to `"string"` so it stays left-aligned like every other status cell (ETP-4764 follow-up). That override is presentation-only and does not affect sorting: `gridQuery`'s `inferSortMode` maps both `"string"` and `"integer"` to `'raw'`, so `_sortBy` carries the column key either way and the backend orders by the real integer.
+
+  **It counts two different things, one per account type (ETP-4795), and the SQL function preserves that.** `PENDING_BY_ACCOUNT_SQL` in `FinancialAccountsPageHandler` originally had a single branch: unmatched `fin_bankstatementline` rows. A cash drawer never imports a bank statement, so for every cash account the figure was **structurally zero** — not "nothing pending", but "this query cannot see cash". It blinded three surfaces at once: the list's *Por conciliar* column, the sidebar's *Cuentas con pendientes* filter, and the Conciliación tab badge. A second branch counts unreconciled cash movements (`processed='Y'`, `fin_reconciliation_id IS NULL`, `status <> 'RPPC'`, `fa.type='C'`), so a cash account reports the movements awaiting their next close. `etgo_account_pending_count` **sums both branches** rather than `UNION ALL`-ing them, which reproduces the `Map.merge(..., Integer::sum)` the old read loop needed for an account that is cash-type *and* has imported bank statements.
+
+  One deliberate semantic change: the old query filtered by `ad_client_id` + `ad_org_id = ANY(accessibleOrgs)`, i.e. by the *reader's* scope. A stored value is one number per account and cannot depend on who reads it, so the function has no org filter. In practice an account's statements and transactions live in the account's own org tree, so the same number comes out — verified against real data when the column was introduced.
+
+  Both surfaces read the column, so there is a single source of truth: `AccountRow.pendingCount` comes straight from `ACCOUNTS_SQL` (appended **last** in the SELECT — `loadAccounts()` and the test's `ResultSet` stub both read by position), `buildSummary` counts `account.pendingCount > 0` for the sidebar, and `PENDING_BY_ACCOUNT_SQL` / `loadPendingByAccount` are gone. The R spec `financial-accounts-page` keeps the flat JSON key `pendingCount` (its payload is hand-built, and `useFinancialAccount` / `useFinancialAccounts` read that name); only the W spec's generic CRUD exposes it as `eTGOPendingCount`.
 - Adding/removing a grid column, reordering, relabelling or changing a renderer = a `decisions.json` change, **not** a code change (a genuinely new *kind* of cell still needs a renderer added to the registry). Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
 - **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[84px]` is not a width but a mirror of `NameCell`'s 44px grip + 32px avatar + 8px padding, so it is coupled to that cell body.
 - **Two pieces of list chrome are props, not decisions**, because both are generic `ListView`/`DataTable` behaviours the retired page had and every other window may want:

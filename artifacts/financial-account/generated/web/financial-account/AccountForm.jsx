@@ -34,5 +34,6 @@ const fields = [
 export default function AccountForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+AccountForm.fields = fields;
 
 // @sf-generated-end component:AccountForm
