@@ -371,6 +371,17 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
     const col = await getInvitationColumn();
     expect(() => render(col.render(undefined))).not.toThrow();
   });
+
+  // ETP-4999 — the Figma spec gives the grid a short label ("Pendiente", ...)
+  // distinct from the detail form's full sentence; `PendingInvitationPill`'s own
+  // suite covers the full compact/non-compact matrix, this just confirms the grid
+  // column actually opts into the short wording via `compact`.
+  it('passes compact to PendingInvitationPill so the grid cell uses the short-wording i18n key (ETP-4999)', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'PENDING' }));
+
+    expect(getByTestId('document-status-pill')).toHaveTextContent('pendingInvitationGridBadge');
+  });
 });
 
 /**

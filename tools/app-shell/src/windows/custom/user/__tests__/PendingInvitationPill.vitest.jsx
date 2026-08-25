@@ -75,3 +75,49 @@ describe('PendingInvitationPill', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+/**
+ * ETP-4999 — the Figma spec splits the SAME status set into two wordings: the
+ * dense list grid (`UserHeaderTable.jsx`, the only `compact` caller) gets a short
+ * label, the detail form's single pill keeps the full sentence. `compact` only
+ * switches the label text source (`*GridBadge` i18n keys) — tone/status/testid
+ * mapping is identical to the default-wording suite above.
+ */
+describe('PendingInvitationPill — compact (grid) wording (ETP-4999)', () => {
+  it.each(['PENDING', 'SENT'])('renders the short pending-invitation label for status %s when compact', (status) => {
+    render(<PendingInvitationPill status={status} compact />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('pendingInvitationGridBadge');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', status);
+  });
+
+  it('renders the short delivery-failed label for DELIVERY_FAILED when compact', () => {
+    render(<PendingInvitationPill status="DELIVERY_FAILED" compact />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationDeliveryFailedGridBadge');
+    expect(pill).toHaveAttribute('data-tone', 'destructive');
+    expect(pill).toHaveAttribute('data-status', 'DELIVERY_FAILED');
+  });
+
+  it('renders the short expired label for EXPIRED when compact', () => {
+    render(<PendingInvitationPill status="EXPIRED" compact />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationExpiredGridBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'EXPIRED');
+  });
+
+  it('renders the short accepted label for ACCEPTED when compact', () => {
+    render(<PendingInvitationPill status="ACCEPTED" compact />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationAcceptedGridBadge');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+    expect(pill).toHaveAttribute('data-status', 'ACCEPTED');
+  });
+
+  it('still renders the full (non-compact) wording when compact is explicitly false', () => {
+    render(<PendingInvitationPill status="PENDING" compact={false} />);
+    expect(screen.getByTestId('document-status-pill')).toHaveTextContent('pendingInvitationBadge');
+  });
+});

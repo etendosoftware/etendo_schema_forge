@@ -145,6 +145,7 @@ export default function UserHeaderTable(props) {
     render: (row) => (
       <PendingInvitationPill
         status={row?.invitationStatus}
+        compact
         data-testid="PendingInvitationPill__grid" />
     ),
   }), [ui]);
