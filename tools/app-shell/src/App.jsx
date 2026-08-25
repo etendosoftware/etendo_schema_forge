@@ -301,16 +301,27 @@ export default function App() {
           loginPath: '/login',
           unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />,
           fetchWindowAccess,
-          // ETP-4576 — the session IS the `__Host-` cookie, so the scheme has to say
-          // so. This was left at the `bearer` default while `restoreSession` was
-          // already wired for cookies, and that combination is not a safe fallback,
-          // it is a false declaration: `mapRestoredSession` drops the token on
-          // purpose, so under `bearer` writeHeaders() has no bearer to send AND
-          // skips `X-Go-CSRF` (it only adds the proof under `cookie`). Reads still
-          // worked — the browser attaches the cookie — so every unsafe request went
-          // out with no credential at all and came back 403 "CSRF validation
-          // failed", which is what took down 19 integration specs.
-          credentialMode: CREDENTIAL_MODES.cookie,
+          // ETP-4576 — the scheme is READ from the backend, not declared here.
+          //
+          // Both hard-coded values were wrong in the same way, in opposite
+          // directions. Left at the `bearer` default while `restoreSession` was
+          // already wired for cookies, `mapRestoredSession` dropped the token, so
+          // writeHeaders() had no bearer to send AND skipped `X-Go-CSRF` (it only
+          // adds the proof under `cookie`): every unsafe request went out with no
+          // credential at all. Pinning `cookie` then broke the mirror image — a
+          // backend not yet redeployed still answers login with a bearer token and
+          // issues no CSRF, so again there was no proof to send. Both times reads
+          // kept working, because the browser attaches whatever session cookie
+          // exists on its own, and only writes came back 403. That asymmetry is
+          // why the declaration cannot be a constant: the frontend is asserting
+          // something about the BACKEND that it has no way to verify.
+          //
+          // `auto` resolves it from evidence instead: a cookie session issues a
+          // CSRF token, a bearer backend does not, so holding one IS the answer.
+          // A bearer instance costs one 401 on boot and then behaves exactly as
+          // before; a cookie instance gets the proof on every unsafe request. The
+          // explicit modes stay available for pinning one in a test.
+          credentialMode: CREDENTIAL_MODES.auto,
           restoreSession,
           // ETP-4576 — with `restoreSession` wired, boot is asynchronous: AuthGate
           // renders this while `status === 'booting'`. Without it the prop defaults

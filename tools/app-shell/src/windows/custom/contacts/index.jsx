@@ -45,7 +45,7 @@ export default function ContactsWindow(props) {
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
-    const { rows, apiBaseUrl, token, reselectFailed } = pendingBulkDelete;
+    const { rows, apiBaseUrl, reselectFailed } = pendingBulkDelete;
     setPendingBulkDelete(null);
 
     // ETP-4656 (QA fix) — was a sequential loop that stopped on the first
@@ -78,10 +78,10 @@ export default function ContactsWindow(props) {
   }, []);
 
   const selectionBarRightActions = useCallback(
-    ({ selectedRows, clearSelection, token, apiBaseUrl, reselectFailed }) => (
+    ({ selectedRows, clearSelection, apiBaseUrl, reselectFailed }) => (
       <>
         <button
-          onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
+          onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, reselectFailed })}
           className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--destructive) / 0.3)] bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)] transition-colors"
         >
           <Trash2 className="h-4 w-4 text-[hsl(var(--destructive))]" data-testid="Trash2__ef097c" />
@@ -100,7 +100,6 @@ export default function ContactsWindow(props) {
   return (
     <ContactsProvider data-testid="ContactsProvider__ef097c">
       <ContactsFinanceProvider
-        token={props.token}
         apiBaseUrl={props.apiBaseUrl}
         data-testid="ContactsFinanceProvider__ef097c">
        <div className={CONTACTS_WRAPPER}>

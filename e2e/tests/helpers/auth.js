@@ -333,3 +333,38 @@ export async function navigateTo(page, windowSlug) {
   await page.goto(`/${windowSlug}`);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
+
+/**
+ * Headers for a helper-issued write against the real backend (ETP-4576).
+ *
+ * The helpers used to read `localStorage['sf_auth_token']` and send it as a
+ * bearer. That key is dead — AuthProvider keeps the session in memory and the
+ * credential is the `__Host-` session cookie — so the read returned null and
+ * every helper that *required* a token threw before its first request.
+ *
+ * The cookie itself needs no help: `page.request` shares the browser context's
+ * cookie jar, so it travels on its own. What an unsafe method still needs is the
+ * CSRF proof, and the honest place to get it is the same endpoint the app uses to
+ * restore a session — GET /sws/go/session returns the `csrfToken` for the
+ * current session. Read through `page.evaluate` so the request is same-origin
+ * from the page, exactly like the app's own.
+ *
+ * The header is omitted when the backend reports no token (bearer mode, or CSRF
+ * not yet enforced) rather than sent empty, which the backend rejects as
+ * malformed.
+ */
+export async function sessionWriteHeaders(page) {
+  const csrfToken = await page.evaluate(async () => {
+    try {
+      const res = await fetch('/sws/go/session', { credentials: 'include' });
+      if (!res.ok) return null;
+      return (await res.json())?.csrfToken ?? null;
+    } catch {
+      return null;
+    }
+  });
+  return {
+    'Content-Type': 'application/json',
+    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+  };
+}

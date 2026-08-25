@@ -65,11 +65,11 @@
  *   - `apiBaseUrl` shape: `App.jsx`'s `API_BASE_URL` (`${apiBase}/sws/neo`,
  *     `apiBase` empty at the dev-server root) plus `WindowLoader.jsx`
  *     appending `/${windowName}` — i.e. `/sws/neo/physical-inventory`.
- *   - the bearer token lives in `localStorage['sf_auth_token']` in BOTH mock
- *     mode (`e2e/tests/helpers/auth.js`) and real mode (session.js's
- *     `sf_auth` prefix + `token` key in `@etendosoftware/app-shell-core`),
- *     so `page.evaluate(() => localStorage.getItem('sf_auth_token'))` after
- *     `login(page)` always yields a usable token — no separate login call.
+ *   - the credential is the `__Host-` session cookie (ETP-4576), not a bearer in
+ *     localStorage: `page.request` shares the browser context's cookie jar, so a
+ *     request authenticates itself after `login(page)` with no header at all. The
+ *     unsafe methods below still need the CSRF proof, which `sessionWriteHeaders`
+ *     reads from GET /sws/go/session — see `e2e/tests/helpers/auth.js`.
  *   - `parentId`/`product`/`storageBin`/`bookQuantity` field names on
  *     `inventoryLine`, and the fact that `InventoryLineHandler.handlePostPreHook`
  *     (com.etendoerp.go's `InventoryLineHandler.java`) computes `bookQuantity`
@@ -122,6 +122,8 @@
  * stock movement the caller asked for.
  */
 
+import { sessionWriteHeaders } from './auth.js';
+
 const SPEC = 'physical-inventory';
 const HEADER_ENTITY = 'inventory';
 const LINE_ENTITY = 'inventoryLine';
@@ -136,15 +138,13 @@ function normalize(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+// ETP-4576 — this used to read `localStorage['sf_auth_token']` and throw when it
+// was absent, which under the cookie session is always: the credential is the
+// `__Host-` cookie and `page.request` carries it on its own. What the POSTs,
+// PATCH and DELETE below still need is the CSRF proof, which sessionWriteHeaders
+// takes from GET /sws/go/session — the same endpoint the app restores from.
 async function getAuthHeaders(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureStockOnHand could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureStockOnHand(page, ...).',
-    );
-  }
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return sessionWriteHeaders(page);
 }
 
 /** Extracts the single record object NEO wraps CRUD create/update responses in
