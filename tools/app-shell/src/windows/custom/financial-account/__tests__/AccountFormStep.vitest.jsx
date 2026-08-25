@@ -380,14 +380,46 @@ describe('AccountFormStep', () => {
         .toHaveTextContent('financeAccountsNewIbanLengthMismatch');
     });
 
-    it('falls back to plain mod-97 (no mismatch message) for a country with no IBAN metadata', async () => {
+    // ETP-4896 QA follow-up: this previously asserted the OPPOSITE (no error, submit enabled).
+    // That was the bug — a country absent from countryIbanRules has no IBAN metadata, which
+    // C_GET_IBAN_DISPLAYED_ACCOUNT rejects outright, so the "valid" save came back as an
+    // untranslated English 400 toast. Caught inline now.
+    it('rejects an IBAN when the selected country has no IBAN configuration', async () => {
       const user = userEvent.setup();
-      // Argentina: present in the picker's world but absent from countryIbanRules (only ~45 of
-      // 243 countries carry IBAN metadata) — nothing to cross-check, so a valid GB IBAN passes.
+      // Argentina: reachable through the picker (it searches the full 243-country selector) but
+      // absent from countryIbanRules (only ~45 countries carry IBAN metadata).
       renderForm({ initialValues: { countryId: 'ar-no-metadata' } });
 
       await user.type(screen.getByTestId('account-form-name'), 'BBVA');
       await user.type(screen.getByTestId('account-form-iban'), 'GB82WEST12345698765432');
+      await user.tab();
+
+      expect(screen.getByTestId('account-form-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanCountryNoConfig');
+      expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+
+    // The empty-catalog guard: /defaults can fail or still be in flight, and both consumers start
+    // from []. Blocking then would break every valid save for a transient reason.
+    it('does not block when the IBAN rules catalog is empty (unknown, defer to the backend)', async () => {
+      const user = userEvent.setup();
+      renderForm({ countryIbanRules: [], initialValues: { countryId: 'ar-no-metadata' } });
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'GB82WEST12345698765432');
+      await user.tab();
+
+      expect(screen.queryByTestId('account-form-iban-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-form-submit')).toBeEnabled();
+    });
+
+    // A country that IS in the catalog keeps behaving as before — the new check must not fire.
+    it('still accepts a matching IBAN for a country present in the catalog', async () => {
+      const user = userEvent.setup();
+      renderForm();
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
       await user.tab();
 
       expect(screen.queryByTestId('account-form-iban-error')).not.toBeInTheDocument();

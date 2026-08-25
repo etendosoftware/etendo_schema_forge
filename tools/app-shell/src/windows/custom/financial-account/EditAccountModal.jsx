@@ -29,7 +29,8 @@ import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { validateIbanForCountry } from '@/lib/countryIban.js';
+import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
@@ -58,24 +59,20 @@ const IBAN_ERROR_KEYS = {
   countryMismatch: 'financeAccountsNewIbanCountryMismatch',
   lengthMismatch: 'financeAccountsNewIbanLengthMismatch',
   missingCountry: 'financeAccountsNewCountryRequiredForIban',
+  noIbanConfig: 'financeAccountsNewIbanCountryNoConfig',
 };
 
 /**
- * Backend 400 bodies (`FinancialAccountHandler`/`FinancialAccountCountrySupport`, ETP-4896) are
- * plain English literals — there is no error `code` field, only `message` (see
- * `financialAccountHttp.js#readErrorMessage`). `useAccountFields`'s own pre-check above is meant
- * to catch every one of these BEFORE the request fires, so this is only a safety net for
- * whatever slips past it (e.g. `countryIbanRules` staleness, a race with another tab) — translate
- * the ones we can recognize verbatim rather than showing raw English in a toast.
+ * Picks which IBAN error to surface. A plain function rather than a nested ternary (Sonar S3358,
+ * the same reason ETP-4871 extracted the previous one in this file). The two country-derived codes
+ * win over `validateIbanForCountry`'s own: they describe what the user just DID (cleared the
+ * country, or picked one that cannot hold an IBAN), which is more actionable than the generic
+ * checksum/format complaint that a mismatched pair also produces.
  */
-const BACKEND_ERROR_MESSAGE_KEYS = {
-  'A bank account with an IBAN must have a country.': 'financeAccountsNewCountryRequiredForIban',
-};
-
-/** Translates a backend error message when recognized, otherwise passes it through as-is. */
-function localizeBackendMessage(message, ui) {
-  const key = BACKEND_ERROR_MESSAGE_KEYS[message];
-  return key ? ui(key) : message;
+function resolveIbanErrorCode(countryRequiredForIban, countryNoIbanConfig, checkCode) {
+  if (countryRequiredForIban) return 'missingCountry';
+  if (countryNoIbanConfig) return 'noIbanConfig';
+  return checkCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,12 +80,20 @@ function localizeBackendMessage(message, ui) {
 // ---------------------------------------------------------------------------
 
 /**
- * The tab a cash account must open on. Unchanged by ETP-4795: even though the General tab now
- * shows the GL Item Difference selector for cash too, Accounting stays the more relevant default
- * landing tab for that account type — General remains one click away.
+ * The tab the modal opens on: General, for every account type.
+ *
+ * Cash accounts used to land on Accounting, on the reasoning that it was the more relevant tab for
+ * them. Two things undid that. ETP-4795 gave General real content for cash — the GL Item Difference
+ * selector backing the cash-close residual — so Accounting was no longer the only tab with anything
+ * to show. And landing on Accounting means the first thing the user sees is the required, empty
+ * "Cuenta bancaria" field with Save disabled, which reads as an error the modal is reporting rather
+ * than as the relevant place to start.
+ *
+ * Kept as a function, rather than inlining the constant, because both the initial state and the
+ * reset-on-open effect have to agree on it — and the test asserts exactly that.
  */
-export function initialEditTab(isCash) {
-  return isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL;
+export function initialEditTab() {
+  return EDIT_TAB_GENERAL;
 }
 
 function formatTypeLabel(type, ui) {
@@ -167,6 +172,10 @@ async function persistAccountEdits({
   // the form changed; the `Object.keys(updates).length > 0` gate below already turns that into a
   // real PUT.
   if (fields.countryDirty) updates.countryId = fields.countryId;
+  // Same normalization the New Account form applies (AccountFormStep), so a BIC saved from either
+  // surface is stored identically. Sent only when dirty: an untouched field means no `swiftCode`
+  // key in the PUT body, which the backend leaves at its stored value.
+  if (fields.swiftDirty) updates.swiftCode = fields.swiftCode.trim().toUpperCase();
   // The `*Value` fields, never the raw strings the inputs hold — see useReconciliationSettings.
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateToleranceValue;
   if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountToleranceValue;
@@ -301,6 +310,10 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   // it, ETP-4896) — NOT derived from `countryIbanRules` below, which only covers the ~45
   // countries with IBAN metadata and would render blank for the ~198 majority that lack it.
   const [countryLabel, setCountryLabel] = useState('');
+  // ETP-4896 QA follow-up: BIC/SWIFT was only ever on the New Account form, so the field could
+  // not be maintained from here at all. Optional and format-unvalidated, matching Classic (which
+  // has no SWIFT format validation — only the FIN_FINACC_SHOWSWIFT_CHK presence constraint).
+  const [swiftCode, setSwiftCode] = useState('');
   const [ibanTouched, setIbanTouched] = useState(false);
   const [currencies, setCurrencies] = useState([]);
   // ETP-4896: the ≤45-country IBAN-metadata catalog, same source/shape as AccountFormStep's —
@@ -308,7 +321,7 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   // option list (that comes from the live C_Country_ID selector in AccountFieldsGrid).
   const [countryIbanRules, setCountryIbanRules] = useState([]);
   const [snapshot, setSnapshot] = useState({
-    name: '', type: '', iban: '', currencyId: '', countryId: '',
+    name: '', type: '', iban: '', currencyId: '', countryId: '', swiftCode: '',
   });
 
   useEffect(() => {
@@ -319,12 +332,14 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
     setCurrencyId(account.currencyId ?? '');
     setCountryId(account.countryId ?? '');
     setCountryLabel(account.countryName ?? '');
+    setSwiftCode(account.swiftCode ?? '');
     setSnapshot({
       name: account.name ?? '',
       type: account.type ?? '',
       iban: account.iban ?? '',
       currencyId: account.currencyId ?? '',
       countryId: account.countryId ?? '',
+      swiftCode: account.swiftCode ?? '',
     });
     setIbanTouched(false);
   }, [open, account]);
@@ -386,20 +401,40 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   // has nothing to do with either field.
   const countryRequiredForIban = isBankType && iban.trim() !== ''
     && countryId === '' && countryId !== snapshot.countryId;
-  const ibanInvalid = isBankType && iban.trim() !== '' && (!ibanCheck.ok || countryRequiredForIban);
-  const ibanErrorCode = countryRequiredForIban ? 'missingCountry' : ibanCheck.code;
+  // The country IS set, but to one that cannot carry an IBAN (the ~198 without IBAN metadata) —
+  // which the DB trigger rejects. Carries the SAME `countryId !== snapshot.countryId` dirty guard
+  // as countryRequiredForIban above, and for the same reason: a legacy account already stored with
+  // an IBAN and such a country, left untouched, sends no `country` key at all, so the backend
+  // never re-validates the pair either. Without the guard, opening such an account to rename it
+  // would show this error and block Save (ETP-4896 QA follow-up).
+  const countryNoIbanConfig = isBankType && iban.trim() !== ''
+    && countryId !== snapshot.countryId
+    && countryLacksIbanConfig(countryId, countryIbanRules);
+  const ibanInvalid = isBankType && iban.trim() !== ''
+    && (!ibanCheck.ok || countryRequiredForIban || countryNoIbanConfig);
+  const ibanErrorCode = resolveIbanErrorCode(
+    countryRequiredForIban, countryNoIbanConfig, ibanCheck.code,
+  );
   const nameDirty = name.trim() !== snapshot.name.trim();
   const typeDirty = typeEditable && type !== snapshot.type;
   const ibanDirty = ibanEditable && normalizeIban(iban) !== normalizeIban(snapshot.iban);
   const currencyDirty = currencyEditable && currencyId !== snapshot.currencyId;
   const countryDirty = countryEditable && countryId !== snapshot.countryId;
+  // Compared case-insensitively on the normalized value actually persisted (trimmed + upper-cased,
+  // same as AccountFormStep), so merely re-typing "bbvaesmm" over a stored "BBVAESMM" is not a
+  // change. Bank-type-gated like the IBAN: the field is not even rendered for Cash/Card, and a
+  // stale stored value on such an account must not make the form look dirty.
+  const swiftDirty = isBankType
+    && swiftCode.trim().toUpperCase() !== (snapshot.swiftCode ?? '').trim().toUpperCase();
 
   return {
     name, setName, type, setType, iban, setIban, currencyId, setCurrencyId,
     countryId, setCountryId, countryLabel, setCountryLabel, countryIbanRules,
-    ibanTouched, setIbanTouched, currencies, isCash, typeEditable, currencyEditable, countryEditable,
+    swiftCode, setSwiftCode,
+    ibanTouched, setIbanTouched, currencies, isCash, isBankType,
+    typeEditable, currencyEditable, countryEditable,
     ibanInvalid, ibanErrorCode, ibanEditable,
-    nameDirty, typeDirty, ibanDirty, currencyDirty, countryDirty,
+    nameDirty, typeDirty, ibanDirty, currencyDirty, countryDirty, swiftDirty,
   };
 }
 
@@ -707,9 +742,19 @@ function useGlItemDifference(open, account) {
   return { value, setValue, dirty };
 }
 
-function GlItemDifferenceSection({ ui, glItemDifference }) {
+/**
+ * @param first when this is the tab's FIRST section, which drops the top margin.
+ *
+ * `mt-6` separates a section from the one above it (same as ReconciliationSettingsSection). For a
+ * cash account the two sections that normally precede this one are skipped, so that margin would
+ * sit directly under the tab row and stack with its own `pt-4` — 40px of dead space, against 16px
+ * on the Accounting tab, which has no leading margin because its section is likewise the only one.
+ */
+function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
   return (
-    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="gl-item-difference-section">
+    <div
+      className={`${first ? '' : 'mt-6 '}border-b border-[hsl(var(--border-subtle))] pb-4`}
+      data-testid="gl-item-difference-section">
       <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
         {ui('financeAccountsGlItemDifferenceSection')}
       </p>
@@ -883,8 +928,7 @@ function AccountingConfigurationSection({ ui, accounting }) {
  *   (`isCash`), which have no bank connection and no per-account amount/date tolerances to
  *   configure, but the GL Item Difference selector renders for every account type — it backs
  *   both the cash-close residual (ETP-4795) and the bank/card reconciliation-difference flow
- *   (ETP-4796). The modal still defaults straight to Accounting when opened for a cash account
- *   (see {@link initialEditTab}); General is one click away.
+ *   (ETP-4796). Every account type opens here (see {@link initialEditTab}).
  * - **Accounting**: the accounting accounts used when generating transaction journal entries —
  *   asset account (required) and transitory account (optional). Backed by the
  *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530). Gated by
@@ -950,10 +994,7 @@ export function EditAccountModal({
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
   // on a role switch — both handled by the reset effect below.
   const canSeeAccounting = useHasCapability('showAccountingFields');
-  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) — cash still opens on
-  // Accounting by product decision (see initialEditTab), independent of General now always
-  // having content to show.
-  const [editTab, setEditTab] = useState(() => initialEditTab(isCash));
+  const [editTab, setEditTab] = useState(() => initialEditTab());
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmDeleteConnectionOpen, setConfirmDeleteConnectionOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -961,8 +1002,8 @@ export function EditAccountModal({
 
   // Reset to the default tab whenever the modal (re)opens for an account (see initialEditTab).
   useEffect(() => {
-    if (open) setEditTab(initialEditTab(isCash));
-  }, [open, account?.id, isCash]);
+    if (open) setEditTab(initialEditTab());
+  }, [open, account?.id]);
 
   // The modal stays mounted while closed, so a confirmation left open when it was dismissed
   // would still be showing the next time it opens. Clear both on close.
@@ -991,7 +1032,7 @@ export function EditAccountModal({
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
-    || fields.countryDirty
+    || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
@@ -1020,7 +1061,13 @@ export function EditAccountModal({
       if (err.status === 409) {
         setError(ui('financeAccountsNewNameExists'));
       } else {
-        toast.error(localizeBackendMessage(err.message, ui) || ui('financeAccountsEditError'));
+        // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
+        // this window's whole 400 family — including the String.format-interpolated country/IBAN
+        // messages that an exact-match table structurally cannot reach (ETP-4896 QA follow-up).
+        // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
+        // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
+        // another tab, an API/MCP-shaped body).
+        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
       }
     } finally {
       setSaving(false);
@@ -1115,6 +1162,7 @@ export function EditAccountModal({
             <GlItemDifferenceSection
               ui={ui}
               glItemDifference={glItemDifference}
+              first={isCash}
               data-testid="GlItemDifferenceSection__73027d" />
           </TabsContent>
 
@@ -1266,6 +1314,25 @@ function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields, token }) 
               {ui(IBAN_ERROR_KEYS[fields.ibanErrorCode] || IBAN_ERROR_KEYS.invalid)}
             </p>
           ) : null}
+        </EditField>
+      ) : null}
+      {/* BIC/SWIFT (ETP-4896 QA follow-up). Gated on `isBankType`, NOT on `!isCash`, to honour the
+          contract's own `displayLogic: "@Type@='B'"` — `!isCash` would also surface it on card
+          accounts, which have no BIC. Optional and deliberately unvalidated: Classic has no SWIFT
+          format validation either (no regex, no length rule, no cross-check against country), so
+          there is no existing rule for the Country field to feed into. */}
+      {fields.isBankType ? (
+        <EditField
+          label={ui('financeAccountsNewFieldBic')}
+          data-testid="EditField__73027d">
+          <Input
+            value={fields.swiftCode}
+            onChange={(e) => fields.setSwiftCode(e.target.value)}
+            placeholder={ui('financeAccountsNewFieldBicPlaceholder')}
+            maxLength={20}
+            data-testid="edit-account-bic"
+            className={FIELD_INPUT}
+          />
         </EditField>
       ) : null}
       {/* Type / Currency are editable form fields (below Name/IBAN) only while the account has no

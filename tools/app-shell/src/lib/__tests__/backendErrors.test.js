@@ -763,3 +763,114 @@ describe('translateBackendError — cash close (ETP-4795)', () => {
     });
   });
 });
+
+/* ETP-4896 QA follow-up: the country/IBAN family from FinancialAccountCountrySupport. The three
+ * String.format-interpolated ones are why the QA-reported "Argentina has no IBAN configuration…"
+ * reached the user as raw English — an exact-match table structurally cannot catch them. */
+
+describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
+  const es = fakeUiTranslator({
+    'backendError.countryNoIbanConfig':
+      '{country} no tiene configuración de IBAN, así que no puede usarse en una cuenta con IBAN',
+    'backendError.ibanPrefixCountryMismatch':
+      "El IBAN empieza con '{prefix}' pero el país seleccionado es {country} ({iso})",
+    'backendError.ibanCountryLengthMismatch':
+      'Un IBAN de {country} debe tener {expected} caracteres (recibidos {actual})',
+    'backendError.ibanTooShort': 'El IBAN es demasiado corto',
+    'backendError.ibanChecksumInvalid':
+      'El IBAN no es válido: los dígitos de control no coinciden',
+    'backendError.invalidCountry': 'País no válido',
+    'backendError.countryIban': 'Se necesita el País para una cuenta IBAN.',
+  });
+
+  describe('"<country> has no IBAN configuration…" match — the QA-reported message', () => {
+    const RAW = 'Argentina has no IBAN configuration, so it cannot be used on an account'
+      + ' with an IBAN.';
+
+    it('translates to es_ES, interpolating the country name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Argentina no tiene configuración de IBAN, así que no puede usarse en una cuenta con IBAN',
+      );
+    });
+
+    it('handles a multi-word country name', () => {
+      const raw = 'United States has no IBAN configuration, so it cannot be used on an account'
+        + ' with an IBAN.';
+      assert.match(translateBackendError(raw, es), /^United States no tiene/);
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+
+    // Guards the `return country ? { country } : null` branch: with nothing before the suffix
+    // there is no country to interpolate, so the matcher must decline and the original survive.
+    it('does not match when there is no country name before the suffix', () => {
+      const raw = 'has no IBAN configuration, so it cannot be used on an account with an IBAN.';
+      assert.equal(translateBackendError(raw, es), raw);
+    });
+  });
+
+  describe('"The IBAN starts with \'X\' but the selected country is Y (Z)." match', () => {
+    const RAW = "The IBAN starts with 'ES' but the selected country is Italy (IT).";
+
+    it('translates to es_ES, interpolating prefix, country and iso', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        "El IBAN empieza con 'ES' pero el país seleccionado es Italy (IT)",
+      );
+    });
+
+    // The country name is split on the LAST ' (' so a parenthesised name still resolves.
+    it('resolves the iso from the last parenthesised token', () => {
+      const raw = "The IBAN starts with 'ES' but the selected country is Bonaire (BQ) (BQ).";
+      assert.equal(
+        translateBackendError(raw, es),
+        "El IBAN empieza con 'ES' pero el país seleccionado es Bonaire (BQ) (BQ)",
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"An IBAN for X must have N characters (received M)." match', () => {
+    const RAW = 'An IBAN for Spain must have 24 characters (received 20).';
+
+    it('translates to es_ES, interpolating country, expected and actual', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Un IBAN de Spain debe tener 24 caracteres (recibidos 20)',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('exact-match entries', () => {
+    const CASES = [
+      ['The IBAN is too short.', 'El IBAN es demasiado corto'],
+      ['The IBAN is not valid: the check digits do not match.',
+        'El IBAN no es válido: los dígitos de control no coinciden'],
+      ['Invalid country', 'País no válido'],
+      // Reuses the DB message's key: same rule, one Spanish phrasing.
+      ['A bank account with an IBAN must have a country.',
+        'Se necesita el País para una cuenta IBAN.'],
+    ];
+
+    CASES.forEach(([raw, expected]) => {
+      it(`translates "${raw}"`, () => {
+        assert.equal(translateBackendError(raw, es), expected);
+      });
+    });
+  });
+
+  it('passes an unrelated message through untouched', () => {
+    const raw = 'Something else entirely went wrong';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+});

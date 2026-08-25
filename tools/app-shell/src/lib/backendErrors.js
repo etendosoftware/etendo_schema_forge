@@ -6,6 +6,13 @@ const BACKEND_ERROR_MAP = {
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
   'Country needed in an IBAN account.': 'backendError.countryIban',
+  // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
+  // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
+  // Spanish phrasing for one rule.
+  'A bank account with an IBAN must have a country.': 'backendError.countryIban',
+  'The IBAN is too short.': 'backendError.ibanTooShort',
+  'The IBAN is not valid: the check digits do not match.': 'backendError.ibanChecksumInvalid',
+  'Invalid country': 'backendError.invalidCountry',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
   'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank': 'backendError.ibanInvalid',
@@ -225,6 +232,66 @@ function matchCashCloseLineInClosedPeriod(msg) {
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
 // guard against the key echoing back" logic isn't duplicated once per matcher.
+/* ETP-4896: the three String.format-interpolated messages from
+ * `FinancialAccountCountrySupport.validateIbanCountryPair`. They cannot be exact-match entries
+ * above, which is why the QA-reported "Argentina has no IBAN configuration…" reached the user as
+ * raw English. Matching on the literal Java text makes those strings a de facto wire contract —
+ * see the pointer comment in that class before rewording any of them. */
+
+const COUNTRY_NO_IBAN_SUFFIX = ' has no IBAN configuration, so it cannot be used on an account'
+  + ' with an IBAN.';
+
+function matchCountryNoIbanConfig(msg) {
+  if (!msg.endsWith(COUNTRY_NO_IBAN_SUFFIX)) return null;
+  const country = msg.slice(0, -COUNTRY_NO_IBAN_SUFFIX.length);
+  return country ? { country } : null;
+}
+
+const IBAN_PREFIX_MISMATCH_PREFIX = "The IBAN starts with '";
+const IBAN_PREFIX_MISMATCH_MID1 = "' but the selected country is ";
+const IBAN_PREFIX_MISMATCH_SUFFIX = ').';
+
+function matchIbanPrefixCountryMismatch(msg) {
+  if (!msg.startsWith(IBAN_PREFIX_MISMATCH_PREFIX)
+    || !msg.endsWith(IBAN_PREFIX_MISMATCH_SUFFIX)) return null;
+  const middle = msg.slice(
+    IBAN_PREFIX_MISMATCH_PREFIX.length,
+    -IBAN_PREFIX_MISMATCH_SUFFIX.length,
+  );
+  const mid1Idx = middle.indexOf(IBAN_PREFIX_MISMATCH_MID1);
+  if (mid1Idx === -1) return null;
+  const prefix = middle.slice(0, mid1Idx);
+  const rest = middle.slice(mid1Idx + IBAN_PREFIX_MISMATCH_MID1.length);
+  // The country name itself may contain spaces or parentheses, so split on the LAST ' (' —
+  // the ISO code is always the final parenthesised token.
+  const isoIdx = rest.lastIndexOf(' (');
+  if (isoIdx === -1) return null;
+  const country = rest.slice(0, isoIdx);
+  const iso = rest.slice(isoIdx + 2);
+  if (!prefix || !country || !iso) return null;
+  return { prefix, country, iso };
+}
+
+const IBAN_LENGTH_PREFIX = 'An IBAN for ';
+const IBAN_LENGTH_MID1 = ' must have ';
+const IBAN_LENGTH_MID2 = ' characters (received ';
+const IBAN_LENGTH_SUFFIX = ').';
+
+function matchIbanCountryLengthMismatch(msg) {
+  if (!msg.startsWith(IBAN_LENGTH_PREFIX) || !msg.endsWith(IBAN_LENGTH_SUFFIX)) return null;
+  const middle = msg.slice(IBAN_LENGTH_PREFIX.length, -IBAN_LENGTH_SUFFIX.length);
+  const mid1Idx = middle.indexOf(IBAN_LENGTH_MID1);
+  if (mid1Idx === -1) return null;
+  const country = middle.slice(0, mid1Idx);
+  const afterMid1 = middle.slice(mid1Idx + IBAN_LENGTH_MID1.length);
+  const mid2Idx = afterMid1.indexOf(IBAN_LENGTH_MID2);
+  if (mid2Idx === -1) return null;
+  const expected = afterMid1.slice(0, mid2Idx);
+  const actual = afterMid1.slice(mid2Idx + IBAN_LENGTH_MID2.length);
+  if (!country || !expected || !actual) return null;
+  return { country, expected, actual };
+}
+
 function resolveParameterizedMatch(msg) {
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
@@ -274,6 +341,24 @@ function resolveParameterizedMatch(msg) {
       key: 'backendError.cashCloseLineInClosedPeriod',
       params: { movement: closedPeriodMatch.movement },
     };
+  }
+
+  const countryNoIbanMatch = matchCountryNoIbanConfig(msg);
+  if (countryNoIbanMatch) {
+    return {
+      key: 'backendError.countryNoIbanConfig',
+      params: { country: countryNoIbanMatch.country },
+    };
+  }
+
+  const ibanPrefixMatch = matchIbanPrefixCountryMismatch(msg);
+  if (ibanPrefixMatch) {
+    return { key: 'backendError.ibanPrefixCountryMismatch', params: { ...ibanPrefixMatch } };
+  }
+
+  const ibanLengthMatch = matchIbanCountryLengthMismatch(msg);
+  if (ibanLengthMatch) {
+    return { key: 'backendError.ibanCountryLengthMismatch', params: { ...ibanLengthMatch } };
   }
 
   return null;
