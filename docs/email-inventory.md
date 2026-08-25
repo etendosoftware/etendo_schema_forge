@@ -47,8 +47,8 @@ graph LR
     K3(["An alert rule matches, or a<br/>TicketBAI / currency sync fails"])
   end
 
-  M1["◐ ✉️ new-account"]
-  M2["◐ ✉️ environment-ready"]
+  M1["✅ ✉️ new-account<br/><i>verified</i>"]
+  M2["✅ ✉️ environment-ready<br/><i>verified</i>"]
   M3["✅ ✉️ company-invitation<br/><i>7-day link — verified</i>"]
   M4["✅ ✉️ reset-password<br/><i>30-minute link — verified</i>"]
   M5["◐ ✉️ password-changed"]
@@ -95,18 +95,21 @@ graph LR
   classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
-  class M3,M4 verified
-  class M1,M2,M5,M6 migrated
+  class M1,M2,M3,M4 verified
+  class M5,M6 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**2 verified, 6 migrated, 20 total.** The two greens were opened in a real inbox on 2026-08-25: the
-invitation (including the resend path) and the password reset, the latter stating its true
-30-minute window. The four ambers render through the same layout and pass their tests, but nobody
-has looked at one yet — `login-alert` cannot be looked at, since no code path reaches it.
+**4 verified, 6 migrated, 20 total.** All four greens were opened in a real inbox on 2026-08-25:
+the invitation (including the resend path), the password reset stating its true 30-minute window,
+and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
+environment-ready notice. That single run covers the whole Admin column of this graph.
+
+Two ambers remain. `password-changed` renders through the same layout and passes its tests but has
+not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
 
 The split still falls along the company boundary: everything **Admin and Operator** receive is
 migrated, everything the **Customer or Supplier** receives is not. F3 fixes that.
