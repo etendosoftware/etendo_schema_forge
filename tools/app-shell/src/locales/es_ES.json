@@ -881,8 +881,8 @@
       "description": "Refresh SII Cash Receipts"
     },
     "EM_Aeatsii_Siikeylist": {
-      "label": "Invoice type key",
-      "description": "Invoice type key"
+      "label": "Clave tipo factura",
+      "description": "Clave tipo factura"
     },
     "CIF": {
       "label": "CIF",
@@ -1477,8 +1477,8 @@
       "description": "Invoice number"
     },
     "EM_Aeatsii_Defaultsiikey": {
-      "label": "Default Key",
-      "description": "Default Key"
+      "label": "Clave por Defecto",
+      "description": "Clave por Defecto"
     },
     "Navarra": {
       "label": "SII - Navarra Tax Agency",
