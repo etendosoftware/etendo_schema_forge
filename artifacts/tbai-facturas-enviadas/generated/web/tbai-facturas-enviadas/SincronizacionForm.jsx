@@ -13,5 +13,6 @@ const fields = [
 export default function SincronizacionForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+SincronizacionForm.fields = fields;
 
 // @sf-generated-end component:SincronizacionForm

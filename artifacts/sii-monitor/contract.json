@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-08-24T22:21:58.139Z",
-  "checksum": "352060ee9539b89b",
+  "updatedAt": "2026-08-24T15:27:52.695Z",
+  "checksum": "f1b50ae3b6423490",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -393,9 +393,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -449,9 +448,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -810,9 +808,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -1522,9 +1519,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -1603,9 +1599,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -1718,9 +1713,8 @@
             },
             "readOnlyLogic": {
               "raw": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true"
             }
           },
           {
@@ -1928,9 +1922,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -3233,9 +3226,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -3289,9 +3281,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -3593,9 +3584,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {
@@ -4305,9 +4295,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -4361,9 +4350,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='N')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === 'Y' || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] !== true)"
             }
           },
           {
@@ -4476,9 +4464,8 @@
             },
             "readOnlyLogic": {
               "raw": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true"
             }
           },
           {
@@ -4686,9 +4673,8 @@
             },
             "readOnlyLogic": {
               "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['em_aeatsii_estado'] === 'BA' || (record['documentStatus'] !== 'CO' && record['documentStatus'] !== 'VO')) || (record['salesTransaction'] !== true && record['aEATSII_PreSII_Invoice'] === 'N' && (record['aeatsiiFechaRegCont'] == null || (record['aeatsiiFechaRegCont'] == null || record['aeatsiiFechaRegCont'] === '') || record['aeatsiiFechaRegCont'] === 'null'))"
             }
           },
           {

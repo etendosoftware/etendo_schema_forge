@@ -1,8 +1,8 @@
 {
-  "version": "0.89.0",
+  "version": "0.90.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-24T22:21:43.649Z",
-  "checksum": "5899759e2ffede67",
+  "updatedAt": "2026-08-24T15:27:51.866Z",
+  "checksum": "e81504d14bd7d267",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -223,9 +223,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === true || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['salesTransaction'] === true)"
             }
           },
           {
@@ -449,9 +448,8 @@
             },
             "readOnlyLogic": {
               "raw": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true"
             }
           },
           {
