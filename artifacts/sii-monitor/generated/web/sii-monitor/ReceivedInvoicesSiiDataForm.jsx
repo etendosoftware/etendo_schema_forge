@@ -18,5 +18,6 @@ const fields = [
 export default function ReceivedInvoicesSiiDataForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReceivedInvoicesSiiDataForm.fields = fields;
 
 // @sf-generated-end component:ReceivedInvoicesSiiDataForm

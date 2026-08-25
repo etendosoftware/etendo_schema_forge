@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const useFiscalConfigMock = vi.fn();
 const useAuthMock = vi.fn();
 const fetchByIdMock = vi.fn();
+const fetchByCriteriaMock = vi.fn();
 const patchByIdMock = vi.fn();
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
@@ -36,6 +37,7 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/components/related-documents/helpers.js', () => ({
   fetchById: (...args) => fetchByIdMock(...args),
+  fetchByCriteria: (...args) => fetchByCriteriaMock(...args),
   patchById: (...args) => patchByIdMock(...args),
 }));
 
@@ -119,6 +121,7 @@ beforeEach(() => {
     EM_Etvfac_Vat_Regime: null,
     em_etvfac_cause_not_taxable: null,
   });
+  fetchByCriteriaMock.mockResolvedValue([]);
   patchByIdMock.mockResolvedValue({ id: TAX_ID });
 });
 
@@ -210,5 +213,82 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — Verifactu
       expect(selectorCall).toBeTruthy();
       expect(selectorCall[0]).toContain('priceList=PL-9');
     });
+  });
+});
+
+// ETP-4888 compound-tax follow-up (commit 147f79100, UX in 19d909b63) — end-to-end
+// through the REAL hook + REAL modal: a line whose own tax is a SUMMARY tax must
+// have its badge/completeness driven by the resolved CHILD (found in the SAME
+// taxById catalog the hook already fetches, via `parentTaxId`/`isEquivalentCharge`
+// enrichment columns), and the modal opened from that badge must edit + PATCH the
+// CHILD, never the summary.
+describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — compound/summary tax resolution', () => {
+  const SUMMARY_ID = 'tax-summary-e2e';
+  const CHILD_ID = 'child-base-e2e';
+
+  beforeEach(() => {
+    useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      return jsonResponse({
+        items: [
+          { id: SUMMARY_ID, name: 'Entregas IVA+RE 21+5.2% ISP', isSummary: 'Y' },
+          { id: CHILD_ID, name: 'IVA 21%', parentTaxId: SUMMARY_ID, isEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+        ],
+        hasMore: false,
+      });
+    });
+    // TaxSifModal.jsx's OWN fetch (fetchById/fetchByCriteria) is independent of the
+    // selector catalog above — it re-fetches the summary record and its children by
+    // its own cross-spec helpers when the badge is clicked.
+    fetchByIdMock.mockResolvedValue({ id: SUMMARY_ID, name: 'Entregas IVA+RE 21+5.2% ISP', summaryLevel: 'Y' });
+    fetchByCriteriaMock.mockResolvedValue([
+      { id: CHILD_ID, name: 'IVA 21%', oBSPTIEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+    ]);
+    patchByIdMock.mockResolvedValue({ id: CHILD_ID });
+  });
+
+  function CompoundHarness() {
+    const { cellBadges, modal } = useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    });
+    const badge = cellBadges.tax?.({ tax: SUMMARY_ID });
+    return (
+      <div>
+        <div data-testid="still-missing">{String(badge !== null)}</div>
+        {badge}
+        {modal}
+      </div>
+    );
+  }
+
+  it('the row badge for the SUMMARY tax is driven by the CHILD\'s completeness (shows because the child is missing its régimen)', async () => {
+    render(<CompoundHarness />);
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('true'));
+  });
+
+  it('clicking the badge opens the modal resolved to the CHILD (badge title = child\'s name), save PATCHes the CHILD\'s id, and completeness re-derives from the merged CHILD entry', async () => {
+    render(<CompoundHarness />);
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('true'));
+
+    await act(async () => { screen.getByTestId('line-action-tax-sif').click(); });
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('IVA 21%'));
+    expect(screen.queryByText('Entregas IVA+RE 21+5.2% ISP')).not.toBeInTheDocument();
+
+    await pickOption('tbaiClaveregimeniva', '05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+    await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+      'tax', 'tax', CHILD_ID,
+      { tbaiClaveregimeniva: '05' },
+      TOKEN, API_BASE_URL,
+    ));
+    expect(patchByIdMock).not.toHaveBeenCalledWith('tax', 'tax', SUMMARY_ID, expect.anything(), expect.anything(), expect.anything());
+
+    // Modal closed; onSaved merged the CHILD's entry (keyed by CHILD_ID, not
+    // SUMMARY_ID) into the hook's taxById — resolveEffectiveTaxRow now finds the
+    // child already complete, with NO refetch.
+    await waitFor(() => expect(screen.queryByTestId('dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('still-missing')).toHaveTextContent('false');
   });
 });

@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-08-11T21:15:37.418Z",
-  "checksum": "b2b70f37b988b3ab",
+  "updatedAt": "2026-08-20T19:20:23.578Z",
+  "checksum": "0de7833af4fe3b65",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -797,9 +797,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | (@IsSOTrx@='Y' & @ISLINKEDTOPRODUCT@='Y' & @PRODUCTTYPE@='S') | @UomManagement@='Y'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['processed'] === true || (record['salesTransaction'] === true && record['iSLINKEDTOPRODUCT'] === 'Y' && record['pRODUCTTYPE'] === 'S') || record['uomManagement'] === 'Y'"
             }
           },
           {

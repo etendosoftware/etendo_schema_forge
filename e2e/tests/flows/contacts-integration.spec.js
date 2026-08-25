@@ -170,7 +170,7 @@ test.describe('Contacts Integration — Full journey', () => {
     await login(page, loginOpts);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // PART 1: Validation error — save without required field
+    // PART 1: Save is blocked client-side while a required field is empty (ETP-4933)
     // ═══════════════════════════════════════════════════════════════════════
 
     await navigateTo(page, 'contacts');
@@ -183,19 +183,26 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
 
-    // Try to save with an empty form — expect server-side validation error
-    // We do NOT fill any fields to avoid triggering auto-save on blur
+    // ETP-4933: this step used to CLICK Save on an empty form and assert the server
+    // rejected it. The gate now blocks that client-side, so the old premise can no
+    // longer be exercised — and asserting the button state is the stronger check:
+    // it proves the incomplete record never reaches the backend at all, and that the
+    // user is told why. We do NOT fill any field (also avoids auto-save on blur).
     const saveBtnFirst = page.getByTestId('action-save')
       .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
-    const saveP1 = expectSaveResponse(page);
-    await saveBtnFirst.first().click();
-    await saveP1;
+    await expect(saveBtnFirst.first()).toBeDisabled({ timeout: 10_000 });
 
-    // Should stay on /new or show an error toast (server-side validation)
-    const stayedOnNew = /\/contacts\/new/.test(page.url());
-    const errorToast = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]');
-    const toastVisible = await errorToast.first().isVisible({ timeout: 5_000 }).catch(() => false);
-    expect(stayedOnNew || toastVisible).toBe(true);
+    // `data-missing-required` carries the blocking field keys, deliberately
+    // locale-independent so this assertion does not depend on the UI language.
+    // A brand-new company contact blocks on `name` (Razón Social).
+    await expect(saveBtnFirst.first()).toHaveAttribute('data-missing-required', /name/);
+
+    // And the reason must be legible to a human, not just to the DOM.
+    const blockedTitle = await saveBtnFirst.first().getAttribute('title');
+    expect(blockedTitle, 'a blocked Save must explain itself').toBeTruthy();
+
+    // Still on /new: nothing was persisted.
+    expect(/\/contacts\/new/.test(page.url())).toBe(true);
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 2: Create contact A (Empresa) — fill all required fields, save
