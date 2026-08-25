@@ -13369,8 +13369,8 @@
       "description": "Invoice number"
     },
     "EM_Tbai_Issimplifiedinv": {
-      "label": "Factura Simplificada",
-      "description": "Indica si la factura es una factura simplificada."
+      "label": "Simplified Invoice",
+      "description": "Indicates whether the invoice is a simplified invoice."
     },
     "EM_Etvfac_Vat_Regime": {
       "label": "Régimen Especial IVA",
