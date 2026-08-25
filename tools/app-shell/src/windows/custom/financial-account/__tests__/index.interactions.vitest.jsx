@@ -276,6 +276,23 @@ describe('FinancialAccountDetail — deep-link query params', () => {
     expect(autoMatchCalls.every((id) => id === null)).toBe(true);
   });
 
+  // ETP-4891: the payment modal's "PSD2 connection inactive" warning links here, so the user lands
+  // straight on the Editar Cuenta modal where Reconectar lives instead of having to find it.
+  it('opens the edit modal for ?edit=true and then clears the query string', () => {
+    currentSearchParams = new URLSearchParams('edit=true');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'true');
+    expect(setSearchParamsMock).toHaveBeenCalledWith({}, { replace: true });
+  });
+
+  it('leaves the edit modal closed for any other value of the edit param', () => {
+    currentSearchParams = new URLSearchParams('edit=false');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
+  });
+
   it('clears the highlighted transaction when the user switches tabs by hand', () => {
     currentSearchParams = new URLSearchParams('txn=txn-77');
     render(<FinancialAccountDetail recordId="acc-1" />);
