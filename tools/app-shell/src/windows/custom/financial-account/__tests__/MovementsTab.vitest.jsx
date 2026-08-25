@@ -114,6 +114,12 @@ vi.mock('../MovementsTable.jsx', () => ({
       </button>
     </div>
   ),
+  // The tab builds these from the table module (the sort state lives in the tab since
+  // ETP-4921, so its toolbar can host the "Ordenar por" popover).
+  useTrxTypeLabel: () => (m) => m.trxType,
+  buildMovementSortCtx: () => ({}),
+  buildMovementSortAccessors: () => ({}),
+  buildMovementSortColumns: () => [],
 }));
 
 // Stub the new-transaction modal — its internals (useCreateMovement → useAuth,

@@ -7,7 +7,13 @@ import { parseCalendarDate } from '@/lib/dateOnly';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
 import { applyConditions } from '../advancedFilterApply';
-import { ReconciliationListTable } from './ReconciliationListTable.jsx';
+import {
+  ReconciliationListTable,
+  buildReconciliationSortAccessors,
+  buildReconciliationSortColumns,
+} from './ReconciliationListTable.jsx';
+import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { useClientSort } from '@/hooks/useClientSort';
 
 /**
  * "Reconciliaciones" tab (ETP-4795) — the read-only history of the account's reconciliation
@@ -43,6 +49,18 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
     [reconciliations, dateRange, search, advancedFilter],
   );
 
+  // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in this toolbar,
+  // which is the table's sibling. Same split as ListView/DataTable. Client-side because the
+  // whole history arrives in one request (`_endRow=200`) — see lib/clientSort.js.
+  const sortAccessors = useMemo(() => buildReconciliationSortAccessors({
+    ui,
+    postedLabel: (posted) => ui(`financeAccountReconciliationsPosted_${posted}`) || posted || '—',
+  }), [ui]);
+  const sortColumns = useMemo(() => buildReconciliationSortColumns(ui), [ui]);
+  const {
+    sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
+  } = useClientSort(filtered, { accessors: sortAccessors });
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden" data-testid="reconciliation-list-tab">
       <div className="flex h-auto min-h-[52px] flex-wrap items-center gap-2 px-2 py-2">
@@ -68,6 +86,14 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
           testId="reconciliation-list-advanced-filter"
           data-testid="AdvancedFilterButton__f4e9e1" />
         <div className="flex-1" />
+        <ListSortPopover
+          columns={sortColumns}
+          sortColumn={sortKey}
+          sortDirection={sortDirection}
+          onSelect={selectSort}
+          onClear={clearSort}
+          isDefaultSort={isDefaultSort}
+          data-testid="ListSortPopover__f4e9e1" />
         <input
           type="search"
           placeholder={ui('financeAccountReconciliationsSearch')}
@@ -79,9 +105,12 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
       </div>
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <ReconciliationListTable
-          reconciliations={filtered}
+          reconciliations={sorted}
           loading={loading}
           currency={account?.currencyIso || 'EUR'}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={toggleSort}
           data-testid="ReconciliationListTable__f4e9e1" />
       </div>
     </div>

@@ -12,5 +12,6 @@ const fields = [
 export default function FinPaymentScheduleDetailForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+FinPaymentScheduleDetailForm.fields = fields;
 
 // @sf-generated-end component:FinPaymentScheduleDetailForm

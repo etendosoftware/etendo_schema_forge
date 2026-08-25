@@ -334,6 +334,16 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     // this, an edit made right before clicking Confirm (without hitting Save
     // first) would be silently discarded — the order gets confirmed with the
     // OLD header values. Abort the whole confirm flow if the save fails.
+    //
+    // ETP-4940 — the same guard now also runs centrally in DetailView's Confirm
+    // button (maybeSaveBeforeConfirm, detailViewHelpers.jsx) BEFORE the
+    // `draftMode.onConfirm` event that opens this modal even fires, so in the
+    // normal flow this call is a no-op (isDirtyHeader is already false) and this
+    // branch is effectively unreachable (a failed central save aborts before the
+    // modal opens at all). Kept as defense-in-depth for this modal's own submit
+    // action, and because OrderCreateInvoice.test.js pins this exact
+    // soSaveBeforeConfirmError behavior — removing it would require updating
+    // that test too, for no behavioral gain.
     if (onSave) {
       const saved = await onSave();
       if (!saved?.id) {
@@ -353,7 +363,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${processRes.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`);
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
@@ -378,7 +388,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -397,7 +407,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -646,7 +656,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -658,7 +668,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -801,7 +811,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
       const res  = await fetch(`${apiBaseUrl}/header/${orderId}/action/cloneRecord`, { method: 'POST', headers });
       const json = await res.json();
       if (!res.ok) {
-        setError(json?.response?.error?.message || ui('cloneOrderError'));
+        setError(json?.response?.error?.message || json?.response?.message || json?.message || ui('cloneOrderError'));
         return;
       }
       const newId = json?.response?.data?.id;

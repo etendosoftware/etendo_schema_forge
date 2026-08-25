@@ -17,5 +17,6 @@ const fields = [
 export default function BankAccountForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BankAccountForm.fields = fields;
 
 // @sf-generated-end component:BankAccountForm

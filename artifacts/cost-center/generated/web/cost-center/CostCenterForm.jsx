@@ -13,5 +13,6 @@ const fields = [
 export default function CostCenterForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CostCenterForm.fields = fields;
 
 // @sf-generated-end component:CostCenterForm

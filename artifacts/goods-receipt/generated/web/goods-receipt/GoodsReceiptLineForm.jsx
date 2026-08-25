@@ -14,5 +14,6 @@ const fields = [
 export default function GoodsReceiptLineForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+GoodsReceiptLineForm.fields = fields;
 
 // @sf-generated-end component:GoodsReceiptLineForm

@@ -15,5 +15,6 @@ const fields = [
 export default function InformationForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+InformationForm.fields = fields;
 
 // @sf-generated-end component:InformationForm

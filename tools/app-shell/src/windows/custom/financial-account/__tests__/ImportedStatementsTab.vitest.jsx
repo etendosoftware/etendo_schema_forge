@@ -121,6 +121,10 @@ vi.mock('../StatementsTable', () => ({
       ))}
     </div>
   ),
+  // The tab builds these from the table module (the sort state lives in the tab since
+  // ETP-4921, so its toolbar can host the "Ordenar por" popover).
+  buildStatementSortAccessors: () => ({}),
+  buildStatementSortColumns: () => [],
 }));
 
 vi.mock('../StatementLinesView', () => ({

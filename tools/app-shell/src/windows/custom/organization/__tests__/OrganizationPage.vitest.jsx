@@ -257,8 +257,16 @@ describe('OrganizationPage', () => {
 
     fireEvent.click(screen.getByTestId('OrganizationPage__save'));
 
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
-    expect(screen.queryByTestId('OrganizationPage__unsaved-banner')).not.toBeInTheDocument();
+    // The success toast and the unsaved-banner clearing are two SEPARATE state
+    // updates (the toast fires, then the dirty flag resets on a later render) —
+    // folding both into the same waitFor lets React settle before either
+    // assertion runs, instead of asserting on the banner synchronously right
+    // after the toast resolves and racing an intermediate render (flaky under
+    // load; see the full-suite timing evidence in the PR discussion).
+    await waitFor(() => {
+      expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully');
+      expect(screen.queryByTestId('OrganizationPage__unsaved-banner')).not.toBeInTheDocument();
+    });
 
     const patchCalls = globalThis.fetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH');
     expect(patchCalls.some(([url]) => url.includes(`/organization/organization/${ORG_ID}`))).toBe(true);

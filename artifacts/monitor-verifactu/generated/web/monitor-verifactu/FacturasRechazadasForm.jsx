@@ -19,5 +19,6 @@ const fields = [
 export default function FacturasRechazadasForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+FacturasRechazadasForm.fields = fields;
 
 // @sf-generated-end component:FacturasRechazadasForm

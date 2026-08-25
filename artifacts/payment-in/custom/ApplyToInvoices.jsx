@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
 
 function formatAmount(value, currency) {
   const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
@@ -30,6 +31,8 @@ export default function ApplyToInvoices({
   apiBaseUrl,
   api,
   onRefresh,
+  onSave,
+  isDirty,
 }) {
   const [invoices, setInvoices] = useState([]);
   const [selected, setSelected] = useState(new Set());
@@ -136,6 +139,12 @@ export default function ApplyToInvoices({
 
   // Apply to invoices + Process Payment
   const handleApplyAndProcess = useCallback(async () => {
+    // ETP-4940 follow-up: this flow fires its own applyToInvoices + aPRMProcessPayment
+    // requests, bypassing DetailView's guarded generic process button entirely — a
+    // pending header edit (e.g. amount, currency) made without clicking Save first was
+    // silently discarded, and the stale value was even used for the totalApplied
+    // validation below. Persist it first; abort on save failure.
+    if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: onSave }))) return;
     const selectedInvoices = invoices
       .filter((inv) => selected.has(inv.scheduleId) && (amounts[inv.scheduleId] || 0) > 0)
       .map((inv) => ({
@@ -195,7 +204,7 @@ export default function ApplyToInvoices({
     } finally {
       setSaving(false);
     }
-  }, [invoices, selected, amounts, totalApplied, paymentNum, base, recordId, headers, onRefresh]);
+  }, [invoices, selected, amounts, totalApplied, paymentNum, base, recordId, headers, onRefresh, onSave, isDirty]);
 
   // No business partner selected
   if (!businessPartnerId) {

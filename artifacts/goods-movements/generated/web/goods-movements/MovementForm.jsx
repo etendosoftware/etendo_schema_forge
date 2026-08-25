@@ -14,5 +14,6 @@ const fields = [
 export default function MovementForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+MovementForm.fields = fields;
 
 // @sf-generated-end component:MovementForm

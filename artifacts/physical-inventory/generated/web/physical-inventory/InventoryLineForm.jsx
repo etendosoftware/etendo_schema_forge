@@ -18,5 +18,6 @@ const fields = [
 export default function InventoryLineForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+InventoryLineForm.fields = fields;
 
 // @sf-generated-end component:InventoryLineForm

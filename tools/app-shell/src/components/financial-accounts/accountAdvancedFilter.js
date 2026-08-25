@@ -22,7 +22,7 @@ export function buildAccountFilterColumns(ui) {
     { key: 'name',           label: ui('financeAccountsColAccount'), type: 'string' },
     { key: 'type',           label: ui('financeAccountsColType'),    type: 'enum', enumLabels: typeLabels },
     { key: 'currentBalance', label: ui('financeAccountsColBalance'),  type: 'number' },
-    { key: 'pendingCount',   label: ui('financeAccountsColPending'),  type: 'number' },
+    { key: 'eTGOPendingCount', label: ui('financeAccountsColPending'), type: 'number' },
   ];
 }
 

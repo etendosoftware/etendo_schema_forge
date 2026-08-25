@@ -99,7 +99,12 @@ export default function OrderConfirmModal({
         );
         if (!processRes.ok) {
           const err = await processRes.json().catch(() => null);
-          const rawMsg = err?.response?.message || err?.message || `Process failed (${processRes.status})`;
+          // Some server-side guard clauses (missing mandatory param, unmet precondition,
+          // access denied) nest the message under `error.message` instead of the flat
+          // `message` a business-rule rejection (e.g. C_Order_Post) returns — check both,
+          // same fallback order already used by the shipment/invoice steps below.
+          const rawMsg = err?.error?.message || err?.response?.message || err?.message
+            || `Process failed (${processRes.status})`;
           throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
         }
         setOrderProcessed(true);

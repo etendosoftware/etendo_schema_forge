@@ -51,7 +51,7 @@ import { PaymentForm } from '../PaymentForm.jsx';
 const METHODS = [
   { id: 'm1', name: 'Transferencia', payinAllow: true, payoutAllow: false, isDefault: true },
   { id: 'm2', name: 'Efectivo', payinAllow: true, payoutAllow: true, isDefault: false },
-  { id: 'm3', name: 'Cheque', payinAllow: false, payoutAllow: true, isDefault: false },
+  { id: 'm3', name: 'Recibo', payinAllow: false, payoutAllow: true, isDefault: false },
 ];
 
 const INVOICES = [

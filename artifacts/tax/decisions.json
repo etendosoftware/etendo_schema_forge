@@ -126,7 +126,10 @@
         },
         "description": { "visibility": "discarded" },
         "taxCategory": { "visibility": "discarded" },
-        "summaryLevel": { "visibility": "discarded" },
+        "summaryLevel": {
+          "visibility": "system",
+          "reason": "ETP-4888: needed client-side (not shown in UI) so TaxSifModal.jsx can detect a compound/summary tax and resolve down to its rate-component child instead of editing the summary tax's own (always-blank) SIF columns."
+        },
         "country": { "visibility": "discarded" },
         "destinationCountry": { "visibility": "discarded" },
         "taxBase": { "visibility": "discarded" },
@@ -135,9 +138,15 @@
         "aeatsiiIsprorate": { "visibility": "discarded" },
         "lineNo": { "visibility": "discarded" },
         "oBSPTITaxBookType": { "visibility": "discarded" },
-        "parentTaxRate": { "visibility": "discarded" },
+        "parentTaxRate": {
+          "visibility": "system",
+          "reason": "ETP-4888: needed to list a summary tax's rate-component children via fetchByCriteria(tax, tax, 'parentTaxRate', summaryId) — see TaxSifModal.jsx's compound-tax resolution."
+        },
         "oBSPTIReverseCharge": { "visibility": "discarded" },
-        "oBSPTIEquivalentCharge": { "visibility": "discarded" },
+        "oBSPTIEquivalentCharge": {
+          "visibility": "system",
+          "reason": "ETP-4888: needed client-side (not shown in UI) to pick the ONE child that carries the régimen key — the non-equivalent-charge rate component, mirroring com.etendoerp.verifactu's ETVFAC_ORDER_VFAC_VALIDATION.xml / InitialValidator.java criterion."
+        },
         "businessPartnerTaxCategory": { "visibility": "discarded" },
         "default": { "visibility": "discarded" },
         "cascade": { "visibility": "discarded" },

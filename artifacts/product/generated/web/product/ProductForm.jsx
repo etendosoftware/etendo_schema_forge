@@ -28,5 +28,6 @@ const fields = [
 export default function ProductForm(props) {
   return <EntityForm fields={fields} cols={3} {...props} />;
 }
+ProductForm.fields = fields;
 
 // @sf-generated-end component:ProductForm

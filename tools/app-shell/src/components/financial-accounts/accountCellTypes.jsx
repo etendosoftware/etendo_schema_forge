@@ -54,7 +54,7 @@ export const ACCOUNT_CELL_TYPES = {
   reconcilePill: (row, ctx) => (
     <span onClick={(e) => e.stopPropagation()} role="presentation" className="inline-flex">
       <ReconcilePill
-        pendingCount={row.pendingCount}
+        pendingCount={row.eTGOPendingCount}
         onClick={() => ctx.onReconcile(row)}
         data-testid="ReconcilePill__c4cfe9" />
     </span>
@@ -62,17 +62,15 @@ export const ACCOUNT_CELL_TYPES = {
 };
 
 /**
- * cellType for columns that cannot declare one themselves.
+ * The cellType a contract column should render with.
  *
- * `appendVirtualFields` (resolve-curated.js) copies a closed 10-key whitelist from a
- * `virtualFields[]` entry, and `cellType` is not in it — so `pendingCount` reaches the
- * contract without one. Drop this map if that whitelist ever widens.
+ * Plain lookup, no fallback map: every grid column of this window declares its own
+ * `cellType` in `decisions.json`. The `VIRTUAL_FIELD_CELL_TYPES` escape hatch that used
+ * to live here existed only because `pendingCount` was a `virtualFields[]` entry, and
+ * `appendVirtualFields` copies a closed whitelist that excludes `cellType`. Since it
+ * became the `EM_ETGO_Pending_Count` stored computed column it is a normal field and
+ * declares `cellType` like the rest.
  */
-export const VIRTUAL_FIELD_CELL_TYPES = {
-  pendingCount: 'reconcilePill',
-};
-
-/** The cellType a contract column should render with, declared or inferred. */
 export function resolveCellType(col) {
-  return col.cellType ?? VIRTUAL_FIELD_CELL_TYPES[col.name];
+  return col.cellType;
 }

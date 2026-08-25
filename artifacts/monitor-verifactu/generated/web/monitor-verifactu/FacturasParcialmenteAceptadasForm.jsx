@@ -18,5 +18,6 @@ const fields = [
 export default function FacturasParcialmenteAceptadasForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+FacturasParcialmenteAceptadasForm.fields = fields;
 
 // @sf-generated-end component:FacturasParcialmenteAceptadasForm

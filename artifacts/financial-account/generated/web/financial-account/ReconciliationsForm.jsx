@@ -15,5 +15,6 @@ const fields = [
 export default function ReconciliationsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReconciliationsForm.fields = fields;
 
 // @sf-generated-end component:ReconciliationsForm

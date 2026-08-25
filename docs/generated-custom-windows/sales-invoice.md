@@ -853,6 +853,28 @@ first** when the invoice was already posted (the Reactivate menu action carries
 (`menuActions` key `post`, gated on `processed && !posted`) and is **not** a `documentAction`
 value — the prompt explicitly tells the agent never to send `PO` here.
 
+**Send to SII from the detail topbar (ETP-4888 point 2):** before this change, the sales-invoice
+**detail view** had no way at all to trigger an SII send — the only existing path was the list
+view's lateral preview modal (`InvoicePreviewModal.jsx` → `InvoicePreview.jsx` →
+`SendToSifButton.jsx` → `SifSendingModal.jsx`). An earlier iteration of this fix added a plain
+`aeatsiiSend` kebab-menu action (`window.menuActions` in `decisions.json`) that called the
+backend directly via `useNeoAction`; it was reverted because it did not validate the
+organisation's fiscal profile the way `SendToSifButton` does (`useFiscalConfig`/
+`getPendingSifTargets`), risking the same silent-failure UX the ticket was filed against if
+required fields are missing. The actual fix instead **reuses the existing, fiscal-profile-aware
+component**: `SalesInvoiceTopbar.jsx` (`tools/app-shell/src/windows/custom/sales-invoice/`, the
+hand-written topbar override wired via `topbarRight={SalesInvoiceTopbar}` in this window's
+`index.jsx`) now renders `SendToSifButton` (`../shared/SendToSifButton.jsx`) alongside
+`CloneButton`/`CopyRecordLinkButton`/`InvoiceTopbarExtra`, the same way `PurchaseInvoiceTopbar.jsx`
+already did. `SendToSifButton` derives `specName` from `apiBaseUrl` (so the shared
+`getInvoiceFiscalTargets(specName, profile)` correctly gates TBAI in addition to SII for the sales
+side, unlike purchase which is SII-only), only renders once `status === 'CO'` and at least one
+fiscal target is still pending (`getPendingSifTargets`), and on click opens `SifSendingModal.jsx`,
+which calls the same `SiiSendHandler` backend action (`POST .../action/Em_aeatsii_send`,
+`EM_Aeatsii_Send`, and `aeatsiiSend` are all accepted aliases) that the reverted kebab entry used.
+No `decisions.json`/generator change was needed for this — `SalesInvoiceTopbar.jsx` is a plain
+custom React component, not generated output.
+
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
 routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same

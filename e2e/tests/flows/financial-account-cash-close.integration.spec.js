@@ -65,11 +65,18 @@ import { ensureOpenPeriod } from '../helpers/period-helpers.js';
  * `cash-close-balanced-pill` after), which is what proves the live recalculation without pinning a
  * number to a locale.
  *
- * Requires a live Etendo backend + a provisioned tenant. Gated by E2E_FINANCE_INTEGRATION=1
- * (domain-level flag, same shape as E2E_SALES_INTEGRATION), exported by scripts/run-e2e-full.sh.
+ * Requires a live Etendo backend + a provisioned tenant, like every other spec in the
+ * `integration` Playwright project — and nothing more, which is why it carries no opt-in flag of
+ * its own. It used to be gated on E2E_FINANCE_INTEGRATION=1, a flag only this file read and only
+ * scripts/run-e2e-full.sh ever set, so the gate never actually gated anything: it was always on
+ * wherever the suite ran, and skipping it silently anywhere else (`make test-e2e`) was the only
+ * thing it achieved. Eleven of the twenty integration specs declare no flag; this is now one of
+ * them.
+ *
+ * Ordering is unaffected: it comes from the `integration` project's `dependencies` on
+ * `onboarding-setup` in playwright.config.js, not from any env var, so this still runs after
+ * onboarding has produced its credentials.
  */
-
-const RUN_INTEGRATION = process.env.E2E_FINANCE_INTEGRATION === '1';
 
 /** Same tolerance the frontend (cashCloseMath) and the backend (CashCloseHandler) use. */
 const TOLERANCE = 0.005;
@@ -175,11 +182,6 @@ async function pickSelectorOption(page, fieldKey, pattern, description) {
 test.describe('Cash close (real backend)', () => {
   test.describe.configure({ timeout: 600_000 });
 
-  test.skip(
-    !RUN_INTEGRATION,
-    'Set E2E_FINANCE_INTEGRATION=1 to run the live financial-account integration tests.',
-  );
-
   test('Case 1: happy path — sales invoice collected in cash, drawer balances, close completes', async ({ page }) => {
     // ETP-4567 — open the accounting period for the doc types this flow
     // confirms, instead of timing out ~10s later on an unrelated UI
@@ -244,12 +246,20 @@ test.describe('Cash close (real backend)', () => {
       'The invoice should have exactly 1 saved line',
     ).toBeVisible({ timeout: 15_000 });
 
-    await clickConfirmButton(page);
     // Precise wait for the sales-invoice documentAction confirmation itself — the generic
     // waitForConfirmResponse() resolves on ANY successful NEO write and can race ahead of the
     // actual confirmation request, letting the pill assertion below read the stale "Borrador"
     // status before the invoice has actually finished completing on the backend.
-    await waitForDocumentActionResponse(page, 'sales-invoice');
+    //
+    // ARMED BEFORE THE CLICK, and that ordering is load-bearing: clickConfirmButton ends with
+    // `await slow(page)`, which sleeps E2E_SLOW_MS. Run with E2E_SLOW_MS set (any --headed
+    // debugging session) the POST completes inside that sleep, so a waiter attached afterwards
+    // is listening for an event that already fired and stalls the full 30s — with the invoice
+    // sitting there Completado on screen, which is a maddening thing to debug. Unset, slow() is
+    // a no-op and the old ordering happened to win the race.
+    const confirmed = waitForDocumentActionResponse(page, 'sales-invoice');
+    await clickConfirmButton(page);
+    await confirmed;
     await dismissSuccessModal(page);
 
     // Confirming navigates back to the invoice list, so go back to the record by id instead of
@@ -315,12 +325,21 @@ test.describe('Cash close (real backend)', () => {
     await expect(page.getByTestId('detail-tab-reconciliation-list')).toBeVisible();
     await expect(page.getByTestId('detail-tab-statements')).toHaveCount(0);
 
-    const pendingPromise = waitForNeoData(page, isCashPending);
+    // Scoped to THIS account: `isCashPending` alone matches any cash-close pending response, so a
+    // request for another drawer (or a stale one) could satisfy it.
+    const isThisDrawerPending = (url) => isCashPending(url) && url.includes(accountId);
+
+    const pendingPromise = waitForNeoData(page, isThisDrawerPending);
     await reconciliationTab.click();
     const pending = await pendingPromise;
 
     await expect(page.getByTestId('cash-close-tab')).toBeVisible({ timeout: 20_000 });
 
+    // A flat `Got 0: []` here does not necessarily mean the drawer is empty. `useCashClosePending`
+    // maps any payload without a `movements` array to `[]`, so a NEO error answered with HTTP 200
+    // — notably `{"status":"not_configured_for_report_generation"}` when the cash-close spec has
+    // no ETGO_SF_ENTITY row carrying Java_Qualifier 'cashClose' — reads here as an empty drawer.
+    // Check the response body before suspecting the write.
     const movements = Array.isArray(pending?.movements) ? pending.movements : [];
     expect(
       movements.length,

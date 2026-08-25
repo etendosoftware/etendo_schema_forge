@@ -3,9 +3,13 @@
  *
  * ETP-4658 moved everything about the Cuentas LIST columns out of JSX and into
  * `decisions.json`: which columns appear (`grid` + `gridOrder`), their headers
- * (`gridLabelKey`), their cell bodies (`cellType`), the runtime-injected "Por conciliar"
- * column (`entities.account.virtualFields[]`) and the suppression of the generic
+ * (`gridLabelKey`), their cell bodies (`cellType`) and the suppression of the generic
  * quick-actions overlay (`window.rowQuickActions.enabled: false`).
+ *
+ * "Por conciliar" used to be the one exception — a runtime-injected
+ * `entities.account.virtualFields[]` entry. It is now the `EM_ETGO_Pending_Count` stored
+ * computed column, so all five columns are declared the same way and the two workarounds a
+ * virtual field needed (`VIRTUAL_FIELD_CELL_TYPES`, `window.labelOverrides`) are gone.
  *
  * This file is the pipeline-integrity half of that migration: it pins the DECLARATIONS and
  * checks they survived the regen, so a future `make regen ONLY=financial-account` cannot
@@ -50,8 +54,9 @@ const EXPECTED_COLUMNS = [
   // ETP-4896 follow-up: inserted right after Type.
   { name: 'country', gridLabelKey: 'financeAccountsColCountry', cellType: 'accountCountry' },
   { name: 'currentBalance', gridLabelKey: 'financeAccountsColBalance', cellType: 'accountBalance' },
-  // Virtual field: no AD column, no gridLabelKey and no cellType it could declare.
-  { name: 'pendingCount', gridLabelKey: null, cellType: null },
+  // Stored computed column (EM_ETGO_Pending_Count): a real field now, so unlike the virtual
+  // field it replaced it declares its own header key and renderer.
+  { name: 'eTGOPendingCount', gridLabelKey: 'financeAccountsColPending', cellType: 'reconcilePill' },
 ];
 
 describe('Cuentas list — decisions.json declares the grid columns', () => {
@@ -66,6 +71,7 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
       { name: 'type', gridOrder: 2 },
       { name: 'country', gridOrder: 3 },
       { name: 'currentBalance', gridOrder: 4 },
+      { name: 'eTGOPendingCount', gridOrder: 5 },
     ]);
   });
 
@@ -77,20 +83,36 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
     }
   });
 
-  // The NeoHandler injects pendingCount in afterHandle — there is no AD column behind it,
-  // so it can only reach the contract as a virtualFields[] entry. Same mechanism as
-  // payment-in / payment-out / return-material-receipt / return-to-vendor-shipment.
-  it('declares pendingCount as a runtime-injected virtual field', () => {
-    const virtual = accountDecisions.virtualFields ?? [];
-    const pending = virtual.find((f) => f.name === 'pendingCount');
+  // "Por conciliar" is a real AD-backed field, not a runtime injection. A value injected in
+  // afterHandle can only be reordered inside the page the SQL already selected, so it could
+  // never be sorted — that is why it became a stored computed column.
+  it('declares eTGOPendingCount as a real field, not a virtual one', () => {
+    assert.equal(
+      accountDecisions.virtualFields,
+      undefined,
+      'this entity has no virtual fields left — do not reintroduce one for Por conciliar',
+    );
 
-    assert.ok(pending, 'entities.account.virtualFields must declare pendingCount');
-    assert.equal(pending.column, 'pendingCount');
-    assert.equal(pending.type, 'integer');
+    const pending = accountDecisions.fields.eTGOPendingCount;
+    assert.ok(pending, 'entities.account.fields must declare eTGOPendingCount');
     assert.equal(pending.visibility, 'readOnly');
     assert.equal(pending.form, false, 'it is a list-only column, never a form field');
     assert.equal(pending.grid, true);
-    assert.equal(pending.gridOrder, 5, 'it must come last, after the four real columns');
+    assert.equal(pending.gridOrder, 5, 'it must come last, after the four other columns');
+    assert.equal(pending.gridLabelKey, 'financeAccountsColPending');
+    assert.equal(pending.cellType, 'reconcilePill');
+  });
+
+  // The override existed ONLY to relabel the virtual field, whose gridLabelKey
+  // appendVirtualFields dropped. A real field resolves its header the normal way.
+  it('no longer needs window.labelOverrides for the pending column', () => {
+    const overrides = decisions.window.labelOverrides ?? {};
+    for (const [locale, entries] of Object.entries(overrides)) {
+      assert.ok(
+        !('pendingCount' in entries) && !('eTGOPendingCount' in entries),
+        `window.labelOverrides.${locale} must not relabel the pending column any more`,
+      );
+    }
   });
 
   // The list owns its actions through the trailing AccountRowActions column, so the
@@ -117,7 +139,7 @@ describe('Cuentas list — the regen carried the declarations into contract.json
   });
 
   // `resolveColumnLabel` feeds `column` to the AD dictionary and ListView's ReportDrawer
-  // maps on it, so every grid column needs one — the virtual field carries its own name.
+  // maps on it, so every grid column needs one.
   it('gives every grid column an AD column name', () => {
     for (const field of contractGridFields) {
       assert.ok(field.column, `${field.name} must carry a column`);
@@ -144,14 +166,28 @@ describe('Cuentas list — the regen carried the declarations into contract.json
     }
   });
 
-  // A virtual field cannot declare a cellType (appendVirtualFields copies a closed 10-key
-  // whitelist), so the registry has to infer it. Drop VIRTUAL_FIELD_CELL_TYPES if that
-  // whitelist ever widens and this assertion starts failing.
-  it('still needs the virtual-field cellType fallback for pendingCount', () => {
-    const pending = contractGridFields.find((f) => f.name === 'pendingCount');
+  // The inverse of the assertion this replaced. While "Por conciliar" was a virtual field its
+  // cellType could not reach the contract (appendVirtualFields copies a closed whitelist that
+  // excludes it), so the registry carried a VIRTUAL_FIELD_CELL_TYPES fallback. As a real field
+  // it declares cellType directly, and the fallback must stay deleted — reintroducing it would
+  // silently outrank a future declared cellType.
+  it('carries the pending column cellType through the contract, with no registry fallback', () => {
+    const pending = contractGridFields.find((f) => f.name === 'eTGOPendingCount');
 
-    assert.equal(pending.cellType ?? null, null, 'the whitelist widened — see the comment above');
-    assert.match(registrySrc, /pendingCount: 'reconcilePill'/);
+    assert.equal(pending.cellType, 'reconcilePill');
+    // Anchored on the export, not the identifier: the file still explains in prose why the
+    // fallback used to exist, and that comment must not fail this test.
+    assert.doesNotMatch(registrySrc, /export const VIRTUAL_FIELD_CELL_TYPES/);
+    assert.match(registrySrc, /return col\.cellType;/);
+  });
+
+  // The whole point of the migration: NEO's generic orderby needs a real DAL property.
+  it('backs the pending column with the stored computed AD column', () => {
+    const pending = contractGridFields.find((f) => f.name === 'eTGOPendingCount');
+
+    assert.equal(pending.column, 'EM_ETGO_Pending_Count');
+    assert.equal(pending.type, 'integer', 'it genuinely counts pending items');
+    assert.deepEqual(pending.computed, { mode: 'stored', refresh: 'synchronous' });
   });
 });
 

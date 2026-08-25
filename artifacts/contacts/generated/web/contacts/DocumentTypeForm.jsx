@@ -13,5 +13,6 @@ const fields = [
 export default function DocumentTypeForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+DocumentTypeForm.fields = fields;
 
 // @sf-generated-end component:DocumentTypeForm

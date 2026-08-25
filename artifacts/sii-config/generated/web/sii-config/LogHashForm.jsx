@@ -11,5 +11,6 @@ const fields = [
 export default function LogHashForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+LogHashForm.fields = fields;
 
 // @sf-generated-end component:LogHashForm

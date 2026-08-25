@@ -3,9 +3,10 @@ import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { isEtendoTrue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
-import { selectSifFields } from './TaxSifField.jsx';
+import { selectSifFields, pickRegimeChild } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
 
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
@@ -102,6 +103,31 @@ async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, 
 }
 
 /**
+ * Resolves the record whose OWN SIF columns should actually drive the completeness
+ * check. For a compound/summary tax (`taxRow.isSummary`), Etendo Classic's completion
+ * validation reads the régimen key off the non-equivalent-charge RATE COMPONENT child,
+ * never the summary tax's own (always-blank) columns — mirrors the exact backend
+ * criterion `pickRegimeChild()` documents (verified against
+ * `ETVFAC_ORDER_VFAC_VALIDATION.xml` / `InitialValidator.java` in
+ * com.etendoerp.verifactu). The child lives in the SAME `taxById` catalog this hook
+ * already fetches in full (see `fetchAllTaxPages` above) — `isSummary`/`parentTaxId`/
+ * `isEquivalentCharge` are enrichment columns added by
+ * `InvoiceLineTaxSifSelectorPolicy` (com.etendoerp.go) specifically so this resolves
+ * with NO extra network round trip. Falls back to `taxRow` itself when it is not a
+ * summary tax, or when the catalog does not resolve to exactly one qualifying child
+ * (same "don't guess" fallback `TaxSifModal.jsx` applies).
+ *
+ * @param {object|null|undefined} taxRow enriched tax record/selector item
+ * @param {object} taxById the full id -> tax-record catalog this hook maintains
+ * @returns {object|null|undefined} the effective record to check completeness against
+ */
+export function resolveEffectiveTaxRow(taxRow, taxById) {
+  if (!taxRow || !isEtendoTrue(taxRow.isSummary)) return taxRow;
+  const children = Object.values(taxById || {}).filter((t) => t.parentTaxId === taxRow.id);
+  return pickRegimeChild(children, { isEquivalentChargeKey: 'isEquivalentCharge' }) || taxRow;
+}
+
+/**
  * Pure completeness check: does `taxRow` (a tax record — or selector item — carrying
  * the SIF-enriched columns) still need its TBAI/Verifactu key filled in?
  *
@@ -111,16 +137,24 @@ async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, 
  * anything at this level: SII's own equivalent lives on the invoice HEADER
  * (`aeatsiiCauseExemption`, `SifTab.jsx`) and is explicitly out of scope here.
  *
+ * When `taxById` is passed and `taxRow` is a compound/summary tax, resolves to its
+ * rate-component child first (`resolveEffectiveTaxRow()`) — otherwise a summary tax's
+ * own always-blank columns would keep the badge showing forever, even after the real
+ * (child) record was correctly saved via `TaxSifModal.jsx`. Passing no `taxById` keeps
+ * the pre-ETP-4888-followup behavior (checks `taxRow` as given) for any other caller.
+ *
  * @param {object|null|undefined} taxRow enriched tax record/selector item
- * @param {object} ctx `{ profile, verifactuRecord, ui }` — same shape `selectSifFields` takes
+ * @param {object} ctx `{ profile, verifactuRecord, ui, taxById }` — `taxById` optional,
+ *   the same shape `selectSifFields` takes plus the full catalog for compound resolution
  * @returns {boolean} true when at least one applicable field's value is blank
  */
-export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
+export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui, taxById } = {}) {
   if (!taxRow) return false;
-  const fields = selectSifFields({ profile, verifactuRecord, data: taxRow, ui });
+  const effective = taxById ? resolveEffectiveTaxRow(taxRow, taxById) : taxRow;
+  const fields = selectSifFields({ profile, verifactuRecord, data: effective, ui });
   if (fields.length === 0) return false;
   return fields.some((field) => {
-    const value = taxRow[field.column];
+    const value = effective[field.column];
     return value == null || value === '';
   });
 }
@@ -132,7 +166,8 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui }) {
  * docs/ui-customization.md), so this hook itself carries no window-specific knowledge.
  *
  * Fetches the tax catalog ONCE via the tax selector — now enriched server-side with
- * `taxExempt`/`notTaxable` + the TBAI/Verifactu key columns by
+ * `taxExempt`/`notTaxable` + the TBAI/Verifactu key columns, PLUS `isSummary`/
+ * `parentTaxId`/`isEquivalentCharge` (ETP-4888 compound-tax follow-up) by
  * `InvoiceLineTaxSifSelectorPolicy` (com.etendoerp.go) — instead of one fetch per
  * distinct tax on the grid, builds a per-tax-id completeness map, and exposes an
  * `InlineLinesPanel`-shaped `cellBadges.tax` renderer that only renders when the row's
@@ -231,7 +266,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     if (!enabled) return {};
     return {
       tax: (row) => {
-        if (!isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui })) return null;
+        if (!isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui, taxById })) return null;
         return (
           <button
             type="button"

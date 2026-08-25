@@ -53,6 +53,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
 9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
+10. **ETP-4940 follow-up:** on a draft (`RPAP`) payment, edit the amount WITHOUT clicking Save, then go to the "Apply to Invoices" tab and click through to apply + process. Confirm the payment processes with the edited amount, not the original one.
 
 ## Automated evidence
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites A–D) provides browser-level E2E coverage for the Attachments tab: tab visibility in the `customTabsAfterBottom` strip, empty state, upload (valid file, file too large, invalid MIME, duplicate name), single delete with confirmation, Delete All, individual file download, and Download All (ZIP). All API calls are mocked; no real backend is required.
@@ -262,46 +263,20 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
 
-## Confirmar abre el editor del pago, no un diálogo
+## "Apply to invoices" tab silently discarded pending header edits — ETP-4940 follow-up
 
-A draft payment — typically one that was just reactivated — used to offer a yes/no dialog: *"El pago
-pasará a estado confirmado y depositado"*. That was the only thing this window could offer, because
-it has no form of its own: `hideFormCard` is on and all 31 header fields are `form: false`, so
-"Datos del pago" is read-only text and Guardar is permanently disabled. A user who reactivated a
-payment to fix its amount could only re-confirm it unchanged.
+The **Facturas Pendientes / Apply to Invoices** tab (`ApplyToInvoices.jsx`, the `customLines`
+component for this window) fires its own two-step request pair — `action/applyToInvoices` then
+`action/aPRMProcessPayment` — entirely bypassing `DetailView.jsx`'s guarded generic process button
+(the one the toolbar's "processConfirm" button uses, already protected since ETP-4542 via this
+window's `saveBeforeProcesses: true`). A header edit (e.g. `amount`, `currency`) made without
+clicking Save first was silently discarded: the apply/process calls ran server-side against the
+last-persisted value, and the client-side `totalAppliedExceedsPaymentAmount` validation even
+compared against the stale amount.
 
-Confirmar now opens the **invoice's own payment editor** (`NewPaymentEntryModal`), with the draft's
-amount, date, method, account and PIS block loaded — the same modal the invoice opens, so the user
-can correct the payment and then either **Guardar** (stays a draft) or **Confirmar**. Both surfaces
-that offer the action do it: the detail toolbar and the grid's kebab.
-
-### How it is wired
-
-`PaymentEditModalLauncher` sits in the window's `processConfirmModal` slot, routed by
-`ReactivarConfirmModal` on `columnName === 'aPRMProcessPayment'`. That slot only renders a
-component — nothing forces it to call `onConfirm` — so a window can replace a process button's
-behaviour outright without touching `generate-frontend.js` in `schema_forge_core`. The slot gained
-two props for this (`apiBaseUrl`, `onRefresh`): a modal that acts on its own never goes through
-`handleProcess`, so nothing else would reload the record.
-
-Everything the editor needs comes from endpoints that already exist:
-
-| Step | Source |
-| --- | --- |
-| which invoice | `invoiceId`, injected on the payment record by `ReactivatePaymentHandler` |
-| currency, document number, outstanding | `GET /sales-invoice/header/{invoiceId}` |
-| the payment, in the editor's own shape | `POST /sales-invoice/header/{invoiceId}/action/invoicePayments` |
-
-That last one matters: `invoicePayments` is the **only** endpoint that returns `creditSourcesUsed`,
-so rebuilding the object by hand would silently drop the credits the draft consumed.
-
-`PaymentRegistrationService.invoiceIdsByPayment` resolves the whole page in one query and counts
-**only positive applications**. A payment that spends a credit carries a negative application
-against the credit note's own installment; that is the credit being spent, not a second invoice, and
-the editor already models it as a source.
-
-### Fallback
-
-When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
-a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
-the editor never opens on a record it could not save correctly.
+Fixed the same way the sibling `topbarRight` fix did for `return-material-receipt`/
+`return-to-vendor-shipment`: `DetailView.jsx` now passes `isDirty` alongside its existing `onSave`
+prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
+`maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` at the top of `handleApplyAndProcess`,
+before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
+documentAction path is the already-guarded generic process button — so it needed no change.

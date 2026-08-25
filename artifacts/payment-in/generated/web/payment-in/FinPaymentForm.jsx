@@ -10,5 +10,6 @@ const fields = [
 export default function FinPaymentForm(props) {
   return <EntityForm fields={fields} cols={3} {...props} />;
 }
+FinPaymentForm.fields = fields;
 
 // @sf-generated-end component:FinPaymentForm

@@ -89,15 +89,25 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await waitForDetailReady(page);
       await slow(page);
 
-      // Try to save with empty required fields (no BP, no warehouse)
-      const guardarBtn = page.getByRole('button', { name: /guardar|save/i });
-      await guardarBtn.click();
+      // ETP-4933: this step used to CLICK Save on an empty form and then wait for the
+      // per-field "Requerido" labels the failed submit produced. Save is now disabled
+      // while a required field is empty, so the click can never land — and asserting
+      // the button state is a stricter check than counting labels: it names exactly
+      // which fields block, so a field silently dropping out of the required set fails
+      // here instead of passing on a >= 2 count.
+      const guardarBtn = page.getByTestId('action-save-draft')
+        .or(page.getByRole('button', { name: /guardar|save/i }));
+      await expect(guardarBtn.first()).toBeDisabled({ timeout: 10_000 });
 
-      // Wait for validation labels to appear (assertion polls internally)
-      await expect(async () => {
-        const requiredCount = await page.getByText('Requerido').count();
-        expect(requiredCount).toBeGreaterThanOrEqual(2);
-      }).toPass({ timeout: 10_000 });
+      // Locale-independent on purpose — the attribute carries field keys, not labels.
+      const missing = await guardarBtn.first().getAttribute('data-missing-required');
+      expect(missing, 'Save must report which required fields block it').toBeTruthy();
+      for (const key of ['businessPartner', 'warehouse']) {
+        expect(missing.split(','), `${key} must block a new PO`).toContain(key);
+      }
+
+      // The human-facing reason must be there too, not just the machine-readable one.
+      expect(await guardarBtn.first().getAttribute('title')).toBeTruthy();
       await slow(page);
     });
 
