@@ -46,8 +46,16 @@ describe('PendingInvitationPill', () => {
     expect(pill).toHaveAttribute('data-status', 'EXPIRED');
   });
 
-  it.each(['ACCEPTED', 'REVOKED'])('renders nothing (null) for terminal status %s', (status) => {
-    const { container } = render(<PendingInvitationPill status={status} />);
+  it('renders a green (success) pill with the accepted-invitation label for ACCEPTED (ETP-4999 — a blank cell for an accepted invitation misleadingly read as "no invitation was ever sent")', () => {
+    render(<PendingInvitationPill status="ACCEPTED" />);
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationAcceptedBadge');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+    expect(pill).toHaveAttribute('data-status', 'ACCEPTED');
+  });
+
+  it('renders nothing (null) for terminal status REVOKED', () => {
+    const { container } = render(<PendingInvitationPill status="REVOKED" />);
     expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
   });

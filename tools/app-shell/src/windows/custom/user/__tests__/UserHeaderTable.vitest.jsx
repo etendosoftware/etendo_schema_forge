@@ -349,7 +349,15 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
     expect(pill).toHaveAttribute('data-tone', 'neutral');
   });
 
-  it.each(['ACCEPTED', 'REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
+  it('renders the green (success) pill for invitationStatus ACCEPTED (ETP-4999)', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'ACCEPTED' }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+  });
+
+  it.each(['REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
     'renders a blank cell (no crash) for invitationStatus %s',
     async (status) => {
       const col = await getInvitationColumn();

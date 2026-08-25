@@ -34,6 +34,7 @@ vi.mock('../roles/useRolesOverviewData.js', () => ({
 vi.mock('lucide-react', () => ({
   ShieldAlert: (p) => <span data-testid={p['data-testid']} {...p} />,
   Users: (p) => <span data-testid={p['data-testid']} {...p} />,
+  LayoutGrid: (p) => <span data-testid={p['data-testid']} {...p} />,
 }));
 
 vi.mock('@/components/ui/card', () => ({

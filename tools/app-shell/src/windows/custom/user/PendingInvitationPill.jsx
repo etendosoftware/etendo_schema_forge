@@ -25,9 +25,11 @@ import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx'
  * `expiresAt` rather than relying on a stored column nothing ever wrote (see that
  * method's own javadoc); it also gives the new "Resend invitation" button (rendered
  * next to this pill, see `index.jsx`'s `TopbarExtra`) something to sit beside instead
- * of floating with no status indicator. Every other value (`ACCEPTED`, `REVOKED`,
- * `null`, or any unrecognized string) renders nothing — a blank cell in the grid,
- * nothing in the toolbar.
+ * of floating with no status indicator. `ACCEPTED` gets its own green/success pill
+ * (ETP-4999 — a blank cell for an accepted invitation reads as "no invitation was
+ * ever sent", misleading for a user who already accepted theirs). `REVOKED`, `null`,
+ * and any unrecognized string still render nothing — there is genuinely no
+ * outstanding/relevant invitation state to show in those cases.
  *
  * Purely reactive to `status` — no local state or polling. In the grid, this means a
  * row updates the next time its data reloads (same as every other cell); in the
@@ -60,6 +62,15 @@ export default function PendingInvitationPill({ status, 'data-testid': dataTestI
         status={status}
         tone="neutral"
         label={ui('invitationExpiredBadge')}
+        data-testid={dataTestId} />
+    );
+  }
+  if (status === 'ACCEPTED') {
+    return (
+      <DocumentStatusPill
+        status={status}
+        tone="success"
+        label={ui('invitationAcceptedBadge')}
         data-testid={dataTestId} />
     );
   }
