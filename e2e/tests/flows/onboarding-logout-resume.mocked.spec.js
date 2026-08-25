@@ -20,7 +20,10 @@ function json(route, body, status = 200) {
 async function installOnboardingMocks(page, { failDraftSave = false, holdProvisioning = false } = {}) {
   const state = { draft: null, events: [], releaseProvisioning: null };
 
-  await page.route('**/sws/go/me', route => json(route, ACCOUNT));
+  // ETP-4798: /me carries the email-confirmation state. This account is already confirmed, which
+  // is what keeps the resume flow reaching setup-progress — an unconfirmed one is gated there.
+  await page.route('**/sws/go/me', route =>
+    json(route, { ...ACCOUNT, emailVerified: true, emailVerificationPending: false }));
   // ETP-4575/4576: the onboarding flow mints the `__Host-` session cookie, so it
   // moved off the legacy bearer endpoints (`/sws/go/register`, `/sws/go/login`,
   // which still answer with a `token`) onto the `/sws/go/session/*` family,

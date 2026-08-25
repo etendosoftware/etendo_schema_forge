@@ -1,30 +1,49 @@
 /**
- * Tests for windows/custom/user/index.jsx — covers both ETP-4906 (role assignment)
- * and ETP-4894 (invitation flow), which share the same `UserWindow` component. See
+ * Tests for windows/custom/user/index.jsx — covers ETP-4906 (role assignment) and
+ * ETP-4830 (invite-on-create: newLabel fix, pending-invitation `topbarExtra` pill,
+ * actionable "user created" toast), which share the same `UserWindow` component. See
  * the source file's own doc comment for the full contract of both flows: fetch
  * applied roles on load for an existing user, thread the live selection to
  * `AssignTemplateRolesControl`/`UserRolesTab` via `RoleSelectionProvider`, fire
  * `saveUserRoleAssignments` from `onAfterExistingSave` (only when the locally-selected
- * set actually differs from what was loaded — the `sameIdSet` no-op guard), and render
- * the invitation banner/dialog as an independent extension via `headerContent` and a
- * sibling `InviteUserDialog`.
+ * set actually differs from what was loaded — the `sameIdSet` no-op guard), and — as
+ * of ETP-4830 — show a single actionable toast on `onAfterCreate` whose action
+ * re-navigates with `location.state.openSecondaryTab` and focuses
+ * `AssignTemplateRolesControl`. The old ETP-4894 `InvitationInfoBanner`/
+ * `InviteUserDialog` wiring was removed from this file entirely (ETP-4830) — see
+ * `InviteUserDialog.vitest.jsx` for that component's own (now-unwired) coverage.
  *
  * Mirrors `windows/custom/warehouse/__tests__/index.vitest.jsx`'s convention of
  * capturing the generated page's props via a mock and driving its callbacks directly.
  */
 const toastError = vi.fn();
+const toastSuccess = vi.fn();
+const toastDismiss = vi.fn();
 
 vi.mock('sonner', () => ({
-  toast: { error: (...args) => toastError(...args) },
+  toast: {
+    error: (...args) => toastError(...args),
+    success: (...args) => toastSuccess(...args),
+    dismiss: (...args) => toastDismiss(...args),
+  },
+}));
+
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/i18n', () => ({
   // Interpolates params into the returned string (rather than the trivial `(key) => key`)
   // so tests asserting the toast call shape can distinguish between a `detail` sourced
   // from the rejection's domain message vs. the `roleAssignmentSaveFailed` i18n fallback
-  // key — both otherwise collapse to the same bare key under `(key) => key`. Plain
-  // (no-params) calls — e.g. the invitation banner's copy — still just return the key.
+  // key — both otherwise collapse to the same bare key under `(key) => key`.
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // The real (unmocked) `DocumentStatusPill` — rendered by `PendingInvitationPill` —
+  // also imports `useLocale` from `@/i18n`; stub it so that import doesn't crash.
+  // Its own `label` is always explicit in `PendingInvitationPill`, so `dictionary`
+  // is never actually read down `statusLabel`'s fallback path.
+  useLocale: () => ({}),
 }));
 
 vi.mock('@/components/attachments', () => ({
@@ -38,6 +57,10 @@ vi.mock('../UserRolesTab', () => ({
 vi.mock('@/lib/userRoleAssignmentsApi.js', () => ({
   fetchUserRoleAssignments: vi.fn(),
   saveUserRoleAssignments: vi.fn(),
+}));
+
+vi.mock('@/lib/resendInvitationApi.js', () => ({
+  resendInvitation: vi.fn(),
 }));
 
 import { useRoleSelection } from '../roleSelectionContext.js';
@@ -64,24 +87,36 @@ function SelectionProbe() {
 
 let lastUserPageProps;
 vi.mock('@generated/user/generated/web/user/UserPage', () => ({
-  // Captures every prop (needed by the ETP-4906 assertions below) AND renders
-  // `headerContent` (the real, unmocked `InvitationInfoBanner` markup, ETP-4894) next
-  // to the role-selection probe — the two extensions are independent, so both need to
-  // show up in this single mock's output.
+  // Captures every prop (needed by the ETP-4906/ETP-4830 assertions below) AND renders
+  // `topbarExtra` (the real, unmocked composite `TopbarExtra` — `PendingInvitationPill` +
+  // `ActiveStatusToggle`, ETP-4830) — mirroring how `DetailView.jsx` itself instantiates
+  // it, passing `data`/`recordId`/`token`/`apiBaseUrl`/`onRefresh` straight through — next
+  // to the role-selection probe.
   default: (props) => {
     lastUserPageProps = props;
+    const TopbarExtra = props.topbarExtra;
     return (
       <div data-testid="user-page">
-        {props.headerContent}
+        {TopbarExtra && (
+          <TopbarExtra
+            data={props.data}
+            recordId={props.recordId}
+            token={props.token}
+            apiBaseUrl={props.apiBaseUrl}
+            onRefresh={props.onRefresh}
+          />
+        )}
         <SelectionProbe />
       </div>
     );
   },
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { resendInvitation } from '@/lib/resendInvitationApi.js';
+import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -127,6 +162,30 @@ describe('UserWindow — fetching applied roles on load', () => {
     render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
 
     await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
+  });
+
+  it('regression: clears a previously-loaded user\'s role selection when recordId changes to "new" without a remount (ETP-4830 stale-state bug)', async () => {
+    // Reproduces the confirmed manual-test bug: viewing an existing user with roles
+    // already applied, then navigating to "New user" WITHOUT the component instance
+    // remounting (same `UserWindow` element, `recordId` prop just changes) must NOT
+    // leave the previous user's roles pre-selected on the blank create form.
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin', 'role-sales'] });
+    const { rerender } = render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+
+    rerender(<UserWindow recordId="new" token="tok" apiBaseUrl="/api" />);
+
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
+  });
+
+  it('regression: clears the selection when recordId becomes absent without a remount', async () => {
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: ['role-fin'] });
+    const { rerender } = render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin"]'));
+
+    rerender(<UserWindow token="tok" apiBaseUrl="/api" />);
+
     await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]'));
   });
 
@@ -350,32 +409,336 @@ describe('UserWindow — additionalDirtyState (the "extra dirty source" prop Det
   });
 });
 
-describe('UserWindow — invitation entry point (ETP-4894)', () => {
-  it('renders the invitation info banner and invite button', () => {
+describe('UserWindow — newLabel fix (ETP-4830)', () => {
+  it('passes the generic "newUser" label, not the old "inviteUser" mislabel', () => {
     render(<UserWindow />);
+    expect(lastUserPageProps.newLabel).toBe('newUser');
+  });
+});
 
-    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
-      'inviteUserDescriptionTitle',
-    );
-    expect(screen.getByTestId('user-invitation-info')).toHaveTextContent(
-      'inviteUserDescription',
-    );
-    expect(screen.getByTestId('action-open-invite')).toBeInTheDocument();
+describe('UserWindow — pending-invitation topbarExtra pill (ETP-4830)', () => {
+  it('passes a topbarExtra component to the generated UserPage', () => {
+    render(<UserWindow />);
+    expect(typeof lastUserPageProps.topbarExtra).toBe('function');
   });
 
-  it('opens the InviteUserDialog when clicking the invite button', () => {
+  it('renders the amber pending-invitation pill when invitationStatus is PENDING (transient pre-send state)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'PENDING' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('pendingInvitationBadge');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', 'PENDING');
+  });
+
+  it('renders the amber pending-invitation pill when invitationStatus is SENT (the real persisted post-send state)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'SENT' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('pendingInvitationBadge');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+    expect(pill).toHaveAttribute('data-status', 'SENT');
+  });
+
+  it('renders a red delivery-failed pill when invitationStatus is DELIVERY_FAILED', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'DELIVERY_FAILED' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationDeliveryFailedBadge');
+    expect(pill).toHaveAttribute('data-tone', 'destructive');
+    expect(pill).toHaveAttribute('data-status', 'DELIVERY_FAILED');
+  });
+
+  it('renders a neutral expired pill when invitationStatus is EXPIRED (ETP-4830 item #2/#3 — a genuinely reachable value now that findLatestInvitationStatus computes it live)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('invitationExpiredBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'EXPIRED');
+  });
+
+  it.each(['ACCEPTED', 'REVOKED'])('renders nothing when invitationStatus is %s (terminal, non-actionable state)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when invitationStatus is absent (e.g. an existing pre-ETP-4830 user)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing on a brand-new, not-yet-saved record (no data yet)', () => {
+    render(<UserWindow recordId="new" />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+});
+
+describe('UserWindow — owner badge (ETP-4830 item #4, detail-header topbarExtra)', () => {
+  it('renders the neutral owner pill when isOwner is true', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', isOwner: true }} />);
+
+    const pill = screen.getByTestId('document-status-pill');
+    expect(pill).toHaveTextContent('ownerBadge');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+    expect(pill).toHaveAttribute('data-status', 'OWNER');
+  });
+
+  it('renders nothing when isOwner is false (the normal case)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', isOwner: false }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when isOwner is absent (e.g. an existing pre-ETP-4830 response shape)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('document-status-pill')).not.toBeInTheDocument();
+  });
+
+  it('coexists with the pending-invitation pill without a testid collision when both render', () => {
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', isOwner: true, invitationStatus: 'SENT' }} />,
+    );
+
+    const pills = screen.getAllByTestId('document-status-pill');
+    expect(pills).toHaveLength(2);
+    expect(pills.map((p) => p.getAttribute('data-status')).sort()).toEqual(['OWNER', 'SENT']);
+  });
+});
+
+describe('UserWindow — "Activo" active/inactive toggle (ETP-4830, detail-header topbarExtra)', () => {
+  afterEach(() => {
+    globalThis.fetch = undefined;
+  });
+
+  it('renders the toggle, checked, for an existing active user', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: true }} />);
+    const toggle = screen.getByTestId('ActiveStatusToggle__switch');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('renders the toggle, unchecked, for an existing inactive user', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: false }} />);
+    const toggle = screen.getByTestId('ActiveStatusToggle__switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('renders nothing on a brand-new, not-yet-saved record (no id to PATCH against)', () => {
+    render(<UserWindow recordId="new" />);
+    expect(screen.queryByTestId('ActiveStatusToggle__switch')).not.toBeInTheDocument();
+  });
+
+  it('PATCHes user/{id} with { active: checked } on toggle and refreshes the record', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true }));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        token="tkn"
+        apiBaseUrl="/api"
+        data={{ id: 'user-1', active: true }}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('ActiveStatusToggle__switch'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/user/user-1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ active: false }),
+    })));
+  });
+
+  it('rolls back the optimistic value and shows an error toast when the PATCH fails', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500 }));
+    render(<UserWindow recordId="user-1" token="tkn" apiBaseUrl="/api" data={{ id: 'user-1', active: true }} />);
+
+    fireEvent.click(screen.getByTestId('ActiveStatusToggle__switch'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('ActiveStatusToggle__switch')).toHaveAttribute('aria-checked', 'true'));
+  });
+});
+
+describe('UserWindow — actionable "user created" toast (ETP-4830, onAfterCreate)', () => {
+  it('passes onAfterCreate to the generated UserPage', () => {
     render(<UserWindow />);
+    expect(typeof lastUserPageProps.onAfterCreate).toBe('function');
+  });
 
-    expect(screen.queryByTestId('invite-user-dialog')).not.toBeInTheDocument();
+  it('does nothing when the saved record has no id', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({});
+    expect(toastDismiss).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByTestId('action-open-invite'));
+  it('replaces the generic save toast in place (same id, no dismiss race) with exactly one actionable success toast', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
 
-    // `InviteUserDialog` is a real (unmocked) component — this asserts the actual
-    // DOM node its own `DialogContent` renders (`invite-user-dialog`, see
-    // `InviteUserDialog.jsx`), not the wrapper's `data-testid` prop passed by
-    // `index.jsx` (`InviteUserDialog__853799`), which the component never spreads
-    // onto its DOM since it only destructures `open`/`onOpenChange`/`onSuccess`/`apiBase`.
-    expect(screen.getByTestId('invite-user-dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('invite-user-email')).toBeInTheDocument();
+    // ETP-4830 regression fix — this used to call toast.dismiss() (no id) immediately
+    // before toast.success(), racing sonner's independently-scheduled dismiss
+    // (requestAnimationFrame) against the new toast's mount (setTimeout) — see
+    // useEntity.js's RECORD_SAVE_TOAST_ID doc comment. It now instead passes the SAME
+    // id the generic "record created" toast used, so sonner updates it in place.
+    expect(toastDismiss).not.toHaveBeenCalled();
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    const [message, options] = toastSuccess.mock.calls[0];
+    expect(message).toBe('userCreatedInvitationSentToast');
+    expect(options.id).toBe(RECORD_SAVE_TOAST_ID);
+    expect(options.action.label).toBe('configureRolesAction');
+    expect(typeof options.action.onClick).toBe('function');
+  });
+
+  it("the toast action navigates to the saved record with location.state.openSecondaryTab: 'custom:roles'", () => {
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    const { action } = toastSuccess.mock.calls[0][1];
+    action.onClick();
+
+    expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', {
+      replace: true,
+      state: { openSecondaryTab: 'custom:roles' },
+    });
+  });
+
+  it('the toast action scrolls/focuses AssignTemplateRolesControl once it is in the DOM', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-testid="AssignTemplateRolesControl__toggle-expand" tabindex="0"></div>';
+    const target = screen.getByTestId('AssignTemplateRolesControl__toggle-expand');
+    target.scrollIntoView = vi.fn();
+    const focusSpy = vi.spyOn(target, 'focus');
+
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    vi.advanceTimersByTime(50);
+
+    expect(target.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    expect(focusSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('falls back to the "save first" placeholder test-id when the expanded toggle is not in the DOM yet', () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-testid="AssignTemplateRolesControl__save-first" tabindex="0"></div>';
+    const target = screen.getByTestId('AssignTemplateRolesControl__save-first');
+    target.scrollIntoView = vi.fn();
+    const focusSpy = vi.spyOn(target, 'focus');
+
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    vi.advanceTimersByTime(50);
+
+    expect(target.scrollIntoView).toHaveBeenCalled();
+    expect(focusSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('does not throw when neither AssignTemplateRolesControl test-id is present', () => {
+    vi.useFakeTimers();
+    render(<UserWindow windowName="user" />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    expect(() => {
+      toastSuccess.mock.calls[0][1].action.onClick();
+      vi.advanceTimersByTime(50);
+    }).not.toThrow();
+    vi.useRealTimers();
+  });
+
+  it('defaults the route to "/user/..." when windowName is not passed', () => {
+    render(<UserWindow />);
+    lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+    toastSuccess.mock.calls[0][1].action.onClick();
+
+    expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', expect.anything());
+  });
+});
+
+describe('UserWindow — "Resend invitation" button (ETP-4830 item #2, detail-header topbarExtra)', () => {
+  it('renders nothing on a brand-new, not-yet-saved record (no id to resend against)', () => {
+    render(<UserWindow recordId="new" data={{ invitationStatus: 'PENDING' }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when invitationStatus is absent (e.g. an existing pre-ETP-4830 user)', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1' }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it.each(['ACCEPTED', 'REVOKED'])('renders nothing when invitationStatus is %s (not eligible for resend)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+  });
+
+  it.each(['PENDING', 'SENT', 'EXPIRED', 'DELIVERY_FAILED'])('renders when invitationStatus is %s (eligible for resend)', (status) => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: status }} />);
+    expect(screen.getByTestId('ResendInvitationButton')).toBeInTheDocument();
+  });
+
+  it('calls resendInvitation with the record id, shows a success toast, and refreshes on success', async () => {
+    resendInvitation.mockResolvedValue({ status: 'success', invitation: { status: 'SENT' } });
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', invitationStatus: 'EXPIRED' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(resendInvitation).toHaveBeenCalledWith('user-1'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('resendInvitationSuccessToast'));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('shows an error toast with the rejection message and does not refresh on failure', async () => {
+    resendInvitation.mockRejectedValue(new Error("Invitation status 'REVOKED' cannot be resent"));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="user-1"
+        data={{ id: 'user-1', invitationStatus: 'EXPIRED' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Invitation status 'REVOKED' cannot be resent"));
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic i18n error key when the rejection has no message', async () => {
+    resendInvitation.mockRejectedValue(new Error());
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('resendInvitationErrorFallback'));
+  });
+
+  it('disables the button while a resend is in flight', async () => {
+    let resolveResend;
+    resendInvitation.mockReturnValue(new Promise((resolve) => { resolveResend = resolve; }));
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', invitationStatus: 'EXPIRED' }} />);
+
+    fireEvent.click(screen.getByTestId('ResendInvitationButton'));
+
+    await waitFor(() => expect(screen.getByTestId('ResendInvitationButton')).toBeDisabled());
+
+    resolveResend({ status: 'success', invitation: { status: 'SENT' } });
+    await waitFor(() => expect(screen.getByTestId('ResendInvitationButton')).not.toBeDisabled());
   });
 });

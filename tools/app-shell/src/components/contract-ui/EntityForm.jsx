@@ -9,7 +9,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
-import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
 import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -1069,7 +1069,14 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // the user clicks "Save" without leaving the input first, blur fires just
     // before the click's onClick, and sonner dedupes the two same-id calls into
     // one visible toast instead of stacking duplicates. ETP-4542.
-    if (err) toast.error(ui(err.key, err.params), { id: numericFieldToastId(f.key) });
+    if (err) {
+      const toastId = numericFieldToastId(f.key);
+      toast.error(ui(err.key, err.params), { id: toastId });
+      // ETP-5002: track it here too — a blur-raised toast outlives the blur, so a
+      // subsequent successful save must be able to clear it, not just one raised by
+      // the save gate itself.
+      trackSaveBlockToast(toastId);
+    }
   };
 
   const renderInputField = (f, label, isReadOnly, displayValue) => {

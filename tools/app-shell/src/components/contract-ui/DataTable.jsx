@@ -19,6 +19,7 @@ import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -149,9 +150,19 @@ function applyLocalSearch(rows, filters, searchQuery) {
   );
 }
 
-async function runInlineToggleRequest({
+// Exported (ETP-4830) so window-scoped topbar/header controls that need the exact
+// same PATCH + optimistic-update + error-toast behavior as a grid inline toggle
+// (e.g. `windows/custom/user/index.jsx`'s detail-header "Activo" Switch) can reuse
+// it instead of re-implementing the request/rollback/toast logic. Generic by
+// design already — every dependency is passed in as a param, none are closed over
+// component state — so exporting adds no coupling.
+//
+// ETP-4576 — it took a `token` param when it arrived from the epic. The credential
+// is not threaded through call sites any more: writeHeaders() below resolves it,
+// so callers pass nothing and cannot pass the wrong thing.
+export async function runInlineToggleRequest({
   apiBaseUrl, entity, row, col, checked,
-  toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated,
+  toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated, ui,
 }) {
   setOptimisticToggles(prev => ({ ...prev, [toggleKey]: checked }));
   setSavingToggles(prev => ({ ...prev, [toggleKey]: true }));
@@ -161,7 +172,10 @@ async function runInlineToggleRequest({
       headers: writeHeaders(),
       body: JSON.stringify({ [col.key]: checked }),
     });
-    if (!res.ok) throw new Error(`Error ${res.status}`);
+    if (!res.ok) {
+      const raw = await parseBackendErrorMessage(res);
+      throw new Error(translateBackendError(raw ?? `Error ${res.status}`, ui));
+    }
     onDataMutated?.();
   } catch (error) {
     setOptimisticToggles(prev => {
@@ -2034,9 +2048,9 @@ export function DataTable({
     await runInlineToggleRequest({
       apiBaseUrl, entity, row, col, checked,
       toggleKey: `${row.id}:${col.key}`,
-      setOptimisticToggles, setSavingToggles, onDataMutated,
+      setOptimisticToggles, setSavingToggles, onDataMutated, ui,
     });
-  }, [apiBaseUrl, entity, onDataMutated]);
+  }, [apiBaseUrl, entity, onDataMutated, ui]);
 
   const renderCellValue = (row, col) => {
     if (typeof col.render === 'function') return col.render(row, { entity, token, apiBaseUrl });

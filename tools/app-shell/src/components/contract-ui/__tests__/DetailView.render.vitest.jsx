@@ -186,7 +186,8 @@ vi.mock('@/lib/documentTotals', () => ({
   resolveTotalDiscountPct: () => 0,
 }));
 
-vi.mock('@/lib/backendErrors.js', () => ({
+vi.mock('@/lib/backendErrors.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   translateBackendError: (m) => m,
 }));
 
