@@ -90,9 +90,11 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 
 ### company-invitation
 - **Creating an invitation twice does not resend it.** With one already pending, the create call
-  returns `"An invitation is already pending for this email"` and sends nothing. Resending is a
-  separate **admin resend-invitation endpoint** added by ETP-4830 (`feature/ETP-4830`) — check
-  whether that work has reached your branch before concluding an address cannot be reached again.
+  returns `"An invitation is already pending for this email"` and sends nothing. That is the create
+  path's dedup, not a dead end: resending is the separate admin endpoint
+  `CompanyInvitationService.resendInvitation` / `SFResendInvitation` (ETP-4830), behind the
+  frontend's Resend button, which re-issues the invitation and invalidates the previous token.
+- The resend goes through the same contract, so it inherits the shared layout with no extra work.
 - To retest the create path locally, delete the row:
   `DELETE FROM etgo_invitation WHERE email = '...';`
 - Validity is 7 days (`CompanyInvitationService.INVITATION_TTL_DAYS`).
