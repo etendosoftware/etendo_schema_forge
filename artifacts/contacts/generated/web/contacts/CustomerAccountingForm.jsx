@@ -11,5 +11,6 @@ const fields = [
 export default function CustomerAccountingForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CustomerAccountingForm.fields = fields;
 
 // @sf-generated-end component:CustomerAccountingForm
