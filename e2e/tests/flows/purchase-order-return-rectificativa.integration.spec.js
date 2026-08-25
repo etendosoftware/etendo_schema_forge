@@ -319,7 +319,25 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // is expected, correct business behavior, not a bug, so it is reported rather than
       // failed, same as the period-error case below.
 
+      // ETP-5000: capture the invoice's own URL BEFORE confirming. Confirming navigates
+      // the SPA AWAY from this detail view (runDraftModeConfirm → onAfterSave → navigate
+      // to the window list), so reading page.url() afterwards yields the LIST url. The
+      // "reload for fresh status" below then reloaded the list and read the FIRST row's
+      // status pill — another record's, still "Borrador" — so this step failed while the
+      // invoice had in fact completed (verified in DB on the Sales side: docstatus=CO).
+      const invoiceUrl = page.url();
+
+      // ETP-5000: let the confirm POST FINISH before anything navigates — the reload
+      // below would otherwise abort a still-in-flight request and leave the document in
+      // Draft. Any status is accepted: a backend rejection is what the race below is for.
+      const confirmResponse = page
+        .waitForResponse(
+          (r) => r.url().includes('/action/documentAction') && r.request().method() === 'POST',
+          { timeout: 60_000 },
+        )
+        .catch(() => null);
       await clickConfirmButton(page);
+      await confirmResponse;
 
       const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
       const noSourceInvoiceError = page.getByText(/no se han asociado facturas a rectificar/i);
@@ -374,9 +392,9 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
         await slow(page);
       }
 
-      // Reload to get fresh status — use goto on current URL to avoid ERR_ABORTED
-      const currentInvoiceUrl = page.url();
-      await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      // Reload to get fresh status. Navigate to the URL captured BEFORE the confirm —
+      // page.url() is the window LIST by now (see the note above), not this invoice.
+      await page.goto(invoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
       await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed', 20_000);

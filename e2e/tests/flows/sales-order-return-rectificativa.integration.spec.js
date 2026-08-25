@@ -399,9 +399,31 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       // exist or it is not opened" — a known environment gap. If hit, report
       // instead of failing.
 
+      // ETP-5000: capture the invoice's own URL BEFORE confirming. Confirming navigates
+      // the SPA AWAY from this detail view (runDraftModeConfirm → onAfterSave → navigate
+      // to the window list), so reading page.url() afterwards yields the LIST url. The
+      // "reload for fresh status" below then reloaded the list and read the FIRST row's
+      // status pill — another record's, still "Borrador" — so this step failed while the
+      // invoice had in fact completed (verified in DB: docstatus=CO). Re-navigating to
+      // this captured URL is what makes the final assertion read the right record.
+      const invoiceUrl = page.url();
+
       const invoiceConfirmBtn = page.getByTestId('action-save');
       await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
+
+      // ETP-5000: let the confirm POST FINISH before anything navigates. The reload below
+      // fired ~5s after the click and aborted the still-in-flight request, leaving the
+      // document in Draft (verified in DB: docstatus=DR) — so the assertion was reading a
+      // genuinely unconfirmed invoice, not a stale UI. Any status is accepted here: a
+      // backend rejection is what the outcome race below is for.
+      const confirmResponse = page
+        .waitForResponse(
+          (r) => r.url().includes('/action/documentAction') && r.request().method() === 'POST',
+          { timeout: 60_000 },
+        )
+        .catch(() => null);
       await invoiceConfirmBtn.click();
+      await confirmResponse;
 
       const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
       const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
@@ -438,9 +460,9 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         await slow(page);
       }
 
-      // Reload to get fresh status — use goto on current URL to avoid ERR_ABORTED
-      const currentInvoiceUrl = page.url();
-      await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      // Reload to get fresh status. Navigate to the URL captured BEFORE the confirm —
+      // page.url() is the window LIST by now (see the note above), not this invoice.
+      await page.goto(invoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
       const finalPill = page.getByTestId('document-status-pill').first();
