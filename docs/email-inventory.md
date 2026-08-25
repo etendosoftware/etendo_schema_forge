@@ -53,7 +53,7 @@ graph LR
   M4["✅ ✉️ reset-password<br/><i>30-minute link — verified</i>"]
   M5["◐ ✉️ password-changed"]
   M6["◐ ✉️ login-alert<br/><i>nothing calls this yet</i>"]
-  M7["◐ ✉️ organization-joined<br/><i>names the organization</i>"]
+  M7["✅ ✉️ organization-joined<br/><i>verified</i>"]
   D1["⬜ ✉️ sales-invoice-send"]
   D2["⬜ ✉️ sales-order-send"]
   D3["⬜ ✉️ sales-quotation-send"]
@@ -98,22 +98,23 @@ graph LR
   classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
-  class M1,M2,M3,M4 verified
-  class M5,M6,M7 migrated
+  class M1,M2,M3,M4,M7 verified
+  class M5,M6 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**4 verified, 7 migrated, 21 total.** All four greens were opened in a real inbox on 2026-08-25:
+**5 verified, 7 migrated, 21 total.** All four greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
-environment-ready notice. That single run covers the whole Admin column of this graph.
+environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
+welcome again on that branch plus the organization-joined notice. Between the two runs, every
+email an Admin or Operator can actually receive has now been seen arriving.
 
-Three ambers remain. `password-changed` and the new `organization-joined` render through the same
-layout and pass their tests but have not been looked at; `login-alert` cannot be looked at at all,
-since no code path reaches it.
+Two ambers remain. `password-changed` renders through the same layout and passes its tests but has
+not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
 
 Note the invitee branch: accepting an invitation sends the welcome **only when the account is
 created right there**, and the joined notice either way. Before ETP-5003 an invited operator
