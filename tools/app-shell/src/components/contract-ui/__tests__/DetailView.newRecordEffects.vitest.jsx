@@ -214,6 +214,85 @@ describe('DetailView isNew-gated effects', () => {
   });
 });
 
+/**
+ * ETP-4830 regression — the gap `aadffb0b6` (windows/custom/user/index.jsx's own
+ * `selectedRoleIds` reset) did NOT cover: `useEntity()` is called directly inside
+ * `DetailView` (see `DetailView.jsx`'s own `hook = useEntity(...)`), so its `editing`/
+ * `selected` state is NOT guaranteed to reset just because `recordId` changes — only a
+ * component-TYPE swap (e.g. the generated `UserPage`'s `if (recordId) DetailView else
+ * ListView`, which only triggers via the list route) actually remounts it. Navigating
+ * directly from an EXISTING record to `'new'` (no stop at the list) keeps this exact
+ * `DetailView` instance, and therefore its stale `hook.editing`, alive.
+ *
+ * The original guard — `if (isNew && !hook.editing) hook.handleNew()` — only fires on a
+ * genuinely fresh mount, where `editing` starts at `null`. Once `editing` holds ANY
+ * value (including a fully-populated OTHER record, left over from before the
+ * navigation), the guard never fires again, so `data` (`hook.editing || currentItem ||
+ * {}`) keeps reporting the OLD record's real `id` on what the route considers a blank
+ * `'new'` page — exactly what let `AssignTemplateRolesControl` (`data?.id` truthy) skip
+ * its save-first placeholder and render its real, interactive role-chip editor for a
+ * user that was never actually saved (confirmed manually, roles chips included).
+ *
+ * Unlike `windows/custom/user/index.vitest.jsx`'s own `aadffb0b6` regression tests
+ * (which `rerender()` a `UserWindow` whose OWN `selectedRoleIds` state has no such
+ * "already set once" guard), this test targets `DetailView` itself — the shared
+ * component every window's generated page renders — and specifically exercises the
+ * guard's `!hook.editing` condition, which only a `rerender()` from a non-'new' recordId
+ * with a populated `hook.editing` can reach (a single `renderNew()` mount never does,
+ * since `editing` starts `null` and the effect never sees the "already set" case).
+ */
+describe('DetailView isNew-gated editing reset — existing record to new (no remount)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'U1' };
+    mockHook.selected = null;
+  });
+
+  it('calls handleNew when editing still holds a DIFFERENT persisted record (stale-state bug)', async () => {
+    // Simulates the state DetailView would already be in after viewing an existing
+    // record: `editing`/`selected` hold that record's real id and fields.
+    mockHook.editing = { id: 'existing-1', documentNo: 'SO-001', documentStatus: 'CO', uOM: 'U1' };
+    mockHook.selected = { id: 'existing-1', documentNo: 'SO-001' };
+    const { rerender } = renderNew({ recordId: 'existing-1' });
+    expect(mockHook.handleNew).not.toHaveBeenCalled();
+
+    rerender(
+      <MemoryRouter>
+        <DetailView
+          entity="header"
+          detailEntity="lines"
+          Form={MockForm}
+          DetailTable={MockDetailTable}
+          DetailForm={null}
+          summary={[]}
+          statusField="documentStatus"
+          processes={[]}
+          addLineFields={{ entry: ENTRY_FIELDS, derived: [] }}
+          api={{ selectors: [{ field: 'uOM', entity: 'lines' }] }}
+          entityLabel="Sales Order"
+          detailLabel="Lines"
+          titleField="documentNo"
+          windowName="sales-order"
+          recordId="new"
+          token="test-token"
+          apiBaseUrl="/api/sales-order"
+          breadcrumb="Sales / Orders"
+          linesLayout="inlineEditable"
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(mockHook.handleNew).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not re-call handleNew once editing is already a blank/id-less new-record state', async () => {
+    mockHook.editing = {};
+    renderNew();
+    await act(async () => { await Promise.resolve(); });
+    expect(mockHook.handleNew).not.toHaveBeenCalled();
+  });
+});
+
 describe('handleAddLineClick — isNew branch', () => {
   afterEach(() => {
     vi.clearAllMocks();
