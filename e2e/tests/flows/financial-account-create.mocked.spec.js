@@ -38,7 +38,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
     isDefault: true,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     bankConnected: false,
   },
 ];
@@ -243,7 +243,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       currencyIso: 'EUR',
       iban: 'ES9121000418450200051332',
       isDefault: false,
-      pendingCount: 0,
+      eTGOPendingCount: 0,
       bankConnected: false,
     };
 

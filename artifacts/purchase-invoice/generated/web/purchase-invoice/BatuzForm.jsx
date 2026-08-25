@@ -13,5 +13,6 @@ const fields = [
 export default function BatuzForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BatuzForm.fields = fields;
 
 // @sf-generated-end component:BatuzForm

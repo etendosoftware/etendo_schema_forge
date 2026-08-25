@@ -11,5 +11,6 @@ const fields = [
 export default function VendorAccountingForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+VendorAccountingForm.fields = fields;
 
 // @sf-generated-end component:VendorAccountingForm
