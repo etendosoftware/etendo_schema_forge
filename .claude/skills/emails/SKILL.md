@@ -5,7 +5,7 @@ description: Work on any email Etendo sends — changing its wording, layout, la
 
 # Etendo Emails
 
-Etendo sends **20 distinct emails** from **two independent stacks**. Full inventory with per-email
+Etendo sends **21 distinct emails** from **two independent stacks**. Full inventory with per-email
 file references: `docs/email-inventory.md`. Design decisions and rollout plan:
 `docs/plans/2026-08-25-etp-5003-unified-email-template.md` (ETP-5003).
 
@@ -109,6 +109,13 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
   read the real TTL needs an API change and a PR in that repo. **If you change
   `PASSWORD_RESET_TTL_SECONDS`, update that locale key too** — in `es_ES`, `es_AR` and `en_US`.
 
+### organization-joined
+- Sent when an invitation is accepted, naming the organization. Keyed on the invitation record, so a
+  retried accept does not send twice.
+- Its sibling: accepting an invitation *also* sends `new-account` when the account is created right
+  there. That welcome uses `sendNewAccountForInvitee`, whose button points at the dashboard — an
+  operator never runs onboarding, so the standard welcome link would strand them.
+
 ### login-alert
 - Registered, migrated, reachable over the endpoint — and **nobody calls it**. There is no producer
   in either repo. Decide whether to wire it or drop it before treating it as live.
@@ -120,6 +127,13 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - **Known debt:** the default subject is computed twice — `SendDocumentModal.jsx:406` in JS and
   `buildSubject` in Java — and already diverges under `en_US`. F3 of ETP-5003 makes the backend the
   single source.
+
+## Body copy is markup
+
+`AccountEmailContent` emits the body through `paragraphHtml`, so copy can emphasise a name. That
+makes **escaping the caller's job**: any value interpolated into a body must go through
+`EmailEscape.escapeHtml` first. `login-alert` does this for the IP and date it takes from the
+request. Forget it and you have HTML injection in an email, not just a broken word.
 
 ## Language
 

@@ -11,7 +11,7 @@ block varies per email.
 
 ## 1. Where we are
 
-- 20 emails, two stacks, no shared layout (`docs/email-inventory.md`).
+- 20 emails, two stacks, no shared layout (`docs/email-inventory.md`). A 21st, `organization-joined`, was added during F2 to close a gap the inventory exposed.
 - Nine GO emails plus the Core SMTP fallback already funnel through **one provider template**,
   `custom` — the provider's bring-your-own-content template, to which we hand a rendered
   `subject` + `body`.
@@ -139,14 +139,14 @@ EmailLayout.render(
 
 ---
 
-## 5. Scope — 14 of the 20 emails
+## 5. Scope — 15 of the 21 emails
 
-Agreed scope: **all 12 Etendo GO emails + the 2 portal emails**.
+Agreed scope: **all 13 Etendo GO emails + the 2 portal emails**.
 
 | In scope | Out of scope |
 |---|---|
 | 6 document emails (invoice, order, quotation, shipment, purchase order, return to vendor) | `[OB Alert]` alert rules |
-| 6 account/auth emails (new account, reset password, password changed, environment ready, company invitation, login alert) | TicketBAI submission error |
+| 7 account/auth emails (new account, reset password, password changed, environment ready, company invitation, organization joined, login alert) | TicketBAI submission error |
 | 2 portal emails (new user, account cancelled) — today the only ones with a real `.ftl` | Currency sync failure |
 | | SII multi-report, scheduled report delivery |
 

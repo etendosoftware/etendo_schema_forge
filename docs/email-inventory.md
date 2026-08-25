@@ -53,6 +53,7 @@ graph LR
   M4["✅ ✉️ reset-password<br/><i>30-minute link — verified</i>"]
   M5["◐ ✉️ password-changed"]
   M6["◐ ✉️ login-alert<br/><i>nothing calls this yet</i>"]
+  M7["◐ ✉️ organization-joined<br/><i>names the organization</i>"]
   D1["⬜ ✉️ sales-invoice-send"]
   D2["⬜ ✉️ sales-order-send"]
   D3["⬜ ✉️ sales-quotation-send"]
@@ -74,6 +75,8 @@ graph LR
   M3 --> OPER
 
   OPER --> O1
+  O1 -- "had no account" --> M1
+  O1 --> M7
   OPER --> O2 --> M4 --> O3 --> M5
   OPER -.-> M6
   OPER --> O4
@@ -84,7 +87,7 @@ graph LR
   ADMIN --> K2 --> C2
   K3 --> C3
 
-  M1 & M2 & M3 & M4 & M5 & M6 --> LAYOUT --> PROVIDER
+  M1 & M2 & M3 & M4 & M5 & M6 & M7 --> LAYOUT --> PROVIDER
   D1 & D2 & D3 & D4 & D5 & D6 --> PROVIDER
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
@@ -96,20 +99,25 @@ graph LR
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
   class M1,M2,M3,M4 verified
-  class M5,M6 migrated
+  class M5,M6,M7 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**4 verified, 6 migrated, 20 total.** All four greens were opened in a real inbox on 2026-08-25:
+**4 verified, 7 migrated, 21 total.** All four greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. That single run covers the whole Admin column of this graph.
 
-Two ambers remain. `password-changed` renders through the same layout and passes its tests but has
-not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
+Three ambers remain. `password-changed` and the new `organization-joined` render through the same
+layout and pass their tests but have not been looked at; `login-alert` cannot be looked at at all,
+since no code path reaches it.
+
+Note the invitee branch: accepting an invitation sends the welcome **only when the account is
+created right there**, and the joined notice either way. Before ETP-5003 an invited operator
+received neither — `sendNewAccount` was reachable only from the admin's own sign-up.
 
 The split still falls along the company boundary: everything **Admin and Operator** receive is
 migrated, everything the **Customer or Supplier** receives is not. F3 fixes that.
@@ -165,6 +173,9 @@ Frontend: `tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx`,
 
 ### 2.B — Etendo GO: account / auth emails
 
+All of these render through `EmailLayout` since ETP-5003; the provider template column below records
+what they used *before* that work, which is what the branded-template migration removed.
+
 | # | Email | Contract name | Trigger (caller) | Provider template | Key files |
 |---|---|---|---|---|---|
 | 7 | New account / welcome | `new-account` | signup — `EtendoGoJwtServlet:619` → `sendNewAccount` | `custom` (subject+body built in Java, ES/EN) | `contracts/AccountLinkEmailContract.java`, `contracts/CoreEmailContractProvider.java` (`newAccountContent`), `rest/TransactionalAuthEmailSender.java` |
@@ -172,7 +183,8 @@ Frontend: `tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx`,
 | 9 | Password changed notice | `password-changed` | after a password change — `EtendoGoJwtServlet:970` | `custom` (`passwordChangedContent`) | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
 | 10 | Environment ready | `environment-ready` | tenant provisioning finished — `EtendoGoJwtServlet:1461` | `custom` (`environmentReadyContent`), links to `/dashboard` | `contracts/AccountLinkEmailContract.java`, `rest/EtendoGoAccountProvisioning.java` |
 | 11 | Company invitation | `company-invitation` | invite a user to a company — `CompanyInvitationService.java:200` | `custom` (subject/body in Java, ES/EN) | `contracts/CompanyInvitationEmailContract.java`, `rest/CompanyInvitationService.java`, `rest/CompanyInvitationDalHelper.java` |
-| 12 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
+| 12 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
+| 13 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
 
 ### 2.C — Etendo Core (classic SMTP)
 
