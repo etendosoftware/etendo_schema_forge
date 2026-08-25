@@ -116,4 +116,39 @@ describe('FiscalDefaultsSection', () => {
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
     });
   });
+
+  describe('edge cases', () => {
+    it('does not crash when data is undefined', () => {
+      expect(() => render(<FiscalDefaultsSection data={undefined} onChange={vi.fn()} />)).not.toThrow();
+      expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
+      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+    });
+
+    it('does not crash when onChange is not provided (toggles are inert, no throw on click)', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} />);
+
+      expect(() => {
+        screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' }).click();
+        screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' }).click();
+      }).not.toThrow();
+    });
+
+    it('re-renders correctly when customer flips from true to false (SII block unmounts cleanly)', () => {
+      const { rerender } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
+
+      rerender(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
+      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+    });
+
+    it('toggling tbaiIssimplifiedinv off sends false to onChange (not just the "turn on" path)', () => {
+      const onChange = vi.fn();
+      render(<FiscalDefaultsSection data={{ tbaiIssimplifiedinv: true }} onChange={onChange} />);
+
+      screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' }).click();
+      expect(onChange).toHaveBeenCalledWith('tbaiIssimplifiedinv', false, 'EM_Tbai_Issimplifiedinv');
+    });
+  });
 });
