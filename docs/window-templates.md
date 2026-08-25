@@ -18,6 +18,18 @@ For catalog / master-data windows that are a **grid + create/edit modal** with *
 
 The generated page is **self-contained**: the generator emits only `<Header>Page.jsx`, `index.jsx` and `mockCatalogs.js` — no per-entity `Table`/`Form` files and no `mockData.js`. Everything (grid columns, modal fields grouped by section, the NEO CRUD endpoint, the i18n title/banner) is read from the contract by the generic `ListModalWindow` component, so the same template serves any window that opts in.
 
+**Column sorting (ETP-4921).** Every column header is clickable (none → asc → desc → none) and
+the toolbar carries the same "Ordenar por" popover the standard lists have
+(`contract-ui/ListSortPopover.jsx`). It is **client-side**: `ListModalWindow` fetches the whole
+list in one `useNeoResource` request and every filter it offers already runs in memory, so
+re-fetching to reorder buys nothing — see `lib/clientSort.js` for the shared comparator. The
+resting order is whatever the window declares (`templateConfig.autoPriorityField` ascending, e.g.
+match rules evaluated in priority order), and the third click returns to it. Nothing to declare
+per window: this comes for free with the layout.
+
+A 44px drag-handle column used to lead every row. It was visual only — its own comment read
+"drag-to-reorder deferred" — so it advertised a reordering that does not exist, and it is gone.
+
 CRUD follows the generic NEO Headless **W** convention (no per-window Java unless custom validation is needed):
 
 ```

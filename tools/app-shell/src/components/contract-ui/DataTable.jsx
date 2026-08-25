@@ -1335,7 +1335,11 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
     <TableHead
       key={col.key}
       data-testid={`column-header-${col.key}`}
-      className="align-middle"
+      // `col.headClass` is honoured here for the same reason the single-label branch below
+      // honours it: a window that pins column widths (financial-account's Figma layout) must
+      // keep them when the header gains segments. Dropping it silently collapsed the column
+      // to auto width, which no Product test caught because Product declares no headClass.
+      className={['align-middle', col.headClass || ''].filter(Boolean).join(' ')}
       style={headStyle}
     >
       <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">

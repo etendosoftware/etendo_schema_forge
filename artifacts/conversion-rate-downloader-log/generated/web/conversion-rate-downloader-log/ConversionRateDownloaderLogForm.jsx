@@ -16,5 +16,6 @@ const fields = [
 export default function ConversionRateDownloaderLogForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ConversionRateDownloaderLogForm.fields = fields;
 
 // @sf-generated-end component:ConversionRateDownloaderLogForm

@@ -13,5 +13,6 @@ const fields = [
 export default function OrganizationForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+OrganizationForm.fields = fields;
 
 // @sf-generated-end component:OrganizationForm

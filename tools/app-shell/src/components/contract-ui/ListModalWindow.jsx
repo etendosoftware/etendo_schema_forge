@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, X, GripVertical, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -22,6 +22,9 @@ import { toast } from 'sonner';
 import { EntityForm } from './EntityForm.jsx';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
+import { ListSortPopover } from './ListSortPopover.jsx';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import { useClientSort } from '@/hooks/useClientSort';
 import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
@@ -233,7 +236,7 @@ export function ListModalWindow({
 
   // --- Local search over the configured filter columns ----------------------
   const [searchQuery, setSearchQuery] = useState('');
-  const data = useMemo(
+  const priorityOrdered = useMemo(
     () => {
       const filtered = applyConditions(
         filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }),
@@ -259,6 +262,19 @@ export function ListModalWindow({
     },
     [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config],
   );
+
+  // Client-side sorting (ETP-4921). `useNeoResource` fetches the whole list in one request and
+  // every filter above already runs in memory, so re-fetching to reorder buys nothing. The
+  // accessors read each column through the same value the cell displays; a column whose
+  // `cellType` renders something non-textual (a toggle, a chip) still sorts on its raw field,
+  // which is what the reader is comparing.
+  const sortAccessors = useMemo(
+    () => Object.fromEntries(columns.map((col) => [col.key, (row) => row?.[col.key]])),
+    [columns],
+  );
+  const {
+    sorted: data, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
+  } = useClientSort(priorityOrdered, { accessors: sortAccessors });
 
   // --- Create / edit modal --------------------------------------------------
   const [modalOpen, setModalOpen] = useState(false);
@@ -522,6 +538,14 @@ export function ListModalWindow({
               />
             </div>
           )}
+          <ListSortPopover
+            columns={columns}
+            sortColumn={sortKey}
+            sortDirection={sortDirection}
+            onSelect={selectSort}
+            onClear={clearSort}
+            isDefaultSort={isDefaultSort}
+            data-testid="ListSortPopover__19eda5" />
           <button
             type="button"
             onClick={openCreate}
@@ -561,6 +585,9 @@ export function ListModalWindow({
           <ListModalGrid
             columns={columns}
             data={data}
+            sortKey={sortKey}
+            sortDirection={sortDirection}
+            onSort={toggleSort}
             tMenu={tMenu}
             ui={ui}
             onEdit={openEdit}
@@ -746,11 +773,19 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
 }
 
 /**
- * In-house grid for the list-modal layout. Renders the Figma row chrome (drag
- * handle placeholder for future reorder, registry-driven cells, hover edit
- * action). Fully generic: structure comes from `columns` + each `column.cellType`.
+ * In-house grid for the list-modal layout. Renders the Figma row chrome (registry-driven
+ * cells, hover edit action). Fully generic: structure comes from `columns` + each
+ * `column.cellType`.
+ *
+ * Column headers are sortable (ETP-4921); the state is owned by the window above, mirroring
+ * the ListView/DataTable split. A 44px drag-handle column used to lead every row — visual only,
+ * with its own "drag-to-reorder deferred" comment — so it advertised a reordering that does not
+ * exist. Removed along with its header cell; the first data column now leads.
  */
-function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, deletingId, onToggle, savingToggles }) {
+function ListModalGrid({
+  columns, data, sortKey, sortDirection, onSort, tMenu, ui,
+  onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
+}) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
   const isEmpty = !data || data.length === 0;
 
@@ -763,18 +798,22 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
             data-testid="TableRow__19eda5">
-            {/* Drag-handle column header (44px) */}
-            <TableHead className="w-11 p-0" aria-hidden="true" data-testid="TableHead__19eda5" />
-            {columns.map((col, idx) => (
+            {columns.map((col) => (
               <TableHead
                 key={col.key}
                 className={cn(
                   'h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
                   cellAlignClass(col),
-                  idx === 0 ? 'pl-0' : '',
                 )}
                 data-testid="TableHead__19eda5">
-                {col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key)}
+                <SortableHeaderLabel
+                  label={col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key)}
+                  sortKey={col.key}
+                  activeKey={sortKey}
+                  direction={sortDirection}
+                  onSort={onSort}
+                  align={cellAlignClass(col)?.includes('text-right') ? 'right' : undefined}
+                  data-testid="SortableHeaderLabel__19eda5" />
               </TableHead>
             ))}
             {/* Actions column header */}
@@ -788,7 +827,9 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
           {isEmpty ? (
             <TableRow className="hover:bg-transparent" data-testid="TableRow__19eda5">
               <TableCell
-                colSpan={columns.length + 2}
+                // columns + the trailing actions column. Was +2 while a drag-handle column led
+                // every row; that column is gone (ETP-4921).
+                colSpan={columns.length + 1}
                 className="py-12 text-center text-[hsl(var(--muted-foreground))]"
                 data-testid="list-modal-empty"
               >
@@ -802,16 +843,7 @@ function ListModalGrid({ columns, data, tMenu, ui, onEdit, onClone, onDelete, de
               data-testid={`list-modal-row-${row.id}`}
               className="group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
             >
-              {/* Drag handle — visual only; drag-to-reorder deferred */}
-              <TableCell className="w-11 p-0" data-testid="TableCell__19eda5">
-                <div className="flex w-11 items-center justify-center opacity-0 transition-opacity group-hover/row:opacity-100">
-                  <GripVertical
-                    className="h-5 w-5 text-[hsl(var(--text-disabled))]"
-                    aria-hidden="true"
-                    data-testid="GripVertical__19eda5" />
-                </div>
-              </TableCell>
-              {columns.map((col, idx) => (
+              {columns.map((col) => (
                 <TableCell
                   key={col.key}
                   className={cn('px-3 py-3', cellAlignClass(col))}

@@ -17,5 +17,6 @@ const fields = [
 export default function PeriodControlForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+PeriodControlForm.fields = fields;
 
 // @sf-generated-end component:PeriodControlForm

@@ -53,7 +53,7 @@ vi.mock('../TaxSifModal.jsx', () => ({
 }));
 
 import { render, screen, renderHook, act, waitFor } from '@testing-library/react';
-import { useTaxSifLineRowActions, isTaxSifMissing } from '../useTaxSifLineRowActions.jsx';
+import { useTaxSifLineRowActions, isTaxSifMissing, resolveEffectiveTaxRow } from '../useTaxSifLineRowActions.jsx';
 import {
   TEST_BEARER_TOKEN,
   TEST_CSRF_TOKEN,
@@ -157,6 +157,93 @@ describe('isTaxSifMissing — pure completeness check', () => {
   it('a fully-configured / SII-profile tax reports NOT missing (no trigger)', () => {
     const siiCtx = { profile: 'sii', verifactuRecord: null, ui: (k) => k };
     expect(isTaxSifMissing({ id: 'tax-sii' }, siiCtx)).toBe(false);
+  });
+
+  // ETP-4888 compound-tax follow-up (commit 147f79100) — resolveEffectiveTaxRow()
+  // and isTaxSifMissing()'s optional `taxById` param.
+  describe('resolveEffectiveTaxRow — compound/summary tax resolution', () => {
+    it('returns the taxRow unchanged when it is not a summary tax (isSummary falsy)', () => {
+      const taxRow = { id: 'tax-1', EM_Tbai_Claveregimeniva: null };
+      expect(resolveEffectiveTaxRow(taxRow, {})).toBe(taxRow);
+    });
+
+    it('returns taxRow as-is for a null/undefined taxRow', () => {
+      expect(resolveEffectiveTaxRow(null, {})).toBeNull();
+      expect(resolveEffectiveTaxRow(undefined, {})).toBeUndefined();
+    });
+
+    it('resolves a summary tax with exactly ONE non-equivalence-charge child in taxById to that child', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y' };
+      const taxById = {
+        'tax-summary': summary,
+        'child-base': { id: 'child-base', parentTaxId: 'tax-summary', isEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+        'child-re': { id: 'child-re', parentTaxId: 'tax-summary', isEquivalentCharge: 'Y' },
+      };
+      const resolved = resolveEffectiveTaxRow(summary, taxById);
+      expect(resolved.id).toBe('child-base');
+    });
+
+    it('falls back to the summary itself when ZERO non-equivalence-charge children are found (never guess wrong)', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y' };
+      const taxById = {
+        'tax-summary': summary,
+        'child-re': { id: 'child-re', parentTaxId: 'tax-summary', isEquivalentCharge: 'Y' },
+      };
+      expect(resolveEffectiveTaxRow(summary, taxById)).toBe(summary);
+    });
+
+    it('falls back to the summary itself when MORE THAN ONE non-equivalence-charge child is found (ambiguous)', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y' };
+      const taxById = {
+        'tax-summary': summary,
+        'child-a': { id: 'child-a', parentTaxId: 'tax-summary', isEquivalentCharge: 'N' },
+        'child-b': { id: 'child-b', parentTaxId: 'tax-summary', isEquivalentCharge: 'N' },
+      };
+      expect(resolveEffectiveTaxRow(summary, taxById)).toBe(summary);
+    });
+
+    it('falls back to the summary itself when taxById has no children at all pointing at it', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y' };
+      expect(resolveEffectiveTaxRow(summary, {})).toBe(summary);
+      expect(resolveEffectiveTaxRow(summary, undefined)).toBe(summary);
+    });
+  });
+
+  describe('isTaxSifMissing — taxById-aware compound resolution', () => {
+    it('when taxRow is a summary tax, reports missing based on the resolved CHILD, not the (structurally blank) summary', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y' };
+      const taxById = {
+        'tax-summary': summary,
+        'child-base': { id: 'child-base', parentTaxId: 'tax-summary', isEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+      };
+      expect(isTaxSifMissing(summary, { ...ctx, taxById })).toBe(true);
+
+      taxById['child-base'] = { ...taxById['child-base'], EM_Tbai_Claveregimeniva: '05' };
+      expect(isTaxSifMissing(summary, { ...ctx, taxById })).toBe(false);
+    });
+
+    it('when resolution cannot pick a unique child, checks the summary tax itself (which has no applicable columns populated, so still reports missing)', () => {
+      const summary = { id: 'tax-summary', isSummary: 'Y', EM_Tbai_Claveregimeniva: null };
+      const taxById = { 'tax-summary': summary }; // no children at all
+      expect(isTaxSifMissing(summary, { ...ctx, taxById })).toBe(true);
+    });
+
+    it('backward compatibility: old 3-arg call sites (no taxById) behave EXACTLY as before for a summary tax — checked as given, never resolved', () => {
+      // Without taxById, isTaxSifMissing must NOT attempt any resolution — it
+      // reads taxRow's own columns directly, matching pre-ETP-4888-followup behavior.
+      const summary = { id: 'tax-summary', isSummary: 'Y', EM_Tbai_Claveregimeniva: null };
+      expect(isTaxSifMissing(summary, ctx)).toBe(true);
+
+      const summaryConfigured = { id: 'tax-summary', isSummary: 'Y', EM_Tbai_Claveregimeniva: '05' };
+      expect(isTaxSifMissing(summaryConfigured, ctx)).toBe(false);
+    });
+
+    it('a non-summary taxRow is unaffected by the presence of taxById (identical to omitting it)', () => {
+      const taxRow = { id: 'tax-1', EM_Tbai_Claveregimeniva: null };
+      const taxById = { 'tax-1': taxRow };
+      expect(isTaxSifMissing(taxRow, { ...ctx, taxById })).toBe(isTaxSifMissing(taxRow, ctx));
+      expect(isTaxSifMissing(taxRow, { ...ctx, taxById })).toBe(true);
+    });
   });
 });
 

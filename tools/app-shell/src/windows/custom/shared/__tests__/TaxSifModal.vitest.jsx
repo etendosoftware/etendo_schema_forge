@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const useFiscalConfigMock = vi.fn();
 const useAuthMock = vi.fn();
 const fetchByIdMock = vi.fn();
+const fetchByCriteriaMock = vi.fn();
 const patchByIdMock = vi.fn();
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 vi.mock('@/components/related-documents/helpers.js', () => ({
   fetchById: (...args) => fetchByIdMock(...args),
+  fetchByCriteria: (...args) => fetchByCriteriaMock(...args),
   patchById: (...args) => patchByIdMock(...args),
 }));
 
@@ -96,6 +98,7 @@ beforeEach(() => {
   useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
   useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
   fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
+  fetchByCriteriaMock.mockResolvedValue([]);
   patchByIdMock.mockResolvedValue({ id: 'tax-1' });
 });
 
@@ -348,5 +351,188 @@ describe('TaxSifModal — closing', () => {
 
     screen.getByTestId('dialog-overlay-close').click();
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// ETP-4888 follow-up (commit 147f79100, UX simplified in 19d909b63) — compound/
+// summary-tax resolution. A summary tax (`summaryLevel='Y'`) has always-blank SIF
+// columns; the modal must resolve down to the one non-equivalence-charge
+// rate-component child (via `fetchByCriteria('parentTaxRate', taxId, ...)` +
+// `pickRegimeChild()`) and read/edit/PATCH THAT record instead. The badge shows
+// the RESOLVED record's own name — the child's when one was resolved, the
+// summary's otherwise (19d909b63 removed the earlier "kept for reference only"
+// caption based on review feedback; assert against the CURRENT behavior).
+describe('TaxSifModal — compound/summary tax resolution (ETP-4888 follow-up)', () => {
+  const SUMMARY_ID = 'tax-summary';
+
+  function summaryRecord(overrides = {}) {
+    return { id: SUMMARY_ID, name: 'Entregas IVA+RE 21+5.2% ISP', summaryLevel: 'Y', ...overrides };
+  }
+
+  it('fetches candidate children via fetchByCriteria("parentTaxRate", taxId, ...) when the fetched record is a summary tax', async () => {
+    fetchByIdMock.mockResolvedValue(summaryRecord());
+    fetchByCriteriaMock.mockResolvedValue([
+      { id: 'child-base', name: 'IVA 21%', oBSPTIEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+    ]);
+    render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+    await waitFor(() => expect(fetchByCriteriaMock).toHaveBeenCalledWith(
+      'tax', 'tax', 'parentTaxRate', SUMMARY_ID, API_BASE_URL,
+    ));
+  });
+
+  it('does NOT fetch children for a non-summary (plain) tax', async () => {
+    await openAndWaitReady();
+    expect(fetchByCriteriaMock).not.toHaveBeenCalled();
+  });
+
+  describe('exactly ONE non-equivalence-charge child — resolves to it', () => {
+    beforeEach(() => {
+      fetchByIdMock.mockResolvedValue(summaryRecord());
+      fetchByCriteriaMock.mockResolvedValue([
+        { id: 'child-base', name: 'IVA 21%', oBSPTIEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: null },
+        { id: 'child-re', name: 'Recargo de Equivalencia 5.2%', oBSPTIEquivalentCharge: 'Y', EM_Tbai_Claveregimeniva: null },
+      ]);
+    });
+
+    it('renders the CHILD\'s fields (edit target is the child, not the blank summary)', async () => {
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+    });
+
+    it('shows the CHILD\'s name in the badge, not the summary\'s (post-19d909b63 behavior)', async () => {
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('IVA 21%'));
+      expect(screen.queryByText('Entregas IVA+RE 21+5.2% ISP')).not.toBeInTheDocument();
+    });
+
+    it('does not render any "kept for reference only" caption/text (removed by 19d909b63)', async () => {
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toBeInTheDocument());
+      expect(screen.queryByText(/kept for reference only/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/solo a modo de referencia/i)).not.toBeInTheDocument();
+    });
+
+    it('save PATCHes the CHILD\'s id (resolvedTaxId), never the summary\'s id', async () => {
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+      await pickRegimeOption('05');
+      await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+      await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+        'tax', 'tax', 'child-base',
+        { tbaiClaveregimeniva: '05' },
+        API_BASE_URL,
+      ));
+      expect(patchByIdMock).not.toHaveBeenCalledWith('tax', 'tax', SUMMARY_ID, expect.anything(), expect.anything(), expect.anything());
+    });
+
+    it('onSaved is called with the CHILD\'s id, so the caller\'s taxById cache updates the child\'s own entry', async () => {
+      const onSaved = vi.fn();
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID, onSaved })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+      await pickRegimeOption('05');
+      await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalledWith({
+        id: 'child-base',
+        EM_Tbai_Claveregimeniva: '05',
+      }));
+    });
+  });
+
+  describe('ZERO non-equivalence-charge children — falls back to editing the summary directly', () => {
+    beforeEach(() => {
+      fetchByIdMock.mockResolvedValue(summaryRecord());
+      fetchByCriteriaMock.mockResolvedValue([
+        { id: 'child-re', name: 'Recargo de Equivalencia 5.2%', oBSPTIEquivalentCharge: 'Y' },
+      ]);
+    });
+
+    it('renders the SUMMARY\'s own fields (unresolved compound structure — never guess wrong)', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not uniquely resolve a rate-component child'));
+      warnSpy.mockRestore();
+    });
+
+    it('shows the SUMMARY\'s own name in the badge (no child was resolved)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('Entregas IVA+RE 21+5.2% ISP'));
+    });
+
+    it('save PATCHes the SUMMARY\'s own id when no child was resolved', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+      await pickRegimeOption('05');
+      await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+      await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+        'tax', 'tax', SUMMARY_ID,
+        { tbaiClaveregimeniva: '05' },
+        API_BASE_URL,
+      ));
+    });
+  });
+
+  describe('MORE THAN ONE non-equivalence-charge child — falls back to editing the summary directly', () => {
+    beforeEach(() => {
+      fetchByIdMock.mockResolvedValue(summaryRecord());
+      fetchByCriteriaMock.mockResolvedValue([
+        { id: 'child-a', name: 'Child A', oBSPTIEquivalentCharge: 'N' },
+        { id: 'child-b', name: 'Child B', oBSPTIEquivalentCharge: 'N' },
+      ]);
+    });
+
+    it('renders the SUMMARY\'s own fields and shows its own name in the badge (ambiguous — never guess)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('Entregas IVA+RE 21+5.2% ISP'));
+    });
+  });
+
+  describe('non-compound (plain) tax — unaffected, resolves to itself', () => {
+    it('shows its own name in the badge, identical to pre-147f79100 behavior', async () => {
+      fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
+      render(<TaxSifModal {...baseProps()} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('IVA 21%'));
+    });
+
+    it('save PATCHes its own id (taxId), matching resolvedTaxId', async () => {
+      fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
+      render(<TaxSifModal {...baseProps()} />);
+      await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+      await pickRegimeOption('05');
+      await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+      await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+        'tax', 'tax', 'tax-1',
+        { tbaiClaveregimeniva: '05' },
+        API_BASE_URL,
+      ));
+    });
+  });
+
+  it('re-fetching children is skipped when taxId changes but the new record is not a summary tax', async () => {
+    fetchByIdMock.mockImplementation((_spec, _entity, id) =>
+      id === SUMMARY_ID
+        ? Promise.resolve(summaryRecord())
+        : Promise.resolve({ id, name: 'Plain tax' }));
+    fetchByCriteriaMock.mockResolvedValue([
+      { id: 'child-base', name: 'IVA 21%', oBSPTIEquivalentCharge: 'N' },
+    ]);
+
+    const { rerender } = render(<TaxSifModal {...baseProps({ taxId: SUMMARY_ID })} />);
+    await waitFor(() => expect(fetchByCriteriaMock).toHaveBeenCalledTimes(1));
+
+    rerender(<TaxSifModal {...baseProps({ taxId: 'tax-plain' })} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('Plain tax'));
+    expect(fetchByCriteriaMock).toHaveBeenCalledTimes(1);
   });
 });
