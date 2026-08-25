@@ -89,9 +89,12 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 ## Per-email notes
 
 ### company-invitation
-- **It never resends.** An existing pending invitation returns `"An invitation is already pending"`
-  and no email is sent. There is no resend feature: a recipient who loses the email waits 7 days.
-- To retest locally, delete the row: `DELETE FROM etgo_invitation WHERE email = '...';`
+- **Creating an invitation twice does not resend it.** With one already pending, the create call
+  returns `"An invitation is already pending for this email"` and sends nothing. Resending is a
+  separate **admin resend-invitation endpoint** added by ETP-4830 (`feature/ETP-4830`) — check
+  whether that work has reached your branch before concluding an address cannot be reached again.
+- To retest the create path locally, delete the row:
+  `DELETE FROM etgo_invitation WHERE email = '...';`
 - Validity is 7 days (`CompanyInvitationService.INVITATION_TTL_DAYS`).
 - The greeting is omitted when the invited email has no Etendo user behind it yet.
 
