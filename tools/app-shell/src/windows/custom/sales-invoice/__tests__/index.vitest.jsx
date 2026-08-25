@@ -36,20 +36,16 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 }));
 
 // index.jsx reads selectedOrg from useAuth() to resolve the org's fiscal
-// profile (Verifactu processing-modal wiring). Mirrors the convention used
-// by PurchaseInvoiceHeaderTable.vitest.jsx / PurchaseInvoiceTopbar.vitest.jsx
-// for the same @/auth/AuthContext.jsx + useFiscalConfig.js pair.
+// profile (Verifactu processing-modal wiring), which also needs
+// useFiscalConfig.js mocked (see @/test/mockOrderWindowAuth.jsx for why both
+// go together). Mirrors the convention used by
+// PurchaseInvoiceHeaderTable.vitest.jsx / PurchaseInvoiceTopbar.vitest.jsx for
+// the same @/auth/AuthContext.jsx + useFiscalConfig.js pair.
 let currentWindowAccessTier = 'full';
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
-  useWindowAccess: () => currentWindowAccessTier,
-  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
-}));
+vi.mock('@/auth/AuthContext.jsx', () => createAuthContextMock(() => currentWindowAccessTier));
 
 let fiscalProfile = null;
-vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
-}));
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => createFiscalConfigMock(() => fiscalProfile));
 
 let rowDeleteConfig;
 const requestDeleteSpy = vi.fn();
@@ -176,6 +172,7 @@ let lastListViewProps;
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesInvoiceWindow from '../index.jsx';
 
 describe('SalesInvoiceWindow — render smoke tests', () => {

@@ -427,6 +427,21 @@ describe('DataTable — render coverage', () => {
       expect(within(inactiveSegment).queryByText('\u25BC')).toBeNull();
     });
 
+    // Regression guard (ETP-4921): the multiField branch built its own <th> and dropped
+    // `col.headClass`, which the single-label branch honours. A window that pins column widths
+    // (financial-account's Figma layout) silently lost them the moment its header gained
+    // segments. No Product test caught it because Product declares no headClass.
+    it('honors col.headClass, like the single-label header does', () => {
+      const cols = [{ ...MF_COLS[0], headClass: 'w-[340px] px-2' }];
+      render(<DataTable columns={cols} data={[]} onSort={vi.fn()} selectable={false} />);
+
+      const th = screen.getByTestId('column-header-name');
+      expect(th.className).toContain('w-[340px]');
+      expect(th.className).toContain('px-2');
+      // Appended, not replacing the branch's own base class.
+      expect(th.className).toContain('align-middle');
+    });
+
     it('renders a non-clickable segment when part.sortable is false', () => {
       const cols = [{
         ...MF_COLS[0],
