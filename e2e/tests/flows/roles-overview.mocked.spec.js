@@ -244,7 +244,7 @@ test.describe('Roles overview — admin/client-admin', () => {
       await expect(card).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__content-${role.id}`)).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__userCount-${role.id}`)).toContainText(String(role.userCount));
-      await expect(page.getByTestId(`RoleSummaryCard__usersIcon-${role.id}`)).toBeVisible();
+      await expect(page.getByTestId(`RoleSummaryCard__windowsIcon-${role.id}`)).toBeVisible();
       // `rolesWindowCount` is i18n'd ("{count} Windows"/"{count} Ventanas") —
       // assert the interpolated count is present rather than hardcoding the
       // rendered locale string.

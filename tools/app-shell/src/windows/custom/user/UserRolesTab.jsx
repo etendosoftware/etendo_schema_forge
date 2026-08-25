@@ -415,7 +415,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                         testIdKey={row.key}
                         winnerTooltipTitle={winnerTooltipTitle}
                         winnerTooltipDescription={winnerTooltipDescription}
-                      />
+                        data-testid="MatrixRoleCell__71bdc9" />
                     );
                   })}
                 </tr>
@@ -451,7 +451,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                           testIdKey={row.windowId}
                           winnerTooltipTitle={winnerTooltipTitle}
                           winnerTooltipDescription={winnerTooltipDescription}
-                        />
+                          data-testid="MatrixRoleCell__71bdc9" />
                       );
                     })}
                   </tr>
