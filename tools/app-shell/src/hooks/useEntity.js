@@ -17,7 +17,7 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
@@ -605,6 +605,10 @@ export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSavi
     // email/website/phone assertions that expect the pre-ETP-4542 single-arg call.
     if (toastId) {
         toast.error(msg, { id: toastId });
+        // ETP-5002: remember it so a later successful save can clear it — see
+        // trackSaveBlockToast. Only stable-id toasts are trackable; the
+        // email/website/phone gates stack auto-id toasts and are left as they were.
+        trackSaveBlockToast(toastId);
     } else {
         toast.error(msg);
     }
@@ -740,8 +744,33 @@ export async function resolveSavedRecordAfterSave(saved, {
     }
 }
 
+// ETP-4830 — stable id for the generic post-save toast. Any caller that needs to
+// REPLACE this toast with its own (e.g. a window's `onAfterCreate` showing a custom
+// "record created, do X next" message) MUST pass this same id to `toast.success()`
+// rather than calling `toast.dismiss()` first: sonner's `ToastState.create()` treats
+// a toast whose id already exists as an in-place UPDATE (one synchronous `publish`,
+// same code path as a fresh toast — see node_modules/sonner's `Observer.create`),
+// while `toast.dismiss()` with no id schedules its removal via `requestAnimationFrame`
+// on a DIFFERENT internal timer than the `setTimeout` a subsequent `toast.success()`
+// uses to add itself — two independently-scheduled callbacks with no ordering
+// guarantee between them. Calling dismiss() then success() back-to-back (as the
+// User window's onAfterCreate originally did) raced exactly that: on a real page,
+// with a route navigation and a heavier re-render immediately following in the same
+// tick, the dismiss-then-add race can resolve so the replacement toast never mounts.
+// Passing the SAME id turns "dismiss the old one, show a new one" into a single
+// atomic update — no race window at all.
+export const RECORD_SAVE_TOAST_ID = 'record-save-toast';
+
 export function showSaveSuccessToast(silent, isNew, ui) {
-    if (!silent) toast.success(getSaveSuccessMessage(isNew, ui));
+    if (silent) return;
+    // ETP-5002: retire the save-blocking error toasts this success supersedes BEFORE
+    // showing the confirmation. RECORD_SAVE_TOAST_ID's in-place update (ETP-4830) does
+    // not promote the toast to the front, so a newer error toast would otherwise keep
+    // `data-front` and the user who just fixed the value would still see the error.
+    // Dismissing a DIFFERENT id than the one we are about to create means there is no
+    // cross-timer race here — unlike ETP-4830's dismiss-then-add of the same toast.
+    dismissSaveBlockToasts(toast.dismiss);
+    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
@@ -805,6 +834,17 @@ export function useEntity(entity, childEntity, {
     // ETP-4741: true while handleNew's defaults request is in flight, so the
     // creation form can gate itself instead of letting the user race the merge.
     const [defaultsLoading, setDefaultsLoading] = useState(false);
+    // ETP-5002: true while the defaults SESSION is still pending — which is NOT the
+    // same window as defaultsLoading above. defaultsLoading is a 4s UX budget: it
+    // releases early so the user can start working while the request keeps running.
+    // This flag tracks the request itself, and only clears when the response lands,
+    // errors, or the session is neutralized. The required-field gate (ETP-4933) needs
+    // the request window, not the UX window: on a slow `GET /<entity>/defaults` the
+    // budget expired, the form unlocked, and the gate then blocked the primary action
+    // on a required field whose default was still in the air (`purchase-order`
+    // /`warehouse`, the ETP-5002 rectificativa E2E failures). Blocking is deferred
+    // until we actually know whether the value is coming.
+    const [defaultsPending, setDefaultsPending] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // ETP-4542: identifier of the header process currently running (POST in flight),
@@ -1040,6 +1080,7 @@ export function useEntity(entity, childEntity, {
         defaultsAbortRef.current = null;
         defaultsEpochRef.current += 1;
         setDefaultsLoading(false);
+        setDefaultsPending(false);
         controller.abort();
     }, []);
 
@@ -1201,6 +1242,8 @@ export function useEntity(entity, childEntity, {
         }, DEFAULTS_TIMEOUT_MS);
 
         setDefaultsLoading(true);
+        // ETP-5002: deliberately NOT cleared by timeoutId above — see the state decl.
+        setDefaultsPending(true);
         try {
             const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
             if (!isCurrent()) return;
@@ -1234,6 +1277,7 @@ export function useEntity(entity, childEntity, {
                 clearTimeout(timeoutId);
                 defaultsAbortRef.current = null;
                 setDefaultsLoading(false);
+                setDefaultsPending(false);
             }
         }
     }, [apiBaseUrl, entity, token, headers]);
@@ -1640,15 +1684,20 @@ export function useEntity(entity, childEntity, {
         () => mergeValidationFields(contractFields, registeredFields),
         [contractFields, registeredFields]
     );
+    // ETP-5002: `deferBlocking` while the creation defaults are still pending. Scoped to
+    // NEW records on purpose — an existing record has no defaults session (fetchById
+    // neutralizes any in flight), and its own policy (skipUnchangedInvalid) already
+    // spares untouched empties, so widening this would only mask a real block.
     const { isValid, missingRequired, missingRequiredFields } = useFormValidity({
         fields: validationFields,
         values: editing,
         changedKeys: userChangedKeysRef.current,
         skipUnchangedInvalid: Boolean(editing?.id),
+        deferBlocking: defaultsPending && !editing?.id,
     });
 
     return {
-        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         isValid, missingRequired, missingRequiredFields,

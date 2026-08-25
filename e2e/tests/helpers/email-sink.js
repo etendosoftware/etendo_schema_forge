@@ -40,3 +40,23 @@ export function invitationLinkFromEmail(message) {
   }
   return link;
 }
+
+/**
+ * ETP-4798 — pulls the email-confirmation token out of the `new-account` welcome mail.
+ *
+ * Returns the raw token rather than the absolute link on purpose. The link is built server-side
+ * from `etendo.go.app.baseUrl`, which does not have to match the E2E `BASE_URL` (the backend may
+ * be told about a public host while the test drives localhost). Navigating to the token on the
+ * app under test sidesteps that mismatch entirely.
+ */
+export function verificationTokenFromEmail(message) {
+  const link = message?.data?.link;
+  if (typeof link !== 'string') {
+    throw new Error('welcome email did not contain a data.link');
+  }
+  const token = new URL(link).searchParams.get('verifyToken');
+  if (!token) {
+    throw new Error(`welcome email link carried no verifyToken: ${link}`);
+  }
+  return token;
+}
