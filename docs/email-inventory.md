@@ -11,140 +11,102 @@
 
 ---
 
-## 1. Map — who renders through the shared layout
+## 1. Map — who does what, who receives what, and what is migrated
 
-✅ = renders through `EmailLayout`, the shared template (ETP-5003).
-⬜ = still builds its own body.
+✅ renders through `EmailLayout`, the shared template. ⬜ still builds its own body.
+Blue = an action someone takes. Green/grey = the email it produces.
 
 ```mermaid
 graph LR
-  subgraph GO["Etendo GO — email contracts"]
-    subgraph ACCOUNT["Account / auth"]
-      A1["✅ company-invitation"]
-      A2["✅ new-account"]
-      A3["✅ environment-ready"]
-      A4["✅ reset-password"]
-      A5["✅ password-changed"]
-      A6["✅ login-alert<br/><i>no producer</i>"]
-    end
-    subgraph DOCS["Documents — F3 pending"]
-      D1["⬜ sales-invoice-send"]
-      D2["⬜ sales-order-send"]
-      D3["⬜ sales-quotation-send"]
-      D4["⬜ goods-shipment-send"]
-      D5["⬜ purchase-order-send"]
-      D6["⬜ return-to-vendor-send"]
-    end
+  ADMIN(["👤 <b>Admin</b>"])
+  OPER(["👤 <b>Operator</b>"])
+  PARTY(["🏢 <b>Customer / Supplier</b>"])
+
+  subgraph SETUP["Admin — sets up the environment"]
+    A1(["Registers"])
+    A2(["Completes onboarding<br/>client + org + dataset"])
+    A3(["Invites the operator"])
+    A4(["Clicks Resend"])
   end
 
-  subgraph CORE["Etendo Core — SMTP"]
-    C1["⬜ Print &amp; Send"]
-    C2["⬜ portal: new user<br/><i>F5 pending</i>"]
-    C3["⬜ portal: account cancelled<br/><i>F5 pending</i>"]
-    C4["⬜ alert rules"]
+  subgraph WORK["Operator — daily work"]
+    O1(["Accepts the invitation"])
+    O2(["Forgot my password"])
+    O3(["Sets the new password"])
+    O4(["Opens a document<br/>and clicks Send"])
   end
 
-  subgraph MODULES["Modules — out of scope"]
-    M1["⬜ TicketBAI error"]
-    M2["⬜ currency sync failure"]
-    M3["⬜ SII report"]
-    M4["⬜ scheduled reports"]
+  subgraph SYS["Backoffice and system"]
+    K1(["Print &amp; Send from the backoffice"])
+    K2(["Grants or cancels portal access"])
+    K3(["An alert rule matches, or a<br/>TicketBAI / currency sync fails"])
   end
 
-  LAYOUT["EmailLayout<br/>shared template"]
-  PROVIDER["API Gateway<br/>provider"]
+  M1["✅ new-account"]
+  M2["✅ environment-ready"]
+  M3["✅ company-invitation<br/><i>7-day link</i>"]
+  M4["✅ reset-password<br/><i>30-minute link</i>"]
+  M5["✅ password-changed"]
+  M6["✅ login-alert<br/><i>nothing calls this yet</i>"]
+  D1["⬜ sales-invoice-send"]
+  D2["⬜ sales-order-send"]
+  D3["⬜ sales-quotation-send"]
+  D4["⬜ goods-shipment-send"]
+  D5["⬜ purchase-order-send"]
+  D6["⬜ return-to-vendor-send"]
+  C1["⬜ document with attachments"]
+  C2["⬜ portal: new user / cancelled"]
+  C3["⬜ [OB Alert] and error notices"]
+
+  LAYOUT["<b>EmailLayout</b><br/>shared template"]
+  PROVIDER["API Gateway provider"]
   SMTP["SMTP"]
 
-  A1 --> LAYOUT
-  A2 --> LAYOUT
-  A3 --> LAYOUT
-  A4 --> LAYOUT
-  A5 --> LAYOUT
-  A6 --> LAYOUT
-  LAYOUT --> PROVIDER
+  ADMIN --> A1 --> M1
+  A1 --> A2 --> M2
+  A2 --> A3 --> M3
+  ADMIN --> A4 --> M3
+  M3 --> OPER
 
-  D1 --> PROVIDER
-  D2 --> PROVIDER
-  D3 --> PROVIDER
-  D4 --> PROVIDER
-  D5 --> PROVIDER
-  D6 --> PROVIDER
+  OPER --> O1
+  OPER --> O2 --> M4 --> O3 --> M5
+  OPER -.-> M6
+  OPER --> O4
+  O4 --> D1 & D2 & D3 & D4 & D5 & D6
+  D1 & D2 & D3 & D4 & D5 & D6 --> PARTY
 
-  C1 --> SMTP
-  C2 --> SMTP
-  C3 --> SMTP
-  C4 --> SMTP
-  M1 --> SMTP
-  M2 --> SMTP
-  M3 --> SMTP
-  M4 --> SMTP
+  ADMIN --> K1 --> C1
+  ADMIN --> K2 --> C2
+  K3 --> C3
 
-  SMTP -. "no SMTP configured:<br/>GoProviderEmailSender" .-> PROVIDER
-
-  classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
-  classDef todo fill:#f1f5f9,stroke:#94a3b8,color:#334155
-  classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
-  class A1,A2,A3,A4,A5,A6 done
-  class D1,D2,D3,D4,D5,D6,C1,C2,C3,C4,M1,M2,M3,M4 todo
-  class LAYOUT,PROVIDER,SMTP hub
-```
-
-**6 of 20 today.** F3 adds the six document emails and F5 the two portal ones, for 14 — the agreed
-scope. The four module emails and the alert rules stay on their own bodies by decision, not by
-omission.
-
-## 2. Map — which action sends which email
-
-Read left to right: what a person does, and what lands in an inbox because of it.
-
-```mermaid
-graph LR
-  subgraph SIGNUP["Sign-up and onboarding"]
-    S1(["User registers"]) --> E1["✅ new-account<br/><i>Welcome</i>"]
-    S2(["User completes onboarding<br/>client + org + dataset created"]) --> E2["✅ environment-ready<br/><i>Your environment is ready</i>"]
-    S1 --> S2
-  end
-
-  subgraph PWD["Credentials"]
-    P1(["User clicks 'forgot my password'"]) --> E3["✅ reset-password<br/><i>30-minute link</i>"]
-    E3 --> P2(["User sets the new password"])
-    P2 --> E4["✅ password-changed<br/><i>Security notice</i>"]
-    P3(["User signs in from a new IP"]) -.-> E5["✅ login-alert<br/><i>nothing calls this yet</i>"]
-  end
-
-  subgraph TEAM["Team"]
-    T1(["Admin invites a user"]) --> E6["✅ company-invitation<br/><i>7-day link</i>"]
-    T2(["Admin clicks Resend"]) --> E6
-    E6 --> T3(["Invitee accepts and joins"])
-  end
-
-  subgraph BUSINESS["Business documents"]
-    B1(["Operator opens a document<br/>and clicks Send"]) --> E7["⬜ {window}-send<br/><i>invoice, order, quotation,<br/>shipment, purchase order, return</i>"]
-    E7 --> B2(["Customer or vendor<br/>gets the PDF link"])
-  end
-
-  subgraph BACKOFFICE["Backoffice and system"]
-    K1(["Operator uses Print &amp; Send"]) --> E8["⬜ document with attachments"]
-    K2(["Admin grants portal access"]) --> E9["⬜ portal: new user"]
-    K3(["Portal account is cancelled"]) --> E10["⬜ portal: account cancelled"]
-    K4(["An alert rule matches"]) --> E11["⬜ [OB Alert]"]
-    K5(["TicketBAI / currency sync fails"]) --> E12["⬜ error notice"]
-  end
+  M1 & M2 & M3 & M4 & M5 & M6 --> LAYOUT --> PROVIDER
+  D1 & D2 & D3 & D4 & D5 & D6 --> PROVIDER
+  C1 & C2 & C3 --> SMTP
+  SMTP -. "no SMTP configured" .-> PROVIDER
 
   classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
   classDef todo fill:#f1f5f9,stroke:#94a3b8,color:#334155
   classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
-  class E1,E2,E3,E4,E5,E6 done
-  class E7,E8,E9,E10,E11,E12 todo
-  class S1,S2,P1,P2,P3,T1,T2,T3,B1,B2,K1,K2,K3,K4,K5 act
+  classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
+  class M1,M2,M3,M4,M5,M6 done
+  class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
+  class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
+  class ADMIN,OPER,PARTY who
+  class LAYOUT,PROVIDER,SMTP hub
 ```
 
-Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
-environment-ready once the client, organization and dataset exist and again issues the reset link,
-`handleChangePassword` sends the security notice, `CompanyInvitationService` covers both invite and
-resend. `login-alert` is drawn dotted because no code path reaches it.
+**6 of 20 migrated.** The split falls along an uncomfortable line: everything the **Admin and
+Operator** receive about their own account already carries the shared design, while everything the
+**Customer or Supplier** receives — the invoice, the order, the shipment — does not. The people
+outside the company see the oldest-looking email. That is what F3 fixes.
 
-## 3. The two delivery stacks
+Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
+environment-ready once the client, organization and dataset exist, `handleChangePassword` sends the
+security notice, `CompanyInvitationService` covers both invite and resend, and each document window
+posts to `` `${windowName}-send` ``. `login-alert` is dotted because no code path reaches it.
+
+## 2. The two delivery stacks
 
 | | Stack A — GO email contracts | Stack B — Core SMTP |
 |---|---|---|
@@ -162,7 +124,7 @@ template). It is a *fallback, not an override* — SMTP, when configured, still 
 
 ---
 
-## 4. Master table — every email
+## 3. Master table — every email
 
 ### 2.A — Etendo GO: document emails ("send this invoice to the customer")
 
@@ -228,7 +190,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 5. Where does the format live? (the question behind the question)
+## 4. Where does the format live? (the question behind the question)
 
 | Format source | Which emails | What it means for changing the copy |
 |---|---|---|
@@ -247,7 +209,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 6. Related existing docs
+## 5. Related existing docs
 
 - `modules/com.etendoerp.go/docs/transactional-email-contracts.md`
 - `modules/com.etendoerp.go/docs/document-email-contract-implementation.md`
