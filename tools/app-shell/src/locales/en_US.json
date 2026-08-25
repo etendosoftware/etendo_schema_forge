@@ -19376,7 +19376,7 @@
     "onboardingResetEmailSentTitle": "Check your email",
     "onboardingResetEmailSentSubtitle": "If an account exists for this email, we sent a link to: {email}",
     "onboardingResetLinkValidity": "The link is valid for {duration}.",
-    "onboardingResetLinkDuration": "15 minutes",
+    "onboardingResetLinkDuration": "30 minutes",
     "onboardingResendPrompt": "Didn't receive it?",
     "onboardingResendLinkAction": "Resend link",
     "onboardingResetPasswordTitle": "Create new password",
