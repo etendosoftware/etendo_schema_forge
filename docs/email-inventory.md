@@ -11,10 +11,15 @@
 
 ---
 
-## 1. Map — who does what, who receives what, and what is migrated
+## 1. Map — who does what, who receives what, and what is verified
 
-✅ renders through `EmailLayout`, the shared template. ⬜ still builds its own body.
-Blue = an action someone takes. Green/grey = the email it produces.
+✉️ marks a node that is an actual email leaving the system; the rest are actions and infrastructure.
+
+| | Meaning |
+|---|---|
+| ✅ green | Rendered through `EmailLayout` **and seen arriving in a real inbox** |
+| ◐ amber | Migrated to `EmailLayout`, not yet observed in an inbox |
+| ⬜ grey | Still builds its own body |
 
 ```mermaid
 graph LR
@@ -42,21 +47,21 @@ graph LR
     K3(["An alert rule matches, or a<br/>TicketBAI / currency sync fails"])
   end
 
-  M1["✅ new-account"]
-  M2["✅ environment-ready"]
-  M3["✅ company-invitation<br/><i>7-day link</i>"]
-  M4["✅ reset-password<br/><i>30-minute link</i>"]
-  M5["✅ password-changed"]
-  M6["✅ login-alert<br/><i>nothing calls this yet</i>"]
-  D1["⬜ sales-invoice-send"]
-  D2["⬜ sales-order-send"]
-  D3["⬜ sales-quotation-send"]
-  D4["⬜ goods-shipment-send"]
-  D5["⬜ purchase-order-send"]
-  D6["⬜ return-to-vendor-send"]
-  C1["⬜ document with attachments"]
-  C2["⬜ portal: new user / cancelled"]
-  C3["⬜ [OB Alert] and error notices"]
+  M1["◐ ✉️ new-account"]
+  M2["◐ ✉️ environment-ready"]
+  M3["✅ ✉️ company-invitation<br/><i>7-day link — verified</i>"]
+  M4["✅ ✉️ reset-password<br/><i>30-minute link — verified</i>"]
+  M5["◐ ✉️ password-changed"]
+  M6["◐ ✉️ login-alert<br/><i>nothing calls this yet</i>"]
+  D1["⬜ ✉️ sales-invoice-send"]
+  D2["⬜ ✉️ sales-order-send"]
+  D3["⬜ ✉️ sales-quotation-send"]
+  D4["⬜ ✉️ goods-shipment-send"]
+  D5["⬜ ✉️ purchase-order-send"]
+  D6["⬜ ✉️ return-to-vendor-send"]
+  C1["⬜ ✉️ document with attachments"]
+  C2["⬜ ✉️ portal: new user / cancelled"]
+  C3["⬜ ✉️ [OB Alert] and error notices"]
 
   LAYOUT["<b>EmailLayout</b><br/>shared template"]
   PROVIDER["API Gateway provider"]
@@ -84,27 +89,32 @@ graph LR
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
 
-  classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef verified fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef migrated fill:#fef3c7,stroke:#d97706,color:#78350f
   classDef todo fill:#f1f5f9,stroke:#94a3b8,color:#334155
   classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
-  class M1,M2,M3,M4,M5,M6 done
+  class M3,M4 verified
+  class M1,M2,M5,M6 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**6 of 20 migrated.** The split falls along an uncomfortable line: everything the **Admin and
-Operator** receive about their own account already carries the shared design, while everything the
-**Customer or Supplier** receives — the invoice, the order, the shipment — does not. The people
-outside the company see the oldest-looking email. That is what F3 fixes.
+**2 verified, 6 migrated, 20 total.** The two greens were opened in a real inbox on 2026-08-25: the
+invitation (including the resend path) and the password reset, the latter stating its true
+30-minute window. The four ambers render through the same layout and pass their tests, but nobody
+has looked at one yet — `login-alert` cannot be looked at, since no code path reaches it.
+
+The split still falls along the company boundary: everything **Admin and Operator** receive is
+migrated, everything the **Customer or Supplier** receives is not. F3 fixes that.
 
 Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
 environment-ready once the client, organization and dataset exist, `handleChangePassword` sends the
 security notice, `CompanyInvitationService` covers both invite and resend, and each document window
-posts to `` `${windowName}-send` ``. `login-alert` is dotted because no code path reaches it.
+posts to `` `${windowName}-send` ``.
 
 ## 2. The two delivery stacks
 
