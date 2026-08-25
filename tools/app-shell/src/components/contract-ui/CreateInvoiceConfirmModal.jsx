@@ -116,7 +116,7 @@ export default function CreateInvoiceConfirmModal({
               onChange={setPriceListId}
               loading={loadingPriceLists}
               idPrefix="invoice-confirm-price-list"
-            />
+              data-testid="invoice-confirm-price-list-field" />
           </div>
         )}
 

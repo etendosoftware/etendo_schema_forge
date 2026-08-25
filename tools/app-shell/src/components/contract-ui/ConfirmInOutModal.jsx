@@ -225,7 +225,7 @@ export default function ConfirmInOutModal({
               onChange={setPriceListId}
               loading={loadingPriceLists}
               idPrefix="confirm-modal-price-list"
-            />
+              data-testid="confirm-modal-price-list-field" />
           )}
 
           {error && (
