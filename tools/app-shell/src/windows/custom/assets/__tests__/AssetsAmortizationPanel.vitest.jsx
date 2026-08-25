@@ -23,6 +23,21 @@ vi.mock('@/components/ui/status-tag', () => ({
   StatusTag: ({ status, label }) => <span data-testid={`status-${status}`}>{label}</span>,
 }));
 
+// ETP-4981 — handleDeleteSelected now surfaces failures via toast.error/
+// toast.warning (toastBatchDeleteOutcome) instead of silently swallowing
+// them. Mock 'sonner' (mirrors AmortizationLinesTable.vitest.jsx's identical
+// convention) and @/hooks/useEntity so extractErrorMessage's resolved value
+// is controllable per test without exercising its real JSON-parsing logic.
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+}));
+
+vi.mock('@/hooks/useEntity', () => ({
+  extractErrorMessage: vi.fn(),
+}));
+
+import { toast } from 'sonner';
+import { extractErrorMessage } from '@/hooks/useEntity';
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
 
 // The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
@@ -874,5 +889,157 @@ describe('AssetsAmortizationPanel — amortization total footer (ETP-4336)', () 
       expect(screen.getByText('assetsNoAmortizationLines')).toBeInTheDocument();
     });
     expect(container.querySelector('tfoot')).toBeNull();
+  });
+});
+
+// ETP-4981 — before this fix, a failed DELETE (e.g. the backend blocking removal
+// of a line whose amortization plan is already confirmed/posted, returned as a
+// non-ok response) produced no feedback at all: handleDeleteSelected used a raw
+// Promise.allSettled with no res.ok check, then unconditionally cleared the
+// selection and refetched regardless of outcome — the row silently reappeared
+// after the (unnecessary) refresh with zero explanation. These tests cover the
+// 3 outcome branches of the shared runBatchDelete/toastBatchDeleteOutcome
+// helpers (ETP-4656) as wired into this component's bulk-only delete flow
+// (there is no per-row single-delete here, only the "N Seleccionados" action bar).
+describe('AssetsAmortizationPanel — bulk delete failure feedback (ETP-4981)', () => {
+  const TWO_LINES = [
+    { id: 'l1', sEQNoAsset: 1, amortizationAmount: 100 },
+    { id: 'l2', sEQNoAsset: 2, amortizationAmount: 200 },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn();
+    // vi.restoreAllMocks() in the afterEach below resets a vi.fn() created
+    // inside a vi.mock() factory back to a no-op (it has no "original"
+    // implementation to restore, unlike a vi.spyOn) — so extractErrorMessage's
+    // default resolved value must be re-armed here on every test.
+    extractErrorMessage.mockClear();
+    extractErrorMessage.mockResolvedValue('mocked error message');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // GET (mount/refetch) always returns `rows`; DELETE outcome per line id is
+  // looked up in `deleteOutcomes` ('ok' | 'fail' | 'reject'), defaulting to
+  // 'ok' for any id not listed.
+  function mockFetchWithDeleteOutcomes(rows, deleteOutcomes = {}) {
+    return vi.fn((url, opts) => {
+      if (opts?.method === 'DELETE') {
+        const id = String(url).match(/\/amortizationLine\/([^/?]+)$/)?.[1];
+        const outcome = deleteOutcomes[id] ?? 'ok';
+        if (outcome === 'ok') return Promise.resolve({ ok: true });
+        // Empty message so deleteLine's fallback path (if any) isn't the thing
+        // under test here — toastBatchDeleteOutcome's outcome is count-based,
+        // not message-based, unlike the single-delete path in the sibling
+        // AmortizationLinesTable component.
+        if (outcome === 'reject') return Promise.reject(new Error(''));
+        return Promise.resolve({ ok: false, status: 409 });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ response: { data: rows } }) });
+    });
+  }
+
+  async function renderAndSelectAll(fetchMock) {
+    globalThis.fetch = fetchMock;
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+    await waitFor(() => {
+      expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+    });
+  }
+
+  it('all selected fail (409, confirmed plan): toast.error fires, selection stays intact, no refetch', async () => {
+    await renderAndSelectAll(mockFetchWithDeleteOutcomes(TWO_LINES, { l1: 'fail', l2: 'fail' }));
+
+    const nonDeleteCallsBefore = globalThis.fetch.mock.calls.filter(
+      (c) => c[1]?.method !== 'DELETE',
+    ).length;
+
+    fireEvent.click(await screen.findByTitle('delete'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed');
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+
+    // Only the 2 DELETE calls fired for this action — no follow-up GET (list
+    // refetch is skipped when every delete failed).
+    const deleteCalls = globalThis.fetch.mock.calls.filter((c) => c[1]?.method === 'DELETE');
+    expect(deleteCalls).toHaveLength(2);
+    const nonDeleteCallsAfter = globalThis.fetch.mock.calls.filter(
+      (c) => c[1]?.method !== 'DELETE',
+    ).length;
+    expect(nonDeleteCallsAfter).toBe(nonDeleteCallsBefore);
+
+    // Selection is left untouched — both rows remain checked and the bar stays open.
+    expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+    expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTitle('delete')).toBeInTheDocument();
+  });
+
+  it('network-level rejection (fetch throws) for every selected row: same all-failed toast, no refetch', async () => {
+    await renderAndSelectAll(mockFetchWithDeleteOutcomes(TWO_LINES, { l1: 'reject', l2: 'reject' }));
+
+    const nonDeleteCallsBefore = globalThis.fetch.mock.calls.filter(
+      (c) => c[1]?.method !== 'DELETE',
+    ).length;
+
+    fireEvent.click(await screen.findByTitle('delete'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed');
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    // extractErrorMessage is only reached on a non-ok HTTP response, never on
+    // a thrown/rejected fetch — runBatchDelete's Promise.allSettled catches
+    // the rejection directly.
+    expect(extractErrorMessage).not.toHaveBeenCalled();
+
+    const nonDeleteCallsAfter = globalThis.fetch.mock.calls.filter(
+      (c) => c[1]?.method !== 'DELETE',
+    ).length;
+    expect(nonDeleteCallsAfter).toBe(nonDeleteCallsBefore);
+
+    // Still both rows selected — no crash, no premature clear.
+    expect(checkboxInput('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+    expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('partial failure (one succeeds, one fails 409): toast.warning fires, only the failed id remains selected, and refetch happens', async () => {
+    await renderAndSelectAll(mockFetchWithDeleteOutcomes(TWO_LINES, { l1: 'ok', l2: 'fail' }));
+
+    const nonDeleteCallsBefore = globalThis.fetch.mock.calls.filter(
+      (c) => c[1]?.method !== 'DELETE',
+    ).length;
+
+    fireEvent.click(await screen.findByTitle('delete'));
+
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledWith('bulkDeletePartialFailure');
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    // At least one succeeded -> a refetch (list GET) is triggered.
+    await waitFor(() => {
+      const nonDeleteCallsAfter = globalThis.fetch.mock.calls.filter(
+        (c) => c[1]?.method !== 'DELETE',
+      ).length;
+      expect(nonDeleteCallsAfter).toBeGreaterThan(nonDeleteCallsBefore);
+    });
+
+    // Only the failed id (l2) is selected right after the outcome — the
+    // succeeded id (l1) was dropped from the selection immediately, before
+    // the refetch settles.
+    expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
   });
 });
