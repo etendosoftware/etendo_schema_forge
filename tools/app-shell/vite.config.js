@@ -175,6 +175,23 @@ export default defineConfig(({ mode }) => {
 
   return {
   base: '/',
+  // E2E_BUILD only — overrides `.env.production`'s hardcoded `VITE_API_BASE=/etendo`
+  // with the CONTEXT PATH of the same `ETENDO_URL` already resolved above (e.g.
+  // `/etendogoclean`), so the built bundle's own `import.meta.env.VITE_API_BASE`
+  // (read by `App.jsx`'s `detectBasePath()`) matches whatever context this
+  // developer's Tomcat actually runs under. Without this, `scripts/run-e2e-full.sh`'s
+  // production-mode E2E build always calls out under the hardcoded `/etendo` prefix —
+  // which the `preview.proxy['/etendo']` rule below then forwards, path intact, to
+  // `ETENDO_ORIGIN` (bare origin, no context) — landing on a context that doesn't
+  // exist for any developer whose local Tomcat context isn't literally `/etendo`
+  // (e.g. `/etendogoclean`), so login never completes and every integration spec
+  // times out waiting for the post-login redirect. `ETENDO_URL` itself (server-side
+  // proxy targets, `mcpRetryProxy`) was already context-aware; this was the one
+  // remaining hardcoded assumption, only reachable via a production/preview build,
+  // so `make dev`'s dev-server proxy (relative API calls, no VITE_API_BASE at all)
+  // never hit it — which is why a developer's own `make dev`-backed manual E2E run
+  // works fine while the pre-push hook's dedicated E2E build did not.
+  ...(E2E_BUILD ? { define: { 'import.meta.env.VITE_API_BASE': JSON.stringify(new URL(ETENDO_URL).pathname) } } : {}),
   plugins: [
     react(),
     sliceLabelsPlugin(),
