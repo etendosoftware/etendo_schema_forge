@@ -179,4 +179,36 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     expect(keyWarning).toBe(false);
     consoleError.mockRestore();
   });
+
+  // ETP-4795 companion bug reported by QA on the payment flow (ETP-4895): a payment confirmed
+  // outside this sidebar (e.g. from the invoice's own payment modal) backfilled its activity entry
+  // from `paymentDate`, a date-only AD column — parseAdDate defaults the missing time to midnight,
+  // so a payment actually confirmed at 12:10 rendered as "· 00:00".
+  it('backfills the confirmed event time from `updated` instead of a fabricated midnight off `paymentDate`', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updated: '2026-08-24 12:10:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('12:10');
+    expect(dateLine.textContent).not.toContain('00:00');
+  });
+
+  it('shows a bare date instead of a fabricated 00:00 when no source carries a real time of day', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updated: undefined,
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).not.toContain('00:00');
+    expect(dateLine.textContent).not.toBe('');
+  });
 });

@@ -72,6 +72,15 @@ function parseAdDate(raw) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * True when an AD date-or-timestamp string carries an actual time-of-day component (an
+ * `HH:mm` group after the date), as opposed to a date-only value that `parseAdDate` would
+ * otherwise silently default to midnight.
+ */
+function hasTimeComponent(raw) {
+  return !!raw && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(String(raw));
+}
+
 function fmtNow(d) {
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
@@ -200,14 +209,22 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   useEffect(() => {
     if (!data?.id) return;
     let stored = readEvents(data.id);
-    // Backfill a single synthetic "confirmed" entry for payments confirmed
-    // before this history feature existed — there's no way to recover the
-    // full past history, only the one timestamp AD still tracks.
-    if (stored.length === 0 && !isDraft && data.paymentDate) {
-      const backfill = parseAdDate(data.paymentDate);
-      if (backfill) {
-        stored = [{ type: 'confirmed', at: backfill.toISOString() }];
-        try { window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(stored)); } catch { /* non-fatal */ }
+    // Backfill a single synthetic "confirmed" entry for payments confirmed before this history
+    // feature existed — there's no way to recover the full past history, only whatever timestamp
+    // AD still tracks. `updated` (an audit timestamp, always HH:mm) is preferred over
+    // `paymentDate` (a date-only AD column) precisely because it carries a real time of day —
+    // without this a payment confirmed at, say, 12:10 rendered as "· 00:00" (ETP-4895), since
+    // parseAdDate defaults a bare date to midnight. When neither source carries a time component,
+    // nothing is written here on purpose: the "no confirmed event" fallback below renders
+    // `paymentDate` as a date-only line instead of fabricating an hour that was never recorded.
+    if (stored.length === 0 && !isDraft) {
+      const backfillSource = data.updated || data.paymentDate;
+      if (hasTimeComponent(backfillSource)) {
+        const backfill = parseAdDate(backfillSource);
+        if (backfill) {
+          stored = [{ type: 'confirmed', at: backfill.toISOString() }];
+          try { window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(stored)); } catch { /* non-fatal */ }
+        }
       }
     }
     setEvents(stored);
