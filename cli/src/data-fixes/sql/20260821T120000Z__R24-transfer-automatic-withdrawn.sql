@@ -1,5 +1,5 @@
 -- @id: R24-transfer-automatic-withdrawn
--- @gap: G3
+-- @gap: G4
 -- @risk: low
 -- @type: sql
 -- @description: Clear automatic_withdrawn on the bank-transfer payment method and its per-account

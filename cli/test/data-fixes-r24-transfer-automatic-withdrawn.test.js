@@ -34,7 +34,7 @@ describe('R24 data-fix — header metadata', () => {
   it('parses with the expected id and gap', () => {
     assert.equal(fix.id, 'R24-transfer-automatic-withdrawn');
     // Continues the `G` series (payment-method config defaults) after R14=G1 and R15=G2.
-    assert.equal(fix.gap, 'G3');
+    assert.equal(fix.gap, 'G4');
   });
 
   it('is a low-risk sql fix', () => {

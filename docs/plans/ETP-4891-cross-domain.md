@@ -29,7 +29,7 @@ Withdrawn off a draft transfer moves no money and creates no bank transaction.
 | `window:financial-account` | `financial-account/index.jsx` | New `?edit=true` deep link opening the Editar Cuenta modal |
 | `app-shell i18n` | `en_US.json`, `es_ES.json`, `es_AR.json` | `cpPsd2InactiveBody`, `cpPsd2InactiveAction` |
 | `cli (data-fixes)` | `20260821T120000Z__R24-transfer-automatic-withdrawn.sql` | Corrective fix for existing tenants, on both tables the flag lives in |
-| `docs` | `purchase-invoice.md`, `financial-account.md`, `payment-out.md`, `onboarding-and-datafixes-map.md`, `tenant-remediation-knowledge.md` | All three window docs described the removed dynamic behavior; R24/G3 registered |
+| `docs` | `purchase-invoice.md`, `financial-account.md`, `payment-out.md`, `onboarding-and-datafixes-map.md`, `tenant-remediation-knowledge.md` | All three window docs described the removed dynamic behavior; R24/G4 registered (relabeled from G3 to G4 during the `epic/ETP-3504` merge — a same-day, unrelated Cheque→Recibo fix already claimed G3/R24 there) |
 
 ## Key design decisions
 

@@ -74,6 +74,11 @@ export default function ReturnWindowShell({
         apiBaseUrl={apiBaseUrl}
         token={token}
         autoSaveOnBlur={true}
+        /* ETP-4933: both return windows put their own Confirm button in the topbarRight
+           slot, so Save must not render as a second primary. Set here rather than in each
+           window's index.jsx because the slot is what this shell's windows have in common —
+           a future shell consumer without a Confirm button should drop this, not inherit it. */
+        hasExternalPrimaryAction
         {...pageProps}
         data-testid="PageComponent__3ea846" />
     );

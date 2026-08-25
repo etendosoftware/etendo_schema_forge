@@ -18,6 +18,10 @@ export function AccountsToolbar({
   onSearchChange,
   onNewAccount,
   onMatchingRules,
+  // Rendered node rather than sort props: the toolbar stays presentational, and the slot that
+  // owns the ListView sort state decides what goes here. Absent = nothing rendered, so this is
+  // inert for any other caller.
+  sortControl = null,
 }) {
   const ui = useUI();
 
@@ -46,6 +50,8 @@ export function AccountsToolbar({
             data-testid="cuentas-search-input"
           />
         </div>
+
+        {sortControl}
 
         <Button
           type="button"
