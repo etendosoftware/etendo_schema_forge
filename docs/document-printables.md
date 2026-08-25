@@ -89,7 +89,8 @@ never WHETHER the Print button is offered.
    truncated to two in a first attempt (D8).
 5. **Say which path produced the PDF.** Both paths end in an indistinguishable `pdfUrl`; keep the
    `[pdf]` and `[print-drawer]` console lines so a stale document can be diagnosed from the
-   console instead of by reading code.
+   console instead of by reading code. `fetchCachedBlob` logs a third case — the cached
+   attachment was discarded as stale — naming both timestamps.
 
 ## The PDF cache, and how it is invalidated
 
@@ -98,36 +99,71 @@ the freshly rendered PDF as a real `AD_Attachment` and marks it *main*
 (`C_File.EM_ETGO_IsPreviewMain='Y'`), once per document. Introduced by ETP-4315 to stop
 re-rendering on every open.
 
+The **draft gate** (`storeCondition: documentStatus !== 'DR'`; for quotations, "under evaluation
+and beyond") survives the invalidation below on purpose — it is not a stand-in for it. A draft
+has no document yet, and the marked attachment is the record's document: caching one would put a
+provisional PDF in the "Adjuntos" tab and, since every edit invalidates, upload a fresh
+attachment on essentially every open. The gate is about *whether the record has a document*;
+invalidation is about *whether the stored one is current*.
+
 **Read** (`pdfUtils.js` → `fetchCachedBlob`): when a marked attachment exists it is served and
 **jsreport is never called**.
 
-**Invalidation: there is none.** Nothing clears the attachment when the document changes. The
-only ways it is replaced are manual: `uploadAndMarkMainAttachment` (the backend deletes the
-previous one in the same transaction), `markAttachmentAsMain`, or `deleteAttachment`.
+**Invalidation: by timestamp, since ETP-4787.** `fetchCachedBlob` compares when the cached
+attachment's contents were written against the record's own `updated`; a file written *before*
+the record's last change is ignored and the PDF is re-rendered. Nothing has to remember to evict
+anything — whoever modified the record already moved `updated`.
 
-That gap has a name — **ETP-4787** (*stale PDF after reactivate+reconfirm*) — and it bites
-predictably:
+"When it was written" is the attachment's own **`updatedAt`**, not `uploadedAt`, and that detail is
+load-bearing: when a record already has a marked attachment the backend **overwrites that row in
+place**, so `uploadedAt` (its `creationDate`) keeps pointing at the very first render while the
+bytes are current. Comparing against it never converged — every open paid a re-render *and* an
+upload, forever. Only running it against a live instance surfaced this; the unit tests were happy.
+(`uploadedAt`/`createdAt`/`creationDate` remain as fallbacks for a payload without `updatedAt`,
+not as alternatives: DAL stamps `updated` on insert too, so it is always the right answer when
+present.)
+
+```
+lib/attachmentFreshness.js   isAttachmentStale(attachment, recordUpdated)
+   ├── pdfUtils.js  → fetchCachedBlob   : stale ⇒ return null ⇒ render fresh
+   └── useMainAttachment.js             : stale ⇒ storedFileIsStale: true
+          └── GenericPreviewModal       : re-uploads the fresh blob (replaces the stale row)
+```
+
+Both halves are needed. Without the second one the check would be permanent: the read side
+would re-render on every open and nothing would ever refresh the cache, since the auto-store
+only fires when *no* file is stored. `uploadAndMarkMainAttachment` deletes the previously
+marked attachment in the same transaction, so the replacement converges after one open.
+
+**How `updated` reaches the client.** `Updated` is an AD *column* on every table but not an AD
+*field*, so `push-to-neo` cannot register it and no window can declare it in `decisions.json`.
+`NeoFieldFilter.ALWAYS_READABLE_KEYS` therefore exempts it from GET filtering — read side only:
+the same `includedFields` set gates `filterCreateRequest`, and a client that could write its own
+`updated` could defeat the check. Each preview then passes it down as
+`cacheConfig.recordUpdated` / `attachmentConfig.recordUpdated`.
+
+**Everything about this is fail-open.** A missing or unparseable `recordUpdated` — a window that
+does not pass it, a backend without the exemption — reads as "fresh", so the cache behaves
+exactly as it did before ETP-4787 rather than silently switching itself off. The comparison is
+strict, and both timestamps are truncated to whole seconds on the wire, so an edit landing in the
+same second as the upload reads as fresh.
+
+**Two windows deliberately opt out**: purchase-invoice and return-material-receipt. Their
+attachment slot holds the *counterparty's* own document (the OCR source, the customer's signed
+receipt), not a cache of something we rendered — no edit of ours can make it stale.
+
+The bug this closes:
 
 1. the document is completed → the preview is opened → a PDF is cached
 2. something changes it (e.g. classic writes the Verifactu QR URL at *Registro de Facturación*
    time, **after** completion)
-3. the preview keeps serving the cached PDF — without the QR — forever
+3. the preview kept serving the cached PDF — without the QR — forever
 
-Note the asymmetry that makes this confusing in practice: the **preview** passes a `cacheConfig`
-and reads the cache, while the **email/print** path (`InvoiceTopbarExtra`) passes none and always
-renders fresh. So the same invoice can show two different PDFs depending on which button you press.
-
-### The agreed fix (agreed, not implemented — needs a backend change)
-
-Compare timestamps in `fetchCachedBlob`: ignore the cached attachment when it is **older than the
-document's last change**.
-
-- the attachment's date is already exposed — `uploadedAt` in `toAttachmentJson`
-  (`NeoAttachmentsHelper.java`), no backend change needed;
-- the document's `updated`, however, **cannot be exposed the usual way**: `Updated` exists as an
-  AD *column* but not as an AD *field*, so `push-to-neo` cannot register it and NEO never returns
-  it (checked: 102 header fields, none of them audit ones). The chosen route is therefore a small
-  change in `com.etendoerp.go` so the header payload carries `updated` as metadata.
+Note the asymmetry that made this confusing in practice: the **preview** passes a `cacheConfig`
+and reads the cache, while the **email/print** path always renders fresh. So the same invoice
+could show two different PDFs depending on which button you pressed. Sending an email is in fact
+a cache *refresher*: `cacheDocumentPreviewFile` unconditionally overwrites the marked attachment
+with the PDF it just sent.
 
 Two accepted consequences, both deliberate:
 

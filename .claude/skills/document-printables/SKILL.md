@@ -14,7 +14,8 @@ description: >
   Triggers on: "imprimible", "printable", "diseño de la factura", "print button", "botón de
   imprimir", "preview del documento", "PDF desactualizado", "stale PDF", "el mail manda otro
   diseño", "QR en la factura", "print-sales-invoice", "template.hbs", "DOCUMENT_TEMPLATE",
-  "pdfBlobUrl", "cache del PDF", "attachment principal", "IsPreviewMain".
+  "pdfBlobUrl", "cache del PDF", "invalidacion del cache", "attachment principal", "IsPreviewMain",
+  "recordUpdated", "attachmentFreshness".
 argument-hint: "<what you want to change>  e.g. 'add the CSV code to the invoice PDF' | 'align print with preview for sales-order' | 'why is the PDF stale'"
 ---
 
@@ -85,27 +86,59 @@ that get violated most:
 ### 3. Check the cache before believing your own eyes
 
 A non-draft document may serve a **cached** PDF instead of rendering yours
-(`C_File.EM_ETGO_IsPreviewMain='Y'`), and there is **no invalidation** today (ETP-4787). If your
-change does not appear:
+(`C_File.EM_ETGO_IsPreviewMain='Y'`). Since ETP-4787 that cache invalidates itself, but only for
+changes that move the record's `updated`. **Editing a template, a generator or a helper does
+not** — so during development the cached PDF of an untouched record still hides your change.
+That is the case that will waste your afternoon.
+
+How it decides, in one line: the attachment's own **`updatedAt`** vs the record's **`updated`**;
+older file ⇒ stale ⇒ re-render. Three things about that are worth knowing before you touch it:
+
+- **It is `updatedAt`, not `uploadedAt`.** Re-caching does not insert a new row — the backend
+  overwrites the marked attachment in place, so `uploadedAt` (its `creationDate`) stays pinned to
+  the very first render while the bytes are current. Comparing against `uploadedAt` never
+  converges: every open pays a re-render *and* an upload, forever. This shipped and was only
+  caught by running it; the unit tests were green.
+- **It takes two halves.** `pdfUtils.js → fetchCachedBlob` ignores the stale file;
+  `useMainAttachment` flags it (`storedFileIsStale`) so `GenericPreviewModal` overwrites it with
+  the fresh render. Drop the second half and the check becomes permanent — the auto-store only
+  fires when *no* file is stored.
+- **It is fail-open.** A window that does not pass `recordUpdated` reads as "fresh" and keeps the
+  old never-invalidated behaviour. So a new cached window that forgets it fails **silently**,
+  exactly like the email-wiring gaps in step 1.
+
+Adding a cached window therefore means passing `recordUpdated: <record>?.updated ?? null` in
+**both** its `pdfCacheConfig` and its `attachmentConfig`. Two windows opt out on purpose —
+purchase-invoice and return-material-receipt hold the *counterparty's* document in that slot, and
+no edit of ours makes it stale.
+
+`updated` reaches the browser only because `NeoFieldFilter.ALWAYS_READABLE_KEYS` exempts it from
+GET filtering (it is an AD column but not an AD field, so no window can declare it). Read side
+only — never union it into `includedFields`, which also gates writes.
+
+To force a re-render of a specific record without touching a template:
 
 ```bash
-# is there a cached PDF for this record?
-psql … -c "select c_file_id, name, em_etgo_ispreviewmain, created from c_file where ad_record_id='<recordId>'"
-# force a re-render without deleting anything
+# is there a cached PDF for this record, and when were its contents written?
+psql … -c "select c_file_id, name, em_etgo_ispreviewmain, created, updated from c_file where ad_record_id='<recordId>'"
+# unmark it (the next open re-renders and re-caches)
 psql … -c "update c_file set em_etgo_ispreviewmain='N' where c_file_id='<id>'"
 ```
 
-Then read the console — three lines name the template each path produced:
+Then read the console — these lines name what each path did:
 
 ```
 [pdf] C_Invoice/<id>: served from cached attachment (no re-render)   |  rendering fresh (cache miss|disabled)
+[pdf] C_Invoice/<id>: cached attachment is stale (written …, record updated …) — re-rendering
 [print-drawer] <id>: client-rendered PDF (same template as preview/email)  |  rendering the <id> artifact
 [print-documents] <window> xN: client-rendered (…)  |  <id> artifact
 ```
 
-They exist precisely so this is diagnosable without reading code — keep them. Note the asymmetry
-they expose: the preview reads the cache and the email path does not, so the same record can show
-two different PDFs.
+They exist precisely so this is diagnosable without reading code — keep them. A correct cycle
+reads `stale … — re-rendering` once and `served from cached attachment` on the next open; if it
+says `stale` *every* time, the write half is broken. Note the asymmetry they expose too: the
+preview reads the cache and the email path does not — it re-renders and *overwrites* the cache —
+so which button you press still decides how fresh the PDF is.
 
 ### 4. Verify on every path that exists
 
@@ -161,7 +194,8 @@ Do not "discover" these again — they are tracked:
 
 | Item | Ticket / status |
 |---|---|
-| No PDF cache invalidation (a stale document is served) | ETP-4787 — agreed fix needs `updated` in the NEO header payload, which requires a change in `com.etendoerp.go`: `Updated` is an AD column but **not** an AD field, so it cannot be exposed the usual way |
+| PDF cache invalidation | done (ETP-4787) — see §3. `lib/attachmentFreshness.js` is the only place that decides staleness; do not inline a second timestamp comparison |
+| Draft documents are never cached (`storeCondition: documentStatus !== 'DR'`) | deliberate, not a workaround for the above — a draft has no document to attach yet, and caching one would upload a new attachment on every open |
 | `print-*` artifacts duplicate the in-app documents; 19 files hand-copied across repos | ETP-4980 |
 | All seven document windows are aligned across the five entry points | done (ETP-4912) — re-verify with §1 when adding a window |
 | A PDF was rendered on mount, unrequested | fixed for sales invoice (ETP-4912); other windows still call their hook eagerly |

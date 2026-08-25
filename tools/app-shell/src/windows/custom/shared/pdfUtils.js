@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
+import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
 // ---------------------------------------------------------------------------
@@ -312,9 +313,22 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // ---------------------------------------------------------------------------
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
-async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, isCancelled }) {
+/**
+ * The cached rendering of this record, or null when there is none or it no longer
+ * matches the record (ETP-4787 — see `lib/attachmentFreshness.js`). Returning null on
+ * staleness is all the invalidation the read side needs: the caller's next step is
+ * already "render fresh".
+ */
+async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, recordUpdated, isCancelled }) {
   const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
   if (isCancelled() || !main?.id) return null;
+  if (isAttachmentStale(main, recordUpdated)) {
+    console.info(
+      `[pdf] ${tableName}/${recordId}: cached attachment is stale `
+      + `(written ${main.updatedAt || main.uploadedAt}, record updated ${recordUpdated}) — re-rendering`,
+    );
+    return null;
+  }
   return fetchAttachmentBlob({ token, attachmentId: main.id, apiBaseUrl });
 }
 
@@ -339,6 +353,10 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
 
   const cacheTableName = cacheConfig?.tableName ?? null;
   const cacheStoreCondition = !!cacheConfig?.storeCondition;
+  // ETP-4787 — the record's own `updated`, so a cached PDF older than the last edit is
+  // ignored. Absent (window not passing it, or a backend without the `updated`
+  // exemption) means "cache as before", never "cache off".
+  const cacheRecordUpdated = cacheConfig?.recordUpdated ?? null;
 
   useEffect(() => {
     if (!recordId || !apiBaseUrl || !token) return;
@@ -355,14 +373,15 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
         if (cacheStoreCondition && cacheTableName) {
           blob = await fetchCachedBlob({
             token, tableName: cacheTableName, recordId, apiBaseUrl,
+            recordUpdated: cacheRecordUpdated,
             isCancelled: () => cancelled,
           });
           if (cancelled) return;
         }
         // Which of the two paths produced this PDF is invisible from the outside —
-        // both end up as the same pdfUrl — yet it is the difference between seeing
-        // the current document and seeing whatever was cached earlier. There is no
-        // cache invalidation yet (ETP-4787), so make the choice observable.
+        // both end up as the same pdfUrl — yet it is the difference between a render
+        // that cost a jsreport round-trip and one that did not. Staleness logs its own
+        // line inside fetchCachedBlob, so the three cases stay distinguishable.
         if (blob) {
           console.info(`[pdf] ${cacheTableName}/${recordId}: served from cached attachment (no re-render)`);
         } else {
@@ -391,7 +410,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
         prevUrlRef.current = null;
       }
     };
-  }, [recordId, apiBaseUrl, token, cacheTableName, cacheStoreCondition]);
+  }, [recordId, apiBaseUrl, token, cacheTableName, cacheStoreCondition, cacheRecordUpdated]);
 
   return { pdfUrl, pdfBlob, loading, error };
 }
