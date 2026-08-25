@@ -362,14 +362,16 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
   const winnerTooltipDescription = ui('userRolesTabWinnerTooltipDescription');
 
   return (
-    // ETP-4999 item 5 — bounded to `max-h-[60vh]` (matching this app's own convention
-    // for a scrollable region nested inside a `bg-card` detail-form card, e.g.
-    // `financial-account/ReconciledTxnsModal.jsx`'s `max-h-[56vh]`) so `<thead>`'s
-    // `sticky top-0` below has a genuinely scrollable ancestor to stick within. The
-    // enclosing `DetailView.jsx` custom-tab panel itself has no bounded height/overflow
-    // of its own — its doc comment confirms the WHOLE document scrolls as one single
-    // outer column — so without this local wrapper `sticky` here would be a no-op.
-    <div className="overflow-auto max-h-[60vh]" data-testid="UserRolesTab">
+    // ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
+    // pass added one, on the assumption `sticky` needed a locally-owned scroll context —
+    // live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
+    // column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
+    // a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
+    // local wrapper here instead created a SECOND, artificially short scroll region
+    // inside the (always full-viewport-height) outer panel — the empty space between
+    // where this region's content ended and the panel's own bottom edge is exactly what
+    // a human caught live: comparing against a pre-item-5 build showed no such gap.
+    <div data-testid="UserRolesTab">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">

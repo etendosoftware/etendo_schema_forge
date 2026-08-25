@@ -329,16 +329,23 @@ describe('UserRolesTab', () => {
       expect(thead.className).toContain('bg-card');
     });
 
-    // ETP-4999 item 5 — the `sticky` class on <thead> above is a no-op without a bounded,
-    // scrollable ancestor to stick within (the enclosing `DetailView.jsx` custom-tab panel
-    // has no bounded height/overflow of its own). This pins that the wrapper div itself
-    // (the same `data-testid="UserRolesTab"` element) carries the bounding class pair.
-    it('bounds the wrapper with max-h-[60vh] and overflow-auto so the sticky <thead> has a scrollable ancestor', async () => {
+    // ETP-4999 item 5 regression guard — an earlier pass wrapped the table in a LOCAL
+    // `max-h-[60vh] overflow-auto` div on the (incorrect) assumption that `sticky` needed
+    // a locally-owned scroll context. A human live-tested that build and found a real bug:
+    // a blank gap at the bottom of the tab whenever the table's content was shorter than
+    // the enclosing `DetailView.jsx` panel's full-viewport height, because the local
+    // wrapper created a SECOND, artificially short scroll region nested inside the panel's
+    // own (always full-height) outer scroll column. Live verification (Playwright) then
+    // confirmed the panel's EXISTING outer `overflow-y-auto` column is itself a valid
+    // `position: sticky` ancestor, so the local wrapper was unnecessary as well as buggy —
+    // it was removed entirely. This test pins that removal: if a local bounding wrapper is
+    // ever reintroduced here, it will reintroduce that same live-confirmed bottom-gap bug.
+    it('does NOT bound the wrapper with a local max-h/overflow — that previously caused a live-confirmed bottom-gap bug', async () => {
       renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
 
       const wrapper = await screen.findByTestId('UserRolesTab');
-      expect(wrapper.className).toContain('max-h-[60vh]');
-      expect(wrapper.className).toContain('overflow-auto');
+      expect(wrapper.className).not.toContain('max-h-[60vh]');
+      expect(wrapper.className).not.toContain('overflow-auto');
     });
   });
 
