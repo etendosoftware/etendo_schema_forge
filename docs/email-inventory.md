@@ -54,6 +54,8 @@ graph LR
   M5["◐ ✉️ password-changed"]
   M6["◐ ✉️ login-alert<br/><i>nothing calls this yet</i>"]
   M7["✅ ✉️ organization-joined<br/><i>verified</i>"]
+  M8["◐ ✉️ verify-email<br/><i>24-hour link</i>"]
+  M9["◐ ✉️ new-account-invitee<br/><i>welcome, no verification</i>"]
   D1["⬜ ✉️ sales-invoice-send"]
   D2["⬜ ✉️ sales-order-send"]
   D3["⬜ ✉️ sales-quotation-send"]
@@ -69,13 +71,15 @@ graph LR
   SMTP["SMTP"]
 
   ADMIN --> A1 --> M1
+  A1 --> M8
+  M8 -- "confirms the address" --> A2
   A1 --> A2 --> M2
   A2 --> A3 --> M3
   ADMIN --> A4 --> M3
   M3 --> OPER
 
   OPER --> O1
-  O1 -- "had no account" --> M1
+  O1 -- "had no account" --> M9
   O1 --> M7
   OPER --> O2 --> M4 --> O3 --> M5
   OPER -.-> M6
@@ -87,7 +91,7 @@ graph LR
   ADMIN --> K2 --> C2
   K3 --> C3
 
-  M1 & M2 & M3 & M4 & M5 & M6 & M7 --> LAYOUT --> PROVIDER
+  M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 --> LAYOUT --> PROVIDER
   D1 & D2 & D3 & D4 & D5 & D6 --> PROVIDER
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
@@ -99,14 +103,14 @@ graph LR
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
   class M1,M2,M3,M4,M7 verified
-  class M5,M6 migrated
+  class M5,M6,M8,M9 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**5 verified, 7 migrated, 21 total.** All four greens were opened in a real inbox on 2026-08-25:
+**5 verified, 9 migrated, 23 total.** All four greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
@@ -116,9 +120,14 @@ email an Admin or Operator can actually receive has now been seen arriving.
 Two ambers remain. `password-changed` renders through the same layout and passes its tests but has
 not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
 
-Note the invitee branch: accepting an invitation sends the welcome **only when the account is
-created right there**, and the joined notice either way. Before ETP-5003 an invited operator
-received neither — `sendNewAccount` was reachable only from the admin's own sign-up.
+Note the invitee branch: accepting an invitation sends a welcome **only when the account is created
+right there**, and the joined notice either way. Before ETP-5003 an invited operator received
+neither — `sendNewAccount` was reachable only from the admin's own sign-up.
+
+That welcome is a **separate contract**, `new-account-invitee`. The admin's own `new-account` now
+carries the email-verification link, and an invited operator has nothing to verify: the invitation
+is itself proof that somebody meant to reach the address, and the operator never runs onboarding —
+the only flow the `403 EMAIL_NOT_VERIFIED` gate protects. Its button goes to the dashboard.
 
 The split still falls along the company boundary: everything **Admin and Operator** receive is
 migrated, everything the **Customer or Supplier** receives is not. F3 fixes that.
@@ -184,17 +193,19 @@ what they used *before* that work, which is what the branded-template migration 
 | 9 | Password changed notice | `password-changed` | after a password change — `EtendoGoJwtServlet:970` | `custom` (`passwordChangedContent`) | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
 | 10 | Environment ready | `environment-ready` | tenant provisioning finished — `EtendoGoJwtServlet:1461` | `custom` (`environmentReadyContent`), links to `/dashboard` | `contracts/AccountLinkEmailContract.java`, `rest/EtendoGoAccountProvisioning.java` |
 | 11 | Company invitation | `company-invitation` | invite a user to a company — `CompanyInvitationService.java:200` | `custom` (subject/body in Java, ES/EN) | `contracts/CompanyInvitationEmailContract.java`, `rest/CompanyInvitationService.java`, `rest/CompanyInvitationDalHelper.java` |
-| 12 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
-| 13 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
+| 12 | Email verification | `verify-email` | sign-up, and `POST /verify-email/resend` — `EtendoGoJwtServlet` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/EmailVerificationDalHelper.java` |
+| 13 | Welcome for an invited user | `new-account-invitee` | invitation accepted when the account is created there — `CompanyInvitationService` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/TransactionalAuthEmailSender.java` |
+| 14 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
+| 15 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
 
 ### 2.C — Etendo Core (classic SMTP)
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
-| 14 | Print & Send a document (invoice, order, …) from the backoffice | "Send by email" in the print flow | **AD template**: `TemplateInfo.EmailDefinition` (subject + body per document template/language) + PDF and record attachments | `src/org/openbravo/erpCommon/utility/reporting/printing/EmailUtilities.java`, `PrintController.java`, `TabAttachments.java` |
-| 15 | New portal user (credentials / access granted) | `GrantPortalAccessProcess` → `EmailEventManager` | **FreeMarker**: `src/org/openbravo/portal/templates/email-new-user.ftl`; subject from AD_Message via `OBMessageUtils` | `src/org/openbravo/portal/NewUserEmailGenerator.java`, `PortalEmailBody.java` |
-| 16 | Portal account cancelled | `AccountChangeObserver` → `EmailEventManager` | **FreeMarker**: `email-account-cancelled.ftl`; subject `Portal_AccountCancelledSubject` | `src/org/openbravo/portal/AccountCancelledEmailGenerator.java` |
-| 17 | Alert rule notification (`[OB Alert] …`) | `AlertProcess` background job | **plain text hardcoded in Java**, header from AD_Message `AlertMailHead` | `src/org/openbravo/erpCommon/ad_process/AlertProcess.java:451-470` |
+| 16 | Print & Send a document (invoice, order, …) from the backoffice | "Send by email" in the print flow | **AD template**: `TemplateInfo.EmailDefinition` (subject + body per document template/language) + PDF and record attachments | `src/org/openbravo/erpCommon/utility/reporting/printing/EmailUtilities.java`, `PrintController.java`, `TabAttachments.java` |
+| 17 | New portal user (credentials / access granted) | `GrantPortalAccessProcess` → `EmailEventManager` | **FreeMarker**: `src/org/openbravo/portal/templates/email-new-user.ftl`; subject from AD_Message via `OBMessageUtils` | `src/org/openbravo/portal/NewUserEmailGenerator.java`, `PortalEmailBody.java` |
+| 18 | Portal account cancelled | `AccountChangeObserver` → `EmailEventManager` | **FreeMarker**: `email-account-cancelled.ftl`; subject `Portal_AccountCancelledSubject` | `src/org/openbravo/portal/AccountCancelledEmailGenerator.java` |
+| 19 | Alert rule notification (`[OB Alert] …`) | `AlertProcess` background job | **plain text hardcoded in Java**, header from AD_Message `AlertMailHead` | `src/org/openbravo/erpCommon/ad_process/AlertProcess.java:451-470` |
 
 Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 `EmailEventContentGenerator.java`, `SmtpCascadeResolver.java`,
@@ -206,10 +217,10 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
-| 18 | TicketBAI submission error | TicketBAI send failure | HTML string built in Java, texts from AD_Message | `modules/com.smf.ticketbai/src/com/smf/ticketbai/email/ErrorEmailSender.java`, `TbaiEmailSender.java` |
-| 19 | Currency conversion-rate sync failure | scheduled rate sync fails | HTML from two AD_Message keys (`String.format`) | `modules/com.smf.currency.conversionrate/src/com/smf/currency/conversionrate/SyncFailureEmailSender.java` |
-| 20 | SII multi-report result | `ProcesoInformeMultiple` | plain Java-built message | `modules/org.openbravo.module.sii/src/org/openbravo/module/sii/reports/ProcesoInformeMultiple.java` |
-| 21 | Scheduled/AD report delivery | report scheduled with email delivery | AD report definition + attachment | `modules_core/org.openbravo.client.application/src/org/openbravo/client/application/report/BaseReportActionHandler.java` |
+| 20 | TicketBAI submission error | TicketBAI send failure | HTML string built in Java, texts from AD_Message | `modules/com.smf.ticketbai/src/com/smf/ticketbai/email/ErrorEmailSender.java`, `TbaiEmailSender.java` |
+| 21 | Currency conversion-rate sync failure | scheduled rate sync fails | HTML from two AD_Message keys (`String.format`) | `modules/com.smf.currency.conversionrate/src/com/smf/currency/conversionrate/SyncFailureEmailSender.java` |
+| 22 | SII multi-report result | `ProcesoInformeMultiple` | plain Java-built message | `modules/org.openbravo.module.sii/src/org/openbravo/module/sii/reports/ProcesoInformeMultiple.java` |
+| 23 | Scheduled/AD report delivery | report scheduled with email delivery | AD report definition + attachment | `modules_core/org.openbravo.client.application/src/org/openbravo/client/application/report/BaseReportActionHandler.java` |
 
 **Not an Etendo email:** Stripe Checkout receipts. `HostedCheckoutService` only passes
 `customer_email` to Stripe; the receipt is sent by Stripe, not by us.

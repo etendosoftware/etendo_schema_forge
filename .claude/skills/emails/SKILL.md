@@ -5,7 +5,7 @@ description: Work on any email Etendo sends — changing its wording, layout, la
 
 # Etendo Emails
 
-Etendo sends **21 distinct emails** from **two independent stacks**. Full inventory with per-email
+Etendo sends **23 distinct emails** from **two independent stacks**. Full inventory with per-email
 file references: `docs/email-inventory.md`. Design decisions and rollout plan:
 `docs/plans/2026-08-25-etp-5003-unified-email-template.md` (ETP-5003).
 
@@ -108,6 +108,16 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
   until ETP-5003 corrected it. The screen lives in `@etendosoftware/etendo-go-core`, so making it
   read the real TTL needs an API change and a PR in that repo. **If you change
   `PASSWORD_RESET_TTL_SECONDS`, update that locale key too** — in `es_ES`, `es_AR` and `en_US`.
+
+### verify-email and the two welcomes
+- The epic added email verification: `verify-email` plus a verification link on the admin's
+  `new-account`, and `handleOnboarding` answers `403 EMAIL_NOT_VERIFIED` until the address is
+  confirmed. Both state a real 24-hour window read from the stored expiry.
+- **An invited operator is exempt by design.** The invitation is itself proof that somebody meant to
+  reach the address, and an operator never runs onboarding — the only flow the gate protects. Their
+  welcome is a separate contract, `new-account-invitee`, whose button goes to the dashboard.
+- So there are two welcomes on purpose. Do not "simplify" them back into one: they ask the reader
+  for different things.
 
 ### organization-joined
 - Sent when an invitation is accepted, naming the organization. Keyed on the invitation record, so a

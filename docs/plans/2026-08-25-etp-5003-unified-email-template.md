@@ -139,14 +139,14 @@ EmailLayout.render(
 
 ---
 
-## 5. Scope — 15 of the 21 emails
+## 5. Scope — 17 of the 23 emails
 
-Agreed scope: **all 13 Etendo GO emails + the 2 portal emails**.
+Agreed scope: **all 15 Etendo GO emails + the 2 portal emails**. The count grew during the work: `organization-joined` closed a gap the inventory exposed, and the epic's email-verification feature added `verify-email` plus a separate invitee welcome.
 
 | In scope | Out of scope |
 |---|---|
 | 6 document emails (invoice, order, quotation, shipment, purchase order, return to vendor) | `[OB Alert]` alert rules |
-| 7 account/auth emails (new account, reset password, password changed, environment ready, company invitation, organization joined, login alert) | TicketBAI submission error |
+| 9 account/auth emails (new account, invitee welcome, email verification, reset password, password changed, environment ready, company invitation, organization joined, login alert) | TicketBAI submission error |
 | 2 portal emails (new user, account cancelled) — today the only ones with a real `.ftl` | Currency sync failure |
 | | SII multi-report, scheduled report delivery |
 
