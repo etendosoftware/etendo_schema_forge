@@ -20164,6 +20164,7 @@
     "backendError.noShipmentsProvided": "No se proporcionaron albaranes.",
     "backendError.shipmentsMustShareBusinessPartner": "Todos los albaranes deben pertenecer al mismo Tercero.",
     "backendError.bpMissingPaymentTermsOrMethod": "Al Tercero le faltan las Condiciones de Pago o la Forma de Pago obligatorias.",
+    "backendError.shipmentPriceListRequired": "No se pudo resolver una tarifa para esta factura. Selecciona una tarifa o configura una tarifa por defecto para el Tercero.",
     "backendError.orderNotFound": "Pedido no encontrado: {orderId}",
     "backendError.shipmentNotFound": "Albarán no encontrado: {id}",
     "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos.",

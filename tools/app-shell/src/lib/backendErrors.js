@@ -65,6 +65,12 @@ const BACKEND_ERROR_MAP = {
   // literal, thrown when the Business Partner lacks mandatory Payment Terms/Method
   // (ETP-4831 case 4, family A).
   'Business Partner is missing mandatory Payment Terms or Payment Method': 'backendError.bpMissingPaymentTermsOrMethod',
+  // CreateDraftInvoiceHandler.java (com.etendoerp.go, ensurePriceListResolved) —
+  // hardcoded English literal thrown when invoicing a shipment with no linked
+  // sales order and no Business Partner default Price List, and the confirm
+  // popup's price-list picker was left empty (ETP-4942).
+  'No Price List could be resolved for this invoice: select a tariff or configure a default Price List for the Business Partner':
+    'backendError.shipmentPriceListRequired',
   // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
   // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
   // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).

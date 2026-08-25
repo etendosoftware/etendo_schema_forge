@@ -19917,6 +19917,7 @@
     "backendError.noShipmentsProvided": "No shipments were provided.",
     "backendError.shipmentsMustShareBusinessPartner": "All shipments must belong to the same Business Partner.",
     "backendError.bpMissingPaymentTermsOrMethod": "The Business Partner is missing mandatory Payment Terms or Payment Method.",
+    "backendError.shipmentPriceListRequired": "No Price List could be resolved for this invoice. Select a tariff, or configure a default Price List for the Business Partner.",
     "backendError.orderNotFound": "Order not found: {orderId}.",
     "backendError.shipmentNotFound": "Shipment not found: {id}.",
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes.",
