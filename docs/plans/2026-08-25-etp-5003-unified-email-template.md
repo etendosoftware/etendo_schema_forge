@@ -129,50 +129,71 @@ EmailLayout.render(
 
 ---
 
-## 5. Rollout
+## 5. Scope — 14 of the 20 emails
+
+Agreed scope: **all 12 Etendo GO emails + the 2 portal emails**.
+
+| In scope | Out of scope |
+|---|---|
+| 6 document emails (invoice, order, quotation, shipment, purchase order, return to vendor) | `[OB Alert]` alert rules |
+| 6 account/auth emails (new account, reset password, password changed, environment ready, company invitation, login alert) | TicketBAI submission error |
+| 2 portal emails (new user, account cancelled) — today the only ones with a real `.ftl` | Currency sync failure |
+| | SII multi-report, scheduled report delivery |
+
+The excluded six are internal operational notifications: they are read by operators, not customers,
+the design buys little, and they live in the Core SMTP stack. They keep working exactly as they do
+now.
+
+## 6. Branding: Etendo logo always
+
+The card header always carries the **Etendo** logo — including document emails that a tenant sends
+to its own customers. When the tenant is relevant it is named **in the copy**, the way the
+invitation email already does it ("*SMF Consulting* te ha invitado…"), never by swapping the logo.
+This keeps one block vocabulary for every email and removes per-tenant asset hosting from scope.
+
+## 7. Rollout
 
 | Phase | Scope | Why this order |
 |---|---|---|
 | **F0** | Spike: what `custom` wraps (§3) | Gates the rest |
 | **F1** | Renderer + tokens + snapshot tests. Apply to **`company-invitation`** only | Its design is already specified — the screenshot in ETP-5003 *is* this email. One email through the whole pipe, validated in real clients (Gmail, Outlook desktop/web, Apple Mail, mobile) before touching anything else |
-| **F2** | Remaining auth emails: `new-account`, `password-changed`, `environment-ready` | Same shape (greeting + copy + CTA + note), same `custom` template, no external dependency |
-| **F3** | The 6 document emails via `DefaultDocumentSendEmailContract` | One change covers all six. **Also fixes today's visible defect:** a branded sales invoice drops to the bare `<p>` layout the moment an operator edits the message — after F3 both paths render the same |
-| **F4** | Move the hardcoded ES/EN literals into AD_Message / i18n | Decoupled from layout; do it once the blocks are stable so the keys match the block vocabulary |
-| **F5** | Core SMTP + modules: route `EmailInfo.setContent` through the same renderer | Portal `.ftl`s, alerts, TicketBAI, currency sync. Lower value, do last |
-| **F6** | Decide the fate of the branded provider templates (§6) | Needs F1–F3 shipped to compare side by side |
+| **F2** | Remaining auth emails: `new-account`, `password-changed`, `environment-ready`, plus **`reset-password` and `login-alert`** migrated off their provider-branded templates | Same shape (greeting + copy + CTA + note), same `custom` template, no external dependency |
+| **F3** | The 6 document emails via `DefaultDocumentSendEmailContract`, including migrating **`invoice`** off its branded template | One change covers all six. **Also fixes today's visible defect:** a branded sales invoice drops to the bare `<p>` layout the moment an operator edits the message — after F3 both paths render the same |
+| **F4** | Move the hardcoded ES/EN literals to **AD_Message** (`OBMessageUtils`) | Decoupled from layout; do it once the blocks are stable so the message keys match the block vocabulary. Same mechanism the portal and TicketBAI already use, so copy becomes translatable by configuration instead of by code change |
+| **F5** | The 2 portal emails: replace `email-new-user.ftl` / `email-account-cancelled.ftl` with the shared renderer | Core SMTP stack, so it needs the renderer reachable from `EmailInfo.setContent`. Lowest risk if done last |
 
----
+All three provider-branded templates are migrated (F2/F3), so after this work there is exactly one
+answer to "what does an Etendo email look like", and it is versioned in this repo. Decide in F2
+whether `login-alert` gets a producer at all — it currently has none in either repo
+(`docs/email-inventory.md` §3).
 
-## 6. What happens to `invoice`, `reset-password`, `login-alert`
+## 8. Dark mode
 
-Once F1–F3 land, our own layout covers those cases. Two options per template: keep the
-provider-branded one (and accept that its design is unversioned and diverges), or point the contract
-at `custom` and render it here. **Recommendation:** migrate all three, so there is exactly one
-answer to "what does an Etendo email look like". Handle `login-alert` in the same pass — it has no
-producer in either repo (`docs/email-inventory.md` §3), so decide whether to wire it or drop it.
+Ship a **real dark variant** via `prefers-color-scheme`, rather than pinning the light palette.
+Needs design input before F1, since the renderer emits both palettes from day one:
 
----
+| Token | Light | Dark — to define |
+|---|---|---|
+| Page background | `#F5F7F9` | ? |
+| Card | `#FFFFFF` | ? |
+| Divider | `#E8EAEF` | ? |
+| Body text | `#555B6D` | ? |
+| Button bg / label | `#121217` / `#FFFFFF` | ? (a near-black button on a dark card loses all contrast — likely inverts to a light button with dark label) |
 
-## 7. Open questions
+Caveat to accept up front: **Outlook.com rewrites colors regardless** of what the email declares, so
+"native in every mode" is achievable in Apple Mail and Gmail, best-effort elsewhere.
+
+## 9. Open questions
 
 1. **`custom` shell** — F0. Blocks everything.
-2. ~~**Logo hosting.**~~ **Resolved** — `https://go.etendo.cloud/favicon.png` (pinned to
-   production) + *Etendo* as text, per §4.
-3. **Per-tenant branding.** Document emails go to a tenant's *customers*. Does the card show the
-   Etendo logo, or the tenant's? The Figma spec covers the Etendo-to-user case (invitation) but not
-   the tenant-to-customer case (invoice). This one changes the block vocabulary — worth settling
-   before F3.
-4. **Dark mode.** Several clients auto-invert. A `#121217` button on `#FFFFFF` inverts badly; decide
-   whether to pin colors (`color-scheme` / `prefers-color-scheme`) or accept the inversion.
-5. **Language coverage.** Today it is ES/EN hardcoded. F4 should state which AD languages are in
-   scope.
+2. **Dark palette values** — §8, needed before F1.
+3. **Footer content** — the Figma shows "Saludos, Equipo de Etendo Go". Confirm whether it also
+   needs a support link or any legal line.
 
----
-
-## 8. Testing
+## 10. Testing
 
 - **Snapshot test per contract** on the rendered HTML — catches accidental layout drift.
 - **A guard test that no contract emits markup**: no `"<p>"` / `"<a href"` literals outside the
   renderer. This is the rule that keeps the unification from eroding.
 - **Manual client matrix** at F1 and again at F3 (Gmail web/app, Outlook desktop/web, Apple Mail,
-  iOS/Android), attached as delivery evidence.
+  iOS/Android), in **both** color schemes, attached as delivery evidence.
