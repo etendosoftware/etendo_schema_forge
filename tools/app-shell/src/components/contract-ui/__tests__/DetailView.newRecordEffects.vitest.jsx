@@ -291,6 +291,60 @@ describe('DetailView isNew-gated editing reset — existing record to new (no re
     await act(async () => { await Promise.resolve(); });
     expect(mockHook.handleNew).not.toHaveBeenCalled();
   });
+
+  /**
+   * ETP-5002 regression — the counterpart the ETP-4830 predicate got wrong.
+   *
+   * `handleSave` writes the persisted record (id included) into `editing` and only THEN
+   * navigates to /{window}/{id}. On the render in between, the route is still 'new', so a
+   * guard keyed on `isNew && editing.id` fires MID-SAVE: handleNew() wipes `editing`, opens
+   * a fresh creation session, and the caller's remaining work persists a SECOND record.
+   * Live cost: sales-order-happy-path created two orders, confirmed the first
+   * (documentAction 200) and left the UI on the second, whose pill still read "Borrador".
+   *
+   * Staying on 'new' while `editing` gains an id must therefore be a no-op. The distinction
+   * that matters is whether the recordId CHANGED, not whether an id is present.
+   */
+  it('does NOT call handleNew when our own save puts an id in editing while still on new', async () => {
+    mockHook.editing = {};
+    const { rerender } = renderNew();
+    await act(async () => { await Promise.resolve(); });
+    expect(mockHook.handleNew).not.toHaveBeenCalled();
+
+    // The save landed: same 'new' route, editing now carries the persisted record.
+    mockHook.editing = { id: 'NEW1', documentNo: 'SO-002', documentStatus: 'DR', uOM: 'U1' };
+    rerender(
+      <MemoryRouter>
+        <DetailView
+          entity="header"
+          detailEntity="lines"
+          Form={MockForm}
+          DetailTable={MockDetailTable}
+          DetailForm={null}
+          summary={[]}
+          statusField="documentStatus"
+          processes={[]}
+          addLineFields={{ entry: ENTRY_FIELDS, derived: [] }}
+          api={{ selectors: [{ field: 'uOM', entity: 'lines' }] }}
+          entityLabel="Sales Order"
+          detailLabel="Lines"
+          titleField="documentNo"
+          windowName="sales-order"
+          recordId="new"
+          token="test-token"
+          apiBaseUrl="/api/sales-order"
+          breadcrumb="Sales / Orders"
+          linesLayout="inlineEditable"
+        />
+      </MemoryRouter>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(
+      mockHook.handleNew,
+      'resetting here wipes the just-saved record and causes a duplicate create',
+    ).not.toHaveBeenCalled();
+  });
 });
 
 describe('handleAddLineClick — isNew branch', () => {

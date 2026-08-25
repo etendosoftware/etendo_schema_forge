@@ -1094,3 +1094,49 @@ export async function maybeSaveBeforeConfirm({ isDirty, handleSave }) {
   const saved = await handleSave?.({ silent: true });
   return !!saved?.id;
 }
+/**
+ * ETP-4830 / ETP-5002 — keeps the `'new'` route's `editing` state honest.
+ *
+ * ETP-4830's need is real: `useEntity()` lives INSIDE `DetailView`, so navigating from an
+ * existing record straight to `'new'` (no stop at the list route) does not remount it, and
+ * a fully-populated OTHER record stays in `editing` on what the route considers a blank
+ * page. That record's real `id` then leaks into `data`, which is how the user window
+ * rendered its interactive role editor for a user that was never saved.
+ *
+ * But the predicate it shipped — `isNew && (!editing || editing.id)` — conflated "editing
+ * is stale" with "editing has an id", and that cost duplicated documents (ETP-5002).
+ * `isNew` stays true across the gap between `handleSave` writing the persisted record into
+ * `editing` and the `navigate()` to `/{window}/{id}` committing. On that render the guard
+ * fired MID-SAVE, wiping `editing` and opening a fresh creation session; the caller went on
+ * working and persisted a SECOND record. `sales-order-happy-path` created two orders,
+ * confirmed the first (`documentAction` 200) and left the UI showing the second, whose
+ * status pill legitimately still read "Borrador" — the backend was never wrong. The
+ * `assets` flow lost a required numeric the same way and got a 400 from `processAsset`.
+ *
+ * So the reset keys off ARRIVING at the `'new'` route, not off any render while sitting on
+ * it: only a `recordId` that actually changed can be carrying a record left over from
+ * before. Once we are already on `'new'`, an id appearing in `editing` is our own save
+ * landing and must be left alone. Tracked with a ref rather than `location.state.justSaved`
+ * because the navigation has not happened yet at the moment this has to decide.
+ *
+ * Lives here rather than inline in DetailView.jsx so the reasoning is testable on its own
+ * and does not add to that file's guarded line budget
+ * (`.claude/hooks/check-detailview-growth.mjs`).
+ */
+export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord }) {
+  if (!isNew) return false;
+  // No editing state at all — a genuinely fresh mount on the creation route.
+  if (!editing) return true;
+  // A persisted record we did NOT just create here: stale leftover, clear it.
+  return Boolean(arrivedFromAnotherRecord && editing.id);
+}
+
+/** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
+  const prevRecordIdRef = useRef(recordId);
+  useEffect(() => {
+    const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
+    prevRecordIdRef.current = recordId;
+    if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
+  }, [isNew, recordId, editing, handleNew]);
+}

@@ -17,7 +17,7 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
@@ -605,6 +605,10 @@ export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSavi
     // email/website/phone assertions that expect the pre-ETP-4542 single-arg call.
     if (toastId) {
         toast.error(msg, { id: toastId });
+        // ETP-5002: remember it so a later successful save can clear it — see
+        // trackSaveBlockToast. Only stable-id toasts are trackable; the
+        // email/website/phone gates stack auto-id toasts and are left as they were.
+        trackSaveBlockToast(toastId);
     } else {
         toast.error(msg);
     }
@@ -758,7 +762,15 @@ export async function resolveSavedRecordAfterSave(saved, {
 export const RECORD_SAVE_TOAST_ID = 'record-save-toast';
 
 export function showSaveSuccessToast(silent, isNew, ui) {
-    if (!silent) toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
+    if (silent) return;
+    // ETP-5002: retire the save-blocking error toasts this success supersedes BEFORE
+    // showing the confirmation. RECORD_SAVE_TOAST_ID's in-place update (ETP-4830) does
+    // not promote the toast to the front, so a newer error toast would otherwise keep
+    // `data-front` and the user who just fixed the value would still see the error.
+    // Dismissing a DIFFERENT id than the one we are about to create means there is no
+    // cross-timer race here — unlike ETP-4830's dismiss-then-add of the same toast.
+    dismissSaveBlockToasts(toast.dismiss);
+    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {

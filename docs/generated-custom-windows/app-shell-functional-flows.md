@@ -350,6 +350,31 @@ Backend callout messages are sanitized before display: HTML tags (such as `<br/>
 
 Fields with a `min: 0` constraint — `invoicedQuantity`, `listPrice`, and `etgoDiscount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
 
+### Save-blocking toasts vs. the success toast — ETP-5002
+
+A save-blocking numeric violation (`min` / `integer`, ETP-4542) raises its error toast under a
+STABLE sonner id, `numericFieldToastId(field.key)` → `numeric-field-<key>`, shared by
+EntityForm's on-blur toast and useEntity's save gate so the two dedupe instead of stacking.
+ETP-4830 then gave the post-save SUCCESS toast a stable id of its own,
+`RECORD_SAVE_TOAST_ID` — deliberately, to turn the User window's dismiss-then-add
+`onAfterCreate` race into one atomic in-place update.
+
+Those two decisions interact badly, and the interaction is the thing to remember: **a stable
+id buys atomic replacement but COSTS front-of-stack promotion.** Sonner applies
+`create()`-with-an-existing-id as an in-place UPDATE, so the success toast refreshes its
+older entry instead of jumping the queue. Whenever a save-blocking error toast is newer, that
+error keeps `data-front="true"` — the user who corrected the value and saved successfully is
+still reading the error, and any assertion on the front-most toast reads it too (this is how
+`assets` integration Case 5/6 failed while the underlying `PATCH` returned 200).
+
+`showSaveSuccessToast` therefore retires the errors it supersedes before confirming: ids
+raised with a stable id are recorded by `trackSaveBlockToast` (from both call sites) and
+dismissed by `dismissSaveBlockToasts` on the next successful save. Only ids we minted are
+dismissed — never a bare `toast.dismiss()`, which would also wipe unrelated backend messages
+and reintroduce the very cross-timer race ETP-4830 documented. Dismissing a DIFFERENT id than
+the one being created has no such race. The email/website/phone gates pass no id, still stack
+auto-id toasts, and are deliberately left untracked.
+
 ### Payment modal date validation
 
 The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red asterisk (*) indicating it is required. The "Confirm payment" button is disabled while the date field is empty, preventing submission without a date. When the user attempts submission with no date or when the backend returns a 400 response, a descriptive translated error message is shown instead of the raw "Failed (400)" string. The error message is resolved via the i18n key `paymentDateRequired` in both `en_US.json` and `es_ES.json`.
@@ -358,6 +383,7 @@ The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red 
 - `tools/app-shell/src/components/contract-ui/DataTable.jsx` — `isMissingRequired`, `isBelowMin` helpers; `invalidFields` state in `InlineAddRow`
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `isValueBelowMin` helper; `invalidCell` state; `hasValidationErrorRef` keeps edit mode open on validation failure
 - `tools/app-shell/src/hooks/useEntity.js` — `handleSaveAndProcess` passes `{ silent: true }` to `handleSave` to suppress the intermediate save toast
+- `tools/app-shell/src/lib/numericValidation.js` — `numericFieldToastId`, plus ETP-5002's `trackSaveBlockToast` / `dismissSaveBlockToasts` / `resetSaveBlockToastTracking` bookkeeping
 - `tools/app-shell/src/hooks/useCallout.js` — `sanitizeCalloutMessage` strips HTML and redundant prefixes before passing text to Sonner
 - `tools/app-shell/src/windows/custom/shared/InvoicePaymentModal.jsx` — `invalidField` state, date/amount/account validation, disabled confirm button
 
