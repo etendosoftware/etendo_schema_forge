@@ -60,7 +60,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   );
 }
 
-export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
+export default function ContactsFinancialPanel({ data, apiBaseUrl, catalogs, api, editing, onChange }) {
   const ui = useUI();
   const [creditTaxDraft, setCreditTaxDraft] = useState({});
   const [savingField, setSavingField] = useState(null);
@@ -81,7 +81,10 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
   ), [editing]);
 
   async function persistCreditTaxField(fieldKey) {
-    if (!data?.id || !apiBaseUrl || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!data?.id || !apiBaseUrl) return;
     if (creditTaxReadOnly[fieldKey]) return;
 
     const currentValue = draftRef.current[fieldKey] ?? '';
@@ -160,7 +163,6 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
             data={data}
             entity="businessPartner"
             api={api}
-            token={token}
             catalogs={catalogs}
             onChange={onChange}
             editing={editing}

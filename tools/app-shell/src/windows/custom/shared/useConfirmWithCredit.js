@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 export function useConfirmWithCredit({
   data,
@@ -26,10 +27,11 @@ export function useConfirmWithCredit({
     ? data.returnInvoices.some(inv => inv.documentStatus === 'CO')
     : data?.hasReturnInvoice === true;
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — one header bag drives this component's reads and its writes, so
+  // it takes the write builder: same shape as the `{ Authorization, Content-Type }`
+  // it used to hand-build, with the session's proof in place of a token the
+  // client no longer holds.
+  const headers = useMemo(() => writeHeaders(), []);
 
   const handleCreateReturnInvoice = useCallback(async () => {
     if (creatingInvoice) return;

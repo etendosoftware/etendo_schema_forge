@@ -32,6 +32,14 @@ vi.mock('lucide-react', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ProductSidebar from '../ProductSidebar.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 // --- Helpers ---
 
@@ -82,10 +90,14 @@ describe('ProductSidebar', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', () => {
+  // ETP-4576 — the inverse of what this asserted. It proved that a null token
+  // stops the read; under the cookie scheme no token is ever held, so the read
+  // never happened and the panel rendered empty as if the record had no data.
+  it('fetches when the client holds no token', async () => {
+    declareCookieSession();
     mockFetchResponses();
-    render(<ProductSidebar {...defaultProps} token={null} />);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    render(<ProductSidebar {...defaultProps} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
   });
 
   it('fetches stock and transactions on mount', async () => {

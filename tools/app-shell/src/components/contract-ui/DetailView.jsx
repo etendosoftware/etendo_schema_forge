@@ -4167,7 +4167,6 @@ export function DetailView({
         onClose={() => setShowPrint(false)}
         windowName={windowName}
         documentIds={getDocumentIds(recordId)}
-        token={token}
         data-testid="DocumentPrintDrawer__fa3275" />
       {deleteConfirmModal ? (
         showDeleteConfirm && (

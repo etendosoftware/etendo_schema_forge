@@ -3,6 +3,11 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import { useCopilotChat } from '../useCopilotChat';
+import { declareBearerSession, declareCookieSession } from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 // Mock the entire copilotApi so no network calls happen
 vi.mock('../copilotApi.js', () => ({
@@ -26,7 +31,7 @@ vi.mock('../copilotApi.js', () => ({
 describe('useCopilotChat', () => {
   // Hook returns { state, actions }
   it('initializes with default state', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     const { state } = result.current;
     expect(state.assistants).toEqual([]);
     expect(state.conversations).toEqual([]);
@@ -37,7 +42,7 @@ describe('useCopilotChat', () => {
   });
 
   it('exposes actions object with functions', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     const { actions } = result.current;
     expect(typeof actions.setInput).toBe('function');
     expect(typeof actions.setFilter).toBe('function');
@@ -48,19 +53,19 @@ describe('useCopilotChat', () => {
   });
 
   it('setInput updates input state', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.setInput('hello'); });
     expect(result.current.state.input).toBe('hello');
   });
 
   it('setFilter updates filter state', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.setFilter('search term'); });
     expect(result.current.state.filter).toBe('search term');
   });
 
   it('resetConversation clears conversation state', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.setInput('something'); });
     act(() => { result.current.actions.resetConversation(); });
     expect(result.current.state.input).toBe('');
@@ -69,27 +74,27 @@ describe('useCopilotChat', () => {
   });
 
   it('addAttachment adds to attachments list', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({ id: 'att1', name: 'file.pdf' }); });
     expect(result.current.state.attachments).toHaveLength(1);
   });
 
   it('addAttachment ignores duplicates', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({ id: 'att1' }); });
     act(() => { result.current.actions.addAttachment({ id: 'att1' }); });
     expect(result.current.state.attachments).toHaveLength(1);
   });
 
   it('addAttachment ignores items without id', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({}); });
     act(() => { result.current.actions.addAttachment(null); });
     expect(result.current.state.attachments).toHaveLength(0);
   });
 
   it('removeAttachment removes and tracks dismissed', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({ id: 'att1' }); });
     act(() => { result.current.actions.removeAttachment('att1'); });
     expect(result.current.state.attachments).toHaveLength(0);
@@ -97,7 +102,7 @@ describe('useCopilotChat', () => {
   });
 
   it('clearAttachments empties both arrays', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({ id: 'a1' }); });
     act(() => { result.current.actions.removeAttachment('a1'); });
     act(() => { result.current.actions.clearAttachments(); });
@@ -106,7 +111,7 @@ describe('useCopilotChat', () => {
   });
 
   it('removeAttachment does not duplicate dismissed id', () => {
-    const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+    const { result } = renderHook(() => useCopilotChat());
     act(() => { result.current.actions.addAttachment({ id: 'x' }); });
     act(() => { result.current.actions.removeAttachment('x'); });
     // Add and remove again
@@ -122,7 +127,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('loadBootstrap', () => {
     it('loads assistants and labels into state', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => { await result.current.actions.loadBootstrap(); });
       expect(result.current.state.assistants).toHaveLength(1);
       expect(result.current.state.assistants[0].assistant_id).toBe('A1');
@@ -130,7 +135,7 @@ describe('useCopilotChat', () => {
     });
 
     it('sets loading state during fetch', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       // Before bootstrap loading is false
       expect(result.current.state.isLoadingAssistants).toBe(false);
       await act(async () => { await result.current.actions.loadBootstrap(); });
@@ -138,18 +143,23 @@ describe('useCopilotChat', () => {
       expect(result.current.state.isLoadingAssistants).toBe(false);
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It used to prove that a null
+      // token STOPS the call, which was the `!token` gate: under the cookie scheme no
+      // token is ever held, so that gate was permanently true and this action — like
+      // the other eleven — never ran. The Copilot panel was simply inert, silently.
+      it('still calls the API when the client holds no token', async () => {
       const { getAssistants } = await import('../copilotApi.js');
       getAssistants.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => { await result.current.actions.loadBootstrap(); });
-      expect(getAssistants).not.toHaveBeenCalled();
-    });
+      expect(getAssistants).toHaveBeenCalled();
+      });
 
     it('sets error on failure', async () => {
       const { getAssistants } = await import('../copilotApi.js');
       getAssistants.mockRejectedValueOnce(new Error('Network fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => { await result.current.actions.loadBootstrap(); });
       expect(result.current.state.error).toBe('Network fail');
     });
@@ -164,7 +174,7 @@ describe('useCopilotChat', () => {
       getConversations.mockResolvedValueOnce([
         { conversation_id: 'c1', title: 'Chat 1' },
       ]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       // First set some input to verify it gets reset
       act(() => { result.current.actions.setInput('hello'); });
       await act(async () => {
@@ -176,7 +186,7 @@ describe('useCopilotChat', () => {
     });
 
     it('clears conversations list on assistant switch', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -192,7 +202,7 @@ describe('useCopilotChat', () => {
     it('does not load conversations when assistant is null', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant(null);
       });
@@ -202,7 +212,7 @@ describe('useCopilotChat', () => {
     it('sets error when getConversations fails', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockRejectedValueOnce(new Error('Conv fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -220,7 +230,7 @@ describe('useCopilotChat', () => {
         { id: 'm1', role: 'user', text: 'Hello' },
         { id: 'm2', role: 'copilot', text: 'Hi' },
       ]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectConversation({ conversation_id: 'c1' });
       });
@@ -231,7 +241,7 @@ describe('useCopilotChat', () => {
     it('does nothing when conv is null', async () => {
       const { getConversationMessages } = await import('../copilotApi.js');
       getConversationMessages.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectConversation(null);
       });
@@ -241,7 +251,7 @@ describe('useCopilotChat', () => {
     it('sets error when message loading fails', async () => {
       const { getConversationMessages } = await import('../copilotApi.js');
       getConversationMessages.mockRejectedValueOnce(new Error('Msg fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectConversation({ conversation_id: 'c1' });
       });
@@ -254,7 +264,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('sendMessage', () => {
     it('adds user and copilot messages', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       // Need a selected assistant
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
@@ -271,7 +281,7 @@ describe('useCopilotChat', () => {
     });
 
     it('sets conversationId from response', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -284,7 +294,7 @@ describe('useCopilotChat', () => {
     it('does nothing for empty/whitespace message', async () => {
       const { sendQuestion } = await import('../copilotApi.js');
       sendQuestion.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -297,7 +307,7 @@ describe('useCopilotChat', () => {
     it('does nothing when no assistant is selected', async () => {
       const { sendQuestion } = await import('../copilotApi.js');
       sendQuestion.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.sendMessage('Hello');
       });
@@ -307,7 +317,7 @@ describe('useCopilotChat', () => {
     it('adds error message on sendQuestion failure', async () => {
       const { sendQuestion } = await import('../copilotApi.js');
       sendQuestion.mockRejectedValueOnce(new Error('Send fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -322,7 +332,7 @@ describe('useCopilotChat', () => {
     });
 
     it('clears input after sending', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -339,7 +349,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('syncAttachments', () => {
     it('keeps existing chips whose id is in desired set', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       // Manually add attachments with ids matching what buildDesiredAttachments produces
       act(() => {
         result.current.actions.addAttachment({ id: 'so:r1', kind: 'record', windowSpec: 'so' });
@@ -362,7 +372,7 @@ describe('useCopilotChat', () => {
     });
 
     it('does not re-add dismissed attachments', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => { result.current.actions.addAttachment({ id: 'a1' }); });
       act(() => { result.current.actions.removeAttachment('a1'); });
       // a1 is now dismissed
@@ -373,7 +383,7 @@ describe('useCopilotChat', () => {
     });
 
     it('prunes stale dismissals', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => { result.current.actions.addAttachment({ id: 'a1' }); });
       act(() => { result.current.actions.removeAttachment('a1'); });
       expect(result.current.state.dismissedIds).toContain('a1');
@@ -383,7 +393,7 @@ describe('useCopilotChat', () => {
     });
 
     it('is a no-op when current is null (non-window route)', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => { result.current.actions.addAttachment({ id: 'a1' }); });
       act(() => { result.current.actions.syncAttachments(null); });
       // Chips preserved
@@ -396,7 +406,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('attachCurrentWindow', () => {
     it('adds listView attachment when no records selected', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.attachCurrentWindow({
           spec: 'sales-order',
@@ -410,7 +420,7 @@ describe('useCopilotChat', () => {
     });
 
     it('adds record attachments for each selected record', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.attachCurrentWindow({
           spec: 'sales-order',
@@ -427,7 +437,7 @@ describe('useCopilotChat', () => {
     });
 
     it('returns empty when spec is missing', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.attachCurrentWindow({ tabTitle: 'X' });
       });
@@ -440,7 +450,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('startNewConversation', () => {
     it('clears messages, conversationId, input, files, error', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => { result.current.actions.setInput('test'); });
       act(() => { result.current.actions.startNewConversation(); });
       expect(result.current.state.messages).toEqual([]);
@@ -461,7 +471,7 @@ describe('useCopilotChat', () => {
         { conversation_id: 'c1', title: 'Chat 1' },
         { conversation_id: 'c2', title: 'Chat 2' },
       ]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -476,7 +486,7 @@ describe('useCopilotChat', () => {
       const { getConversationMessages, getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Chat 1' }]);
       getConversationMessages.mockResolvedValueOnce([{ id: 'm1', role: 'user', text: 'Hi' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -498,7 +508,7 @@ describe('useCopilotChat', () => {
     it('moves conversation from archived back to active', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Chat 1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -523,7 +533,7 @@ describe('useCopilotChat', () => {
     it('removes conversation from both lists', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -533,14 +543,18 @@ describe('useCopilotChat', () => {
       expect(result.current.state.conversations.find((c) => c.conversation_id === 'c1')).toBeUndefined();
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It proved that a null token
+    // STOPS the call, which is the `!token` gate: under the cookie scheme no token
+    // is ever held, so the gate was permanently true and this action never ran.
+    it('still calls the API when the client holds no token', async () => {
       const { permanentDeleteConversation } = await import('../copilotApi.js');
       permanentDeleteConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.permanentDelete('c1');
       });
-      expect(permanentDeleteConversation).not.toHaveBeenCalled();
+      expect(permanentDeleteConversation).toHaveBeenCalled();
     });
   });
 
@@ -551,7 +565,7 @@ describe('useCopilotChat', () => {
     it('updates conversation title in state', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Old' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -565,7 +579,7 @@ describe('useCopilotChat', () => {
     it('does nothing for empty title', async () => {
       const { renameConversation } = await import('../copilotApi.js');
       renameConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.renameConversation('c1', '   ');
       });
@@ -578,7 +592,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('uploadFile', () => {
     it('adds file and fileId to state', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       const mockFile = new File(['data'], 'test.txt');
       await act(async () => {
         await result.current.actions.uploadFile(mockFile);
@@ -590,7 +604,7 @@ describe('useCopilotChat', () => {
     it('sets error on upload failure', async () => {
       const { uploadFile: mockUpload } = await import('../copilotApi.js');
       mockUpload.mockRejectedValueOnce(new Error('Upload fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(new File(['data'], 'test.txt'));
       });
@@ -603,7 +617,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('removeFile', () => {
     it('removes file at index', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(new File(['a'], 'a.txt'));
       });
@@ -624,7 +638,7 @@ describe('useCopilotChat', () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([]); // selectAssistant call
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -639,7 +653,7 @@ describe('useCopilotChat', () => {
     it('loads archived conversations for selected assistant', async () => {
       const { getArchivedConversations } = await import('../copilotApi.js');
       getArchivedConversations.mockResolvedValueOnce([{ conversation_id: 'a1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -658,7 +672,7 @@ describe('useCopilotChat', () => {
       const { getConversations, generateTitle } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: '' }]);
       generateTitle.mockResolvedValueOnce({ title: 'Generated Title' });
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -673,7 +687,7 @@ describe('useCopilotChat', () => {
       const { getConversations, generateTitle } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: '' }]);
       generateTitle.mockResolvedValueOnce({ generated_title: 'Fallback Title' });
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -684,20 +698,24 @@ describe('useCopilotChat', () => {
       expect(conv.title).toBe('Fallback Title');
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It proved that a null token
+    // STOPS the call, which is the `!token` gate: under the cookie scheme no token
+    // is ever held, so the gate was permanently true and this action never ran.
+    it('still calls the API when the client holds no token', async () => {
       const { generateTitle } = await import('../copilotApi.js');
       generateTitle.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.generateTitle('c1');
       });
-      expect(generateTitle).not.toHaveBeenCalled();
+      expect(generateTitle).toHaveBeenCalled();
     });
 
     it('does nothing when id is falsy', async () => {
       const { generateTitle } = await import('../copilotApi.js');
       generateTitle.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.generateTitle(null);
       });
@@ -708,7 +726,7 @@ describe('useCopilotChat', () => {
       const { getConversations, generateTitle } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: '' }]);
       generateTitle.mockRejectedValueOnce(new Error('Title gen fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -726,7 +744,7 @@ describe('useCopilotChat', () => {
     it('sends message with uploaded file ids', async () => {
       const { sendQuestion } = await import('../copilotApi.js');
       sendQuestion.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -741,11 +759,11 @@ describe('useCopilotChat', () => {
       });
       expect(sendQuestion).toHaveBeenCalled();
       const callArgs = sendQuestion.mock.calls[0];
-      expect(callArgs[1].file).toEqual(['F1']);
+      expect(callArgs[0].file).toEqual(['F1']);
     });
 
     it('clears files after successful send', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -764,7 +782,7 @@ describe('useCopilotChat', () => {
       const { sendQuestion } = await import('../copilotApi.js');
       let resolveSend;
       sendQuestion.mockImplementationOnce(() => new Promise(r => { resolveSend = r; }));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -792,7 +810,7 @@ describe('useCopilotChat', () => {
     it('prepends context prefix when attachments are present', async () => {
       const { sendQuestion } = await import('../copilotApi.js');
       sendQuestion.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -807,7 +825,7 @@ describe('useCopilotChat', () => {
         await result.current.actions.sendMessage('Analyze this');
       });
       expect(sendQuestion).toHaveBeenCalled();
-      const wireQuestion = sendQuestion.mock.calls[0][1].question;
+      const wireQuestion = sendQuestion.mock.calls[0][0].question;
       expect(wireQuestion).toContain('[Context]');
       expect(wireQuestion).toContain('sales-order');
       expect(wireQuestion).toContain('Analyze this');
@@ -825,7 +843,7 @@ describe('useCopilotChat', () => {
         { conversation_id: 'c2', title: 'Chat 2' },
       ]);
       getConversationMessages.mockResolvedValueOnce([{ id: 'm1', role: 'user', text: 'Hi' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -849,7 +867,7 @@ describe('useCopilotChat', () => {
       const { deleteConversation: apiDelete, getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1' }]);
       apiDelete.mockRejectedValueOnce(new Error('Delete failed'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -862,7 +880,7 @@ describe('useCopilotChat', () => {
     it('does nothing when id is falsy', async () => {
       const { deleteConversation: apiDelete } = await import('../copilotApi.js');
       apiDelete.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.deleteConversation(null);
       });
@@ -877,7 +895,7 @@ describe('useCopilotChat', () => {
     it('removes from archived list', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Chat 1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -896,7 +914,7 @@ describe('useCopilotChat', () => {
     it('sets error when permanent delete fails', async () => {
       const { permanentDeleteConversation } = await import('../copilotApi.js');
       permanentDeleteConversation.mockRejectedValueOnce(new Error('Perm delete fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.permanentDelete('c1');
       });
@@ -906,7 +924,7 @@ describe('useCopilotChat', () => {
     it('does nothing when id is falsy', async () => {
       const { permanentDeleteConversation } = await import('../copilotApi.js');
       permanentDeleteConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.permanentDelete('');
       });
@@ -921,7 +939,7 @@ describe('useCopilotChat', () => {
     it('sets error when restore API fails', async () => {
       const { restoreConversation: apiRestore, getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1' }]);
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -935,20 +953,24 @@ describe('useCopilotChat', () => {
       expect(result.current.state.error).toBe('Restore failed');
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It proved that a null token
+    // STOPS the call, which is the `!token` gate: under the cookie scheme no token
+    // is ever held, so the gate was permanently true and this action never ran.
+    it('still calls the API when the client holds no token', async () => {
       const { restoreConversation: apiRestore } = await import('../copilotApi.js');
       apiRestore.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.restoreConversation('c1');
       });
-      expect(apiRestore).not.toHaveBeenCalled();
+      expect(apiRestore).toHaveBeenCalled();
     });
 
     it('does nothing when id is falsy', async () => {
       const { restoreConversation: apiRestore } = await import('../copilotApi.js');
       apiRestore.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.restoreConversation(null);
       });
@@ -964,7 +986,7 @@ describe('useCopilotChat', () => {
       const { renameConversation, getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Old' }]);
       renameConversation.mockRejectedValueOnce(new Error('Rename fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -974,20 +996,24 @@ describe('useCopilotChat', () => {
       expect(result.current.state.error).toBe('Rename fail');
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It proved that a null token
+    // STOPS the call, which is the `!token` gate: under the cookie scheme no token
+    // is ever held, so the gate was permanently true and this action never ran.
+    it('still calls the API when the client holds no token', async () => {
       const { renameConversation } = await import('../copilotApi.js');
       renameConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.renameConversation('c1', 'Title');
       });
-      expect(renameConversation).not.toHaveBeenCalled();
+      expect(renameConversation).toHaveBeenCalled();
     });
 
     it('does nothing when id is null', async () => {
       const { renameConversation } = await import('../copilotApi.js');
       renameConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.renameConversation(null, 'Title');
       });
@@ -998,14 +1024,14 @@ describe('useCopilotChat', () => {
       const { renameConversation, getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([{ conversation_id: 'c1', title: 'Old' }]);
       renameConversation.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
       await act(async () => {
         await result.current.actions.renameConversation('c1', '  Trimmed Title  ');
       });
-      expect(renameConversation).toHaveBeenCalledWith('tk', 'c1', 'Trimmed Title');
+      expect(renameConversation).toHaveBeenCalledWith('c1', 'Trimmed Title');
       const conv = result.current.state.conversations.find(c => c.conversation_id === 'c1');
       expect(conv.title).toBe('Trimmed Title');
     });
@@ -1016,7 +1042,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('syncAttachments — additional', () => {
     it('adds new items from desired set when not already present', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.syncAttachments({
           spec: 'so',
@@ -1031,7 +1057,7 @@ describe('useCopilotChat', () => {
     });
 
     it('refreshes kept items with latest data', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.addAttachment({ id: 'so:r1', kind: 'record', windowSpec: 'so', recordData: { old: true } });
       });
@@ -1049,7 +1075,7 @@ describe('useCopilotChat', () => {
     });
 
     it('handles sync with empty selected records (list view)', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.addAttachment({ id: 'so:r1', kind: 'record', windowSpec: 'so' });
       });
@@ -1066,7 +1092,7 @@ describe('useCopilotChat', () => {
     });
 
     it('handles undefined current (non-window route preserves chips)', () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       act(() => {
         result.current.actions.addAttachment({ id: 'a1', kind: 'record' });
       });
@@ -1085,7 +1111,7 @@ describe('useCopilotChat', () => {
     it('does nothing when no assistant is selected', async () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.loadConversations();
       });
@@ -1096,7 +1122,7 @@ describe('useCopilotChat', () => {
       const { getConversations } = await import('../copilotApi.js');
       getConversations.mockResolvedValueOnce([]); // for selectAssistant
       getConversations.mockRejectedValueOnce(new Error('Load conv fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -1111,7 +1137,7 @@ describe('useCopilotChat', () => {
     it('does nothing when no assistant is selected', async () => {
       const { getArchivedConversations } = await import('../copilotApi.js');
       getArchivedConversations.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.loadArchivedConversations();
       });
@@ -1121,7 +1147,7 @@ describe('useCopilotChat', () => {
     it('sets error when loadArchivedConversations fails', async () => {
       const { getArchivedConversations } = await import('../copilotApi.js');
       getArchivedConversations.mockRejectedValueOnce(new Error('Load archived fail'));
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.selectAssistant({ app_id: 'APP1' });
       });
@@ -1139,27 +1165,31 @@ describe('useCopilotChat', () => {
     it('does nothing when file is null', async () => {
       const { uploadFile: mockUpload } = await import('../copilotApi.js');
       mockUpload.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(null);
       });
       expect(mockUpload).not.toHaveBeenCalled();
     });
 
-    it('does nothing when token is null', async () => {
+    // ETP-4576 — the inverse of what this asserted. It proved that a null token
+    // STOPS the call, which is the `!token` gate: under the cookie scheme no token
+    // is ever held, so the gate was permanently true and this action never ran.
+    it('still calls the API when the client holds no token', async () => {
       const { uploadFile: mockUpload } = await import('../copilotApi.js');
       mockUpload.mockClear();
-      const { result } = renderHook(() => useCopilotChat({ token: null }));
+      declareCookieSession();
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(new File(['d'], 'f.txt'));
       });
-      expect(mockUpload).not.toHaveBeenCalled();
+      expect(mockUpload).toHaveBeenCalled();
     });
 
     it('handles upload response with fileId key', async () => {
       const { uploadFile: mockUpload } = await import('../copilotApi.js');
       mockUpload.mockResolvedValueOnce({ fileId: 'FILE-UUID-1' });
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(new File(['data'], 'test.txt'));
       });
@@ -1172,7 +1202,7 @@ describe('useCopilotChat', () => {
   // -----------------------------------------------------------------
   describe('removeFile — additional', () => {
     it('removes file from middle of list', async () => {
-      const { result } = renderHook(() => useCopilotChat({ token: 'tk' }));
+      const { result } = renderHook(() => useCopilotChat());
       await act(async () => {
         await result.current.actions.uploadFile(new File(['a'], 'a.txt'));
       });

@@ -11,9 +11,13 @@ vi.mock('../../copilotApi.js', () => ({
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useOcrExtraction } from '../useOcrExtraction.js';
 import { uploadFile, executeTool, extractAnswerText } from '../../copilotApi.js';
+import { declareBearerSession, declareCookieSession } from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 const defaultParams = {
-  token: 'test-token',
   toolName: 'SimpleOcrTool',
   question: 'Extract invoice data',
 };
@@ -44,20 +48,22 @@ describe('useOcrExtraction', () => {
     expect(error.message).toBe('No file provided');
   });
 
-  it('extract rejects when token is missing', async () => {
-    const { result } = renderHook(() =>
-      useOcrExtraction({ ...defaultParams, token: '' }),
-    );
+  // ETP-4576 — the inverse of what this asserted. It proved that an empty token
+  // makes `extract` throw 'Missing auth token'. Under the cookie scheme the client
+  // never holds a token, so that throw fired on every OCR extraction: the feature
+  // was unreachable, and the error blamed the caller for a scheme change.
+  it('extracts when the client holds no token', async () => {
+    declareCookieSession();
+    uploadFile.mockResolvedValue({ file: '/tmp/cookie.pdf' });
+    executeTool.mockResolvedValue({ answer: '{"total":1}' });
+    const { result } = renderHook(() => useOcrExtraction(defaultParams));
     const file = new File(['content'], 'invoice.pdf');
-    let error;
+    let data;
     await act(async () => {
-      try {
-        await result.current.extract(file);
-      } catch (e) {
-        error = e;
-      }
+      data = await result.current.extract(file);
     });
-    expect(error.message).toBe('Missing auth token');
+    expect(uploadFile).toHaveBeenCalled();
+    expect(data).toEqual({ total: 1 });
   });
 
   it('transitions through uploading -> extracting -> done on success', async () => {
@@ -129,7 +135,7 @@ describe('useOcrExtraction', () => {
       await result.current.extract(file);
     });
 
-    expect(executeTool).toHaveBeenCalledWith('test-token', expect.objectContaining({
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
       params: expect.objectContaining({ path: '/tmp/alt.pdf' }),
     }));
   });
@@ -146,7 +152,7 @@ describe('useOcrExtraction', () => {
       await result.current.extract(file);
     });
 
-    expect(executeTool).toHaveBeenCalledWith('test-token', expect.objectContaining({
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
       params: expect.objectContaining({ path: '/tmp/dynamic.pdf' }),
     }));
   });
@@ -208,7 +214,7 @@ describe('useOcrExtraction', () => {
       await result.current.extract(file);
     });
 
-    expect(executeTool).toHaveBeenCalledWith('test-token', expect.objectContaining({
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
       params: expect.objectContaining({ structured_output_schema: schema }),
     }));
   });
@@ -227,7 +233,7 @@ describe('useOcrExtraction', () => {
       await result.current.extract(file);
     });
 
-    expect(executeTool).toHaveBeenCalledWith('test-token', expect.objectContaining({
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
       params: expect.objectContaining({ structured_output: 'InvoiceSchema' }),
     }));
   });

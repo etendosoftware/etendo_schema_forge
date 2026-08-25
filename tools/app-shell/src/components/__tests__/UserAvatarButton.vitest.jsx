@@ -17,6 +17,7 @@ let localeOverrides = {};
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     username: 'x',
+    isAuthenticated: true,
     logout: logoutMock,
     selectedRole: null,
     selectedOrg: null,
@@ -69,8 +70,7 @@ describe('UserAvatarButton', () => {
     localeOverrides = {};
   });
 
-  it('shows the Change Password menu item when a platform token exists and the auth method is password', () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
+  it('shows the Change Password menu item when the auth method is password', () => {
     localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);
@@ -79,15 +79,12 @@ describe('UserAvatarButton', () => {
   });
 
   it('shows the Change Password menu item when the auth method key is absent (legacy sessions)', () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
-
     render(<UserAvatarButton />);
 
     expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
   });
 
   it('hides the Change Password menu item for SSO sessions', () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
     localStorage.setItem('sf_platform_auth_method', 'sso');
 
     render(<UserAvatarButton />);
@@ -95,7 +92,19 @@ describe('UserAvatarButton', () => {
     expect(screen.queryByTestId('menu-change-password')).not.toBeInTheDocument();
   });
 
-  it('hides the Change Password menu item when no platform token exists', () => {
+  // ETP-4576 — the inverse of what this asserted. It required `sf_platform_token`
+  // in localStorage, a key the cookie migration stopped writing, so the menu item
+  // was hidden for every user and this test passed by describing the bug.
+  it('shows the Change Password menu item with no client-held token', () => {
+    localStorage.setItem('sf_platform_auth_method', 'password');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
+  });
+
+  it('hides the Change Password menu item when the user is not authenticated', () => {
+    authOverrides = { isAuthenticated: false };
     localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);
@@ -105,7 +114,6 @@ describe('UserAvatarButton', () => {
 
   it('opens the change password dialog when the menu item is selected', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);
@@ -117,7 +125,6 @@ describe('UserAvatarButton', () => {
 
   it('sets both one-shot onboarding flags and logs out after a successful password change', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);

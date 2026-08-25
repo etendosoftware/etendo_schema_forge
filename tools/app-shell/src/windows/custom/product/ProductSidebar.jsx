@@ -523,7 +523,7 @@ function StockChart({
 }
 
 
-export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
+export default function ProductSidebar({ recordId, data, apiBaseUrl }) {
   const ui = useUI();
   const [stockRows, setStockRows] = useState(null);
   const [transactions, setTransactions] = useState(null);
@@ -532,7 +532,10 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
 
   useEffect(() => {
-    if (!recordId || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!recordId) return;
     const headers = readCredentialHeaders();
 
     fetch(`${apiBaseUrl}/stock?parentId=${recordId}&_startRow=0&_endRow=200`, { headers })
@@ -544,7 +547,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
       .then(r => (r.ok ? r.json() : null))
       .then(data => setTransactions(data?.response?.data ?? []))
       .catch(() => setTransactions([]));
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, apiBaseUrl]);
 
   const onHand = stockRows?.reduce((s, r) => s + (Number(r.quantityOnHand) || 0), 0) ?? null;
 

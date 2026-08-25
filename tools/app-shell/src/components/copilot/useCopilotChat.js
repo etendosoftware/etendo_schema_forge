@@ -307,10 +307,14 @@ function formatTimestamp(date = new Date()) {
 /**
  * useCopilotChat — centralized state management for the full copilot chat UI.
  *
- * @param {{ token: string|null }} options
  * @returns {{ state: object, actions: object }}
  */
-export function useCopilotChat({ token }) {
+// ETP-4576 — no `token` option. Every request below takes its credential from the
+// active session scheme, and the `!token` gates this hook was built around are
+// gone: under the cookie scheme the client holds no token, so all twelve of them
+// were permanently true and the whole Copilot panel did nothing — no assistants,
+// no conversations, no send — without a single error anywhere.
+export function useCopilotChat() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // ------------------------------------------------------------------
@@ -321,15 +325,13 @@ export function useCopilotChat({ token }) {
    * Fetch assistants and labels in parallel and populate the store.
    */
   const loadBootstrap = useCallback(async () => {
-    if (!token) return;
-
     dispatch({ type: SET_LOADING, key: 'isLoadingAssistants', value: true });
     dispatch({ type: SET_ERROR, payload: '' });
 
     try {
       const [assistants, labels] = await Promise.all([
-        getAssistants(token),
-        getLabels(token),
+        getAssistants(),
+        getLabels(),
       ]);
       dispatch({ type: SET_ASSISTANTS, payload: assistants });
       dispatch({ type: SET_LABELS, payload: labels });
@@ -338,7 +340,7 @@ export function useCopilotChat({ token }) {
     } finally {
       dispatch({ type: SET_LOADING, key: 'isLoadingAssistants', value: false });
     }
-  }, [token]);
+  }, []);
 
   // ------------------------------------------------------------------
   // Conversations
@@ -348,35 +350,35 @@ export function useCopilotChat({ token }) {
    * Load active conversations for the currently selected assistant.
    */
   const loadConversations = useCallback(async () => {
-    if (!token || !state.selectedAssistant) return;
+    if (!state.selectedAssistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: true });
     try {
-      const convs = await getConversations(token, state.selectedAssistant.app_id);
+      const convs = await getConversations(state.selectedAssistant.app_id);
       dispatch({ type: SET_CONVERSATIONS, payload: convs });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to load conversations' });
     } finally {
       dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: false });
     }
-  }, [token, state.selectedAssistant]);
+  }, [state.selectedAssistant]);
 
   /**
    * Load archived conversations for the currently selected assistant.
    */
   const loadArchivedConversations = useCallback(async () => {
-    if (!token || !state.selectedAssistant) return;
+    if (!state.selectedAssistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingArchivedConversations', value: true });
     try {
-      const convs = await getArchivedConversations(token, state.selectedAssistant.app_id);
+      const convs = await getArchivedConversations(state.selectedAssistant.app_id);
       dispatch({ type: SET_ARCHIVED, payload: convs });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to load archived conversations' });
     } finally {
       dispatch({ type: SET_LOADING, key: 'isLoadingArchivedConversations', value: false });
     }
-  }, [token, state.selectedAssistant]);
+  }, [state.selectedAssistant]);
 
   // ------------------------------------------------------------------
   // Assistant selection
@@ -389,18 +391,18 @@ export function useCopilotChat({ token }) {
    */
   const selectAssistant = useCallback(async (assistant) => {
     dispatch({ type: SET_SELECTED_ASSISTANT, payload: assistant });
-    if (!token || !assistant) return;
+    if (!assistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: true });
     try {
-      const convs = await getConversations(token, assistant.app_id);
+      const convs = await getConversations(assistant.app_id);
       dispatch({ type: SET_CONVERSATIONS, payload: convs });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to load conversations' });
     } finally {
       dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: false });
     }
-  }, [token]);
+  }, []);
 
   // ------------------------------------------------------------------
   // Message selection & navigation
@@ -412,21 +414,21 @@ export function useCopilotChat({ token }) {
    * @param {object} conv - Conversation object (must have conversation_id)
    */
   const selectConversation = useCallback(async (conv) => {
-    if (!token || !conv?.conversation_id) return;
+    if (!conv?.conversation_id) return;
 
     dispatch({ type: SET_CONVERSATION_ID, payload: conv.conversation_id });
     dispatch({ type: SET_LOADING, key: 'isLoadingMessages', value: true });
     dispatch({ type: SET_ERROR, payload: '' });
 
     try {
-      const messages = await getConversationMessages(token, conv.conversation_id);
+      const messages = await getConversationMessages(conv.conversation_id);
       dispatch({ type: SET_MESSAGES, payload: messages });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to load messages' });
     } finally {
       dispatch({ type: SET_LOADING, key: 'isLoadingMessages', value: false });
     }
-  }, [token]);
+  }, []);
 
   /**
    * Clear the active conversation so the user can start fresh.
@@ -447,7 +449,7 @@ export function useCopilotChat({ token }) {
    * @param {string} question - Text to send
    */
   const sendMessage = useCallback(async (question) => {
-    if (!question?.trim() || !state.selectedAssistant || !token || state.isSending) return;
+    if (!question?.trim() || !state.selectedAssistant || state.isSending) return;
 
     dispatch({ type: SET_ERROR, payload: '' });
     dispatch({ type: SET_LOADING, key: 'isSending', value: true });
@@ -470,7 +472,7 @@ export function useCopilotChat({ token }) {
       : question.trim();
 
     try {
-      const response = await sendQuestion(token, {
+      const response = await sendQuestion({
         app_id: state.selectedAssistant.app_id,
         question: wireQuestion,
         conversation_id: state.conversationId || undefined,
@@ -510,7 +512,7 @@ export function useCopilotChat({ token }) {
 
       // Auto-generate a title after the first reply in a new conversation.
       if (isFirstReply) {
-        generateTitle(token, newConversationId)
+        generateTitle(newConversationId)
           .then((res) => {
             const title = res?.title || res?.generated_title;
             if (title) {
@@ -533,7 +535,7 @@ export function useCopilotChat({ token }) {
     } finally {
       dispatch({ type: SET_LOADING, key: 'isSending', value: false });
     }
-  }, [state.selectedAssistant, state.conversationId, state.fileIds, state.files, state.isSending, state.attachments, token]);
+  }, [state.selectedAssistant, state.conversationId, state.fileIds, state.files, state.isSending, state.attachments]);
 
   // ------------------------------------------------------------------
   // Conversation management
@@ -545,9 +547,9 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const deleteConversationAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
-      await apiDeleteConversation(token, id);
+      await apiDeleteConversation(id);
       // Move from active to archived list.
       const archived = state.conversations.find((c) => c.conversation_id === id);
       dispatch({ type: REMOVE_CONVERSATION, id });
@@ -561,7 +563,7 @@ export function useCopilotChat({ token }) {
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to delete conversation.' });
     }
-  }, [token, state.conversations, state.archivedConversations, state.conversationId]);
+  }, [state.conversations, state.archivedConversations, state.conversationId]);
 
   /**
    * Restore an archived conversation back to the active list.
@@ -569,9 +571,9 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const restoreConversationAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
-      await apiRestoreConversation(token, id);
+      await apiRestoreConversation(id);
       const conv = state.archivedConversations.find((c) => c.conversation_id === id);
       dispatch({
         type: SET_ARCHIVED,
@@ -583,7 +585,7 @@ export function useCopilotChat({ token }) {
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to restore conversation.' });
     }
-  }, [token, state.archivedConversations, state.conversations]);
+  }, [state.archivedConversations, state.conversations]);
 
   /**
    * Permanently delete an archived conversation (irreversible).
@@ -591,14 +593,14 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const permanentDelete = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
-      await apiPermanentDeleteConversation(token, id);
+      await apiPermanentDeleteConversation(id);
       dispatch({ type: REMOVE_CONVERSATION, id });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to permanently delete conversation.' });
     }
-  }, [token]);
+  }, []);
 
   /**
    * Rename a conversation and update it in the local list.
@@ -607,14 +609,14 @@ export function useCopilotChat({ token }) {
    * @param {string} title - New title
    */
   const renameConversationAction = useCallback(async (id, title) => {
-    if (!token || !id || !title?.trim()) return;
+    if (!id || !title?.trim()) return;
     try {
-      await apiRenameConversation(token, id, title.trim());
+      await apiRenameConversation(id, title.trim());
       dispatch({ type: UPDATE_CONVERSATION, id, updates: { title: title.trim() } });
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to rename conversation.' });
     }
-  }, [token]);
+  }, []);
 
   /**
    * Auto-generate a title for a conversation and update it in the local list.
@@ -622,9 +624,9 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const generateTitleAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
-      const response = await generateTitle(token, id);
+      const response = await generateTitle(id);
       const title = response?.title || response?.generated_title;
       if (title) {
         dispatch({ type: UPDATE_CONVERSATION, id, updates: { title } });
@@ -632,7 +634,7 @@ export function useCopilotChat({ token }) {
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to generate title.' });
     }
-  }, [token]);
+  }, []);
 
   // ------------------------------------------------------------------
   // File management
@@ -644,9 +646,9 @@ export function useCopilotChat({ token }) {
    * @param {File} file
    */
   const uploadFileAction = useCallback(async (file) => {
-    if (!token || !file) return;
+    if (!file) return;
     try {
-      const data = await uploadFile(token, file);
+      const data = await uploadFile(file);
       const uploadId =
         data?.fileId ||
         data?.id ||
@@ -660,7 +662,7 @@ export function useCopilotChat({ token }) {
     } catch (err) {
       dispatch({ type: SET_ERROR, payload: err.message || 'Failed to upload file.' });
     }
-  }, [token, state.files, state.fileIds]);
+  }, [state.files, state.fileIds]);
 
   /**
    * Remove a pending file attachment by index.

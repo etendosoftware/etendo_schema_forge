@@ -86,7 +86,6 @@ export default function OcrReviewModal({
   resolving,
   contactsBase,
   apiBaseUrl,
-  token,
   onSubmit,
   onCancel,
 }) {
@@ -165,7 +164,6 @@ export default function OcrReviewModal({
                   kind={field.kind}
                   field={{ ...field, extracted }}
                   value={entry.value}
-                  token={token}
                   apiBaseUrl={apiBaseUrl}
                   contactsBase={contactsBase}
                   createComponent={field.createComponent ? CREATE_COMPONENTS[field.createComponent] : null}

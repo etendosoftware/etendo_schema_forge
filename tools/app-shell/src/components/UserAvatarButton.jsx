@@ -14,7 +14,6 @@ import {
 import { ChangePasswordDialog } from './ChangePasswordDialog.jsx';
 import { useLogout } from '@/auth/useLogout.js';
 
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const PLATFORM_AUTH_METHOD_KEY = 'sf_platform_auth_method';
 
 const LOCALES = [
@@ -28,20 +27,27 @@ const LOCALES = [
  * - expanded=true: full row with user icon + username + chevron (for sidebar footer).
  */
 export function UserAvatarButton({ expanded = false }) {
-  const { username, selectedRole, selectedOrg } = useAuth();
+  const { username, selectedRole, selectedOrg, isAuthenticated } = useAuth();
   const logout = useLogout();
   const ui = useUI();
   const navigate = useNavigate();
   const { locale, setLocale } = useLocaleSwitch();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
-  // Change Password targets the platform account, so it's only offered when a
-  // platform token is present (it provides the credential the endpoint rotates).
-  // SSO sessions have no local password to change — the backend rejects them —
-  // so the option is hidden when the session was obtained via an SSO provider.
+  // Change Password targets the platform account, so it's only offered to a
+  // signed-in user. SSO sessions have no local password to change — the backend
+  // rejects them — so the option is hidden when the session came from a provider.
+  //
+  // ETP-4576 — this used to require `sf_platform_token` in localStorage as proof
+  // of a platform session. The cookie migration stopped writing that key, so the
+  // condition was permanently false and the menu item disappeared for everyone.
+  // `sf_platform_auth_method` is the replacement signal and IS written at login;
+  // an absent value means "not known to be SSO", which is why it reads `!== 'sso'`
+  // rather than `=== 'password'` — sessions opened before the key existed keep
+  // the option instead of silently losing it.
   const canChangePassword =
+    isAuthenticated &&
     typeof window !== 'undefined' &&
-    !!window.localStorage?.getItem(PLATFORM_TOKEN_KEY) &&
     window.localStorage?.getItem(PLATFORM_AUTH_METHOD_KEY) !== 'sso';
 
   // After a password change we log out; flag onboarding to land on Sign In

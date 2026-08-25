@@ -13,6 +13,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
@@ -81,10 +82,11 @@ export default function GoodsReceiptWindow(props) {
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — one header bag drives this component's reads and its writes, so
+  // it takes the write builder: same shape as the `{ Authorization, Content-Type }`
+  // it used to hand-build, with the session's proof in place of a token the
+  // client no longer holds.
+  const headers = useMemo(() => writeHeaders(), []);
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,

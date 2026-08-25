@@ -3,9 +3,13 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import './not-posted-documents.css';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
-function buildHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+// ETP-4576 — this hand-built `{ Authorization: Bearer <token>, Content-Type }`.
+// `writeHeaders()` is that exact shape with the session's proof, and it is the
+// write builder because this page's header bag drives its posting actions too.
+function buildHeaders() {
+  return writeHeaders();
 }
 
 function formatDate(raw) {
@@ -52,7 +56,7 @@ function MultiSelect({ options, selected, onToggle, 'data-testid': dataTestId })
   );
 }
 
-export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
+export default function NotPostedDocumentsPage({ apiBaseUrl }) {
   const ui = useUI();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const neoUrl = apiBaseUrl;
@@ -63,7 +67,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   useEffect(() => {
     const ctrl = new AbortController();
     fetch(`${neoUrl}/header?_mode=filter-options`, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(),
       signal: ctrl.signal,
     })
       .then(r => r.ok ? r.json() : null)
@@ -77,7 +81,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       })
       .catch(() => {});
     return () => ctrl.abort();
-  }, [neoUrl, token]);
+  }, [neoUrl]);
 
   // ── Filter state ─────────────────────────────────────────────────────────────
   const [document, setDocument] = useState('');
@@ -115,7 +119,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       if (filters.dateTo) params.set('dateTo', filters.dateTo);
 
       const res = await fetch(`${neoUrl}/header?${params}`, {
-        headers: buildHeaders(token),
+        headers: buildHeaders(),
         signal: ctrl.signal,
       });
       const json = await res.json().catch(() => null);
@@ -130,7 +134,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     } finally {
       if (fetchAbortRef.current === ctrl) setLoading(false);
     }
-  }, [neoUrl, token]);
+  }, [neoUrl]);
 
   // ── Initial load ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -174,7 +178,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         `${neoUrl}/header/${encodeURIComponent(row.documentId)}/action/post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          headers: buildHeaders(),
           body: JSON.stringify({ tableId: row.tableId, recordId: row.documentId }),
         }
       );
@@ -206,7 +210,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         `${neoUrl}/header/0/action/bulk-post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          headers: buildHeaders(),
           body: JSON.stringify({
             rows: rowsToPost.map(r => ({ tableId: r.tableId, recordId: r.documentId, label: r.description })),
           }),

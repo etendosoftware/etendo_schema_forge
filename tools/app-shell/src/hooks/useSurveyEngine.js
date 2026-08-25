@@ -24,7 +24,7 @@ function trackSurveyEvent(eventDef, properties) {
 }
 
 export function useSurveyEngine() {
-  const { isAuthenticated, selectedRole, username, selectedOrg, token } = useAuth();
+  const { isAuthenticated, selectedRole, username, selectedOrg } = useAuth();
   const [activeSurvey, setActiveSurvey] = useState(null);
 
   const userProps = useMemo(() => {
@@ -54,9 +54,9 @@ export function useSurveyEngine() {
   }, [isAuthenticated, checkAndShowSurvey]);
 
   useEffect(() => {
-    if (!isAuthenticated || !token) return;
-    loadRemoteSurveyConfig({ apiBaseUrl: getApiBase(), token });
-  }, [isAuthenticated, token]);
+    if (!isAuthenticated) return;
+    loadRemoteSurveyConfig({ apiBaseUrl: getApiBase() });
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let timer;
@@ -97,13 +97,12 @@ export function useSurveyEngine() {
     // track call above: never blocks the UI on the network round-trip.
     Promise.resolve(submitSurveyResponse({
       apiBaseUrl: getApiBase(),
-      token,
       surveyKey: activeSurvey.id,
       score,
       feedback,
       tags,
     })).catch(() => {});
-  }, [activeSurvey, userProps, token]);
+  }, [activeSurvey, userProps]);
 
   const handleClose = useCallback(() => {
     setActiveSurvey(null);

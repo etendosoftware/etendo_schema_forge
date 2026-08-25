@@ -75,7 +75,6 @@ export default function AttachmentsTab({
   } = useAttachments({
     tableName,
     recordId,
-    token,
     apiBaseUrl,
     isActive,
     config: effectiveConfig,

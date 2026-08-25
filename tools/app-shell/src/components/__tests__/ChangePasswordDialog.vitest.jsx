@@ -47,6 +47,10 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
 vi.mock('../copilot/copilotApi.js', () => ({
   detectBaseUrl: () => 'https://base',
 }));
+// ETP-4576 — the CSRF proof comes from the session, not from localStorage.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ csrfToken: 'csrf-token' }),
+}));
 
 import { ChangePasswordDialog } from '../ChangePasswordDialog.jsx';
 
@@ -62,9 +66,8 @@ describe('ChangePasswordDialog', () => {
     localStorage.clear();
   });
 
-  it('changes the password with the platform token and triggers onSuccess (logout)', async () => {
+  it('changes the password with the session CSRF token and triggers onSuccess (logout)', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     changePassword.mockResolvedValue({ token: 'rotated' });
     const onSuccess = vi.fn();
 
@@ -74,7 +77,7 @@ describe('ChangePasswordDialog', () => {
     await user.click(screen.getByTestId('change-password-submit'));
 
     await waitFor(() => {
-      expect(changePassword).toHaveBeenCalledWith(fetch, 'https://base', 'platform-token', {
+      expect(changePassword).toHaveBeenCalledWith(fetch, 'https://base', 'csrf-token', {
         currentPassword: 'old',
         newPassword: 'new',
         confirmPassword: 'new',
@@ -99,7 +102,6 @@ describe('ChangePasswordDialog', () => {
 
   it('shows the server error and does not log out when the change fails', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     changePassword.mockRejectedValue({ userMessage: 'Wrong current password' });
     const onSuccess = vi.fn();
 
@@ -149,7 +151,6 @@ describe('ChangePasswordDialog', () => {
 
   it('keeps the dialog state while a submission is in flight (close is a no-op)', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     let resolveChange;
     changePassword.mockImplementation(
       () => new Promise((resolve) => { resolveChange = resolve; }),

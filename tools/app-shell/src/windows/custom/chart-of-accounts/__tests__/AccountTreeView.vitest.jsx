@@ -33,6 +33,15 @@ import { render, screen, within, fireEvent, waitFor } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import AccountTreeView from '../AccountTreeView.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 // --- Fixtures ---
 
@@ -465,14 +474,34 @@ describe('AccountTreeView', () => {
       );
     }
 
-    it('fetches the complete dataset from apiBaseUrl/token on mount', async () => {
+    it('fetches the complete dataset from apiBaseUrl on mount', async () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
       render(<AccountTreeView {...defaultProps} data={[]} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}` } }),
+        expect.objectContaining({
+          credentials: 'include',
+          headers: expect.objectContaining({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` }),
+        }),
+      ));
+    });
+
+    // ETP-4576 — the cookie half of the pair above: same read, no header carries
+    // a credential, the `__Host-` cookie does.
+    it('fetches the complete dataset under the cookie scheme', async () => {
+      declareCookieSession();
+      mockFetchOnce({ response: { data: FULL_DATASET } });
+
+      render(<AccountTreeView {...defaultProps} data={[]} />);
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
+        expect.objectContaining({
+          credentials: 'include',
+          headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+        }),
       ));
     });
 

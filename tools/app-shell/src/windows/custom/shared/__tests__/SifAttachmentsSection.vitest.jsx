@@ -61,13 +61,12 @@ describe('SifAttachmentsSection', () => {
 
   // ── wiring into useAttachments ───────────────────────────────────────────────
 
-  it('calls useAttachments with the given tableName/recordId/token/apiBaseUrl', () => {
+  it('calls useAttachments with the given tableName/recordId/apiBaseUrl', () => {
     render(<SifAttachmentsSection {...baseProps} />);
     expect(useAttachmentsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         tableName: 'aeatsii_facturas',
         recordId: 'sub-001',
-        token: 'tok',
         apiBaseUrl: '/sws/neo/sales-invoice',
         isActive: true,
       }),

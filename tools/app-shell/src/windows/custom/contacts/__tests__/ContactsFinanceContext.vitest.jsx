@@ -12,7 +12,7 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 // test also supplies. The scheme is declared explicitly because src/test/setup.js
 // resets to the bearer default before every test: an assertion that leans on that
 // default passes by omission rather than by proving anything.
-import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
+import { declareBearerSession, declareCookieSession, expectBearerHeader } from '@/test/sessionContract.js';
 import {
   ContactsFinanceProvider,
   useContactsFinance,
@@ -178,20 +178,24 @@ describe('ContactsFinanceProvider', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', async () => {
+  // ETP-4576 — the inverse of what this asserted. It proved that a null token
+  // stops the read; under the cookie scheme no token is ever held, so the read
+  // never happened and the panel rendered empty as if the record had no data.
+  it('fetches when the client holds no token', async () => {
+    declareCookieSession();
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
     });
     render(
-      <ContactsFinanceProvider token={null} apiBaseUrl="/api">
+      <ContactsFinanceProvider apiBaseUrl="/api">
         <FinanceConsumer />
       </ContactsFinanceProvider>,
     );
     await act(async () => {
       screen.getByText('setRecordId').click();
     });
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 });
 

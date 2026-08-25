@@ -11,8 +11,8 @@ function escHql(value) {
 // (and only when exactly one row matches). OCR routinely returns variants
 // ("ACME, S.L." vs "ACME SL"), so we also try a case-insensitive LIKE that
 // resolves when the result is unambiguous.
-async function findBpFuzzy({ token, apiBaseUrl, name }) {
-  if (!apiBaseUrl || !token || !name || !String(name).trim()) return null;
+async function findBpFuzzy({ apiBaseUrl, name }) {
+  if (!apiBaseUrl || !name || !String(name).trim()) return null;
   const contactsBase = deriveContactsApiBase(apiBaseUrl);
   const where = encodeURIComponent(
     `lower(name) like lower('%${escHql(String(name).trim())}%') and active = true`,
@@ -35,14 +35,14 @@ async function findBpFuzzy({ token, apiBaseUrl, name }) {
 }
 
 // Adapter: bridge the legacy {taxId, name} signature of findBp to the generic
-// PRE_RESOLVERS contract ({token, apiBaseUrl, value, extracted}) and return
+// PRE_RESOLVERS contract ({apiBaseUrl, value, extracted}) and return
 // the same {id, label, bpId, bpCreate, locationCreate} shape EntityField emits
 // when the user picks an item — so OcrReviewModal and purchaseInvoiceDescriptor
 // can treat pre-resolved and user-picked vendors identically.
-async function findBp({ token, apiBaseUrl, value, extracted }) {
+async function findBp({ apiBaseUrl, value, extracted }) {
   const taxId = extracted?.tax_id;
   const name = extracted?.vendor_name ?? value;
-  const exactId = await findBpLegacy({ token, apiBaseUrl, taxId, name });
+  const exactId = await findBpLegacy({ apiBaseUrl, taxId, name });
   if (exactId) {
     return {
       id: exactId,
@@ -52,7 +52,7 @@ async function findBp({ token, apiBaseUrl, value, extracted }) {
       locationCreate: null,
     };
   }
-  const fuzzy = await findBpFuzzy({ token, apiBaseUrl, name });
+  const fuzzy = await findBpFuzzy({ apiBaseUrl, name });
   if (!fuzzy) return null;
   return {
     id: fuzzy.id,

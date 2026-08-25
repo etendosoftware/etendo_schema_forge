@@ -9,7 +9,7 @@ import {
 
 const SEARCH_LIMIT = 30;
 
-export default function EntityCell({ column, value, token, apiBaseUrl, onChange }) {
+export default function EntityCell({ column, value, apiBaseUrl, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -30,7 +30,6 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
   const { items, loading } = useEntitySearch({
     open,
     endpoint,
-    token,
     query,
     filter: column?.filter,
     limit: SEARCH_LIMIT,

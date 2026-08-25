@@ -40,6 +40,14 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import NewAccountModal from '../NewAccountModal.jsx';
+import {
+  declareBearerSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 const BASE_URL = 'http://localhost/sws/neo/chart-of-accounts';
 const TOKEN = 'test-token';
@@ -134,7 +142,10 @@ describe('NewAccountModal', () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } }),
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` }),
+      }),
     ));
     await waitFor(() => {
       const select = screen.getByTestId('new-account-modal-parent');
@@ -234,7 +245,8 @@ describe('NewAccountModal', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(`${BASE_URL}/elementValue`, expect.objectContaining({
       method: 'POST',
-      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
       body: JSON.stringify({ searchKey: '40001234', name: 'US Sales', accountType: 'E' }),
     }));
     expect(toast.success).toHaveBeenCalledWith('newSubAccountSuccess');

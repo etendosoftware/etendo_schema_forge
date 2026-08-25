@@ -38,6 +38,14 @@ vi.mock('@/components/contract-ui', () => ({
 }));
 
 import PriceListProductPrices from '../PriceListProductPrices.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 describe('PriceListProductPrices', () => {
   const defaultProps = {
@@ -177,16 +185,14 @@ describe('PriceListProductPrices', () => {
     });
   });
 
-  it('does not fetch when token is missing', async () => {
-    render(
-      <PriceListProductPrices
-        {...defaultProps}
-        token={null}
-      />,
-    );
-    // Should not call fetch
+  // ETP-4576 — the inverse of what this asserted. It proved that a null token
+  // stops the read; under the cookie scheme no token is ever held, so the read
+  // never happened and the panel rendered empty as if the record had no data.
+  it('fetches when the client holds no token', async () => {
+    declareCookieSession();
+    render(<PriceListProductPrices {...defaultProps} />);
     await waitFor(() => {
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalled();
     });
   });
 

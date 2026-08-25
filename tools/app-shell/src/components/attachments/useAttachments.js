@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
+// ETP-4576 — one builder per request shape: reads carry no Content-Type, the
+// multipart upload must not declare one (the browser sets the boundary), the
+// bodyless DELETEs need only the write proof, and the PATCH sends JSON.
+import { readCredentialHeaders, writeCredentialHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Format a byte size into a human readable string.
@@ -68,7 +72,6 @@ async function extractErrorMessage(res) {
  * @param {object} params
  * @param {string} params.tableName  - AD table name (e.g. "C_Order").
  * @param {string} params.recordId   - Owning record id.
- * @param {string} params.token      - Bearer token for the API.
  * @param {string} params.apiBaseUrl - Base URL for the NEO Headless API.
  * @param {boolean} params.isActive  - Whether the tab is currently visible.
  *                                     Used to lazy-load only when needed.
@@ -89,7 +92,7 @@ async function extractErrorMessage(res) {
  *   formatBytes: (bytes: number) => string,
  * }}
  */
-export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActive, config }) {
+export function useAttachments({ tableName, recordId, apiBaseUrl, isActive, config }) {
   const ui = useUI();
 
   // apiBaseUrl may be the full spec URL (e.g. http://host/sws/neo/sales-order).
@@ -121,13 +124,6 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
 
-  // Build the Authorization header. Caller-provided token is required.
-  const authHeaders = useCallback(() => {
-    const headers = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return headers;
-  }, [token]);
-
   const resetAbortController = useCallback(() => {
     if (abortRef.current) {
       abortRef.current.abort();
@@ -146,7 +142,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { headers: authHeaders(), signal: ctrl.signal },
+        { credentials: 'include', headers: readCredentialHeaders(), signal: ctrl.signal },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -162,7 +158,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, resetAbortController, ui]);
+  }, [apiBaseUrl, tableName, recordId, resetAbortController, ui]);
 
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
@@ -198,7 +194,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       // NOTE: do NOT set Content-Type manually — the browser sets the boundary.
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { method: 'POST', headers: authHeaders(), body: form },
+        { method: 'POST', credentials: 'include', headers: writeCredentialHeaders(), body: form },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -223,7 +219,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui, announceChange]);
+  }, [apiBaseUrl, tableName, recordId, list, ui, announceChange]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
@@ -231,7 +227,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/file/${attachment.id}`,
-        { headers: authHeaders() },
+        { credentials: 'include', headers: readCredentialHeaders() },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -242,7 +238,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, ui]);
 
   // ── download all (zip) ──────────────────────────────────────────────────
   const downloadAll = useCallback(async () => {
@@ -250,7 +246,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}/zip`,
-        { headers: authHeaders() },
+        { credentials: 'include', headers: readCredentialHeaders() },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -261,7 +257,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, ui]);
+  }, [apiBaseUrl, tableName, recordId, ui]);
 
   // ── remove (optimistic) ─────────────────────────────────────────────────
   const remove = useCallback(async (attachmentId) => {
@@ -271,7 +267,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
-        { method: 'DELETE', headers: authHeaders() },
+        { method: 'DELETE', credentials: 'include', headers: writeCredentialHeaders() },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -283,7 +279,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiBaseUrl, authHeaders, ui, announceChange]);
+  }, [apiBaseUrl, ui, announceChange]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -295,7 +291,8 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         snapshot.map((it) =>
           fetch(`${attachmentsBase}/sws/neo/attachments/file/${it.id}`, {
             method: 'DELETE',
-            headers: authHeaders(),
+            credentials: 'include',
+            headers: writeCredentialHeaders(),
           }).then((res) => {
             if (!res.ok) return res.text().then((t) => { throw new Error(t || `HTTP ${res.status}`); });
           })
@@ -307,7 +304,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiBaseUrl, authHeaders, ui, announceChange]);
+  }, [apiBaseUrl, ui, announceChange]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -319,7 +316,8 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
         {
           method: 'PATCH',
-          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          credentials: 'include',
+          headers: writeHeaders(),
           body: JSON.stringify({ description }),
         },
       );
@@ -332,7 +330,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, ui]);
 
   return {
     items,

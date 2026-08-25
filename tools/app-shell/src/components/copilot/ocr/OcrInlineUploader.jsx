@@ -4,7 +4,6 @@ import { Upload, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 const LazyPdfViewer = lazy(() => import('@/windows/custom/shared/PdfViewer.jsx'));
 import { useUI } from '@/i18n';
-import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { attachFile } from './attachFile';
 import { listAttachments, markAttachmentAsMain } from './listAttachments';
@@ -19,7 +18,6 @@ export default function OcrInlineUploader({
   isNew,
   apiBaseUrl,
   onRefresh,
-  token: tokenProp,
   // Legacy props kept for backward compat with DetailView's slot bag:
   // - onFieldChange / onSave / onAddChild / entity were used by the previous
   //   client-side orchestration. The /batch endpoint owns persistence now,
@@ -29,8 +27,6 @@ export default function OcrInlineUploader({
 }) {
   const ui = useUI();
   const navigate = useNavigate();
-  const { token: copilotToken } = useCopilot();
-  const token = tokenProp || copilotToken;
   const docType = getOcrDocType(docTypeId);
   const inputRef = useRef(null);
   // Snapshot of the dropped file at the moment the user triggered extraction.
@@ -56,7 +52,6 @@ export default function OcrInlineUploader({
   }, [file]);
   const { result, loading: applying, pendingModal } = useOcrFlow({
     docTypeId,
-    token,
     apiBaseUrl,
     onRefresh,
   });
@@ -74,9 +69,12 @@ export default function OcrInlineUploader({
     const newId = result.recordId;
     const sourceFile = fileAtExtractRef.current;
     (async () => {
-      if (sourceFile && docType.tabId && token) {
+      // ETP-4576 — the `&& token` conjunct used to live here. The token came
+      // from `useCopilot()`, which no longer carries one under the cookie
+      // scheme, so the source PDF was never attached to the created record —
+      // the navigation below still ran, so the flow looked like it worked.
+      if (sourceFile && docType.tabId) {
         const res = await attachFile({
-          token,
           tabId: docType.tabId,
           recordId: newId,
           file: sourceFile,
@@ -100,9 +98,8 @@ export default function OcrInlineUploader({
       }
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
     })();
-  }, [result?.committed, result?.recordId, docType, navigate, token, apiBaseUrl]);
+  }, [result?.committed, result?.recordId, docType, navigate, apiBaseUrl]);
   const { extract, status, error, reset } = useOcrExtraction({
-    token,
     toolName: docType?.toolName,
     question: docType?.question,
     structuredOutput: docType?.structuredOutput,

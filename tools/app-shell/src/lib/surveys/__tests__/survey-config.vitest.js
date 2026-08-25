@@ -1,5 +1,14 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
+import {
   resolvePositiveInt,
   getSurveyConfig,
   getSurveyTypeConfig,
@@ -232,44 +241,62 @@ describe('getRemoteCannedResponses', () => {
 });
 
 describe('loadRemoteSurveyConfig', () => {
-  it('does nothing when apiBaseUrl is null/undefined or token is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined', async () => {
     const fetchImpl = vi.fn();
-    await loadRemoteSurveyConfig({ apiBaseUrl: null, token: 'tok', fetchImpl });
-    await loadRemoteSurveyConfig({ apiBaseUrl: undefined, token: 'tok', fetchImpl });
-    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: null, fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: null, fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: undefined, fetchImpl });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    await loadRemoteSurveyConfig({ apiBaseUrl: '', token: 'tok', fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '', fetchImpl });
     expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/', {
-      headers: { Authorization: 'Bearer tok' },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
     });
   });
 
-  it('fetches the endpoint with a Bearer token and stores the result', async () => {
+  it('fetches the endpoint under the bearer scheme and stores the result', async () => {
     const payload = { maxPerMonth: 9, canned: {} };
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
 
-    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok-123', fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
-      headers: { Authorization: 'Bearer tok-123' },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
     });
     expect(getSurveyConfig({}).maxPerMonth).toBe(9);
   });
 
+  // ETP-4576 — the cookie half of the pair above. Same call, other scheme: the
+  // `__Host-` cookie is the credential, so no header carries one. A GET needs no
+  // CSRF proof either.
+  it('fetches the endpoint under the cookie scheme and stores the result', async () => {
+    declareCookieSession();
+    const payload = { maxPerMonth: 4, canned: {} };
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
+
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', fetchImpl });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(getSurveyConfig({}).maxPerMonth).toBe(4);
+  });
+
   it('leaves the config untouched on a non-ok response', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false });
-    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok', fetchImpl });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', fetchImpl });
     expect(getSurveyConfig({}).maxPerMonth).toBe(DEFAULT_SURVEY_MAX_PER_MONTH);
   });
 
   it('leaves the config untouched and logs a warning on a network error', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
     const logger = { warn: vi.fn() };
-    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok', fetchImpl, logger });
+    await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', fetchImpl, logger });
     expect(logger.warn).toHaveBeenCalledWith(
       '[surveys] Failed to load remote survey config, using local defaults',
       expect.any(Error),
@@ -279,21 +306,19 @@ describe('loadRemoteSurveyConfig', () => {
 });
 
 describe('submitSurveyResponse', () => {
-  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined or surveyKey is missing', async () => {
     const fetchImpl = vi.fn();
-    await submitSurveyResponse({ apiBaseUrl: null, token: 'tok', surveyKey: 'nps', fetchImpl });
-    await submitSurveyResponse({ apiBaseUrl: undefined, token: 'tok', surveyKey: 'nps', fetchImpl });
-    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: null, surveyKey: 'nps', fetchImpl });
-    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: null, fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: null, surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: undefined, surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', surveyKey: null, fetchImpl });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('posts the survey response with a Bearer token, JSON content type, and full body', async () => {
+  it('posts the survey response with the bearer credential, JSON content type, and full body', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
 
     await submitSurveyResponse({
       apiBaseUrl: '/etendo',
-      token: 'tok-123',
       surveyKey: 'nps',
       score: 9,
       feedback: '  great product  ',
@@ -303,9 +328,10 @@ describe('submitSurveyResponse', () => {
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        Authorization: 'Bearer tok-123',
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_BEARER_TOKEN}`,
       },
       body: JSON.stringify({
         surveyKey: 'nps',
@@ -319,7 +345,7 @@ describe('submitSurveyResponse', () => {
   it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
 
-    await submitSurveyResponse({ apiBaseUrl: '', token: 'tok', surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: '', surveyKey: 'nps', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/response', expect.objectContaining({
       method: 'POST',
@@ -329,7 +355,7 @@ describe('submitSurveyResponse', () => {
   it('omits score, feedback, and tags from the body when not provided', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
 
-    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'csat_invoicing', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', surveyKey: 'csat_invoicing', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', expect.objectContaining({
       body: JSON.stringify({ surveyKey: 'csat_invoicing' }),
@@ -341,7 +367,6 @@ describe('submitSurveyResponse', () => {
 
     await submitSurveyResponse({
       apiBaseUrl: '/etendo',
-      token: 'tok',
       surveyKey: 'nps',
       feedback: '   ',
       tags: [],
@@ -357,7 +382,7 @@ describe('submitSurveyResponse', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     const logger = { warn: vi.fn() };
 
-    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'nps', fetchImpl, logger });
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', surveyKey: 'nps', fetchImpl, logger });
 
     expect(logger.warn).toHaveBeenCalledWith('[surveys] Failed to persist survey response', 500);
   });
@@ -368,7 +393,7 @@ describe('submitSurveyResponse', () => {
     const logger = { warn: vi.fn() };
 
     await expect(
-      submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'nps', fetchImpl, logger }),
+      submitSurveyResponse({ apiBaseUrl: '/etendo', surveyKey: 'nps', fetchImpl, logger }),
     ).resolves.toBeUndefined();
 
     expect(logger.warn).toHaveBeenCalledWith('[surveys] Failed to persist survey response', error);

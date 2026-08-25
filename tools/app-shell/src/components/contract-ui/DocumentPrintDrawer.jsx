@@ -59,7 +59,7 @@ async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
  * Preview drawer: shows document preview one at a time with < > navigation.
  * Report ID convention: print-{windowName} (e.g., print-purchase-order)
  */
-export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [], token }) {
+export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [] }) {
   const ui = useUI();
   const { shouldRender, isClosing } = useAnimatedOpen(open, 200);
   const iframeRef = useRef(null);
@@ -74,7 +74,10 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
   const currentDocId = documentIds[currentIndex];
 
   const renderDocument = useCallback(async (docId) => {
-    if (!reportId || !docId || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so the print drawer opened on an empty
+    // iframe with no error: the render POST was never issued.
+    if (!reportId || !docId) return;
     setLoading(true);
     setError(null);
     try {
@@ -97,7 +100,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setError(err.message);
     }
     setLoading(false);
-  }, [reportId, token]);
+  }, [reportId]);
 
   useEffect(() => { if (open && currentDocId) renderDocument(currentDocId); }, [open, currentDocId, renderDocument]);
   useEffect(() => { if (open) setCurrentIndex(0); }, [open]);
@@ -138,7 +141,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     if (!currentDocId || printing) return;
     setPrinting(true);
     try {
-      await printDocuments(windowName, [currentDocId], token, ui);
+      await printDocuments(windowName, [currentDocId], ui);
     } finally {
       setPrinting(false);
     }
@@ -218,9 +221,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  * `toast.error()` instead of propagating as an unhandled promise rejection
  * (the previous behavior: this function's caller never awaits/catches it).
  */
-export async function printDocuments(windowName, documentIds, token, translate = (key) => key) {
+export async function printDocuments(windowName, documentIds, translate = (key) => key) {
   const reportId = `print-${windowName}`;
-  if (!reportId || !token || documentIds.length === 0) return;
+  if (!reportId || documentIds.length === 0) return;
 
   try {
     // Fetch HTML for each document

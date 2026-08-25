@@ -17,8 +17,10 @@ describe('PaymentDetailSidebarBase', () => {
 
   // ── Props contract ─────────────────────────────────────────────────────────
 
-  it('accepts dir, specName, data, token, apiBaseUrl props', () => {
-    assert.match(src, /\{\s*dir\s*,\s*specName\s*,\s*data\s*,\s*token\s*,\s*apiBaseUrl\s*\}/);
+  // ETP-4576 — `token` is gone from the destructure: the panel's read takes the
+  // session credential from the shared builder instead of a threaded prop.
+  it('accepts dir, specName, data, apiBaseUrl props', () => {
+    assert.match(src, /\{\s*dir\s*,\s*specName\s*,\s*data\s*,\s*apiBaseUrl\s*\}/);
   });
 
   // ── Amount formatting ──────────────────────────────────────────────────────

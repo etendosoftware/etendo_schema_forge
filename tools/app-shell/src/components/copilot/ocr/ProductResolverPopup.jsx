@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { X, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
+// ETP-4576 — the credential comes from the session, not from a prop threaded
+// four components deep. `` used to be built here as
+// `Bearer ${token}`; under the cookie scheme that header carried `undefined`
+// and every selector lookup, defaults read and product create went out
+// unauthenticated.
+import { readCredentialHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -29,7 +35,6 @@ function normalizeText(value) {
  *   productSpecUrl — base URL of the product spec
  *                    (e.g. /sws/neo/product). Used to look up UOM / TaxCategory
  *                    selectors and to POST the product create.
- *   token          — bearer token
  *   onSubmit       — receives a map { [idx]: productId | null }
  *   onCancel       — discards the import entirely
  */
@@ -53,13 +58,10 @@ export default function ProductResolverPopup({
   unmatched = [],
   selectorUrl,
   productSpecUrl,
-  token,
   onSubmit,
   onCancel,
 }) {
   const ui = useUI();
-  const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-
   // selections: { [idx]: { id, label } | null }
   const [selections, setSelections] = useState({});
 
@@ -97,8 +99,6 @@ export default function ProductResolverPopup({
               onSelect={(value) => setSelections(prev => ({ ...prev, [row.idx]: value }))}
               selectorUrl={selectorUrl}
               productSpecUrl={productSpecUrl}
-              authHeader={authHeader}
-              token={token}
               ui={ui}
               data-testid="ProductRow__b3ae11" />
           ))}
@@ -123,7 +123,7 @@ export default function ProductResolverPopup({
   );
 }
 
-function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, authHeader, token, ui }) {
+function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, ui }) {
   const [creating, setCreating] = useState(false);
 
   return (
@@ -147,7 +147,6 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
         </div>
         <InlineSelector
           selectorUrl={selectorUrl}
-          authHeader={authHeader}
           initialQuery={row.description}
           value={selection}
           onPick={onSelect}
@@ -159,8 +158,6 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
         <ProductCreateForm
           initialName={row.description}
           productSpecUrl={productSpecUrl}
-          authHeader={authHeader}
-          token={token}
           onCreated={(value) => { onSelect(value); setCreating(false); }}
           onCancel={() => setCreating(false)}
           ui={ui}
@@ -170,7 +167,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
   );
 }
 
-function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, onCreateNew, ui }) {
+function InlineSelector({ selectorUrl, initialQuery, value, onPick, onCreateNew, ui }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
@@ -216,7 +213,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
           params.set('name', trimmed);
           params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
         }
-        const res = await fetch(`${selectorUrl}?${params}`, { headers: authHeader });
+        const res = await fetch(`${selectorUrl}?${params}`, { credentials: 'include', headers: readCredentialHeaders() });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         const list = data?.items ?? data?.response?.data ?? [];
@@ -228,7 +225,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [open, query, selectorUrl, authHeader]);
+  }, [open, query, selectorUrl]);
 
   const options = useMemo(() => {
     const seen = new Set();
@@ -319,7 +316,6 @@ function SelectorDialog({
   title,
   initialQuery,
   selectorUrl,
-  authHeader,
   currentId,
   onPick,
   onClose,
@@ -360,7 +356,7 @@ function SelectorDialog({
           params.set('name', trimmed);
           params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
         }
-        const res = await fetch(`${selectorUrl}?${params}`, { headers: authHeader });
+        const res = await fetch(`${selectorUrl}?${params}`, { credentials: 'include', headers: readCredentialHeaders() });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         const list = data?.items ?? data?.response?.data ?? [];
@@ -377,7 +373,7 @@ function SelectorDialog({
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [query, selectorUrl, authHeader]);
+  }, [query, selectorUrl]);
 
   const options = useMemo(() => {
     const seen = new Set();
@@ -481,7 +477,7 @@ function deriveSearchKey(value) {
   return String(value || '').trim().replace(/\s+/g, '');
 }
 
-function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onCreated, onCancel, ui }) {
+function ProductCreateForm({ initialName, productSpecUrl, onCreated, onCancel, ui }) {
   const [name, setName] = useState(initialName || '');
   const [searchKey, setSearchKey] = useState(deriveSearchKey(initialName));
   const [skTouched, setSkTouched] = useState(false);
@@ -509,7 +505,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${productSpecUrl}/product/defaults`, { headers: authHeader });
+        const res = await fetch(`${productSpecUrl}/product/defaults`, { credentials: 'include', headers: readCredentialHeaders() });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
@@ -527,7 +523,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productSpecUrl, authHeader]);
+  }, [productSpecUrl]);
 
   const validate = () => {
     if (!name.trim()) return ui('ocrProductCreateNameRequired');
@@ -554,7 +550,8 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
       delete body.id;
       const res = await fetch(`${productSpecUrl}/product`, {
         method: 'POST',
-        headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: writeHeaders(),
         body: JSON.stringify(body),
       });
       const text = await res.text().catch(() => '');
@@ -672,7 +669,6 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           title={ui('ocrProductCreateUom')}
           initialQuery=""
           selectorUrl={uomSelectorUrl}
-          authHeader={authHeader}
           currentId={uom?.id || null}
           onPick={(value) => { setUom(value); setPicker(null); }}
           onClose={() => setPicker(null)}
@@ -684,7 +680,6 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           title={ui('ocrProductCreateTaxCategory')}
           initialQuery=""
           selectorUrl={taxSelectorUrl}
-          authHeader={authHeader}
           currentId={taxCategory?.id || null}
           onPick={(value) => { setTaxCategory(value); setPicker(null); }}
           onClose={() => setPicker(null)}

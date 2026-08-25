@@ -21,11 +21,19 @@ vi.mock('sonner', () => ({
 
 import { useAttachments, formatBytes } from '../useAttachments';
 import { toast } from 'sonner';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 const baseOpts = {
   tableName: 'C_Order',
   recordId: 'REC-1',
-  token: 'tok-123',
   apiBaseUrl: 'http://api.test/sws/neo/sales-order',
   isActive: true,
 };
@@ -125,7 +133,10 @@ describe('useAttachments — remaining branches', () => {
       await setup();
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/C_Order/REC-1',
-        expect.objectContaining({ headers: { Authorization: 'Bearer tok-123' } }),
+        expect.objectContaining({
+          credentials: 'include',
+          headers: { Authorization: `Bearer ${TEST_BEARER_TOKEN}` },
+        }),
       );
     });
 
@@ -134,9 +145,16 @@ describe('useAttachments — remaining branches', () => {
       expect(globalThis.fetch.mock.calls[0][0]).toBe('/sws/neo/attachments/C_Order/REC-1');
     });
 
-    it('sends no Authorization header without a token', async () => {
-      await setup({ token: undefined });
-      expect(globalThis.fetch.mock.calls[0][1].headers).toEqual({});
+    // ETP-4576 — the inverse of what this asserted. It proved the read went out
+    // with `headers: {}` when no token was held; under the cookie scheme that is
+    // EVERY read, so this described an unauthenticated request as correct. The
+    // credential is the `__Host-` cookie now, carried by `credentials: 'include'`.
+    it('sends the cookie session and no Authorization under the cookie scheme', async () => {
+      declareCookieSession();
+      await setup();
+      const init = globalThis.fetch.mock.calls[0][1];
+      expect(init.credentials).toBe('include');
+      expect(init.headers.Authorization).toBeUndefined();
     });
   });
 
@@ -329,7 +347,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/file/att-1',
-        { headers: { Authorization: 'Bearer tok-123' } },
+        { credentials: 'include', headers: { Authorization: `Bearer ${TEST_BEARER_TOKEN}` } },
       );
       expect(anchorClick).toHaveBeenCalledTimes(1);
       expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
@@ -377,7 +395,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/C_Order/REC-1/zip',
-        { headers: { Authorization: 'Bearer tok-123' } },
+        { credentials: 'include', headers: { Authorization: `Bearer ${TEST_BEARER_TOKEN}` } },
       );
       expect(downloadName).toBe('attachments-REC-1.zip');
     });

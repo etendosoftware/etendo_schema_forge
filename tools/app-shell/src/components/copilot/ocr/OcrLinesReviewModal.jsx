@@ -15,7 +15,7 @@ function normaliseRow(line, columns) {
   return base;
 }
 
-export default function OcrLinesReviewModal({ columns = [], lines = [], token, apiBaseUrl, onSubmit, onCancel }) {
+export default function OcrLinesReviewModal({ columns = [], lines = [], apiBaseUrl, onSubmit, onCancel }) {
   const ui = useUI();
   const [rows, setRows] = useState(() => lines.map((line) => ({
     ...normaliseRow(line, columns),
@@ -76,7 +76,6 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                           value={column.kind === 'entity' && row.tax_id
                             ? { id: row.tax_id, label: row[column.extractFrom] }
                             : row[column.extractFrom]}
-                          token={token}
                           apiBaseUrl={apiBaseUrl}
                           onChange={(value) => update(idx, column.kind === 'entity'
                             ? { tax_id: value?.id || null, [column.extractFrom]: value?.label || row[column.extractFrom] }

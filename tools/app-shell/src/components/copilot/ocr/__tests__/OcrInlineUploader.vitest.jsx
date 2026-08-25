@@ -24,10 +24,6 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/components/CopilotContext', () => ({
-  useCopilot: () => ({ token: 'test-token' }),
-}));
-
 vi.mock('../ocrDocTypes', () => ({
   getOcrDocType: (id) => id === 'purchase-invoice' ? {
     id: 'purchase-invoice',
@@ -89,7 +85,6 @@ describe('OcrInlineUploader', () => {
     isNew: true,
     apiBaseUrl: '/sws/neo/purchase-invoice',
     onRefresh: vi.fn(),
-    token: 'test-token',
   };
 
   beforeEach(() => {
@@ -332,8 +327,10 @@ describe('OcrInlineUploader', () => {
       mockFlowReturn.result = { committed: true, recordId: 'new-123' };
       rerender(<OcrInlineUploader {...defaultProps} />);
 
+      // ETP-4576 — no `token` in the call. The attachment used to be gated on
+      // one coming from CopilotContext, which stopped carrying it.
       await waitFor(() => expect(attachFile).toHaveBeenCalledWith({
-        token: 'test-token', tabId: '290', recordId: 'new-123', file,
+        tabId: '290', recordId: 'new-123', file,
       }));
       await waitFor(() => expect(listAttachments).toHaveBeenCalledWith({
         tableName: 'C_Invoice', recordId: 'new-123', apiBaseUrl: '/sws/neo/purchase-invoice',

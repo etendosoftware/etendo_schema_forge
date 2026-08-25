@@ -47,7 +47,7 @@ function fileToBase64(file) {
  * Display: GET /sws/neo/image/{imageId} (same NEO image endpoint as ImageField).
  * Upload: POST /sws/neo/image with base64 body, returns { imageId }.
  */
-export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onChange, readOnly = false }) {
+export default function OrgLogoField({ imageId, orgName, apiBaseUrl, onChange, readOnly = false }) {
   const ui = useUI();
   const [blobUrl, setBlobUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -58,7 +58,9 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
     : '/sws/neo/image';
 
   useEffect(() => {
-    if (!imageId || !token) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so no organization logo ever loaded.
+    if (!imageId) {
       setBlobUrl(null);
       return;
     }
@@ -75,7 +77,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, token, imageBase]);
+  }, [imageId, imageBase]);
 
   useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, []);
 

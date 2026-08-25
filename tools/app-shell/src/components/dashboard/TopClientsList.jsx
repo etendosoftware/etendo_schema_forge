@@ -8,13 +8,16 @@ import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { jsonHeaders } from '../../lib/sessionHeaders.js';
 
-async function resolveClientRoute({ client, token, apiBaseUrl }) {
+async function resolveClientRoute({ client, apiBaseUrl }) {
   const directRoute = resolveDashboardNavigation(client?.navigation);
   if (directRoute) return directRoute;
   if (client?.id) return `/contacts/${client.id}`;
 
   const name = String(client?.name ?? '').trim();
-  if (!token || !apiBaseUrl || !name) return '/contacts';
+  // ETP-4576 — the dropped `!token` conjunct was permanently true under the
+  // cookie scheme, so a client with no id always fell back to the bare
+  // /contacts list instead of resolving to the partner's own record.
+  if (!apiBaseUrl || !name) return '/contacts';
 
   const criteria = encodeURIComponent(JSON.stringify({
     operator: 'and',
@@ -36,7 +39,7 @@ async function resolveClientRoute({ client, token, apiBaseUrl }) {
   }
 }
 
-export function TopClientsList({ clients = [], currencyLabel = '', token = '', apiBaseUrl = '' }) {
+export function TopClientsList({ clients = [], currencyLabel = '', apiBaseUrl = '' }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -49,7 +52,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
       entityType: 'business_partner',
       source: 'dashboard_top_clients',
     });
-    const route = await resolveClientRoute({ client, token, apiBaseUrl });
+    const route = await resolveClientRoute({ client, apiBaseUrl });
     navigate(route);
   };
 

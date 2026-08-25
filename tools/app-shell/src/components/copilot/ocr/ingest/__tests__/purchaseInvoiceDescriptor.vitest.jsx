@@ -205,12 +205,16 @@ describe('purchaseInvoiceDescriptor', () => {
   });
 
   describe('resolveTaxesForLines', () => {
-    it('returns empty for no token', async () => {
-      expect(await resolveTaxesForLines({ token: null, lines: [{}] })).toEqual([]);
+    // ETP-4576 — this asserted that a null token yields no tax resolution at
+    // all. Under the cookie scheme no token is ever held, so every line lost
+    // its tax silently. A line with no usable term still resolves to null;
+    // what must not happen is the whole call short-circuiting to [].
+    it('still resolves lines when the client holds no token', async () => {
+      expect(await resolveTaxesForLines({ lines: [{}] })).toEqual([null]);
     });
 
     it('returns empty for empty lines', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: [] })).toEqual([]);
+      expect(await resolveTaxesForLines({ lines: [] })).toEqual([]);
     });
 
     it('returns null-filled array when all terms are empty', async () => {

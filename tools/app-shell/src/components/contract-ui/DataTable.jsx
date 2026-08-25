@@ -150,7 +150,7 @@ function applyLocalSearch(rows, filters, searchQuery) {
 }
 
 async function runInlineToggleRequest({
-  apiBaseUrl, entity, row, col, token, checked,
+  apiBaseUrl, entity, row, col, checked,
   toggleKey, setOptimisticToggles, setSavingToggles, onDataMutated,
 }) {
   setOptimisticToggles(prev => ({ ...prev, [toggleKey]: checked }));
@@ -2023,16 +2023,20 @@ export function DataTable({
   }, [filteredData, amountColumns]);
 
   const handleInlineToggle = useCallback(async (row, col, checked) => {
-    if (!apiBaseUrl || !entity || !row?.id || !token) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so every inline toggle answered with
+    // "Inline toggle is not available in this context" instead of saving. The
+    // PATCH below already carries the session's write proof via writeHeaders().
+    if (!apiBaseUrl || !entity || !row?.id) {
       toast.error('Inline toggle is not available in this context');
       return;
     }
     await runInlineToggleRequest({
-      apiBaseUrl, entity, row, col, token, checked,
+      apiBaseUrl, entity, row, col, checked,
       toggleKey: `${row.id}:${col.key}`,
       setOptimisticToggles, setSavingToggles, onDataMutated,
     });
-  }, [apiBaseUrl, entity, onDataMutated, token]);
+  }, [apiBaseUrl, entity, onDataMutated]);
 
   const renderCellValue = (row, col) => {
     if (typeof col.render === 'function') return col.render(row, { entity, token, apiBaseUrl });

@@ -37,9 +37,14 @@ export function toIsoDate(value) {
  * callout only sets it when the BP has a primary location flagged in a way the
  * callout recognizes — which isn't reliable through /batch. So we resolve it
  * client-side and embed it in the header body.
+ *
+ * ETP-4576 — the whole ingest chain used to thread a caller-held `token` and
+ * refuse to run without one. Under the cookie scheme no token is ever held, so
+ * every resolver here returned null and the batch was built with no vendor, no
+ * products and no taxes — silently, as if the invoice had none.
  */
-async function findBpLocation({ token, apiBaseUrl, bpId }) {
-  if (!apiBaseUrl || !token || !bpId) return null;
+async function findBpLocation({ apiBaseUrl, bpId }) {
+  if (!apiBaseUrl || !bpId) return null;
   const contactsBase = apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
   const where = encodeURIComponent(`businessPartner.id = '${bpId}' and active = true`);
   const url = `${contactsBase}/locationAddress?_neoWhere=${where}&limit=1`;
@@ -64,8 +69,8 @@ async function findBpLocation({ token, apiBaseUrl, bpId }) {
  * otherwise null. Multiple-candidate disambiguation is intentionally left to
  * the popup — by the time we trigger it the user is already in the loop.
  */
-export async function findBp({ token, apiBaseUrl, taxId, name }) {
-  if (!apiBaseUrl || !token) return null;
+export async function findBp({ apiBaseUrl, taxId, name }) {
+  if (!apiBaseUrl) return null;
   // apiBaseUrl points at the host spec (e.g. /sws/neo/purchase-invoice).
   // The contacts spec lives at the sibling /sws/neo/contacts; derive it the
   // same way ContactCreatePopup does so we hit a real endpoint, not the
@@ -107,11 +112,10 @@ export async function findBp({ token, apiBaseUrl, taxId, name }) {
  * Run simSearch on the line descriptions. Returns an empty array when there
  * is nothing to look up so the caller can index by line idx safely.
  */
-async function runProductSimSearch({ token, lines }) {
+async function runProductSimSearch({ lines }) {
   const productHints = lines.map(l => String(l?.description ?? '').trim());
-  if (!token || productHints.length === 0) return [];
+  if (productHints.length === 0) return [];
   return simSearch({
-    token,
     entityName: 'Product',
     items: productHints,
     minSimPercent: 30,
@@ -143,11 +147,10 @@ export function buildTaxSearchTerm(line) {
   return `${rate}%`;
 }
 
-export async function findTax({ token, value, extracted }) {
+export async function findTax({ value, extracted }) {
   const term = String(value ?? extracted?.tax_label ?? '').trim();
-  if (!token || !term) return null;
+  if (!term) return null;
   const matches = await simSearch({
-    token,
     entityName: 'FinancialMgmtTaxRate',
     items: [term],
     minSimPercent: 50,
@@ -170,14 +173,13 @@ export async function findTax({ token, value, extracted }) {
  * unrelated rate-only queries ("21%" must look like a real tax identifier
  * in the catalog before we accept the match).
  */
-export async function resolveTaxesForLines({ token, lines }) {
-  if (!token || !Array.isArray(lines) || lines.length === 0) return [];
+export async function resolveTaxesForLines({ lines }) {
+  if (!Array.isArray(lines) || lines.length === 0) return [];
   const terms = lines.map(buildTaxSearchTerm);
   if (terms.every(t => !t)) return Array(lines.length).fill(null);
   // simSearch returns one slot per requested item; empty terms produce no match.
   const items = terms.map(t => t || '');
   const matches = await simSearch({
-    token,
     entityName: 'FinancialMgmtTaxRate',
     items,
     minSimPercent: 50,
@@ -193,9 +195,8 @@ export async function resolveTaxesForLines({ token, lines }) {
  *   - { bpId: null, bpCreate, locationCreate? }        — user filled the popup
  *   - { cancelled: true }                              — user dismissed popup
  */
-async function resolveBpOrAskUser({ token, apiBaseUrl, safe, askUserForBp }) {
+async function resolveBpOrAskUser({ apiBaseUrl, safe, askUserForBp }) {
   const bpId = await findBp({
-    token,
     apiBaseUrl,
     taxId: safe.tax_id,
     name: safe.vendor_name,
@@ -233,8 +234,8 @@ async function resolveBpOrAskUser({ token, apiBaseUrl, safe, askUserForBp }) {
  * for a freshly-created BP it points at the location op via $ref, for an
  * existing BP we look up the first active location ourselves.
  */
-async function resolvePartnerAddress({ token, apiBaseUrl, bpId, locationCreate }) {
-  if (bpId) return findBpLocation({ token, apiBaseUrl, bpId });
+async function resolvePartnerAddress({ apiBaseUrl, bpId, locationCreate }) {
+  if (bpId) return findBpLocation({ apiBaseUrl, bpId });
   if (locationCreate) return '$ref:loc';
   return null;
 }
@@ -330,7 +331,7 @@ export function buildLineOps(lines, productByIdx, taxByIdx = {}) {
 export async function buildPurchaseInvoiceBatch(extracted, ctx) {
   const safe = extracted || {};
   const rawLines = Array.isArray(safe.line_items) ? safe.line_items : [];
-  const { token, apiBaseUrl, askUserForBp, askUserForProducts, reviewedHeader, reviewedLines } = ctx || {};
+  const { apiBaseUrl, askUserForBp, askUserForProducts, reviewedHeader, reviewedLines } = ctx || {};
 
   // Merge OCR lines with the user's per-line edits. When the lines modal
   // isn't in play (no `reviewedLines`), fall back to the raw OCR data.
@@ -351,8 +352,8 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
   // Run product + tax simSearch in parallel — both hit the same webhook and
   // are independent of the BP resolution path.
   const [productMatches, taxIds] = await Promise.all([
-    runProductSimSearch({ token, lines }),
-    resolveTaxesForLines({ token, lines }),
+    runProductSimSearch({ lines }),
+    resolveTaxesForLines({ lines }),
   ]);
 
   // Vendor: prefer the review modal's resolution; fall back to the legacy
@@ -365,14 +366,14 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
     bpCreate = reviewedHeader.vendor.bpCreate || null;
     locationCreate = reviewedHeader.vendor.locationCreate || null;
   } else {
-    const bpResolution = await resolveBpOrAskUser({ token, apiBaseUrl, safe, askUserForBp });
+    const bpResolution = await resolveBpOrAskUser({ apiBaseUrl, safe, askUserForBp });
     if (bpResolution.cancelled) return { cancelled: true };
     bpId = bpResolution.bpId;
     bpCreate = bpResolution.bpCreate;
     locationCreate = bpResolution.locationCreate;
   }
 
-  const partnerAddress = await resolvePartnerAddress({ token, apiBaseUrl, bpId, locationCreate });
+  const partnerAddress = await resolvePartnerAddress({ apiBaseUrl, bpId, locationCreate });
 
   const productResolution = await resolveProductsForLines({
     lines,

@@ -24,6 +24,15 @@ vi.mock('@/components/ui/status-tag', () => ({
 }));
 
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_CSRF_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 // The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
 // <label data-testid="..."> wrapping a nested <input type="checkbox">.
@@ -530,12 +539,16 @@ describe('AssetsAmortizationPanel', () => {
     expect(globalThis.fetch.mock.calls.length).toBe(callsBefore);
   });
 
-  it('sends DELETE requests without an Authorization header when token is missing', async () => {
+  // ETP-4576 — the inverse of what this asserted. It proved the DELETE went out
+  // with `headers: {}` when no token was held, which is exactly the bug: under the
+  // cookie scheme that is EVERY delete, unauthenticated and with no CSRF proof.
+  it('sends DELETE requests with the session write proof under the cookie scheme', async () => {
+    declareCookieSession();
     globalThis.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ response: { data: TWO_LINES } }),
     });
-    render(<AssetsAmortizationPanel {...BASE_PROPS} token={undefined} />);
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
     await waitFor(() => {
       expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
     });
@@ -554,7 +567,11 @@ describe('AssetsAmortizationPanel', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE_PROPS.apiBaseUrl}/amortizationLine/l1`,
-        expect.objectContaining({ method: 'DELETE', headers: {} })
+        expect.objectContaining({
+          method: 'DELETE',
+          credentials: 'include',
+          headers: expect.objectContaining({ 'X-Go-CSRF': TEST_CSRF_TOKEN }),
+        })
       );
     });
   });

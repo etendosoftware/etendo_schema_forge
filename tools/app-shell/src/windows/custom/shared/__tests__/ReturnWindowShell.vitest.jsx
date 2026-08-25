@@ -58,6 +58,15 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReturnWindowShell from '../ReturnWindowShell.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 let lastPageProps;
 function PageComponent(props) {
@@ -104,6 +113,28 @@ describe('ReturnWindowShell', () => {
     expect(lastPageProps.rowQuickActions).toBeUndefined();
   });
 
+  // ETP-4576 — the cookie half of the clone-modal credential. The shell hands the
+  // modal one header bag; under the cookie scheme it must carry no Authorization
+  // at all, because the `__Host-` cookie is the session.
+  it('passes no Authorization to the clone modal under the cookie scheme', () => {
+    declareCookieSession();
+    render(
+      <ReturnWindowShell
+        windowName="return-to-vendor"
+        apiBaseUrl="/api"
+        PageComponent={PageComponent}
+        entity="returnToVendor"
+        headerEntity="returnToVendor"
+        routePrefix="/return-to-vendor/"
+      />,
+    );
+
+    act(() => {
+      lastPageProps.rowQuickActions.onClone({ id: 'ret-9' });
+    });
+    expect(screen.getByTestId('clone-modal')).not.toHaveAttribute('data-auth');
+  });
+
   it('wires list mode row actions, delete refresh, preview, and clone modal', () => {
     const renderPreview = vi.fn(() => <div data-testid="preview" />);
     const duplicateAction = { show: false };
@@ -141,7 +172,10 @@ describe('ReturnWindowShell', () => {
       lastPageProps.rowQuickActions.onClone({ id: 'ret-3' });
     });
     expect(screen.getByTestId('clone-modal')).toHaveAttribute('data-record-count', '1');
-    expect(screen.getByTestId('clone-modal')).toHaveAttribute('data-auth', 'Bearer tkn');
+    // ETP-4576 — the header bag comes from writeHeaders() now, so the credential
+    // is the session's, not the `token` prop's. Under bearer that is still an
+    // Authorization header; the cookie case is covered below.
+    expect(screen.getByTestId('clone-modal')).toHaveAttribute('data-auth', `Bearer ${TEST_BEARER_TOKEN}`);
     expect(screen.getByTestId('clone-modal')).toHaveAttribute('data-header-entity', 'returnToVendor');
     expect(screen.getByTestId('clone-modal')).toHaveAttribute('data-route-prefix', '/return-to-vendor/');
 

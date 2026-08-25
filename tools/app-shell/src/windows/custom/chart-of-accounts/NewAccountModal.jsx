@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
+import { readCredentialHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
@@ -23,7 +24,6 @@ import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
  *   allAccounts   — full flat list already loaded in the tree
  *                   (used to build the parent selector — no extra fetch)
  *   apiBaseUrl    — NEO base URL, e.g. "/sws/neo/chart-of-accounts"
- *   token         — JWT for Authorization header
  *
  * Parent auto-selection:
  *   - If `currentRecord.summaryLevel === 'Y'` and its code is 4 digits → use it as parent.
@@ -79,7 +79,6 @@ export default function NewAccountModal({
   currentRecord,
   allAccounts = [],
   apiBaseUrl,
-  token,
 }) {
   const ui = useUI();
   const [loadedAccounts, setLoadedAccounts] = useState([]);
@@ -96,13 +95,14 @@ export default function NewAccountModal({
   useEffect(() => {
     if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
     fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      credentials: 'include',
+      headers: readCredentialHeaders(),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
       .catch(() => setLoadedAccounts([]))
       .finally(() => setAccountsFetched(true));
-  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, token]);
+  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl]);
 
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
@@ -218,10 +218,11 @@ export default function NewAccountModal({
     try {
       const res = await fetch(`${apiBaseUrl}/elementValue`, {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
+        // ETP-4576 — the spread used to be `token ? { Authorization: ... } : {}`,
+        // which under the cookie scheme contributed nothing: the account was
+        // created by an unproven POST.
+        credentials: 'include',
+        headers: writeHeaders(),
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),
@@ -243,7 +244,7 @@ export default function NewAccountModal({
     } finally {
       setSaving(false);
     }
-  }, [form, validate, apiBaseUrl, token, onSaved, ui]);
+  }, [form, validate, apiBaseUrl, onSaved, ui]);
 
   const handleOpenChange = useCallback(
     (open) => {

@@ -31,13 +31,16 @@ const PAYMENT_STATUS = {
  * The backend PaymentDetailsHandler enriches each row with FIN_Payment fields
  * (documentNo, paymentDate, paymentMethod, account, status) via OBDal traversal.
  */
-export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl }) {
+export default function PaymentDetailsPanelCustom({ parentId, apiBaseUrl }) {
   const ui = useUI();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!parentId || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!parentId) return;
     setLoading(true);
 
     const headers = readCredentialHeaders();
@@ -59,7 +62,7 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
       .then((details) => setRows(details))
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
-  }, [parentId, apiBaseUrl, token]);
+  }, [parentId, apiBaseUrl]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground py-4 text-center">{ui('loading')}</p>;

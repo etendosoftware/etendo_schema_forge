@@ -13,6 +13,11 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { toast } from 'sonner';
 import DocumentPrintDrawer, { printDocuments } from '../DocumentPrintDrawer.jsx';
+import { declareBearerSession, declareCookieSession } from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 describe('DocumentPrintDrawer', () => {
   beforeEach(() => {
@@ -297,23 +302,34 @@ describe('printDocuments (ETP-4728)', () => {
     });
   };
 
-  it('does nothing when token or documentIds are missing', async () => {
+  it('does nothing when documentIds are missing', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    await printDocuments('order', [], 'tok');
-    await printDocuments('order', ['d1'], '');
+    await printDocuments('order', []);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // ETP-4576 — the case above used to have a second row, `printDocuments('order',
+  // ['d1'], '')`, proving that an empty token stops the print. Under the cookie
+  // scheme no token is ever held, so that row described a print button that did
+  // nothing at all. Kept inverted as a regression guard.
+  it('prints when the client holds no token', async () => {
+    declareCookieSession();
+    mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await printDocuments('order', ['d1']);
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it('toasts a service-unavailable message when jsreport is unreachable, using the injected translator', async () => {
     mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
     const translate = vi.fn((key) => `t:${key}`);
-    await printDocuments('order', ['d1'], 'tok', translate);
+    await printDocuments('order', ['d1'], translate);
     expect(toast.error).toHaveBeenCalledWith('t:reportServiceUnavailable');
   });
 
   it('falls back to the raw key when no translator is injected', async () => {
     mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
-    await printDocuments('order', ['d1'], 'tok');
+    await printDocuments('order', ['d1']);
     expect(toast.error).toHaveBeenCalledWith('reportServiceUnavailable');
   });
 
@@ -325,7 +341,7 @@ describe('printDocuments (ETP-4728)', () => {
       headers: { get: (h) => (h === 'content-type' ? 'application/pdf' : null) },
       blob: () => Promise.resolve(new Blob(['%PDF'])),
     }));
-    await printDocuments('order', ['d1'], 'tok');
+    await printDocuments('order', ['d1']);
     expect(openSpy).toHaveBeenCalledWith('blob:generated', '_blank');
     expect(toast.error).not.toHaveBeenCalled();
   });

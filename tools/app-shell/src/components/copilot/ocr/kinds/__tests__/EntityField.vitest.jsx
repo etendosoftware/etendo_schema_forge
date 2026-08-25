@@ -70,7 +70,6 @@ describe('EntityField', () => {
     expect(useEntitySearch.lastArgs).toMatchObject({
       open: true,
       endpoint: '/sws/neo/business-partner',
-      token: 'tok',
       query: 'Acme Raw',
       filter: 'active = true',
       limit: 20,

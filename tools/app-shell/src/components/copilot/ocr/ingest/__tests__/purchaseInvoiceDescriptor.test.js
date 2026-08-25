@@ -161,7 +161,6 @@ describe('resolveTaxesForLines', () => {
       { id: 'TAX-12', name: 'IVA Compras 12%' },
     ]));
     const result = await resolveTaxesForLines({
-      token: 'tok',
       lines: [
         { tax_label: 'IVA 21%', tax_rate: 21 },
         { tax_label: null, tax_rate: 12 },
@@ -182,7 +181,6 @@ describe('resolveTaxesForLines', () => {
       null,  // no match for the second line
     ]));
     const result = await resolveTaxesForLines({
-      token: 'tok',
       lines: [
         { tax_label: 'IVA 21%' },
         { tax_label: 'Unknown weird tax' },
@@ -195,7 +193,6 @@ describe('resolveTaxesForLines', () => {
     let fetched = false;
     globalThis.fetch = async () => { fetched = true; return { ok: true, json: async () => ({}) }; };
     const result = await resolveTaxesForLines({
-      token: 'tok',
       lines: [
         { description: 'A' },
         { description: 'B', tax_label: '', tax_rate: null },
@@ -205,19 +202,21 @@ describe('resolveTaxesForLines', () => {
     assert.equal(fetched, false, 'no terms → no network call');
   });
 
-  it('returns empty array when token or lines are missing', async () => {
+  // ETP-4576 — a fourth case here passed `token: null` and expected `[]`. Under
+  // the cookie scheme no token is ever held, so that branch swallowed every tax
+  // resolution: an invoice came back with all its taxes silently dropped. Only
+  // the "no lines at all" cases legitimately short-circuit.
+  it('returns empty array when lines are missing', async () => {
     let fetched = false;
     globalThis.fetch = async () => { fetched = true; return { ok: true, json: async () => ({}) }; };
-    assert.deepEqual(await resolveTaxesForLines({ token: null, lines: [{ tax_rate: 21 }] }), []);
-    assert.deepEqual(await resolveTaxesForLines({ token: 'tok', lines: [] }), []);
-    assert.deepEqual(await resolveTaxesForLines({ token: 'tok' }), []);
+    assert.deepEqual(await resolveTaxesForLines({ lines: [] }), []);
+    assert.deepEqual(await resolveTaxesForLines({}), []);
     assert.equal(fetched, false);
   });
 
   it('uses "<rate>%" when only tax_rate is provided (no label)', async () => {
     mockSimSearchFetch(envelopeWith([{ id: 'TAX-21', name: 'IVA 21%' }]));
     const result = await resolveTaxesForLines({
-      token: 'tok',
       lines: [{ tax_rate: 21 }],
     });
     assert.deepEqual(result, ['TAX-21']);

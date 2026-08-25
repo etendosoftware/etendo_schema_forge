@@ -19,11 +19,18 @@ vi.mock('sonner', () => ({
 import { useAttachments } from '../useAttachments';
 import { ATTACHMENTS_CHANGED_EVENT, notifyAttachmentsChanged } from '../attachmentsBus';
 import { toast } from 'sonner';
+import {
+  declareBearerSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 const baseOpts = {
   tableName: 'C_Order',
   recordId: 'REC-1',
-  token: 'tok-123',
   apiBaseUrl: 'http://api.test',
   isActive: true,
   config: { maxSizeMB: 10 },
@@ -108,7 +115,11 @@ describe('useAttachments', () => {
     expect(postCall[0]).toBe('http://api.test/sws/neo/attachments/C_Order/REC-1');
     expect(postCall[1].method).toBe('POST');
     expect(postCall[1].body).toBeInstanceOf(FormData);
-    expect(postCall[1].headers.Authorization).toBe('Bearer tok-123');
+    expect(postCall[1].headers.Authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+    // ETP-4576 — a multipart upload must NOT declare Content-Type: the browser
+    // sets it with the boundary. writeCredentialHeaders() is the builder that
+    // carries the write proof without one.
+    expect(postCall[1].headers['Content-Type']).toBeUndefined();
     // The fallback list call refreshed items.
     await waitFor(() => expect(result.current.items).toHaveLength(1));
     expect(toast.success).toHaveBeenCalled();

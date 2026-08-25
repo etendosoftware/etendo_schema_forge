@@ -8,7 +8,7 @@ import { renderHook, act } from '@testing-library/react';
 // test also supplies. The scheme is declared explicitly because src/test/setup.js
 // resets to the bearer default before every test: an assertion that leans on that
 // default passes by omission rather than by proving anything.
-import { declareBearerSession, expectBearerHeader } from '@/test/sessionContract.js';
+import { declareBearerSession, declareCookieSession, expectBearerHeader } from '@/test/sessionContract.js';
 import {
   SEARCH_DEBOUNCE_MS,
   escHql,
@@ -139,18 +139,27 @@ describe('useEntitySearch', () => {
   const baseParams = {
     open: true,
     endpoint: '/sws/neo/product/product',
-    token: 'tok',
     query: '',
     filter: undefined,
     limit: 20,
   };
 
-  it('does nothing when open/endpoint/token are falsy', () => {
+  it('does nothing when open/endpoint are falsy', () => {
     renderHook(() => useEntitySearch({ ...baseParams, open: false }));
     renderHook(() => useEntitySearch({ ...baseParams, endpoint: '' }));
-    renderHook(() => useEntitySearch({ ...baseParams, token: '' }));
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS + 10));
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  // ETP-4576 — a third row here used to pass `token: ''` and expect no request.
+  // The session is the `__Host-` cookie, so the client never holds a token and
+  // that gate suppressed every entity search. Kept as a regression guard.
+  it('searches when the client holds no token', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    declareCookieSession();
+    renderHook(() => useEntitySearch(baseParams));
+    await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   it('fetches after the debounce and sets items from json.response.data', async () => {

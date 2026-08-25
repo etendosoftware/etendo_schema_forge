@@ -326,7 +326,11 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // either returns the authorization number (injected into updates) or an ERROR message.
   const handleAuthorizationToggle = useCallback(async (val) => {
     onChange?.('aeatsiiIsauthorization', val); // optimistic update
-    if (!apiBaseUrl || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie scheme
+    // it was permanently true, so the optimistic toggle above was never confirmed
+    // by the callout: the authorization number never arrived and no error showed.
+    // The POST already carries the session's write proof via writeHeaders().
+    if (!apiBaseUrl) return;
     try {
       const res = await fetch(`${apiBaseUrl}/header/callout`, {
         method: 'POST',
@@ -345,7 +349,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
         }
       }
     } catch { /* network error — keep optimistic state */ }
-  }, [apiBaseUrl, token, data, onChange]);
+  }, [apiBaseUrl, data, onChange]);
 
   // ETP-4783: Per-field lock conditions that differ from the general siiFieldReadOnly gate.
   // Classic parity: SII desc and accounting-register date are editable even on completed

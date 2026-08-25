@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUI, getStoredLocale } from '@/i18n';
+import { useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast.js';
+import { buildHeaders, buildWriteHeaders } from '@/auth/api.js';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
@@ -61,15 +62,14 @@ function yearCriteria(yearId) {
 // DOCUMENT_CATEGORY_LABEL_KEYS below for the actual fix (client-side enumLabels, same
 // convention DataTable.cellRenderers.jsx's renderEnumCell already uses everywhere else). The
 // header is still sent since it's correct for other things (e.g. AD_Message translations) and
-// doesn't hurt. `getStoredLocale()` (from @/i18n, app-shell-core's useLocaleState.js) is the
-// canonical "read the active locale outside of React" helper already published for exactly
-// this use case — reused here instead of duplicating useEntity.js's own localStorage read.
-function buildLocaleHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    'Accept-Language': getStoredLocale(),
-  };
-}
+// doesn't hurt — the builders below attach it from `getStoredLocale()` themselves.
+//
+// ETP-4576 — this used to hand-build `{ Authorization: Bearer <token>,
+// 'Accept-Language': ... }`. `buildHeaders()`/`buildWriteHeaders()` from
+// auth/api.js are that exact shape with the session's credential in place of a
+// token the client no longer holds — the read builder for GETs, the write
+// builder for the openClose POSTs (a read builder there omits the CSRF proof
+// and the backend answers 403).
 
 // The actual fix for the untranslated labels: client-side enumLabels dictionaries resolved via
 // ui()/tMenu (dictionary.genericLabels), exactly like DataTable.cellRenderers.jsx's
@@ -139,8 +139,8 @@ const DOCUMENT_CATEGORY_LABEL_KEYS = {
   WRE: 'calendarDocCategoryWorkRequirement',
 };
 
-async function fetchJson(url, token) {
-  const res = await fetch(url, { headers: buildLocaleHeaders(token) });
+async function fetchJson(url) {
+  const res = await fetch(url, { credentials: 'include', headers: buildHeaders() });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
   // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
@@ -150,10 +150,11 @@ async function fetchJson(url, token) {
   return body?.response?.data ?? (Array.isArray(body) ? body : []);
 }
 
-async function postAction(url, token, fieldValues) {
+async function postAction(url, fieldValues) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { ...buildLocaleHeaders(token), 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: buildWriteHeaders(),
     // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
     // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
     body: JSON.stringify({ fieldValues }),
@@ -162,7 +163,7 @@ async function postAction(url, token, fieldValues) {
   return res.json();
 }
 
-export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) {
+export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
   const ui = useUI();
   // Three distinct states, not just null vs array (same convention as AccountingPanel):
   // `undefined` = loading, `null` = the request failed, an array = loaded (possibly empty).
@@ -192,31 +193,31 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   const loadPeriods = useCallback(async () => {
     if (!parentId) return;
     try {
-      const data = await fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`, token);
+      const data = await fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`);
       setPeriods(data);
     } catch {
       setPeriods(null);
     }
-  }, [parentId, apiBaseUrl, token]);
+  }, [parentId, apiBaseUrl]);
 
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
     loadPeriods();
-  }, [parentId, apiBaseUrl, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parentId, apiBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetches (or re-fetches) one period's documents — used both by toggleExpand (first expand)
   // and, silently, to refresh a document row's status right after a document action succeeds.
   // Reused rather than duplicated so "initial load" and "post-action refresh" can never drift.
   const loadDocumentsForPeriod = useCallback(async (periodId) => {
     try {
-      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, token);
+      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`);
       setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
       setDocumentsError((prev) => ({ ...prev, [periodId]: false }));
     } catch {
       setDocumentsError((prev) => ({ ...prev, [periodId]: true }));
     }
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl]);
 
   const toggleExpand = useCallback(async (periodId) => {
     // Selection only ever applies to the currently expanded period's rows — collapsing or
@@ -247,7 +248,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
       return { ...prev, [key]: true };
     });
     try {
-      await postAction(url, token, fieldValues);
+      await postAction(url, fieldValues);
       // Targeted refetch of just the affected data (never a full page reload) so the status
       // badge reflects the new value immediately, instead of staying stale until a manual F5.
       await onSuccess?.();
@@ -256,7 +257,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     } finally {
       setPendingActions((prev) => ({ ...prev, [key]: false }));
     }
-  }, [token, ui]);
+  }, [ui]);
 
   // Opens the shared ProcessParamDialog instead of firing the request directly — the actual
   // POST happens in handleDialogConfirm once the user picks Open/Closed/Permanently closed.
@@ -290,7 +291,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     setPendingActions((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
     try {
       const outcomes = await Promise.allSettled(
-        ids.map((id) => postAction(`${apiBaseUrl}/documents/${id}/action/openClose`, token, fieldValues))
+        ids.map((id) => postAction(`${apiBaseUrl}/documents/${id}/action/openClose`, fieldValues))
       );
       const failed = outcomes.filter((o) => o.status === 'rejected');
       const ok = ids.length - failed.length;
@@ -302,7 +303,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     } finally {
       setPendingActions((prev) => ({ ...prev, [key]: false }));
     }
-  }, [apiBaseUrl, token, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
+  }, [apiBaseUrl, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
 
   const handleDialogConfirm = useCallback((paramValues) => {
     if (!dialogTarget) return;

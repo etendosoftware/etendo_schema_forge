@@ -55,14 +55,13 @@ async function validateImageFile(file, ui) {
  * Props:
  *  - imageId: current AD_Image_ID value (string UUID or empty)
  *  - onChange: (newImageId) => void — called after a successful upload
- *  - token: JWT token for authenticated requests
  *  - apiBaseUrl: base URL like "/sws/neo" or "/etendo/sws/neo"
  *  - readOnly: boolean
  *  - fieldKey: string (for data-testid)
  *  - stretch: boolean — fill the available height (via an absolutely positioned
  *    preview, so the image never expands the grid row) instead of a fixed 176px box
  */
-export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = false, fieldKey = 'image', stretch = false, label = null }) {
+export function ImageField({ imageId, onChange, apiBaseUrl, readOnly = false, fieldKey = 'image', stretch = false, label = null }) {
   const ui = useUI();
   const [blobUrl, setBlobUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -79,7 +78,10 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
 
   // Load image blob when imageId changes
   useEffect(() => {
-    if (!imageId || !token) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so no record image ever loaded: the field
+    // rendered its empty placeholder as if the record simply had no image.
+    if (!imageId) {
       setBlobUrl(null);
       return;
     }
@@ -96,7 +98,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, token, imageBase]);
+  }, [imageId, imageBase]);
 
   // Cleanup blob URL on unmount
   useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, []);

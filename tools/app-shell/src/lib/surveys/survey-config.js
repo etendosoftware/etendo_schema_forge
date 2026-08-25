@@ -1,3 +1,4 @@
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 // Survey engine tunables — team-configurable via VITE_SURVEY_* env vars (build-time only,
 // requires a rebuild+redeploy to take effect). NOT a customer-facing setting: there is no UI,
 // no window, no per-org override — this is for the Etendo GO team to tune cooldowns/caps per
@@ -119,13 +120,18 @@ export function getRemoteCannedResponses(surveyId, language) {
  * so the survey engine keeps working off VITE_SURVEY_* / hardcoded defaults when the backend
  * is unreachable. Never throws.
  */
-export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fetch, logger = console } = {}) {
+export async function loadRemoteSurveyConfig({ apiBaseUrl, fetchImpl = fetch, logger = console } = {}) {
   // apiBaseUrl is legitimately '' in dev (getApiBase() resolves to the app root) — only bail
   // when it's truly absent (null/undefined), not just falsy, or the fetch never fires locally.
-  if (apiBaseUrl == null || !token) return;
+  // ETP-4576 — the `!token` conjunct used to live here, and the header below was
+  // hand-built. Under the cookie scheme the gate was permanently true, so the
+  // remote survey config never loaded and the engine ran on local defaults
+  // forever — indistinguishable from the backend being unreachable.
+  if (apiBaseUrl == null) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      headers: jsonHeaders(),
     });
     if (!response.ok) return;
     const data = await response.json();
@@ -145,16 +151,14 @@ export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fe
  * throws.
  */
 export async function submitSurveyResponse({
-  apiBaseUrl, token, surveyKey, score, feedback, tags, fetchImpl = fetch, logger = console,
+  apiBaseUrl, surveyKey, score, feedback, tags, fetchImpl = fetch, logger = console,
 } = {}) {
-  if (apiBaseUrl == null || !token || !surveyKey) return;
+  if (apiBaseUrl == null || !surveyKey) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/response`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      credentials: 'include',
+      headers: writeHeaders(),
       body: JSON.stringify({
         surveyKey,
         ...(score != null ? { score } : {}),

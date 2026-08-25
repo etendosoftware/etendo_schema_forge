@@ -1,11 +1,17 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useWidget } from '../useWidget';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+} from '@/test/sessionContract.js';
 
 describe('useWidget', () => {
-  const opts = { token: 'test-token', apiBaseUrl: 'http://localhost/api' };
+  const opts = { apiBaseUrl: 'http://localhost/api' };
 
   beforeEach(() => {
     globalThis.fetch = vi.fn();
+    declareBearerSession();
   });
 
   afterEach(() => {
@@ -35,7 +41,7 @@ describe('useWidget', () => {
         'http://localhost/api/sales-kpis/data',
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: 'Bearer test-token',
+            Authorization: `Bearer ${TEST_BEARER_TOKEN}`,
           }),
         }),
       );
@@ -131,14 +137,33 @@ describe('useWidget', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('does not fetch when token is missing', () => {
+  it('does not fetch when apiBaseUrl is missing', () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
     });
 
-    renderHook(() => useWidget('my-widget', { token: '', apiBaseUrl: 'http://localhost' }));
+    renderHook(() => useWidget('my-widget', { apiBaseUrl: '' }));
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  // ETP-4576 — the case above used to be "no token → no fetch". Under the cookie
+  // scheme no token is ever held, so the widget would never load its data.
+  it('fetches under the cookie scheme, with no Authorization header', async () => {
+    declareCookieSession();
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [] } }),
+    });
+
+    renderHook(() => useWidget('my-widget', opts));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost/api/my-widget/data',
+      expect.objectContaining({
+        headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+      }),
+    ));
   });
 });

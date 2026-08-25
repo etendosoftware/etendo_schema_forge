@@ -56,7 +56,6 @@ function parseLooseJson(text) {
  * `tools/schemas/`.
  *
  * @param {{
- *   token: string,
  *   toolName?: string,
  *   question: string,
  *   structuredOutput?: string,
@@ -65,7 +64,6 @@ function parseLooseJson(text) {
  * }} params
  */
 export function useOcrExtraction({
-  token,
   toolName = 'SimpleOcrTool',
   question,
   structuredOutput,
@@ -77,14 +75,16 @@ export function useOcrExtraction({
 
   const extract = useCallback(async (file) => {
     if (!file) throw new Error('No file provided');
-    if (!token) throw new Error('Missing auth token');
+    // ETP-4576 — no `!token` throw. Under the cookie scheme no token is held, so
+    // this rejected every OCR extraction before it started; whether the session is
+    // valid is the backend's answer to give.
 
     setError(null);
     setStatus('uploading');
 
     let uploadedPath;
     try {
-      const uploadResp = await uploadFile(token, file);
+      const uploadResp = await uploadFile(file);
       // Java RestService returns the form field keyed by its name ("file"), with
       // the Python-side absolute path as the value.
       uploadedPath = uploadResp?.file
@@ -105,7 +105,7 @@ export function useOcrExtraction({
       if (structuredOutputSchema) toolParams.structured_output_schema = structuredOutputSchema;
       else if (structuredOutput) toolParams.structured_output = structuredOutput;
 
-      const resp = await executeTool(token, {
+      const resp = await executeTool({
         toolName,
         params: toolParams,
         agentId,
@@ -123,7 +123,7 @@ export function useOcrExtraction({
       setStatus('error');
       throw err;
     }
-  }, [token, toolName, question, structuredOutput, structuredOutputSchema, agentId]);
+  }, [toolName, question, structuredOutput, structuredOutputSchema, agentId]);
 
   const reset = useCallback(() => {
     setStatus('idle');

@@ -6,6 +6,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -29,7 +30,6 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 export default function PurchaseOrderActions({
   data,
   recordId,
-  token,
   apiBaseUrl,
   api,
   onProcess,
@@ -42,13 +42,10 @@ export default function PurchaseOrderActions({
     () => (apiBaseUrl || '').replace(/\/[^/]+$/, ''),
     [apiBaseUrl],
   );
-  const headers = useMemo(
-    () => ({
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    }),
-    [token],
-  );
+  // ETP-4576 — one header bag for this component's reads and writes, so it takes
+  // the write builder: same shape as the hand-built `{ Authorization,
+  // Content-Type }`, with the session's proof in place of the token.
+  const headers = useMemo(() => writeHeaders(), []);
 
   if (!data) return null;
 
@@ -296,7 +293,6 @@ export default function PurchaseOrderActions({
           <ConfirmOrderModal
             orderId={recordId}
             data={data}
-            token={token}
             apiBaseUrl={apiBaseUrl}
             onClose={() => setShowConfirmModal(false)}
             data-testid="ConfirmOrderModal__4da6de" />,
@@ -312,7 +308,6 @@ export default function PurchaseOrderActions({
 function ConfirmOrderModal({
   orderId,
   data,
-  token,
   apiBaseUrl,
   onClose,
   defaultSelected = 'confirm',
@@ -327,10 +322,10 @@ function ConfirmOrderModal({
   const [needsReload, setNeedsReload] = useState(false);
 
   const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — one header bag for this component's reads and writes, so it takes
+  // the write builder: same shape as the hand-built `{ Authorization,
+  // Content-Type }`, with the session's proof in place of the token.
+  const headers = useMemo(() => writeHeaders(), []);
 
   // Fetch fresh record + line count on mount
   useEffect(() => {

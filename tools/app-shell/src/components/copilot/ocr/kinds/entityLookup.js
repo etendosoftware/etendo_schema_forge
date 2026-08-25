@@ -29,12 +29,15 @@ export function useClickOutside(ref, enabled, onOutside) {
   }, [enabled, ref, onOutside]);
 }
 
-export function useEntitySearch({ open, endpoint, token, query, filter, limit }) {
+export function useEntitySearch({ open, endpoint, query, filter, limit }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !endpoint || !token) return undefined;
+    // ETP-4576 — the session is the `__Host-` cookie, so there is no client-held
+    // token to require here. The dropped `!token` conjunct was permanently true
+    // under the cookie scheme and the entity search never issued a request.
+    if (!open || !endpoint) return undefined;
     let cancelled = false;
     const trimmed = query.trim();
     const timer = setTimeout(async () => {
@@ -60,7 +63,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, token, query, filter, limit]);
+  }, [open, endpoint, query, filter, limit]);
 
   return { items, loading };
 }

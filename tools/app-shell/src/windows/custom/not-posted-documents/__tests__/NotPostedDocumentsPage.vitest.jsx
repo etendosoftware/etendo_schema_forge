@@ -3,6 +3,16 @@ import { render, screen, waitFor, fireEvent, act, within } from '@testing-librar
 import { toast } from 'sonner';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
+import {
+  declareBearerSession,
+  declareCookieSession,
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+} from '@/test/sessionContract.js';
+
+beforeEach(() => {
+  declareBearerSession();
+});
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
@@ -160,16 +170,29 @@ describe('NotPostedDocumentsPage', () => {
     expect(screen.getByText('2024-03-15')).toBeInTheDocument();
   });
 
-  it('sends Authorization Bearer header', async () => {
+  it('sends the bearer credential under the bearer scheme', async () => {
     globalThis.fetch = mkFetch([]);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    render(<NotPostedDocumentsPage apiBaseUrl={BASE_URL} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
+        headers: expect.objectContaining({ Authorization: `Bearer ${TEST_BEARER_TOKEN}` }),
       }),
     );
+  });
+
+  // ETP-4576 — the cookie half of the pair. Same page, other scheme: no header
+  // carries a credential and the CSRF proof rides along instead, because this
+  // page's one header bag also drives its posting actions.
+  it('sends the CSRF proof and no Authorization under the cookie scheme', async () => {
+    declareCookieSession();
+    globalThis.fetch = mkFetch([]);
+    render(<NotPostedDocumentsPage apiBaseUrl={BASE_URL} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const init = globalThis.fetch.mock.calls[0][1];
+    expect(init.headers.Authorization).toBeUndefined();
+    expect(init.headers['X-Go-CSRF']).toBe(TEST_CSRF_TOKEN);
   });
 
   it('selecting a row reveals the bulk post button', async () => {

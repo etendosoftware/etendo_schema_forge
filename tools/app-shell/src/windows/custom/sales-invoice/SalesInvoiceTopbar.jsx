@@ -8,6 +8,7 @@ import CloneButton from '../shared/CloneButton.jsx';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@etendosoftware/app-shell-core';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -18,10 +19,11 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
 
   useInvoiceUpdatedListener('sales-invoice', recordId, onRefresh);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — one header bag drives this component's reads and its writes, so
+  // it takes the write builder: same shape as the `{ Authorization, Content-Type }`
+  // it used to hand-build, with the session's proof in place of a token the
+  // client no longer holds.
+  const headers = useMemo(() => writeHeaders(), []);
 
   if (!data || !recordId) return null;
 

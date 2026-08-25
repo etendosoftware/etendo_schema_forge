@@ -17,14 +17,17 @@ const ContactsFinanceContext = createContext(null);
 
 const EMPTY_TREND = { labels: [], revenue: [], expenses: [] };
 
-export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
+export function ContactsFinanceProvider({ apiBaseUrl, children }) {
   const [period, setPeriod] = useState('3M');
   const [recordId, setRecordId] = useState(null);
   const [stats, setStats] = useState(null); // null = loading, [] = loaded/empty
   const [trend, setTrend] = useState(null);
 
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!recordId || !apiBaseUrl) {
       setStats(null);
       setTrend(null);
       return;
@@ -40,7 +43,7 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
       .then(r => (r.ok ? r.json() : null))
       .then(data => setTrend(data?.response?.data ?? EMPTY_TREND))
       .catch(() => setTrend(EMPTY_TREND));
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, apiBaseUrl]);
 
   const value = useMemo(() => ({
     period, setPeriod,

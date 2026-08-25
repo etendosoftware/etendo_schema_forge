@@ -6,6 +6,7 @@
  */
 import {
   declareBearerSession,
+  declareCookieSession,
   expectBearerHeader,
   expectNoCsrfHeader,
 } from '@/test/sessionContract.js';
@@ -80,7 +81,7 @@ describe('ImageField — behaviour', () => {
 
   describe('loading the current image', () => {
     it('fetches the binary from the /image endpoint derived from apiBaseUrl', async () => {
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/etendo/sws/neo/product" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/etendo/sws/neo/product" onChange={vi.fn()} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
       expect(globalThis.fetch.mock.calls[0][0]).toBe('/etendo/sws/neo/image/IMG-1');
@@ -94,24 +95,34 @@ describe('ImageField — behaviour', () => {
     });
 
     it('falls back to the default /sws/neo/image base when no apiBaseUrl is given', async () => {
-      render(<ImageField imageId="IMG-1" token="tk" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" onChange={vi.fn()} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
       expect(globalThis.fetch.mock.calls[0][0]).toBe('/sws/neo/image/IMG-1');
       expectBearerHeader('tk');
     });
 
-    it('does not fetch when there is no imageId or no token', () => {
-      const { unmount } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+    it('does not fetch when there is no imageId', () => {
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
       expect(globalThis.fetch).not.toHaveBeenCalled();
-      unmount();
+    });
 
+    // ETP-4576 — the case above used to have a second half: an imageId with no
+    // token, expecting no fetch. Commit 4f6b8b09 dropped `token={token}` at both
+    // EntityForm call sites but left the `!token` gate inside ImageField, so on
+    // this branch NO record image loaded — the field showed its empty
+    // placeholder as if the record had none. Kept inverted as a regression guard.
+    it('loads the image when the client holds no token', async () => {
+      declareCookieSession();
       render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/sws/neo/image/IMG-1',
+        expect.objectContaining({ headers: expect.not.objectContaining({ Authorization: expect.anything() }) }),
+      ));
     });
 
     it('keeps the placeholder when the image request fails', async () => {
       globalThis.fetch.mockResolvedValue({ ok: false, blob: async () => null });
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
@@ -119,7 +130,7 @@ describe('ImageField — behaviour', () => {
 
     it('swallows a rejected image request', async () => {
       globalThis.fetch.mockRejectedValue(new Error('offline'));
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
@@ -127,12 +138,12 @@ describe('ImageField — behaviour', () => {
 
     it('revokes the previous blob URL when the imageId changes', async () => {
       const { rerender } = render(
-        <ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />,
+        <ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />,
       );
       await screen.findByRole('img');
       expect(createObjectURL).toHaveBeenCalledTimes(1);
 
-      rerender(<ImageField imageId="IMG-2" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      rerender(<ImageField imageId="IMG-2" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
       await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith(BLOB_URL));
       expect(createObjectURL).toHaveBeenCalledTimes(2);
     });
@@ -141,7 +152,7 @@ describe('ImageField — behaviour', () => {
   describe('upload validation', () => {
     it('rejects a file whose MIME type is not png/jpeg', async () => {
       const onChange = vi.fn();
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={onChange} />);
 
       fireEvent.change(fileInput(container), {
         target: { files: [makeFile({ name: 'doc.pdf', type: 'application/pdf' })] },
@@ -154,7 +165,7 @@ describe('ImageField — behaviour', () => {
     });
 
     it('rejects a file above the 30 MB limit', async () => {
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile({ sizeMb: 31 })] } });
 
@@ -164,7 +175,7 @@ describe('ImageField — behaviour', () => {
 
     it('rejects an image beyond the maximum pixel dimensions', async () => {
       stubImageDecoder({ width: 7681, height: 100 });
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
 
@@ -176,7 +187,7 @@ describe('ImageField — behaviour', () => {
       stubImageDecoder({ fail: true });
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ imageId: 'NEW-1' }) });
       const onChange = vi.fn();
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={onChange} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
 
@@ -185,7 +196,7 @@ describe('ImageField — behaviour', () => {
     });
 
     it('ignores a change event with no selected file', async () => {
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       fireEvent.change(fileInput(container), { target: { files: [] } });
 
@@ -199,7 +210,7 @@ describe('ImageField — behaviour', () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ imageId: 'NEW-9' }) });
       const onChange = vi.fn();
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/etendo/sws/neo/product" onChange={onChange} />,
+        <ImageField apiBaseUrl="/etendo/sws/neo/product" onChange={onChange} />,
       );
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile({ name: 'front.png' })] } });
@@ -224,7 +235,7 @@ describe('ImageField — behaviour', () => {
     it('surfaces the server text when the upload is rejected', async () => {
       globalThis.fetch.mockResolvedValue({ ok: false, status: 413, text: async () => 'payload too large' });
       const onChange = vi.fn();
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={onChange} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
 
@@ -234,7 +245,7 @@ describe('ImageField — behaviour', () => {
 
     it('falls back to the status code when the error body is empty', async () => {
       globalThis.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => '' });
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
 
@@ -244,7 +255,7 @@ describe('ImageField — behaviour', () => {
     it('errors when the response carries no imageId', async () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
       const onChange = vi.fn();
-      const { container } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} />);
+      const { container } = render(<ImageField apiBaseUrl="/sws/neo" onChange={onChange} />);
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
 
@@ -259,7 +270,7 @@ describe('ImageField — behaviour', () => {
       }));
       const onChange = vi.fn();
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />,
+        <ImageField apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />,
       );
 
       fireEvent.change(fileInput(container), { target: { files: [makeFile()] } });
@@ -277,7 +288,7 @@ describe('ImageField — behaviour', () => {
     it('opens the file picker when the empty preview is clicked', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       // The click handler sits on the preview box; clicking its content bubbles up.
       await user.click(screen.getByText('noImage'));
@@ -287,7 +298,7 @@ describe('ImageField — behaviour', () => {
     it('does not open the file picker in readOnly mode', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly />);
 
       await user.click(screen.getByText('noImage'));
       expect(clickSpy).not.toHaveBeenCalled();
@@ -296,7 +307,7 @@ describe('ImageField — behaviour', () => {
     it('opens the file picker from the stretch dropzone', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
 
       await user.click(screen.getByText('imageDropTitle'));
       expect(clickSpy).toHaveBeenCalled();
@@ -305,14 +316,14 @@ describe('ImageField — behaviour', () => {
     it('does not open the file picker from a readOnly stretch dropzone', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch readOnly />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch readOnly />);
 
       await user.click(screen.getByText('imageDropTitle'));
       expect(clickSpy).not.toHaveBeenCalled();
     });
 
     it('uses the fieldKey for its test id', () => {
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} fieldKey="logo" />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} fieldKey="logo" />);
       expect(screen.getByTestId('field-logo')).toBeInTheDocument();
     });
   });
@@ -321,7 +332,7 @@ describe('ImageField — behaviour', () => {
     it('clears the value from the non-stretch preview', async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={onChange} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={onChange} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('button', { name: 'Remove image' }));
@@ -331,7 +342,7 @@ describe('ImageField — behaviour', () => {
     it('clears the value from the stretch preview', async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('button', { name: 'Remove image' }));
@@ -339,7 +350,7 @@ describe('ImageField — behaviour', () => {
     });
 
     it('hides the remove and upload affordances when readOnly', async () => {
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly stretch />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly stretch />);
 
       await screen.findByRole('img');
       expect(screen.queryByRole('button', { name: 'Remove image' })).not.toBeInTheDocument();
@@ -349,7 +360,7 @@ describe('ImageField — behaviour', () => {
     it('replaces an existing image from the non-stretch overlay without opening the lightbox', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('button', { name: /uploadImage/ }));
@@ -362,7 +373,7 @@ describe('ImageField — behaviour', () => {
     it('offers the upload button next to an existing image in stretch mode', async () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('button', { name: 'uploadImage' }));
@@ -373,7 +384,7 @@ describe('ImageField — behaviour', () => {
   describe('lightbox', () => {
     it('opens on preview click and closes with Escape', async () => {
       const user = userEvent.setup();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('img'));
@@ -385,7 +396,7 @@ describe('ImageField — behaviour', () => {
 
     it('closes when the close button is used', async () => {
       const user = userEvent.setup();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('img'));
@@ -395,7 +406,7 @@ describe('ImageField — behaviour', () => {
 
     it('stays open when the enlarged image itself is clicked', async () => {
       const user = userEvent.setup();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('img'));
@@ -407,7 +418,7 @@ describe('ImageField — behaviour', () => {
 
     it('opens from the stretch preview too', async () => {
       const user = userEvent.setup();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('img'));
@@ -416,7 +427,7 @@ describe('ImageField — behaviour', () => {
 
     it('ignores non-Escape keys while open', async () => {
       const user = userEvent.setup();
-      render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
 
       await screen.findByRole('img');
       await user.click(screen.getByRole('img'));
@@ -430,7 +441,7 @@ describe('ImageField — behaviour', () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ imageId: 'DROP-1' }) });
       const onChange = vi.fn();
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />,
+        <ImageField apiBaseUrl="/sws/neo" onChange={onChange} stretch label="Photo" />,
       );
       const zone = screen.getByText('imageDropTitle').closest('div[class*="border-dashed"]')
         ?? container.querySelector('[class*="border-dashed"]');
@@ -445,7 +456,7 @@ describe('ImageField — behaviour', () => {
 
     it('highlights on drag enter and clears on drag leave', () => {
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />,
+        <ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />,
       );
       const zone = container.querySelector('[class*="border-dashed"]');
 
@@ -458,7 +469,7 @@ describe('ImageField — behaviour', () => {
 
     it('does not highlight or upload when readOnly', async () => {
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch readOnly />,
+        <ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch readOnly />,
       );
       const zone = container.querySelector('[class*="border-dashed"]');
 
@@ -471,7 +482,7 @@ describe('ImageField — behaviour', () => {
 
     it('ignores a drop with no files', async () => {
       const { container } = render(
-        <ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />,
+        <ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch />,
       );
       const zone = container.querySelector('[class*="border-dashed"]');
 
@@ -482,19 +493,19 @@ describe('ImageField — behaviour', () => {
 
   describe('empty / loading placeholders', () => {
     it('shows the no-image label when there is nothing to load', () => {
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
       expect(screen.getByText('noImage')).toBeInTheDocument();
       expect(screen.getByText('uploadImage')).toBeInTheDocument();
     });
 
     it('hides the upload hint when readOnly', () => {
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} readOnly />);
       expect(screen.getByText('noImage')).toBeInTheDocument();
       expect(screen.queryByText('uploadImage')).not.toBeInTheDocument();
     });
 
     it('renders the dropzone copy in stretch mode', () => {
-      render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch label="Photo" />);
+      render(<ImageField apiBaseUrl="/sws/neo" onChange={vi.fn()} stretch label="Photo" />);
       expect(screen.getByText('imageDropTitle')).toBeInTheDocument();
       expect(screen.getByText('imageDropSubtitle')).toBeInTheDocument();
       expect(screen.getByText('Photo')).toBeInTheDocument();
@@ -510,7 +521,7 @@ describe('ImageField — behaviour', () => {
     // when `imageId` changes, see the test above). Un-skip once the deps are fixed.
     it.skip('releases the blob URL on unmount', async () => {
       const { unmount } = render(
-        <ImageField imageId="IMG-1" token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />,
+        <ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />,
       );
       await screen.findByRole('img');
       revokeObjectURL.mockClear();

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { InlineLinesPanel } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 // ETP-4592: product-price lines cannot be deleted from this tab (products are
 // added to a tariff from the product record itself). InlineLinesPanel has no
@@ -40,7 +41,7 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export default function PriceListProductPrices({ recordId, data, token, apiBaseUrl, editing }) {
+export default function PriceListProductPrices({ recordId, data, apiBaseUrl, editing }) {
   const ui = useUI();
   const columns = useMemo(() => [
     { key: 'product', column: 'M_Product_ID', type: 'string', label: ui('product'), readOnly: true, required: true },
@@ -56,10 +57,10 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — `headers` drives this panel's reads and its price writes, so it
+  // takes the write builder. It used to hand-build `Bearer ${token}`, which
+  // carried `undefined` once the client stopped holding a token.
+  const headers = useMemo(() => writeHeaders(), []);
 
   const parentId = data?.id || (recordId !== 'new' ? recordId : null);
   const selectorContext = useMemo(() => (versionId ? { parentId: versionId } : {}), [versionId]);
@@ -70,7 +71,9 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   const versionFromRecord = data?.priceListVersion || null;
 
   const loadProductPrices = useCallback(async () => {
-    if (!parentId || !token || !apiBaseUrl) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so the price lines never loaded.
+    if (!parentId || !apiBaseUrl) {
       setVersionId(null); setLines([]); setLoading(false); return;
     }
     if (!versionFromRecord) {
@@ -87,7 +90,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
       setError(err?.message || ui('priceLoadError'));
       setVersionId(null); setLines([]); setLoading(false);
     }
-  }, [apiBaseUrl, headers, parentId, token, versionFromRecord]);
+  }, [apiBaseUrl, headers, parentId, versionFromRecord]);
 
   useEffect(() => {
     // loadProductPrices handles its own errors; catch is a safety net for unexpected throws.
@@ -137,7 +140,6 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
               entity="productPrice"
               data={lines}
               columns={columns}
-              token={token}
               apiBaseUrl={apiBaseUrl}
               selectorContext={selectorContext}
               isDocumentReadOnly={!editing}

@@ -7,7 +7,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
-import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 function PeriodLink({ label, onClick }) {
   return (
@@ -33,7 +33,7 @@ function StatusBadge({ isProcessed, ui }) {
   );
 }
 
-export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange }) {
+export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, apiBaseUrl, onCountChange }) {
   const ui = useUI();
   const navigate = useNavigate();
   const orgCurrency = useCurrency() ?? 'USD';
@@ -128,7 +128,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .then(entries => setProcessedMap(new Map(entries ?? [])))
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl]);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!apiBaseUrl || selectedRows.size === 0) return;
@@ -138,7 +138,11 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         [...selectedRows].map(id =>
           fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
             method: 'DELETE',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            // ETP-4576 — this used to be `token ? { Authorization: ... } : {}`,
+            // which under the cookie scheme resolved to the empty branch: an
+            // unauthenticated DELETE with no CSRF proof.
+            credentials: 'include',
+            headers: writeHeaders(),
           })
         )
       );
@@ -147,7 +151,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     } finally {
       setDeleting(false);
     }
-  }, [apiBaseUrl, token, selectedRows, fetchLines]);
+  }, [apiBaseUrl, selectedRows, fetchLines]);
 
   useEffect(() => {
     fetchLines();

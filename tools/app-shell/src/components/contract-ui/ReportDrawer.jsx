@@ -116,7 +116,7 @@ const CSV_TEMPLATE = `{{#each columns}}{{this.label}}{{#unless @last}},{{/unless
 const MAX_REPORT_ROWS = 10000;
 const BATCH = 200;
 
-async function fetchAllRecords(apiBaseUrl, entity, token, sortColumn, sortDirection) {
+async function fetchAllRecords(apiBaseUrl, entity, sortColumn, sortDirection) {
   const headers = jsonHeaders();
   let allRows = [];
   let start = 0;
@@ -203,7 +203,7 @@ async function renderViaJsreport(recipe, title, columns, rows, filters) {
 // ---------------------------------------------------------------------------
 export default function ReportDrawer({
   open, onClose, windowName, columns, title,
-  apiBaseUrl, entity, token, sortColumn, sortDirection,
+  apiBaseUrl, entity, sortColumn, sortDirection,
   activeFilters,
 }) {
   const ui = useUI();
@@ -223,7 +223,10 @@ export default function ReportDrawer({
 
   // Fetch all records when drawer opens
   useEffect(() => {
-    if (!open || !apiBaseUrl || !entity || !token) {
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so opening the report drawer cleared the
+    // rows and showed no error: the paged read was never issued.
+    if (!open || !apiBaseUrl || !entity) {
       setReportRows(null);
       setError(null);
       return;
@@ -233,7 +236,7 @@ export default function ReportDrawer({
     setFetchingData(true);
     setError(null);
 
-    fetchAllRecords(apiBaseUrl, entity, token, sortColumn || 'creationDate', sortDirection || 'desc')
+    fetchAllRecords(apiBaseUrl, entity, sortColumn || 'creationDate', sortDirection || 'desc')
       .then(rows => {
         if (cancelled) return;
         const resolved = resolveRows(rows, columns || []);
@@ -247,7 +250,7 @@ export default function ReportDrawer({
       });
 
     return () => { cancelled = true; };
-  }, [open, apiBaseUrl, entity, token, sortColumn, sortDirection, columns]);
+  }, [open, apiBaseUrl, entity, sortColumn, sortDirection, columns]);
 
   // Store preview HTML so we can re-render and print reliably
   const previewHtmlRef = useRef('');

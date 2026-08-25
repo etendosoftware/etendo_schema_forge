@@ -4,7 +4,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { readCredentialHeaders } from '../../../lib/sessionHeaders.js';
+import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
 
 const PRE_SAVE_BILLING_PREF_FIELDS = [
   'priceList',
@@ -77,11 +77,14 @@ function DiscountSelect({ value, options, onChange, loading }) {
 
 export default function BillingPreferencesForm(props) {
   const ui = useUI();
-  const { data, api, token, onChange, apiBaseUrl } = props;
+  const { data, api, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
   const apiBase = apiBaseUrl ?? api?.baseUrl ?? '';
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  // ETP-4576 — `headers` drives this form's DELETE and PUTs, so it takes the
+  // write builder. It used to hand-build `Bearer ${token}`, which carried
+  // `undefined` under the cookie scheme and left the writes unproven.
+  const headers = writeHeaders();
   const organizationId = resolveId(data?.organization ?? data?.adOrgId ?? data?.ad_org_id);
   const clientId = resolveId(data?.client ?? data?.adClientId ?? data?.ad_client_id);
   // Sub-entity records (current BP's discount)
@@ -136,7 +139,10 @@ export default function BillingPreferencesForm(props) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!bpId || !token) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie scheme
+    // it was permanently true, so the discount record and its catalog never
+    // loaded: the form rendered as if the partner had no billing preferences.
+    if (!bpId) return;
 
     // Fetch current discount record for this BP
     fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: readCredentialHeaders() })
@@ -162,7 +168,7 @@ export default function BillingPreferencesForm(props) {
       })
       .catch(() => setDiscountOptions([]))
       .finally(() => setDiscountRecord(prev => prev === undefined ? null : prev)); // Clear loading state on error
-  }, [bpId, token, apiBase, organizationId, clientId]);
+  }, [bpId, apiBase, organizationId, clientId]);
 
   // In Classic, billing preferences are set after the Business Partner exists.
   // Keep the pre-save create payload clean by removing auto-defaulted billing values

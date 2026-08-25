@@ -15,7 +15,7 @@ import { writeHeaders } from '../../../../lib/sessionHeaders.js';
  * This hook does no orchestration beyond POST + JSON parsing — the same shape
  * an MCP agent would use when calling a `neo_batch` tool.
  */
-export function useBatch({ apiBaseUrl, token }) {
+export function useBatch({ apiBaseUrl }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -59,7 +59,7 @@ export function useBatch({ apiBaseUrl, token }) {
     } finally {
       setLoading(false);
     }
-  }, [batchUrl, token]);
+  }, [batchUrl]);
 
   return { runBatch, loading, error };
 }

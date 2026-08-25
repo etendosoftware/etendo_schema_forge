@@ -1,3 +1,15 @@
+import {
+  TEST_BEARER_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+} from '@/test/sessionContract.js';
+
+// File scope, outside every describe: src/test/setup.js resets the scheme to the
+// bearer default before each test, so a credential assertion that does not declare
+// one is only ever exercising that default.
+beforeEach(() => {
+  declareBearerSession();
+});
 /**
  * Tests for copilotApi.js — exercises all exported functions.
  * Pure function tests + fetch-mocked async tests.
@@ -204,7 +216,7 @@ describe('copilotRequest', () => {
       text: async () => JSON.stringify(data),
     });
 
-    const result = await copilotRequest('question', 'test-token', {
+    const result = await copilotRequest('question', {
       method: 'POST',
       body: JSON.stringify({ question: 'hi' }),
     });
@@ -214,7 +226,9 @@ describe('copilotRequest', () => {
     const [url, opts] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/copilot/question');
     expect(opts.credentials).toBe('include');
-    expect(opts.headers.get('Authorization')).toBe('Bearer test-token');
+    // ETP-4576 — the credential is the active scheme's, declared at file scope
+    // below, not a positional argument this test also chose.
+    expect(opts.headers.get('Authorization')).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
     expect(opts.headers.get('Content-Type')).toBe('application/json');
   });
 
@@ -225,7 +239,7 @@ describe('copilotRequest', () => {
       text: async () => JSON.stringify({ error: 'Server down' }),
     });
 
-    await expect(copilotRequest('question', 'tk')).rejects.toThrow('Server down');
+    await expect(copilotRequest('question')).rejects.toThrow('Server down');
   });
 
   it('throws with status code when no error message in body', async () => {
@@ -235,7 +249,7 @@ describe('copilotRequest', () => {
       text: async () => '',
     });
 
-    await expect(copilotRequest('question', 'tk')).rejects.toThrow('403');
+    await expect(copilotRequest('question')).rejects.toThrow('403');
   });
 
   it('does not set Content-Type for FormData body', async () => {
@@ -247,21 +261,22 @@ describe('copilotRequest', () => {
       text: async () => JSON.stringify({ fileId: 'F1' }),
     });
 
-    await copilotRequest('file', 'tk', { method: 'POST', body: formData });
+    await copilotRequest('file', { method: 'POST', body: formData });
 
     const [, opts] = globalThis.fetch.mock.calls[0];
     // Content-Type should NOT be set for FormData (browser sets multipart boundary)
     expect(opts.headers.has('Content-Type')).toBe(false);
   });
 
-  it('omits Authorization header when token is null', async () => {
+  it('omits Authorization under the cookie scheme, where no bearer exists', async () => {
+    declareCookieSession();
     globalThis.fetch.mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => '{}',
     });
 
-    await copilotRequest('question', null);
+    await copilotRequest('question');
 
     const [, opts] = globalThis.fetch.mock.calls[0];
     expect(opts.headers.has('Authorization')).toBe(false);
@@ -287,7 +302,7 @@ describe('copilotGet', () => {
       text: async () => JSON.stringify([]),
     });
 
-    await copilotGet('assistants', 'tk');
+    await copilotGet('assistants');
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/copilot/assistants');
     expect(url).not.toContain('?');
@@ -299,7 +314,7 @@ describe('copilotGet', () => {
       text: async () => JSON.stringify({}),
     });
 
-    await copilotGet('conversations', 'tk', { app_id: 'A1', empty: '' });
+    await copilotGet('conversations', { app_id: 'A1', empty: '' });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('app_id=A1');
     // empty string param should be filtered out
@@ -312,7 +327,7 @@ describe('copilotGet', () => {
       text: async () => '{}',
     });
 
-    await copilotGet('labels', 'tk', { x: null, y: 'yes' });
+    await copilotGet('labels', { x: null, y: 'yes' });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).not.toContain('x=');
     expect(url).toContain('y=yes');
@@ -341,50 +356,50 @@ describe('Endpoint helpers', () => {
 
   it('getAssistants returns array from response', async () => {
     mockOk([{ assistant_id: 'A1' }]);
-    const result = await getAssistants('tk');
+    const result = await getAssistants();
     expect(result).toEqual([{ assistant_id: 'A1' }]);
   });
 
   it('getAssistants returns empty array for non-array response', async () => {
     mockOk({ something: 'else' });
-    const result = await getAssistants('tk');
+    const result = await getAssistants();
     expect(result).toEqual([]);
   });
 
   it('getLabels returns object from response', async () => {
     mockOk({ greeting: 'Hello' });
-    const result = await getLabels('tk');
+    const result = await getLabels();
     expect(result).toEqual({ greeting: 'Hello' });
   });
 
   it('getLabels returns empty object on fetch failure', async () => {
     globalThis.fetch.mockRejectedValue(new Error('network'));
-    const result = await getLabels('tk');
+    const result = await getLabels();
     expect(result).toEqual({});
   });
 
   it('getConversations returns normalized conversations', async () => {
     mockOk([{ id: 'C1', name: 'Chat' }]);
-    const result = await getConversations('tk', 'A1');
+    const result = await getConversations('A1');
     expect(result[0].conversation_id).toBe('C1');
     expect(result[0].title).toBe('Chat');
   });
 
   it('getConversations handles data.conversations wrapper', async () => {
     mockOk({ conversations: [{ id: 'C2', title: 'Test' }] });
-    const result = await getConversations('tk', 'A1');
+    const result = await getConversations('A1');
     expect(result[0].conversation_id).toBe('C2');
   });
 
   it('getArchivedConversations returns normalized conversations', async () => {
     mockOk([{ id: 'C3' }]);
-    const result = await getArchivedConversations('tk', 'A1');
+    const result = await getArchivedConversations('A1');
     expect(result[0].conversation_id).toBe('C3');
   });
 
   it('getConversationMessages normalizes messages', async () => {
     mockOk([{ sender: 'bot', content: 'Hello' }]);
-    const result = await getConversationMessages('tk', 'C1');
+    const result = await getConversationMessages('C1');
     expect(result[0].role).toBe('copilot');
     expect(result[0].text).toBe('Hello');
     expect(result[0].id).toBeDefined();
@@ -392,20 +407,20 @@ describe('Endpoint helpers', () => {
 
   it('getConversationMessages handles data.messages wrapper', async () => {
     mockOk({ messages: [{ sender: 'user', message: 'Hi' }] });
-    const result = await getConversationMessages('tk', 'C1');
+    const result = await getConversationMessages('C1');
     expect(result[0].role).toBe('user');
     expect(result[0].text).toBe('Hi');
   });
 
   it('getConversationMessages normalizes assistant role to copilot', async () => {
     mockOk([{ role: 'assistant', text: 'test' }]);
-    const result = await getConversationMessages('tk', 'C1');
+    const result = await getConversationMessages('C1');
     expect(result[0].role).toBe('copilot');
   });
 
   it('sendQuestion sends POST with correct body', async () => {
     mockOk({ answer: 'response' });
-    await sendQuestion('tk', { app_id: 'A1', question: 'hi' });
+    await sendQuestion({ app_id: 'A1', question: 'hi' });
     const [, opts] = globalThis.fetch.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.app_id).toBe('A1');
@@ -416,7 +431,7 @@ describe('Endpoint helpers', () => {
 
   it('sendQuestion includes optional conversation_id and file', async () => {
     mockOk({ answer: 'ok' });
-    await sendQuestion('tk', {
+    await sendQuestion({
       app_id: 'A1',
       question: 'q',
       conversation_id: 'C1',
@@ -430,7 +445,7 @@ describe('Endpoint helpers', () => {
 
   it('executeTool sends POST with tool_name and params', async () => {
     mockOk({ answer: { result: 'data' } });
-    await executeTool('tk', { toolName: 'MyTool', params: { x: 1 } });
+    await executeTool({ toolName: 'MyTool', params: { x: 1 } });
     const [, opts] = globalThis.fetch.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.tool_name).toBe('MyTool');
@@ -439,7 +454,7 @@ describe('Endpoint helpers', () => {
 
   it('executeTool includes optional agentId', async () => {
     mockOk({});
-    await executeTool('tk', { toolName: 'T', agentId: 'AG1' });
+    await executeTool({ toolName: 'T', agentId: 'AG1' });
     const [, opts] = globalThis.fetch.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.agent_id).toBe('AG1');
@@ -448,14 +463,14 @@ describe('Endpoint helpers', () => {
   it('uploadFile sends FormData body', async () => {
     mockOk({ fileId: 'F1' });
     const file = new File(['content'], 'test.pdf');
-    await uploadFile('tk', file);
+    await uploadFile(file);
     const [, opts] = globalThis.fetch.mock.calls[0];
     expect(opts.body instanceof FormData).toBe(true);
   });
 
   it('generateTitle sends POST with conversation_id', async () => {
     mockOk({ title: 'Auto Title' });
-    await generateTitle('tk', 'C1');
+    await generateTitle('C1');
     const [, opts] = globalThis.fetch.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.conversation_id).toBe('C1');
@@ -463,7 +478,7 @@ describe('Endpoint helpers', () => {
 
   it('renameConversation sends POST with id and title', async () => {
     mockOk({});
-    await renameConversation('tk', 'C1', 'New Name');
+    await renameConversation('C1', 'New Name');
     const [, opts] = globalThis.fetch.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.conversation_id).toBe('C1');
@@ -472,21 +487,21 @@ describe('Endpoint helpers', () => {
 
   it('deleteConversation sends POST with conversation_id', async () => {
     mockOk({});
-    await deleteConversation('tk', 'C1');
+    await deleteConversation('C1');
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('deleteConversation');
   });
 
   it('restoreConversation sends POST with conversation_id', async () => {
     mockOk({});
-    await restoreConversation('tk', 'C1');
+    await restoreConversation('C1');
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('restoreConversation');
   });
 
   it('permanentDeleteConversation sends POST with conversation_id', async () => {
     mockOk({});
-    await permanentDeleteConversation('tk', 'C1');
+    await permanentDeleteConversation('C1');
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('permanentDeleteConversation');
   });
@@ -514,11 +529,11 @@ describe('copilotRequest — FormData body handling', () => {
       text: async () => JSON.stringify({ ok: true }),
     });
 
-    await copilotRequest('upload', 'tk', { method: 'POST', body: formData });
+    await copilotRequest('upload', { method: 'POST', body: formData });
 
     const [, opts] = globalThis.fetch.mock.calls[0];
     expect(opts.headers.has('Content-Type')).toBe(false);
-    expect(opts.headers.get('Authorization')).toBe('Bearer tk');
+    expect(opts.headers.get('Authorization')).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
   });
 
   it('sets Content-Type to application/json for string body', async () => {
@@ -528,7 +543,7 @@ describe('copilotRequest — FormData body handling', () => {
       text: async () => '{}',
     });
 
-    await copilotRequest('endpoint', 'tk', { method: 'POST', body: '{"x":1}' });
+    await copilotRequest('endpoint', { method: 'POST', body: '{"x":1}' });
 
     const [, opts] = globalThis.fetch.mock.calls[0];
     expect(opts.headers.get('Content-Type')).toBe('application/json');
@@ -541,7 +556,7 @@ describe('copilotRequest — FormData body handling', () => {
       text: async () => JSON.stringify({ message: 'Validation failed' }),
     });
 
-    await expect(copilotRequest('test', 'tk')).rejects.toThrow('Validation failed');
+    await expect(copilotRequest('test')).rejects.toThrow('Validation failed');
   });
 });
 
@@ -564,7 +579,7 @@ describe('copilotGet — param filtering', () => {
       text: async () => '{}',
     });
 
-    await copilotGet('endpoint', 'tk', { valid: 'yes', nullParam: null });
+    await copilotGet('endpoint', { valid: 'yes', nullParam: null });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('valid=yes');
     expect(url).not.toContain('nullParam');
@@ -576,7 +591,7 @@ describe('copilotGet — param filtering', () => {
       text: async () => '{}',
     });
 
-    await copilotGet('endpoint', 'tk', { keep: 'val', drop: undefined });
+    await copilotGet('endpoint', { keep: 'val', drop: undefined });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('keep=val');
     expect(url).not.toContain('drop');
@@ -588,7 +603,7 @@ describe('copilotGet — param filtering', () => {
       text: async () => '{}',
     });
 
-    await copilotGet('endpoint', 'tk', { filled: 'data', empty: '' });
+    await copilotGet('endpoint', { filled: 'data', empty: '' });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('filled=data');
     expect(url).not.toContain('empty=');
@@ -600,7 +615,7 @@ describe('copilotGet — param filtering', () => {
       text: async () => '{}',
     });
 
-    await copilotGet('endpoint', 'tk', { a: null, b: '', c: undefined });
+    await copilotGet('endpoint', { a: null, b: '', c: undefined });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).not.toContain('?');
   });

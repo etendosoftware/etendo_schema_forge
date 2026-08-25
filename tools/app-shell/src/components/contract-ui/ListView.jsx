@@ -936,7 +936,7 @@ export function ListView({
                   <Button
                     size={selectionBarSize}
                     className="gap-1.5"
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), ui)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                     {ui('print')} ({selectedRows.length})
@@ -1202,7 +1202,6 @@ export function ListView({
           title={label}
           apiBaseUrl={apiBaseUrl}
           entity={entity}
-          token={token}
           sortColumn={hook.sortColumn}
           sortDirection={hook.sortDirection}
           data-testid="ReportDrawer__620cbc" />

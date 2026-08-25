@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useCopilotChat } from './copilot/useCopilotChat.js';
-import { useAuth } from '@/auth/AuthContext.jsx';
 
 const CopilotContext = createContext(null);
 
 export function CopilotProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false);
-  const { token } = useAuth();
-  const { state, actions } = useCopilotChat({ token });
+  // ETP-4576 — no token read and none handed down. useCopilotChat's requests take
+  // their credential from the active session scheme; this used to pass
+  // useAuth().token, which the cookie scheme never populates, and the hook's own
+  // `!token` gates then disabled the entire panel in silence.
+  const { state, actions } = useCopilotChat();
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => {
@@ -26,8 +28,8 @@ export function CopilotProvider({ children }) {
   }, [actions]);
 
   const value = useMemo(
-    () => ({ isOpen, open, close, toggle, state, actions, token }),
-    [isOpen, open, close, toggle, state, actions, token],
+    () => ({ isOpen, open, close, toggle, state, actions }),
+    [isOpen, open, close, toggle, state, actions],
   );
 
   return (

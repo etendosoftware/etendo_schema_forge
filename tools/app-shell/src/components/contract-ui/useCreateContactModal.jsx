@@ -1,14 +1,18 @@
 import { useState, useMemo } from 'react';
-import { jsonHeaders } from '@/lib/sessionHeaders.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { createPortal } from 'react-dom';
 import CreateContactModal from './CreateContactModal';
 
 export function useCreateContactModal({ apiBaseUrl, documentType = 'sale' }) {
   const [createContactState, setCreateContactState] = useState(null);
 
-  // ETP-4576 — no credential in the header; the `__Host-` session cookie carries
-  // the session and each fetch opts in with `credentials: 'include'`.
-  const headers = jsonHeaders();
+  // ETP-4576 — the WRITE builder, not `jsonHeaders()`. This one bag is handed to
+  // CreateContactModal, which creates the partner and its location with five POSTs
+  // and rolls back with a DELETE, and to CloneOrderModal, which POSTs the clone
+  // action. A read builder omits `X-Go-CSRF`, so under the cookie session every
+  // one of those writes would come back 403 — with the reads still working, which
+  // is what makes this kind of mix-up hard to spot.
+  const headers = writeHeaders();
 
   const bpApiBaseUrl = useMemo(
     () => (apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : null),

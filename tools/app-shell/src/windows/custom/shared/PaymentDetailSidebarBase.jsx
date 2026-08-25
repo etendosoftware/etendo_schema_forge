@@ -143,7 +143,7 @@ function appendEvent(id, type, date) {
   }
 }
 
-export default function PaymentDetailSidebarBase({ dir, specName, data, token, apiBaseUrl }) {
+export default function PaymentDetailSidebarBase({ dir, specName, data, apiBaseUrl }) {
   const ui = useUI();
   const [lines, setLines] = useState(null);
   const [events, setEvents] = useState([]);
@@ -240,7 +240,10 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   }, [data?.id]);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
     const headers = jsonHeaders();
     const linesEntity = isIn ? 'finPaymentScheduleDetail' : 'lines';
@@ -264,7 +267,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload moves
   // for this effect to react to. Without it "Aplicado a facturas" kept showing the amount from
   // before the save until the whole window was reloaded.
-  }, [data?.id, refreshSignal, token, apiBaseUrl, isIn, specName]);
+  }, [data?.id, refreshSignal, apiBaseUrl, isIn, specName]);
 
   const appliedLines = lines ?? [];
   const applied = appliedLines.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);

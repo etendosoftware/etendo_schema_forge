@@ -2,6 +2,12 @@
  * copilotApi.js — HTTP client layer for the Copilot service.
  * All endpoints are relative to /sws/copilot/*.
  */
+import {
+  jsonHeaders,
+  readCredentialHeaders,
+  writeCredentialHeaders,
+  writeHeaders,
+} from '@/lib/sessionHeaders.js';
 
 /**
  * Detect the application base URL by inspecting the current pathname.
@@ -56,13 +62,30 @@ export async function parseJsonResponse(response) {
  * @param {RequestInit} [options] - Additional fetch options
  * @returns {Promise<object|null>}
  */
-export async function copilotRequest(path, token, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+export async function copilotRequest(path, options = {}) {
+  // ETP-4576 — the credential is the active scheme's, not a token threaded down
+  // from useAuth(). Under the cookie scheme no token is ever held, so every
+  // caller in this module used to send no Authorization at all AND be gated out
+  // by `!token` upstream: the entire Copilot feature went silent, with nothing
+  // logged anywhere.
+  //
+  // Four builders rather than one, because two axes matter here:
+  //  - method safety: only unsafe methods may carry the CSRF proof.
+  //  - multipart: a FormData body must NOT declare Content-Type, or the browser
+  //    cannot attach its boundary and the backend cannot parse the upload. The
+  //    *CredentialHeaders variants exist for exactly that.
+  const method = String(options.method || 'GET').toUpperCase();
+  const unsafe = method !== 'GET' && method !== 'HEAD';
+  const multipart = options.body instanceof FormData;
+  const base = multipart
+    ? (unsafe ? writeCredentialHeaders() : readCredentialHeaders())
+    : (unsafe ? writeHeaders() : jsonHeaders());
+
+  const headers = new Headers(base);
+  // Caller-supplied headers last so a call site can still override, e.g. a
+  // different Content-Type for a non-JSON body.
+  for (const [key, value] of new Headers(options.headers || {})) {
+    headers.set(key, value);
   }
 
   const response = await fetch(buildCopilotUrl(path), {
@@ -88,10 +111,10 @@ export async function copilotRequest(path, token, options = {}) {
  * @param {Record<string, string>} [params] - Query string parameters
  * @returns {Promise<object|null>}
  */
-export async function copilotGet(path, token, params = {}) {
+export async function copilotGet(path, params = {}) {
   const entries = Object.entries(params).filter(([, v]) => v != null && v !== '');
   const query = entries.length > 0 ? `?${new URLSearchParams(entries).toString()}` : '';
-  return copilotRequest(`${path}${query}`, token, { method: 'GET' });
+  return copilotRequest(`${path}${query}`, { method: 'GET' });
 }
 
 /**
@@ -174,8 +197,8 @@ function normalizeMessage(msg) {
  * @param {string} token
  * @returns {Promise<Array>}
  */
-export async function getAssistants(token) {
-  const data = await copilotGet('assistants', token);
+export async function getAssistants() {
+  const data = await copilotGet('assistants');
   return Array.isArray(data) ? data : [];
 }
 
@@ -185,8 +208,8 @@ export async function getAssistants(token) {
  * @param {string} token
  * @returns {Promise<Record<string, string>>}
  */
-export async function getLabels(token) {
-  const data = await copilotGet('labels', token).catch(() => ({}));
+export async function getLabels() {
+  const data = await copilotGet('labels').catch(() => ({}));
   return data && typeof data === 'object' ? data : {};
 }
 
@@ -197,8 +220,8 @@ export async function getLabels(token) {
  * @param {string} appId
  * @returns {Promise<Array>}
  */
-export async function getConversations(token, appId) {
-  const data = await copilotGet('conversations', token, { app_id: appId });
+export async function getConversations(appId) {
+  const data = await copilotGet('conversations', { app_id: appId });
   const list = Array.isArray(data) ? data : (data?.conversations ?? []);
   return list.map(normalizeConversation);
 }
@@ -210,8 +233,8 @@ export async function getConversations(token, appId) {
  * @param {string} appId
  * @returns {Promise<Array>}
  */
-export async function getArchivedConversations(token, appId) {
-  const data = await copilotGet('archivedConversations', token, { app_id: appId });
+export async function getArchivedConversations(appId) {
+  const data = await copilotGet('archivedConversations', { app_id: appId });
   const list = Array.isArray(data) ? data : (data?.conversations ?? []);
   return list.map(normalizeConversation);
 }
@@ -223,8 +246,8 @@ export async function getArchivedConversations(token, appId) {
  * @param {string} conversationId
  * @returns {Promise<Array>}
  */
-export async function getConversationMessages(token, conversationId) {
-  const data = await copilotGet('conversationMessages', token, { conversation_id: conversationId });
+export async function getConversationMessages(conversationId) {
+  const data = await copilotGet('conversationMessages', { conversation_id: conversationId });
   const list = Array.isArray(data) ? data : (data?.messages ?? []);
   return list.map(normalizeMessage);
 }
@@ -236,11 +259,11 @@ export async function getConversationMessages(token, conversationId) {
  * @param {{ app_id: string, question: string, conversation_id?: string, file?: string[] }} params
  * @returns {Promise<object>}
  */
-export async function sendQuestion(token, { app_id, question, conversation_id, file }) {
+export async function sendQuestion({ app_id, question, conversation_id, file }) {
   const body = { app_id, question };
   if (conversation_id) body.conversation_id = conversation_id;
   if (file && file.length > 0) body.file = file;
-  return copilotRequest('question', token, {
+  return copilotRequest('question', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -262,10 +285,10 @@ export async function sendQuestion(token, { app_id, question, conversation_id, f
  * }} input
  * @returns {Promise<object>} payload with `answer` containing the tool output
  */
-export async function executeTool(token, { toolName, params, agentId }) {
+export async function executeTool({ toolName, params, agentId }) {
   const body = { tool_name: toolName, params: params || {} };
   if (agentId) body.agent_id = agentId;
-  return copilotRequest('executeTool', token, {
+  return copilotRequest('executeTool', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -278,10 +301,10 @@ export async function executeTool(token, { toolName, params, agentId }) {
  * @param {File} file
  * @returns {Promise<object>}
  */
-export async function uploadFile(token, file) {
+export async function uploadFile(file) {
   const formData = new FormData();
   formData.append('file', file);
-  return copilotRequest('file', token, {
+  return copilotRequest('file', {
     method: 'POST',
     body: formData,
   });
@@ -294,8 +317,8 @@ export async function uploadFile(token, file) {
  * @param {string} conversationId
  * @returns {Promise<object>}
  */
-export async function generateTitle(token, conversationId) {
-  return copilotRequest('generateTitleConversation', token, {
+export async function generateTitle(conversationId) {
+  return copilotRequest('generateTitleConversation', {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId }),
   });
@@ -309,8 +332,8 @@ export async function generateTitle(token, conversationId) {
  * @param {string} title
  * @returns {Promise<object>}
  */
-export async function renameConversation(token, conversationId, title) {
-  return copilotRequest('renameConversation', token, {
+export async function renameConversation(conversationId, title) {
+  return copilotRequest('renameConversation', {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId, title }),
   });
@@ -323,8 +346,8 @@ export async function renameConversation(token, conversationId, title) {
  * @param {string} conversationId
  * @returns {Promise<object>}
  */
-export async function deleteConversation(token, conversationId) {
-  return copilotRequest('deleteConversation', token, {
+export async function deleteConversation(conversationId) {
+  return copilotRequest('deleteConversation', {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId }),
   });
@@ -337,8 +360,8 @@ export async function deleteConversation(token, conversationId) {
  * @param {string} conversationId
  * @returns {Promise<object>}
  */
-export async function restoreConversation(token, conversationId) {
-  return copilotRequest('restoreConversation', token, {
+export async function restoreConversation(conversationId) {
+  return copilotRequest('restoreConversation', {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId }),
   });
@@ -351,8 +374,8 @@ export async function restoreConversation(token, conversationId) {
  * @param {string} conversationId
  * @returns {Promise<object>}
  */
-export async function permanentDeleteConversation(token, conversationId) {
-  return copilotRequest('permanentDeleteConversation', token, {
+export async function permanentDeleteConversation(conversationId) {
+  return copilotRequest('permanentDeleteConversation', {
     method: 'POST',
     body: JSON.stringify({ conversation_id: conversationId }),
   });

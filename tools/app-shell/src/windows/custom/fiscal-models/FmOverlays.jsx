@@ -786,7 +786,7 @@ function CfgSection349({ t }) {
 
 // model: '303' | '349' | undefined — when provided, opens with that model's tab active;
 // undefined shows both tabs starting with Declarante.
-export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
+export function ConfigDrawer({ model, onClose, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
 
@@ -801,7 +801,10 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
+    // scheme it was permanently true, so this read never fired and the panel
+    // rendered empty as if the record simply had no data.
+    if (!apiBaseUrl) return;
     const controller = new AbortController();
     fetch(`${neoBase(apiBaseUrl)}/session`, {
       headers: readCredentialHeaders(),
@@ -822,7 +825,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [token, apiBaseUrl]);
+  }, [apiBaseUrl]);
 
   const set = (key) => (e) => { setForm(prev => ({ ...prev, [key]: e.target.value })); setIsDirty(true); };
 

@@ -217,7 +217,9 @@ describe('useOcrFlow — full flow', () => {
       expect(payload).toEqual({ vendor_name: 'Acme', line_items: [] });
       expect(context.reviewedHeader).toEqual({ vendor: 'reviewed-vendor' });
       expect(context.reviewedLines).toBeNull();
-      expect(context.token).toBe('tok');
+      // ETP-4576 — the descriptor ctx no longer carries a token; the resolvers
+    // it drives read the session credential themselves.
+    expect(context.token).toBeUndefined();
       expect(context.apiBaseUrl).toBe('/api');
     });
 
@@ -474,7 +476,7 @@ describe('useOcrFlow — full flow', () => {
       expect(JSON.parse(screen.getByTestId('popup-unmatched').textContent)).toEqual(['Widget X']);
       expect(H.popupProps.selectorUrl).toBe('/sel');
       expect(H.popupProps.productSpecUrl).toBe('/spec');
-      expect(H.popupProps.token).toBe('tok');
+      expect(H.popupProps.token).toBeUndefined();
 
       await user.click(screen.getByTestId('popup-submit'));
       await waitFor(() => expect(picks).toEqual([{ picked: 'p1' }]));

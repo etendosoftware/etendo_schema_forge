@@ -7,7 +7,14 @@
  * the document under the AD_Attachment grid for that record. Same backend the
  * paperclip menu uses, so files are visible in Etendo Classic and any other
  * UI on top of Etendo metadata.
+ *
+ * ETP-4576 — the POST is an unsafe method, so it carries the session's CSRF
+ * proof via `writeHeaders()`. It used to hand-build `Authorization: Bearer`
+ * from a caller-threaded token and refuse to run without one, which under the
+ * cookie scheme meant every OCR attachment returned 'Missing required
+ * parameters' with all its real parameters present.
  */
+import { writeHeaders } from '../../../lib/sessionHeaders.js';
 
 /**
  * Resolve the Etendo base URL the same way simSearch does — strip the `/web/...`
@@ -50,15 +57,14 @@ export function blobToBase64(blob) {
  * envelope so the caller can decide whether the OCR flow is salvageable.
  *
  * @param {{
- *   token: string,
  *   tabId: string,        // AD_Tab_ID of the entity's main tab
  *   recordId: string,     // id of the record the file should attach to
  *   file: File|Blob,      // browser File from <input type=file> or drop event
  *   fileName?: string,    // optional override; defaults to file.name
  * }} params
  */
-export async function attachFile({ token, tabId, recordId, file, fileName } = {}) {
-  if (!token || !tabId || !recordId || !file) {
+export async function attachFile({ tabId, recordId, file, fileName } = {}) {
+  if (!tabId || !recordId || !file) {
     return { error: 'Missing required parameters' };
   }
   const name = fileName || file.name || 'document.pdf';
@@ -75,10 +81,7 @@ export async function attachFile({ token, tabId, recordId, file, fileName } = {}
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: writeHeaders(),
       body: JSON.stringify({
         ADTabId: tabId,
         RecordId: recordId,

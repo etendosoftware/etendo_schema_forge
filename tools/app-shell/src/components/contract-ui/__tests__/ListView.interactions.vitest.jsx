@@ -834,14 +834,14 @@ describe('ListView — selection bar actions', () => {
     expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
-  it('prints the selected documents with the window name and token', async () => {
+  it('prints the selected documents with the window name', async () => {
     const user = userEvent.setup();
     render(<ListView {...defaultProps} />);
     selectRows();
 
     await user.click(screen.getByText(/^print/).closest('button'));
 
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function));
   });
 
   it('hands the selected rows to onCloneRow', async () => {
@@ -861,7 +861,7 @@ describe('ListView — selection bar actions', () => {
     act(() => { tableProps.onSelectionChange(['r1', 'r2']); });
 
     await user.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function));
   });
 
   it('renders host-supplied bulkActions with the selection context', () => {

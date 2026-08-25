@@ -91,12 +91,11 @@ function hasLinesToReview(docType, payload) {
 
 export function useOcrFlow({
   docTypeId,
-  token,
   apiBaseUrl,
   onRefresh,
 } = {}) {
   const docType = getOcrDocType(docTypeId);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
+  const { runBatch } = useBatch({ apiBaseUrl });
   const { showResult } = useBulkActionToast();
 
   const [loading, setLoading] = useState(false);
@@ -121,12 +120,11 @@ export function useOcrFlow({
         unmatched={unmatched}
         selectorUrl={selectorUrl}
         productSpecUrl={productSpecUrl}
-        token={token}
         onSubmit={(picks) => close(picks)}
         onCancel={() => close(null)}
         data-testid="ProductResolverPopup__ebdfaa" />
     );
-  }), [token]);
+  }), []);
 
   const closeReview = (value) => {
     setReviewOpen(false);
@@ -163,14 +161,13 @@ export function useOcrFlow({
     setReviewResolving(true);
     (async () => {
       const preResolved = await resolvePreResolvedFields(docType?.headerFields, extracted, {
-        token,
         apiBaseUrl,
       });
       setReviewPreResolved(preResolved);
       setReviewResolving(false);
       setReviewOpen(true);
     })();
-  }), [docType, token, apiBaseUrl]);
+  }), [docType, apiBaseUrl]);
 
   useEffect(() => {
     if (!docType?.eventName) return undefined;
@@ -192,7 +189,7 @@ export function useOcrFlow({
           return;
         }
         const extractedLines = hasLinesToReview(docType, payload)
-          ? await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl })
+          ? await resolveLines(docType.lineColumns, payload.line_items, { apiBaseUrl })
           : [];
         let reviewedLines = null;
         if (extractedLines.length > 0) {
@@ -204,7 +201,6 @@ export function useOcrFlow({
           }
         }
         const built = await buildBatch(payload, {
-          token,
           apiBaseUrl,
           askUserForProducts,
           reviewedHeader: reviewed,
@@ -262,7 +258,7 @@ export function useOcrFlow({
 
     window.addEventListener(docType.eventName, handler);
     return () => window.removeEventListener(docType.eventName, handler);
-  }, [docType, token, apiBaseUrl, askUserToReview, askUserToReviewLines, askUserForProducts, runBatch, showResult, onRefresh]);
+  }, [docType, apiBaseUrl, askUserToReview, askUserToReviewLines, askUserForProducts, runBatch, showResult, onRefresh]);
 
   const contactsBase = apiBaseUrl ? deriveContactsApiBase(apiBaseUrl) : null;
   let pendingModal = pendingPopup;
@@ -271,7 +267,6 @@ export function useOcrFlow({
       <OcrLinesReviewModal
         columns={docType.lineColumns}
         lines={linesPayload}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         onSubmit={(value) => closeLines(value)}
         onCancel={() => closeLines(null)}
@@ -287,7 +282,6 @@ export function useOcrFlow({
         resolving={reviewResolving}
         contactsBase={contactsBase}
         apiBaseUrl={apiBaseUrl}
-        token={token}
         onSubmit={(value) => closeReview(value)}
         onCancel={() => closeReview(null)}
         data-testid="OcrReviewModal__ebdfaa" />

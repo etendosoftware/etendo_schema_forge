@@ -32,7 +32,6 @@ export default function SifAttachmentsSection({ tableName, recordId, token, apiB
   const { items, loading, uploadingFiles, download, downloadAll, formatBytes } = useAttachments({
     tableName,
     recordId,
-    token,
     apiBaseUrl,
     isActive: Boolean(recordId),
   });

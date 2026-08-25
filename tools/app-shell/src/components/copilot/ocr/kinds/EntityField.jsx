@@ -12,7 +12,6 @@ const SEARCH_LIMIT = 20;
 export default function EntityField({
   field,
   value,
-  token,
   contactsBase,
   apiBaseUrl,
   createComponent: CreateComponent,
@@ -44,7 +43,6 @@ export default function EntityField({
   const { items, loading } = useEntitySearch({
     open,
     endpoint,
-    token,
     query,
     filter: field?.filter,
     limit: SEARCH_LIMIT,
@@ -130,7 +128,6 @@ export default function EntityField({
         <CreateComponent
           item={{ kind: 'createContact', payload: { prefilled: createPrefilled, documentType: field.createDocumentType || null } }}
           apiBaseUrl={apiBaseUrl}
-          token={token}
           onCancel={() => setShowCreate(false)}
           onSubmit={handleCreateSubmit}
           data-testid={"CreateComponent__" + field.id} />

@@ -13,14 +13,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { changePassword } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
 const EMPTY_FORM = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
-
 /**
  * Dialog that lets a signed-in user change their platform account password.
+ *
+ * ETP-4576 — this used to read the caller's credential out of
+ * `localStorage.sf_platform_token`. The cookie migration stopped writing that
+ * key, so the read returned `null` and the POST went out with no `X-Go-CSRF`
+ * header: authenticated by the cookie the browser attaches on its own, but
+ * with no write proof, which the backend rejects once CSRF is enforced.
+ * The proof now comes from the session, like every other unsafe request.
  *
  * On success the rotated platform token is intentionally discarded and
  * `onSuccess` is invoked so the caller can log the user out — they then sign
@@ -29,6 +35,7 @@ const PLATFORM_TOKEN_KEY = 'sf_platform_token';
  */
 export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
   const ui = useUI();
+  const { csrfToken } = useAuth();
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -51,8 +58,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
     }
     setLoading(true);
     try {
-      const token = localStorage.getItem(PLATFORM_TOKEN_KEY);
-      await changePassword(fetch, detectBaseUrl(), token, form);
+      await changePassword(fetch, detectBaseUrl(), csrfToken, form);
       // Rotated token is discarded on purpose: we sign the user out so they
       // re-authenticate with the new password.
       onSuccess?.();

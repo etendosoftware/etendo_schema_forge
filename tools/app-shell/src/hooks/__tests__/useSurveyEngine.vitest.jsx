@@ -621,7 +621,7 @@ describe('useSurveyEngine', () => {
   // -------------------------------------------------------------------------
 
   describe('submitSurveyResponse (fire-and-forget)', () => {
-    it('calls submitSurveyResponse with the real feedback text, score, tags, token and apiBaseUrl', () => {
+    it('calls submitSurveyResponse with the real feedback text, score, tags and apiBaseUrl', () => {
       const survey = makeSurvey();
       useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: 'tok-1' }));
       selectNextSurvey.mockReturnValue(survey);
@@ -636,7 +636,6 @@ describe('useSurveyEngine', () => {
 
       expect(submitSurveyResponse).toHaveBeenCalledWith({
         apiBaseUrl: '/etendo',
-        token: 'tok-1',
         surveyKey: survey.id,
         score: 9,
         feedback: 'great tool',
@@ -817,13 +816,13 @@ describe('useSurveyEngine', () => {
   // -------------------------------------------------------------------------
 
   describe('loadRemoteSurveyConfig', () => {
-    it('loads the remote config when authenticated with a token', () => {
+    it('loads the remote config when authenticated', () => {
       useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: 'tok-123' }));
 
       renderHook(() => useSurveyEngine());
 
       expect(getApiBase).toHaveBeenCalled();
-      expect(loadRemoteSurveyConfig).toHaveBeenCalledWith({ apiBaseUrl: '/etendo', token: 'tok-123' });
+      expect(loadRemoteSurveyConfig).toHaveBeenCalledWith({ apiBaseUrl: '/etendo' });
     });
 
     it('does not load the remote config when not authenticated', () => {
@@ -834,12 +833,16 @@ describe('useSurveyEngine', () => {
       expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
     });
 
-    it('does not load the remote config when there is no token', () => {
+    // ETP-4576 — the inverse of what this asserted. It required a client-held
+    // token before loading the remote survey config; under the cookie scheme no
+    // token is ever held, so the config never loaded and the engine ran on local
+    // defaults forever. Being signed in is the only precondition now.
+    it('loads the remote config when the client holds no token', () => {
       useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: null }));
 
       renderHook(() => useSurveyEngine());
 
-      expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
+      expect(loadRemoteSurveyConfig).toHaveBeenCalledWith({ apiBaseUrl: '/etendo' });
     });
   });
 });
