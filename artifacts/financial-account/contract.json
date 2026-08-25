@@ -11526,14 +11526,6 @@
         "description": "System field 'creditLimit' should exist in backend but not frontend for account"
       },
       {
-        "id": "t-system-field-account-eTGOPendingCount",
-        "category": "system-field",
-        "entity": "account",
-        "field": "eTGOPendingCount",
-        "runner": "node",
-        "description": "System field 'eTGOPendingCount' should exist in backend but not frontend for account"
-      },
-      {
         "id": "t-system-field-account-genericAccountNo",
         "category": "system-field",
         "entity": "account",
@@ -12726,7 +12718,7 @@
         "rule-declared": 226,
         "searchable-filters": 2,
         "selector-endpoint": 28,
-        "system-field": 151,
+        "system-field": 150,
         "visibility": 7
       },
       "byRunner": {
