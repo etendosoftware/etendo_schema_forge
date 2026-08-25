@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUI } from '@/i18n';
 import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
@@ -17,13 +18,38 @@ import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.
  * user count should be the headline). The Figma spec then dropped it from
  * this card altogether — the card now shows only role icon + name + user
  * count, nothing else; `role.windowCount` is no longer read here at all.
+ *
+ * **ETP-4999 — click-through to the filtered Users window.** The whole card
+ * is a navigation target (human-confirmed placement, over the alternative of
+ * only the matrix column header below being clickable): clicking it goes to
+ * `/user?role=<role.id>`, which `UserHeaderTable.jsx`'s `RoleFilterControl`
+ * reads on mount to pre-apply that role's filter — the same id space
+ * `RoleFilterControl` already filters by (`String(role.id)`), so no new id
+ * scheme is introduced. `role="button"`/`tabIndex`/`onKeyDown` give it the
+ * same keyboard reachability as a real button despite being a `<div>`-based
+ * `Card`, since `Card` itself isn't a semantic interactive element.
  */
 export default function RoleSummaryCard({ role, Icon }) {
   const ui = useUI();
+  const navigate = useNavigate();
   const displayName = role.isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : resolveRoleDisplayName(ui, role.name);
 
+  const goToFilteredUsers = () => navigate(`/user?role=${encodeURIComponent(role.id)}`);
+
   return (
-    <Card data-testid={`RoleSummaryCard__${role.id}`}>
+    <Card
+      className="cursor-pointer transition-colors hover:bg-muted/40"
+      role="button"
+      tabIndex={0}
+      aria-label={ui('rolesSummaryCardNavigateAria', { role: displayName })}
+      onClick={goToFilteredUsers}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          goToFilteredUsers();
+        }
+      }}
+      data-testid={`RoleSummaryCard__${role.id}`}>
       <CardContent className="p-3" data-testid={`RoleSummaryCard__content-${role.id}`}>
         <div className="flex min-w-0 items-center gap-2">
           {Icon && (

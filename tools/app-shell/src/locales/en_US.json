@@ -17345,6 +17345,7 @@
     "rolesWindowCount": "{count} Windows",
     "rolesMatrixWindowColumn": "Window",
     "rolesUserCount": "{count} Users",
+    "rolesSummaryCardNavigateAria": "View users with the {role} role",
     "userRolesTabLabel": "User roles",
     "userRolesTabEmptyState": "Select a role to view permissions",
     "userRolesTabWindowColumn": "Window",

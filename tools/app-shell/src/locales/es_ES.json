@@ -17586,6 +17586,7 @@
     "rolesWindowCount": "{count} Ventanas",
     "rolesMatrixWindowColumn": "Ventana",
     "rolesUserCount": "{count} Usuarios",
+    "rolesSummaryCardNavigateAria": "Ver usuarios con el rol {role}",
     "userRolesTabLabel": "Roles del usuario",
     "userRolesTabEmptyState": "Selecciona un rol para visualizar los permisos",
     "userRolesTabWindowColumn": "Ventana",
