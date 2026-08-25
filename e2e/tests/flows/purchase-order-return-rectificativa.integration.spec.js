@@ -305,18 +305,29 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
     });
 
-    await test.step('Confirm the rectificative invoice (may hit known env gap)', async () => {
+    await test.step('Confirm the rectificative invoice (may hit known env gap, or the expected no-source-invoice block)', async () => {
       // Completing a rectificativa document was seen to sometimes fail with
       // "The Period does not exist or it is not opened" — a known environment
       // gap, NOT a bug in this test. If hit, report instead of failing.
+      //
+      // ETP-5000: this spec deliberately drives a return with NO source invoice (the
+      // "Crear factura" toggle is turned OFF at receipt-confirm above), so on any tenant
+      // with SII/TicketBAI/Verifactu configured, ETSG_CHECK_RECTIF_INV_DOC correctly
+      // rejects completing this invoice as a "Factura Rectificativa" — there is nothing to
+      // rectify. ETP-5000 fixed the case where a source invoice DOES exist (it now links
+      // via C_Invoice_Reverse and completes); a return with no source invoice failing here
+      // is expected, correct business behavior, not a bug, so it is reported rather than
+      // failed, same as the period-error case below.
 
       await clickConfirmButton(page);
 
       const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
+      const noSourceInvoiceError = page.getByText(/no se han asociado facturas a rectificar/i);
       const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
 
       const outcome = await Promise.race([
         periodError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'period-error').catch(() => null),
+        noSourceInvoiceError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'no-source-invoice').catch(() => null),
         invoiceCompletedPill.waitFor({ state: 'visible', timeout: 60_000 })
           .then(async () => (
             (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
@@ -337,6 +348,21 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
             + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
             + 'already verified in Draft with the correct doc type and negative amounts above, '
             + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
+        });
+        return;
+      }
+
+      if (outcome === 'no-source-invoice') {
+        test.info().annotations.push({
+          type: 'expected-outcome',
+          description:
+            'Confirming the rectificative purchase invoice hit "El tipo de documento es '
+            + 'rectificativo, pero no se han asociado facturas a rectificar." — EXPECTED here: '
+            + 'this spec deliberately confirms the receipt with the invoice toggle OFF, so the '
+            + 'return has no source invoice to rectify. On a tenant with SII/TicketBAI/Verifactu '
+            + 'configured, ETSG_CHECK_RECTIF_INV_DOC correctly blocks completing a "Factura '
+            + 'Rectificativa" with nothing to rectify (see ETP-5000). The invoice was already '
+            + 'verified in Draft with the correct doc type and negative amounts above.',
         });
         return;
       }
