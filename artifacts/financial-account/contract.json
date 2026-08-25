@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
-  "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-19T12:24:01.114Z",
-  "checksum": "2c0bd53da5b3c050",
+  "version": "0.31.0",
+  "generatedAt": "2026-08-21T16:17:27.627Z",
+  "updatedAt": "2026-08-21T18:44:54.589Z",
+  "checksum": "c7e13c08b8720494",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -18,14 +18,7 @@
         "headerTable": "AccountsHeaderTable"
       },
       "detailEntity": null,
-      "labelOverrides": {
-        "en_US": {
-          "pendingCount": "Pending"
-        },
-        "es_ES": {
-          "pendingCount": "Por conciliar"
-        }
-      },
+      "listSortBy": "name asc",
       "rowQuickActions": {
         "enabled": false
       },
@@ -125,6 +118,18 @@
             "cellType": "accountType",
             "gridLabelKey": "financeAccountsColType",
             "gridOrder": 2,
+            "multiField": {
+              "parts": [
+                {
+                  "field": "type",
+                  "labelKey": "financeAccountsColType"
+                },
+                {
+                  "field": "iBAN",
+                  "labelKey": "financeAccountsColIban"
+                }
+              ]
+            },
             "validation": {
               "required": true,
               "maxLength": 60
@@ -832,21 +837,32 @@
             }
           },
           {
-            "name": "pendingCount",
-            "apiKey": "pendingCount",
-            "column": "pendingCount",
-            "label": "Pending",
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
+            "label": "Pending Count",
             "type": "integer",
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": false,
-            "section": "other",
-            "gridOrder": 5
+            "cellType": "reconcilePill",
+            "gridLabelKey": "financeAccountsColPending",
+            "gridOrder": 5,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
-        "searchableFields": [],
+        "searchableFields": [
+          "type",
+          "iBAN"
+        ],
         "computedFields": [
           {
             "name": "type",
@@ -1045,6 +1061,13 @@
                 "name": "Payment Cleared",
                 "labels": {
                   "es_ES": "Conciliado"
+                }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
                 }
               }
             ],
@@ -3229,14 +3252,7 @@
         "headerTable": "AccountsHeaderTable"
       },
       "detailEntity": null,
-      "labelOverrides": {
-        "en_US": {
-          "pendingCount": "Pending"
-        },
-        "es_ES": {
-          "pendingCount": "Por conciliar"
-        }
-      },
+      "listSortBy": "name asc",
       "rowQuickActions": {
         "enabled": false
       }
@@ -3672,6 +3688,14 @@
             "required": false
           },
           {
+            "name": "eTGOPendingCount",
+            "apiKey": "eTGOPendingCount",
+            "column": "EM_ETGO_Pending_Count",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -3726,14 +3750,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "pendingCount",
-            "apiKey": "pendingCount",
-            "column": "pendingCount",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -4048,6 +4064,14 @@
             "required": true
           },
           {
+            "name": "eTGOFinaccTransDest",
+            "apiKey": "eTGOFinaccTransDest",
+            "column": "EM_ETGO_Finacc_Trans_Dest",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4102,14 +4126,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOFinaccTransDest",
-            "apiKey": "eTGOFinaccTransDest",
-            "column": "EM_ETGO_Finacc_Trans_Dest",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "document-posting"
@@ -5316,7 +5332,10 @@
         "method": "GET",
         "path": "/account",
         "entity": "account",
-        "supportedFilters": []
+        "supportedFilters": [
+          "type",
+          "iBAN"
+        ]
       },
       {
         "method": "GET",
@@ -5538,7 +5557,10 @@
         "delete": true,
         "listUrl": "/sws/neo/accounts/account",
         "detailUrl": "/sws/neo/accounts/account/{id}",
-        "supportedFilters": []
+        "supportedFilters": [
+          "type",
+          "iBAN"
+        ]
       },
       "transaction": {
         "get": true,
@@ -5598,13 +5620,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -6072,14 +6098,6 @@
     },
     "window": {
       "category": "finance"
-    },
-    "labelOverrides": {
-      "en_US": {
-        "pendingCount": "Pending"
-      },
-      "es_ES": {
-        "pendingCount": "Por conciliar"
-      }
     }
   },
   "testManifest": {
@@ -7614,6 +7632,14 @@
         "description": "Field 'eTGODateTolerance' should be present in account"
       },
       {
+        "id": "t-field-presence-account-eTGOPendingCount",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "eTGOPendingCount",
+        "runner": "node",
+        "description": "Field 'eTGOPendingCount' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-iBAN",
         "category": "field-presence",
         "entity": "account",
@@ -7636,14 +7662,6 @@
         "field": "partialAccountNo",
         "runner": "node",
         "description": "Field 'partialAccountNo' should be present in account"
-      },
-      {
-        "id": "t-field-presence-account-pendingCount",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "pendingCount",
-        "runner": "node",
-        "description": "Field 'pendingCount' should be present in account"
       },
       {
         "id": "t-field-presence-account-pSD2CardNumber",
@@ -8430,6 +8448,14 @@
         "description": "Field 'eTGODateTolerance' should have type 'number' in account"
       },
       {
+        "id": "t-field-type-account-eTGOPendingCount",
+        "category": "field-type",
+        "entity": "account",
+        "field": "eTGOPendingCount",
+        "runner": "node",
+        "description": "Field 'eTGOPendingCount' should have type 'number' in account"
+      },
+      {
         "id": "t-field-type-account-iBAN",
         "category": "field-type",
         "entity": "account",
@@ -8452,14 +8478,6 @@
         "field": "partialAccountNo",
         "runner": "node",
         "description": "Field 'partialAccountNo' should have type 'string' in account"
-      },
-      {
-        "id": "t-field-type-account-pendingCount",
-        "category": "field-type",
-        "entity": "account",
-        "field": "pendingCount",
-        "runner": "node",
-        "description": "Field 'pendingCount' should have type 'number' in account"
       },
       {
         "id": "t-field-type-account-pSD2CardNumber",
@@ -11196,6 +11214,22 @@
         "description": "Rule 'Transaction Process' (process) should be declared"
       },
       {
+        "id": "t-searchable-filters-account-iBAN",
+        "category": "searchable-filters",
+        "entity": "account",
+        "field": "iBAN",
+        "runner": "node",
+        "description": "Field 'iBAN' should be a supported filter for account"
+      },
+      {
+        "id": "t-searchable-filters-account-type",
+        "category": "searchable-filters",
+        "entity": "account",
+        "field": "type",
+        "runner": "node",
+        "description": "Field 'type' should be a supported filter for account"
+      },
+      {
         "id": "t-selector-endpoint-account-aprmGlitemDiff",
         "category": "selector-endpoint",
         "entity": "account",
@@ -12670,7 +12704,7 @@
       }
     ],
     "summary": {
-      "total": 853,
+      "total": 855,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
@@ -12682,12 +12716,13 @@
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
+        "searchable-filters": 2,
         "selector-endpoint": 28,
         "system-field": 150,
         "visibility": 7
       },
       "byRunner": {
-        "node": 853,
+        "node": 855,
         "junit": 0
       }
     }

@@ -18,5 +18,6 @@ const fields = [
 export default function ReceivedInvoicespreviousPeriodSiiDataForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReceivedInvoicespreviousPeriodSiiDataForm.fields = fields;
 
 // @sf-generated-end component:ReceivedInvoicespreviousPeriodSiiDataForm

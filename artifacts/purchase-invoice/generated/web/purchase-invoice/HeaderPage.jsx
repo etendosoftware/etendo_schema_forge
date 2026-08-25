@@ -10,6 +10,7 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
+import SifErrorBanner from '@/windows/custom/purchase-invoice/SifErrorBanner';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
@@ -122,13 +123,17 @@ export const api = {
     "tax": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/tax",
       "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "basicDiscounts": {
       "get": true,
@@ -199,13 +204,17 @@ export const api = {
     "accounting": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/accounting",
       "detailUrl": "/sws/neo/purchase-invoice/accounting/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "siiData": {
       "get": true,
@@ -221,13 +230,17 @@ export const api = {
     "batuz": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/batuz",
       "detailUrl": "/sws/neo/purchase-invoice/batuz/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [
@@ -389,14 +402,6 @@ export const api = {
       "reference": "CostCenter",
       "inputMode": "selector",
       "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
-    },
-    {
-      "entity": "header",
-      "field": "aeatsiiPurDescription",
-      "column": "EM_Aeatsii_Pur_Description_ID",
-      "reference": "aeatsii_description",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiPurDescription"
     },
     {
       "entity": "header",
@@ -1015,6 +1020,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
+        formFooter={SifErrorBanner}
         hideDeleteWhenComplete
         hidePrintWhen={true}
         noHeaderBorder

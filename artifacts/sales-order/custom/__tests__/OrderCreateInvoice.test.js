@@ -365,4 +365,172 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
     });
   });
+
+  // ETP-4888 (commit b30276a14) — 6 call sites (ConfirmModal's step1/2/3,
+  // CreateDocsModal's shipment/invoice, and CloneModal's handleClone) were
+  // missing the flat `e?.message`/`json?.message` fallback. A business-rule
+  // rejection (e.g. C_Order_Post) returns a FLAT `{ status, message }` body —
+  // no `error`/`response` wrapper — and before the fix that shape fell
+  // through to a generic "Error (400)"/"Process failed (400)" message,
+  // silently hiding the real Spanish reason from the user. Each test below
+  // extracts the REAL fallback expression from the live source (not a
+  // hand-copied duplicate) via balanced-paren slicing and executes it, so
+  // reverting the fix at any single call site fails only that test.
+  describe('silent generic error message — real backend message surfaces (ETP-4888)', () => {
+    // Extracts the argument list of the first `callPrefix(...)` call found
+    // AFTER `marker` in `source` (balanced-paren aware, so nested `(...)` in
+    // the expression — e.g. `ui('...')` — don't truncate the extraction).
+    function extractCallExprAfter(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.indexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found after marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" after "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    // Same as above, but finds the call PRECEDING the marker (for call sites
+    // where the marker text — e.g. an i18n key — sits INSIDE the call's own
+    // argument list, so a forward search from the marker would skip past the
+    // call's own opening paren and land on the next occurrence instead).
+    function extractCallExprAround(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.lastIndexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found before marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" around "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    const REAL_MESSAGE = 'El pedido no puede confirmarse: falta el almacén';
+    // The exact shape the real backend returns for a C_Order_Post
+    // business-rule rejection — flat, no nested error/response wrapper.
+    const flatErrBody = (message = REAL_MESSAGE) => ({ status: 'error', message });
+
+    describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
+      function resolveMessage(e, processRes) {
+        const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
+        return new Function('e', 'processRes', `return ${expr};`)(e, processRes);
+      }
+
+      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), { status: 400 }), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic "Error (400)" message', () => {
+        assert.notEqual(resolveMessage(flatErrBody(), { status: 400 }), 'Error (400)');
+      });
+
+      it('falls back to "Error (status)" only when there is truly no message', () => {
+        assert.equal(resolveMessage(null, { status: 500 }), 'Error (500)');
+      });
+    });
+
+    describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
+        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
+        return fn(e, res, (k) => k);
+      }
+
+      it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), { status: 400 }), `soOrderConfirmedShipmentError${REAL_MESSAGE}`);
+      });
+
+      it('does not fall back to the generic "Error (400)" suffix', () => {
+        assert.doesNotMatch(resolveMessage(flatErrBody(), { status: 400 }), /Error \(400\)$/);
+      });
+    });
+
+    describe('ConfirmModal.handleConfirm — Step 3 (createDraftInvoice)', () => {
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAround(src, 'soOrderConfirmedInvoiceError', 'throw new Error(');
+        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
+        return fn(e, res, (k) => k);
+      }
+
+      it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), { status: 400 }), `soOrderConfirmedInvoiceError${REAL_MESSAGE}`);
+      });
+
+      it('does not fall back to the generic "Error (400)" suffix', () => {
+        assert.doesNotMatch(resolveMessage(flatErrBody(), { status: 400 }), /Error \(400\)$/);
+      });
+    });
+
+    describe('CreateDocsModal.handleCreate — shipment step (sibling to ConfirmModal, ETP-4888)', () => {
+      const createDocsModalSrc = src.slice(src.indexOf('export function CreateDocsModal'));
+
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
+        return new Function('e', 'res', `return ${expr};`)(e, res);
+      }
+
+      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), { status: 400 }), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic "Error (400)" message', () => {
+        assert.notEqual(resolveMessage(flatErrBody(), { status: 400 }), 'Error (400)');
+      });
+    });
+
+    describe('CreateDocsModal.handleCreate — invoice step (sibling to ConfirmModal, ETP-4888)', () => {
+      const createDocsModalSrc = src.slice(src.indexOf('export function CreateDocsModal'));
+
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAfter(createDocsModalSrc, 'action/createDraftInvoice', 'throw new Error(');
+        return new Function('e', 'res', `return ${expr};`)(e, res);
+      }
+
+      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), { status: 400 }), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic "Error (400)" message', () => {
+        assert.notEqual(resolveMessage(flatErrBody(), { status: 400 }), 'Error (400)');
+      });
+    });
+
+    describe('CloneModal.handleClone', () => {
+      const cloneModalSrc = src.slice(src.indexOf('function CloneModal'));
+
+      function resolveMessage(json, ui) {
+        const expr = extractCallExprAfter(cloneModalSrc, 'action/cloneRecord', 'setError(');
+        const fn = new Function('json', 'ui', `return ${expr};`);
+        return fn(json, ui);
+      }
+
+      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
+        assert.equal(resolveMessage(flatErrBody(), (k) => k), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic cloneOrderError i18n key when a flat message is present', () => {
+        assert.notEqual(resolveMessage(flatErrBody(), (k) => k), 'cloneOrderError');
+      });
+
+      it('still falls back to the cloneOrderError i18n key when the body has no message at all', () => {
+        assert.equal(resolveMessage({}, (k) => k), 'cloneOrderError');
+      });
+
+      it('keeps preferring the nested json.response.error.message over the flat json.message', () => {
+        const nested = { response: { error: { message: 'Nested clone message' } }, message: 'Flat message' };
+        assert.equal(resolveMessage(nested, (k) => k), 'Nested clone message');
+      });
+    });
+  });
 });

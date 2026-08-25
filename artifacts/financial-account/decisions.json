@@ -13,34 +13,34 @@
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideListFilters": true,
-    "labelOverrides": {
-      "en_US": { "pendingCount": "Pending" },
-      "es_ES": { "pendingCount": "Por conciliar" }
-    }
+    "listSortBy": "name asc"
   },
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
       "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
-      "virtualFields": [
-        {
-          "name": "pendingCount",
-          "column": "pendingCount",
-          "label": "Pending",
-          "type": "integer",
-          "visibility": "readOnly",
-          "form": false,
-          "grid": true,
-          "gridOrder": 5
-        }
-      ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
+        "type": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 2,
+          "gridLabelKey": "financeAccountsColType",
+          "cellType": "accountType",
+          "searchable": true,
+          "multiField": {
+            "parts": [
+              { "field": "type", "labelKey": "financeAccountsColType" },
+              { "field": "iBAN", "labelKey": "financeAccountsColIban" }
+            ]
+          },
+          "reason": "The Tipo cell shows TWO values — the account type and, under it, the IBAN — so a single header could only ever sort by one of them. The multiField decorator splits the header into two independently sortable segments (\"Tipo & IBAN\"), the same mechanism the Product list uses for \"Identificador & Nombre\". The cell body is untouched: cellType accountType still renders TypeCell, because DataTable's col.render wins over the multiField cell renderer. Both parts carry searchable:true because F18 blocks a sort-enabled part that is not queryable.",
+          "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md"
+        },
         "currency": { "visibility": "editable", "grid": false, "required": true },
         "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
-        "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
+        "iBAN": { "visibility": "editable", "grid": false, "searchable": true, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
         "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
         "bankCode": { "visibility": "editable", "grid": false },
         "branchCode": { "visibility": "editable", "grid": false },
@@ -66,7 +66,8 @@
         "aprmIsfundstransEnabled": { "visibility": "discarded" },
         "aprmGlitemDiff": { "visibility": "editable", "grid": false },
         "eTGODateTolerance": { "visibility": "editable" },
-        "eTGOAmountTolerance": { "visibility": "editable" }
+        "eTGOAmountTolerance": { "visibility": "editable" },
+        "eTGOPendingCount": { "visibility": "readOnly", "form": false, "grid": true, "gridOrder": 5, "gridLabelKey": "financeAccountsColPending", "cellType": "reconcilePill", "reason": "\"Por conciliar\". Was an entities.account.virtualFields[] entry injected by FinancialAccountHandler.afterHandle; became the EM_ETGO_Pending_Count stored computed column (EPL-1807 engine) so the column can be sorted and filtered server-side — a value injected in afterHandle can only be reordered inside the page the SQL already selected. Being a real field also retires the two workarounds the virtual one needed: cellType no longer goes through VIRTUAL_FIELD_CELL_TYPES and the header no longer needs window.labelOverrides, because appendVirtualFields' closed whitelist excluded both keys." }
       }
     },
     "transaction": {
@@ -236,6 +237,7 @@
       }
     },
     "clearedItems": {
+      "readOnly": true,
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "accountingDate": {

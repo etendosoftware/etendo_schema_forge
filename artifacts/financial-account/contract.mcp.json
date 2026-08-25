@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
-  "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-19T12:24:01.114Z",
-  "contractChecksum": "2c0bd53da5b3c050",
+  "version": "0.31.0",
+  "generatedAt": "2026-08-21T16:17:27.627Z",
+  "updatedAt": "2026-08-21T16:25:24.001Z",
+  "contractChecksum": "c7e13c08b8720494",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -16,7 +16,10 @@
         "delete": true,
         "listUrl": "/sws/neo/accounts/account",
         "detailUrl": "/sws/neo/accounts/account/{id}",
-        "supportedFilters": []
+        "supportedFilters": [
+          "type",
+          "iBAN"
+        ]
       },
       "transaction": {
         "get": true,
@@ -76,13 +79,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -1065,14 +1072,6 @@
     },
     "window": {
       "category": "finance"
-    },
-    "labelOverrides": {
-      "en_US": {
-        "pendingCount": "Pending"
-      },
-      "es_ES": {
-        "pendingCount": "Por conciliar"
-      }
     }
   },
   "formState": {
@@ -1152,7 +1151,7 @@
           "eTGODateTolerance": {
             "defaultValue": "3"
           },
-          "pendingCount": {
+          "eTGOPendingCount": {
             "readOnly": true
           }
         }
@@ -1539,5 +1538,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "751bc708819bfe59"
+  "checksum": "b324f219805b85a4"
 }
