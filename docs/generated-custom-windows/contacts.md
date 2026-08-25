@@ -214,11 +214,11 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 
 **Composite descriptor splits one CSV row into three records.** Contacts registers a custom import descriptor (`contactsImportDescriptor.js`, name `contacts`) instead of the plain single-entity default: a row builds a `businessPartner` op (with `oBTIKTaxIDKey` defaulted and `searchKey` falling back to `name`), and — only when address fields are present — a `locationAddress` op plus a `contact` (person) op, so a single "Company + contact person + address" row lands correctly across the three underlying tabs. `country`/`region` resolve through dedicated FK resolvers (`contactsFkResolvers.js`) rather than the generic per-field resolver, since they need the composite descriptor's own SimSearch calls.
 
-**Row-level dedupe by email.** `window.import.dedupe` is `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
+**Row-level dedupe.** ⚠️ **Superseded by ETP-4995:** the key is now `["taxID"]`, not `["etgoEmail"]` — email is optional, and `dedupeRows` skips deduplication entirely when any key part is blank. `window.import.dedupe` was `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
 
 ## ETP-4905 — Contact category resolution during import
 
-The Contacts CSV import supports the same dependent-category behavior as the Product import. A row may provide `categoryCode` (exact `C_BP_Group.Value`), `categoryName` (accent/case/whitespace-insensitive `C_BP_Group.Name`), or the legacy `category` column. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
+The Contacts CSV import supports the same dependent-category behavior as the Product import. ⚠️ **Superseded by ETP-4995:** the three columns described here (`categoryCode`, `categoryName`, `category`) collapsed into a single `category` column, whose cell is matched as an exact `C_BP_Group.Value` first and as an accent/case/whitespace-insensitive `C_BP_Group.Name` otherwise. The resolution and auto-creation semantics below are unchanged. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
 
 When no category matches, the descriptor creates one through the `business-partner-category` endpoint using a deterministic uppercase code derived from the category name. The resolver cache stores in-flight promises per import token, so concurrent rows with the same new category create one record and reuse its ID. Ambiguous normalized names fail the individual row without guessing; category-creation failures also remain row-level errors, while valid rows in the same file continue. Files without any category column preserve legacy behavior and let the backend defaults apply.
 
@@ -321,3 +321,74 @@ itself is still frágil for other windows in principle, but tightening it for ev
 is a separate, cross-window concern with its own risk budget — out of scope here. Verified
 with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
 `statusField` resolves to `null` and the pill no longer renders on new or existing records.
+
+## ETP-4995 — CSV import fixes and cleanup
+
+**P0 — the downloaded template could not be imported.** `buildTemplateCsv` emits every
+declared field's first alias as a column, so the template always carried
+`clave nif pais residencia` (`oBTIKTaxIDKey`). An empty cell in that column arrives as `''`
+(defined), not `undefined`, and the descriptor spread the AD default `'1'` *before*
+`...bpFields` — so the blank cell overwrote it and the mandatory column failed with
+`MISSING_REQUIRED_FIELDS` for **every** row. The only workaround was deleting the column
+from the file. Defaults are now applied after the row's own fields, and only a non-blank,
+valid cell may override one.
+
+**AD-coded columns accept the labels a human types.** `EM_OBTIK_Tax_ID_Key` is an AD List
+(`1`=NIF, `2`=NOI, `3`=Pasaporte, `4`=Documento oficial de identificación expedido por el
+país, `5`=Certificado de residencia fiscal, `6`=Otro documento probatorio, `7`=No Censado —
+`1` also accepts `CIF`/`CIF/NIF`, which is not an AD list name but is what users type, the
+window's own tax-id column being labelled "CIF/NIF")
+and `EM_Etgo_Isperson` is an AD **Yes/No** (`Y`=Persona, `N`=Empresa, AD default `N`) — not
+a list, despite reading like one. Neither can go through `matchEntity` FK resolution, which
+queries SimSearch by DAL *entity* name; a reference list is not an entity. Both now resolve
+through a per-descriptor synonym table (`lib/codedValue.js`), accent- and case-insensitively,
+with the raw code always accepted so an Etendo-exported CSV round-trips. An unrecognized
+value fails its own row with a message naming the accepted values, instead of a bare 400.
+
+**`etgoIsperson` is importable at all.** It had no column, was absent from `BP_TARGETS`, and
+`mapColumns` only ever matches a header against a field's `label`/`aliases` — never against
+the target name — so every imported row landed on the same contact type.
+
+**A bare `nombre` column no longer produces a nameless business partner.** `nombre` was an
+alias of `etgoFirstname`, so a CSV whose only name column was `nombre` left `name` (razón
+social) and the derived `searchKey` empty. `nombre` is now an alias of `name`; the descriptor
+additionally falls back to first+last name, and fails the row when neither is present.
+
+**`searchKey` no longer collides.** `C_BPartner.Value` is capped at 40 chars and was derived
+with a blind `.slice(0, 40)`, so two commercial names sharing a 40-char prefix collapsed onto
+one key. Names that fit are used verbatim; longer ones keep a 32-char prefix plus a
+deterministic FNV-1a hash of the *full* name, so re-importing a file is idempotent.
+
+**Dedupe key changed from `etgoEmail` to `taxID`.** `dedupeRows`'s `buildKey` returns `null`
+when any key part is blank, and email is optional — so the default path deduplicated nothing.
+`taxID` is `required: true` (see above), so it is always present, and two rows sharing a tax id
+are the same legal entity — a stronger identity than a matching commercial name, which two
+distinct companies can share.
+
+**Category columns 3 → 1.** `categoryCode`/`categoryName`/`category` were three columns for
+one concept. Only `category` survives; the cell is probed against the existing category codes
+first and treated as a name otherwise (`lib/dependentEntityCell.js`), preserving both the
+exact-code match and the derived-code auto-create.
+
+**`creditLimit` removed from `BP_TARGETS`** — no declared column could ever populate it.
+
+**CIF/NIF is required at import level, on purpose.** `C_BPartner.TaxID` is *not* mandatory
+in AD (`ismandatory='N'`, 20 chars) and a contact created by hand can be saved without one —
+but a contact loaded in bulk without a tax id is not useful, so `decisions.json` declares
+`taxID` as `required: true`. This is the import being deliberately stricter than the
+dictionary, which is precisely what a per-window import config is for. The explicit flag also
+survives the generator's AD backfill, which would otherwise mark it optional.
+
+**`required: true` is now declared, and `required: false` is deliberate.**
+`requiredTargets` (`ImportDialog.jsx`) is built from `f.required`; with nothing declared it
+was empty and `validateRow` validated nothing, so the user learned about a missing mandatory
+field from a backend 400. Note that `generate-contract.js` **backfills `required` from AD**
+when `decisions.json` is silent: `etgoIsperson` and `etgoFirstname` are AD-mandatory but must
+stay optional in the CSV (the descriptor defaults the first, and a company legitimately has
+no first name), so both declare `required: false` explicitly. Omitting that flag re-breaks
+the plain template exactly like the P0 bug did.
+
+Regression coverage: `contactsImportDescriptor.vitest.js`, plus
+`windows/custom/__tests__/importTemplateRoundTrip.vitest.js`, which downloads the template,
+fills it without deleting a column, and asserts it maps, validates and builds operations —
+the end-to-end path none of the per-unit tests covered.
