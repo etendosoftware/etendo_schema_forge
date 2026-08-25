@@ -1120,3 +1120,127 @@
   inside `modules/com.etendoerp.go` fails with a Gradle-version mismatch (module pins Gradle
   9.4.1, root pins 8.12.1), a pre-existing, diff-independent quirk; always run it as
   `./gradlew ":modules:com.etendoerp.go:compileJava"` from the etendo root.
+
+## Cheque → Recibo payment-method replacement (G3 / R24, 2026-08-21)
+
+- **2026-08-21 — The six `*use` columns on BOTH `fin_paymentmethod` and `fin_finacc_paymentmethod`
+  (`uponreceiptuse`, `upondeposituse`, `inuponclearinguse`, `uponpaymentuse`, `uponwithdrawaluse`,
+  `outuponclearinguse`) are NULLABLE, and comparing them with `=` inside a `NOT ( ... )` guard is a
+  silent correctness bug.** `col = 'CLE'` evaluates to NULL when the column is NULL, `NOT (NULL)` is
+  NULL, and the row is never matched — so the divergent row is skipped by `@apply` AND reported as
+  already-fixed by `@check`. Hit live while trialling R24: the migrated Bank link kept empty
+  reconciliation accounts while `@check` returned 0 rows on the re-run, i.e. a falsely-green
+  convergence. **Apply:** in any data-fix guard over a nullable column use `IS NOT DISTINCT FROM`
+  (or `IS NULL`), never `=`. Only the SET clauses may use `=`. R24 carries a regression test.
+- **2026-08-21 — NOTHING in the schema has a foreign key pointing AT `fin_finacc_paymentmethod`**
+  (verified against `information_schema`). **Apply:** per-account payment-method links can be
+  repointed to a different method or deleted outright without cascade risk — a method swap does not
+  need to recreate them. The one constraint to respect is `fin_finacc_paymentmethod_un UNIQUE
+  (fin_paymentmethod_id, fin_financial_account_id)`, so a repoint must be guarded against an
+  account that already carries a link to the target method (R24 Effect 2 → 2b handles this by
+  repointing what it can and deleting the rest).
+- **2026-08-21 — The Etendo GO tenant signature is a payment method named `Transferencia bancaria`,
+  NOT one named `Cheque`.** `F&B International Group` (Openbravo demo data,
+  `referencedata/sampledata/F_B_International_Group/FIN_PAYMENTMETHOD.xml`) ships its own unrelated
+  method literally named `Cheque`, alongside `Check`, `Wire Transfer`, `Cash`, `Al contado` and
+  `Transferencia`. Live counts: 36 tenants have a `Cheque`, only 35 have `Transferencia bancaria`
+  — the extra one is F&B. **Apply:** gate any payment-method data-fix on `Transferencia bancaria`;
+  gating on `Cheque` corrupts F&B (and any other demo client) instead of the GO fleet.
+- **2026-08-21 — Deactivating a payment method is NOT enough: `Cheque` was the default method of 34
+  `c_bpartner` rows.** Leaving `c_bpartner.fin_paymentmethod_id` (and `po_paymentmethod_id`)
+  pointing at an `isactive='N'` method makes every new invoice for those partners inherit a method
+  the selectors will not offer. **Apply:** a method retirement must repoint the forward-looking
+  configuration references — `c_bpartner`×2, `c_paymenttermline`, `c_project`, `c_projectproposal`,
+  `fin_payment_proposal` — and, so open work stays operable, the UNPROCESSED documents
+  (`c_invoice`/`c_order`/`fin_payment` with `processed='N'`, plus the `fin_payment_schedule` rows
+  hanging off them). Processed documents are deliberately left behind so history keeps its original
+  label; that is the reason to create a NEW method rather than rename the old one in place.
+- **2026-08-21 — Card accounts (`fin_financial_account.type='CA'`) never had a Cheque link: 0 of 34
+  live, versus 55 of 66 Bank accounts.** So "associate Recibo to Bank AND Card accounts" is a
+  migration on Bank and brand-new behaviour on Card. **Apply:** never assume a per-account link set
+  is symmetric across account types — count them (`type` ref list is `B` Bank / `C` Cash / `CA`
+  Card) before writing the fix, or the `CA` half is silently missed.
+- **2026-08-21 — `FinancialAccountSupport.createLink` did NOT copy `INUponClearingUse` /
+  `OUTUponClearingUse` from the method template**, even though the surrounding comment already
+  explains that fields with no sane default must be copied or "every new account's transaction
+  handling silently diverges". It now does. Note the entity's setters are spelled
+  `setINUponClearingUse` / `setOUTUponClearingUse` (property names `iNUponClearingUse` /
+  `oUTUponClearingUse`), not `setInUponClearingUse`.
+- **2026-08-21 — In `PAYMENT_METHODS_BY_TYPE` the FIRST method of each list becomes the account's
+  default** (`assignDefaultPaymentMethods` → `createLink(account, method, i == 0)`). **Apply:** to
+  add a method to an account type without stealing its default, append it — never prepend. R24 uses
+  `B: [Transferencia, Recibo, Tarjeta]` and `CA: [Tarjeta, Recibo]` for exactly this reason, and the
+  corrective `.sql` inserts new links with `isdefault='N'` and never writes `isdefault` in a SET.
+- **2026-08-21 — There is NO `EntityPersistenceEventObserver` on `FIN_FinancialAccount` anywhere in
+  `com.etendoerp.go`.** The automatic method-linking fires from exactly two call sites, both Neo
+  handlers: `FinancialAccountHandler#afterHandle` (manual "sin conexión" creation) and
+  `FinancialAccountBankConnectionHandler#handleCreateAndLink` (Salt Edge create-and-link).
+  **Apply:** an account created straight from the Etendo Classic window gets no automatic links.
+  Accepted scope for G3 (explicit product call), but any requirement phrased as "every new account,
+  however created" needs an event handler that does not exist yet.
+- **2026-08-21 — `get_uuid()` is the right PK minter for a data-fix that inserts N rows** (precedent:
+  R1, R7, R9, R10, R16, R17, R18, R20, R22, R23). Reserve the `@uuid_<KEY>@` placeholder for
+  singleton rows whose id other statements must reference; for N-row inserts call `get_uuid()` in
+  the SELECT list. R24 uses `@uuid_RECIBO@` for the one method row and `get_uuid()` for the
+  per-account links.
+- **2026-08-21 — `parseFix(text, fixId)` takes the file CONTENTS first and the fix id (file name
+  without `.sql`) second.** Passing the path first "succeeds" far enough to produce a confusing
+  `missing or empty @check section` error whose message is the entire file. **Apply:** when
+  trialling a fix by hand, mirror `run.js`'s templating order exactly — `inlineParams` →
+  `inlineClientName` (only if `@name_client@` is present) → `inlineFreshUuids` — then run
+  `@check`/`@apply`/`@report` inside a `BEGIN … ROLLBACK` against the real DB. Sweeping all tenants
+  in one rolled-back transaction (44 tenants for R24) is the cheapest way to prove convergence and
+  catch the NULL-comparison class of bug before review.
+- **2026-08-21 — A data-fix that repoints a column via a scalar subquery must guard that the
+  subquery has a row, or it BLANKS the column instead.** `SET fin_paymentmethod_id = (SELECT …
+  WHERE name='Recibo')` yields NULL — not "no change" — on any tenant where `Recibo` does not
+  exist, so the `WHERE` filter matching on the OLD method is not enough. **Apply:** pair every
+  `SET col = (scalar subquery)` with `AND EXISTS (<same subquery>)`.
+- **2026-08-21 — Put the tenant-identification gate on EVERY `@apply` statement, not only on
+  `@check`.** The runner does evaluate `@check` first and skips `@apply` on 0 rows
+  (`run.js` `applyFix`, and `--fix`/`cmdTargetedFix` goes through the same path), so `@check` alone
+  is sufficient in normal operation — which is exactly why the omission is easy to miss in review.
+  It stops being sufficient the moment anyone replays `@apply` by hand (the standard way to trial a
+  fix) or a future runner change reorders the two. Measured on R24: replaying the un-gated `@apply`
+  straight onto `F&B International Group` **deleted its `Cheque` payment method and one account
+  link**; with the gate on all 18 statements the same replay is a no-op. **Apply:** gate every
+  statement, and prove it by running `@apply` alone against a tenant the fix must not touch, inside
+  `BEGIN … ROLLBACK`, comparing a before/after snapshot.
+- **2026-08-21 — Never write `:org_id` (or any bind placeholder you don't want resolved) anywhere
+  inside a fix's `@check`/`@apply`/`@report` body — INCLUDING in a comment.** `run.js` decides
+  whether to resolve the tenant's operative org with a raw substring test over the concatenated
+  section text (`` `${fix.check}\n${fix.apply}\n${fix.report}`.includes(':org_id') ``), and
+  `parseFix` keeps comment lines inside the section bodies. R24 mentioned the placeholder only in
+  an explanatory comment saying it deliberately does NOT use it — which was enough to switch org
+  resolution on, and the run then died on the first tenant with no operative org
+  (`:org_id used but tenant … has no operative org`), aborting the whole chain after 22 of 44
+  tenants with an already-committed partial result. **Apply:** keep placeholder names out of prose
+  (say "the runner's operative-org bind" instead), and after authoring a fix assert
+  `parseFix(...)` → `check+apply+report` does not contain `:org_id` unless you mean it.
+- **2026-08-21 — A targeted `--fix` run that throws does NOT roll back the tenants it already
+  committed.** Each tenant is its own transaction, and `cmdTargetedFix` has no try/catch around the
+  per-tenant loop, so an exception thrown by `applyFix`'s *pre*-flight (bind resolution, before any
+  `BEGIN`) propagates out of the loop and leaves the earlier tenants APPLIED and the rest untouched
+  (exit code 2). **Apply:** the fix is idempotent, so the remedy is simply to re-run it once the
+  cause is fixed — already-APPLIED tenants come back `SKIPPED_NOT_NEEDED — kept prior success
+  state` via the ledger's no-downgrade guard. Always check the exit code and the APPLIED+SKIPPED
+  count against the announced tenant count; a truncated console listing looks identical to success.
+- **2026-08-21 — When auditing a data-fix by splitting `@apply` into statements, STRIP full-line
+  comments first, or adjacent prose makes an ungated statement look gated.** Splitting the raw
+  section text on `;\n` puts each statement's preceding comment block inside that statement's chunk,
+  so a substring test for the gate literal matches the comment, not the SQL. This produced a real
+  gap on R24: the comment above Effect 4 read "…`isdefault='N'` so **Transferencia bancaria** /
+  Tarjeta keep the default…", so both the audit census AND the script that inserted the gate
+  (sharing the same contaminated predicate) skipped that one statement — the census reported
+  "0 ungated" while the executable SQL of the `INSERT INTO fin_finacc_paymentmethod` had no gate at
+  all. It was structurally safe only second-order (its `CROSS JOIN` on `name='Recibo'` yields no
+  rows for a tenant without that method), which is exactly the kind of safety that evaporates when
+  someone renames something. **Apply:** any per-statement assertion — in an audit script or in a
+  test — must run on comment-stripped SQL, and the two numbers (raw vs comment-stripped) should be
+  compared explicitly, because agreeing is what proves the audit is not measuring prose.
+- **2026-08-21 — Open framework footgun (NOT fixed): `run.js:249` decides whether to resolve
+  `:org_id` with a raw `.includes(':org_id')` over the concatenated section bodies, comments
+  included.** R24 is hardened by a test, but the next fix that names a bind in prose repeats the
+  incident. Root fix would be to strip comments before the `.includes()` (or scan executable SQL
+  only) in `cli/src/data-fixes/run.js`, with its own test — deliberately left out of ETP-4893's
+  scope as shared-runner surface.

@@ -22,6 +22,7 @@ const fields = [
 export default function QuotationForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+QuotationForm.fields = fields;
 QuotationForm.hasCollapsedFields = true;
 
 // @sf-generated-end component:QuotationForm

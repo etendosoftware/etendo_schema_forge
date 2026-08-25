@@ -28,7 +28,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { render } from '@testing-library/react';
-import TaxSifField, { selectSifFields } from '../TaxSifField.jsx';
+import TaxSifField, { selectSifFields, pickRegimeChild } from '../TaxSifField.jsx';
 
 // Identity ui() so selector output is inspectable by key.
 const ui = (key) => key;
@@ -259,5 +259,71 @@ describe('TaxSifField — render (fields array + label overrides)', () => {
       etvfacVatRegime: true,
       etvfacExemptionCause: true,
     });
+  });
+});
+
+// ETP-4888 follow-up (commit 147f79100) — pickRegimeChild() resolves a compound/
+// summary tax's candidate children down to the ONE non-equivalence-charge
+// rate-component child that actually carries the régimen key. Mirrors the exact
+// criterion Etendo Classic's own completion validation uses (see the function's
+// own doc comment for the verified source files). Deliberately "never guess
+// wrong": 0 or >1 qualifying children resolve to `null`, not a best-effort pick.
+describe('pickRegimeChild — compound/summary tax child resolution (ETP-4888)', () => {
+  it('resolves to the single non-equivalence-charge child when exactly one qualifies', () => {
+    const children = [
+      { id: 'child-base', oBSPTIEquivalentCharge: 'N' },
+      { id: 'child-re', oBSPTIEquivalentCharge: 'Y' },
+    ];
+    expect(pickRegimeChild(children)).toEqual({ id: 'child-base', oBSPTIEquivalentCharge: 'N' });
+  });
+
+  it('returns null when there are ZERO non-equivalence-charge children (all are equivalence-charge)', () => {
+    const children = [
+      { id: 'child-re-1', oBSPTIEquivalentCharge: 'Y' },
+      { id: 'child-re-2', oBSPTIEquivalentCharge: true },
+    ];
+    expect(pickRegimeChild(children)).toBeNull();
+  });
+
+  it('returns null when there is MORE THAN ONE non-equivalence-charge child (ambiguous, never guess)', () => {
+    const children = [
+      { id: 'child-a', oBSPTIEquivalentCharge: 'N' },
+      { id: 'child-b', oBSPTIEquivalentCharge: 'N' },
+      { id: 'child-c', oBSPTIEquivalentCharge: 'Y' },
+    ];
+    expect(pickRegimeChild(children)).toBeNull();
+  });
+
+  it('returns null for an empty children array', () => {
+    expect(pickRegimeChild([])).toBeNull();
+  });
+
+  it('returns null for a null/undefined children argument (defensive default)', () => {
+    expect(pickRegimeChild(null)).toBeNull();
+    expect(pickRegimeChild(undefined)).toBeNull();
+  });
+
+  it('treats Etendo boolean variants (true / "Y") as equivalence-charge, excluding them', () => {
+    const children = [
+      { id: 'base', oBSPTIEquivalentCharge: 'N' },
+      { id: 're-bool', oBSPTIEquivalentCharge: true },
+    ];
+    expect(pickRegimeChild(children)?.id).toBe('base');
+  });
+
+  it('a child missing the flag entirely (undefined) is treated as non-equivalence-charge (isEtendoTrue(undefined) is false)', () => {
+    const children = [{ id: 'base-no-flag' }];
+    expect(pickRegimeChild(children)?.id).toBe('base-no-flag');
+  });
+
+  it('honors a custom isEquivalentChargeKey — the invoice-lines selector enrichment uses "isEquivalentCharge", not "oBSPTIEquivalentCharge"', () => {
+    const children = [
+      { id: 'base', isEquivalentCharge: 'N' },
+      { id: 're', isEquivalentCharge: 'Y' },
+    ];
+    // Default key would find nothing truthy to filter out (wrong key), so BOTH
+    // would count as candidates -> null. The custom key resolves correctly.
+    expect(pickRegimeChild(children)).toBeNull();
+    expect(pickRegimeChild(children, { isEquivalentChargeKey: 'isEquivalentCharge' })?.id).toBe('base');
   });
 });

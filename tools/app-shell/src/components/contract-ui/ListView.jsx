@@ -6,7 +6,7 @@ import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -14,6 +14,7 @@ import ReportDrawer from './ReportDrawer.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { ListSortPopover } from './ListSortPopover.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -192,23 +193,6 @@ function ListTableRegion({
         </div>
       )}
     </ScrollPane>
-  );
-}
-
-function SortToggleButton({ SortIconComponent, isDefaultSort, iconButtonHover, onToggle }) {
-  const SortEl = SortIconComponent || ArrowUpDown;
-  return (
-    <button
-      onClick={onToggle}
-      className={[
-        'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors',
-        isDefaultSort
-          ? `border-border text-muted-foreground ${iconButtonHover}`
-          : 'border-primary/40 bg-primary/10 text-primary',
-      ].join(' ')}
-    >
-      <SortEl className="h-4 w-4" data-testid="SortEl__620cbc" />
-    </button>
   );
 }
 
@@ -803,7 +787,6 @@ export function ListView({
     isFormEditing: false,
   }), [windowName, label, selectedRows]);
   useRegisterWindowContext(windowContextInfo);
-  const [showSortPopover, setShowSortPopover] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(`viewMode:${entity}`) || 'list'
@@ -814,21 +797,8 @@ export function ListView({
     localStorage.setItem(`viewMode:${entity}`, mode);
   };
 
-  const sortBtnRef = useRef(null);
 
   const isDefaultSort = isDefaultSortActive(hook, initialSortColumn, initialSortDirection);
-
-  // Close sort popover on outside click
-  useEffect(() => {
-    if (!showSortPopover) return;
-    const handleClick = (e) => {
-      if (sortBtnRef.current && !sortBtnRef.current.contains(e.target)) {
-        setShowSortPopover(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showSortPopover]);
 
   const handleSortSelect = useCallback((colKey) => {
     if (hook.sortColumn === colKey) {
@@ -838,10 +808,14 @@ export function ListView({
       hook.setSortColumn(colKey);
       hook.setSortDirection('asc');
     }
-    setShowSortPopover(false);
   }, [hook.sortColumn, hook.setSortColumn, hook.setSortDirection]);
 
-  // Header click: none → asc → desc → clear
+  // Header click: none → asc → desc → back to this window's own default.
+  // The reset arm used to hardcode `creationDate desc`, which is only the default for a
+  // window that declares no `listSortBy`. For one that does, the third click silently
+  // switched to a DIFFERENT order than the one the list opened in — and any slot that keys
+  // off "is the sort still at rest" (AccountsHeaderTable's two-key resting order) could
+  // never return to it.
   const handleColumnSort = useCallback((colKey) => {
     if (hook.sortColumn !== colKey) {
       hook.setSortColumn(colKey);
@@ -849,16 +823,16 @@ export function ListView({
     } else if (hook.sortDirection === 'asc') {
       hook.setSortDirection('desc');
     } else {
-      hook.setSortColumn('creationDate');
-      hook.setSortDirection('desc');
+      hook.setSortColumn(initialSortColumn);
+      hook.setSortDirection(initialSortDirection);
     }
-  }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection]);
+  }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection,
+    initialSortColumn, initialSortDirection]);
 
   const handleClearSort = useCallback(() => {
-    hook.setSortColumn('creationDate');
-    hook.setSortDirection('desc');
-    setShowSortPopover(false);
-  }, [hook.setSortColumn, hook.setSortDirection]);
+    hook.setSortColumn(initialSortColumn);
+    hook.setSortDirection(initialSortDirection);
+  }, [hook.setSortColumn, hook.setSortDirection, initialSortColumn, initialSortDirection]);
 
   const handleReachBottom = useCallback(() => {
     if (hook.hasMore && !hook.loadingMore) hook.loadMore();
@@ -897,6 +871,15 @@ export function ListView({
     sortColumn: hook.sortColumn,
     sortDirection: hook.sortDirection,
     onSort: handleColumnSort,
+    // The other two thirds of the sort API, forwarded so a window that REPLACES the idle bar
+    // (financial-account, via `hideListBar`) can still render `ListSortPopover` in its own
+    // toolbar instead of losing the control. `onSort` alone is not enough: the popover needs
+    // pick-a-column (which must not silently clear the sort the way the header's third click
+    // does) and back-to-default, and it needs to know whether it is AT the default to decide
+    // whether to offer that at all.
+    onSortSelect: handleSortSelect,
+    onClearSort: handleClearSort,
+    isDefaultSort,
     onColumnsReady: setTableColumns,
     api,
     token,
@@ -1089,53 +1072,16 @@ export function ListView({
                     <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
                   </button>
                 )}
-                <div className="relative" ref={sortBtnRef}>
-                  <SortToggleButton
-                    SortIconComponent={SortIconComponent}
-                    isDefaultSort={isDefaultSort}
-                    iconButtonHover={iconButtonHover}
-                    onToggle={() => setShowSortPopover(v => !v)}
-                    data-testid="SortToggleButton__620cbc" />
-                  {showSortPopover && tableColumns.length > 0 && (
-                    <div
-                      className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground tracking-wide">
-                        {ui('sortBy')}
-                      </div>
-                      {tableColumns.filter(col => col.sortable !== false).map(col => {
-                        const colLabel = t(col.column) ?? col.label ?? col.key;
-                        const isActive = hook.sortColumn === col.key;
-                        return (
-                          <button
-                            key={col.key}
-                            onClick={() => handleSortSelect(col.key)}
-                            className={[
-                              'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
-                              isActive ? 'bg-primary/5 text-foreground font-medium' : 'text-foreground hover:bg-muted/50',
-                            ].join(' ')}
-                          >
-                            <span className="w-4 text-center text-xs">
-                              {isActive ? (hook.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : ''}
-                            </span>
-                            <span className="flex-1 text-left">{colLabel}</span>
-                          </button>
-                        );
-                      })}
-                      {!isDefaultSort && (
-                        <>
-                          <div className="border-t border-border/50 my-1" />
-                          <button
-                            onClick={handleClearSort}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                          >
-                            <span className="w-4" />
-                            <span className="flex-1 text-left">{ui('clearSort')}</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <ListSortPopover
+                  columns={tableColumns}
+                  sortColumn={hook.sortColumn}
+                  sortDirection={hook.sortDirection}
+                  onSelect={handleSortSelect}
+                  onClear={handleClearSort}
+                  isDefaultSort={isDefaultSort}
+                  SortIconComponent={SortIconComponent}
+                  iconButtonHover={iconButtonHover}
+                  data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
                   iconButtonHover={iconButtonHover}

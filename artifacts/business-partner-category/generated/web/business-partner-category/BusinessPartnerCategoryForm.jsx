@@ -13,5 +13,6 @@ const fields = [
 export default function BusinessPartnerCategoryForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BusinessPartnerCategoryForm.fields = fields;
 
 // @sf-generated-end component:BusinessPartnerCategoryForm

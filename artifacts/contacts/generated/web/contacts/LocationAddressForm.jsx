@@ -18,5 +18,6 @@ const fields = [
 export default function LocationAddressForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+LocationAddressForm.fields = fields;
 
 // @sf-generated-end component:LocationAddressForm

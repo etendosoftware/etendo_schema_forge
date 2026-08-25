@@ -48,5 +48,6 @@ const fields = [
 export default function ValorespordefectoForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ValorespordefectoForm.fields = fields;
 
 // @sf-generated-end component:ValorespordefectoForm

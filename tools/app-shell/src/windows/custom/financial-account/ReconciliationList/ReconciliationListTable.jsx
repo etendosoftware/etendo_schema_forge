@@ -7,6 +7,7 @@ import { StatusTag } from '@/components/ui/status-tag';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatDate } from '@/lib/formatSigned';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
 
 /**
@@ -41,6 +42,8 @@ const CELL_RENDERERS = {
   startingbalance: {
     width: 'minmax(120px,0.9fr)',
     labelKey: 'financeAccountReconciliationsColStartingBalance',
+    // Numeric, so the comparator orders 9 before 10 instead of lexicographically.
+    sortValue: (r) => Number(r.startingbalance) || 0,
     render: (r, ctx) => (
       <MoneyAmount
         value={Number(r.startingbalance) || 0}
@@ -53,6 +56,7 @@ const CELL_RENDERERS = {
   endingBalance: {
     width: 'minmax(120px,0.9fr)',
     labelKey: 'financeAccountReconciliationsColEndingBalance',
+    sortValue: (r) => Number(r.endingBalance) || 0,
     render: (r, ctx) => (
       <MoneyAmount
         value={Number(r.endingBalance) || 0}
@@ -67,6 +71,9 @@ const CELL_RENDERERS = {
   documentStatus: {
     width: 'minmax(140px,1fr)',
     labelKey: 'financeAccountReconciliationsColStatus',
+    // Sorts by the translated pill text, not the raw code: 'CO'/'DR'/'VO' order alphabetically
+    // as Completado/Borrador/Anulado in neither language.
+    sortValue: (r, ctx) => ctx.ui(`financeAccountReconciliationsDocStatus_${r.documentStatus}`) || r.documentStatus,
     render: (r, ctx) => (
       <span>
         <StatusTag
@@ -79,6 +86,7 @@ const CELL_RENDERERS = {
   posted: {
     width: 'minmax(170px,1.2fr)',
     labelKey: 'financeAccountReconciliationsColPosted',
+    sortValue: (r, ctx) => ctx.postedLabel(r.posted),
     render: (r, ctx) => (
       <span>
         <StatusTag
@@ -115,7 +123,34 @@ function amountAligned(name) {
   return name === 'startingbalance' || name === 'endingBalance';
 }
 
-export function ReconciliationListTable({ reconciliations, loading, currency = 'EUR' }) {
+/**
+ * Sort accessors for this grid, keyed by contract field name.
+ *
+ * Exported so the TAB can own the sort state: its toolbar hosts the "Ordenar por" popover, and
+ * the toolbar is a sibling of this table, not a child. Same split as ListView/DataTable — the
+ * container owns the state, the grid receives it. Each accessor comes from the renderer that
+ * draws the cell, so the order always matches what is on screen.
+ */
+export function buildReconciliationSortAccessors(cellCtx) {
+  return Object.fromEntries(
+    COLUMNS
+      .filter((c) => CELL_RENDERERS[c.name]?.sortValue)
+      .map((c) => [c.name, (row) => CELL_RENDERERS[c.name].sortValue(row, cellCtx)]),
+  );
+}
+
+/** The sortable columns, for the toolbar popover's menu. */
+export function buildReconciliationSortColumns(ui) {
+  return COLUMNS.map((col) => ({
+    key: col.name,
+    label: CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label,
+  }));
+}
+
+export function ReconciliationListTable({
+  reconciliations, loading, currency = 'EUR',
+  sortKey = null, sortDirection = 'asc', onSort,
+}) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -129,6 +164,7 @@ export function ReconciliationListTable({ reconciliations, loading, currency = '
     // The label set of the accounting status, keyed by the raw `Posted` code.
     postedLabel: (posted) => ui(`financeAccountReconciliationsPosted_${posted}`) || posted || '—',
   };
+
 
   return (
     // Full-bleed like the Imported Statements grid: no card border/radius, the rows' own bottom
@@ -148,7 +184,14 @@ export function ReconciliationListTable({ reconciliations, loading, currency = '
         <span aria-hidden="true" />
         {COLUMNS.map((col) => (
           <span key={col.name} className={amountAligned(col.name) ? 'text-right' : undefined}>
-            {CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
+            <SortableHeaderLabel
+              label={CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
+              sortKey={col.name}
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align={amountAligned(col.name) ? 'right' : undefined}
+              data-testid="SortableHeaderLabel__d80a75" />
           </span>
         ))}
       </div>

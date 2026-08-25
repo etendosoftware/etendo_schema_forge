@@ -28,5 +28,6 @@ const fields = [
 export default function SiiConfigurationForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+SiiConfigurationForm.fields = fields;
 
 // @sf-generated-end component:SiiConfigurationForm

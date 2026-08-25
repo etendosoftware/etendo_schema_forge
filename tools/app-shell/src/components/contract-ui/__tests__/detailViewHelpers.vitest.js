@@ -45,6 +45,8 @@ import {
   runAddLineAction,
   buildInitialTabs,
   buildLineRowClickHandler,
+  maybeSaveBeforeProcess,
+  maybeSaveBeforeConfirm,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -628,5 +630,79 @@ describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
       ],
     }));
     expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'custom:attachments', 'accounting']);
+  });
+});
+
+// ETP-4542 — moved here from DetailView.jsx (growth-guarded, see
+// .claude/hooks/check-detailview-growth.mjs) alongside maybeSaveBeforeConfirm
+// below. DetailView.dispatchProcessAction.vitest.jsx already covers this
+// function through DetailView.jsx's re-export (R1: no test was edited); this
+// block is the direct-import counterpart the ETP-4730 precedent above expects.
+describe('maybeSaveBeforeProcess', () => {
+  it('dirty + successful save → saves silently and allows the process to run', async () => {
+    const handleSave = vi.fn().mockResolvedValue({ id: 'A1' });
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: true, handleSave });
+    expect(handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(proceed).toBe(true);
+  });
+
+  it('dirty + failed save → aborts (returns false)', async () => {
+    const handleSave = vi.fn().mockResolvedValue(null);
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: true, handleSave });
+    expect(proceed).toBe(false);
+  });
+
+  it('not dirty → runs directly without saving', async () => {
+    const handleSave = vi.fn();
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: true, isDirty: false, handleSave });
+    expect(handleSave).not.toHaveBeenCalled();
+    expect(proceed).toBe(true);
+  });
+
+  it('without the opt-in flag → never saves, even when dirty', async () => {
+    const handleSave = vi.fn();
+    const proceed = await maybeSaveBeforeProcess({ saveBeforeProcesses: false, isDirty: true, handleSave });
+    expect(handleSave).not.toHaveBeenCalled();
+    expect(proceed).toBe(true);
+  });
+});
+
+// ETP-4940 — "Confirmar" (and any kebab-menu documentAction) must never
+// silently discard a pending header edit. Unlike maybeSaveBeforeProcess above,
+// there is no opt-in flag: every draftMode window whose Confirm button uses a
+// custom `onConfirm` callback, and every kebab-menu documentAction, goes
+// through this gate unconditionally.
+describe('maybeSaveBeforeConfirm', () => {
+  it('dirty header + click Confirm → saves silently BEFORE the confirm action is allowed to fire', async () => {
+    const handleSave = vi.fn().mockResolvedValue({ id: 'ORD-1' });
+    const proceed = await maybeSaveBeforeConfirm({ isDirty: true, handleSave });
+    expect(handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(proceed).toBe(true);
+  });
+
+  it('save fails → confirm does NOT proceed', async () => {
+    // handleSave returns null on validation/required/numeric/backend failure —
+    // it has already surfaced the error (toast / field errors) itself.
+    const handleSave = vi.fn().mockResolvedValue(null);
+    const proceed = await maybeSaveBeforeConfirm({ isDirty: true, handleSave });
+    expect(handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(proceed).toBe(false);
+  });
+
+  it('a save that resolves with no id (e.g. unnavigable new-record edge case) also aborts', async () => {
+    const handleSave = vi.fn().mockResolvedValue({});
+    const proceed = await maybeSaveBeforeConfirm({ isDirty: true, handleSave });
+    expect(proceed).toBe(false);
+  });
+
+  it('no pending changes → confirm proceeds without an extra save call (no regression)', async () => {
+    const handleSave = vi.fn();
+    const proceed = await maybeSaveBeforeConfirm({ isDirty: false, handleSave });
+    expect(handleSave).not.toHaveBeenCalled();
+    expect(proceed).toBe(true);
+  });
+
+  it('tolerates a missing handleSave (defensive optional-chaining) when dirty', async () => {
+    await expect(maybeSaveBeforeConfirm({ isDirty: true, handleSave: undefined })).resolves.toBe(false);
   });
 });

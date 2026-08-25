@@ -9,7 +9,7 @@
 // to consume these through an `ACCOUNT_CELL_RENDERERS` registry; the generic
 // `DataTable` now supplies its own `<TableCell>` around whatever `col.render` returns,
 // which is why these are exported as bare bodies with no wrapper of their own.
-import { Copy, GripVertical } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ACCOUNT_TYPE } from '../tokens';
@@ -27,14 +27,20 @@ function chunkIban(iban) {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
-// Reveal-on-row-hover affordances (the drag grip, the copy-IBAN button) carry BOTH
-// Tailwind group variants on purpose. The host in production, `DataTable`, marks its
-// row as a NAMED group (`group/row`, DataTable.jsx:1201), and `group-hover:` does not
-// match `.group/row` — carrying only the unnamed variant is exactly what made both
-// affordances silently invisible when the list moved onto DataTable. The unnamed one
-// is kept as cheap insurance for any future host that marks rows as a plain `group`:
-// one dead class token costs nothing, whereas dropping it reintroduces a bug that
-// jsdom cannot catch (no Tailwind, no computed opacity).
+// The reveal-on-row-hover affordance (the copy-IBAN button) carries BOTH Tailwind group
+// variants on purpose. The host in production, `DataTable`, marks its row as a NAMED
+// group (`group/row`, DataTable.jsx:1201), and `group-hover:` does not match
+// `.group/row` — carrying only the unnamed variant is exactly what made the reveal
+// silently invisible when the list moved onto DataTable. The unnamed one is kept as
+// cheap insurance for any future host that marks rows as a plain `group`: one dead class
+// token costs nothing, whereas dropping it reintroduces a bug that jsdom cannot catch
+// (no Tailwind, no computed opacity).
+//
+// A drag grip used to sit here too, in a 44px slot ahead of the avatar. It was purely
+// decorative — aria-hidden, no draggable attribute, no handlers, and the repo has no
+// drag-and-drop library at all — so it advertised a row reordering that does not exist.
+// Removed with its slot; COLUMN_CHROME.name's left padding in AccountsHeaderTable
+// mirrors this cell's leading offset and was reduced to match.
 export function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the connection column is not yet populated, so anything not explicitly
@@ -42,12 +48,6 @@ export function NameCell({ account, ui, onConnect }) {
   const isDisconnected = !isCashLike && account.bankConnected !== true;
   return (
     <div className="flex h-full items-center">
-        <div className="flex w-[44px] shrink-0 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">
-          <GripVertical
-            className="h-5 w-5 text-[hsl(var(--text-disabled))]"
-            aria-hidden="true"
-            data-testid="GripVertical__dc050f" />
-        </div>
         <AccountLogoAvatar account={account} data-testid="AccountLogoAvatar__dc050f" />
         <div className="flex flex-1 flex-col justify-center gap-1 px-2 py-2">
           <div className="flex items-center gap-1">

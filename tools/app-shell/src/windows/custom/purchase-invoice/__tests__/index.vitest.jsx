@@ -37,21 +37,15 @@ vi.mock('@/hooks/useBulkActionToast', () => ({
 // ETP-4520 — index.jsx now checks useWindowAccess() before either branch renders.
 // ETP-4888 — index.jsx now also reads selectedOrg from useAuth() (via
 // useTaxSifLineRowActions -> useFiscalConfig) to resolve the org's fiscal
-// profile for the tax-SIF line trigger. Mirrors the convention already used by
+// profile for the tax-SIF line trigger. See @/test/mockOrderWindowAuth.jsx for
+// why both mocks are needed together; mirrors the convention already used by
 // sales-invoice/__tests__/index.vitest.jsx and PurchaseInvoiceHeaderTable.vitest.jsx
-// / PurchaseInvoiceTopbar.vitest.jsx for the same @/auth/AuthContext.jsx +
-// useFiscalConfig.js pair.
+// / PurchaseInvoiceTopbar.vitest.jsx for the same pair.
 let currentWindowAccessTier = 'full';
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
-  useWindowAccess: () => currentWindowAccessTier,
-  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
-}));
+vi.mock('@/auth/AuthContext.jsx', () => createAuthContextMock(() => currentWindowAccessTier));
 
 let fiscalProfile = null;
-vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: fiscalProfile })),
-}));
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => createFiscalConfigMock(() => fiscalProfile));
 
 let rowDeleteConfig;
 const requestDeleteSpy = vi.fn();
@@ -154,6 +148,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import PurchaseInvoiceWindow from '../index.jsx';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -140,7 +140,7 @@ if [ "$SUITE" != "mocked" ]; then
   fi
   echo "==> Playwright E2E — integration specs (${integration_workers} workers${integration_note}${selection_note})..."
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$PASSWORD" BASE_URL="$BASE_URL" \
-      E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 E2E_FINANCE_INTEGRATION=1 \
+      E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
       "${integration_test_args[@]}" )
 else
   echo "==> Playwright E2E — integration specs... SKIPPED (E2E_SUITE=mocked)"

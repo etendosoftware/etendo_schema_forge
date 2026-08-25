@@ -16,5 +16,6 @@ const fields = [
 export default function ContactForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ContactForm.fields = fields;
 
 // @sf-generated-end component:ContactForm

@@ -15,5 +15,6 @@ const fields = [
 export default function PriceListForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+PriceListForm.fields = fields;
 
 // @sf-generated-end component:PriceListForm

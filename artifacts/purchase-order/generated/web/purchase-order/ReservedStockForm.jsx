@@ -16,5 +16,6 @@ const fields = [
 export default function ReservedStockForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReservedStockForm.fields = fields;
 
 // @sf-generated-end component:ReservedStockForm

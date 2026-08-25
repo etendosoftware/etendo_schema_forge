@@ -16,6 +16,18 @@ import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import { useMenuLabel } from '@/i18n';
 import { useOrderWindow } from '../shared/useOrderWindow.jsx';
 import { useOrderPdf } from '../shared/useOrderPdf.js';
+import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
+
+// Mirrors artifacts/sales-order/decisions.json → window.lineTaxSifTrigger (ETP-4888
+// point 5 follow-up round, docs/decisions-reference.md). `DetailView`'s `lineCellBadges`
+// prop is a plain generic passthrough with NO generate-frontend.js wiring
+// (schema_forge_core is out of reach for this window-specific feature) — same convention
+// sales-invoice/purchase-invoice's index.jsx already uses. `GeneratedApp` below (this
+// window's `@generated/sales-order/generated/web/sales-order/index.jsx`) spreads its own
+// `...rest` straight into `HeaderPage`, which itself spreads `{...props}` into
+// `DetailView`, so passing `lineCellBadges` here reaches the line grid unchanged.
+// Keep this constant in sync with the decisions.json flag.
+const LINE_TAX_SIF_TRIGGER_ENABLED = true;
 
 const LIST_COLUMNS = [
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false, required: true },
@@ -88,6 +100,12 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     documentType: tMenu('Sales Order'),
   });
 
+  // ETP-4888 point 5 follow-up — see LINE_TAX_SIF_TRIGGER_ENABLED above for the
+  // decisions.json mirror note.
+  const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
+  });
+
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
@@ -115,8 +133,10 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
           {...rest}
+          lineCellBadges={taxSifCellBadges}
           data-testid="GeneratedApp__6339e4" />
         {contactPortal}
+        {taxSifModal}
       </CreateContactContext.Provider>
     );
   }

@@ -16,5 +16,6 @@ const fields = [
 export default function GeneralForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+GeneralForm.fields = fields;
 
 // @sf-generated-end component:GeneralForm

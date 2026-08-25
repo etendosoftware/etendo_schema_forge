@@ -15,5 +15,6 @@ const fields = [
 export default function ReversedInvoicesForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ReversedInvoicesForm.fields = fields;
 
 // @sf-generated-end component:ReversedInvoicesForm

@@ -13,5 +13,6 @@ const fields = [
 export default function WarehouseForm(props) {
   return <EntityForm fields={fields} cols={4} {...props} />;
 }
+WarehouseForm.fields = fields;
 
 // @sf-generated-end component:WarehouseForm

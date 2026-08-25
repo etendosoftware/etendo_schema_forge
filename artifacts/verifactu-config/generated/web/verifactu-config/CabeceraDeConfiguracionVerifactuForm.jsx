@@ -15,5 +15,6 @@ const fields = [
 export default function CabeceraDeConfiguracionVerifactuForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CabeceraDeConfiguracionVerifactuForm.fields = fields;
 
 // @sf-generated-end component:CabeceraDeConfiguracionVerifactuForm

@@ -102,11 +102,13 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
     assert.deepEqual(literals, ["key: '_rowActions'"]);
   });
 
-  // "Por conciliar" is an `entities.account.virtualFields[]` entry in decisions.json now
-  // (the NeoHandler injects pendingCount in afterHandle), so it must arrive through the
-  // contract like any other column instead of being appended here.
-  it('does not hand-append the pendingCount column', () => {
+  // "Por conciliar" is the `EM_ETGO_Pending_Count` stored computed column, declared in
+  // decisions.json like every other grid field, so it must arrive through the contract
+  // instead of being appended here. Both the old virtual-field name and the new one are
+  // checked: neither may reappear as a hand-built column.
+  it('does not hand-append the pending column', () => {
     assert.doesNotMatch(src, /key: 'pendingCount'/);
+    assert.doesNotMatch(src, /key: 'eTGOPendingCount'/);
     assert.doesNotMatch(src, /<ReconcilePill/);
     assert.doesNotMatch(src, /ReconcilePill \}/);
   });
@@ -118,7 +120,7 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
 
   // DataTable appends `text-right tabular-nums` itself for numeric column types
   // (DataTable.jsx:1423), so restating it in the chrome only duplicated the class.
-  // The one exception is `GRID_TYPE_OVERRIDE`: `pendingCount` is contractually
+  // The one exception is `GRID_TYPE_OVERRIDE`: `eTGOPendingCount` is contractually
   // "integer" (it IS a count) but always renders through `reconcilePill`, never as a
   // right-aligned number, so its DataTable-facing `type` is overridden to keep the
   // pill left-aligned like every other status cell — see the constant's own comment.
@@ -127,8 +129,8 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
     assert.match(src, /type: GRID_TYPE_OVERRIDE\[col\.name\] \?\? col\.type/);
   });
 
-  it('only overrides the grid type for pendingCount, not any other column', () => {
-    assert.match(src, /const GRID_TYPE_OVERRIDE = \{\s*pendingCount: 'string',\s*\}/);
+  it('only overrides the grid type for the pending column, not any other', () => {
+    assert.match(src, /const GRID_TYPE_OVERRIDE = \{\s*eTGOPendingCount: 'string',\s*\}/);
   });
 
   it('binds the cell bodies through the cellType registry, not a local map', () => {

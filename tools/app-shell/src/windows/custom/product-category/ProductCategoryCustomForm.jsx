@@ -3,23 +3,44 @@ import { useUI, useLabel } from '@/i18n';
 
 /* eslint-disable react/prop-types */
 
+// ETP-4933: the descriptor shapes, hoisted to module scope WITHOUT labels so they can
+// be exposed as the `fields` static below. This window is hand-written rather than
+// generated, so the generator's static never reaches it; without this, DetailView has
+// nothing to gate on here and the Save button would never block.
+// Labels stay inside the component — they need useLabel/useUI — and are merged in
+// below, so there is a single source of truth for what the fields ARE.
+const TEXT_FIELD_SHAPES = [
+  { key: 'name', column: 'Name', type: 'text', required: true, section: 'principal' },
+  { key: 'searchKey', column: 'Value', type: 'text', required: true, section: 'principal' },
+];
+const CHECKBOX_FIELD_SHAPES = [
+  { key: 'default', column: 'IsDefault', type: 'checkbox', required: true, section: 'principal' },
+  { key: 'active', column: 'IsActive', type: 'checkbox', required: true, section: 'principal' },
+];
+const DESCRIPTION_FIELD_SHAPES = [
+  { key: 'description', column: 'Description', type: 'textarea', section: 'principal', span: 3, rows: 3 },
+];
+
 export default function ProductCategoryCustomForm({ entity, data, token, apiBaseUrl, catalogs, api, onChange, onFieldBlur, displayLogic, section }) {
-  if (section && section !== 'principal') return null;
   const ui = useUI();
   const t = useLabel();
+  // NOTE: this guard used to sit ABOVE the two hooks. A conditional return before a
+  // hook makes the hook count depend on props — the same defect that crashed
+  // /sales-order/new with "Rendered fewer hooks than expected" (ETP-4933).
+  if (section && section !== 'principal') return null;
 
   const textFields = [
-    { key: 'name', column: 'Name', type: 'text', label: t('Name'), required: true, section: 'principal' },
-    { key: 'searchKey', column: 'Value', type: 'text', label: t('Value') ?? ui('searchKey'), required: true, section: 'principal' },
+    { ...TEXT_FIELD_SHAPES[0], label: t('Name') },
+    { ...TEXT_FIELD_SHAPES[1], label: t('Value') ?? ui('searchKey') },
   ];
 
   const checkboxFields = [
-    { key: 'default', column: 'IsDefault', type: 'checkbox', label: ui('categoryDefault'), required: true, section: 'principal' },
-    { key: 'active', column: 'IsActive', type: 'checkbox', label: t('IsActive'), required: true, section: 'principal' },
+    { ...CHECKBOX_FIELD_SHAPES[0], label: ui('categoryDefault') },
+    { ...CHECKBOX_FIELD_SHAPES[1], label: t('IsActive') },
   ];
 
   const descriptionField = [
-    { key: 'description', column: 'Description', type: 'textarea', label: t('Description'), section: 'principal', span: 3, rows: 3 },
+    { ...DESCRIPTION_FIELD_SHAPES[0], label: t('Description') },
   ];
 
   return (
@@ -91,3 +112,12 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
     </div>
   );
 }
+
+// ETP-4933: mirrors the generator's `<Comp>.fields` static so DetailView can gate the
+// Save button here too. The two required checkboxes are included for completeness —
+// getMissingRequiredFields excludes `type: 'checkbox'` by design, so they never block.
+ProductCategoryCustomForm.fields = [
+  ...TEXT_FIELD_SHAPES,
+  ...CHECKBOX_FIELD_SHAPES,
+  ...DESCRIPTION_FIELD_SHAPES,
+];

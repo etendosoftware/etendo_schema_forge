@@ -11,5 +11,6 @@ const fields = [
 export default function InternalConsumptionForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+InternalConsumptionForm.fields = fields;
 
 // @sf-generated-end component:InternalConsumptionForm

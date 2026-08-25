@@ -210,6 +210,22 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByText('financeReconcileRightEmptyTitle')).toBeInTheDocument();
   });
 
+  // The left panel's empty state used to be one line of centered text in a full-height table,
+  // which read as a rendering failure rather than an intentional state. It now mirrors the right
+  // panel's own: circled icon, title, hint.
+  it('gives the rows empty state an icon and a hint, like the right panel', () => {
+    setLines([]);
+    renderPanel();
+
+    const empty = screen.getByTestId('recon-rows-empty');
+    expect(empty).toBeInTheDocument();
+    expect(empty).toContainElement(screen.getByTestId('SearchX__d0f4d5'));
+    expect(empty.textContent).toContain('financeReconcileEmpty');
+    // The hint points at the filters — the list here is always a filter result, so there is
+    // nothing for the user to create.
+    expect(empty.textContent).toContain('financeReconcileEmptyHint');
+  });
+
   it('renders a back button and movement-style filter controls on the left toolbar', () => {
     const onBack = vi.fn();
     setLines([LINE_A]);
@@ -217,7 +233,11 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-toolbar-back'));
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/financeReconcileFilterStatusPending/)).toBeInTheDocument();
-    expect(screen.getAllByText('dateRangeLast30Days').length).toBeGreaterThan(0);
+    // ETP-4921 — the default period is the last 12 months, not 30 days: a statement line is
+    // often matched against an invoice or payment months older than itself, and the 30-day
+    // window hid those candidates by default. It also makes the picker's own placeholder
+    // honest, which already read "Últimos 12 meses".
+    expect(screen.getAllByText('dateRangeLast12Months').length).toBeGreaterThan(0);
   });
 
   it('passes the selected source filter to the candidates hook', () => {

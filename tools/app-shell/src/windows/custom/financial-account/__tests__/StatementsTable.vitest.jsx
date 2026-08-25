@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -20,7 +20,25 @@ vi.mock('../StatementLinesInline', () => ({
   ),
 }));
 
-import { StatementsTable } from '../StatementsTable.jsx';
+import * as React from 'react';
+import { useClientSort } from '@/hooks/useClientSort';
+import { StatementsTable, buildStatementSortAccessors } from '../StatementsTable.jsx';
+
+// The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
+// "Ordenar por" popover). This harness supplies that state with the same hook the tab uses.
+function SortableStatements({ statements }) {
+  const accessors = React.useMemo(() => buildStatementSortAccessors('es-ES'), []);
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(statements, { accessors });
+  return (
+    <StatementsTable
+      statements={sorted}
+      loading={false}
+      sortKey={sortKey}
+      sortDirection={sortDirection}
+      onSort={toggleSort}
+    />
+  );
+}
 
 const ROWS = [
   {
@@ -262,5 +280,63 @@ describe('StatementsTable', () => {
       await user.click(screen.getAllByRole('checkbox')[1]);
       expect(screen.queryByTestId('stub-inline-s1')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('StatementsTable — column sorting (ETP-4921)', () => {
+  const rowIds = () => [...document.querySelectorAll('[data-testid^="statement-row-"]')]
+    .map((el) => el.getAttribute('data-testid').replace('statement-row-', ''));
+
+  // Client-side, because the bank-statements endpoint is a bespoke Java handler that takes no
+  // sort parameter and returns the whole unpaged list — see lib/clientSort.js.
+  it('sorts by a contract column, ascending then descending', () => {
+    render(<SortableStatements statements={ROWS} />);
+    expect(rowIds()).toEqual(['s1', 's2', 's3']);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(rowIds()).toEqual(['s1', 's2', 's3']);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(rowIds()).toEqual(['s3', 's2', 's1']);
+  });
+
+  // The synthetic tail columns are computed aggregates with no AD field behind them, but they
+  // travel WITH the row, so sorting them client-side is as correct as sorting a contract column.
+  it('sorts the synthetic Lines aggregate numerically', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-lines'));
+    // lineCount 3 (s3) < 5 (s1) < 10 (s2)
+    expect(rowIds()).toEqual(['s3', 's1', 's2']);
+  });
+
+  it('sorts dates chronologically, not by the formatted day-of-month', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-transactionDate'));
+    expect(rowIds()).toEqual(['s1', 's2', 's3']);
+    fireEvent.click(screen.getByTestId('column-header-sort-transactionDate'));
+    expect(rowIds()).toEqual(['s3', 's2', 's1']);
+  });
+
+  // s2 has no `name`, so the cell falls back to the formatted periodFrom-periodTo range. The
+  // sort must follow what is displayed, not the empty raw field.
+  it('sorts the Nombre column by the displayed value, range fallback included', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-name'));
+    // Every row here HAS a name, so this is plain alphabetical: Julio < Junio < Mayo.
+    expect(rowIds()).toEqual(['s3', 's2', 's1']);
+  });
+
+  it('restores the backend order on the third click', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    const header = screen.getByTestId('column-header-sort-lines');
+    fireEvent.click(header);
+    fireEvent.click(header);
+    fireEvent.click(header);
+
+    expect(rowIds()).toEqual(['s1', 's2', 's3']);
   });
 });

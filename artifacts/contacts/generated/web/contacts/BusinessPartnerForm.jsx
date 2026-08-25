@@ -21,5 +21,6 @@ const fields = [
 export default function BusinessPartnerForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BusinessPartnerForm.fields = fields;
 
 // @sf-generated-end component:BusinessPartnerForm

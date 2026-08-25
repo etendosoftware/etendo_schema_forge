@@ -17,5 +17,6 @@ const fields = [
 export default function SiiDataForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+SiiDataForm.fields = fields;
 
 // @sf-generated-end component:SiiDataForm

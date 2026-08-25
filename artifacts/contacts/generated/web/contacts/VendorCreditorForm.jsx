@@ -24,5 +24,6 @@ const fields = [
 export default function VendorCreditorForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+VendorCreditorForm.fields = fields;
 
 // @sf-generated-end component:VendorCreditorForm

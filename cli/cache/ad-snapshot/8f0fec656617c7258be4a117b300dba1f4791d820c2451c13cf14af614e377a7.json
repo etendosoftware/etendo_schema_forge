@@ -35234,7 +35234,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "14b6bae71be4fa4a654f69f4f62262d6448d39cda108603dd54cb0e6825194ec",
+      "checksum": "d52f5f6764b9b7fed93290279735c68def74bdc76b12051af46350dbd4b682ac",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -36666,6 +36666,12 @@
           "ad_table_id": "B129E53BC0E747879F7BA17F0AECEC32",
           "columnname": "EM_PSD2_Connection_Status",
           "position": "89"
+        },
+        {
+          "ad_column_id": "870AD3030E334C3CB5BED17CB44C2A1B",
+          "ad_table_id": "B129E53BC0E747879F7BA17F0AECEC32",
+          "columnname": "EM_ETGO_Pending_Count",
+          "position": null
         },
         {
           "ad_column_id": "9DA1E5CA5A25476C9764CCBEC70E3E36",

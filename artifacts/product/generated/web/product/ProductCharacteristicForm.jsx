@@ -18,5 +18,6 @@ const fields = [
 export default function ProductCharacteristicForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ProductCharacteristicForm.fields = fields;
 
 // @sf-generated-end component:ProductCharacteristicForm

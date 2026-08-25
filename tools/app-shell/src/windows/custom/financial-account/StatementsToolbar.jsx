@@ -120,6 +120,9 @@ export function StatementsToolbar({
   bankConnectionSynced = false,
   onSyncClick,
   syncing = false,
+  // Rendered node, not sort props: the toolbar stays presentational and the tab that owns the
+  // sort state decides what goes here. Absent = nothing rendered.
+  sortControl = null,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -169,6 +172,7 @@ export function StatementsToolbar({
           className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
+      {sortControl}
       {/* bank-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
           manual import / manual create split-button. */}
       {bankConnectionSynced ? (

@@ -43,4 +43,41 @@ describe('ApplyToInvoices', () => {
   it("derives currency from the first pending invoice's own currency field", () => {
     assert.match(src, /const currency = invoices\[0\]\?\.currency \|\| '';/);
   });
+
+  // ── ETP-4940 follow-up: save pending header edits before apply+process ────
+  // This flow fires its own applyToInvoices + aPRMProcessPayment requests,
+  // bypassing DetailView's guarded generic process button entirely — a header
+  // edit made without clicking Save first was silently discarded.
+  describe('ApplyToInvoices — save pending edits before apply+process (ETP-4940 follow-up)', () => {
+    it('imports maybeSaveBeforeConfirm from detailViewHelpers', () => {
+      assert.match(
+        src,
+        /import \{ maybeSaveBeforeConfirm \} from '@\/components\/contract-ui\/detailViewHelpers\.jsx'/,
+      );
+    });
+
+    it('accepts onSave and isDirty props', () => {
+      assert.match(src, /onSave,\s*\n\s*isDirty,/);
+    });
+
+    it('guards handleApplyAndProcess with maybeSaveBeforeConfirm before the apply/process fetch calls', () => {
+      const fn = src.match(/const handleApplyAndProcess = useCallback\(async \(\) => \{[\s\S]*?\}, \[[^\]]*\]\);/);
+      assert.ok(fn, 'expected the handleApplyAndProcess callback');
+      assert.match(
+        fn[0],
+        /if \(!\(await maybeSaveBeforeConfirm\(\{ isDirty, handleSave: onSave \}\)\)\) return;/,
+      );
+      // The guard must run before either fetch call, not after.
+      const guardIdx = fn[0].indexOf('maybeSaveBeforeConfirm(');
+      const applyIdx = fn[0].indexOf('action/applyToInvoices');
+      assert.ok(guardIdx > -1 && applyIdx > -1 && guardIdx < applyIdx, 'guard must run before the applyToInvoices fetch');
+    });
+
+    it('includes onSave and isDirty in the handleApplyAndProcess dependency array', () => {
+      const fn = src.match(/const handleApplyAndProcess = useCallback\(async \(\) => \{[\s\S]*?\}, \[([^\]]*)\]\);/);
+      assert.ok(fn, 'expected the handleApplyAndProcess callback');
+      assert.match(fn[1], /\bonSave\b/);
+      assert.match(fn[1], /\bisDirty\b/);
+    });
+  });
 });

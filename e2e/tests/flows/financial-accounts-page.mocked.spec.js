@@ -16,10 +16,13 @@ import { login } from '../helpers/auth.js';
  *   1. Entry point is `/financial-account`. `finance/accounts` is kept as a redirect (asserted
  *      below) so bookmarks and the archive-dialog return keep working.
  *   2. Rows come from the standard W spec — `GET /sws/neo/financial-account/account` — with the
- *      list-only derived fields (`pendingCount`, `bankConnected`, `currencyIso`, `iban`,
- *      `active`, …) injected by FinancialAccountHandler.afterHandle, and the sidebar aggregates
- *      as a `summary` SIBLING of `response.data` on that same request. The bespoke
- *      `financial-accounts-page` R spec no longer feeds this screen.
+ *      list-only derived fields (`bankConnected`, `currencyIso`, `iban`, `active`, …) injected
+ *      by FinancialAccountHandler.afterHandle, and the sidebar aggregates as a `summary`
+ *      SIBLING of `response.data` on that same request. The bespoke `financial-accounts-page`
+ *      R spec no longer feeds this screen.
+ *      "Por conciliar" is NOT one of the injected fields: it is the `EM_ETGO_Pending_Count`
+ *      stored computed column, so the generic CRUD serves it as `eTGOPendingCount` — which is
+ *      also why the cell testid below is `cell-{id}-eTGOPendingCount`.
  *   3. Rows carry the generic DataTable testids — `row-{id}` and `cell-{id}-{column}` — not the
  *      old hand-rolled `account-row-{id}`. The action/toolbar/sidebar testids are unchanged
  *      because those components were kept.
@@ -38,7 +41,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
     isDefault: true,
-    pendingCount: 12,
+    eTGOPendingCount: 12,
     bankConnected: true,
     active: true,
   },
@@ -51,7 +54,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000002',
     isDefault: false,
-    pendingCount: 1,
+    eTGOPendingCount: 1,
     bankConnected: true,
     active: true,
   },
@@ -64,7 +67,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000003',
     isDefault: false,
-    pendingCount: 5,
+    eTGOPendingCount: 5,
     bankConnected: false,
     active: true,
   },
@@ -77,7 +80,7 @@ const ACCOUNTS = [
     currencyIso: 'USD',
     iban: '',
     isDefault: false,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     active: true,
   },
   // Archived — must never show in the default view (only under the "Inactivas" filter).
@@ -90,7 +93,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: '',
     isDefault: false,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     active: false,
   },
 ];
@@ -169,7 +172,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
     // All four data columns come from contract.json (entity `account`, grid + gridOrder) —
     // "Por conciliar" among them, as an `entities.account.virtualFields[]` declaration whose
     // value the NeoHandler injects in afterHandle. Only the row actions are added by the slot.
-    for (const key of ['name', 'type', 'currentBalance', 'pendingCount', '_rowActions']) {
+    for (const key of ['name', 'type', 'currentBalance', 'eTGOPendingCount', '_rowActions']) {
       await expect(page.getByTestId(`column-header-${key}`)).toHaveCount(1);
     }
   });
@@ -226,19 +229,19 @@ test.describe('Financial Accounts list — Cuentas', () => {
   });
 
   test('Conciliado pill vs pending pill per account', async ({ page }) => {
-    // acc-4 has pendingCount = 0 → "Conciliado" pill.
+    // acc-4 has eTGOPendingCount = 0 → "Conciliado" pill.
     await expect(
-      page.getByTestId('cell-acc-4-pendingCount').getByTestId('reconcile-status-reconciled'),
+      page.getByTestId('cell-acc-4-eTGOPendingCount').getByTestId('reconcile-status-reconciled'),
     ).toBeVisible();
 
-    // acc-1 has pendingCount = 12 → "Conciliar (12)" pending pill.
-    const pending = page.getByTestId('cell-acc-1-pendingCount').getByTestId('reconcile-status-pending');
+    // acc-1 has eTGOPendingCount = 12 → "Conciliar (12)" pending pill.
+    const pending = page.getByTestId('cell-acc-1-eTGOPendingCount').getByTestId('reconcile-status-pending');
     await expect(pending).toBeVisible();
     await expect(pending).toContainText('12');
   });
 
   test('the pending pill deep-links to the reconciliation tab without a plain row click', async ({ page }) => {
-    await page.getByTestId('cell-acc-1-pendingCount').getByTestId('reconcile-status-pending').click();
+    await page.getByTestId('cell-acc-1-eTGOPendingCount').getByTestId('reconcile-status-pending').click();
 
     // The detail view's deep-link effect (index.jsx) applies `tab`/`autoMatch` from the URL to
     // local state on mount, then immediately clears the query string with

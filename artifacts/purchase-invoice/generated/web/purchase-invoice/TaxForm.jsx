@@ -13,5 +13,6 @@ const fields = [
 export default function TaxForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+TaxForm.fields = fields;
 
 // @sf-generated-end component:TaxForm

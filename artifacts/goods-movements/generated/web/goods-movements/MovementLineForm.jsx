@@ -16,5 +16,6 @@ const fields = [
 export default function MovementLineForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+MovementLineForm.fields = fields;
 
 // @sf-generated-end component:MovementLineForm

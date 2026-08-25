@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
   "updatedAt": "2026-08-19T19:36:03.628Z",
-  "contractChecksum": "e7b42bd17765af38",
+  "contractChecksum": "f1b50ae3b6423490",
   "apiPrediction": {
     "specName": "sii-monitor",
     "baseUrl": "/sws/neo/sii-monitor",

@@ -36,7 +36,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
     isDefault: true,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     bankConnected: false,
     active: true,
     // Zero dependent records anywhere — the row kebab and bulk-delete both treat it as deletable.
@@ -51,7 +51,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000002',
     isDefault: false,
-    pendingCount: 3,
+    eTGOPendingCount: 3,
     bankConnected: false,
     active: true,
     // Has movements/reconciliations/etc. — not deletable.
@@ -66,7 +66,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: '',
     isDefault: false,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     active: true,
     deletable: true,
   },
