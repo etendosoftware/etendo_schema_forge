@@ -20,5 +20,6 @@ const fields = [
 export default function PaymentPlanForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+PaymentPlanForm.fields = fields;
 
 // @sf-generated-end component:PaymentPlanForm
