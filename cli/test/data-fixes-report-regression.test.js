@@ -19,7 +19,14 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
-const FIXES_WITH_REPORT = new Set(['20260803T160000Z__R19-locator-inventory-status']);
+const FIXES_WITH_REPORT = new Set([
+  '20260803T160000Z__R19-locator-inventory-status',
+  // R24 retires the "Cheque" payment method: DELETE when nothing references it, otherwise
+  // isactive='N'. Its @report lists the tenants where Cheque survived and the reference counts
+  // that blocked the delete — exactly the "skipped part of its own work" case this section exists
+  // for. See cli/test/data-fixes-r24-payment-method-cheque-to-recibo.test.js.
+  '20260821T120000Z__R24-payment-method-cheque-to-recibo',
+]);
 
 async function loadCatalogFiles() {
   const files = (await readdir(SQL_DIR)).filter((f) => f.endsWith('.sql'));
@@ -33,7 +40,7 @@ async function loadCatalogFiles() {
 }
 
 describe('data-fixes catalog — @report is opt-in and backward compatible', () => {
-  it('has at least one fix WITH @report (R19) so this guard is not vacuous', async () => {
+  it('has at least one fix WITH @report (R19, R24) so this guard is not vacuous', async () => {
     const catalog = await loadCatalogFiles();
     const withReport = catalog.filter(({ fix }) => fix.report.length > 0);
     assert.ok(withReport.length >= 1, 'expected at least one fix with a non-empty @report section');

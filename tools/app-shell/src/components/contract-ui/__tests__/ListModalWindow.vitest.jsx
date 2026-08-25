@@ -23,6 +23,9 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (label) => label,
   // useLabel echoes the column name so footer-toggle label assertions are predictable.
   useLabel: () => (column) => column,
+  // ListSortPopover (added to the toolbar in ETP-4921) resolves each menu entry through
+  // resolveColumnLabel, which reads the active locale.
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 // Auth: token comes from context unless passed as a prop.

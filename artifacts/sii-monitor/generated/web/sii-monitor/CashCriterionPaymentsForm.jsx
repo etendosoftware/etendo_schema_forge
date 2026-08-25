@@ -11,7 +11,7 @@ const fields = [
   { key: 'paymentnumber', column: 'Paymentnumber', type: 'text', label: 'Payment Number', section: 'other' },
   { key: 'paymentdate', column: 'Paymentdate', type: 'date', label: 'Payment Date', section: 'other' },
   { key: 'amount', column: 'Amount', type: 'number', label: 'Amount', section: 'other' },
-  { key: 'status', column: 'Status', type: 'select', label: 'Status', section: 'other', options: [{ value: 'RPAP', label: 'Awaiting Payment', labels: {"es_ES":"A Pagar"} }, { value: 'RPAE', label: 'Awaiting Execution', labels: {"es_ES":"A Ejecutar"} }, { value: 'RPVOID', label: 'Void', labels: {"es_ES":"Anulado"} }, { value: 'PPM', label: 'Payment Made', labels: {"es_ES":"Pagado"} }, { value: 'RPR', label: 'Payment Received', labels: {"es_ES":"Cobrado"} }, { value: 'RDNC', label: 'Deposited not Cleared', labels: {"es_ES":"Cobro depositado"} }, { value: 'PWNC', label: 'Withdrawn not Cleared', labels: {"es_ES":"Pago reintegrado"} }, { value: 'RPPC', label: 'Payment Cleared', labels: {"es_ES":"Conciliado"} }] },
+  { key: 'status', column: 'Status', type: 'select', label: 'Status', section: 'other', options: [{ value: 'RPAP', label: 'Awaiting Payment', labels: {"es_ES":"A Pagar"} }, { value: 'RPAE', label: 'Awaiting Execution', labels: {"es_ES":"A Ejecutar"} }, { value: 'RPVOID', label: 'Void', labels: {"es_ES":"Anulado"} }, { value: 'PPM', label: 'Payment Made', labels: {"es_ES":"Pagado"} }, { value: 'RPR', label: 'Payment Received', labels: {"es_ES":"Cobrado"} }, { value: 'RDNC', label: 'Deposited not Cleared', labels: {"es_ES":"Cobro depositado"} }, { value: 'PWNC', label: 'Withdrawn not Cleared', labels: {"es_ES":"Pago reintegrado"} }, { value: 'RPPC', label: 'Payment Cleared', labels: {"es_ES":"Conciliado"} }, { value: 'ETGOERR', label: 'Payment Error', labels: {"es_ES":"Payment Error"} }] },
   { key: 'fINPaymentmethod', column: 'FIN_Paymentmethod_ID', type: 'selector', label: 'Payment Method', section: 'other', reference: 'Paymentmethod', inputMode: 'selector' },
   { key: 'fINPayment', column: 'FIN_Payment_ID', type: 'selector', label: 'Payment In', section: 'other', reference: 'Payment', inputMode: 'selector' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', section: 'other', reference: 'Currency', inputMode: 'selector' },
@@ -26,5 +26,6 @@ const fields = [
 export default function CashCriterionPaymentsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CashCriterionPaymentsForm.fields = fields;
 
 // @sf-generated-end component:CashCriterionPaymentsForm

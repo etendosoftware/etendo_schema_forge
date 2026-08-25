@@ -212,8 +212,20 @@ for (const { spec, entity } of WINDOWS) {
       expect(page.url()).toMatch(new RegExp(`/${spec}/new`));
     });
 
-    // ── Case 3: empty required Name ──────────────────────────────────────────
-    test('blocks save and shows a required-field error when Name is empty', async ({ page }) => {
+    // ── Case 3: empty required Name (ETP-4933 — was "blocks save and shows a
+    // required-field error when Name is empty") ─────────────────────────────
+    //
+    // ETP-4933 replaced ETP-3894/ETP-4892's click-then-report model with
+    // prevent-before-click: `action-save` is now DISABLED while Name is empty
+    // (see `buildSaveGate` / `getMissingRequiredFields` in saveActions.jsx /
+    // requiredFields.js), so a click can no longer reach the old post-hoc
+    // validation that used to set `error-name` and fire a toast. That
+    // post-hoc path still exists in useEntity.js's handleSave (kept as a
+    // safety net for handleSaveAndProcess, programmatic saves and
+    // not-yet-migrated modals), but it is unreachable from this button now.
+    // Do NOT restore the inline-error / click / toast assertions this test
+    // used to make — they describe a path Save no longer takes.
+    test('Save is disabled with data-missing-required="name" while Name is empty, and enables once Name is filled', async ({ page }) => {
       await login(page);
       await installMocks(page, { spec, entity });
       await page.goto(`/${spec}/new`);
@@ -222,8 +234,9 @@ for (const { spec, entity } of WINDOWS) {
       await page.getByTestId('field-searchKey').fill('MW-NEW-002');
       // Name intentionally left empty.
 
-      // No SAVE POST should ever be sent — this is a pure client-side gate
-      // (useEntity.js getMissingRequiredFields runs before any fetch on isNew).
+      // No SAVE POST should ever be sent — this is a pure client-side gate,
+      // now enforced even earlier than ETP-4892's post-hoc check (the button
+      // itself is disabled, so a click is a no-op).
       //
       // The matcher below is scoped to the bare create URL (`/sws/neo/{spec}/{entity}`,
       // optionally followed by a query string) rather than a loose `.includes()` on that
@@ -244,17 +257,24 @@ for (const { spec, entity } of WINDOWS) {
       });
 
       const saveBtn = page.getByTestId('action-save');
-      await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
-      await saveBtn.click();
+      await expect(saveBtn).toBeDisabled({ timeout: 10_000 });
+      // data-missing-required carries field KEYS (locale-independent — set by
+      // buildSaveGate, see saveActions.jsx), not translated labels.
+      await expect(saveBtn).toHaveAttribute('data-missing-required', /(^|,)name(,|$)/, { timeout: 5_000 });
 
-      const nameError = page.getByTestId('error-name');
-      await expect(nameError).toBeVisible({ timeout: 5_000 });
-
-      const toastLocator = page.locator('[data-sonner-toast]').first();
-      await expect(toastLocator).toBeVisible({ timeout: 5_000 });
-
-      // Still on /new — save was blocked before any network round trip.
+      // A forced click on the disabled button is still a no-op: the browser
+      // does not fire the click handler on a native disabled <button>.
+      await saveBtn.click({ force: true });
+      await expect(page.locator('[data-sonner-toast]').first()).toHaveCount(0);
       expect(page.url()).toMatch(new RegExp(`/${spec}/new`));
+      expect(postSent).toBe(false);
+
+      // Filling the missing required field enables the button — the actual
+      // user-visible promise of ETP-4933 (prevented, not just reported).
+      await page.getByTestId('field-name').fill('New Master Record');
+      await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+      await expect(saveBtn).not.toHaveAttribute('data-missing-required', /(^|,)name(,|$)/);
+
       expect(postSent).toBe(false);
     });
 
