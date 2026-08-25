@@ -227,6 +227,79 @@ function matchCashCloseLineInClosedPeriod(msg) {
   return movement ? { movement } : null;
 }
 
+// PSD2 bank-connection link (com.etendoerp.go, ETP-4406/ETP-4891 flow) — the
+// `PSD2_IBANAutoFillFailed` AD_MESSAGE ("IBAN could not be set automatically (%0). Please enter it
+// manually in the Financial Account."), shown when the connected bank account's own IBAN implies a
+// country that conflicts with the Financial Account's configured country (e.g. a Spain-registered
+// account linked to a German IBAN). Like `SMFCR_CannotModifyRateNonDraft` above, the owning module
+// (`com.etendoerp.psd2`) ships no real es_ES AD_MESSAGE_TRL for its ~108 messages — the es_ES row is
+// a verbatim copy of the English text — so Core resolves the same English string regardless of
+// session locale. `%0` is substituted server-side with the IBAN before this reaches the frontend, so
+// the skeleton is a fixed prefix/suffix around a dynamic IBAN, same shape as the other parameterized
+// matchers here (plain slicing, no regex — an IBAN is not attacker-controlled but consistency keeps
+// the ReDoS-safety argument uniform across this file, per the matchers above).
+const IBAN_AUTOFILL_FAILED_PREFIX = 'IBAN could not be set automatically (';
+const IBAN_AUTOFILL_FAILED_SUFFIX = '). Please enter it manually in the Financial Account.';
+
+function matchIbanAutoFillFailed(msg) {
+  if (!msg.startsWith(IBAN_AUTOFILL_FAILED_PREFIX) || !msg.endsWith(IBAN_AUTOFILL_FAILED_SUFFIX)) {
+    return null;
+  }
+  const iban = msg.slice(
+    IBAN_AUTOFILL_FAILED_PREFIX.length,
+    -IBAN_AUTOFILL_FAILED_SUFFIX.length,
+  );
+  return iban ? { iban } : null;
+}
+
+// PSD2 bank-statement sync result (com.etendoerp.go's `ImportedStatementsTab` "Sincronizar
+// extractos" and `EditAccountModal`'s sync action — same bridge, two UI entry points, ETP-4891
+// follow-up). Same root cause as the IBAN-autofill matcher above: `com.etendoerp.psd2` ships no
+// real es_ES translation for these AD_MESSAGEs either, so the raw English reaches the frontend
+// regardless of session locale. `%0` is substituted server-side with the account name.
+//
+// Note the odd literal " ." (space before the period) on the first two — that is genuinely what
+// the AD_MESSAGE template contains (verified against ad_message.msgtext), not a typo introduced
+// here; the skeleton has to match it exactly or the message falls through untranslated.
+const TRANSACTIONS_OBTAINED_PREFIX = 'Transactions obtained for the account: ';
+const TRANSACTIONS_OBTAINED_SUFFIX = ' .';
+
+function matchTransactionsObtained(msg) {
+  if (!msg.startsWith(TRANSACTIONS_OBTAINED_PREFIX) || !msg.endsWith(TRANSACTIONS_OBTAINED_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(
+    TRANSACTIONS_OBTAINED_PREFIX.length,
+    -TRANSACTIONS_OBTAINED_SUFFIX.length,
+  );
+  return account ? { account } : null;
+}
+
+const NO_NEW_TRANSACTIONS_PREFIX = 'No new transactions found for the account: ';
+const NO_NEW_TRANSACTIONS_SUFFIX = ' .';
+
+function matchNoNewTransactionsFound(msg) {
+  if (!msg.startsWith(NO_NEW_TRANSACTIONS_PREFIX) || !msg.endsWith(NO_NEW_TRANSACTIONS_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(
+    NO_NEW_TRANSACTIONS_PREFIX.length,
+    -NO_NEW_TRANSACTIONS_SUFFIX.length,
+  );
+  return account ? { account } : null;
+}
+
+const SYNC_FETCH_FAILED_PREFIX = 'The bank reported an error while synchronizing: ';
+const SYNC_FETCH_FAILED_SUFFIX = '.';
+
+function matchSyncFetchFailed(msg) {
+  if (!msg.startsWith(SYNC_FETCH_FAILED_PREFIX) || !msg.endsWith(SYNC_FETCH_FAILED_SUFFIX)) {
+    return null;
+  }
+  const detail = msg.slice(SYNC_FETCH_FAILED_PREFIX.length, -SYNC_FETCH_FAILED_SUFFIX.length);
+  return detail ? { detail } : null;
+}
+
 // Runs the parameterized matchers in order and returns the winning translation
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
@@ -280,6 +353,32 @@ function resolveParameterizedMatch(msg) {
       key: 'backendError.cashCloseLineInClosedPeriod',
       params: { movement: closedPeriodMatch.movement },
     };
+  }
+
+  const ibanAutoFillMatch = matchIbanAutoFillFailed(msg);
+  if (ibanAutoFillMatch) {
+    return { key: 'backendError.ibanAutoFillFailed', params: { iban: ibanAutoFillMatch.iban } };
+  }
+
+  const transactionsObtainedMatch = matchTransactionsObtained(msg);
+  if (transactionsObtainedMatch) {
+    return {
+      key: 'backendError.transactionsObtainedForAccount',
+      params: { account: transactionsObtainedMatch.account },
+    };
+  }
+
+  const noNewTransactionsMatch = matchNoNewTransactionsFound(msg);
+  if (noNewTransactionsMatch) {
+    return {
+      key: 'backendError.noNewTransactionsForAccount',
+      params: { account: noNewTransactionsMatch.account },
+    };
+  }
+
+  const syncFetchFailedMatch = matchSyncFetchFailed(msg);
+  if (syncFetchFailedMatch) {
+    return { key: 'backendError.syncFetchFailed', params: { detail: syncFetchFailedMatch.detail } };
   }
 
   return null;

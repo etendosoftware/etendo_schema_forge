@@ -6,6 +6,7 @@ import {
   invitationLinkFromEmail,
   waitForEmail,
 } from '../helpers/email-sink.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 function loadCredentials(accountNumber = 1) {
   try {
@@ -231,7 +232,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await expect(page.getByTestId('invite-authenticated-step')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('action-accept-invitation').click();
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-joined-company.png`,
       fullPage: true,
     });
@@ -239,7 +240,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-dashboard.png`,
       fullPage: true,
     });
@@ -256,7 +257,7 @@ async function verifyAcceptedLinkIsIdempotent(browser, inviteLink, evidencePath)
   try {
     await page.goto(inviteLink);
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({ path: evidencePath, fullPage: true });
+    await captureScreenshot(page, { path: evidencePath, fullPage: true });
   } finally {
     await context.close();
   }
@@ -431,7 +432,7 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
           await page.waitForURL('**/dashboard', { timeout: 60_000 });
           await expect(page.getByLabel('switchCompany')).toContainText(org1Name);
           await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-          await page.screenshot({
+          await captureScreenshot(page, {
             path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
             fullPage: true,
           });

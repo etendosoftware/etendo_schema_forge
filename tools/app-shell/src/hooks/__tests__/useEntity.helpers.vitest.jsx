@@ -4,7 +4,7 @@
  * These tests cover the utility functions that are exported independently.
  */
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() },
 }));
 
 import { toast } from 'sonner';
@@ -36,6 +36,7 @@ import {
   getNumericFieldViolation,
   buildSavePayload,
 } from '../useEntity';
+import { numericFieldToastId, resetSaveBlockToastTracking } from '@/lib/numericValidation.js';
 
 describe('useEntity helpers', () => {
   describe('pickMessage', () => {
@@ -654,6 +655,39 @@ describe('useEntity helpers', () => {
       // toast in place (see useEntity.js's own doc comment on RECORD_SAVE_TOAST_ID)
       // instead of racing a dismiss() against a fresh toast.success() call.
       expect(toast.success).toHaveBeenCalledWith('recordCreated', { id: RECORD_SAVE_TOAST_ID });
+    });
+
+    // ETP-5002 — the cost of ETP-4830's fixed id: sonner applies create()-with-an-existing-id
+    // as an in-place UPDATE, not a front insert, so the success toast does NOT jump the queue.
+    // A newer save-blocking error toast therefore keeps `data-front` and the user who just
+    // corrected the value still reads the error. The success path has to retire it.
+    it('dismisses a pending save-block error toast before confirming the save', () => {
+      resetSaveBlockToastTracking();
+      // The save gate raised (and tracked) a min-value error for this field.
+      reportInvalidFormatField(
+        'fieldMinValueError', (k) => k, vi.fn(), vi.fn(),
+        numericFieldToastId('usableLifeMonths'), { min: 1 },
+      );
+      expect(toast.error).toHaveBeenCalledWith('fieldMinValueError', {
+        id: 'numeric-field-usableLifeMonths',
+      });
+
+      showSaveSuccessToast(false, false, (k) => k);
+
+      expect(
+        toast.dismiss,
+        'without this the stale error toast stays in front of the success confirmation',
+      ).toHaveBeenCalledWith('numeric-field-usableLifeMonths');
+      expect(toast.success).toHaveBeenCalledWith('recordSaved', { id: RECORD_SAVE_TOAST_ID });
+    });
+
+    it('never calls a bare dismiss() when no save-block toast is pending', () => {
+      resetSaveBlockToastTracking();
+      toast.dismiss.mockClear(); // this suite does not auto-clear spies between cases
+      showSaveSuccessToast(false, false, (k) => k);
+      // A bare dismiss() would also wipe unrelated backend messages and reintroduce
+      // exactly the cross-timer race ETP-4830 documented.
+      expect(toast.dismiss).not.toHaveBeenCalled();
     });
 
     it('does not show toast when silent', () => {

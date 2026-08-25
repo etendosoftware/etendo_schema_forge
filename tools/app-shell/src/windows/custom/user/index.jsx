@@ -174,8 +174,8 @@ function TopbarExtra(props) {
       <PendingInvitationPill
         status={props.data?.invitationStatus}
         data-testid="PendingInvitationPill__toolbar" />
-      <ResendInvitationButton {...props} />
-      <ActiveStatusToggle {...props} />
+      <ResendInvitationButton {...props} data-testid="ResendInvitationButton__toolbar" />
+      <ActiveStatusToggle {...props} data-testid="ActiveStatusToggle__toolbar" />
     </div>
   );
 }
