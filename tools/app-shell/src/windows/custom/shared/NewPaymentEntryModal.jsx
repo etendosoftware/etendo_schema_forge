@@ -112,6 +112,19 @@ const PIS_MAX_TRANSPORT_ERRORS = 5;
 const PIS_MAX_CHECKS = 1;
 
 /**
+ * How long to wait before the next tick.
+ *
+ * A triggered check runs with no delay at all: by the time it is armed, the servlet has already
+ * resolved the payment, so the answer is a local read (see PIS_MAX_CHECKS). Once the check is spent
+ * this becomes the quiet, no-network watch of `popup.closed`. The single exception is a retry after
+ * a transport error — there the request itself failed, so giving the network a moment is the point.
+ */
+function nextCheckDelay(checkingNow, retryingAfterTransportError) {
+  if (!checkingNow) return PIS_WATCH_INTERVAL_MS;
+  return retryingAfterTransportError ? PIS_POLL_INTERVAL_MS : 0;
+}
+
+/**
  * Folds one pisPaymentStatus answer into the wait state.
  *
  * A real answer spends the check, whatever it says: a resolutive status ends the wait, and a
@@ -1345,9 +1358,7 @@ export default function NewPaymentEntryModal({
     // The one case that still waits is a retry after a transport error: there the request itself
     // failed, so giving the network a moment before asking again is the whole point.
     const retryingAfterTransportError = (pisPolling.transportErrors || 0) > 0;
-    const delay = !checkingNow
-      ? PIS_WATCH_INTERVAL_MS
-      : (retryingAfterTransportError ? PIS_POLL_INTERVAL_MS : 0);
+    const delay = nextCheckDelay(checkingNow, retryingAfterTransportError);
 
     let cancelled = false;
     const timer = setTimeout(async () => {

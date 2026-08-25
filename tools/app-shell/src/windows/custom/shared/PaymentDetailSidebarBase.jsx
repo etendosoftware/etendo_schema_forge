@@ -100,6 +100,54 @@ function isMidnightArtifact(ev) {
     && d.getSeconds() === 0 && d.getMilliseconds() === 0;
 }
 
+/**
+ * The payment's real time of day, preferring the audit timestamp the backend injects for this
+ * (`updatedAt`, see ReactivatePaymentHandler) over the `updated` property, which the runtime does
+ * not actually send — the push to ETGO_SF_FIELD drops audit columns.
+ */
+function auditTimestamp(data) {
+  return data?.updatedAt || data?.updated;
+}
+
+/**
+ * The activity history to display: whatever was recorded live, minus the midnight artifacts of the
+ * old backfill, plus a synthetic "confirmed" entry when nothing usable is left.
+ *
+ * Backfilling is now the NORMAL path for a bank transfer, not a legacy fallback:
+ * PisReturnCallbackServlet registers the payment server-side, so the modal that used to record the
+ * live event may never have been open (ETP-4895). `paymentDate` stays last in the chain because it
+ * is a date-only AD column — it is what made a payment confirmed at 12:10 render as "· 00:00", since
+ * parseAdDate defaults a bare date to midnight. When no source carries a time component nothing is
+ * written on purpose, and the caller's "no confirmed event" fallback shows a date-only line rather
+ * than fabricating an hour that was never recorded.
+ */
+function resolveConfirmedEvents(data, isDraft) {
+  const stored = readEvents(data.id).filter(ev => !isMidnightArtifact(ev));
+  if (stored.length > 0 || isDraft) return stored;
+
+  const source = auditTimestamp(data) || data.paymentDate;
+  if (!hasTimeComponent(source)) return stored;
+  const backfill = parseAdDate(source);
+  if (!backfill) return stored;
+
+  const events = [{ type: 'confirmed', at: backfill.toISOString() }];
+  try {
+    window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(events));
+  } catch { /* non-fatal */ }
+  return events;
+}
+
+/** When the accounting entry was posted: the recorded moment, else the audit timestamp. */
+function resolvePostedAt(data, isDraft) {
+  const stored = readEventAt(data.id, 'postedAt');
+  if (stored) return stored;
+  if (isDraft || data.posted !== 'Y') return null;
+
+  const backfill = parseAdDate(auditTimestamp(data));
+  if (backfill) writeEventAt(data.id, 'postedAt', backfill);
+  return backfill;
+}
+
 function fmtNow(d) {
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
@@ -227,42 +275,9 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
 
   useEffect(() => {
     if (!data?.id) return;
-    let stored = readEvents(data.id);
-    // Drop entries the old backfill poisoned with midnight BEFORE deciding whether anything is
-    // stored, so a payment carrying one is backfilled again from the server timestamp instead of
-    // being stuck on "· 00:00" forever.
-    stored = stored.filter(ev => !isMidnightArtifact(ev));
-    // Backfill a single synthetic "confirmed" entry whenever no live event was recorded — which is
-    // now the NORMAL case for a bank transfer, since PisReturnCallbackServlet registers the payment
-    // server-side and the modal may never have been open (ETP-4895). `updatedAt` is the audit
-    // timestamp the backend injects for exactly this (ReactivatePaymentHandler); it is the only
-    // value that carries a real time of day. `updated`/`paymentDate` remain as fallbacks, but
-    // `paymentDate` is a date-only AD column, which is what made a payment confirmed at 12:10
-    // render as "· 00:00" — parseAdDate defaults a bare date to midnight. When no source carries a
-    // time component, nothing is written on purpose: the "no confirmed event" fallback below shows
-    // a date-only line rather than fabricating an hour that was never recorded.
-    if (stored.length === 0 && !isDraft) {
-      const backfillSource = data.updatedAt || data.updated || data.paymentDate;
-      if (hasTimeComponent(backfillSource)) {
-        const backfill = parseAdDate(backfillSource);
-        if (backfill) {
-          stored = [{ type: 'confirmed', at: backfill.toISOString() }];
-          try { window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(stored)); } catch { /* non-fatal */ }
-        }
-      }
-    }
-    setEvents(stored);
-
-    const storedPosted = readEventAt(data.id, 'postedAt');
-    if (storedPosted) {
-      setPostedAt(storedPosted);
-    } else if (!isDraft && data.posted === 'Y' && (data.updatedAt || data.updated)) {
-      const backfill = parseAdDate(data.updatedAt || data.updated);
-      if (backfill) {
-        writeEventAt(data.id, 'postedAt', backfill);
-        setPostedAt(backfill);
-      }
-    }
+    setEvents(resolveConfirmedEvents(data, isDraft));
+    const posted = resolvePostedAt(data, isDraft);
+    if (posted) setPostedAt(posted);
   }, [data?.id, data?.posted]);
 
   useEffect(() => {
