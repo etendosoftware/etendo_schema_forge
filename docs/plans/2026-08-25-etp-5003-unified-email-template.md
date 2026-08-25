@@ -1,6 +1,6 @@
 # ETP-5003 — Plan: one base template for every Etendo email
 
-**Status:** proposal, pending the F0 spike below.
+**Status:** proposal. F0 spike resolved 2026-08-25 (§3) — the layout decision is unblocked.
 **Companion doc:** `docs/email-inventory.md` (what we send today and from where).
 **Goal:** every Etendo email renders through a single layout owned by this repo. Only the content
 block varies per email.
@@ -47,21 +47,29 @@ from another team. Option B stays on the table for the branded templates we may 
 
 ---
 
-## 3. F0 — the spike that gates everything
+## 3. F0 — RESOLVED: `custom` wraps nothing
 
-**Question: what does the provider's `custom` template wrap around our `body`?**
+**Question was: what does the provider's `custom` template wrap around our `body`?**
 
-If it injects its own header/footer/`<html>` shell, sending a full document produces a double shell
-and the plan changes shape (we would send a fragment and negotiate the shell with the gateway
-team instead).
+**Answer: nothing.** Verified 2026-08-25 by sending a real `company-invitation` from a local
+instance (local points at the production API Gateway, `provider.enabled=true`). The delivered email
+is exactly the body Java builds — no logo, no card, no button, no shell of any kind. Sender is
+`Etendo Cloud <noreply@etendo.cloud>`.
 
-How to answer it: send one `custom` email through
-`POST /sws/neo/email-contracts/company-invitation/send` against staging with a body carrying a
-recognizable marker, then read the delivered source. Half a day, and it decides §4.
+**Consequence: Option A is unblocked.** The renderer must emit a *complete* HTML document
+(`<html>`/`<head>`/`<body>` with the full table layout); the provider passes it through untouched.
+No fragment negotiation with the gateway team is needed.
 
-Everything below assumes `custom` passes the body through essentially untouched.
+Two further findings from the same test, both worth fixing inside this task:
 
----
+1. **Auth-contract bodies are plain text, document bodies are HTML.** `CompanyInvitationEmailContract`
+   builds its body with `\n\n` separators while `DefaultDocumentSendEmailContract` emits `<p>` tags.
+   The provider autolinks bare URLs, which is why the invitation still shows a clickable link. The
+   renderer removes this split — every contract will emit the same markup.
+2. **Invitations always arrive in English.** `InviteUserDialog.jsx:75` posts
+   `{ email }` without `language`, so the servlet reads `""`, `LANGUAGE_SPANISH.equals("")` is false
+   and the contract falls through to its English branch — regardless of the operator's UI locale.
+   One-line frontend fix; fold it into F4 (i18n) or ship it earlier as a standalone fix.
 
 ## 4. The base layout
 
@@ -185,8 +193,8 @@ Caveat to accept up front: **Outlook.com rewrites colors regardless** of what th
 
 ## 9. Open questions
 
-1. **`custom` shell** — F0. Blocks everything.
-2. **Dark palette values** — §8, needed before F1.
+1. ~~**`custom` shell**~~ — **resolved**, see §3: it wraps nothing.
+2. **Dark palette values** — §8, needed before F1. Now the only blocker.
 3. **Footer content** — the Figma shows "Saludos, Equipo de Etendo Go". Confirm whether it also
    needs a support link or any legal line.
 
