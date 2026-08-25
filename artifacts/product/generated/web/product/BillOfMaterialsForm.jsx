@@ -14,5 +14,6 @@ const fields = [
 export default function BillOfMaterialsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BillOfMaterialsForm.fields = fields;
 
 // @sf-generated-end component:BillOfMaterialsForm

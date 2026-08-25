@@ -16,5 +16,6 @@ const fields = [
 export default function TransactionsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+TransactionsForm.fields = fields;
 
 // @sf-generated-end component:TransactionsForm

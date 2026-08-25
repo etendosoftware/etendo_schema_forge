@@ -13,5 +13,6 @@ const fields = [
 export default function ServiceProjectForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ServiceProjectForm.fields = fields;
 
 // @sf-generated-end component:ServiceProjectForm

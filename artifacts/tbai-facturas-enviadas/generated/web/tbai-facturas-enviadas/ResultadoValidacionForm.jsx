@@ -12,5 +12,6 @@ const fields = [
 export default function ResultadoValidacionForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+ResultadoValidacionForm.fields = fields;
 
 // @sf-generated-end component:ResultadoValidacionForm

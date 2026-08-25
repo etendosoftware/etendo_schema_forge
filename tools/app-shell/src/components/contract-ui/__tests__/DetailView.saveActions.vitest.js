@@ -90,7 +90,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
-import { handlePostSaveNavigation, reportUnnavigableSave } from '../DetailView.jsx';
+import { handlePostSaveNavigation, reportUnnavigableSave } from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
   it('returns early without side effects when saved is null', async () => {

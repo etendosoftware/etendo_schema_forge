@@ -16,5 +16,6 @@ const fields = [
 export default function FacturasInvalidasForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+FacturasInvalidasForm.fields = fields;
 
 // @sf-generated-end component:FacturasInvalidasForm

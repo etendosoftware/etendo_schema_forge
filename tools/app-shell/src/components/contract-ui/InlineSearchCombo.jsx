@@ -38,6 +38,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // room on the left, anchor the panel's right edge to the trigger so it grows leftward
   // instead of truncating/scrolling.
   const [anchorRight, setAnchorRight] = useState(false);
+  // Keyboard-nav highlight over `filtered` (ETP-4600 Gap A parity, ported from
+  // CreatableSearchSelect). -1 = nothing highlighted (mouse-only interaction so far).
+  const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
   // ETP-4600: `inputRef` is caller-supplied and OPTIONAL — DataTable only wires it up for the
@@ -284,6 +287,19 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     if (!open) setAnchorRight(false);
   }, [open]);
 
+  // Reset the keyboard highlight whenever the dropdown opens/closes or the search text
+  // changes — a stale index from a previous open/query would highlight the wrong option.
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [open, query]);
+
+  // Keep the highlighted option scrolled into view (mirrors CreatableSearchSelect).
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeIndex]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -354,17 +370,61 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           setQuery('');
         }, 150)}
         onKeyDown={(e) => {
-          // Let Enter/Escape propagate to the row handler only if dropdown is closed
-          if (e.key === 'Enter' && open && filtered.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSelect(filtered[0]);
-            return;
+          // ArrowUp/Down/Home/End/Enter are only intercepted while the dropdown panel is
+          // actually rendered (ETP-4600 Gap A parity, ported from CreatableSearchSelect's
+          // handleInputKeyDown). Escape, and every key while the combo is closed or has no
+          // matches, keeps falling through to the row handler unchanged — arrows on a closed
+          // combo do NOT open it here (unlike the header selector): in a grid cell they may
+          // carry a competing row/cell-navigation meaning, so hijacking them is out of scope.
+          const dropdownVisible = open && filtered.length > 0;
+          if (dropdownVisible) {
+            switch (e.key) {
+              case 'ArrowDown':
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+                return;
+              case 'ArrowUp':
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveIndex((i) => Math.max(i - 1, 0));
+                return;
+              case 'Home':
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveIndex(0);
+                return;
+              case 'End':
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveIndex(filtered.length - 1);
+                return;
+              case 'Enter': {
+                e.preventDefault();
+                e.stopPropagation();
+                // Deliberate divergence from CreatableSearchSelect (which requires
+                // activeIndex >= 0): falls back to filtered[0] so the fast "type + Enter"
+                // grid entry flow keeps working when no arrow key was pressed at all.
+                const opt = activeIndex >= 0 ? filtered[activeIndex] : filtered[0];
+                if (opt) handleSelect(opt);
+                return;
+              }
+              default:
+                break;
+            }
           }
           onKeyDown?.(e);
         }}
         placeholder={placeholder}
         className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
+        role="combobox"
+        aria-expanded={open && filtered.length > 0}
+        aria-controls={`inline-options-${field.key}`}
+        aria-activedescendant={
+          activeIndex >= 0 && filtered[activeIndex]
+            ? `${field.key}-inline-option-${filtered[activeIndex].id}`
+            : undefined
+        }
       />
       )}
       <button
@@ -392,6 +452,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
       {open && filtered.length > 0 && dropdownStyle && createPortal(
         <div
           ref={dropdownRef}
+          id={`inline-options-${field.key}`}
+          role="listbox"
           data-testid={`inline-add-options-${field.key}`}
           className="bg-card border rounded-md shadow-lg overflow-auto"
           style={dropdownStyle}
@@ -431,13 +493,18 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
               CreatableSearchSelect's identical comment for the full root cause. */}
           <div className="min-w-full w-max">
-            {filtered.map(opt => (
+            {filtered.map((opt, index) => (
               <button
                 key={opt.id}
+                id={`${field.key}-inline-option-${opt.id}`}
                 type="button"
+                role="option"
+                aria-selected={index === activeIndex}
+                data-option-index={index}
                 data-testid={`inline-add-option-${field.key}-${opt.id}`}
-                className="w-full block text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap"
+                className={`w-full block text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap${index === activeIndex ? ' bg-status-info' : ''}`}
                 onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
+                onMouseEnter={() => setActiveIndex(index)}
               >
                 {opt.name || opt.label || opt._identifier || opt.id}
               </button>
