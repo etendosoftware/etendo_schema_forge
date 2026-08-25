@@ -109,6 +109,17 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
   read the real TTL needs an API change and a PR in that repo. **If you change
   `PASSWORD_RESET_TTL_SECONDS`, update that locale key too** — in `es_ES`, `es_AR` and `en_US`.
 
+### password-changed
+- Sent from **both** password-change paths: `handleChangePassword` (in-app, asks for the current
+  password) and `handlePasswordResetConfirm` (the emailed recovery link). It used to fire only from
+  the first, which was backwards — the recovery path is the one an attacker with a stolen link would
+  take, so it is where the notice matters most (fixed in ETP-5003).
+- The copy points at self-service recovery *before* support, naming the screen's own label,
+  "¿Olvidaste tu contraseña?" / "Forgot password?". Keep it matching the real label: someone reading
+  this email is looking for that exact button, usually in a hurry.
+- Its command carries a per-send `recordId` (account id + UUID), so two changes in a row are not
+  collapsed into one by the duplicate check. Do not "clean that up" into a plain account id.
+
 ### verify-email and the two welcomes
 - The epic added email verification: `verify-email` plus a verification link on the admin's
   `new-account`, and `handleOnboarding` answers `403 EMAIL_NOT_VERIFIED` until the address is

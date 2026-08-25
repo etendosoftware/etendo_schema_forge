@@ -37,7 +37,8 @@ graph LR
   subgraph WORK["Operator — daily work"]
     O1(["Accepts the invitation"])
     O2(["Forgot my password"])
-    O3(["Sets the new password"])
+    O3(["Sets the new password<br/>from the emailed link"])
+    O5(["Changes the password<br/>from inside the app"])
     O4(["Opens a document<br/>and clicks Send"])
   end
 
@@ -82,6 +83,7 @@ graph LR
   O1 -- "had no account" --> M9
   O1 --> M7
   OPER --> O2 --> M4 --> O3 --> M5
+  OPER --> O5 --> M5
   OPER -.-> M6
   OPER --> O4
   O4 --> D1 & D2 & D3 & D4 & D5 & D6
@@ -105,7 +107,7 @@ graph LR
   class M1,M2,M3,M4,M7 verified
   class M5,M6,M8,M9 migrated
   class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
-  class A1,A2,A3,A4,O1,O2,O3,O4,K1,K2,K3 act
+  class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
@@ -190,7 +192,7 @@ what they used *before* that work, which is what the branded-template migration 
 |---|---|---|---|---|---|
 | 7 | New account / welcome | `new-account` | signup — `EtendoGoJwtServlet:619` → `sendNewAccount` | `custom` (subject+body built in Java, ES/EN) | `contracts/AccountLinkEmailContract.java`, `contracts/CoreEmailContractProvider.java` (`newAccountContent`), `rest/TransactionalAuthEmailSender.java` |
 | 8 | Password reset link | `reset-password` | forgot-password — `EtendoGoJwtServlet:2336` → `sendPasswordReset` | `reset-password` (branded, provider-owned copy) | same as above + `rest/EtendoGoAuthLinkBuilder.java` |
-| 9 | Password changed notice | `password-changed` | after a password change — `EtendoGoJwtServlet:970` | `custom` (`passwordChangedContent`) | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
+| 9 | Password changed notice | `password-changed` | **both** password-change paths — `handleChangePassword` and `handlePasswordResetConfirm` | shared layout | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
 | 10 | Environment ready | `environment-ready` | tenant provisioning finished — `EtendoGoJwtServlet:1461` | `custom` (`environmentReadyContent`), links to `/dashboard` | `contracts/AccountLinkEmailContract.java`, `rest/EtendoGoAccountProvisioning.java` |
 | 11 | Company invitation | `company-invitation` | invite a user to a company — `CompanyInvitationService.java:200` | `custom` (subject/body in Java, ES/EN) | `contracts/CompanyInvitationEmailContract.java`, `rest/CompanyInvitationService.java`, `rest/CompanyInvitationDalHelper.java` |
 | 12 | Email verification | `verify-email` | sign-up, and `POST /verify-email/resend` — `EtendoGoJwtServlet` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/EmailVerificationDalHelper.java` |
