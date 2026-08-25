@@ -64,3 +64,42 @@ export function getNumericFieldError(field, value) {
 export function numericFieldToastId(key) {
   return `numeric-field-${key}`;
 }
+
+/**
+ * ETP-5002 — the set of save-blocking error toasts currently on screen, by stable id.
+ *
+ * Needed because ETP-4830 gave the post-save success toast a FIXED id
+ * (`RECORD_SAVE_TOAST_ID`). A stable id buys atomic replacement — which is exactly what
+ * killed the User window's dismiss-then-add race — but it COSTS front-of-stack promotion:
+ * sonner treats `create()` with an existing id as an in-place UPDATE, so the success toast
+ * refreshes an older entry instead of jumping to the front. When a save-blocking error
+ * toast is newer, that error keeps `data-front="true"` and the user who just fixed the
+ * value and saved successfully is still staring at the error.
+ *
+ * The two properties are genuinely in tension, so rather than drop the id (reopening
+ * ETP-4830's race) the success path clears the errors it is superseding. Only ids WE
+ * minted are dismissed — never a bare `toast.dismiss()`, which would also wipe unrelated
+ * backend messages and reintroduce the very cross-timer race ETP-4830 documented.
+ */
+const pendingSaveBlockToastIds = new Set();
+
+/** Remember a save-blocking error toast so a later successful save can clear it. */
+export function trackSaveBlockToast(id) {
+    if (id) pendingSaveBlockToastIds.add(id);
+}
+
+/**
+ * Dismiss every tracked save-blocking error toast. Safe to call when none are pending.
+ * `dismiss` is injected (rather than importing sonner here) to keep this module free of
+ * UI dependencies, matching the rest of the file.
+ */
+export function dismissSaveBlockToasts(dismiss) {
+    if (pendingSaveBlockToastIds.size === 0) return;
+    for (const id of pendingSaveBlockToastIds) dismiss?.(id);
+    pendingSaveBlockToastIds.clear();
+}
+
+/** Test seam: forget all tracked ids without touching the UI. */
+export function resetSaveBlockToastTracking() {
+    pendingSaveBlockToastIds.clear();
+}
