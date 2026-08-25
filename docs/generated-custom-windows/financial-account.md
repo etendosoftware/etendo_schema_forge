@@ -1176,8 +1176,8 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementLinesInline.jsx     — lines table shown in the expanded accordion row (white rounded card): date, description, contact name (free text), contact (BP FK name), G/L item (concepto contable), Nº Referencia, **Estado** (badge: amber "Sin conciliar" / green "Conciliado"), **Transacción** (grey ↗ chip with the reconciled movement's doc no, opening `ReconciledTxnsModal`; a 1:N group shows as a single "N movimientos" chip), then **Salida · Entrada** last (amount headers left-aligned, values right-aligned)
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
-      ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, four header fields in one row (name, transaction date, import date, file name) + a Notas textarea, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the required fields are **date, Reference No, out/in**; contact / G/L item are optional. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / G/L item. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
       LookupPicker.jsx             — shared text-input + dropdown lookup (BP / G/L item), used by NewMovementDialog and ManualStatementModal.
 ```
@@ -1201,7 +1201,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 | `useAccountMovements(accountId)` | `hooks/useAccountMovements.js` | Thin wrapper over `useNeoResource` — hits `/sws/neo/financial-account-transactions?FIN_Financial_Account_ID={id}` (powered by `FinancialAccountTransactionsHandler` on the Etendo Go side). Returns `{ movements, totals, enabledDimensions, loading, error, reload }`. Each movement carries `paymentId` / `paymentIsReceipt` (for the Payment link) and a `dimensions` object (per-row dimension values); `enabledDimensions` is the account-level list of dimension keys enabled in the chart of accounts. |
 | `useBankStatements(accountId)` | `hooks/useBankStatements.js` | Fetches imported bank statements — hits `GET /sws/neo/bank-statements?FIN_Financial_Account_ID={id}`. Returns `{ statements, loading, error, reload }`. |
 | `useBankStatementLines(statementId)` | `hooks/useBankStatementLines.js` | Fetches lines of one statement — hits `GET /sws/neo/bank-statements?action=lines&statementId={id}`. Returns `{ lines, loading, error, reload }`. |
-| `useStatementImport()` | `hooks/useStatementImport.js` | Mutation hook for C43 import — posts `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. |
+| `useStatementImport()` | `hooks/useStatementImport.js` | Mutation hook for C43 import — posts `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
 | `useCreateStatement()` | `hooks/useCreateStatement.js` | Mutation hook for manual statement creation — posts `{ FIN_Financial_Account_ID, name, transactionDate, importDate, fileName, notes, lines[] }` to `POST /sws/neo/bank-statements?action=create`. Returns `{ createStatement, creating, error }`. |
 | `useStatementActions()` | `hooks/useStatementActions.js` | Mutation hook for the draft row actions — `processStatement(id)` (`?action=process`), `updateStatement({ id, ...header, lines })` (`?action=update`), `deleteStatement(id)` (`?action=delete`). All only valid for drafts (backend returns 400 otherwise). Returns `{ processStatement, updateStatement, deleteStatement, busy, error }`. |
 
@@ -1271,6 +1271,8 @@ GET  /sws/neo/bank-statements?...&export=csv&columns=...&ids=...     → CSV dow
 POST /sws/neo/bank-statements?action=preview                         → in-memory parse (no persist)
 POST /sws/neo/bank-statements?action=import                          → C43 / CSV import
      body: { FIN_Financial_Account_ID, fileName, contentBase64 }
+     201  { id, fileName, lineCount, discardedLines }
+     400  { error: { code: "NO_VALID_LINES", message } }  ← no line survived the prune
 POST /sws/neo/bank-statements?action=create                          → manual create (header + lines, no file)
      body: { FIN_Financial_Account_ID, name, transactionDate, importDate,
              fileName, notes, process,
@@ -1281,7 +1283,7 @@ POST /sws/neo/bank-statements?action=update    body: { id, ...create }  → edit
 POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines)
 ```
 
-The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**`). The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
+The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**` — Reference No is optional in BOTH flows). A non-blank line whose `in` and `out` are both 0 is rejected with a 400 ("Every line must have an amount in either Deposit or Withdrawal") rather than silently dropped: the manual flow has a user who can fix it. The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
 
 **Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **replaces all lines** (deletes the existing ones, then recreates from the body), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
 
@@ -1292,7 +1294,35 @@ The import handler:
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)
 - Calls `init(account)` + `loadFile(stream, statement)` headlessly (no servlet context needed)
 - Saves `FIN_BankStatement` + `FIN_BankStatementLine` rows in one transaction
-- Returns `201 { id, fileName, lineCount }` on success
+- Runs `BankStatementLinePruner.pruneZeroAmountLines(statement)` (via the `pruneLines` test seam)
+- Returns `201 { id, fileName, lineCount, discardedLines }` on success, where `lineCount` is what
+  actually got persisted — not what the parser read
+
+#### Zero-amount lines and empty files (alignment with Classic)
+
+`BankStatementLinePruner` ports the sanitising half of Classic's
+`org.openbravo.advpaymentmngt.utility.FIN_BankStatementImport#saveFINBankStatementLines`: a parsed
+line whose `cramount` **and** `dramount` are both zero carries no financial information, so it is
+removed and the survivors are renumbered `(counter + 1) * 10` — **no gap** in `lineno`. Classic
+reports the drop through `AD_MESSAGE.APRM_ZeroAmountNotInserted` ("%s row/s inserted … %s row/s not
+inserted because credit and debit amount were 0") and still calls the import a success; we return
+`discardedLines` and the modal surfaces it the same way.
+
+It runs on the statement's already-persisted lines rather than inside a parser, exactly like in
+Classic where the rule lives in core and not in the CSV importer — so it applies to Cuaderno 43 too.
+
+Both `?action=import` and `?action=preview` then reject a statement with **no surviving line**
+(`400`, `error.code = NO_VALID_LINES`) and roll back, covering a CSV that only has its header row as
+well as one whose every line is amount-less. Classic does the same (`importFile` →
+`rollbackAndClose()` when `bankStatementLines` is empty); the previous behaviour was a `201` with
+`lineCount: 0` and an empty, already-processed statement left in the DB.
+
+Two deliberate divergences from Classic, both documented in the tests:
+- a **blank** amount cell is `0` here, whereas Classic's `Utility.stringToBigDecimal("")` throws and
+  aborts the whole file. The resulting zero/zero line is pruned anyway, so the outcome matches
+  without failing an otherwise valid import;
+- **negative** amounts are kept. Classic's condition is "not both zero", not "positive", so
+  rejecting negatives would be a new business rule rather than a consistency fix.
 
 #### Cuaderno 43 lookup requirements (MANDATORY)
 

@@ -38,9 +38,19 @@ export function useStatementImport() {
         }),
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        const detail = text ? `: ${text}` : '';
-        throw new Error(`HTTP ${res.status}${detail}`);
+        // Read the failure body as text and parse it ourselves: a NEO error body
+        // is JSON and carries `error.code`, but a proxy/gateway failure is not,
+        // and that raw text is then the only clue about what went wrong.
+        const raw = await res.text().catch(() => '');
+        let parsed = null;
+        try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+        const detail = raw ? `: ${raw}` : '';
+        const err = new Error(parsed?.error?.message || `HTTP ${res.status}${detail}`);
+        err.status = parsed?.error?.status ?? res.status;
+        // Stable machine-readable code (e.g. NO_VALID_LINES) so the caller can
+        // show a translated message instead of a generic failure.
+        err.code = parsed?.error?.code ?? null;
+        throw err;
       }
       const json = await res.json();
       return json?.response?.data ?? {};
