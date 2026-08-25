@@ -16646,6 +16646,18 @@
     }
   },
   "genericLabels": {
+    "onboardingEmailVerifyResendCooldown": "Reenviar en {seconds} s",
+    "onboardingVerifyEmailTitle": "Confirma tu correo",
+    "onboardingVerifyEmailSent": "Te enviamos un enlace para confirmar tu correo electrónico. Ábrelo para empezar a configurar tu entorno.",
+    "onboardingVerifyEmailSentToAddress": "Enviamos un enlace a {email}. Ábrelo para empezar a configurar tu entorno.",
+    "onboardingVerifyEmailHint": "¿No lo encuentras? Revisa tu carpeta de spam o vuelve a enviar el enlace.",
+    "onboardingEmailVerifyResend": "Reenviar enlace",
+    "onboardingEmailVerifyResending": "Enviando…",
+    "onboardingEmailVerifyResent": "Enlace enviado. Revisa tu bandeja de entrada.",
+    "onboardingEmailVerifyResendFailed": "No pudimos enviar el enlace. Vuelve a intentarlo en unos instantes.",
+    "onboardingEmailNotVerified": "Confirma tu correo electrónico antes de crear tu entorno. Busca en tu bandeja de entrada el enlace que te enviamos.",
+    "onboardingEmailVerifyInvalid": "Ese enlace de confirmación ya no es válido. Solicita uno nuevo.",
+    "onboardingEmailVerifyFailed": "No pudimos confirmar tu correo electrónico. Vuelve a intentarlo.",
     "computedFreshnessQueued": "Este valor se calcula en segundo plano y puede tardar unos minutos en actualizarse.",
     "computedFreshnessManual": "Este valor se calcula y se actualiza manualmente.",
     "computedFreshnessAria": "Valor calculado — puede estar desactualizado",
