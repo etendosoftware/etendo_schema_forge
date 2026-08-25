@@ -1,14 +1,27 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-08-03T16:25:15.395Z",
-  "checksum": "261839b234d57627",
+  "updatedAt": "2026-08-24T13:35:40.129Z",
+  "checksum": "dcf93d458aa7bb36",
   "frontendContract": {
     "window": {
       "id": "110",
       "name": "Organización",
       "primaryEntity": "organization",
       "category": "configuration",
+      "secondaryTabs": {
+        "actividadesDelIae": {
+          "tabOrder": 10,
+          "label": "Actividades del IAE",
+          "addLineFields": [
+            "epgrafeIAE",
+            "epiaeType",
+            "epiaeCode",
+            "default"
+          ]
+        }
+      },
+      "detailEntity": "information",
       "layoutType": "custom"
     },
     "entities": {
@@ -219,6 +232,87 @@
         ],
         "searchableFields": [],
         "computedFields": []
+      },
+      "actividadesDelIae": {
+        "tableName": "EPIAE_OrgInfo_Epigraph",
+        "tabId": "910CA3AD36CA47F2B92B7AB9484EF47B",
+        "tabName": "Actividades del IAE",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "epgrafeIAE",
+            "apiKey": "epgrafeIAE",
+            "column": "Epiae_Epigraph_ID",
+            "label": "Epígrafe IAE",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "EPIAE_Epigraph",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "Isdefault",
+            "label": "Valor por defecto",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_IsDefault"
+            }
+          },
+          {
+            "name": "epiaeType",
+            "apiKey": "epiaeType",
+            "column": "Epiae_Type_ID",
+            "label": "Clave",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "epiae_type",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "epiaeCode",
+            "apiKey": "epiaeCode",
+            "column": "Epiae_Code_ID",
+            "label": "Código",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "EPIAE_Code",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
       }
     }
   },
@@ -228,6 +322,19 @@
       "name": "Organización",
       "primaryEntity": "organization",
       "category": "configuration",
+      "secondaryTabs": {
+        "actividadesDelIae": {
+          "tabOrder": 10,
+          "label": "Actividades del IAE",
+          "addLineFields": [
+            "epgrafeIAE",
+            "epiaeType",
+            "epiaeCode",
+            "default"
+          ]
+        }
+      },
+      "detailEntity": "information",
       "layoutType": "custom"
     },
     "entities": {
@@ -756,6 +863,117 @@
             "required": false
           }
         ]
+      },
+      "actividadesDelIae": {
+        "tableName": "EPIAE_OrgInfo_Epigraph",
+        "tabId": "910CA3AD36CA47F2B92B7AB9484EF47B",
+        "tabName": "Actividades del IAE",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "epgrafeIAE",
+            "apiKey": "epgrafeIAE",
+            "column": "Epiae_Epigraph_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "Isdefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "epiaeType",
+            "apiKey": "epiaeType",
+            "column": "Epiae_Type_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "epiaeCode",
+            "apiKey": "epiaeCode",
+            "column": "Epiae_Code_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Epiae_Orginfo_Epigraph_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
       }
     },
     "endpoints": [
@@ -818,6 +1036,36 @@
         "path": "/information/:id",
         "entity": "information",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/actividadesDelIae",
+        "entity": "actividadesDelIae",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/actividadesDelIae/:id",
+        "entity": "actividadesDelIae",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/actividadesDelIae",
+        "entity": "actividadesDelIae",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/actividadesDelIae/:id",
+        "entity": "actividadesDelIae",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/actividadesDelIae/:id",
+        "entity": "actividadesDelIae",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -847,6 +1095,17 @@
         "listUrl": "/sws/neo/organizaci-n/information",
         "detailUrl": "/sws/neo/organizaci-n/information/{id}",
         "supportedFilters": []
+      },
+      "actividadesDelIae": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/actividadesDelIae",
+        "detailUrl": "/sws/neo/organizaci-n/actividadesDelIae/{id}",
+        "supportedFilters": []
       }
     },
     "selectors": [
@@ -865,6 +1124,30 @@
         "reference": "Location",
         "inputMode": "search",
         "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+      },
+      {
+        "entity": "actividadesDelIae",
+        "field": "epgrafeIAE",
+        "column": "Epiae_Epigraph_ID",
+        "reference": "EPIAE_Epigraph",
+        "inputMode": "selector",
+        "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epgrafeIAE"
+      },
+      {
+        "entity": "actividadesDelIae",
+        "field": "epiaeType",
+        "column": "Epiae_Type_ID",
+        "reference": "epiae_type",
+        "inputMode": "selector",
+        "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeType"
+      },
+      {
+        "entity": "actividadesDelIae",
+        "field": "epiaeCode",
+        "column": "Epiae_Code_ID",
+        "reference": "EPIAE_Code",
+        "inputMode": "selector",
+        "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeCode"
       }
     ],
     "actions": [
@@ -921,6 +1204,13 @@
         "description": "Action endpoint for 'ready' in organization should exist"
       },
       {
+        "id": "t-crud-flags-actividadesDelIae",
+        "category": "crud-flags",
+        "entity": "actividadesDelIae",
+        "runner": "node",
+        "description": "CRUD flags for 'actividadesDelIae' should all be booleans"
+      },
+      {
         "id": "t-crud-flags-information",
         "category": "crud-flags",
         "entity": "information",
@@ -941,6 +1231,38 @@
         "field": "etgoBusinessType",
         "runner": "node",
         "description": "Default value for 'etgoBusinessType' in organization should be a string"
+      },
+      {
+        "id": "t-field-presence-actividadesDelIae-default",
+        "category": "field-presence",
+        "entity": "actividadesDelIae",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should be present in actividadesDelIae"
+      },
+      {
+        "id": "t-field-presence-actividadesDelIae-epgrafeIAE",
+        "category": "field-presence",
+        "entity": "actividadesDelIae",
+        "field": "epgrafeIAE",
+        "runner": "node",
+        "description": "Field 'epgrafeIAE' should be present in actividadesDelIae"
+      },
+      {
+        "id": "t-field-presence-actividadesDelIae-epiaeCode",
+        "category": "field-presence",
+        "entity": "actividadesDelIae",
+        "field": "epiaeCode",
+        "runner": "node",
+        "description": "Field 'epiaeCode' should be present in actividadesDelIae"
+      },
+      {
+        "id": "t-field-presence-actividadesDelIae-epiaeType",
+        "category": "field-presence",
+        "entity": "actividadesDelIae",
+        "field": "epiaeType",
+        "runner": "node",
+        "description": "Field 'epiaeType' should be present in actividadesDelIae"
       },
       {
         "id": "t-field-presence-information-etgoEmail",
@@ -1021,6 +1343,38 @@
         "field": "socialName",
         "runner": "node",
         "description": "Field 'socialName' should be present in organization"
+      },
+      {
+        "id": "t-field-type-actividadesDelIae-default",
+        "category": "field-type",
+        "entity": "actividadesDelIae",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should have type 'boolean' in actividadesDelIae"
+      },
+      {
+        "id": "t-field-type-actividadesDelIae-epgrafeIAE",
+        "category": "field-type",
+        "entity": "actividadesDelIae",
+        "field": "epgrafeIAE",
+        "runner": "node",
+        "description": "Field 'epgrafeIAE' should have type 'string' in actividadesDelIae"
+      },
+      {
+        "id": "t-field-type-actividadesDelIae-epiaeCode",
+        "category": "field-type",
+        "entity": "actividadesDelIae",
+        "field": "epiaeCode",
+        "runner": "node",
+        "description": "Field 'epiaeCode' should have type 'string' in actividadesDelIae"
+      },
+      {
+        "id": "t-field-type-actividadesDelIae-epiaeType",
+        "category": "field-type",
+        "entity": "actividadesDelIae",
+        "field": "epiaeType",
+        "runner": "node",
+        "description": "Field 'epiaeType' should have type 'string' in actividadesDelIae"
       },
       {
         "id": "t-field-type-information-etgoEmail",
@@ -1467,6 +1821,30 @@
         "description": "Rule 'Years of the Intrastat Calendar' (validation) should be declared"
       },
       {
+        "id": "t-selector-endpoint-actividadesDelIae-epgrafeIAE",
+        "category": "selector-endpoint",
+        "entity": "actividadesDelIae",
+        "field": "epgrafeIAE",
+        "runner": "node",
+        "description": "Selector endpoint for 'epgrafeIAE' in actividadesDelIae should exist"
+      },
+      {
+        "id": "t-selector-endpoint-actividadesDelIae-epiaeCode",
+        "category": "selector-endpoint",
+        "entity": "actividadesDelIae",
+        "field": "epiaeCode",
+        "runner": "node",
+        "description": "Selector endpoint for 'epiaeCode' in actividadesDelIae should exist"
+      },
+      {
+        "id": "t-selector-endpoint-actividadesDelIae-epiaeType",
+        "category": "selector-endpoint",
+        "entity": "actividadesDelIae",
+        "field": "epiaeType",
+        "runner": "node",
+        "description": "Selector endpoint for 'epiaeType' in actividadesDelIae should exist"
+      },
+      {
         "id": "t-selector-endpoint-information-locationAddress",
         "category": "selector-endpoint",
         "entity": "information",
@@ -1481,6 +1859,78 @@
         "field": "currency",
         "runner": "node",
         "description": "Selector endpoint for 'currency' in organization should exist"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-active",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-client",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-createdBy",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-creationDate",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-id",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-lineNo",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "System field 'lineNo' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-organization",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-updated",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for actividadesDelIae"
+      },
+      {
+        "id": "t-system-field-actividadesDelIae-updatedBy",
+        "category": "system-field",
+        "entity": "actividadesDelIae",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for actividadesDelIae"
       },
       {
         "id": "t-system-field-information-active",
@@ -1915,6 +2365,13 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for organization"
       },
       {
+        "id": "t-visibility-actividadesDelIae",
+        "category": "visibility",
+        "entity": "actividadesDelIae",
+        "runner": "node",
+        "description": "Entity 'actividadesDelIae' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-information",
         "category": "visibility",
         "entity": "information",
@@ -1930,20 +2387,20 @@
       }
     ],
     "summary": {
-      "total": 135,
+      "total": 157,
       "byCategory": {
         "action-endpoint": 2,
-        "crud-flags": 2,
+        "crud-flags": 3,
         "default-value-type": 1,
-        "field-presence": 10,
-        "field-type": 10,
+        "field-presence": 14,
+        "field-type": 14,
         "rule-declared": 52,
-        "selector-endpoint": 2,
-        "system-field": 54,
-        "visibility": 2
+        "selector-endpoint": 5,
+        "system-field": 63,
+        "visibility": 3
       },
       "byRunner": {
-        "node": 135,
+        "node": 157,
         "junit": 0
       }
     }

@@ -6,6 +6,12 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 
+// Page size for the server-side search's paginated fetches (initial load, search, and
+// scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE and
+// CreatableSearchSelect.jsx's SERVER_SEARCH_PAGE so all three selector styles page at the
+// same granularity (ETP-4975).
+const SERVER_SEARCH_PAGE = 50;
+
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
  * Text input with filtered dropdown — lightweight alternative to full SearchInput.
@@ -23,6 +29,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const [openUp, setOpenUp] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState(null);
   const [serverResults, setServerResults] = useState(null);
+  // Whether another page might exist beyond the loaded ones — drives the "loading more"
+  // footer and gates scroll-triggered fetches (ETP-4975, mirrors CreatableSearchSelect.jsx's
+  // serverSearch mode and SelectorInput.jsx's hasMore).
+  const [hasMore, setHasMore] = useState(true);
   // ETP-4600: mirrors CreatableSearchSelect's horizontal anchor flip — when the panel's real
   // content (measured after mount) would overflow the right viewport edge and there's more
   // room on the left, anchor the panel's right edge to the trigger so it grows leftward
@@ -63,44 +73,103 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
 
   // Server-side search with debounce
   const fetchTimer = useRef(null);
-  const fetchServerResults = useCallback((q) => {
+  // Mirrors CreatableSearchSelect.jsx's hasMoreRef/offsetRef — the scroll handler (which fires
+  // outside React's render cycle) always reads the latest value synchronously (ETP-4975).
+  const hasMoreRef = useRef(true);
+  const offsetRef = useRef(0);
+  // Guards against a scroll-triggered fetch overlapping another already in flight.
+  const fetchInFlightRef = useRef(false);
+  // Tags every fetch with the search "generation" it belongs to (ETP-4975 BUG-2) — mirrors
+  // CreatableSearchSelect.jsx's identical guard. Incremented each time a NEW search starts
+  // (offset===0 — typed, or via focus/open/toggle); a scroll-triggered "load more" (offset>0)
+  // keeps whatever generation was current when it was launched. `fetchServerResults` compares
+  // the captured generation against the current one before applying a resolved fetch's result, so
+  // a stale in-flight request from an already-superseded search can never overwrite/append onto a
+  // newer one's results.
+  const searchGenerationRef = useRef(0);
+
+  // Resets pagination state before a fresh search (new typed query, or reopening with an
+  // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
+  // equivalent call sites, so a scroll-triggered "load more" left over from the PREVIOUS
+  // query/session can never append onto the new one (ETP-4975).
+  const resetPagination = useCallback(() => {
+    offsetRef.current = 0;
+    hasMoreRef.current = true;
+    setHasMore(true);
+  }, []);
+
+  // Fetches one page of server-side results. `offset` 0 is the debounced typing/open/focus
+  // flow (REPLACES `serverResults` — a new query always starts from page 0); `offset > 0` is
+  // the scroll-triggered "load more" (APPENDS, no debounce — mirrors
+  // CreatableSearchSelect.jsx's triggerServerSearch scroll path, ETP-4975). Sends explicit
+  // `limit`/`offset` so the backend's own default page size never silently caps the list.
+  const fetchServerResults = useCallback((q, offset = 0) => {
     if (!selectorUrl || !token) { setServerResults(null); return; }
+    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     clearTimeout(fetchTimer.current);
+    // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
+    // focus/open/toggle); offset>0 (scroll-triggered "load more") is tagged with whatever
+    // generation was already current when it fired — it never starts one of its own. When the
+    // fetch resolves, only apply it if that captured generation is still the current one;
+    // otherwise a newer search has already superseded it and the stale result is discarded
+    // silently instead of overwriting/appending onto the newer search's state
+    // (serverResults/offsetRef/hasMoreRef).
+    if (offset === 0) searchGenerationRef.current += 1;
+    const requestGeneration = searchGenerationRef.current;
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
-    fetchTimer.current = setTimeout(() => {
+    queryParams.limit = SERVER_SEARCH_PAGE;
+    queryParams.offset = offset;
+    const runFetch = () => {
+      fetchInFlightRef.current = true;
       fetch(buildUrlWithParams(selectorUrl, queryParams), {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
-          if (data?.items) setServerResults(data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
+          if (!data?.items) return;
+          if (searchGenerationRef.current !== requestGeneration) return;
+          const items = data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it }));
+          setServerResults(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
+          offsetRef.current = offset + items.length;
+          const more = items.length >= SERVER_SEARCH_PAGE;
+          hasMoreRef.current = more;
+          setHasMore(more);
         })
-        .catch(() => {});
-    }, 300);
+        .catch(() => {})
+        .finally(() => { fetchInFlightRef.current = false; });
+    };
+    if (offset === 0) {
+      // Debounced — typing/open/focus can all fire this in quick succession; only the last
+      // call within 300ms actually hits the server (unchanged from the pre-ETP-4975 behavior).
+      fetchTimer.current = setTimeout(runFetch, 300);
+    } else {
+      runFetch();
+    }
   }, [selectorUrl, selectorContext, token]);
 
   const filtered = useMemo(() => {
     let base;
-    let limit;
     if (serverResults) {
+      // Already paginated server-side (ETP-4975: fetchServerResults sends explicit
+      // limit/offset and concatenates on scroll) — show the full accumulated list here,
+      // no client-side slice on top of it.
       base = serverResults;
-      limit = 20;
     } else if (!query) {
-      base = options;
-      limit = 15;
+      // Local catalog fallback shown while the initial server page is still in flight (or
+      // no selectorUrl/token is configured) — unrelated to server pagination, capped at 15.
+      base = options.slice(0, 15);
     } else {
       const q = query.toLowerCase();
       base = options.filter(o => {
         const name = o.name || o.label || o._identifier || '';
         return name.toLowerCase().includes(q);
-      });
-      limit = 15;
+      }).slice(0, 15);
     }
     // Drop the excluded value (e.g. the document currency) from both the local
     // catalog and any server-side results so it can never be chosen here.
     if (excludeId != null) base = base.filter(o => o.id !== excludeId);
-    return base.slice(0, limit);
+    return base;
   }, [query, options, serverResults, excludeId]);
 
   const handleSelect = (opt) => {
@@ -117,6 +186,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setOpen(true);
     setQuery('');
     setServerResults(null);
+    resetPagination();
     fetchServerResults('');
     requestAnimationFrame(() => {
       localInputRef.current?.focus();
@@ -134,6 +204,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     onChange('', '');
     setQuery('');
     setServerResults(null);
+    resetPagination();
     setOpen(true);
     fetchServerResults('');
     requestAnimationFrame(() => {
@@ -255,6 +326,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           setQuery(e.target.value);
           setOpen(true);
           setServerResults(null);
+          // A new typed term is a NEW search, not "load more of the old one" — reset
+          // pagination to page 0 up front (ETP-4975), mirroring CreatableSearchSelect.jsx's
+          // onChange handler.
+          resetPagination();
           fetchServerResults(e.target.value);
           // Clear the committed ID while typing so the parent knows no option is selected yet.
           // Disabled (clearOnType=false) in auto-save contexts like InlineLinesPanel to avoid
@@ -269,6 +344,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           // never the previously-committed label pre-filtered down to one match.
           setQuery('');
           setServerResults(null);
+          resetPagination();
           fetchServerResults('');
         }}
         onBlur={() => setTimeout(() => {
@@ -302,6 +378,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
             updateDropdownDirection();
             setQuery('');
             setServerResults(null);
+            resetPagination();
             fetchServerResults('');
           } else {
             setQuery('');
@@ -332,6 +409,19 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               e.currentTarget.scrollTop += e.deltaY;
             }
           }}
+          onScroll={(e) => {
+            // Infinite scroll for server-side results (ETP-4975): this outer `overflow-auto`
+            // div IS the real scrollable container for the options list. Guarded on
+            // `serverResults` (not just `hasMore`) so a scroll over the LOCAL catalog fallback
+            // (still loading the first server page, or no selectorUrl/token configured) never
+            // fires a server fetch — same 100px-from-bottom threshold as SelectorInput.jsx and
+            // CreatableSearchSelect.jsx.
+            if (serverResults == null) return;
+            const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+              fetchServerResults(query, offsetRef.current);
+            }
+          }}
         >
           {/* min-w-full w-max: sizes this inner wrapper to the widest option's natural content
               width (at least the panel's own width). Rows below are `w-full block` — 100% of
@@ -352,6 +442,17 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 {opt.name || opt.label || opt._identifier || opt.id}
               </button>
             ))}
+            {/* "Loading more" footer while a scroll-triggered next page fetches. Gated on
+                `serverResults != null` rather than a separate loading flag — that's also true
+                exactly while the INITIAL page is still in flight (serverResults stays null
+                until the first page resolves), so this never flashes during that load —
+                mirrors SelectorInput.jsx's `{hasMore && selectorUrl && (...)}` /
+                CreatableSearchSelect.jsx's `{serverSearch && !loading && hasMore && ...}` footer. */}
+            {serverResults != null && hasMore && (
+              <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">
+                {ui('loading')}
+              </div>
+            )}
           </div>
         </div>,
         document.body,
