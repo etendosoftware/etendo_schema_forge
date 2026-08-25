@@ -3,10 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  assertProductCodeMappedInHookSource,
-  assertResolveProductCodeFallsBackToDash,
-} from './testUtils/resolveProductCodeAssertions.js';
+import { registerResolveProductCodeHookTests } from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useInvoicePdf.js'), 'utf8');
@@ -210,17 +207,7 @@ describe('useInvoicePdf', () => {
       assert.doesNotMatch(src, /l\.orderedQuantity/);
     });
 
-    // ETP-4941 — the printed "CÓD." column must show the product SKU
-    // (product$_value), not the line number.
-    it('ETP-4941: maps productCode via the shared resolveProductCode helper', () => {
-      assertProductCodeMappedInHookSource(assert, src);
-    });
-
-    it('ETP-4941: resolveProductCode falls back to "—" (never the line index) when no SKU is available', () => {
-      // AC: a product with no SKU must render an empty/em-dash cell, not a digit
-      // indistinguishable from the original line-number bug.
-      assertResolveProductCodeFallsBackToDash(assert, sharedSrc);
-    });
+    registerResolveProductCodeHookTests(assert, src, sharedSrc);
 
     it('includes subtotalWithoutDiscount label key in labels object', () => {
       assert.match(src, /buildDocumentPdfLabels/, 'hook delegates base labels to buildDocumentPdfLabels');
