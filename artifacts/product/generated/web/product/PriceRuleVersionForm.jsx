@@ -12,5 +12,6 @@ const fields = [
 export default function PriceRuleVersionForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+PriceRuleVersionForm.fields = fields;
 
 // @sf-generated-end component:PriceRuleVersionForm

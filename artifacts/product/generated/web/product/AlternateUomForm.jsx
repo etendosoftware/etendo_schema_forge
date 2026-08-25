@@ -15,5 +15,6 @@ const fields = [
 export default function AlternateUomForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+AlternateUomForm.fields = fields;
 
 // @sf-generated-end component:AlternateUomForm
