@@ -11,7 +11,89 @@
 
 ---
 
-## 1. The two delivery stacks
+## 1. Map — who renders through the shared layout
+
+✅ = renders through `EmailLayout`, the shared template (ETP-5003).
+⬜ = still builds its own body.
+
+```mermaid
+graph LR
+  subgraph GO["Etendo GO — email contracts"]
+    subgraph ACCOUNT["Account / auth"]
+      A1["✅ company-invitation"]
+      A2["✅ new-account"]
+      A3["✅ environment-ready"]
+      A4["✅ reset-password"]
+      A5["✅ password-changed"]
+      A6["✅ login-alert<br/><i>no producer</i>"]
+    end
+    subgraph DOCS["Documents — F3 pending"]
+      D1["⬜ sales-invoice-send"]
+      D2["⬜ sales-order-send"]
+      D3["⬜ sales-quotation-send"]
+      D4["⬜ goods-shipment-send"]
+      D5["⬜ purchase-order-send"]
+      D6["⬜ return-to-vendor-send"]
+    end
+  end
+
+  subgraph CORE["Etendo Core — SMTP"]
+    C1["⬜ Print &amp; Send"]
+    C2["⬜ portal: new user<br/><i>F5 pending</i>"]
+    C3["⬜ portal: account cancelled<br/><i>F5 pending</i>"]
+    C4["⬜ alert rules"]
+  end
+
+  subgraph MODULES["Modules — out of scope"]
+    M1["⬜ TicketBAI error"]
+    M2["⬜ currency sync failure"]
+    M3["⬜ SII report"]
+    M4["⬜ scheduled reports"]
+  end
+
+  LAYOUT["EmailLayout<br/>shared template"]
+  PROVIDER["API Gateway<br/>provider"]
+  SMTP["SMTP"]
+
+  A1 --> LAYOUT
+  A2 --> LAYOUT
+  A3 --> LAYOUT
+  A4 --> LAYOUT
+  A5 --> LAYOUT
+  A6 --> LAYOUT
+  LAYOUT --> PROVIDER
+
+  D1 --> PROVIDER
+  D2 --> PROVIDER
+  D3 --> PROVIDER
+  D4 --> PROVIDER
+  D5 --> PROVIDER
+  D6 --> PROVIDER
+
+  C1 --> SMTP
+  C2 --> SMTP
+  C3 --> SMTP
+  C4 --> SMTP
+  M1 --> SMTP
+  M2 --> SMTP
+  M3 --> SMTP
+  M4 --> SMTP
+
+  SMTP -. "no SMTP configured:<br/>GoProviderEmailSender" .-> PROVIDER
+
+  classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef todo fill:#f1f5f9,stroke:#94a3b8,color:#334155
+  classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
+  class A1,A2,A3,A4,A5,A6 done
+  class D1,D2,D3,D4,D5,D6,C1,C2,C3,C4,M1,M2,M3,M4 todo
+  class LAYOUT,PROVIDER,SMTP hub
+```
+
+**6 of 20 today.** F3 adds the six document emails and F5 the two portal ones, for 14 — the agreed
+scope. The four module emails and the alert rules stay on their own bodies by decision, not by
+omission.
+
+## 2. The two delivery stacks
 
 | | Stack A — GO email contracts | Stack B — Core SMTP |
 |---|---|---|
@@ -29,7 +111,7 @@ template). It is a *fallback, not an override* — SMTP, when configured, still 
 
 ---
 
-## 2. Master table — every email
+## 3. Master table — every email
 
 ### 2.A — Etendo GO: document emails ("send this invoice to the customer")
 
@@ -95,7 +177,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 3. Where does the format live? (the question behind the question)
+## 4. Where does the format live? (the question behind the question)
 
 | Format source | Which emails | What it means for changing the copy |
 |---|---|---|
@@ -114,7 +196,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ---
 
-## 4. Related existing docs
+## 5. Related existing docs
 
 - `modules/com.etendoerp.go/docs/transactional-email-contracts.md`
 - `modules/com.etendoerp.go/docs/document-email-contract-implementation.md`
