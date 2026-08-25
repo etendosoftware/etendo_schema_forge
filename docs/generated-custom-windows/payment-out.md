@@ -203,9 +203,10 @@ once the withdrawal is recorded. Labelling it "Pago depositado" was therefore wr
 the money has not left the account — and visibly wrong for a Salt Edge transfer, which sits in `PPM`
 for the whole wait between the bank authorizing it and the funds actually moving.
 
-The accounts Etendo Go pays from over PIS are configured **without Automatic Withdrawn** precisely so
-the transaction only appears on execution, which is what makes `PPM` a reliable "in progress" signal
-here rather than an edge case.
+The bank-transfer payment method is configured **without Automatic Withdrawn** precisely so the
+transaction only appears on execution, which is what makes `PPM` a reliable "in progress" signal here
+rather than an edge case. Since **ETP-4891** that holds for every account, connected or not — it is a
+property of the method, not of the account's bank connection (see `purchase-invoice.md`).
 
 Three places in this window changed:
 
