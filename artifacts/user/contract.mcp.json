@@ -1,7 +1,8 @@
 {
-  "version": "0.21.1",
+  "version": "0.24.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "contractChecksum": "ac2e18f50a4b14be",
+  "updatedAt": "2026-08-20T15:39:16.471Z",
+  "contractChecksum": "f26d6514b2858ce6",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -233,6 +234,9 @@
             "defaultValue": "N"
           },
           "description": {},
+          "active": {
+            "required": true
+          },
           "businessPartner": {},
           "email": {
             "required": true
@@ -313,6 +317,7 @@
     "minimumCreate": {
       "headerFields": [
         "name",
+        "active",
         "email"
       ],
       "lineFields": [
@@ -388,6 +393,7 @@
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
           "name",
+          "active",
           "email"
         ]
       }
@@ -396,5 +402,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "04aa2813026ba774"
+  "checksum": "2a405710a28dd162"
 }

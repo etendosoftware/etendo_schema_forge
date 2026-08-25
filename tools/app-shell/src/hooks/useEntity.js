@@ -740,8 +740,25 @@ export async function resolveSavedRecordAfterSave(saved, {
     }
 }
 
+// ETP-4830 — stable id for the generic post-save toast. Any caller that needs to
+// REPLACE this toast with its own (e.g. a window's `onAfterCreate` showing a custom
+// "record created, do X next" message) MUST pass this same id to `toast.success()`
+// rather than calling `toast.dismiss()` first: sonner's `ToastState.create()` treats
+// a toast whose id already exists as an in-place UPDATE (one synchronous `publish`,
+// same code path as a fresh toast — see node_modules/sonner's `Observer.create`),
+// while `toast.dismiss()` with no id schedules its removal via `requestAnimationFrame`
+// on a DIFFERENT internal timer than the `setTimeout` a subsequent `toast.success()`
+// uses to add itself — two independently-scheduled callbacks with no ordering
+// guarantee between them. Calling dismiss() then success() back-to-back (as the
+// User window's onAfterCreate originally did) raced exactly that: on a real page,
+// with a route navigation and a heavier re-render immediately following in the same
+// tick, the dismiss-then-add race can resolve so the replacement toast never mounts.
+// Passing the SAME id turns "dismiss the old one, show a new one" into a single
+// atomic update — no race window at all.
+export const RECORD_SAVE_TOAST_ID = 'record-save-toast';
+
 export function showSaveSuccessToast(silent, isNew, ui) {
-    if (!silent) toast.success(getSaveSuccessMessage(isNew, ui));
+    if (!silent) toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {

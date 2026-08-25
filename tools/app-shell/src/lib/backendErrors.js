@@ -77,6 +77,12 @@ const BACKEND_ERROR_MAP = {
     'backendError.cashCloseHasBankStatementLines',
   'Cash close is only available for cash-type financial accounts':
     'backendError.cashCloseOnlyForCashAccount',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-4830 BUG-1 guard) — hardcoded English
+  // literals, no AD_Message involvement, thrown when a PATCH explicitly sets active=false
+  // on the acting user's own record or the client's last remaining active admin.
+  'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
+  'Cannot deactivate the last active administrator for this client':
+    'backendError.cannotDeactivateLastAdmin',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -384,6 +390,25 @@ function translateParameterized(msg, t) {
   const translated = t(match.key, match.params);
   // Guard: if t() returns the key itself the translation is missing — keep original
   return (translated && translated !== match.key) ? translated : null;
+}
+
+export async function parseBackendErrorMessage(res) {
+  let raw;
+  try {
+    const data = await res.json();
+    // NEO Headless top-level format: { error: { message, status } }
+    if (data?.error?.message) raw = data.error.message;
+    else {
+      // Etendo JsonDataService format: { response: { error: { message } | string } }
+      const err = data?.response?.error;
+      if (err?.message) raw = err.message;
+      else if (typeof err === 'string') raw = err;
+      else if (data?.message) raw = data.message;
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return raw;
 }
 
 export function translateBackendError(msg, t) {

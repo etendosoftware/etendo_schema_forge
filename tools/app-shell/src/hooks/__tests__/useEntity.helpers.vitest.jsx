@@ -26,6 +26,7 @@ import {
   reportMissingRequiredFields,
   shouldRefetchAfterSave,
   showSaveSuccessToast,
+  RECORD_SAVE_TOAST_ID,
   isEmailField,
   getInvalidEmailFields,
   getInvalidWebsiteFields,
@@ -649,7 +650,10 @@ describe('useEntity helpers', () => {
   describe('showSaveSuccessToast', () => {
     it('shows toast when not silent', () => {
       showSaveSuccessToast(false, true, (k) => k);
-      expect(toast.success).toHaveBeenCalledWith('recordCreated');
+      // ETP-4830 — carries a stable id so a window's onAfterCreate can REPLACE this
+      // toast in place (see useEntity.js's own doc comment on RECORD_SAVE_TOAST_ID)
+      // instead of racing a dismiss() against a fresh toast.success() call.
+      expect(toast.success).toHaveBeenCalledWith('recordCreated', { id: RECORD_SAVE_TOAST_ID });
     });
 
     it('does not show toast when silent', () => {
@@ -661,7 +665,7 @@ describe('useEntity helpers', () => {
     it('shows recordSaved for existing record', () => {
       toast.success.mockClear();
       showSaveSuccessToast(false, false, (k) => k);
-      expect(toast.success).toHaveBeenCalledWith('recordSaved');
+      expect(toast.success).toHaveBeenCalledWith('recordSaved', { id: RECORD_SAVE_TOAST_ID });
     });
   });
 

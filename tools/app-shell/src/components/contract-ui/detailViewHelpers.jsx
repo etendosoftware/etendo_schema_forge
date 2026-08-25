@@ -11,6 +11,11 @@ import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+// Re-exported (not defined here) so this file's own React-component-heavy import
+// graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
+// like DataTable.jsx's inline-toggle error handling — that only need this one
+// pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
+export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -389,25 +394,6 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
   } else {
     return true;
   }
-}
-
-export async function parseBackendErrorMessage(res) {
-  let raw;
-  try {
-    const data = await res.json();
-    // NEO Headless top-level format: { error: { message, status } }
-    if (data?.error?.message) raw = data.error.message;
-    else {
-      // Etendo JsonDataService format: { response: { error: { message } | string } }
-      const err = data?.response?.error;
-      if (err?.message) raw = err.message;
-      else if (typeof err === 'string') raw = err;
-      else if (data?.message) raw = data.message;
-    }
-  } catch {
-    // Ignore non-JSON error bodies.
-  }
-  return raw;
 }
 
 export function getDocumentIds(recordId) {
