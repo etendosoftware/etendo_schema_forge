@@ -81,7 +81,10 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/accounts/account",
       "detailUrl": "/sws/neo/accounts/account/{id}",
-      "supportedFilters": []
+      "supportedFilters": [
+        "type",
+        "iBAN"
+      ]
     },
     "transaction": {
       "get": true,
@@ -141,13 +144,17 @@ export const api = {
     "clearedItems": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/clearedItems",
       "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [
@@ -615,19 +622,9 @@ export const api = {
   },
   "window": {
     "category": "finance"
-  },
-  "labelOverrides": {
-    "en_US": {
-      "pendingCount": "Pending"
-    },
-    "es_ES": {
-      "pendingCount": "Por conciliar"
-    }
   }
 };
 
-
-const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AccountPage
 export default function AccountPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
@@ -661,7 +658,6 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Financial_Account", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />
       </>
@@ -680,7 +676,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       hideListFilters
-      labelOverrides={labelOverrides}
+      listSortBy="name asc"
       {...props} window={effectiveWindow}
     />
   );

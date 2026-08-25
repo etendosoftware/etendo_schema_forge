@@ -344,7 +344,7 @@ describe('OnboardingWizard — createRecords flow', () => {
     });
   });
 
-  it('back button in DetailScreen returns to ConfirmScreen', async () => {
+  it('back button in DetailScreen goes to AppliedScreen (ETP-4783: records already created, cannot go back to wizard)', async () => {
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
@@ -353,7 +353,8 @@ describe('OnboardingWizard — createRecords flow', () => {
       expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText('fiscal.cancel'));
-    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.onboarding.confirm.title')).not.toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument();
   });
 });
 

@@ -328,7 +328,7 @@ Status is fetched by `useFiscalStatus(invoiceId, specName, profile, apiBaseUrl)`
 |--------|------|--------|----------|--------------|
 | SII | `sii-monitor` | `issuedInvoices` (then `receivedInvoices` fallback) | `aeatsiiInvoice` | `aeatsiiEstado` |
 | TBAI | `tbai-facturas-enviadas` | `sincronización` | `invoice` | `estado` |
-| Verifactu | `monitor-verifactu` | `facturasAceptadas` → `facturasParcialmenteAceptadas` → `facturasRechazadas` → `facturasInválidas` (first match) | `invoice` | `verifactuSendingStatus` |
+| Verifactu | `monitor-verifactu` | `facturasAceptadas` → `facturasParcialmenteAceptadas` → `facturasRechazadas` → `facturasInválidas` (first match) | `invoice` | `verifactuSendingStatus` — raw DB code (CO/AE/ER/IN/PE) is normalized through `VF_STATUS_MAP` to a StatusPill key (`accepted`/`partiallyAccepted`/`rejected`/`invalid`/`pending`) before rendering |
 
 No match → pill shows `PE` (SII/Verifactu) or `Pendiente` (TBAI). While fetching, rows show a skeleton shimmer.
 

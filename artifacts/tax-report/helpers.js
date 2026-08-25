@@ -12,3 +12,16 @@ function formatNumber(value) {
   if (isNaN(num)) return String(value);
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
 }
+
+// csvField is a report-specific extra (ETP-4899, same pattern as other reports'
+// csvField) — quotes a CSV field and doubles any embedded quote, only when the
+// value actually needs it (contains a comma/quote/newline). Used exclusively by
+// template-csv.hbs; the HTML/PDF/XLSX templates never need it.
+function csvField(value) {
+  if (value == null) return '';
+  var s = String(value);
+  if (/[",\n\r]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}

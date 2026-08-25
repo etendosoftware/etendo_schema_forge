@@ -76,13 +76,17 @@ export const api = {
     "productTransactions": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/warehouse/productTransactions",
       "detailUrl": "/sws/neo/warehouse/productTransactions/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "binContents": {
       "get": true,

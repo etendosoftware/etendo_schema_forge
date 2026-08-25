@@ -58,12 +58,12 @@ it never fails or rolls back the parent save request.
 |-------|-------|
 | `etsgSifTerritory` | Basque territory (`alava`, `bizkaia`, `gipuzkoa`) |
 | `tbaisystemdate` | TBAI system activation date |
-| `productionEnv` | Production vs test environment flag |
-| `invoiceDescription` | Default invoice description |
-| `uSEAsproductDesc` | Use product description as invoice description |
+| `productionEnv` | Production vs test environment flag — **managed in Etendo Classic only**; `TbaiSection` does not include this field in its PUT body so operator-set values are never overwritten |
+| `invoiceDescription` | Default invoice description — editable from `TbaiSection` |
+| `uSEAsproductDesc` | Use product description as invoice description — **managed in Etendo Classic only**; excluded from `TbaiSection` PUT body |
 | `autoSendInvoices` | Auto-send invoices to the tax authority |
 | `jasperreportPath` | Path to the Jasper report template |
-| `validatePreviousInvoice` | Validate previous invoice chain |
+| `validatePreviousInvoice` | Validate previous invoice chain — **managed in Etendo Classic only**; excluded from `TbaiSection` PUT body |
 
 ## See also
 

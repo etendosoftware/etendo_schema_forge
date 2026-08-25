@@ -131,11 +131,18 @@ async function installFinancialAccountMocks(page) {
   // on the query string so it never swallows the entity's other verbs/sub-paths.
   await page.route(/\/sws\/neo\/financial-account\/account\?/, async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    // The two specs name the pending counter differently and the fixture below is shared, so
+    // the W rows are mapped here rather than carrying both keys. The R spec hand-builds its
+    // JSON and kept the flat `pendingCount`; the W spec's generic CRUD derives its keys from
+    // the AD column, so the same value arrives as `eTGOPendingCount`.
+    const wRows = ACCOUNTS.map(({ pendingCount, ...rest }) => ({
+      ...rest, eTGOPendingCount: pendingCount,
+    }));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        response: { data: ACCOUNTS, totalRows: ACCOUNTS.length, summary: SUMMARY },
+        response: { data: wRows, totalRows: wRows.length, summary: SUMMARY },
       }),
     });
   });
