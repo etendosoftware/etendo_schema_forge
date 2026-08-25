@@ -202,7 +202,7 @@ function Bubble({ message, onQuickReply, getLocalImageUrl }) {
         <div className={`sc-bub-av${isHumanAgent ? ' human' : ''}`}>
           {isHumanAgent
             ? (message.senderInitials || message.senderName?.[0] || 'A')
-            : <ValerIATile size={20} radius={999} data-testid="ValerIATile__50ab90" />
+            : <ValerIATile size={28} radius={999} data-testid="ValerIATile__50ab90" />
           }
         </div>
       )}
@@ -462,11 +462,13 @@ function ConversationHeader({
           style={{ transform: 'rotate(180deg)' }}
           data-testid="ChevronRight__50ab90" />
       </button>
-      <div className={`sc-conv-av${isHuman ? ' human' : ''}`}>
-        {isHuman
-          ? (conversation?.assigneeInitials || assigneeName[0])
-          : <ValerIATile size={26} radius={999} data-testid="ValerIATile__50ab90" />
-        }
+      <div className="sc-conv-av-wrap">
+        <div className={`sc-conv-av${isHuman ? ' human' : ''}`}>
+          {isHuman
+            ? (conversation?.assigneeInitials || assigneeName[0])
+            : <ValerIATile size={32} radius={999} data-testid="ValerIATile__50ab90" />
+          }
+        </div>
         {!isClosed && <div className="sc-status-dot" />}
       </div>
       <div className="sc-grow">
@@ -655,6 +657,11 @@ export function ConversationView({
   // confirmation turn, Jira ticket transition) instead of a separate backend path.
   const handleEscalateToHuman = () => {
     playSendSound();
+    // Hide the bar the instant the user clicks it, rather than waiting for the full
+    // LLM + Jira round trip (a few seconds) to come back and flip assigneeKind — clicking
+    // this button IS the user's explicit confirmation to escalate, so there's no reason to
+    // keep showing "talk to a human" while that's already in flight.
+    setEscalateBarDismissed(true);
     onSend(ui('supportEscalateMessage'), []);
   };
 
@@ -805,7 +812,7 @@ export function ConversationView({
 
         {isSending && (
           <div className="sc-msg bot">
-            <div className="sc-bub-av"><ValerIATile size={20} radius={999} data-testid="ValerIATile__50ab90" /></div>
+            <div className="sc-bub-av"><ValerIATile size={28} radius={999} data-testid="ValerIATile__50ab90" /></div>
             <div className="sc-bubble">
               <span className="sc-typing"><i /><i /><i /></span>
             </div>
