@@ -175,13 +175,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       {/* Fiscal defaults (SII / TicketBAI) — grouped block, ETP-4784 part 2 UX fix */}
       <FiscalDefaultsSection
         data={data}
-        entity="businessPartner"
-        api={api}
-        token={token}
-        catalogs={catalogs}
         onChange={onChange}
-        editing={editing}
-        apiBaseUrl={apiBaseUrl}
         data-testid="FiscalDefaultsSection__d55d36" />
     </div>
   );

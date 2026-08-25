@@ -121,14 +121,19 @@ in `artifacts/organization/decisions.json`. `system` keeps them out of this wind
 auto-generated form (they carry no UI here) while making them available on the backend
 contract/API (`GET /sws/neo/organizaci-n/information/{orgId}`).
 
-**Why:** the Contacts window's `FiscalDefaultsSection` needs to know, per contact
-organization, whether SII and/or TicketBAI are actively configured, to gate its two
-conditional sub-blocks. Previously it inferred this by fetching and filtering the
-`sii-config`/`tbai-config` entity lists; these 3 flags are the authoritative,
-already-computed answer, so exposing them collapsed that detection to a single `getById`
-read. See `docs/generated-custom-windows/contacts.md` ("ETP-4784 part 4") for the consumer
-side. `etsgHasVfactuConfig` is exposed for a future Verifactu use case — nothing consumes it
-yet.
+**Why:** these 3 flags were originally added to support a design where the Contacts
+window's `FiscalDefaultsSection` would gate its "SII"/"TicketBAI" sub-blocks on whether
+the contact's organization actually had SII and/or TicketBAI configured — first via
+fetching and filtering the `sii-config`/`tbai-config` entity lists, later via these same
+flags for a cheaper single `getById` read. **That gating was reverted** — see
+`docs/generated-custom-windows/contacts.md` ("ETP-4784 part 3") — `FiscalDefaultsSection`
+today shows/hides its blocks purely on Classic-parity logic (`data.customer` for SII,
+always for TicketBAI) and does not read these flags at all.
+
+The 3 flags are left exposed as `system` fields because they are legitimate,
+already-computed information on this window (server-maintained per-org config state),
+useful for a future consumer (e.g. a Verifactu-gating use case) — not because anything
+reads them from Contacts today.
 
 No frontend change was needed on this window itself — `system` fields are excluded from
 `frontendContract`/the generated form by design, only added to `backendContract`. Verified via
