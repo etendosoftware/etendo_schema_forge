@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, CircleAlert, CreditCard, Loader2, Rocket } from 'lucide-react';
 import { initialSetupSteps, applyProgressMessage, fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding';
@@ -220,6 +220,9 @@ export default function UpgradePage() {
   // legitimate upgrade.
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
+  // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
+  // the usual cause is a transient/auth error, not an account without environments.
+  const [lookupAttempt, setLookupAttempt] = useState(0);
   const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
@@ -245,12 +248,15 @@ export default function UpgradePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [lookupAttempt]);
 
-  // Fires once accountState settles ('loading' happens exactly once at mount),
-  // reporting which branch the user actually landed on.
+  // Fires once accountState first settles, reporting which branch the user actually landed on.
+  // Guarded by a ref because a retry moves accountState back through 'loading' — a second
+  // "page viewed" would inflate the metric for what is still one page view.
+  const pageViewReported = useRef(false);
   useEffect(() => {
-    if (accountState === 'loading') return;
+    if (accountState === 'loading' || pageViewReported.current) return;
+    pageViewReported.current = true;
     const branch = resolveUpgradePageViewBranch(accountState, environments);
     emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_PAGE_VIEWED, { branch });
   }, [accountState, environments]);
@@ -513,6 +519,42 @@ export default function UpgradePage() {
                 error={errors.tenantName}
                 ui={ui}
               />
+
+              {accountState === 'unavailable' && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2 rounded-md border p-3 text-sm"
+                  // Semantic status tokens, not palette literals — see
+                  // src/lib/__tests__/semanticThemeUsage.test.js, which fails the build on raw
+                  // Tailwind colour classes in application UI.
+                  style={{
+                    background: 'var(--status-warning-bg)',
+                    color: 'var(--status-warning-fg)',
+                    borderColor: 'var(--status-warning-border)',
+                  }}
+                  data-testid="upgrade-environments-unavailable"
+                >
+                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+                  <div className="space-y-2">
+                    {/* Without the environment list the convert-this-environment option cannot be
+                        offered, so the form silently collapses to "create a new tenant". Say so
+                        rather than letting the user pay for something they did not choose. */}
+                    <p>{ui('upgradeEnvironmentsUnavailable')}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAccountState('loading');
+                        setLookupAttempt(attempt => attempt + 1);
+                      }}
+                      data-testid="upgrade-environments-retry"
+                    >
+                      {ui('upgradeEnvironmentsRetry')}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {demoEnvironments.length > 0 && (
                 <fieldset className="space-y-3" data-testid="upgrade-target-choice">

@@ -18,6 +18,30 @@ describe('sliceLabelsPlugin', () => {
     assert.equal(plugin.buildStart.constructor.name, 'AsyncFunction');
   });
 
+  // ETP-4830 — buildStart alone only re-slices once, at dev-server boot. Editing a
+  // top-level locale file (e.g. adding a new genericLabels key) while `make dev` is
+  // already running never re-triggers it, so the derived core.<locale>.json stays
+  // silently stale for the rest of that session. configureServer watches the locale
+  // source files directly and re-slices on change instead.
+  it('exposes a configureServer hook that watches the locale source files', () => {
+    const plugin = sliceLabelsPlugin();
+    assert.equal(typeof plugin.configureServer, 'function');
+
+    const watched = [];
+    const listeners = {};
+    const fakeServer = {
+      watcher: {
+        add: (pattern) => watched.push(pattern),
+        on: (event, cb) => { listeners[event] = cb; },
+      },
+      ws: { send: () => {} },
+    };
+    plugin.configureServer(fakeServer);
+
+    assert.ok(watched.some((p) => p.endsWith('*.json')), 'should watch a *.json glob under the locales dir');
+    assert.equal(typeof listeners.change, 'function');
+  });
+
   it('is a fresh object per invocation (no shared mutable state)', () => {
     assert.notEqual(sliceLabelsPlugin(), sliceLabelsPlugin());
   });
