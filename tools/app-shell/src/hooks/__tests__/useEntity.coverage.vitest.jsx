@@ -5,7 +5,7 @@
  * isDirtyHeader, handleDelete errors, handleSave network errors, normalizeRows via $ref.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useEntity } from '../useEntity';
+import { useEntity, RECORD_SAVE_TOAST_ID } from '../useEntity';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
@@ -1437,8 +1437,10 @@ describe('useEntity — coverage paths', () => {
 
       await act(async () => { await result.current.handleSave(); });
 
-      // The i18n mock returns the key as-is; showSaveSuccessToast calls toast.success with 'recordSaved'
-      expect(toast.success).toHaveBeenCalledWith('recordSaved');
+      // The i18n mock returns the key as-is; showSaveSuccessToast calls toast.success
+      // with 'recordSaved', carrying the shared RECORD_SAVE_TOAST_ID (ETP-4830 — lets a
+      // window's onAfterCreate replace this toast in place instead of dismiss()+create()).
+      expect(toast.success).toHaveBeenCalledWith('recordSaved', { id: RECORD_SAVE_TOAST_ID });
     });
 
     it('falls back to generic success toast when messages key is absent', async () => {
@@ -1455,7 +1457,7 @@ describe('useEntity — coverage paths', () => {
 
       await act(async () => { await result.current.handleSave(); });
 
-      expect(toast.success).toHaveBeenCalledWith('recordSaved');
+      expect(toast.success).toHaveBeenCalledWith('recordSaved', { id: RECORD_SAVE_TOAST_ID });
     });
 
     it('does not call toast.success with i18n key when backend messages are present', async () => {
