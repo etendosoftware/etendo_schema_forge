@@ -13,5 +13,6 @@ const fields = [
 export default function CabeceraDeEmisorForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+CabeceraDeEmisorForm.fields = fields;
 
 // @sf-generated-end component:CabeceraDeEmisorForm

@@ -10,5 +10,6 @@ const fields = [
 export default function EmployeeAccountingForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+EmployeeAccountingForm.fields = fields;
 
 // @sf-generated-end component:EmployeeAccountingForm

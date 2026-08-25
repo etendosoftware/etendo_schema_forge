@@ -1965,10 +1965,10 @@
     "to": "0.45.0",
     "level": "additive",
     "reasons": [
-      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+      "Field \"orderedQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
     ],
     "author": "pipeline",
-    "date": "2026-08-24"
+    "date": "2026-08-20"
   },
   {
     "from": "0.45.0",
