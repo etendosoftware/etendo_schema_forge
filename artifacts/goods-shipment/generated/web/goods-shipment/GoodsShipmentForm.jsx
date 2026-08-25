@@ -19,6 +19,7 @@ const fields = [
 export default function GoodsShipmentForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+GoodsShipmentForm.fields = fields;
 GoodsShipmentForm.hasCollapsedFields = true;
 
 // @sf-generated-end component:GoodsShipmentForm

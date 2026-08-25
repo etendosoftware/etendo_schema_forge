@@ -13,5 +13,6 @@ const fields = [
 export default function LineTaxForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+LineTaxForm.fields = fields;
 
 // @sf-generated-end component:LineTaxForm

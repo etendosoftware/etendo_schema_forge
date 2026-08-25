@@ -11,5 +11,6 @@ const fields = [
 export default function YearForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+YearForm.fields = fields;
 
 // @sf-generated-end component:YearForm
