@@ -12,5 +12,6 @@ const fields = [
 export default function AssetsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+AssetsForm.fields = fields;
 
 // @sf-generated-end component:AssetsForm

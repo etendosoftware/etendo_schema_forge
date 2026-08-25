@@ -23,5 +23,6 @@ const fields = [
 export default function IntrastatForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+IntrastatForm.fields = fields;
 
 // @sf-generated-end component:IntrastatForm

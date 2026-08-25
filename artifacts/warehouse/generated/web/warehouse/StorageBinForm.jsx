@@ -17,5 +17,6 @@ const fields = [
 export default function StorageBinForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+StorageBinForm.fields = fields;
 
 // @sf-generated-end component:StorageBinForm

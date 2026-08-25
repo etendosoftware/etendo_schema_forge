@@ -15,5 +15,6 @@ const fields = [
 export default function BasicDiscountForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+BasicDiscountForm.fields = fields;
 
 // @sf-generated-end component:BasicDiscountForm
