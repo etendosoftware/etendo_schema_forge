@@ -54,7 +54,13 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});
   const id = data?.id || recordId;
-  const toggleKey = 'active';
+  // Keyed by id (matches the grid's own `${row.id}:${col.key}` inline-toggle
+  // convention, DataTable.jsx) — this component's instance is not guaranteed to
+  // remount when navigating between records in the same UserWindow instance (see
+  // this file's own doc comment on the appliedRoleIdsRef reset above), so a
+  // constant key would let one record's optimistic/saving toggle state bleed into
+  // the next record's render.
+  const toggleKey = `${id}:active`;
 
   if (!id || id === 'new') return null;
 

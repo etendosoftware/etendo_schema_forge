@@ -71,13 +71,42 @@ export default function sliceLabelsPlugin() {
     configureServer(server) {
       const localesDir = SLICER_PATHS.localesDir;
       server.watcher.add(join(localesDir, '*.json'));
-      server.watcher.on('change', async (file) => {
+
+      // In-flight/pending guard: some editors fire multiple `change` events per save
+      // (e.g. atomic write via temp-file-then-rename). Without this, overlapping
+      // `sliceAll()` calls could race writes to the shared generated slice files and
+      // spam `full-reload` messages. A change that arrives while a slice is already
+      // running is coalesced into a single trailing re-run instead of firing again.
+      let slicing = false;
+      let pending = false;
+
+      const runSlice = async (file) => {
+        slicing = true;
+        try {
+          const { sliceAll } = await import(slicerSpecifier());
+          const { windows, locales } = await sliceAll(SLICER_PATHS);
+          // eslint-disable-next-line no-console
+          console.log(`[slice-labels] ${basename(file)} changed — re-sliced ${windows} windows + core (${locales.join(', ')})`);
+          server.ws.send({ type: 'full-reload' });
+        } finally {
+          slicing = false;
+          if (pending) {
+            pending = false;
+            await runSlice(file);
+          }
+        }
+      };
+
+      server.watcher.on('change', (file) => {
         if (dirname(file) !== localesDir || !LOCALE_FILE_RE.test(basename(file))) return;
-        const { sliceAll } = await import(slicerSpecifier());
-        const { windows, locales } = await sliceAll(SLICER_PATHS);
-        // eslint-disable-next-line no-console
-        console.log(`[slice-labels] ${basename(file)} changed — re-sliced ${windows} windows + core (${locales.join(', ')})`);
-        server.ws.send({ type: 'full-reload' });
+        if (slicing) {
+          pending = true;
+          return;
+        }
+        runSlice(file).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[slice-labels] re-slice failed:', err);
+        });
       });
     },
   };
