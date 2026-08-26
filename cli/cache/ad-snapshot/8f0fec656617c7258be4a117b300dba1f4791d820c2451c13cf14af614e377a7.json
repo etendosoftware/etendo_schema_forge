@@ -130,7 +130,7 @@
       ]
     },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
+      "checksum": "579383eb8eec9ced73af772e77ed9866451449fa089460a1ecff25c5cfe6b580",
       "params": [
         "144"
       ],
@@ -980,6 +980,12 @@
           "ad_table_id": "209",
           "columnname": "Issummary",
           "position": "16"
+        },
+        {
+          "ad_column_id": "84155B8F80914418AB43194AE782BF72",
+          "ad_table_id": "209",
+          "columnname": "EM_Etgo_Issystemcategory",
+          "position": "17"
         },
         {
           "ad_column_id": "521F823119456C29E040007F01001B31",

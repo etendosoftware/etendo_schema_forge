@@ -67,6 +67,14 @@ if (typeof globalThis.window === 'undefined') {
 if (typeof globalThis.localStorage === 'undefined') {
   globalThis.localStorage = globalThis.window.localStorage;
 }
+// ETP-5002: sonner's toast.dismiss() schedules removal through requestAnimationFrame, and
+// showSaveSuccessToast now dismisses the save-blocking error toasts it supersedes. Stubbed
+// here with the file's other browser-API shims so the real dismissal path is exercised
+// rather than skipped — run synchronously, since these tests assert straight after the call.
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  globalThis.requestAnimationFrame = (cb) => { cb(0); return 0; };
+  globalThis.cancelAnimationFrame = () => {};
+}
 if (typeof globalThis.document === 'undefined') {
   const noopEl = {
     setAttribute: () => {},

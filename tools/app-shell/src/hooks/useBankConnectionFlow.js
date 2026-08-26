@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from './useBankConnectionActions';
 
 /**
@@ -43,7 +44,12 @@ export function useBankConnectionFlow({ onDone } = {}) {
         ? await createAndLink({ type: ctx.type, connectionId, saltEdgeAccountId })
         : await link({ financialAccountId: ctx.account.id, connectionId, saltEdgeAccountId });
       if (result?.warning) {
-        toast.warning(result.warning);
+        // ETP-4406/ETP-4891 warning surface: com.etendoerp.psd2 ships ~108 AD_Message rows with no
+        // real es_ES translation (the trl row is a verbatim copy of the English text — see
+        // backendErrors.js's PSD2_IBANAutoFillFailed entry), so Core always resolves English here
+        // regardless of session locale. Route it through the same frontend translation map every
+        // other untranslated backend message already uses instead of toasting it raw.
+        toast.warning(translateBackendError(result.warning, ui));
       }
       toast.success(ui('financeAccountsBankConnectionSuccess'));
       onDone?.();

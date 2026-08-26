@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { pickLabel } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 
 // ETP-4898 — report-trial-balance ("Balance de Sumas y Saldos") new
 // `accountLevel` parameter.
@@ -281,17 +282,21 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
 //
 // `activeFilters` is built inline inside the request handler and is not
 // exported. Rather than refactor production code just to make it reachable,
-// this extracts the REAL `.map()` callback source (and the real pickLabel())
-// from the plugin file and evaluates them — so the behavior under test is the
-// shipped code, not a copy of it.
+// this extracts the REAL `.map()` callback source from the plugin file and
+// evaluates it — so the behavior under test is the shipped code, not a copy.
+//
+// `pickLabel` used to be text-extracted from this same file too. It now lives
+// in the shared @etendosoftware/schema-forge-cli module (so the production
+// report-server gets it as well), so it is imported and injected instead —
+// which is strictly better: the test exercises the real shipped function
+// rather than a regex-scraped duplicate of it.
 
 function loadActiveFiltersBuilder() {
-  const pickLabelSrc = REPORT_API_SRC.match(/function pickLabel\(labelObj, locale, fallback = ''\) \{[\s\S]*?\n\}/);
-  assert.ok(pickLabelSrc, 'could not extract pickLabel() from report-api.js');
   const blockSrc = REPORT_API_SRC.match(/const activeFilters = Object\.entries\(params\)[\s\S]*?\n[ \t]*\}\);\n/);
   assert.ok(blockSrc, 'could not extract the activeFilters block from report-api.js');
   // eslint-disable-next-line no-new-func
-  return new Function('params', 'contract', 'locale', `${pickLabelSrc[0]}\n${blockSrc[0]}\nreturn activeFilters;`);
+  const build = new Function('params', 'contract', 'locale', 'pickLabel', `${blockSrc[0]}\nreturn activeFilters;`);
+  return (params, contract, locale) => build(params, contract, locale, pickLabel);
 }
 
 const buildActiveFilters = loadActiveFiltersBuilder();

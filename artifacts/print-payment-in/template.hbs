@@ -53,6 +53,7 @@
   {{!-- Document Header --}}
   <div class="doc-header">
     <div class="doc-company">
+      {{> document-branding}}
       <div class="doc-company-name">{{header.org_name}}</div>
       <div class="doc-company-info">
         {{#if header.org_taxid}}Tax ID: {{header.org_taxid}}<br>{{/if}}

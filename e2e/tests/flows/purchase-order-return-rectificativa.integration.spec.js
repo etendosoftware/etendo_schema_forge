@@ -4,7 +4,7 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
-  expectStatusPill, safeReload, VENDOR_FIXTURE_NAME,
+  expectStatusPill, safeReload, VENDOR_FIXTURE_NAME, waitForDocumentActionResponse,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -309,39 +309,58 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // Completing a rectificativa document was seen to sometimes fail with
       // "The Period does not exist or it is not opened" — a known environment
       // gap, NOT a bug in this test. If hit, report instead of failing.
-
+      //
+      // ARMED BEFORE THE CLICK, and the previous implementation's bug was
+      // exactly that it wasn't: it did `invoiceCompletedPill.waitFor({ state:
+      // 'visible' })` AFTER clicking, racing it against a periodError text
+      // wait. But `document-status-pill` is ALREADY visible when this step
+      // starts — it has read "Borrador" since the previous step's own
+      // assertion. `waitFor({ state: 'visible' })` only checks the element's
+      // CURRENT state; it does NOT wait for a *change* to that state. So that
+      // race leg resolved in milliseconds with "Borrador" (no match against
+      // /completado|completed/), the whole Promise.race settled on `null`
+      // almost instantly, and the code fell straight through to
+      // `page.goto(currentInvoiceUrl)` a few lines below — aborting the
+      // confirm PATCH/POST that was still in flight on the backend. The
+      // invoice was never actually confirmed; it stayed legitimately in
+      // Borrador. Waiting on the confirm request's own network response
+      // (which can only resolve once the backend has actually answered) is
+      // the only reliable way to know the confirm settled before navigating
+      // away. Do not reintroduce a DOM-visibility no-op here.
+      const confirmed = waitForDocumentActionResponse(page, 'purchase-invoice');
       await clickConfirmButton(page);
+      const confirmResponse = await confirmed;
 
-      const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
-      const invoiceCompletedPill = page.getByTestId('document-status-pill').first();
+      if (confirmResponse.status() >= 400) {
+        const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
+        const isPeriodError = await periodError.isVisible({ timeout: 10_000 }).catch(() => false);
 
-      const outcome = await Promise.race([
-        periodError.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'period-error').catch(() => null),
-        invoiceCompletedPill.waitFor({ state: 'visible', timeout: 60_000 })
-          .then(async () => (
-            (await invoiceCompletedPill.textContent() || '').match(/completado|completed/i) ? 'completed' : null
-          ))
-          .catch(() => null),
-      ]);
+        if (isPeriodError) {
+          await captureScreenshot(page, {
+            path: 'e2e/test-results/purchase-rectificativa-period-error.png',
+            fullPage: true,
+          }).catch(() => {});
+          test.info().annotations.push({
+            type: 'known-environment-issue',
+            description:
+              'Confirming the rectificative purchase invoice hit "The Period does not exist or '
+              + 'it is not opened" — a known, inconclusively root-caused environment gap (see '
+              + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
+              + 'already verified in Draft with the correct doc type and negative amounts above, '
+              + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
+          });
+          return;
+        }
 
-      if (outcome === 'period-error') {
-        await captureScreenshot(page, {
-          path: 'e2e/test-results/purchase-rectificativa-period-error.png',
-          fullPage: true,
-        }).catch(() => {});
-        test.info().annotations.push({
-          type: 'known-environment-issue',
-          description:
-            'Confirming the rectificative purchase invoice hit "The Period does not exist or '
-            + 'it is not opened" — a known, inconclusively root-caused environment gap (see '
-            + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
-            + 'already verified in Draft with the correct doc type and negative amounts above, '
-            + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
-        });
-        return;
+        // A real failure, not the known period gap — surface it clearly instead of
+        // letting a later assertion time out with no diagnostic value.
+        const body = await confirmResponse.text().catch(() => '<unreadable response body>');
+        throw new Error(
+          `Rectificative purchase invoice confirm failed with HTTP ${confirmResponse.status()}: ${body}`,
+        );
       }
 
-      // No period error surfaced — the confirm must have actually succeeded.
+      // Confirm response was successful — dismiss the success modal if present.
       const invoiceCloseBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
       if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await invoiceCloseBtn.click();

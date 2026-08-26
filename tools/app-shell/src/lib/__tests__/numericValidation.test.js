@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getNumericFieldError, numericFieldToastId } from '../numericValidation.js';
+import {
+  getNumericFieldError, numericFieldToastId,
+  trackSaveBlockToast, dismissSaveBlockToasts, resetSaveBlockToastTracking,
+} from '../numericValidation.js';
 
 // Pure, declarative numeric validation (min / integer) shared by EntityForm's
 // on-blur feedback and useEntity's save-block gate. ETP-4542.
@@ -93,5 +96,69 @@ describe('numericFieldToastId', () => {
 
   it('produces DIFFERENT ids for different keys (no cross-field dedup)', () => {
     assert.notEqual(numericFieldToastId('qty'), numericFieldToastId('rate'));
+  });
+});
+
+// ETP-5002 — save-blocking toast bookkeeping. ETP-4830 gave the success toast a FIXED id,
+// which sonner applies as an in-place UPDATE rather than a front insert, so a newer error
+// toast keeps `data-front` and the user who just fixed the value still sees the error.
+// The success path therefore has to retire the errors it supersedes.
+describe('save-block toast tracking', () => {
+  it('dismisses exactly the tracked ids, once each', () => {
+    resetSaveBlockToastTracking();
+    trackSaveBlockToast('numeric-field-usableLifeMonths');
+    trackSaveBlockToast('numeric-field-annualDepreciation');
+
+    const dismissed = [];
+    dismissSaveBlockToasts(id => dismissed.push(id));
+
+    assert.deepEqual(dismissed.sort(), [
+      'numeric-field-annualDepreciation',
+      'numeric-field-usableLifeMonths',
+    ]);
+  });
+
+  it('clears its set, so a second success does not re-dismiss stale ids', () => {
+    resetSaveBlockToastTracking();
+    trackSaveBlockToast('numeric-field-x');
+    dismissSaveBlockToasts(() => {});
+
+    const dismissed = [];
+    dismissSaveBlockToasts(id => dismissed.push(id));
+    assert.deepEqual(dismissed, [], 'a cleared set must not dismiss anything again');
+  });
+
+  it('dedupes a repeatedly-raised toast for the same field', () => {
+    resetSaveBlockToastTracking();
+    trackSaveBlockToast('numeric-field-usableLifeMonths');
+    trackSaveBlockToast('numeric-field-usableLifeMonths');
+
+    const dismissed = [];
+    dismissSaveBlockToasts(id => dismissed.push(id));
+    assert.deepEqual(dismissed, ['numeric-field-usableLifeMonths']);
+  });
+
+  it('ignores a falsy id rather than tracking an untargetable toast', () => {
+    resetSaveBlockToastTracking();
+    trackSaveBlockToast(undefined);
+    trackSaveBlockToast('');
+
+    const dismissed = [];
+    dismissSaveBlockToasts(id => dismissed.push(id));
+    assert.deepEqual(dismissed, [], 'the email/website/phone gates pass no id and stay untracked');
+  });
+
+  it('is a no-op when nothing is pending, without calling dismiss at all', () => {
+    resetSaveBlockToastTracking();
+    let calls = 0;
+    dismissSaveBlockToasts(() => { calls += 1; });
+    assert.equal(calls, 0, 'a bare dismiss() would also wipe unrelated backend messages');
+  });
+
+  it('tolerates a missing dismiss fn without throwing', () => {
+    resetSaveBlockToastTracking();
+    trackSaveBlockToast('numeric-field-x');
+    dismissSaveBlockToasts(undefined);
+    assert.ok(true);
   });
 });
