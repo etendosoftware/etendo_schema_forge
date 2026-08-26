@@ -87,10 +87,11 @@ import { X } from 'lucide-react';
  *     (ETP-4972 test-pass finding, present since the very first migration
  *     commit, not introduced by any later change).
  */
-function SelectionToolbarDivider() {
+function SelectionToolbarDivider({ 'data-testid': dataTestId }) {
   return (
     <span
       aria-hidden="true"
+      data-testid={dataTestId}
       // `self-stretch` (not a fixed h-* + self-center) so this fills the
       // row's full cross-axis height regardless of which sibling ends up
       // tallest — matches Figma's `height: Fill`. Figma's own outer frame
@@ -150,7 +151,7 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
         {segments.map((segment, i) => (
           <Fragment key={i}>
             {segment}
-            <SelectionToolbarDivider />
+            <SelectionToolbarDivider data-testid="SelectionToolbarDivider__b532f6" />
           </Fragment>
         ))}
         <button
