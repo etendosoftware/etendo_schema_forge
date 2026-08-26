@@ -403,13 +403,13 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   checked={testMode}
                   onChange={e => setTestMode(e.target.checked)}
                   data-testid="AeatSubmitFlow__testMode" />
-                {t('fm.aeat.test_mode.label') ?? 'Test mode (no certificate required)'}
+                {t('fm.aeat.test_mode.label') ?? 'Validate without filing'}
               </label>
               {testMode && (
                 <Banner
                   tone="warning"
                   icon={<TriangleAlert size={16} data-testid="TriangleAlert__aeat" />}
-                  title={t('fm.aeat.test_mode.warning') ?? 'In test mode the declaration is validated by AEAT but NOT submitted.'}
+                  title={t('fm.aeat.test_mode.warning') ?? 'This option only validates the file with the AEAT. The declaration is not filed.'}
                   data-testid="Banner__aeatTestWarning" />
               )}
 
