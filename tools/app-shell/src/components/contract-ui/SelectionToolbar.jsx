@@ -118,7 +118,13 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
           'selection-toolbar',
           // radius/md = 7px flat (Figma Dev Mode measurement off the close
           // button's own corner), not a stadium/pill — see file header note.
-          'pointer-events-auto flex items-center rounded-[7px]',
+          // h-[38px] fixed (Figma's own measured height) rather than letting
+          // whichever child happens to be tallest decide it — callers differ
+          // (ListView's counter row is h-10, DetailView's plain-text counter
+          // has no explicit height), so without a fixed height here the pill
+          // itself came out a visibly different size depending on which
+          // screen it was on (ETP-4972 live-QA finding).
+          'pointer-events-auto flex h-[38px] items-center rounded-[7px]',
           'bg-[hsl(var(--floating-toolbar-bg))] text-[hsl(var(--floating-toolbar-fg))]',
           // No vertical/right padding here anymore: the close button now
           // owns its own py-[7px]/pr-3 and is flush against the frame's

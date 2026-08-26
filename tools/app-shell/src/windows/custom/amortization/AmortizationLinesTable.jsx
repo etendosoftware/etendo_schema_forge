@@ -592,15 +592,17 @@ export default function AmortizationLinesTable({
         <span className="text-sm font-medium">
           {ui('selected', { count: selectedRows.size })}
         </span>
-        {/* ETP-4972 — icon-only, no visible "Eliminar" label: the applied Figma
-            instance has this button's Button Text property set to false. */}
+        {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label: the
+            applied Figma instance's own canvas render has no stroke around
+            this icon, just red icon color — ghost, like every other
+            secondary action. */}
         <button
           type="button"
           disabled={bulkDeleting}
           title={ui('delete')}
           aria-label={ui('delete')}
           onClick={bulkDelete}
-          className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
         </button>

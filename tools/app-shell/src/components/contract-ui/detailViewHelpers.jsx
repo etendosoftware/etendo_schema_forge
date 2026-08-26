@@ -561,7 +561,7 @@ export function renderDetailBulkActionBar({
                 setDeletingChildren(false);
               }
             }}
-            className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >
             <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />

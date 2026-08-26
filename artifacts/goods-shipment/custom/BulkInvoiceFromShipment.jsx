@@ -47,26 +47,30 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid hsl(var(--card))', paddingLeft: 8, marginLeft: 4 }}>
-        <button
-          type="button"
-          disabled={!canCreate}
-          onClick={() => setShowModal(true)}
-          title={tooltip}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
-          style={{
-            padding: '4px 12px', borderRadius: 6,
-            border: canCreate ? '1px solid var(--status-info-bg)' : '1px solid hsl(var(--card))',
-            background: canCreate ? 'hsl(var(--card))' : 'transparent',
-            color: canCreate ? 'var(--status-info-bg)' : 'hsl(var(--muted-foreground))',
-            cursor: canCreate ? 'pointer' : 'not-allowed',
-            opacity: canCreate ? 1 : 0.5,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          {ui('createInvoiceBtn')} ({invoiceableCount})
-        </button>
-      </div>
+      {/* ETP-4972 — the surrounding `borderLeft` wrapper was this component's
+          own hand-rolled divider, predating SelectionToolbar's automatic
+          per-segment divider; kept, it doubled up into two lines. The button
+          itself was styled for the old light selection bar (`hsl(var(--card))`
+          background) — on the new dark pill that rendered as a solid white
+          box. Restyled to the same ghost/icon-only pattern as every other
+          secondary action (Print, Clone, Confirm, kebab): transparent,
+          icon-only with a tooltip, no visible "(count)" suffix (the pill's
+          own counter segment already shows the selection count). */}
+      <button
+        type="button"
+        disabled={!canCreate}
+        onClick={() => setShowModal(true)}
+        title={canCreate ? `${ui('createInvoiceBtn')} (${invoiceableCount})` : tooltip}
+        aria-label={ui('createInvoiceBtn')}
+        className="inline-flex items-center justify-center rounded-md p-2 transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
+        style={{
+          color: canCreate ? 'hsl(var(--floating-toolbar-fg))' : 'hsl(var(--floating-toolbar-muted))',
+          cursor: canCreate ? 'pointer' : 'not-allowed',
+          opacity: canCreate ? 1 : 0.5,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </button>
 
       {showModal && createPortal(
         <BulkInvoiceModal

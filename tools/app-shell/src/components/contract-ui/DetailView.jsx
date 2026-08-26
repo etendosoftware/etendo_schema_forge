@@ -538,15 +538,16 @@ function secondaryAddLineBar(props) {
             closeTitle={props.closeTitle}
             data-testid="SelectionToolbar__fa3275">
             <span className="text-sm font-medium">{props.selectedLabel}</span>
-            {/* ETP-4972 — icon-only, no visible label: applied Figma instance
-                has this button's Button Text property set to false. */}
+            {/* ETP-4972 — icon-only, no border, no visible label: applied
+                Figma instance's own canvas render has no stroke around this
+                icon, just red icon color. */}
             <button
               type="button"
               disabled={props.secondaryDeleting[props.st.key] ?? false}
               title={props.deleteLabel}
               aria-label={props.deleteLabel}
               onClick={props.onDelete}
-              className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
             </button>
@@ -3549,7 +3550,7 @@ export function DetailView({
                                             }
                                           }}
                                           aria-label={ui('delete')}
-                                          className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                                          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
                                         </button>

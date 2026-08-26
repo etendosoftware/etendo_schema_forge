@@ -133,9 +133,11 @@
    hand-styled "Eliminar" buttons at every other SelectionToolbar call site
    (see e.g. AssetsAmortizationPanel.jsx, detailViewHelpers.jsx). Keyed off
    the existing, unchanged `bulk-delete-selected` data-testid (ListView.jsx)
-   rather than editing that call site's className. */
+   rather than editing that call site's className. No border: zoomed into the
+   applied Figma instance's own canvas render and confirmed the trash icon
+   has no stroke/box at all, just red icon color — ghost, like every other
+   secondary action here. */
 .selection-toolbar button[data-testid="bulk-delete-selected"] {
-  border-color: hsl(var(--destructive) / 0.5);
   color: hsl(var(--destructive));
 }
 

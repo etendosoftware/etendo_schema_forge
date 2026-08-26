@@ -983,14 +983,15 @@ export function ListView({
                     ETP-4871 — additionally disabled (with an explanatory tooltip) once the
                     selection includes a row the host's `isRowDeletable` rejects; absent, this
                     never differs from the pre-existing behavior. */}
-                {/* ETP-4972 — icon-only, no visible "Eliminar" label: the actual
-                    placed Figma instance (not the abstract component showcase) has
-                    this button's `Button Text` property set to false — confirmed in
-                    Dev Mode on the applied "Usuarios" mockup, the icon+text version
-                    was only the component's own illustrative default. */}
+                {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
+                    zoomed straight into the applied Figma instance's canvas
+                    render (not just the Dev Mode property panel) and confirmed
+                    no stroke/box around the trash icon at all — ghost, same as
+                    every other secondary action, distinguished only by its red
+                    icon color. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
                     disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}

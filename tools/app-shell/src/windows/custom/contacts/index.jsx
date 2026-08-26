@@ -89,7 +89,7 @@ export default function ContactsWindow(props) {
         onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
         title={ui('delete')}
         aria-label={ui('delete')}
-        className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10"
+        className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10"
       >
         <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__ef097c" />
       </button>
