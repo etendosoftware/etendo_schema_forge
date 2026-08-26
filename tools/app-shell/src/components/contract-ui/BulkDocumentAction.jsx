@@ -87,19 +87,22 @@ export default function BulkDocumentAction({
 
   return (
     <>
-      {/* ETP-4972 — ghost variant, icon-only, title tooltip only: only the
-          destructive "Eliminar" action keeps a visible text label and border
-          in the floating pill, per the Figma spec. Nothing here is hidden,
-          just narrower and borderless. */}
+      {/* ETP-4972 — ghost variant (transparent, no border, hover highlight),
+          but keeps its text label: Ale (design) confirmed icon-only is fine
+          for universally-recognized actions (print, clone, delete) but this
+          one needs it — the same checklist icon here means "Confirmar" in
+          some windows and "Procesado masivo" in others depending on
+          `labelKey`, so the icon alone isn't even consistently meaningful. */}
       <Button
         variant="ghost"
-        size="icon"
+        size="sm"
+        className="gap-1.5"
         title={ui(labelKey)}
-        aria-label={ui(labelKey)}
         onClick={handleOpen}
         disabled={running}
         data-testid="Button__90fe6a">
         <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__90fe6a" />
+        {ui(labelKey)}
       </Button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
         <DialogContent data-testid="DialogContent__90fe6a">

@@ -268,7 +268,12 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-foreground/30 ${getBackdropClass(animState)}`}
+      // z-[60], above SelectionToolbar's z-50 (ETP-4972 live-QA finding):
+      // both portal to document.body, so equal z-index left paint order to
+      // decide the winner, and the floating selection pill was showing on
+      // top of this preview when opened with rows still selected in the
+      // list behind it.
+      className={`fixed inset-0 z-[60] bg-foreground/30 ${getBackdropClass(animState)}`}
       onClick={triggerClose}
     >
       <div
