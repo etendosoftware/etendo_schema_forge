@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowUpRight } from 'lucide-react';
+import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
-import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 
 function PeriodLink({ label, onClick }) {
   return (
@@ -44,32 +44,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [barVisible, setBarVisible] = useState(false);
   const [barClosing, setBarClosing] = useState(false);
-  const [barRect, setBarRect] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const barAnchorRef = useRef(null);
-
-  useEffect(() => {
-    if (!barVisible) return;
-    const el = barAnchorRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-    }
-    window.addEventListener('scroll', measure, true);
-    window.addEventListener('resize', measure, true);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure, true);
-    };
-  }, [barVisible]);
 
   useEffect(() => {
     if (selectedRows.size > 0) {
@@ -281,20 +256,26 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   return (
     <div className="pt-2 pb-5">
       {renderBody()}
-      <div ref={barAnchorRef} style={{ height: 48 }} />
-      <LinesSelectionBar
+      <SelectionToolbar
         visible={barVisible}
         closing={barClosing}
-        barRect={barRect}
-        count={selectedRows.size}
-        selectedLabel={ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
-        deleting={deleting}
-        deleteTitle={ui('delete') ?? 'Eliminar'}
-        closeTitle={ui('close') ?? 'Cerrar'}
-        onDelete={handleDeleteSelected}
         onClose={clearSelection}
-        compact
-        data-testid="LinesSelectionBar__34159c" />
+        closeTitle={ui('close') ?? 'Cerrar'}
+        data-testid="SelectionToolbar__34159c">
+        <span className="text-sm font-semibold">
+          {ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
+        </span>
+        <button
+          type="button"
+          disabled={deleting}
+          title={ui('delete') ?? 'Eliminar'}
+          onClick={handleDeleteSelected}
+          className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
+          {ui('delete') ?? 'Eliminar'}
+        </button>
+      </SelectionToolbar>
     </div>
   );
 }

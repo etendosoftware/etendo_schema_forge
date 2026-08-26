@@ -17,3 +17,55 @@
 .dark {
   --scrim: 0 0% 0%;
 }
+
+/*
+ * Floating selection toolbar (ETP-4972) — the "Floating Toolbar | Dark" Figma
+ * component. It is a fixed dark pill regardless of the active app theme (it
+ * does NOT invert like --inverse does), so it needs its own theme-invariant
+ * tokens rather than --foreground/--background — those flip per theme and
+ * would leave the pill's own text nearly unreadable against its own
+ * background in one of the two themes. Same value in both blocks on purpose,
+ * mirroring --scrim above. Used by SelectionToolbar.jsx.
+ */
+:root,
+.dark {
+  --floating-toolbar-bg: 222 47% 11%;
+  --floating-toolbar-fg: 210 20% 98%;
+  --floating-toolbar-muted: 215 16% 72%;
+}
+
+/*
+ * Enter/exit slide animation for SelectionToolbar.jsx (ETP-4972). These class
+ * names were referenced by the pre-ETP-4972 LinesSelectionBar.jsx but never
+ * actually defined anywhere in the codebase (verified — no matching keyframes
+ * existed), so the bar never animated in or out. Authored from scratch here.
+ */
+@keyframes lines-bar-appear {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lines-bar-dismiss {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.lines-bar-appear {
+  animation: lines-bar-appear 200ms ease-out both;
+}
+
+.lines-bar-dismiss {
+  animation: lines-bar-dismiss 200ms ease-in both;
+}

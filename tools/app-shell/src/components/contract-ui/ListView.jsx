@@ -15,6 +15,7 @@ import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -928,7 +929,11 @@ export function ListView({
               wants no selection at all simply keeps `selectable={false}` on its own
               DataTable and never renders rows that can be picked. */}
           {selectedRows.length > 0 ? (
-            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
+            <SelectionToolbar
+              visible={selectedRows.length > 0}
+              onClose={clearSelection}
+              closeTitle={ui('close')}
+              data-testid="SelectionToolbar__620cbc">
               <div className="flex items-center gap-3 h-10">
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
@@ -996,7 +1001,7 @@ export function ListView({
                   reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
-            </div>
+            </SelectionToolbar>
           ) : !listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
