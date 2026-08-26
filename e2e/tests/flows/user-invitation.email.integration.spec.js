@@ -122,7 +122,19 @@ async function loginAsAdmin(request, configuredCredentials = onboardingCredentia
   const environmentsText = await environmentsResponse.text();
   expect(environmentsResponse.status(), environmentsText).toBe(200);
   const environmentsBody = JSON.parse(environmentsText);
-  const environment = environmentsBody?.environments?.find((item) => item.adminUserId);
+  // ETP-4894: once an account belongs to 2+ clients (e.g. after accepting a
+  // cross-client invitation), `environments` holds one entry per client and a
+  // plain "first truthy adminUserId" pick can land on either admin's
+  // environment for BOTH accounts (backend sorts by plan tier then
+  // clientName, not by which environment is this account's "home" one). Each
+  // environment's `adminUser` is always the bare account login email (see
+  // `EtendoGoJwtDalHelper#buildEnvironmentJson` -> `FIELD_ADMIN_USER`, set
+  // from `environmentUser.getUsername()`), so prefer the environment whose
+  // adminUser matches this call's own credentials — falling back to the old
+  // "first truthy adminUserId" behavior for single-environment accounts.
+  const environment = environmentsBody?.environments?.find(
+    (item) => item.adminUser?.toLowerCase() === credentials.email.toLowerCase(),
+  ) || environmentsBody?.environments?.find((item) => item.adminUserId);
   expect(environment?.adminUserId, environmentsText).toEqual(expect.any(String));
 
   const neoLoginResponse = await request.get(
