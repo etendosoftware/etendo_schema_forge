@@ -20,6 +20,12 @@ import {
 // the same QR.
 
 const ARTIFACTS_DIR = fileURLToPath(new URL('../../../artifacts', import.meta.url));
+const REPORT_TEMPLATES_DIR = fileURLToPath(new URL('../../../templates/reports', import.meta.url));
+
+function expandDocumentPartials(source) {
+  const branding = readFileSync(join(REPORT_TEMPLATES_DIR, 'document-branding.hbs'), 'utf8');
+  return source.replace(/\{\{>\s*document-branding\s*\}\}/g, branding);
+}
 
 describe('buildDocumentQrText', () => {
   const fullHeader = {
@@ -172,7 +178,9 @@ describe('print-* artifacts — QR is data, never a helper', () => {
 });
 
 describe('document template render (print-sales-invoice, dev HTML path)', () => {
-  const templateContent = readFileSync(join(ARTIFACTS_DIR, 'print-sales-invoice', 'template.hbs'), 'utf8');
+  const templateContent = expandDocumentPartials(
+    readFileSync(join(ARTIFACTS_DIR, 'print-sales-invoice', 'template.hbs'), 'utf8'),
+  );
   const helpersPath = join(ARTIFACTS_DIR, 'print-sales-invoice', 'helpers.js');
   const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
 

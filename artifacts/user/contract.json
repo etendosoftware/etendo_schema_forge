@@ -1,7 +1,8 @@
 {
-  "version": "0.21.1",
+  "version": "0.24.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "checksum": "ac2e18f50a4b14be",
+  "updatedAt": "2026-08-20T15:39:16.471Z",
+  "checksum": "f26d6514b2858ce6",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -65,6 +66,10 @@
             "section": "security",
             "validation": {
               "maxLength": 255
+            },
+            "displayLogic": {
+              "js": "!!record.id",
+              "evaluable": true
             }
           },
           {
@@ -105,6 +110,26 @@
             }
           },
           {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "security",
+            "gridOrder": 5,
+            "inlineToggle": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
             "name": "businessPartner",
             "apiKey": "businessPartner",
             "column": "C_BPartner_ID",
@@ -137,6 +162,10 @@
             "validation": {
               "required": true,
               "maxLength": 255
+            },
+            "readOnlyLogic": {
+              "js": "!!record.id",
+              "evaluable": true
             }
           },
           {
@@ -858,7 +887,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1684,6 +1713,22 @@
         "description": "Default value for 'locked' in user should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-user-password",
+        "category": "displaylogic-evaluable",
+        "entity": "user",
+        "field": "password",
+        "runner": "node",
+        "description": "Display logic for 'password' in user should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-user-password",
+        "category": "displaylogic-valid",
+        "entity": "user",
+        "field": "password",
+        "runner": "node",
+        "description": "Display logic for 'password' in user should be valid JS"
+      },
+      {
         "id": "t-field-presence-emailConfiguration-active",
         "category": "field-presence",
         "entity": "emailConfiguration",
@@ -1802,6 +1847,14 @@
         "field": "testSuccessful",
         "runner": "node",
         "description": "Field 'testSuccessful' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-field-presence-user-active",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in user"
       },
       {
         "id": "t-field-presence-user-businessPartner",
@@ -2052,6 +2105,14 @@
         "description": "Field 'testSuccessful' should have type 'boolean' in emailConfiguration"
       },
       {
+        "id": "t-field-type-user-active",
+        "category": "field-type",
+        "entity": "user",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in user"
+      },
+      {
         "id": "t-field-type-user-businessPartner",
         "category": "field-type",
         "entity": "user",
@@ -2178,6 +2239,22 @@
         "field": "supervisor",
         "runner": "node",
         "description": "Field 'supervisor' should have type 'string' in user"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-user-email",
+        "category": "readonlylogic-evaluable",
+        "entity": "user",
+        "field": "email",
+        "runner": "node",
+        "description": "Read-only logic for 'email' in user should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-user-email",
+        "category": "readonlylogic-valid",
+        "entity": "user",
+        "field": "email",
+        "runner": "node",
+        "description": "Read-only logic for 'email' in user should be valid JS"
       },
       {
         "id": "t-rule-declared-AD-Client-of-Role",
@@ -2452,14 +2529,6 @@
         "description": "System field 'userContact' should exist in backend but not frontend for emailConfiguration"
       },
       {
-        "id": "t-system-field-user-active",
-        "category": "system-field",
-        "entity": "user",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for user"
-      },
-      {
         "id": "t-system-field-user-alternativePhone",
         "category": "system-field",
         "entity": "user",
@@ -2707,21 +2776,25 @@
       }
     ],
     "summary": {
-      "total": 143,
+      "total": 148,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 2,
         "default-value-type": 8,
-        "field-presence": 31,
-        "field-type": 31,
+        "displaylogic-evaluable": 1,
+        "displaylogic-valid": 1,
+        "field-presence": 32,
+        "field-type": 32,
+        "readonlylogic-evaluable": 1,
+        "readonlylogic-valid": 1,
         "rule-declared": 16,
         "searchable-filters": 3,
         "selector-endpoint": 7,
-        "system-field": 40,
+        "system-field": 39,
         "visibility": 2
       },
       "byRunner": {
-        "node": 143,
+        "node": 148,
         "junit": 0
       }
     }
