@@ -257,6 +257,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
           windowName={specName}
           token={token}
           pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
           data-testid="SendDocumentModal__90f59a" />
