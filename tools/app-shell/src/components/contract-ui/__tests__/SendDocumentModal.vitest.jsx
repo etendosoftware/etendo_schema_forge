@@ -1,7 +1,33 @@
 // Mock dependencies BEFORE any import
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
+
+// The modal GETs the contract's default subject/message before anything else (ETP-5003). Queue an
+// answer for it first, so the responses a test lines up still meet the requests it cares about.
+// The pre-filled copy lands asynchronously; an operator sees it before typing, so a test that
+// replaces it must wait for it too — otherwise it races the response and appends to it.
+async function waitForDefaultMessage(getTextarea, expected = 'Le enviamos su Factura de Venta INV-1.') {
+  await waitFor(() => expect(getTextarea()).toHaveValue(expected));
+}
+
+function queueDefaultsThen(subject = 'Factura de Venta #INV-1 — ACME', message = 'Le enviamos su Factura de Venta INV-1.') {
+  return global.fetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ response: { data: { subject, message } } }),
+  });
+}
+
+// ETP-5003 — the modal now also GETs the contract's default subject/message before the operator
+// sends, so the send request is no longer at a fixed call index. Find it by what it is.
+function sendRequestBody() {
+  const call = global.fetch.mock.calls.find(
+    ([url, init]) => String(url).endsWith('/send') && init?.method === 'POST',
+  );
+  if (!call) throw new Error('no send request was made');
+  return JSON.parse(call[1].body);
+}
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -214,7 +240,7 @@ describe('SendDocumentModal', () => {
 
   it('sends a contract command without provider payload fields', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -235,7 +261,7 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'doc-1',
@@ -255,7 +281,7 @@ describe('SendDocumentModal', () => {
   // POSTing base64 JSON to the retired /preview-file endpoint.
   it('caches the generated preview before sending when preview caching is enabled by default', async () => {
     const user = userEvent.setup();
-    global.fetch
+    queueDefaultsThen()
       .mockResolvedValueOnce({
         ok: true,
         blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
@@ -277,13 +303,11 @@ describe('SendDocumentModal', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('blob:test');
     });
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      2,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/doc-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      3,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
       expect.objectContaining({ method: 'POST' }),
     );
@@ -292,7 +316,7 @@ describe('SendDocumentModal', () => {
 
   it('routes sales order sends to the sales-order email contract', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -317,7 +341,7 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'order-1',
@@ -328,7 +352,7 @@ describe('SendDocumentModal', () => {
 
   it('routes sales quotation sends to the sales-quotation email contract', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -353,7 +377,7 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'quotation-1',
@@ -364,7 +388,7 @@ describe('SendDocumentModal', () => {
 
   it('shows throttled state from the email contract executor', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'THROTTLED', retryAfterSeconds: 30 } },
@@ -389,7 +413,7 @@ describe('SendDocumentModal', () => {
 
   it('shows duplicate state as a successful idempotent send even with non-2xx HTTP', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: false,
       status: 409,
       json: async () => ({
@@ -415,7 +439,7 @@ describe('SendDocumentModal', () => {
 
   it('shows unauthorized state from the email contract executor', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'UNAUTHORIZED' } },
@@ -440,7 +464,7 @@ describe('SendDocumentModal', () => {
 
   it('shows provider failure state from the email contract executor', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'PROVIDER_FAILED' } },
@@ -561,7 +585,7 @@ describe('SendDocumentModal — error resolver branches', () => {
   // BASE, so the preview cache fetch is skipped) and asserts the toast key.
   async function sendWith(data) {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: false,
       json: async () => ({ response: { data } }),
     });
@@ -745,6 +769,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     await user.type(subjectInput, 'Custom subject line');
     expect(subjectInput).toHaveValue('Custom subject line');
 
+    // This test queues no defaults, so the field stays empty and there is nothing to replace.
     const messageTextarea = getMessageTextarea();
     await user.type(messageTextarea, 'Please review this document');
     expect(messageTextarea).toHaveValue('Please review this document');
@@ -752,7 +777,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
 
   it('includes messageEdits in the send payload when the operator edits the message', async () => {
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -765,6 +790,10 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
       />,
     );
 
+    // ETP-5003 — the message arrives pre-filled with what the backend would send; replacing it
+    // means waiting for it and clearing first.
+    await waitForDefaultMessage(getMessageTextarea);
+    await user.clear(getMessageTextarea());
     await user.type(getMessageTextarea(), 'Please review this document');
     await user.click(getSendButton());
 
@@ -774,11 +803,12 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body.messageEdits).toBeTruthy();
     expect(body.messageEdits.message).toBe('Please review this document');
-    // Subject was not touched — its auto-derived default is carried alongside.
-    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
+    // Subject was not touched, so it travels as the backend's own default — round-tripping to the
+    // very value the backend would rebuild, rather than to a second one derived here (ETP-5003).
+    expect(body.messageEdits.subject).toBe('Factura de Venta #INV-1 — ACME');
   });
 
   it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
@@ -786,7 +816,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     // that a send where the operator never touched subject/message must stay
     // byte-identical to the legacy payload shape (no messageEdits key at all).
     const user = userEvent.setup();
-    global.fetch.mockResolvedValueOnce({
+    queueDefaultsThen().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -807,7 +837,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body.messageEdits).toBeUndefined();
   });
 });

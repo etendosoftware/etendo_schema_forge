@@ -30,6 +30,11 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
     recordId: documentId,
     intent: 'send-document',
   };
+  // ETP-5003 — without this the backend falls back to Spanish for every recipient, whatever
+  // locale the operator is working in.
+  if (options.language) {
+    command.language = options.language;
+  }
   // ETP-4717 — opt-in, mirrors recipientEdits: only present when the operator
   // actually changed subject/message away from their auto-derived defaults,
   // so an untouched send stays byte-identical with the legacy payload shape.
@@ -43,6 +48,35 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
   }
   command.idempotencyKey = `${contractName}:${documentId}:send:v1`;
   return command;
+}
+
+/**
+ * Reads the subject and message a document email would carry if the operator edits nothing.
+ *
+ * ETP-5003 — the modal used to derive its own subject from the menu label while the backend
+ * derived one from the message catalog, so the operator could read one subject on screen and the
+ * customer receive another. There is now one source, and this fetches it.
+ *
+ * Returns null when the defaults cannot be read; the caller keeps whatever it already had rather
+ * than blocking the send behind a non-essential request.
+ */
+export async function fetchDocumentEmailDefaults({ apiBaseUrl, token, windowName, documentId, language }) {
+  const contractName = resolveDocumentEmailContract(windowName);
+  const params = new URLSearchParams({ recordId: documentId });
+  if (language) {
+    params.set('language', language);
+  }
+  try {
+    const res = await fetch(
+      `${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/defaults?${params.toString()}`,
+      { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+    );
+    if (!res.ok) return null;
+    const data = await readEmailContractResponse(res);
+    return typeof data?.subject === 'string' ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function readEmailContractResponse(res) {
@@ -143,6 +177,7 @@ export async function sendDocumentEmail({
   pdfBlobUrl,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
@@ -160,7 +195,7 @@ export async function sendDocumentEmail({
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
+    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits, language })),
   });
   return readEmailContractResponse(res);
 }
