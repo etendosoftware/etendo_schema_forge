@@ -1588,13 +1588,17 @@ path** — no bespoke bulk-delete code in this window:
 | --- | --- |
 | Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
 | Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
-| Selection bar + "Eliminar seleccionados" | `ListView`, rendered **above** the `AccountsHeaderTable` slot |
+| Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
 | Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
 
 **How the flow behaves.** Tick one or more row checkboxes → the slot's own
-`AccountsToolbar` unmounts and `ListView`'s selection bar takes its place (one swap, not
-two stacked bars) → **Eliminar seleccionados (N)** opens the shared confirm dialog → on
-confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
+`AccountsToolbar` unmounts (it reads `ListView`'s `selectedRows` prop; see the load-bearing
+note below) while `ListView`'s floating `SelectionToolbar` pill appears bottom-center of the
+viewport (ETP-4972 — a true `position: fixed` portal, not anchored to any scrolled element,
+so it does not occupy the slot's own layout the way the retired in-flow bar did) → the
+icon-only red trash button (no "(N)" count in the button itself anymore — the pill's own
+counter segment shows it) opens the shared confirm dialog → on confirm one DELETE per row
+goes out in parallel, then a single toast reports the outcome:
 
 - **all succeeded** → list refetches, selection clears, toolbar comes back.
 - **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
@@ -1617,14 +1621,19 @@ same mechanics as the old open-reconciliations guard, just a stricter, real-dele
 That equivalence with the plain per-row `DELETE` is still *why* no bespoke
 `useBatchDeleteDialog` + mutation wiring was added here — unlike the **Movimientos**
 and **Extractos importados** detail tabs, which are not `ListView`s and therefore must keep
-their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
+their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`. (`BulkDeleteSelectionBar` was
+itself migrated onto the shared `SelectionToolbar` shell in ETP-4972 — it used to render as
+its own in-flow bar pinned above the tab's toolbar, the one selection bar in this window that
+had been missed in the original ETP-4972 floating-pill migration; it is now the same
+viewport-fixed floating pill as everywhere else, icon-only delete button, no separate X — see
+`docs/ui-customization.md` §9e.)
 
 **`isRowDeletable` (ETP-4871, generic `ListView` prop) gates the button itself for a mixed
 selection.** `windows/custom/financial-account/index.jsx` passes
 `isRowDeletable={(row) => row.deletable !== false}` to `AccountPage` (forwarded straight through
 to `ListView` via its `{...props}` spread). `ListView` computes, on every selection change, how
-many of the *currently selected* rows fail that predicate; if any do, **Eliminar seleccionados**
-disables and shows a tooltip (`bulkDeleteBlockedTooltip`, generic/entity-agnostic) naming how many
+many of the *currently selected* rows fail that predicate; if any do, the icon-only delete button
+disables and its tooltip switches to `bulkDeleteBlockedTooltip` (generic/entity-agnostic) naming how many
 are blocked, instead of letting the batch go out and resolving as a confusing partial failure. The
 prop is optional and defaults to "every row is deletable" — every other `ListView` window is
 unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
@@ -1654,8 +1663,9 @@ unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
 The wrapper (`windows/custom/financial-account/index.jsx`) also keeps `hidePrint` from
 `decisions.json`, which covers the Printer button. The selection bar's "Vista Previa" (eye)
 button was removed unconditionally from `ListView.jsx` in ETP-4644 — it no longer exists in
-any window, so this wrapper no longer needs a flag for it either. Net result: **Eliminar
-seleccionados** is the only action in the bar.
+any window, so this wrapper no longer needs a flag for it either. Net result: the icon-only
+delete button (title/aria-label "Eliminar", no visible text since ETP-4972) is the only
+action in the bar besides its own built-in close button.
 
 **Testids** for anyone writing specs against this: row `row-{id}` (its checkbox is the
 `Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
