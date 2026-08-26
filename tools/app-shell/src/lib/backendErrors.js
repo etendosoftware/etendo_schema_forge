@@ -371,7 +371,37 @@ function matchIbanCountryLengthMismatch(msg) {
   return { country, expected, actual };
 }
 
+/*
+ * Every parameterized matcher below shares one shape: it returns null on no-match, or an object
+ * whose fields ARE the interpolation params. So they dispatch off a table instead of a chain of
+ * near-identical if blocks — which is also what keeps this function under Sonar's cognitive
+ * complexity ceiling (javascript:S3776). The ETP-4891 sync matchers and the ETP-4896 country/IBAN
+ * ones landed on separate branches and together pushed the old chain to 16 against the 15 allowed;
+ * with a table, adding the next matcher is a row here and costs no complexity at all.
+ *
+ * ORDER IS SIGNIFICANT — it is the resolution precedence, preserved verbatim from the chain this
+ * replaced. `matchAccountNotFound` stays hand-written below because it is the one matcher that maps
+ * to two different keys, and omits a param, depending on what it found.
+ */
+const PARAMETERIZED_MATCHERS = [
+  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
+  [matchOrderNotFound, 'backendError.orderNotFound'],
+  [matchShipmentNotFound, 'backendError.shipmentNotFound'],
+  [matchCashCloseNoConcept, 'backendError.cashCloseNoConcept'],
+  [matchCashCloseBackdated, 'backendError.cashCloseDateBeforeLastClose'],
+  [matchCashCloseLineInClosedPeriod, 'backendError.cashCloseLineInClosedPeriod'],
+  [matchCountryNoIbanConfig, 'backendError.countryNoIbanConfig'],
+  [matchIbanPrefixCountryMismatch, 'backendError.ibanPrefixCountryMismatch'],
+  [matchIbanCountryLengthMismatch, 'backendError.ibanCountryLengthMismatch'],
+  [matchIbanAutoFillFailed, 'backendError.ibanAutoFillFailed'],
+  [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
+  [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
+  [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+];
+
 function resolveParameterizedMatch(msg) {
+  // Hand-written: two possible keys, and `group` must be absent from the params (not present and
+  // undefined) when the message carried no BP group.
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
     if (accountMatch.group !== null) {
@@ -383,87 +413,11 @@ function resolveParameterizedMatch(msg) {
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
   }
 
-  const invoiceLineMatch = matchInvoiceLineAlreadyInvoiced(msg);
-  if (invoiceLineMatch) {
-    return {
-      key: 'backendError.invoiceLineAlreadyInvoiced',
-      params: {
-        docNo: invoiceLineMatch.docNo,
-        invoiced: invoiceLineMatch.invoiced,
-        pending: invoiceLineMatch.pending,
-      },
-    };
-  }
-
-  const orderMatch = matchOrderNotFound(msg);
-  if (orderMatch) {
-    return { key: 'backendError.orderNotFound', params: { orderId: orderMatch.orderId } };
-  }
-
-  const shipmentMatch = matchShipmentNotFound(msg);
-  if (shipmentMatch) {
-    return { key: 'backendError.shipmentNotFound', params: { id: shipmentMatch.id } };
-  }
-
-  if (matchCashCloseNoConcept(msg)) {
-    return { key: 'backendError.cashCloseNoConcept', params: {} };
-  }
-
-  const backdatedMatch = matchCashCloseBackdated(msg);
-  if (backdatedMatch) {
-    return { key: 'backendError.cashCloseDateBeforeLastClose', params: { date: backdatedMatch.date } };
-  }
-
-  const closedPeriodMatch = matchCashCloseLineInClosedPeriod(msg);
-  if (closedPeriodMatch) {
-    return {
-      key: 'backendError.cashCloseLineInClosedPeriod',
-      params: { movement: closedPeriodMatch.movement },
-    };
-  }
-
-  const countryNoIbanMatch = matchCountryNoIbanConfig(msg);
-  if (countryNoIbanMatch) {
-    return {
-      key: 'backendError.countryNoIbanConfig',
-      params: { country: countryNoIbanMatch.country },
-    };
-  }
-
-  const ibanPrefixMatch = matchIbanPrefixCountryMismatch(msg);
-  if (ibanPrefixMatch) {
-    return { key: 'backendError.ibanPrefixCountryMismatch', params: { ...ibanPrefixMatch } };
-  }
-
-  const ibanLengthMatch = matchIbanCountryLengthMismatch(msg);
-  if (ibanLengthMatch) {
-    return { key: 'backendError.ibanCountryLengthMismatch', params: { ...ibanLengthMatch } };
-  }
-
-  const ibanAutoFillMatch = matchIbanAutoFillFailed(msg);
-  if (ibanAutoFillMatch) {
-    return { key: 'backendError.ibanAutoFillFailed', params: { iban: ibanAutoFillMatch.iban } };
-  }
-
-  const transactionsObtainedMatch = matchTransactionsObtained(msg);
-  if (transactionsObtainedMatch) {
-    return {
-      key: 'backendError.transactionsObtainedForAccount',
-      params: { account: transactionsObtainedMatch.account },
-    };
-  }
-
-  const noNewTransactionsMatch = matchNoNewTransactionsFound(msg);
-  if (noNewTransactionsMatch) {
-    return {
-      key: 'backendError.noNewTransactionsForAccount',
-      params: { account: noNewTransactionsMatch.account },
-    };
-  }
-
-  const syncFetchFailedMatch = matchSyncFetchFailed(msg);
-  if (syncFetchFailedMatch) {
-    return { key: 'backendError.syncFetchFailed', params: { detail: syncFetchFailedMatch.detail } };
+  for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
+    const match = matcher(msg);
+    if (match) {
+      return { key, params: { ...match } };
+    }
   }
 
   return null;
