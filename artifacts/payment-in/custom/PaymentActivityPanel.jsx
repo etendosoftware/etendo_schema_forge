@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUI } from '@/i18n';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const STATUS_LABELS = {
   RPPC: 'statusCleared',
@@ -81,7 +82,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
   useEffect(() => {
     if (!recordId || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = jsonHeaders();
 
     (async () => {
       try {
@@ -118,7 +119,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
   const saveNoteToDescription = useCallback(async (noteTextValue) => {
     if (!recordId || !token || !apiBaseUrl) return false;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = jsonHeaders();
 
     // Build updated description: append new timestamped note
     const timestamp = new Date().toISOString();
@@ -131,7 +132,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
         `${base}/payment-in/finPayment/${recordId}`,
         {
           method: 'PATCH',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({ description: updatedDesc }),
         },
       );

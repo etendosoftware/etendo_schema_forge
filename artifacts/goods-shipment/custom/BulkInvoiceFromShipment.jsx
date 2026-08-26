@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl }) {
   const ui = useUI();
@@ -101,10 +102,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const hdrs = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const hdrs = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,7 +168,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         try {
           const draftRes = await fetch(
             `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/checkDraftInvoice`,
-            { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id) }) },
+            { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ shipmentIds: shipments.map(s => s.id) }) },
           );
           if (draftRes.ok && !cancelled) {
             const draftData = (await draftRes.json())?.response?.data;
@@ -236,7 +234,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
       });
       const res = await fetch(
         `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/createDraftInvoice`,
-        { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id), lines: linesPayload }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ shipmentIds: shipments.map(s => s.id), lines: linesPayload }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import InventoryCreateListModal from './InventoryCreateListModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 function IconBtn({ label, onClick, disabled, children }) {
   const [rect, setRect] = useState(null);
@@ -68,7 +69,7 @@ export default function InventoryTopbarActions({ data, recordId, token, apiBaseU
     try {
       const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (!res.ok) {

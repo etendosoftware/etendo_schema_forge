@@ -10,6 +10,7 @@ import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -42,10 +43,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     token,
     apiBaseUrl,
   });
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     const handler = () => setShowConfirm(true);
@@ -70,7 +68,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           `${base}/return-to-vendor-shipment/returnToVendorShipment/_/action/availableReceiptLines`,
           {
             method: 'POST',
-            headers,
+            headers: writeHeaders(),
             body: JSON.stringify({ receiptId: recordId, businessPartner: bpId }),
           },
         );
@@ -88,7 +86,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     try {
       const res = await fetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/createPurchaseInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -312,7 +310,7 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
     try {
       const res = await fetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'CO' }) },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -463,7 +461,7 @@ function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST', headers });
+      const res = await fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST', headers: writeHeaders() });
       const json = await res.json();
       if (!res.ok) {
         setError(json?.response?.error?.message || ui('cloneReceiptError'));

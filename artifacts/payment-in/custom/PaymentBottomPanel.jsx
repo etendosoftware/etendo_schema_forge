@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -128,7 +129,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = jsonHeaders();
     let cancelled = false;
     (async () => {
       try {

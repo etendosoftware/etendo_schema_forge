@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import InventoryCreateListModal from './InventoryCreateListModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 const itemStyle = {
   width: '100%', textAlign: 'left', padding: '6px 12px',
@@ -23,7 +24,7 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
     try {
       const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (!res.ok) {

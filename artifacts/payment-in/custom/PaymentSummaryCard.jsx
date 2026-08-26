@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 const STATUS_LABEL_KEYS = {
   RPPC: 'statusCleared', DR: 'statusDraft', RPAP: 'statusAwaiting',
@@ -25,7 +26,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = jsonHeaders();
 
     (async () => {
       try {

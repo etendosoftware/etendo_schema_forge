@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function formatAmount(value, currency) {
   const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
@@ -52,10 +53,7 @@ export default function ApplyToInvoices({
     return apiBaseUrl.replace(/\/[^/]+$/, '');
   }, [apiBaseUrl]);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   // Fetch pending invoices when BP changes
   useEffect(() => {
@@ -171,7 +169,7 @@ export default function ApplyToInvoices({
         `${base}/payment-in/finPayment/${recordId}/action/applyToInvoices`,
         {
           method: 'POST',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({ invoices: selectedInvoices }),
         },
       );
@@ -186,7 +184,7 @@ export default function ApplyToInvoices({
         `${base}/payment-in/finPayment/${recordId}/action/aPRMProcessPayment`,
         {
           method: 'POST',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({}),
         },
       );

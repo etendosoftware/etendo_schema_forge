@@ -12,6 +12,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
@@ -32,10 +33,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const canCreateReturn = data?.canCreateReturn === true;
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   // ETP-4372 — source the same client-rendered delivery-note PDF the
   // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
@@ -58,7 +56,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           `${base}/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines`,
           {
             method: 'POST',
-            headers,
+            headers: writeHeaders(),
             body: JSON.stringify({ shipmentId: recordId }),
           },
         );
@@ -76,7 +74,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     try {
       const res = await fetch(
         `${base}/goods-shipment/goodsShipment/${recordId}/action/createDraftInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -303,7 +301,7 @@ function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirm
     try {
       const res = await fetch(
         `${base}/goods-shipment/goodsShipment/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'CO' }) },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => null);

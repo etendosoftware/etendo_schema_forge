@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { SquareCheckbox } from '@/windows/custom/shared/SquareCheckbox';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // Codes match the backend AD process param `QtyRange` — do NOT change them.
 const QTY_OPTIONS = [
@@ -28,10 +29,7 @@ export default function GenerateLinesModal({ recordId, apiBaseUrl, token, onClos
   const [submitting, setSubmitting] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     fetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`, { headers })
@@ -56,7 +54,7 @@ export default function GenerateLinesModal({ recordId, apiBaseUrl, token, onClos
       }
       const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/generateLines`, {
         method: 'POST',
-        headers,
+        headers: writeHeaders(),
         body: JSON.stringify(payload),
       });
       if (!res.ok) {

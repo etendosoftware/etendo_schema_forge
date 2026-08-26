@@ -9,6 +9,7 @@ import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
 import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
 import { useUI, useMenuLabel } from '@/i18n';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 function CopyIcon() {
   return (
@@ -43,10 +44,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [showReject, setShowReject] = useState(false);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   const status = data?.documentStatus;
 

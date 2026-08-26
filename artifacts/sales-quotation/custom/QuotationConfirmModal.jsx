@@ -3,6 +3,7 @@ import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -12,7 +13,6 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 export default function QuotationConfirmModal({
   quotationId,
   data,
-  token,
   apiBaseUrl,
   onClose,
   onSave,
@@ -26,10 +26,7 @@ export default function QuotationConfirmModal({
   const [lineCount, setLineCount] = useState(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   const [freshData, setFreshData] = useState(null);
 
@@ -108,7 +105,6 @@ export default function QuotationConfirmModal({
             const toCurrency = orgCurrencyId ?? orgCurrency;
             const rateData = await fetchOptionalJson(
               `${baseNeoUrl}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(docDate)}`,
-              token,
             );
             if (rateData && !rateData.hasRate) {
               setError(ui('noExchangeRateAvailable'));
@@ -122,7 +118,7 @@ export default function QuotationConfirmModal({
       if (selected === 'order') {
         const res = await fetch(
           `${entityUrl}/${quotationId}/action/Convertquotation`,
-          { method: 'POST', headers, body: JSON.stringify({ fieldValues: {} }) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ fieldValues: {} }) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -154,7 +150,7 @@ export default function QuotationConfirmModal({
               try {
                 const reactRes = await fetch(
                   `${baseNeoUrl}/sales-order/header/${order.id}/action/DocAction`,
-                  { method: 'POST', headers, body: JSON.stringify({ docAction: 'RE' }) },
+                  { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'RE' }) },
                 );
                 if (reactRes.ok) finalStatus = 'DR';
               } catch { /* best-effort */ }
@@ -175,7 +171,7 @@ export default function QuotationConfirmModal({
       } else {
         const res = await fetch(
           `${entityUrl}/${quotationId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);

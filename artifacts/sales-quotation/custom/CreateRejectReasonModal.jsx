@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Inline-create sub-modal opened from RejectQuotationModal when the user
@@ -16,7 +17,6 @@ export default function CreateRejectReasonModal({
   initialName,
   quotationId,
   apiBaseUrl,
-  token,
   onClose,
   onCreated,
 }) {
@@ -26,10 +26,7 @@ export default function CreateRejectReasonModal({
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -43,7 +40,7 @@ export default function CreateRejectReasonModal({
     try {
       const res = await fetch(
         `${apiBaseUrl}/quotation/${quotationId}/action/createRejectReason`,
-        { method: 'POST', headers, body: JSON.stringify({ name: trimmed }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ name: trimmed }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

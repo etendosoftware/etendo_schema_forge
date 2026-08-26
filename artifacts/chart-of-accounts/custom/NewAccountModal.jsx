@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
@@ -96,7 +97,7 @@ export default function NewAccountModal({
   useEffect(() => {
     if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
     fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: jsonHeaders(),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
@@ -218,10 +219,7 @@ export default function NewAccountModal({
     try {
       const res = await fetch(`${apiBaseUrl}/elementValue`, {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(),
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { getProgressTone } from '@/lib/progressTone';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 const CRITERIA = (field, value) =>
   encodeURIComponent(JSON.stringify([{ fieldName: field, operator: 'equals', value }]));
@@ -24,10 +25,7 @@ export default function PurchaseOrderDraftChips({ data, recordId, token, apiBase
     let cancelled = false;
 
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    const headers = jsonHeaders();
 
     Promise.all([
       fetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`, { headers })

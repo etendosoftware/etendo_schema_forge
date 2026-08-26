@@ -5,6 +5,7 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from '@/windows/custom/goods-receipt/RelatedDocuments';
 import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromPurchaseInvoiceModal from './ImportFromPurchaseInvoiceModal';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 export default function GoodsReceiptBottomPanel(props) {
   return <LinesBottomSection {...props} relatedDocuments={RelatedDocuments} showTotals={false} />;
@@ -18,7 +19,7 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   // Auto-open the correct modal when forceOpen is set (after save+navigate for new records).
   useEffect(() => {
@@ -110,7 +111,7 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   // Auto-open the correct modal when forceOpen is set (after save+navigate for new records).
   useEffect(() => {

@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Comment text mentioning the old header would satisfy a doesNotMatch on the raw
+// source, so the negative assertions below read the code only.
+function stripComments(text) {
+  return text.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GenerateLinesModal.jsx'), 'utf8');
 
@@ -58,8 +64,13 @@ describe('GenerateLinesModal — source contract', () => {
     assert.match(src, /method:\s*['"]POST['"]/);
   });
 
-  it('sends a Bearer token Authorization header', () => {
-    assert.match(src, /Authorization:\s*`Bearer\s*\$\{token\}`/);
+  it('proves its writes through the shared write builder, not a hand-built bearer', () => {
+    // ETP-4576 — this asserted `Authorization: `Bearer ${token}``. The call site no
+    // longer chooses a scheme: writeHeaders() resolves it and carries the CSRF proof
+    // the cookie session requires. The negative matters as much as the positive —
+    // a reintroduced bearer here is exactly the regression that answers 403.
+    assert.match(src, /writeHeaders\(\)/);
+    assert.doesNotMatch(stripComments(src), /Authorization:\s*`Bearer/);
   });
 
   it('guards against double submission while a request is in flight', () => {

@@ -4,6 +4,7 @@ import { LinesBottomSection, LinesEmptyState } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 import RelatedDocuments from './RelatedDocuments';
 import ImportFromReceiptModal from '@/windows/custom/return-to-vendor-shipment/ImportFromReceiptModal';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 export default function ReturnToVendorShipmentBottomPanel(props) {
   // Import-only lines (ETP-4462): this window sets `window.maxDetailLines: 0`,
@@ -58,7 +59,7 @@ function ReturnToVendorLinesEmptyState({ data, onAddLine, recordId, token, apiBa
   const [showModal, setShowModal] = useState(false);
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -122,7 +123,7 @@ const ReturnToVendorLineActions = forwardRef(function ReturnToVendorLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (!forceOpen) return;

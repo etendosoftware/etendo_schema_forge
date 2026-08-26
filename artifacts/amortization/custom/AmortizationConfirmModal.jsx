@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI, getStoredLocale } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, onClose }) {
   const ui = useUI();
@@ -12,13 +13,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
   const [invalidCount, setInvalidCount] = useState(0);
   const [missingPctCount, setMissingPctCount] = useState(0);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    // Propagate the UI locale so backend AD_Message translations match the
-    // language the user selected in the frontend.
-    'Accept-Language': getStoredLocale(),
-  }), [token]);
+  const headers = useMemo(() => ({ ...jsonHeaders(), 'Accept-Language': getStoredLocale() }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +64,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
     try {
       const res = await fetch(
         `${apiBaseUrl}/header/${recordId}/action/Processed`,
-        { method: 'POST', headers, body: JSON.stringify({ fieldValues: { Processed: 'Y' } }) },
+        { method: 'POST', headers: { ...writeHeaders(), 'Accept-Language': getStoredLocale() }, body: JSON.stringify({ fieldValues: { Processed: 'Y' } }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

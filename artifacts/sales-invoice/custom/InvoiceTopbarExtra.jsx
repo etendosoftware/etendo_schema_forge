@@ -7,6 +7,7 @@ import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -60,10 +61,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -131,9 +129,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     setShipmentCreating(true);
     try {
       const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = jsonHeaders();
       const res = await fetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
-        method: 'POST', headers, body: JSON.stringify({}),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({}),
       });
       const json = await res.json();
       const shipmentData = json?.response?.data;

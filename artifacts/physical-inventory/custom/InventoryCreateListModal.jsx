@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const QTY_OPTIONS = [
   { value: 'N', key: 'qtyNotZero' },
@@ -19,10 +20,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
   const [submitting, setSubmitting] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     fetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`, { headers })
@@ -44,7 +42,7 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
       }
       const res = await fetch(`${apiBaseUrl}/inventory/${inventoryId}/action/generateList`, {
         method: 'POST',
-        headers,
+        headers: writeHeaders(),
         body: JSON.stringify(body),
       });
       if (!res.ok) {

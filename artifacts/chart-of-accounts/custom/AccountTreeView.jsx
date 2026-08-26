@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // A tree needs its FULL leaf list upfront to know which top-level folders exist —
 // it can't discover them via ListView's incremental "scroll near bottom, load a bit
@@ -385,7 +386,7 @@ export default function AccountTreeView({
       try {
         const res = await fetch(
           `${apiBaseUrl}/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+          { headers: jsonHeaders() },
         );
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();

@@ -12,8 +12,11 @@ describe('SendToEvaluationModal', () => {
     assert.match(src, /export default function SendToEvaluationModal/);
   });
 
-  it('accepts quotationId, data, token, apiBaseUrl, onClose props', () => {
-    assert.match(src, /quotationId.*token.*apiBaseUrl.*onClose/s);
+  it('accepts quotationId, data, apiBaseUrl, onClose props', () => {
+    // ETP-4576 — `token` was in this list. The credential is not threaded through
+    // props any more: the header builders resolve it, so a call site that cannot
+    // pass one cannot pass the wrong one.
+    assert.match(src, /quotationId.*apiBaseUrl.*onClose/s);
   });
 
   it('POSTs to DocAction endpoint on confirm', () => {

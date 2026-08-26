@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Comment text mentioning the old header would satisfy a doesNotMatch on the raw
+// source, so the negative assertions below read the code only.
+function stripComments(text) {
+  return text.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'InternalConsumptionActions.jsx'), 'utf8');
 
@@ -29,9 +35,14 @@ describe('InternalConsumptionActions', () => {
     assert.match(src, /\/internalConsumption\/\$\{recordId\}\/action\/processNow/);
   });
 
-  it('uses method POST with an Authorization Bearer header', () => {
+  it('proves its writes through the shared write builder, not a hand-built bearer', () => {
     assert.match(src, /method:\s*'POST'/);
-    assert.match(src, /Authorization:\s*`Bearer \$\{token\}`/);
+    // ETP-4576 — this asserted `Authorization: `Bearer ${token}``. The call site no
+    // longer chooses a scheme: writeHeaders() resolves it and carries the CSRF proof
+    // the cookie session requires. The negative matters as much as the positive —
+    // a reintroduced bearer here is exactly the regression that answers 403.
+    assert.match(src, /writeHeaders\(\)/);
+    assert.doesNotMatch(stripComments(src), /Authorization:\s*`Bearer/);
   });
 
   it('sends a flat { action: VO } body (NOT the old CO process, NOT wrapped in fieldValues)', () => {

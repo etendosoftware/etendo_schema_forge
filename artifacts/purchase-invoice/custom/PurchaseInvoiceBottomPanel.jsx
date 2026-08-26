@@ -8,6 +8,7 @@ import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromGoodsReturnModal from './ImportFromGoodsReturnModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getApSubtype } from './purchaseInvoiceSubtype';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 /* eslint-disable react/prop-types */
 
@@ -39,7 +40,7 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
   const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (forceOpen) {
@@ -189,7 +190,7 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
   const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (forceOpen) {

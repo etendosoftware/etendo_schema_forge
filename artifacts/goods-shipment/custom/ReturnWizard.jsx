@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function MiniCheck({ checked, onChange }) {
   return (
@@ -102,7 +103,7 @@ export default function ReturnWizard({
       const orderId = shipmentData?.salesOrder;
       if (orderId && token && apiBaseUrl) {
         const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const headers = jsonHeaders();
         // Fetch order header for currency
         fetch(`${base}/sales-order/header/${orderId}`, { headers })
           .then(r => r.ok ? r.json() : null)
@@ -168,14 +169,14 @@ export default function ReturnWizard({
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = jsonHeaders();
       const payload = {
         lines: selectedLines.map((l) => ({ lineId: l.id, returnQuantity: quantities[l.id] })),
         reason,
       };
       const res = await fetch(
         `${apiBaseUrl}/goodsShipment/${shipmentData.id}/action/createReturn`,
-        { method: 'POST', headers, body: JSON.stringify(payload) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify(payload) },
       );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));

@@ -8,6 +8,7 @@ import ImportFromOrderModal from './ImportFromOrderModal';
 import ImportFromReturnShipmentModal from './ImportFromReturnShipmentModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getArSubtype } from './invoiceSubtype';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Sales Invoice bottom section. Delegates to the shared LinesBottomSection so
@@ -36,7 +37,7 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
   const arSubtype = getArSubtype(data);
   const isRectificativa = arSubtype === 'RECTIFICATIVA';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (forceOpen) {
@@ -187,7 +188,7 @@ const InvoiceLineActions = forwardRef(function InvoiceLineActions(
   const arSubtype = getArSubtype(data);
   const isRectificativa = arSubtype === 'RECTIFICATIVA';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (forceOpen) {

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const STORAGE_KEY = 'bulkActionResult';
 const COMPLETED = 'CO';
@@ -70,10 +71,7 @@ async function hasDraftShipment(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+  const headers = jsonHeaders();
   const isInvoice = action === 'createDraftInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -99,7 +97,7 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
 
       const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        headers: writeHeaders(),
         body: JSON.stringify({}),
       });
       if (!res.ok) {

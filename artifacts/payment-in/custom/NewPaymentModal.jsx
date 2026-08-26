@@ -5,6 +5,7 @@ import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function fmtDate(raw) {
   if (!raw) return '-';
@@ -23,7 +24,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   const navigate = useNavigate();
   const ui = useUI();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   const [mode, setMode] = useState('credit'); // 'credit' | 'invoice'
   const [saving, setSaving] = useState(false);
@@ -145,7 +146,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       }
 
       const res = await fetch(`${base}/sales-invoice/header/${invoiceId}/action/registerPayment`, {
-        method: 'POST', headers,
+        method: 'POST', headers: writeHeaders(),
         body: JSON.stringify({
           scheduleId,
           actual_payment: String(amount),
@@ -185,7 +186,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       if (description.trim()) body.description = description.trim();
 
       const res = await fetch(`${base}/payment-in/finPayment`, {
-        method: 'POST', headers, body: JSON.stringify(body),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify(body),
       });
       const resJson = await res.json().catch(() => null);
       if (!res.ok) throw new Error(resJson?.response?.message || resJson?.message || `Failed (${res.status})`);

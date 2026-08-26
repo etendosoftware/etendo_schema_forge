@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 const STATUS_LABELS = {
   RPPC: 'Payment Cleared',
@@ -34,7 +35,7 @@ export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
   useEffect(() => {
     if (!recordId || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = jsonHeaders();
 
     (async () => {
       try {

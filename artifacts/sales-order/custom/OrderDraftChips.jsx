@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { getProgressTone } from '@/lib/progressTone';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
   const ui = useUI();
@@ -20,10 +21,7 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
     if (!isCompleted || !recordId) return;
     let cancelled = false;
 
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    const headers = jsonHeaders();
 
     Promise.all([
       fetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`, { headers })

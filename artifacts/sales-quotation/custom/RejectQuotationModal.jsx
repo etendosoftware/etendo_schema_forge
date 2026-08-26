@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import CreateRejectReasonModal from './CreateRejectReasonModal';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Reject confirmation for Sales Quotation in Under Evaluation (UE).
@@ -37,10 +38,7 @@ export default function RejectQuotationModal({
   const blurTimeoutRef = useRef(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   // The selector URL mirrors the one EntityForm builds for the rejectReason
   // field (see tools/app-shell/src/components/contract-ui/EntityForm.jsx:626).
@@ -117,7 +115,7 @@ export default function RejectQuotationModal({
         `${entityUrl}/${quotationId}/action/rejectQuotation`,
         {
           method: 'POST',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({ rejectReason: selected.id }),
         },
       );

@@ -5,6 +5,7 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from './RelatedDocuments';
 import ImportFromSalesOrderModal from './ImportFromSalesOrderModal';
 import ImportFromSalesInvoiceModal from './ImportFromSalesInvoiceModal';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine, canAddLine, onSave, onRefresh, forceOpen, onForceOpenHandled }) {
   const ui = useUI();
@@ -20,10 +21,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   const handleImportOrderClick = async () => {
     if (onSave) {
@@ -117,10 +115,7 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   useEffect(() => {
     if (!forceOpen) return;

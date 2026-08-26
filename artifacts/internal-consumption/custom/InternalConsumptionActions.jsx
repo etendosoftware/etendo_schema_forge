@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * moreMenuContent (kebab) for Internal Consumption.
@@ -20,7 +21,7 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
     try {
       const res = await fetch(`${apiBaseUrl}/internalConsumption/${recordId}/action/processNow`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: writeHeaders(),
         body: JSON.stringify({ action: 'VO' }),
       });
       if (!res.ok) {

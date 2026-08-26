@@ -1,3 +1,5 @@
+import { readCredentialHeaders } from '@/lib/sessionHeaders.js';
+
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');
@@ -7,13 +9,9 @@ function detectBase() {
 const BASE = detectBase();
 const NEO_BASE = `${BASE}/sws/neo`;
 
-function getToken() {
-  return localStorage.getItem('sf_auth_token');
-}
-
 // Deliberately NOT `useDiscovery.js`'s `callWebhook()` (admin token via
 // `adminAuthHeaders()`, POST) — this fetch must run as the CURRENT logged-in
-// user's own role (`sf_auth_token`), since SFListMenu's whole point here is
+// user's own role (the session credential), since SFListMenu's whole point here is
 // returning a tree scoped to that role. Using the admin token would always
 // return the unfiltered tree, defeating useRoleMenu()'s purpose. Explorer's
 // own `fetchMenuTree` caller (`AddSpec.jsx`'s MenuSelector, admin-only dev
@@ -30,13 +28,13 @@ function getToken() {
 // changed.
 async function callMenuWebhook(params) {
   const url = `${NEO_BASE}/listmenu`;
-  const token = getToken();
   // No Content-Type: this is a GET with no body, and application/json isn't a
   // CORS-safelisted value — setting it unnecessarily triggers a preflight
   // OPTIONS request (and risks it failing) whenever VITE_API_BASE points at a
-  // different origin than the SPA.
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // different origin than the SPA. `readCredentialHeaders` is precisely that —
+  // the credential with no Content-Type — resolved from whichever scheme the
+  // backend runs (ETP-4576) instead of a token this module no longer holds.
+  const headers = readCredentialHeaders();
   const query = new URLSearchParams(params).toString();
   const res = await fetch(query ? `${url}?${query}` : url, { headers });
   const text = await res.text();

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export default function SendToEvaluationModal({
   quotationId,
   data,
-  token,
   apiBaseUrl,
   onClose,
 }) {
@@ -16,10 +16,7 @@ export default function SendToEvaluationModal({
   const [lineCount, setLineCount] = useState(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +68,7 @@ export default function SendToEvaluationModal({
     try {
       const res = await fetch(
         `${entityUrl}/${quotationId}/action/DocAction`,
-        { method: 'POST', headers, body: JSON.stringify({ fieldValues: {} }) },
+        { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ fieldValues: {} }) },
       );
       if (!res.ok) {
         const errJson = await res.json().catch(() => null);

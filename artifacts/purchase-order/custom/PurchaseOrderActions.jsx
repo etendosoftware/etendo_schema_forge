@@ -10,6 +10,7 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -56,10 +57,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const isCompleted = status === 'CO';
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -345,7 +343,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       try {
         const processRes = await fetch(
           `${orderUrl}/${orderId}/action/documentAction`,
-          { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'CO' }) },
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
@@ -372,7 +370,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     if (createReceipt && !receiptResult) {
       try {
         const res = await fetch(`${orderUrl}/${orderId}/action/createGoodsReceipt`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
@@ -396,7 +394,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     if (createInvoice && !invoiceResult) {
       try {
         const res = await fetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
@@ -647,7 +645,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
       if (createReceipt) {
         const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createGoodsReceipt`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
@@ -660,7 +658,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
       if (createInvoice) {
         const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
@@ -804,7 +802,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
     setLoading(true);
     setError(null);
     try {
-      const res  = await fetch(`${apiBaseUrl}/header/${orderId}/action/cloneRecord`, { method: 'POST', headers });
+      const res  = await fetch(`${apiBaseUrl}/header/${orderId}/action/cloneRecord`, { method: 'POST', headers: writeHeaders() });
       const json = await res.json();
       if (!res.ok) {
         setError(json?.response?.error?.message || ui('cloneOrderError'));
@@ -935,10 +933,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const [fetched, setFetched] = useState(null);
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => jsonHeaders(), []);
 
   useEffect(() => {
     if (!orderId) return;

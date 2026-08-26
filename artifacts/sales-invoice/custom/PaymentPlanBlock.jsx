@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -27,10 +28,7 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
   const [loaded, setLoaded] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (jsonHeaders()), []);
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = parseFloat(data?.grandTotalAmount) || 1;
 
