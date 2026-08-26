@@ -18307,6 +18307,7 @@
     "cpPisAuthorizedRegistered": "Pago registrado. Tu banco está procesando la transferencia.",
     "cpPisStillInProgress": "Tu banco sigue procesando la transferencia. El pago se actualizará solo.",
     "cpPisConnectionLost": "No se pudo consultar el estado — reintentando",
+    "cpPisVerifying": "Verificando el pago…",
     "cpPisRejectedNoPayment": "El banco rechazó la transferencia. No se creó ningún pago — podés intentar de nuevo.",
     "cpPisFailedError": "No se pudo completar la transferencia bancaria. Intenta nuevamente.",
     "cpPisWindowClosed": "Cerraste la ventana del banco antes de autorizar",
