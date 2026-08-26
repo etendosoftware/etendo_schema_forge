@@ -13,6 +13,10 @@ vi.mock('../BillingPreferencesForm', () => ({
   default: (props) => <div data-testid="billing-form" data-editing={String(!!props.editing)} />,
 }));
 
+vi.mock('../FiscalDefaultsSection', () => ({
+  default: () => <div data-testid="fiscal-defaults-section" />,
+}));
+
 // --- Import under test ---
 
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -81,5 +85,10 @@ describe('ContactsFinancialPanel', () => {
   it('shows billing preferences description', () => {
     render(<ContactsFinancialPanel {...defaultProps} />);
     expect(screen.getByText('billingPreferencesDesc')).toBeInTheDocument();
+  });
+
+  it('renders the fiscal defaults section', () => {
+    render(<ContactsFinancialPanel {...defaultProps} />);
+    expect(screen.getByTestId('fiscal-defaults-section')).toBeInTheDocument();
   });
 });

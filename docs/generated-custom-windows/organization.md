@@ -152,6 +152,34 @@ The same missing-default-IAE-activity condition is guarded on **both** entry poi
 Both guards share the identical shape: when `isLastPeriodOfYear(decl?.period)` (shared export in `fm303Layouts.js`, extracted from what used to be an inline check duplicated ad hoc) and an organization id is resolvable, each calls `GET /sws/neo/organization/actividadesDelIae?parentId=<orgId>` and runs the shared `isMissingDefaultIaeActivity(rows)` helper (exported from `AeatSubmitFlow.jsx`, imported by `FmModel303Page.jsx`) — same "default=true AND epiaeCode set" condition as above. If none qualifies, the action is blocked with a translated banner (`fm.aeat.error.missingDefaultIae`) plus a "Go to Organization" CTA (`fm.aeat.action.go_to_organization`) that navigates to `/organization`, instead of round-tripping to the backend for the raw `IndexOutOfBoundsException`. Both guards fail **open** on any fetch/network error (let the action proceed) rather than blocking an action that might otherwise succeed — the same reasoning `neo-headless.md` §5 documents for `NeoExchangeRateService.hasRate`.
 
 Both files read the organization id via `useAuth().selectedOrg?.id` (AuthContext), each wrapped in its own `try/catch` so the component still renders (guard simply skipped) when no `AuthProvider` is present — `AeatSubmitFlow.jsx` was previously 100%-provider-free and unit-tested that way, and `FmModel303Page.jsx`'s own `try { selectedOrg = useAuth().selectedOrg; } catch { selectedOrg = null; }` (next to its pre-existing `useNavigate()` guard, same pattern) preserves the same safety without adding a new required prop through `FiscalModelsPage.jsx` → `FmModel303Page.jsx` / `AeatSubmitFlow.jsx`.
+## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
+
+Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,
+`EM_Etsg_Has_Vfactu_Config` (server-maintained Y/N flags, one per fiscal system, on the
+`information` entity) — were promoted from `visibility: "discarded"` to `visibility: "system"`
+in `artifacts/organization/decisions.json`. `system` keeps them out of this window's
+auto-generated form (they carry no UI here) while making them available on the backend
+contract/API (`GET /sws/neo/organizaci-n/information/{orgId}`).
+
+**Why:** these 3 flags were originally added to support a design where the Contacts
+window's `FiscalDefaultsSection` would gate its "SII"/"TicketBAI" sub-blocks on whether
+the contact's organization actually had SII and/or TicketBAI configured — first via
+fetching and filtering the `sii-config`/`tbai-config` entity lists, later via these same
+flags for a cheaper single `getById` read. **That gating was reverted** — see
+`docs/generated-custom-windows/contacts.md` ("ETP-4784 part 3") — `FiscalDefaultsSection`
+today shows/hides its blocks purely on Classic-parity logic (`data.customer` for SII,
+always for TicketBAI) and does not read these flags at all.
+
+The 3 flags are left exposed as `system` fields because they are legitimate,
+already-computed information on this window (server-maintained per-org config state),
+useful for a future consumer (e.g. a Verifactu-gating use case) — not because anything
+reads them from Contacts today.
+
+No frontend change was needed on this window itself — `system` fields are excluded from
+`frontendContract`/the generated form by design, only added to `backendContract`. Verified via
+`make regen ONLY=organization` (contract shows the 3 fields as `visibility: "system"` under
+`backendContract.entities.information.fields`, absent from `frontendContract`) followed by
+`make regen ONLY=organization PUSH_TO_NEO=1`.
 
 ## Known gaps
 

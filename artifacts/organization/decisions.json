@@ -286,13 +286,16 @@
           "derivation": "fromConfig"
         },
         "etsgHasSIIConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "etsgHasTbaiConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "etsgHasVfactuConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "updated": {
           "visibility": "system",

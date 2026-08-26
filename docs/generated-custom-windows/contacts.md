@@ -321,3 +321,191 @@ itself is still frágil for other windows in principle, but tightening it for ev
 is a separate, cross-window concern with its own risk budget — out of scope here. Verified
 with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
 `statusField` resolves to `null` and the pill no longer renders on new or existing records.
+
+## ETP-4784 (part 2) — SII/TicketBAI Business Partner defaults exposed
+
+Three Classic Business Partner fields, used as **billing-time defaults** by the Etendo
+Classic AEAT SII / TicketBAI modules, are now exposed in the Go Contacts window. These are
+plain configuration values with **no callout/derivation logic of their own** on the Business
+Partner — they are only *read* later when an invoice is generated. Architecture investigation
+has **confirmed, by code inspection and live DB-trigger verification**, that consumption of
+these defaults at invoicing time already works automatically in Go with no additional code:
+the `aeatsii_invoice_trg` DB trigger was confirmed to exist with correct logic for reading
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`, and `XMLUtils.java` was confirmed to read the
+`tbaiIssimplifiedinv` field directly off the Business Partner at TBAI send time — both fire
+the same way regardless of whether the invoice originates in Classic or Go. **Not yet
+verified end-to-end through the Go UI** — that check requires a running Tomcat/Go
+environment, which was not available during this ticket's development, so it remains a
+pending manual verification (steps below) rather than a follow-up ticket.
+
+**Pending manual end-to-end verification (requires a live Go environment):**
+1. Start Tomcat / the local Go environment.
+2. In Go Contacts, create or edit a Business Partner with `Customer = true`, "Clave por
+   defecto" checked, "Clave tipo factura" = `F1`, and "Factura Simplificada" checked. Save.
+3. Create and complete a sales invoice for that Business Partner from Go.
+4. In Classic, open the invoice → AEAT SII tab → confirm "Clave tipo factura" was populated
+   with `F1`.
+5. Trigger/inspect that invoice's TBAI submission → confirm the XML carries
+   `<FacturaSimplificada>S</FacturaSimplificada>`.
+
+| Classic field | Go field (camelCase) | Entity | Where it lives in Go |
+|---|---|---|---|
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+
+**SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
+and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
+(part 4 below):** that classification was only correct for the `customer` entity; the fields
+were never declared for `businessPartner`, which is the entity the UI actually persists
+through, so saves were silently discarded until part 4's fix. Deliberately
+**not** declared with an explicit `fieldGroup`/entity-level customization in `decisions.json`:
+the generated `CustomerForm.jsx` for the `customer` entity is never imported by
+`BusinessPartnerPage.jsx` or any custom component — every `customer`/`vendor` entity field in
+this window (`priceList`, `paymentMethod`, `purchasePricelist`, …) is hand-wired directly via
+small local `fields` arrays passed to `EntityForm`. `aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`
+follow that same established pattern, but from `FiscalDefaultsSection.jsx` (see below) rather
+than `BillingPreferencesForm.jsx`.
+
+**Hide ≠ strip.** Unchecking "Clave por defecto" hides `aeatsiiSiikeylist` via
+`displayLogic` — it does **not** clear the stored value. The field simply stops being
+visible and stops being required while hidden; its previously-saved value persists
+untouched, and reappears if "Clave por defecto" is checked again. This is intentional
+parity with Classic's own behavior for the same field, not a bug. Covered by a regression
+test in `FiscalDefaultsSection.vitest.jsx` ("does not clear aeatsiiSiikeylist when the
+default-key checkbox is off").
+
+Field labels are resolved
+automatically by `EntityForm` via `useLabel()`/`t(column)` against the AD dictionary
+(`EM_Aeatsii_Defaultsiikey` → "Default Key", `EM_Aeatsii_Siikeylist` → "Invoice type key" in
+both `en_US.json` and `es_ES.json` — the AD reference data itself has not been translated to
+Spanish yet; that is a pre-existing AD/i18n data gap, not something this change introduces).
+The four enum option labels (`R`/`F1`/`F2`/`F4`) are hardcoded in the component with their
+`labels.es_ES` overrides copied verbatim from `contract.json`, following the same static-enum
+pattern already used by `AssetsConfigPanel.jsx`/`TaxSifField.jsx` — `F1` ("Invoice") has no
+AD-side Spanish translation either, same underlying data gap.
+
+## ETP-4784 (part 2, UX follow-up) — Fiscal defaults grouped into one section
+
+Part 2 (above) shipped the 3 fields as **stray fields** split across two unrelated spots:
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist` inside the Cliente billing block, and
+`tbaiIssimplifiedinv` auto-rendered in the header form's General tab — with no visual
+indication that all three configure the same thing (billing-time defaults consumed by SII /
+TicketBAI when an invoice is generated for this Business Partner). Human feedback: group them
+under one clearly-labeled section, regardless of which Classic tab each field originally came
+from.
+
+**New component — `tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx`.**
+Self-contained: it renders its own title/description (i18n keys `fiscalDefaults` /
+`fiscalDefaultsDescription`, both locales) plus the 3 fields, so `ContactsFinancialPanel.jsx`
+only needs to mount it — no layout duplication. It follows the label-left / content-right row
+convention already used by the sibling Credit and Billing Preferences sections in the same
+panel. Rendered in the Financial tab, directly below the Billing Preferences row (own `<hr>`
+separator).
+
+- `tbaiIssimplifiedinv` — always rendered, unconditional (it never depended on the
+  Customer/Vendor flags to begin with).
+- `aeatsiiDefaultsiikey` / `aeatsiiSiikeylist` — moved out of `BillingPreferencesForm.jsx`
+  verbatim, keeping the exact same `displayLogic`/gating wiring: both only render when
+  `data.customer` is true, and `aeatsiiSiikeylist` stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` (unchanged AD parity behavior, see above).
+
+**`decisions.json` — `tbaiIssimplifiedinv.form` flipped `true` → `false`** (visibility stays
+`editable`). This removes it from the header form's auto-rendered field array
+(`BusinessPartnerForm.jsx`) and from the generated `requiredHeaderFields` gate on
+`BusinessPartnerPage.jsx` (used only to gate the "+ Add Line" affordance on child tabs) —
+harmless here since it's a boolean checkbox that is always "filled" (`defaultValue: "N"`), so
+the required-flag never actually blocked anything. The field itself is unaffected in
+`contract.json`/the API: `form: false` only silences the auto-form emission, it does not
+touch `visibility`, so the field keeps flowing through `resolve-curated.js` →
+`generate-contract.js` exactly as before — `FiscalDefaultsSection.jsx` reads/writes it
+directly off `data`/`onChange`, same mechanism `BillingPreferencesForm.jsx` already used for
+the other two fields.
+
+No other generator or `decisions.json` change was needed — this was a pure UI-grouping
+task on top of the already-working part 2 wiring. Verified with `make regen ONLY=contacts`
+(published core, no `LOCAL_CORE` needed): `BusinessPartnerForm.jsx` no longer emits
+`tbaiIssimplifiedinv`, `BusinessPartnerPage.jsx`'s `requiredHeaderFields` array dropped it,
+and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
+`FiscalDefaultsSection.vitest.jsx`, `ContactsFinancialPanel.vitest.jsx`) pass.
+
+## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
+
+Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
+explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
+had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
+lists, then by reading 3 server-maintained flags off `AD_OrgInfo`
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`). **That gating was reverted.**
+
+Investigation of the real `AD_FIELD.DisplayLogic` in Classic for the 3 fields
+(`aeatsiiDefaultsiikey`, `aeatsiiSiikeylist`, `tbaiIssimplifiedinv`) confirmed **none of them
+depend on whether the organization has SII/TicketBAI active** — they are shown whenever the
+containing tab is visible. Human decision: **"be faithful to Classic, don't invent
+show/hide logic"**. `FiscalDefaultsSection.jsx` final behavior:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — shown only when
+  `data.customer` is true. This is the same `data.customer` gate `BillingPreferencesForm.jsx`
+  uses for its own Cliente block, and matches where these two fields live in Classic (the
+  Customer tab). `aeatsiiSiikeylist` still stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` via `displayLogic` (unchanged, see part 2 above).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — always shown, unconditional. No
+  organization-level or Customer/Vendor gating at all.
+- The section title/description (`fiscalDefaults`/`fiscalDefaultsDescription`) always render
+  — no `loading` state, no early `return null`.
+
+**Removed:** `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js` (the
+`useSiiTbaiActive`/`resolveOrganizationId` hook and its `organization/information/{orgId}`
+fetch) and its test file — deleted outright, nothing else in the repo imported them.
+`FiscalDefaultsSection.jsx` no longer takes an `apiBaseUrl`-driven network dependency; it is
+now a pure presentational component driven entirely by `data`/`onChange`, same contract as
+`BillingPreferencesForm.jsx`.
+
+The `organization` spec's 3 `AD_OrgInfo` flags added in the discarded intermediate design
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`, `system` visibility) were
+**kept as-is** in `artifacts/organization/decisions.json` — they remain legitimate
+Organization-window information exposed on the backend contract, just no longer consumed
+from Contacts. See `docs/generated-custom-windows/organization.md` for that side.
+
+No `decisions.json` or generator change was needed for this simplification — pure
+custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all
+Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
+visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
+to `onChange`).
+
+## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
+
+**Bug:** editing "Clave por Defecto" (`aeatsiiDefaultsiikey`) or "Clave tipo factura"
+(`aeatsiiSiikeylist`) in `FiscalDefaultsSection.jsx` and saving appeared to succeed (`PATCH`
+returned `200 OK`), but reloading the record showed the old value — the change never
+persisted.
+
+**Root cause:** part 2 above documented these two fields against entity `customer`, but that
+was only true for their *read* classification. `FiscalDefaultsSection.jsx` is mounted by
+`ContactsFinancialPanel.jsx` on the `businessPartner` entity's own `data`/`onChange` — it
+writes through `PATCH /businessPartner/{id}`, not `/customer`. In `artifacts/contacts/decisions.json`
+neither field was explicitly declared under `entities.businessPartner.fields`, so both fell
+back to the extractor's default classification for that entity/tab: `visibility: "system"`
+(a leftover from pre-ETP-4784 classification). `system` visibility maps to
+`ETGO_SF_FIELD.isreadonly='Y'`, so NEO's `businessPartner` PATCH handler accepted the request,
+silently dropped the two fields (not in the writable set), and returned 200 — masking the
+failure. The sibling `customer` entity (a different sub-tab on the same `C_BPartner` table)
+happened to classify the same two columns as `editable`, which is why part 2 wrongly assumed
+the fields were already correctly configured end-to-end.
+
+**Fix:** declared `aeatsiiDefaultsiikey` and `aeatsiiSiikeylist` explicitly under
+`entities.businessPartner.fields` in `artifacts/contacts/decisions.json` with
+`visibility: "editable"`, `form: false` (rendered by hand in `FiscalDefaultsSection.jsx`, not
+by the auto-generated form), matching the existing `tbaiIssimplifiedinv` entry right above
+them. Regenerated with `make regen ONLY=contacts PUSH_TO_NEO=1`; confirmed in
+`ETGO_SF_FIELD` that both columns now have `isreadonly='N'` for the `businessPartner` entity,
+and confirmed end-to-end with a live `PATCH` + `GET` against
+`/sws/neo/contacts/businessPartner/{id}` that the new value survives a reload.
+
+No frontend code changed — `FiscalDefaultsSection.jsx` was already reading/writing the right
+entity; this was purely a backend field-classification gap. `npx vitest run
+src/windows/custom/contacts` still passes unchanged (167 passed, 1 skipped).
+
+**Lesson:** an entity table in this doc records *where a field is rendered*, not *which
+entity's PATCH endpoint persists it*. When a custom component reads `data`/`onChange` from a
+different entity than the one implied by a field's original Classic tab, always verify the
+`decisions.json` classification against the entity the component is actually mounted on.

@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-08-24T13:35:40.129Z",
-  "checksum": "dcf93d458aa7bb36",
+  "updatedAt": "2026-08-24T17:57:19.569Z",
+  "checksum": "dbb58bbfc12c2fa7",
   "frontendContract": {
     "window": {
       "id": "110",
@@ -803,7 +803,7 @@
             "apiKey": "etsgHasSIIConfig",
             "column": "EM_Etsg_Has_Sii_Config",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -811,7 +811,7 @@
             "apiKey": "etsgHasTbaiConfig",
             "column": "EM_Etsg_Has_Tbai_Config",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -819,7 +819,7 @@
             "apiKey": "etsgHasVfactuConfig",
             "column": "EM_Etsg_Has_Vfactu_Config",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {

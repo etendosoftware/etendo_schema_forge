@@ -881,8 +881,8 @@
       "description": "Refresh SII Cash Receipts"
     },
     "EM_Aeatsii_Siikeylist": {
-      "label": "Invoice type key",
-      "description": "Invoice type key"
+      "label": "Clave tipo factura",
+      "description": "Clave tipo factura"
     },
     "CIF": {
       "label": "CIF",
@@ -1477,8 +1477,8 @@
       "description": "Invoice number"
     },
     "EM_Aeatsii_Defaultsiikey": {
-      "label": "Default Key",
-      "description": "Default Key"
+      "label": "Clave por Defecto",
+      "description": "Clave por Defecto"
     },
     "Navarra": {
       "label": "SII - Navarra Tax Agency",
@@ -18064,6 +18064,10 @@
     "billingPreferences": "Preferencias de facturación",
     "billingPreferencesDesc": "Configuración de facturación de cliente y proveedor.",
     "billingPreferencesAfterSave": "Guarda el contacto para configurar preferencias de facturación.",
+    "fiscalDefaults": "Valores por Defecto SIF",
+    "fiscalDefaultsDescription": "Se usan como valores por defecto al enviar las facturas de este cliente a SII/TicketBAI.",
+    "fiscalDefaultsSiiBlock": "SII",
+    "fiscalDefaultsTbaiBlock": "TicketBAI",
     "validationRequiredField": "El campo \"{field}\" es obligatorio.",
     "validationRequiredGeneric": "Falta un campo obligatorio.",
     "validationDuplicateRecord": "Ya existe un registro con el mismo valor.",
