@@ -141,6 +141,22 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - Registered, migrated, reachable over the endpoint — and **nobody calls it**. There is no producer
   in either repo. Decide whether to wire it or drop it before treating it as live.
 
+### Known issue: the document download link (not fixed)
+The link in a document email answers **500 for any document in a real organization**; it only works
+for documents in organization `*`, which is why test datasets and demo instances look healthy.
+
+`AttachImplementationManager.download` checks readable access on the referenced document, and this
+route is deliberately unauthenticated (`NeoServlet` handles it before authentication, since the
+signed token is the authorization), so the context can only read organization `0`. Admin mode does
+not lift that check — it reads `getReadableOrganizations()` directly. Behind it sits a second
+filter: `CoreAttachImplementation.downloadFile` re-resolves the folder through a criteria that
+filters on readable *clients*, finds nothing, and silently falls back to the legacy
+`<tableId>-<recordId>` layout — harmless only where files were stored that way.
+
+A working fix exists and was verified against two clients in real organizations, then reverted by
+decision. The patch is kept at `docs/plans/drafts/backup-download-fix/` (gitignored); reapply with
+`git am` from the `com.etendoerp.go` repo. Do not re-diagnose this from scratch.
+
 ### The six document emails
 - One implementation, `DefaultDocumentSendEmailContract`, parameterised six times. Contract name is
   always `` `${windowName}-send` ``.
