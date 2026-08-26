@@ -157,6 +157,25 @@ A working fix exists and was verified against two clients in real organizations,
 decision. The patch is kept at `docs/plans/drafts/backup-download-fix/` (gitignored); reapply with
 `git am` from the `com.etendoerp.go` repo. Do not re-diagnose this from scratch.
 
+### ⚠ The document email default copy lives in TWO places
+The send modal composes the default subject and message itself, and the module composes the same two
+sentences for a send that carries no edits. Both must say the same thing:
+
+| Side | Where |
+|---|---|
+| Modal | `SendDocumentModal.jsx` (`defaultSubject`, `defaultMessage`) + `sendModalDefaultMessage` in `tools/app-shell/src/locales/*.json` |
+| Module | `document.subject.withRecipient` and `document.body` in `emails_*.properties` |
+
+The duplication is deliberate — it saves a request on every open of the modal — and it is guarded by
+`defaultCopyInSync.vitest.js`, which reads the module's catalog and fails when the two drift. That
+guard only runs where the `com.etendoerp.go` checkout exists, which is the machine of anyone editing
+either side.
+
+**Editing one side means editing the other.** They diverged once already: the modal derived its
+label from the AD menu while the module used its catalog, so an operator read one subject on screen
+while the customer received another — and a comment in the Java saying "the two must agree" did not
+stop it. If the guard fails, fix the copy; do not relax the test.
+
 ### The six document emails
 - One implementation, `DefaultDocumentSendEmailContract`, parameterised six times. Contract name is
   always `` `${windowName}-send` ``.

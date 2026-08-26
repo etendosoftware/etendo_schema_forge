@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
-import { sendDocumentEmail, fetchDocumentEmailDefaults } from './documentEmailSend.js';
+import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
 
@@ -404,41 +404,21 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   // kept around so handleSend can tell whether the operator actually changed
   // either one; an untouched send must stay byte-identical to the legacy
   // payload (no `messageEdits` key at all).
-  // ETP-5003 — these are a placeholder until the backend answers with the copy it will actually
-  // send. They used to be the real thing, derived here from the menu label while the backend
-  // derived its own from the message catalog, so the operator could read one subject on screen and
-  // the customer receive another.
-  const editedRef = useRef(false);
-  const markEdited = useCallback(setter => value => {
-    editedRef.current = true;
-    setter(value);
-  }, []);
-  const fallbackSubject = `${documentType} #${documentNo} — ${bpName}`;
-  const [defaults, setDefaults] = useState({ subject: fallbackSubject, message: '' });
-  const [subject, setSubject] = useState(fallbackSubject);
-  const [message, setMessage] = useState('');
-
-  // Show what will actually be sent: ask the backend for the subject and message it would use
-  // untouched, and seed both fields with them (ETP-5003).
-  useEffect(() => {
-    if (!open || !documentId || !windowName || !apiBaseUrl || !token) return undefined;
-    let cancelled = false;
-    fetchDocumentEmailDefaults({ apiBaseUrl, token, windowName, documentId, language: locale })
-      .then(fetched => {
-        // Nothing is seeded once the operator has touched a field: this response lands
-        // asynchronously, and someone who starts editing immediately must not have their text
-        // replaced when it arrives. Clearing a field counts as editing it.
-        if (cancelled || !fetched || editedRef.current) return;
-        setDefaults(fetched);
-        // Seed only fields the operator has not touched yet: this response lands asynchronously,
-        // and someone who starts typing immediately must not have their text overwritten when it
-        // arrives.
-        setSubject(fetched.subject);
-        setMessage(fetched.message ?? '');
-      });
-    return () => { cancelled = true; };
-  }, [open, documentId, windowName, apiBaseUrl, token, locale, fallbackSubject]);
-
+  // ETP-5003 — the operator must read exactly what the customer will receive, so both fields start
+  // filled with the copy the backend composes when nothing is edited.
+  //
+  // ⚠ KEEP IN SYNC with the module's message catalog, which owns the same two sentences for a send
+  // that carries no edits:
+  //   com.etendoerp.go/.../email/render/messages/emails_*.properties
+  //   → document.subject.withRecipient  and  document.body
+  // They are composed here rather than fetched, to save the round trip. That trade only holds while
+  // both sides say the same thing — they diverged once already, and the operator read one subject
+  // while the customer received another. `defaultCopyInSync.test.js` fails when they drift; fix the
+  // mismatch rather than relaxing the test.
+  const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
+  const defaultMessage = ui('sendModalDefaultMessage', { documentType, documentNo });
+  const [subject, setSubject] = useState(defaultSubject);
+  const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(!pdfBlobUrl);
@@ -496,7 +476,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       // byte-identical to the legacy one (mirrors recipientEdits above).
       // Either field left as the backend proposed it means no edit at all. When one did change,
       // both travel: the untouched half round-trips to the very value the backend would rebuild.
-      const messageEdits = (subject !== defaults.subject || message !== defaults.message)
+      const messageEdits = (subject !== defaultSubject || message !== defaultMessage)
         ? { subject, message }
         : null;
       await sendDocumentFromModal({
@@ -584,8 +564,8 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
               }}
               subject={subject}
               message={message}
-              onSubjectChange={markEdited(setSubject)}
-              onMessageChange={markEdited(setMessage)}
+              onSubjectChange={setSubject}
+              onMessageChange={setMessage}
               ui={ui}
               data-testid="EmailFormPanel__afec0a" />
           )}

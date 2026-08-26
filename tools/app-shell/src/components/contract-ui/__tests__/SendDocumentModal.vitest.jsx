@@ -6,21 +6,8 @@ vi.mock('@/i18n', () => ({
 
 // The modal GETs the contract's default subject/message before anything else (ETP-5003). Queue an
 // answer for it first, so the responses a test lines up still meet the requests it cares about.
-// The pre-filled copy lands asynchronously; an operator sees it before typing, so a test that
-// replaces it must wait for it too — otherwise it races the response and appends to it.
-async function waitForDefaultMessage(getTextarea, expected = 'Le enviamos su Factura de Venta INV-1.') {
-  await waitFor(() => expect(getTextarea()).toHaveValue(expected));
-}
-
-function queueDefaultsThen(subject = 'Factura de Venta #INV-1 — ACME', message = 'Le enviamos su Factura de Venta INV-1.') {
-  return global.fetch.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ response: { data: { subject, message } } }),
-  });
-}
-
-// ETP-5003 — the modal now also GETs the contract's default subject/message before the operator
-// sends, so the send request is no longer at a fixed call index. Find it by what it is.
+// The modal fetches more than the send request (the preview cache, for one), so locate the send
+// request by what it is rather than by call index.
 function sendRequestBody() {
   const call = global.fetch.mock.calls.find(
     ([url, init]) => String(url).endsWith('/send') && init?.method === 'POST',
@@ -240,7 +227,7 @@ describe('SendDocumentModal', () => {
 
   it('sends a contract command without provider payload fields', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -281,7 +268,7 @@ describe('SendDocumentModal', () => {
   // POSTing base64 JSON to the retired /preview-file endpoint.
   it('caches the generated preview before sending when preview caching is enabled by default', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen()
+    global.fetch
       .mockResolvedValueOnce({
         ok: true,
         blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
@@ -316,7 +303,7 @@ describe('SendDocumentModal', () => {
 
   it('routes sales order sends to the sales-order email contract', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -352,7 +339,7 @@ describe('SendDocumentModal', () => {
 
   it('routes sales quotation sends to the sales-quotation email contract', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -388,7 +375,7 @@ describe('SendDocumentModal', () => {
 
   it('shows throttled state from the email contract executor', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'THROTTLED', retryAfterSeconds: 30 } },
@@ -413,7 +400,7 @@ describe('SendDocumentModal', () => {
 
   it('shows duplicate state as a successful idempotent send even with non-2xx HTTP', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: false,
       status: 409,
       json: async () => ({
@@ -439,7 +426,7 @@ describe('SendDocumentModal', () => {
 
   it('shows unauthorized state from the email contract executor', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'UNAUTHORIZED' } },
@@ -464,7 +451,7 @@ describe('SendDocumentModal', () => {
 
   it('shows provider failure state from the email contract executor', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({
         response: { data: { status: 'PROVIDER_FAILED' } },
@@ -585,7 +572,7 @@ describe('SendDocumentModal — error resolver branches', () => {
   // BASE, so the preview cache fetch is skipped) and asserts the toast key.
   async function sendWith(data) {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ response: { data } }),
     });
@@ -769,15 +756,15 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     await user.type(subjectInput, 'Custom subject line');
     expect(subjectInput).toHaveValue('Custom subject line');
 
-    // This test queues no defaults, so the field stays empty and there is nothing to replace.
     const messageTextarea = getMessageTextarea();
+    await user.clear(messageTextarea);
     await user.type(messageTextarea, 'Please review this document');
     expect(messageTextarea).toHaveValue('Please review this document');
   });
 
   it('includes messageEdits in the send payload when the operator edits the message', async () => {
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });
@@ -790,9 +777,8 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
       />,
     );
 
-    // ETP-5003 — the message arrives pre-filled with what the backend would send; replacing it
-    // means waiting for it and clearing first.
-    await waitForDefaultMessage(getMessageTextarea);
+    // ETP-5003 — the message starts pre-filled with the copy that would be sent, so replacing it
+    // means clearing first.
     await user.clear(getMessageTextarea());
     await user.type(getMessageTextarea(), 'Please review this document');
     await user.click(getSendButton());
@@ -806,9 +792,8 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     const body = sendRequestBody();
     expect(body.messageEdits).toBeTruthy();
     expect(body.messageEdits.message).toBe('Please review this document');
-    // Subject was not touched, so it travels as the backend's own default — round-tripping to the
-    // very value the backend would rebuild, rather than to a second one derived here (ETP-5003).
-    expect(body.messageEdits.subject).toBe('Factura de Venta #INV-1 — ACME');
+    // Subject was not touched — its default is carried alongside.
+    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
   });
 
   it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
@@ -816,7 +801,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     // that a send where the operator never touched subject/message must stay
     // byte-identical to the legacy payload shape (no messageEdits key at all).
     const user = userEvent.setup();
-    queueDefaultsThen().mockResolvedValueOnce({
+    global.fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'SENT' }),
     });

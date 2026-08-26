@@ -17480,6 +17480,7 @@
     "sendModalNoEmail": "No se encontró email para este contacto",
     "sendModalSubject": "Asunto",
     "sendModalMessage": "Mensaje",
+    "sendModalDefaultMessage": "Le enviamos su {documentType} {documentNo}.",
     "sendModalMessagePlaceholder": "Añade un mensaje personal...",
     "sendModalSend": "Enviar",
     "sendModalSending": "Enviando...",
