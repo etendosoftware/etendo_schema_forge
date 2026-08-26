@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId }) {
   // Fetch current receipt lines directly (by parentId) + other draft receipts list in parallel.
@@ -125,7 +126,7 @@ const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
   const [orderId] = importedDocIds;
   await fetch(`${base}/goods-receipt/goodsReceipt/${invoiceId}`, {
     method: 'PATCH',
-    headers,
+    headers: writeHeaders(),
     body: JSON.stringify({ salesOrder: orderId }),
   });
 };

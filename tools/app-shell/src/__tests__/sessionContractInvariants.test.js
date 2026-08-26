@@ -257,33 +257,14 @@ const G2_DEBT = new Set([
  * them would stop it watching a real crossing point.
  */
 const G3_DEBT = new Set([
-  'components/contract-ui/CloneOrderModal.jsx',
-  'components/contract-ui/ConfirmDocumentModal.jsx',
-  'components/contract-ui/ConfirmInOutModal.jsx',
-  'components/contract-ui/CreateContactModal.jsx',
-  'components/contract-ui/ImportLinesModal.jsx',
-  'components/import-return-lines/ImportReturnLinesModal.jsx',
   'explorer/useDiscovery.js',
-  'hooks/useEntity.js',
   'pages/InviteAcceptancePage.jsx',
   'windows/custom/contacts/BillingPreferencesForm.jsx',
-  'windows/custom/return-material-receipt/ImportFromShipmentModal.jsx',
-  'windows/custom/return-to-vendor-shipment/ImportFromReceiptModal.jsx',
   // -- artifacts/<window>/custom (ETP-4576) ----------------------------------
   // Measured, not migrated. Extending the scan to the per-window `custom/` trees
   // (see ARTIFACTS above) surfaced these at once; they were never swept because no
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
-  'artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx',
-  'artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromGoodsReturnModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromSourceInvoiceModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromOrderModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromReturnShipmentModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx',
 ]);
 
 const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;

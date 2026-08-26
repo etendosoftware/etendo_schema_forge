@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { getApSubtype } from './purchaseInvoiceSubtype';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Import invoice lines from a completed standard ("Factura") purchase invoice
@@ -62,7 +63,7 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
     }
     const res = await fetch(`${base}/purchase-invoice/lines/callout`, {
       method: 'POST',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({
         field: 'product', value: productId, formState,
         ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
@@ -157,7 +158,7 @@ const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
   try {
     await fetch(`${base}/purchase-invoice/header/${invoiceId}`, {
       method: 'PATCH',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({ originInvoices: [...importedDocIds] }),
     });
   } catch {

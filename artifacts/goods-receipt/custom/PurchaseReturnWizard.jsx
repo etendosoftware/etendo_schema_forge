@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 function MiniCheck({ checked, onChange }) {
   return (
@@ -125,7 +126,7 @@ export default function PurchaseReturnWizard({
         `${base}/goods-receipt/goodsReceipt/${receiptData.id}/action/createPurchaseReturn`,
         {
           method: 'POST',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({
             lines: selectedLines.map((l) => ({ lineId: l.id, returnQuantity: quantities[l.id] })),
             reason,

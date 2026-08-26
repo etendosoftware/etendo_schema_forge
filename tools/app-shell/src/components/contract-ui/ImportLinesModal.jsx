@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 export default function ImportLinesModal({
   invoiceId,
@@ -163,7 +164,7 @@ export default function ImportLinesModal({
           const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
           const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
           const res = await fetch(`${base}/${linesEndpoint}`, {
-            method: 'POST', headers, body: JSON.stringify(lineBody),
+            method: 'POST', headers: writeHeaders(), body: JSON.stringify(lineBody),
           });
           if (!res.ok) errors++;
           else importedDocIds.add(doc.id);

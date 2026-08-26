@@ -1,4 +1,5 @@
 import ImportReturnLinesModal from '@/components/import-return-lines/ImportReturnLinesModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 const ACTION_BASE = (base) =>
   `${base}/return-material-receipt/returnMaterialReceipt/_/action`;
@@ -7,7 +8,7 @@ const SHIPMENT_CONFIG = {
   fetchSourceDocs: async (base, bpId, headers) => {
     const res = await fetch(`${ACTION_BASE(base)}/availableShipments`, {
       method: 'POST',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({ businessPartner: bpId }),
     });
     if (!res.ok) return [];
@@ -16,7 +17,7 @@ const SHIPMENT_CONFIG = {
   fetchSourceLines: async (base, docId, headers) => {
     const res = await fetch(`${ACTION_BASE(base)}/availableShipmentLines`, {
       method: 'POST',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({ shipmentId: docId }),
     });
     if (!res.ok) return [];

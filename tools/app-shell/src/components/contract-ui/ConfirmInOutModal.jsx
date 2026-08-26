@@ -1,16 +1,23 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
  * Matches the ConfirmGoodsReceiptModal design: toggle switch + green info row + dynamic button.
  *
  * All visible strings are passed as props (resolved by the caller via useUI()).
+ *
+ * ETP-4576 — it used to take a `headers` prop, and every caller handed it the READ
+ * bag (`jsonHeaders()`), which carries no CSRF proof. Both requests below are
+ * POSTs, so confirming a shipment or a receipt answered 403 while everything else
+ * in the same window worked. Building the write headers here is what makes that
+ * unrepresentable: a caller can no longer supply the wrong bag, because it supplies
+ * none.
  */
 export default function ConfirmInOutModal({
   base,
-  headers,
   recordId,
   specName,
   entityName,
@@ -51,7 +58,7 @@ export default function ConfirmInOutModal({
 
       if (!skipDocumentAction) {
         const res = await fetch(`${actionBase}/documentAction`, {
-          method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }),
+          method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'CO' }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -62,7 +69,7 @@ export default function ConfirmInOutModal({
       let invoice = null;
       if ((skipDocumentAction || createInvoice) && invoiceAction) {
         const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers, body: JSON.stringify({}),
+          method: 'POST', headers: writeHeaders(), body: JSON.stringify({}),
         });
         if (!invRes.ok) {
           const body = await invRes.json().catch(() => null);

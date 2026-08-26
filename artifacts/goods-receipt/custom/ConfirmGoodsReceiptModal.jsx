@@ -1,12 +1,11 @@
 import { useUI } from '@/i18n';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 
-export default function ConfirmGoodsReceiptModal({ data, base, headers, recordId, onConfirmed, onClose }) {
+export default function ConfirmGoodsReceiptModal({ data, base, recordId, onConfirmed, onClose }) {
   const ui = useUI();
   return (
     <ConfirmInOutModal
       base={base}
-      headers={headers}
       recordId={recordId}
       specName="goods-receipt"
       entityName="goodsReceipt"

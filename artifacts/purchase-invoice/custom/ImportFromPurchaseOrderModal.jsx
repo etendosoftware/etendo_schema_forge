@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
@@ -72,7 +73,7 @@ const afterImport = async ({ importedDocIds, sharedContext, base, headers, invoi
   if (uniqueDiscounts.length !== 1) return;
   await fetch(`${base}/purchase-invoice/header/${invoiceId}`, {
     method: 'PATCH',
-    headers,
+    headers: writeHeaders(),
     body: JSON.stringify({ etgoTotalDiscount: uniqueDiscounts[0] }),
   });
 };

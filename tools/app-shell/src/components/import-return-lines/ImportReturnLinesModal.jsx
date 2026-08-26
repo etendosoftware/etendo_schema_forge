@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import ImportModalFooter, { ImportModalHeader } from './ImportModalFooter.jsx';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Generic modal for importing lines into a return document from source documents.
@@ -171,7 +172,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
 
       const res = await fetch(importActionUrl(base, targetId), {
         method: 'POST',
-        headers,
+        headers: writeHeaders(),
         body: JSON.stringify({ lines }),
       });
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export default function ConfirmDocumentModal({
       const actionBase = `${base}/${specName}/${entityName}/${recordId}/action`;
 
       const res = await fetch(`${actionBase}/documentAction`, {
-        method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ docAction: 'CO' }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -162,7 +163,7 @@ export default function ConfirmDocumentModal({
       let invoice = null;
       if (createInvoice && invoiceAction) {
         const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers, body: JSON.stringify({}),
+          method: 'POST', headers: writeHeaders(), body: JSON.stringify({}),
         });
         if (!invRes.ok) {
           const err = await invRes.json().catch(() => null);

@@ -4,6 +4,7 @@ import { useUI, useLocale } from '@/i18n';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -118,7 +119,7 @@ export default function CloneOrderModal({
     try {
       const newIds = [];
       for (const item of items) {
-        const res  = await fetch(`${apiBaseUrl}/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST', headers });
+        const res  = await fetch(`${apiBaseUrl}/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST', headers: writeHeaders() });
         const json = await res.json();
         if (!res.ok) {
           setError(json?.error?.message || json?.response?.error?.message || ui(errorKey));

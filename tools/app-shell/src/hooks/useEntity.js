@@ -916,7 +916,15 @@ export function useEntity(entity, childEntity, {
     }, [editing, selected]);
 
     const headers = buildHeaders();
-    const mutationHeaders = buildMutationHeaders();
+    // ETP-4576 — deliberately NOT hoisted into a render-scoped `const`. It used to
+    // be, and every mutation below closed over that one value: the callbacks do not
+    // list it in their deps, so whatever `writeHeaders()` returned on the FIRST
+    // render was frozen and reused forever. On a cold load that render happens
+    // before the session restore resolves, so the frozen bag carries no CSRF proof
+    // and every process action answers 403 — while a component mounted after the
+    // restore works fine, which is why this looked intermittent and window-specific.
+    // Calling the builder at request time is the whole fix: it reads the scheme that
+    // is active NOW.
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;
@@ -1399,7 +1407,7 @@ export function useEntity(entity, childEntity, {
         // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
         const body = JSON.stringify(payload);
         try {
-            const res = await fetch(url, { method, headers: mutationHeaders, credentials: 'include', body });
+            const res = await fetch(url, { method, headers: buildMutationHeaders(), credentials: 'include', body });
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -1446,7 +1454,7 @@ export function useEntity(entity, childEntity, {
     const handleDelete = useCallback(async () => {
         if (!selected?.id) return false;
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers: mutationHeaders, credentials: 'include' });
+            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers: buildMutationHeaders(), credentials: 'include' });
             if (res.ok) {
                 setSelected(null);
                 setEditing(null);
@@ -1487,7 +1495,7 @@ export function useEntity(entity, childEntity, {
             body.parentId = selected.id;
             const res = await fetch(`${apiBaseUrl}/${childEntity}`, {
                 method: 'POST',
-                headers: mutationHeaders,
+                headers: buildMutationHeaders(),
                 credentials: 'include',
                 body: JSON.stringify(body),
             });
@@ -1569,7 +1577,7 @@ export function useEntity(entity, childEntity, {
         // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
         const res = await fetch(url, {
             method: 'POST',
-            headers: mutationHeaders,
+            headers: buildMutationHeaders(),
             credentials: 'include',
             body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
         });
@@ -1626,7 +1634,7 @@ export function useEntity(entity, childEntity, {
         try {
             const res = await fetch(url, {
                 method: 'POST',
-                headers: mutationHeaders,
+                headers: buildMutationHeaders(),
                 credentials: 'include',
                 body: JSON.stringify({ fieldValues }),
             });

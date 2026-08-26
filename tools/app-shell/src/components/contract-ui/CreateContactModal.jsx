@@ -6,6 +6,7 @@ import FinancialSection from './FinancialSection.jsx';
 import AddressSection from './AddressSection.jsx';
 import { contactModalConfig } from './contactModalConfig.js';
 import { matchOptionByLabel } from '@/lib/matchOptionLabel';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 const COMPONENT_MAP = { AddressSection, FinancialSection };
 
@@ -431,7 +432,7 @@ export default function CreateContactModal({
 
     const res = await fetch(`${bpApiBaseUrl}/businessPartner`, {
       method: 'POST',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify(createPayload),
     });
 
@@ -460,7 +461,7 @@ export default function CreateContactModal({
         const locName = [form.city, form.address].filter(Boolean).join(', ') || countryLabel || 'Location';
         await fetch(`${bpApiBaseUrl}/locationAddress?parentId=${newId}`, {
           method: 'POST',
-          headers,
+          headers: writeHeaders(),
           body: JSON.stringify({
             name: locName,
             addressLine1: form.address || null,
@@ -486,7 +487,7 @@ export default function CreateContactModal({
         ...contacts.map(async (c) => {
           const contactRes = await fetch(`${bpApiBaseUrl}/contact?parentId=${newId}`, {
             method: 'POST',
-            headers,
+            headers: writeHeaders(),
             body: JSON.stringify({
               parentId: newId,
               businessPartner: newId,
@@ -515,7 +516,7 @@ export default function CreateContactModal({
         ...banks.map(async (b) => {
           const bankRes = await fetch(`${bpApiBaseUrl}/bankAccount?parentId=${newId}`, {
             method: 'POST',
-            headers,
+            headers: writeHeaders(),
             body: JSON.stringify({
               parentId: newId,
               bankFormat: b.bankAccountFormat || 'GENERIC',
@@ -534,7 +535,7 @@ export default function CreateContactModal({
         Object.keys(billingPatch).length > 0
           ? fetch(`${bpApiBaseUrl}/businessPartner/${newId}`, {
               method: 'PATCH',
-              headers,
+              headers: writeHeaders(),
               body: JSON.stringify(billingPatch),
             }).then(async patchRes => {
               if (!patchRes.ok) {
@@ -547,7 +548,7 @@ export default function CreateContactModal({
     } catch (e) {
       // BP was created in Step 1 but subsequent steps failed — roll it back to avoid orphans
       if (newId) {
-        await fetch(`${bpApiBaseUrl}/businessPartner/${newId}`, { method: 'DELETE', headers }).catch(() => null);
+        await fetch(`${bpApiBaseUrl}/businessPartner/${newId}`, { method: 'DELETE', headers: writeHeaders() }).catch(() => null);
       }
       throw e;
     }

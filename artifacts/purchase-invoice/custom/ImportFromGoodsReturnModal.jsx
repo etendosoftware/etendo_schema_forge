@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Import invoice lines from a completed Return to Vendor Shipment (Albarán de
@@ -48,7 +49,7 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
     }
     const res = await fetch(`${base}/purchase-invoice/lines/callout`, {
       method: 'POST',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({
         field: 'product', value: productId, formState,
         ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
@@ -75,7 +76,7 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
       const cascadeState = { ...formState, ...result, invoicedQuantity: qty || 1 };
       const cascadeRes = await fetch(`${base}/purchase-invoice/lines/callout`, {
         method: 'POST',
-        headers,
+        headers: writeHeaders(),
         body: JSON.stringify({ field: 'PriceActual', value: String(unitPrice), formState: cascadeState }),
       });
       if (cascadeRes.ok) {

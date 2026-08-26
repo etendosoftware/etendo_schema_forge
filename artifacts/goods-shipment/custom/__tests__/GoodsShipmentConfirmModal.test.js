@@ -39,10 +39,14 @@ describe('GoodsShipmentConfirmModal', () => {
     });
   });
 
-  it('passes recordId, base, headers through from props', () => {
+  it('passes recordId and base through from props, but never a header bag', () => {
     assert.match(src, /base=\{base\}/);
-    assert.match(src, /headers=\{headers\}/);
     assert.match(src, /recordId=\{recordId\}/);
+    // ETP-4576 — this asserted `headers={headers}`. Every caller handed down the
+    // READ bag, so ConfirmInOutModal's two POSTs went out with no CSRF proof and
+    // confirming a shipment answered 403. The modal builds its own write headers
+    // now; forwarding a bag from here is the bug, not the contract.
+    assert.doesNotMatch(src, /headers=\{/);
   });
 
   it('passes onConfirmed and onClose through from props', () => {

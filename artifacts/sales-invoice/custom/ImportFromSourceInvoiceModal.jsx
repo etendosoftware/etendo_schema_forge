@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Import invoice lines from a completed, plain "Factura" (FAC subtype) sales
@@ -143,7 +144,7 @@ const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
   try {
     await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
       method: 'PATCH',
-      headers,
+      headers: writeHeaders(),
       body: JSON.stringify({ originInvoices: [...importedDocIds] }),
     });
   } catch {

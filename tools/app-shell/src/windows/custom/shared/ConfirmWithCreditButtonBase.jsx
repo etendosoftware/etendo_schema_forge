@@ -24,7 +24,7 @@ export default function ConfirmWithCreditButtonBase({
   const resultNavigatedRef = useRef(false);
   const {
     ui, status, currency, confirmDisabled, hasReturnInvoice,
-    headers, base, showModal, setShowModal,
+    base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
@@ -79,8 +79,7 @@ export default function ConfirmWithCreditButtonBase({
       {showModal && status === 'DR' && (
         <ConfirmInOutModal
           base={base}
-          headers={headers}
-          recordId={data?.id || recordId}
+              recordId={data?.id || recordId}
           specName={specName}
           entityName={entityName}
           invoiceAction={isFullyInvoiced ? undefined : 'createReturnInvoice'}
