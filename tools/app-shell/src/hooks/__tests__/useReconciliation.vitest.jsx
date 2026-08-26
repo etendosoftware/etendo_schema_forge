@@ -223,6 +223,21 @@ describe('useAutoMatch (GET)', () => {
     });
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
+
+  // ETP-4922: the automatch preview intentionally has no date prefilter — suggestions with dates
+  // outside the active Conciliación filter period must still surface. Locks in that the request
+  // URL only ever carries `action` + `accountId`, never a date range.
+  it('never sends a date range — the endpoint has no date filtering by design', async () => {
+    globalThis.fetch.mockResolvedValue(getResponse({ groups: [] }));
+
+    renderHook(() => useAutoMatch('acc-1'));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const [url] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`/etendo${BASE}?action=autoMatch&accountId=acc-1`);
+    expect(url).not.toContain('dateFrom=');
+    expect(url).not.toContain('dateTo=');
+  });
 });
 
 describe('useReconcileGroup (POST via useNeoPost)', () => {

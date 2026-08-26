@@ -1,5 +1,11 @@
 # Sales Order
 
+The official grid **Print** action uses the server-rendered `print-sales-order`
+document report. Its header uses the shared document-branding contract, so the
+organization's configured document image is included when available. See
+`docs/reports/document-report-branding.md` for the extension point used by
+future document templates.
+
 ## Intent
 
 This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.

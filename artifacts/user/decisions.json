@@ -50,13 +50,15 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it."
+          "readOnlyLogicJs": "!!record.id",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it. ETP-4830: locked read-only once the record is persisted (readOnlyLogicJs, same 'locks after first save' pattern as sales-invoice/purchase-invoice's transactionDocument) — email seeds username and the linked etgo_account row at creation time only; editing it afterward would desync the two."
         },
         "password": {
           "visibility": "editable",
           "section": "security",
           "displayLogic": null,
-          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4829: on create, this same field doubles as an optional temporary workaround — if an admin types a password here, com.etendoerp.go's UserRoleAssignmentHandler also uses it (hashed, validated against PasswordPolicy.isStrong) to create the linked etgo_account already active, instead of pending on ETP-4830's invite-email flow. AD_User.Password itself is unaffected (unrelated password store)."
+          "displayLogicJs": "!!record.id",
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4830: the create-time 'admin types a password, skips the invite email' bypass this field used to double as (ETP-4829) was removed server-side — com.etendoerp.go no longer reads a submitted password at creation, every new user now always goes through the invite-email flow (backend confirmed done: EtendoGoAccountProvisioning deleted entirely, pre-hook no longer reads password). The input is hidden on the CREATE form entirely via displayLogicJs (only rendered once record.id exists, i.e. on an already-persisted user) — not discarded outright, since resetting an existing user's password after creation is a separate, still-valid use of this same native AD_User.Password field."
         },
         "isPasswordExpired": {
           "visibility": "readOnly",
@@ -73,6 +75,15 @@
           "grid": true,
           "section": "security",
           "reason": "Account lock status, typically system-managed but visible for admin review"
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "inlineToggle": true,
+          "gridOrder": 5,
+          "section": "security",
+          "derivation": null,
+          "reason": "ETP-4830 — 'Activo' toggle, human-confirmed to match the ticket's reference screenshot (grid column + detail-header toggle next to the invitation pill). Raw AD default pins this field to visibility: system with derivation: {type: computed, source: true} (always hardcoded true, hidden) — overridden here to visibility: editable + an explicit derivation: null (same 'suppress the raw computed derivation on a system->editable transition' escape hatch resolve-curated.js already documents and purchase-order/sales-order/sales-quotation/purchase-invoice/sales-invoice's currency/transactionDocument fields already use; without it, resolve-curated.js's copyRawProps would still copy the raw computed derivation onto the curated field even after visibility flips, and NEO would keep overriding any admin-set value on save). inlineToggle: true renders it as a live-PATCHing Switch in the grid (generate-frontend.js's togglePart, no generator change needed — DataTable.cellRenderers.jsx's renderBooleanCell already handles col.toggle generically). De-activating a user does NOT delete the AD_User record or block admins from viewing/editing it — standard Etendo de-activation semantics (see this field's own AD help text: de-activated records stay available for reporting/auditing, just unavailable for new selection)."
         },
         "description": {
           "visibility": "editable",
@@ -339,8 +350,8 @@
       "entity": "user",
       "decision": "Omit",
       "description": "Shows password field only after record is saved (AD_USER_ID is not empty) or on autosave",
-      "impactIfOmitted": "Password field is always visible (simpler UX for admin config)",
-      "reason": "Suppressed via displayLogic: null in field decision, password is always visible in simplified UI"
+      "impactIfOmitted": "Raw AD displayLogic replaced by displayLogicJs: \"!!record.id\" on the field decision — password field is hidden entirely on the create form (invite-email is now the only account-provisioning path, ETP-4830) and only appears once the record is persisted, for the existing-user password-reset use case",
+      "reason": "Suppressed via displayLogic: null in field decision; visibility now driven purely by displayLogicJs (ETP-4830)"
     },
     "Display_EmailServerPassword": {
       "type": "displayLogic",

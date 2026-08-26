@@ -564,9 +564,24 @@ check_go_module_push_sync() {
 # reported — same "collect everything, don't stop at the first problem"
 # contract as the rest of this hook.
 # Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
+# backend_url defaults to the LOCAL environment's own configured context (read from
+# ../config/Openbravo.properties' context.url) rather than a hardcoded /etendo — different
+# developer machines legitimately deploy under different context names (e.g. /etendogoclean).
+# E2E_BACKEND_URL always wins when set; falls back to the historical /etendo default when the
+# properties file is missing or has no context.url (CI, a fresh checkout, etc).
+resolve_backend_url() {
+  local etendo_root props_file url
+  etendo_root="$(git rev-parse --show-toplevel 2>/dev/null)/.."
+  props_file="$etendo_root/config/Openbravo.properties"
+  if [ -f "$props_file" ]; then
+    url="$(grep -E '^context\.url=' "$props_file" | tail -1 | sed 's/^context\.url=//; s/\\:/:/g')"
+  fi
+  echo "${url:-http://localhost:8080/etendo}"
+}
+
 run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
-  local backend_url="${E2E_BACKEND_URL:-http://localhost:8080/etendo}"
+  local backend_url="${E2E_BACKEND_URL:-$(resolve_backend_url)}"
 
   if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"

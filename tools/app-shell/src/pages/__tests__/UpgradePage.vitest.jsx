@@ -423,3 +423,59 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(trackedEvents('upgrade_enter_tenant_failed')).toEqual([{}]);
   });
 });
+
+describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
+  /** A `/sws/go/environments` rejection shaped like the real 401 from the backend. */
+  function unauthorizedEnvironments() {
+    return jsonResponse(
+      { error: { message: 'Invalid or expired token', status: 401 } },
+      { ok: false, status: 401 }
+    );
+  }
+
+  it('warns that the environment list is missing instead of silently offering only a new tenant', async () => {
+    // Without the list the convert-this-environment option cannot be rendered, so the page would
+    // otherwise show a bare "create a new tenant" checkout — the user pays for the wrong thing
+    // with no indication anything went wrong.
+    installFetch({ environments: unauthorizedEnvironments });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-environments-unavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-target-choice')).not.toBeInTheDocument();
+  });
+
+  it('keeps the checkout reachable so a failed lookup never blocks a legitimate upgrade', async () => {
+    installFetch({ environments: unauthorizedEnvironments });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-checkout')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-submit')).toBeEnabled();
+  });
+
+  it('retries the lookup and reveals the convert option once it succeeds', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    installFetch({
+      environments: () => {
+        attempt += 1;
+        return attempt === 1
+          ? unauthorizedEnvironments()
+          : jsonResponse({ environments: [{ clientName: EXISTING_TENANT, clientId: 'CLIENT-1' }] });
+      },
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-environments-retry'));
+
+    await screen.findByTestId('upgrade-target-choice');
+    expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('shows no warning when the lookup succeeds', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT, clientId: 'CLIENT-1' }] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-target-choice')).toBeInTheDocument();
+  });
+});

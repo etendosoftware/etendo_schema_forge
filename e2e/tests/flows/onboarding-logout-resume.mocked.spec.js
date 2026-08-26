@@ -20,7 +20,10 @@ function json(route, body, status = 200) {
 async function installOnboardingMocks(page, { failDraftSave = false, holdProvisioning = false } = {}) {
   const state = { draft: null, events: [], releaseProvisioning: null };
 
-  await page.route('**/sws/go/me', route => json(route, ACCOUNT));
+  // ETP-4798: /me carries the email-confirmation state. This account is already confirmed, which
+  // is what keeps the resume flow reaching setup-progress — an unconfirmed one is gated there.
+  await page.route('**/sws/go/me', route =>
+    json(route, { ...ACCOUNT, emailVerified: true, emailVerificationPending: false }));
   await page.route('**/sws/go/register', route => json(route, { token: PLATFORM_TOKEN, account: ACCOUNT }));
   await page.route('**/sws/go/login', route => {
     if (route.request().method() === 'POST') return json(route, { token: PLATFORM_TOKEN, account: ACCOUNT });

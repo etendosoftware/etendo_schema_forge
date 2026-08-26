@@ -3,18 +3,52 @@ import { login } from '../helpers/auth.js';
 
 /**
  * Company user invitation and acceptance flows — ETP-4894 (mocked).
+ *
+ * Test 1 ("admin creates a user, invite fires automatically") was rewritten for
+ * ETP-4830 (commit b02874e46, "Send invite email on admin-created users
+ * (frontend)"): the old standalone `action-open-invite` / `InviteUserDialog.jsx`
+ * flow was removed from `windows/custom/user/index.jsx` entirely. There is no more
+ * separate "open invite dialog" UI — an admin fills the ordinary create-user form
+ * (email is the mandatory, save-locking field per `artifacts/user/decisions.json`'s
+ * `user.email` entry) and clicks Save; the invite email is sent server-side as part
+ * of that same create call, surfaced by a single actionable `sonner` toast
+ * (`userCreatedInvitationSentToast` / `configureRolesAction`, see
+ * `windows/custom/user/index.jsx`'s `handleAfterCreate`). `InviteUserDialog.jsx` and
+ * its own `__tests__/InviteUserDialog.vitest.jsx` are now dead code (zero imports
+ * from app source) — left untouched here, flagged as a follow-up cleanup candidate.
  */
 
-async function installUserListMock(page) {
-  await page.route('**/sws/neo/user/user{/**,}**', async (route) => {
+async function installUserCreateMocks(page) {
+  await page.route('**/sws/neo/user/user/**', async (route) => route.fallback());
+  await page.route('**/sws/neo/user/user**', async (route) => {
     const request = route.request();
-    const url = request.url();
+    const method = request.method();
 
-    if (request.method() === 'GET' && !/\/user\/user\/[^/?]+/.test(url)) {
+    if (method === 'GET') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+      });
+      return;
+    }
+
+    if (method === 'POST') {
+      const body = request.postDataJSON() ?? {};
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: {
+            data: [{
+              id: 'user-mock-123',
+              name: body.name || 'Invited Person',
+              email: body.email || 'invited.person@example.com',
+              active: true,
+              invitationStatus: 'PENDING',
+            }],
+          },
+        }),
       });
       return;
     }
@@ -24,56 +58,36 @@ async function installUserListMock(page) {
 }
 
 test.describe('Company User Invitations — ETP-4894', () => {
-  test('exposes invitation banner and submits email-only invitation dialog with pending status', async ({
+  test('admin creates a user and gets a single actionable "invitation sent" toast (ETP-4830)', async ({
     page,
   }) => {
     await login(page);
-    await installUserListMock(page);
+    await installUserCreateMocks(page);
 
-    await page.route('**/sws/go/company-invitations', async (route) => {
-      if (route.request().method() === 'POST') {
-        const body = route.request().postDataJSON();
-        await route.fulfill({
-          status: 201,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            status: 'success',
-            invitation: {
-              id: 'inv-mock-123',
-              email: body?.email || 'invited.person@example.com',
-              status: 'PENDING',
-              expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
-            },
-          }),
-        });
-        return;
-      }
-      await route.fallback();
-    });
-
-    await page.goto('/user');
+    await page.goto('/user/new');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // Verify invitation guidance banner
-    const guidance = page.getByTestId('user-invitation-info');
-    await expect(guidance).toBeVisible({ timeout: 10_000 });
+    // Fill the two fields the create form actually requires (decisions.json:
+    // user.name and user.email — active is a checkbox, excluded from the
+    // required-field gate by design, see requiredFields.js).
+    const nameInput = page.getByTestId('field-name');
+    await expect(nameInput).toBeVisible({ timeout: 10_000 });
+    await nameInput.fill('Invited Person');
 
-    // Open invitation dialog
-    const openInviteBtn = page.getByTestId('action-open-invite');
-    await expect(openInviteBtn).toBeVisible();
-    await openInviteBtn.click();
-
-    // Verify dialog elements
-    const emailInput = page.getByTestId('invite-user-email');
+    const emailInput = page.getByTestId('field-email');
     await expect(emailInput).toBeVisible();
     await emailInput.fill('invited.person@example.com');
 
-    const submitBtn = page.getByTestId('invite-user-submit');
-    await submitBtn.click();
+    const saveBtn = page.getByTestId('action-save');
+    await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+    await saveBtn.click();
 
-    // Verify pending confirmation view
-    const pendingStatus = page.getByTestId('invite-user-pending-status');
-    await expect(pendingStatus).toBeVisible();
+    // Single actionable toast, not the old banner/dialog — es_ES is the mock-mode
+    // default locale (docs/e2e-testing-guide.md "Mock-mode Tests" section).
+    const toast = page.locator('[data-sonner-toast][data-type="success"]').first();
+    await expect(toast).toBeVisible({ timeout: 10_000 });
+    await expect(toast).toContainText('Usuario creado. Invitación enviada por correo.');
+    await expect(toast.getByRole('button', { name: 'Configurar roles' })).toBeVisible();
 
     await page.screenshot({
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-user-invitation-pending.png',

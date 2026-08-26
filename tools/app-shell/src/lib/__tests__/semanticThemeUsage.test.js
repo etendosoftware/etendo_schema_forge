@@ -20,6 +20,7 @@ const COLOR_LITERAL_EXCEPTIONS = new Map([
   ['windows/custom/product/ProductSidebar.jsx', 'warehouse data-series identity'],
   ['windows/custom/shared/documentPdf.js', 'PDF document contract'],
   ['windows/custom/shared/pdfUtils.js', 'PDF document contract'],
+  ['windows/custom/user/UserDebugPanel.jsx', 'developer diagnostic palette'],
   // Landed via an unrelated epic branch after this enforcement test was written —
   // not yet migrated. Tracked as a follow-up, not in scope for the branch that
   // brought this test in.

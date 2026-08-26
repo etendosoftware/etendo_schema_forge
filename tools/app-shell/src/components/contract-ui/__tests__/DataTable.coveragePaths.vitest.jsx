@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 
 vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
@@ -250,6 +251,38 @@ describe('DataTable coverage-oriented paths', () => {
     );
     fireEvent.click(screen.getAllByRole('switch')[0]);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
+  });
+
+  it('surfaces the parsed backend error message on a failed inline toggle, not a generic "Error <status>"', async () => {
+    // Regression test for ETP-4830 commit 9e90cccf1: runInlineToggleRequest used to throw a bare
+    // `Error ${res.status}` on !res.ok, so a self-deactivation guard rejection surfaced as "Error
+    // 400" instead of the real backend message. It now parses the { error: { message } } body via
+    // parseBackendErrorMessage/translateBackendError before throwing/toasting.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: { message: 'You cannot deactivate your own user account', status: 400 },
+      }),
+    }));
+
+    render(
+      <DataTable
+        entity="orderLine"
+        apiBaseUrl="/api"
+        token="tkn"
+        columns={baseColumns}
+        data={baseRows}
+        selectable={false}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole('switch')[0]);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'You cannot deactivate your own user account',
+    ));
+    expect(toast.error).not.toHaveBeenCalledWith('Error 400');
   });
 
   it('exercises inline add row lookup, search, selector, select, numeric clamp, callout, and submit paths', async () => {

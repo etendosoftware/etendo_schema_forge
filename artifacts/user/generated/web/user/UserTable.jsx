@@ -7,6 +7,7 @@ const columns = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
   { key: 'email', column: 'Email', type: 'string', label: 'Email', required: true },
   { key: 'locked', column: 'IsLocked', type: 'boolean', label: 'Locked', required: true },
+  { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', toggle: true, required: true },
   { key: 'defaultRole', column: 'Default_Ad_Role_ID', type: 'selector', label: 'Default Role' },
 ];
 // @sf-generated-end columns:user

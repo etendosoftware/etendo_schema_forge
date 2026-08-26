@@ -1118,4 +1118,196 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       });
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // E — ETP-5002: the required-field gate must not block on a default in flight
+  //
+  // ETP-4933 disables every primary persist action while a required field is
+  // empty. ETP-4741's 4s budget releases defaultsLoading EARLY, without settling
+  // the request — so on a slow `GET /<entity>/defaults` the form unlocks with the
+  // defaults still in the air, and the gate then blocks Guardar/Confirmar on a
+  // value the backend was about to supply. `purchase-order` marks `warehouse`
+  // required with no contract default, which is exactly how the ETP-5002
+  // rectificativa E2E specs died: "Completa primero los campos obligatorios:
+  // Almacén" on a brand-new PO, with a disabled Guardar AND Confirmar.
+  //
+  // Contract: block on the REQUEST window (defaultsPending), not the UX window.
+  // ---------------------------------------------------------------------------
+
+  describe('required-field gate vs. pending defaults (ETP-5002)', () => {
+    // Mirrors artifacts/purchase-order/contract.json: `warehouse` is
+    // required + editable with defaultValue null, i.e. NEO's /defaults is the
+    // only thing that ever fills it.
+    const PO_FIELDS = [
+      { key: 'warehouse', column: 'warehouse', label: 'Warehouse', type: 'search', required: true },
+    ];
+
+    function renderPO() {
+      return renderEntity('purchaseOrder', { contractFields: PO_FIELDS });
+    }
+
+    it('defers blocking while the defaults request is still in flight', async () => {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      expect(result.current.defaultsPending, 'the defaults session must read as pending').toBe(true);
+      expect(
+        result.current.isValid,
+        'the gate must not block a new record on a required field whose default has not landed'
+      ).toBe(true);
+      expect(result.current.missingRequiredFields).toEqual([]);
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { warehouse: 'WH-1' } }));
+      });
+      await settle();
+    });
+
+    it('keeps deferring after the 4s UX budget expires — the request is what matters', async () => {
+      vi.useFakeTimers();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(DEFAULTS_TIMEOUT_MS + 1);
+      });
+
+      expect(
+        result.current.defaultsLoading,
+        'ETP-4741: the UX budget releases the form so the user can start working'
+      ).toBe(false);
+      expect(
+        result.current.defaultsPending,
+        'ETP-5002: the request is still running, so the gate must stay deferred'
+      ).toBe(true);
+      expect(
+        result.current.isValid,
+        'this is the exact ETP-5002 regression: unlocked form + still-flying default '
+        + 'must NOT leave Guardar/Confirmar disabled on `warehouse`'
+      ).toBe(true);
+
+      vi.useRealTimers();
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { warehouse: 'WH-1' } }));
+      });
+      await settle();
+    });
+
+    it('applies the gate in full once the defaults land WITHOUT the required field', async () => {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { someOtherField: 'X' } }));
+      });
+      await settle();
+
+      expect(result.current.defaultsPending).toBe(false);
+      expect(
+        result.current.isValid,
+        'once we KNOW the backend is not supplying warehouse, the gate is correct to block'
+      ).toBe(false);
+      expect(result.current.missingRequiredFields.map(f => f.key)).toEqual(['warehouse']);
+    });
+
+    it('clears the block when the defaults land WITH the required field', async () => {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { warehouse: 'WH-1' } }));
+      });
+      await settle();
+
+      expect(result.current.defaultsPending).toBe(false);
+      expect(result.current.editing?.warehouse).toBe('WH-1');
+      expect(result.current.isValid, 'the default filled the field, so nothing blocks').toBe(true);
+    });
+
+    it('applies the gate in full when the defaults request fails', async () => {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        pending.reject(new Error('network down'));
+      });
+      await settle();
+
+      expect(
+        result.current.defaultsPending,
+        'a failed session is settled, not pending — deferring forever would disable the gate'
+      ).toBe(false);
+      expect(result.current.isValid).toBe(false);
+      expect(result.current.missingRequiredFields.map(f => f.key)).toEqual(['warehouse']);
+    });
+
+    it('stops deferring when a record load neutralizes the pending session', async () => {
+      mockFetchHonoringAbort();
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      expect(result.current.defaultsPending).toBe(true);
+
+      globalThis.fetch.mockResolvedValueOnce(
+        jsonResponse({ response: { data: [{ id: '42', warehouse: '' }] } })
+      );
+      await act(async () => {
+        result.current.fetchById('42');
+      });
+      await settle();
+
+      expect(
+        result.current.defaultsPending,
+        'neutralizePendingDefaults must clear the deferral, or it latches forever'
+      ).toBe(false);
+    });
+
+    it('never defers on an EXISTING record, even mid-session', async () => {
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderPO();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      // Simulate the post-create state: the record now has an id, while a
+      // defaults response is somehow still outstanding.
+      await act(async () => {
+        result.current.handleChange('warehouse', '');
+      });
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: {} }));
+      });
+      await settle();
+
+      expect(
+        result.current.isValid,
+        'a touched-and-emptied required field must still block once defaults settled'
+      ).toBe(false);
+    });
+  });
 });

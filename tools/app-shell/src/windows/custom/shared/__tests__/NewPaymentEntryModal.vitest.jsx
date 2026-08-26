@@ -16,6 +16,14 @@ vi.mock('@/i18n', () => ({
 // which masked the account-currency symbol on the multi-currency readout — using the real,
 // dependency-free util keeps these assertions faithful to what the running app renders.
 
+// ETP-4891: the PSD2-inactive warning navigates to the account's window. `useNavigate` is only
+// called from inside that warning, so the rest of the suite never needs a Router — but the mock
+// has to be hoisted anyway for the tests that DO render it.
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+}));
+
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange }) => (
     <div data-testid="select" data-value={value || ''} data-onchange={typeof onValueChange}>{children}</div>
@@ -183,6 +191,7 @@ describe('NewPaymentEntryModal', () => {
     // leave an overpayment as credit; no conversion prefill (same-currency path).
     mockOrgCurrency = 'EUR';
     mockConversion = { rate: null, hasRate: false, loading: false };
+    navigateMock.mockReset();
   });
 
   afterEach(() => {
@@ -2777,6 +2786,154 @@ describe('NewPaymentEntryModal', () => {
           expect(screen.queryByTestId('cp-pis-reopen')).not.toBeInTheDocument();
         }, 8000);
       });
+    });
+  });
+  // ─── ETP-4891 ───────────────────────────────────────────────────────────────
+  // A transfer is executed by the bank over PIS, so it needs a LIVE connection. The three PSD2
+  // states of an account split three ways: connected → PIS form; reconnectable (connected once,
+  // then switched off, link still alive) → blocked with a warning; never connected → ordinary
+  // manual payment, exactly as before.
+  describe('PSD2 inactive connection blocks a transfer (ETP-4891)', () => {
+    const WARNING = 'cp-psd2-inactive-warning';
+    const EDIT_BUTTON = 'cp-psd2-inactive-edit-account';
+
+    /** A transfer-method scenario whose account is in the given PSD2 state. */
+    function transferTo(accountState, extra = {}) {
+      return buildPisApiFetch({
+        accounts: [{ id: 'acc-1', label: 'Banco', ...accountState }],
+        methods: [{ id: 'm-1', label: 'Transferencia', isBankTransfer: true }],
+        ...extra,
+      });
+    }
+
+    const outbound = { dir: 'out', specName: 'purchase-invoice' };
+
+    it('shows the warning and hides the payment body when the connection is reconnectable', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal(outbound);
+
+      expect(await screen.findByTestId(WARNING)).toBeInTheDocument();
+      // The form body is gone — no amount, no date, no PIS section, no balance readout.
+      expect(screen.queryByTestId('cp-amount-input')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('date-field')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-equalize')).not.toBeInTheDocument();
+    });
+
+    it('keeps the method and account selects so another account can be picked without reopening', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal(outbound);
+
+      await screen.findByTestId(WARNING);
+      expect(screen.getByTestId('field-paymentMethod-chip')).toBeInTheDocument();
+      expect(screen.getByTestId('field-account-chip')).toBeInTheDocument();
+    });
+
+    it('disables Confirm but leaves Save draft enabled', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal(outbound);
+
+      await screen.findByTestId(WARNING);
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+      // A draft moves no money and creates no bank transaction, so it stays available.
+      expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+    });
+
+    it('does not register a payment when Confirm is clicked while blocked', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal(outbound);
+
+      await screen.findByTestId(WARNING);
+      fireEvent.click(screen.getByTestId('cp-confirm'));
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      expect(mockApiFetch.mock.calls.some(([path]) => path.includes('registerPayment'))).toBe(false);
+    });
+
+    it('navigates to the account with ?edit=true so the user can reconnect', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal(outbound);
+
+      fireEvent.click(await screen.findByTestId(EDIT_BUTTON));
+      expect(navigateMock).toHaveBeenCalledWith('/financial-account/acc-1?edit=true');
+    });
+
+    it('shows the PIS form and no warning when the connection is active', async () => {
+      mockApiFetch = transferTo({ bankConnected: true, bankReconnectable: false, maskedPan: '****1234' });
+      renderModal(outbound);
+
+      expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+      expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument();
+    });
+
+    it('leaves an account that was NEVER connected on the ordinary manual flow', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: false });
+      renderModal(outbound);
+
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      // No warning, no PIS — but the full form, so a manual transfer is still payable.
+      expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-amount-input')).toBeInTheDocument();
+    });
+
+    it('does not block a receipt (dir "in") on the same reconnectable account', async () => {
+      mockApiFetch = transferTo({ bankConnected: false, bankReconnectable: true });
+      renderModal({ dir: 'in' });
+
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-amount-input')).toBeInTheDocument();
+    });
+
+    it('does not block a method that is merely NAMED like a transfer (isBankTransfer false)', async () => {
+      // The old name regex would have matched "Transferencia interna" and blocked a legitimate
+      // payment. The backend flag is authoritative now.
+      mockApiFetch = buildPisApiFetch({
+        accounts: [{ id: 'acc-1', label: 'Banco', bankConnected: false, bankReconnectable: true }],
+        methods: [{ id: 'm-1', label: 'Transferencia interna', isBankTransfer: false }],
+      });
+      renderModal(outbound);
+
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-amount-input')).toBeInTheDocument();
+    });
+
+    it('falls back to the name heuristic when the backend does not send the flag', async () => {
+      // Older backend: `isBankTransfer` absent. The method is still recognised as a transfer, so
+      // the block holds rather than silently letting an unexecutable payment through.
+      mockApiFetch = buildPisApiFetch({
+        accounts: [{ id: 'acc-1', label: 'Banco', bankConnected: false, bankReconnectable: true }],
+        methods: [{ id: 'm-1', label: 'Transferencia' }],
+      });
+      renderModal(outbound);
+
+      expect(await screen.findByTestId(WARNING)).toBeInTheDocument();
+    });
+
+    it('clears the warning when the user switches to a connected account', async () => {
+      mockApiFetch = buildPisApiFetch({
+        accounts: [
+          { id: 'acc-1', label: 'Banco desconectado', bankConnected: false, bankReconnectable: true },
+          { id: 'acc-2', label: 'Banco conectado', bankConnected: true, maskedPan: '****9999' },
+        ],
+        methods: [{ id: 'm-1', label: 'Transferencia', isBankTransfer: true }],
+      });
+      renderModal(outbound);
+
+      await screen.findByTestId(WARNING);
+
+      // Pick the connected account from the (still visible) account dropdown.
+      fireEvent.click(screen.getByTestId('field-account-chip'));
+      const accountInput = await screen.findByTestId('field-account');
+      fireEvent.focus(accountInput);
+      fireEvent.change(accountInput, { target: { value: '' } });
+      await waitFor(() => expect(screen.getByTestId('options-account')).toBeInTheDocument());
+      // Options select on mouseDown (it fires before blur), not click.
+      fireEvent.mouseDown(screen.getByTestId('option-account-acc-2'));
+
+      await waitFor(() => expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument());
+      expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
     });
   });
 });

@@ -244,8 +244,8 @@ test-e2e-report: ## Show last E2E test report in browser
 test-e2e-record: ## Record a test flow (opens browser, generates code)
 	cd e2e && npx playwright codegen --save-storage=auth.json http://localhost:3100 --output=recordings/recorded-flow.spec.js
 
-test-e2e-onboarding-integration: ## Run the live onboarding integration spec; e2e/onboarding-accounts.json controls repeated account fixtures
-	cd e2e && E2E_ONBOARDING_INTEGRATION=1 npx playwright test tests/flows/onboarding-register.integration.spec.js
+test-e2e-onboarding-integration: ## Run the live onboarding integration spec; e2e/onboarding-accounts.json controls repeated account fixtures. Needs the backend pointed at the email sink (docs/e2e-testing-guide.md)
+	cd e2e && E2E_ONBOARDING_INTEGRATION=1 E2E_EMAIL_SINK=$${E2E_EMAIL_SINK:-1} npx playwright test tests/flows/onboarding-register.integration.spec.js
 
 install-e2e: ## Install E2E dependencies + browsers
 	cd e2e && npm install && npx playwright install chromium

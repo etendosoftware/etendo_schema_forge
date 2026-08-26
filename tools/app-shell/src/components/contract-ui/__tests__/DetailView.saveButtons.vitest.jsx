@@ -38,6 +38,14 @@ const mockHook = {
   handleChange: vi.fn(),
   handleSave: vi.fn(() => Promise.resolve({ id: '123' })),
   handleSaveAndProcess: vi.fn(() => Promise.resolve({ id: '123' })),
+  // ETP-4830 — DetailView's own isNew-gated effect now calls this whenever `editing`
+  // still holds a DIFFERENT persisted record's id (see DetailView.jsx). This file's
+  // `resetHook()` always seeds `editing` from the "existing record" fixture (`rec`,
+  // id: '123'), which the "new record" tests below render with `recordId="new"`
+  // without overriding — previously harmless (the old guard never re-fired once
+  // `editing` held any value), now exercised. A no-op stub is enough: these tests
+  // assert on handleSave/onAfterCreate/navigate, not on handleNew's own behavior.
+  handleNew: vi.fn(),
   handleCreate: vi.fn(),
   handleDelete: vi.fn(),
   handleAddChild: vi.fn(),
