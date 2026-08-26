@@ -53,8 +53,20 @@ test.describe('Purchase Order — readOnlyLogic when processed', () => {
       const fieldRoot = page.getByTestId(field.testId);
       await expect(fieldRoot).toBeVisible({ timeout: 5_000 });
 
-      const control = fieldRoot.locator('input, button, textarea, select').first();
-      await expect(control).toBeDisabled({ timeout: 3_000 });
+      // The testid sits on the CONTAINER for most fields but on the control itself for
+      // others (orderDate is a bare <input data-testid="field-orderDate" disabled>), so a
+      // descendant-only lookup finds nothing there and reports "element(s) not found" —
+      // which reads as "the field is editable" when it is in fact disabled. Resolve the
+      // control as "the node itself when it is one, otherwise its first descendant".
+      await expect.poll(
+        () => fieldRoot.evaluate((el) => {
+          const control = el.matches('input, button, textarea, select')
+            ? el
+            : el.querySelector('input, button, textarea, select');
+          return control ? control.disabled === true : 'no control found';
+        }),
+        { timeout: 3_000, message: `${field.label} must be disabled on a processed order` },
+      ).toBe(true);
     });
   }
 

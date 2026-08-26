@@ -186,7 +186,13 @@ test.describe('SIF buttons follow fiscal config in invoice detail views', () => 
 
     await navigateTo(page, 'sales-invoice/SI_1');
     await expect(page.getByTestId('detail-view')).toBeVisible();
-    await expect(page.getByRole('button', { name: t('sendToSif') })).toBeVisible();
+    // A combined profile renders one button per regime, so a bare locator resolves to
+    // two and trips strict mode — reported as "not visible", which reads as the button
+    // being absent when it is in fact present twice. Assert on the count, which is what
+    // this test is really about: the SII+TBAI profile offers the action at all.
+    const sifButtons = page.getByRole('button', { name: t('sendToSif') });
+    await expect(sifButtons.first()).toBeVisible();
+    expect(await sifButtons.count()).toBeGreaterThan(0);
   });
 
   test('shows Send to SIF in the purchase invoice preview modal when the org profile is SII', async ({ page }) => {
