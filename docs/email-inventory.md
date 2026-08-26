@@ -53,7 +53,7 @@ graph LR
   M3["✅ ✉️ company-invitation<br/><i>7-day link — verified</i>"]
   M4["✅ ✉️ reset-password<br/><i>30-minute link — verified</i>"]
   M5["◐ ✉️ password-changed"]
-  M6["◐ ✉️ login-alert<br/><i>nothing calls this yet</i>"]
+  M6["◐ ✉️ login-alert<br/><i>built, deliberately not sent</i>"]
   M7["✅ ✉️ organization-joined<br/><i>verified</i>"]
   M8["◐ ✉️ verify-email<br/><i>24-hour link</i>"]
   M9["◐ ✉️ new-account-invitee<br/><i>welcome, no verification</i>"]
@@ -120,7 +120,8 @@ welcome again on that branch plus the organization-joined notice. Between the tw
 email an Admin or Operator can actually receive has now been seen arriving.
 
 `password-changed` renders through the same layout and passes its tests but has
-not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
+not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it — and
+by decision (2026-08-26) none will for now, so it stays amber indefinitely rather than pending work.
 
 Note the invitee branch: accepting an invitation sends a welcome **only when the account is created
 right there**, and the joined notice either way. Before ETP-5003 an invited operator received
@@ -215,7 +216,7 @@ what they used *before* that work, which is what the branded-template migration 
 | 12 | Email verification | `verify-email` | sign-up, and `POST /verify-email/resend` — `EtendoGoJwtServlet` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/EmailVerificationDalHelper.java` |
 | 13 | Welcome for an invited user | `new-account-invitee` | invitation accepted when the account is created there — `CompanyInvitationService` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/TransactionalAuthEmailSender.java` |
 | 14 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
-| 15 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
+| 15 | Login alert (new IP/device) | `login-alert` | **deliberately not sent** (2026-08-26) — registered and reachable over the endpoint, no in-repo caller by decision | shared layout | `contracts/LoginAlertEmailContract.java` |
 
 ### 3.C — Etendo Core (classic SMTP)
 
@@ -266,9 +267,11 @@ signature); the layout decides how it looks.
 
 ### Gaps still open
 
-- **`login-alert` (#6 in the map) has no producer.** The contract is registered and its catalog
-  entries exist in both locales, but nothing in either repo calls it. Either wire it to the sign-in
-  path or drop it — a registered contract nobody sends is a maintenance cost with no user.
+- **`login-alert` (#6 in the map) has no producer — on purpose.** The contract is registered and its
+  catalog entries exist in both locales, but nothing in either repo calls it, and as of 2026-08-26
+  **that is a decision, not an oversight: we are not sending this email yet.** It stays built and
+  dormant so the work survives until the call is revisited. Do not wire it to the sign-in path
+  looking to close a gap.
 - **Only two locales.** `emails_es_ES` and `emails_en_US`. Anything else resolves to Spanish through
   the explicit fallback — deliberately, since `ResourceBundle` would otherwise let the *server's*
   JVM locale pick the language of a customer's email (this is why `EmailMessages` uses

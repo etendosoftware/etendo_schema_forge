@@ -139,7 +139,12 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 
 ### login-alert
 - Registered, migrated, reachable over the endpoint — and **nobody calls it**. There is no producer
-  in either repo. Decide whether to wire it or drop it before treating it as live.
+  in either repo.
+- **This is deliberate, as of 2026-08-26: we are not sending it yet.** The contract and its catalog
+  entries stay in place so the work is not lost, but no sign-in path should be wired to it until
+  that decision is revisited. Do not "fix" the missing producer.
+- Because it never leaves the system, it cannot be verified in an inbox — treat it as dormant, not
+  as working.
 
 ### Known issue: the document download link (not fixed)
 The link in a document email answers **500 for any document in a real organization**; it only works

@@ -181,9 +181,10 @@ All three provider-branded templates are now migrated (F2/F3), so for Etendo GO 
 answer to "what does an Etendo email look like", and it is versioned in this repo. F5 extends that
 answer to the Core SMTP portal emails.
 
-**Still undecided:** whether `login-alert` gets a producer at all. It was migrated in F2 and has
-catalog entries in both locales, but nothing in either repo calls it, so it cannot be verified in an
-inbox and cannot be said to work. Wire it or drop it — see `docs/email-inventory.md` §4.
+**Decided 2026-08-26: `login-alert` is not sent for now.** It was migrated in F2 and has catalog
+entries in both locales, but no producer is being wired — the email stays built and dormant until
+the decision is revisited. It therefore cannot be verified in an inbox, and that is expected rather
+than outstanding work. See `docs/email-inventory.md` §4.
 
 ## 8. Dark mode
 
