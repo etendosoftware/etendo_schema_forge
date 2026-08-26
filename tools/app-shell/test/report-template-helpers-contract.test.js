@@ -17,6 +17,7 @@ import { registerReportHelpers } from '../../../templates/reports/helpers/report
 // guards the GENERAL invariant for every report template, not just qrCode.
 
 const ARTIFACTS_DIR = fileURLToPath(new URL('../../../artifacts', import.meta.url));
+const REPORT_TEMPLATES_DIR = fileURLToPath(new URL('../../../templates/reports', import.meta.url));
 const REPORT_API_PLUGIN = fileURLToPath(
   new URL('../vite-plugins/report-api.js', import.meta.url)
 );
@@ -96,6 +97,11 @@ function canonicalRegisteredHelperNames() {
   const hb = Handlebars.create();
   registerReportHelpers(hb);
   return new Set(Object.keys(hb.helpers));
+}
+
+function expandDocumentPartials(source) {
+  const branding = readFileSync(join(REPORT_TEMPLATES_DIR, 'document-branding.hbs'), 'utf8');
+  return source.replace(/\{\{>\s*document-branding\s*\}\}/g, branding);
 }
 
 describe('report template ↔ server helper whitelist contract', () => {
@@ -214,7 +220,7 @@ describe('document print templates — strict render smoke (canonical helpers on
     it(`renders ${dir}/template.hbs without throwing (registerReportHelpers only)`, () => {
       const templatePath = join(ARTIFACTS_DIR, dir, 'template.hbs');
       const helpersPath = join(ARTIFACTS_DIR, dir, 'helpers.js');
-      const templateContent = readFileSync(templatePath, 'utf8');
+      const templateContent = expandDocumentPartials(readFileSync(templatePath, 'utf8'));
       const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
 
       const hb = Handlebars.create();
@@ -222,9 +228,12 @@ describe('document print templates — strict render smoke (canonical helpers on
 
       let html;
       assert.doesNotThrow(() => {
-        html = hb.compile(templateContent)({ css: '', meta, header, lines, taxes });
+        html = hb.compile(templateContent)({
+          css: '', meta, header: { ...header, companyLogoDataUrl: 'data:image/png;base64,FAKE' }, lines, taxes,
+        });
       });
       assert.ok(!html.includes('Missing helper'), `${dir}/template.hbs rendered a "Missing helper" fallback`);
+      assert.match(html, /class="document-brand-logo"/, `${dir}/template.hbs must render the shared document branding partial`);
     });
   }
 });
