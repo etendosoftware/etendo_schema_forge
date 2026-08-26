@@ -589,7 +589,7 @@ export default function AmortizationLinesTable({
         onClose={() => setSelectedRows(new Set())}
         closeTitle={ui('close')}
         data-testid="SelectionToolbar__fecdcf">
-        <span className="text-sm font-semibold">
+        <span className="text-sm font-medium">
           {ui('selected', { count: selectedRows.size })}
         </span>
         <button

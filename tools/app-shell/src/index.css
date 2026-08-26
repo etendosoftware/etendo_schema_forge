@@ -69,3 +69,61 @@
 .lines-bar-dismiss {
   animation: lines-bar-dismiss 200ms ease-in both;
 }
+
+/*
+ * SelectionToolbar contrast fix (ETP-4972 review round — Alex/live-QA finding).
+ *
+ * Callers frequently pass a shared shadcn `<Button>` as SelectionToolbar
+ * children (ListView's Print/Clone/Delete, `bulkActions`,
+ * `selectionBarRightActions` — used by many windows, e.g. Contacts). That
+ * component's `default`/`outline` variants assume a light card/page
+ * background:
+ *   - default:  bg-primary text-primary-foreground ...
+ *   - outline:  border border-input bg-background ...
+ * `--primary` (light theme) is LITERALLY the same HSL triplet as
+ * `--floating-toolbar-bg` (both `222 47% 11%`), so a default-variant button
+ * disappears into the pill entirely; an outline-variant button renders as a
+ * near-white `bg-background` chip. Both are illegible against the dark pill.
+ *
+ * Scoped generically to `.selection-toolbar` (the pill SelectionToolbar.jsx
+ * renders) and keyed off the exact shadcn variant classes, so this fixes
+ * every current and future caller's injected <Button> without touching that
+ * caller's own className — no per-window patch needed. Deliberately written
+ * OUTSIDE any `@layer` block: Tailwind's utilities (bg-primary, bg-background,
+ * border-input, hover:*) live inside `@layer utilities`, and an unlayered
+ * rule always wins over a layered one regardless of selector specificity or
+ * source order — so this reliably overrides them without `!important`.
+ *
+ * Hand-styled buttons elsewhere in this codebase (e.g. the explicit
+ * `text-destructive border-destructive` buttons SelectionToolbar callers
+ * already hand-roll) don't carry `bg-primary`/`bg-background` and are
+ * untouched by this rule.
+ */
+.selection-toolbar button[class*="bg-primary"],
+.selection-toolbar button[class*="bg-background"] {
+  background-color: transparent;
+  border-color: hsl(var(--floating-toolbar-fg) / 0.3);
+  color: hsl(var(--floating-toolbar-fg));
+  box-shadow: none;
+}
+
+.selection-toolbar button[class*="bg-primary"]:hover,
+.selection-toolbar button[class*="bg-background"]:hover {
+  background-color: hsl(var(--floating-toolbar-fg) / 0.12);
+  color: hsl(var(--floating-toolbar-fg));
+}
+
+/* Delete-flavored shadcn buttons read as destructive red, matching the
+   hand-styled "Eliminar" buttons at every other SelectionToolbar call site
+   (see e.g. AssetsAmortizationPanel.jsx, detailViewHelpers.jsx). Keyed off
+   the existing, unchanged `bulk-delete-selected` data-testid (ListView.jsx)
+   rather than editing that call site's className. */
+.selection-toolbar button[data-testid="bulk-delete-selected"] {
+  border-color: hsl(var(--destructive) / 0.5);
+  color: hsl(var(--destructive));
+}
+
+.selection-toolbar button[data-testid="bulk-delete-selected"]:hover {
+  background-color: hsl(var(--destructive) / 0.15);
+  color: hsl(var(--destructive));
+}

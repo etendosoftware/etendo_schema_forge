@@ -537,7 +537,7 @@ function secondaryAddLineBar(props) {
             onClose={props.onClose}
             closeTitle={props.closeTitle}
             data-testid="SelectionToolbar__fa3275">
-            <span className="text-sm font-semibold">{props.selectedLabel}</span>
+            <span className="text-sm font-medium">{props.selectedLabel}</span>
             <button
               type="button"
               disabled={props.secondaryDeleting[props.st.key] ?? false}
@@ -3508,7 +3508,7 @@ export function DetailView({
                                         closeTitle={ui('close')}
                                         data-testid="SelectionToolbar__fa3275">
                                         <div className="flex flex-col items-start">
-                                          <span className="text-sm font-semibold">
+                                          <span className="text-sm font-medium">
                                             {ui('selected', { count: selectedChildRows.length })}
                                           </span>
                                           {getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data) != null && (

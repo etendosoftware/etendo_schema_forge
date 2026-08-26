@@ -911,10 +911,17 @@ export function ListView({
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
-          {/* Selection bar or filter bar */}
-          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
-              ternary whose alternate is a plain `&&`: nesting one ternary inside
-              another here is what Sonar S3358 flags.
+          {/* Selection toolbar AND filter/idle bar — rendered independently, not as
+              either/or branches of one ternary (ETP-4972 Finding 4). Before ETP-4972
+              the selection bar occupied this same DOM slot as the idle bar (an inline
+              "replace the toolbar" design), so a ternary made sense. Now that
+              SelectionToolbar is a viewport-fixed portal to document.body, the two
+              no longer compete for the same space — and per ETP-4972's own "Floating
+              Toolbar vs Gmail/Drive-style replace" decision, the floating pill is
+              explicitly ADDITIVE: the idle bar (Filtros, ViewToggle, Nuevo, etc.) must
+              stay visible while rows are selected, not disappear behind the pill.
+              Rendering both as independent `&&` expressions below achieves that with
+              no nested-ternary risk (Sonar S3358 doesn't apply to two siblings).
 
               ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
               selection bar. The flag exists because a custom headerTable draws the
@@ -928,14 +935,14 @@ export function ListView({
               unreachable unless the grid is selectable, so a custom headerTable that
               wants no selection at all simply keeps `selectable={false}` on its own
               DataTable and never renders rows that can be picked. */}
-          {selectedRows.length > 0 ? (
+          {selectedRows.length > 0 && (
             <SelectionToolbar
               visible={selectedRows.length > 0}
               onClose={clearSelection}
               closeTitle={ui('close')}
               data-testid="SelectionToolbar__620cbc">
               <div className="flex items-center gap-3 h-10">
-                <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
+                <span role="status" className="text-sm font-medium" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
@@ -1002,7 +1009,8 @@ export function ListView({
                 })}
               </div>
             </SelectionToolbar>
-          ) : !listBarHidden && (
+          )}
+          {!listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (

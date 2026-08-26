@@ -262,7 +262,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         onClose={clearSelection}
         closeTitle={ui('close') ?? 'Cerrar'}
         data-testid="SelectionToolbar__34159c">
-        <span className="text-sm font-semibold">
+        <span className="text-sm font-medium">
           {ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
         </span>
         <button

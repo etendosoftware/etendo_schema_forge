@@ -516,7 +516,7 @@ export function renderDetailBulkActionBar({
       onClose={() => setSelectedChildRows([])}
       closeTitle={ui('close')}
       data-testid="SelectionToolbar__7c75ad">
-      <span className="text-sm font-semibold">{ui('selected', {count: selectedChildRows.length})}</span>
+      <span className="text-sm font-medium">{ui('selected', {count: selectedChildRows.length})}</span>
       <div className="flex items-center gap-2">
         {detailProcesses.map(p => (
           <button
