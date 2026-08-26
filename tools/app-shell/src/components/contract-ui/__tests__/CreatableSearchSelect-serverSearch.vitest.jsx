@@ -91,7 +91,7 @@ describe('CreatableSearchSelect — serverSearch mode (ETP-4600 Phase 2a)', () =
     expect(global.fetch.mock.calls[0][0]).toContain('q=Ac');
   });
 
-  it('shows the options exactly as returned by the server (no local re-filtering), capped to 20', async () => {
+  it('shows the options exactly as returned by the server (no local re-filtering), NOT capped to 20 (ETP-4975 — pagination replaced the fixed cap)', async () => {
     const manyItems = Array.from({ length: 25 }, (_, i) => ({ id: String(i), label: `Zzz-${i}` }));
     global.fetch = mockFetchOnce(manyItems);
 
@@ -103,9 +103,9 @@ describe('CreatableSearchSelect — serverSearch mode (ETP-4600 Phase 2a)', () =
     fireEvent.change(input, { target: { value: 'Zz' } });
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2), { timeout: 1000, interval: 50 });
 
-    // The full server page (25 items, capped to 20) renders as-is — proving the list comes
-    // straight from the server response, not a local re-filter pass.
-    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(20));
+    // The full server page (25 items) renders as-is, uncapped — proving the list comes
+    // straight from the server response (page size, not a local slice/truncation).
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(25));
   });
 
   it('resolves the chip label via a ?id= fetch when value is set without displayValue', async () => {
