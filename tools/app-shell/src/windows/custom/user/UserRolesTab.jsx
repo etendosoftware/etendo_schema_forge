@@ -34,7 +34,7 @@ const ROLE_ICONS = {
  *
  * `...rest` (e.g. `data-testid`) is spread onto the rendered `<span>` — every call site
  * passes `data-testid`, and without forwarding it here it was silently dropped (PR
- * #1211 review finding), so `TierPill__...` never actually reached the DOM despite
+ * 1211 review finding), so `TierPill__...` never actually reached the DOM despite
  * every caller setting it.
  */
 function TierPill({ tier, bold, children, ...rest }) {
