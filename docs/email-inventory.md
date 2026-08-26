@@ -57,12 +57,12 @@ graph LR
   M7["✅ ✉️ organization-joined<br/><i>verified</i>"]
   M8["◐ ✉️ verify-email<br/><i>24-hour link</i>"]
   M9["◐ ✉️ new-account-invitee<br/><i>welcome, no verification</i>"]
-  D1["⬜ ✉️ sales-invoice-send"]
-  D2["⬜ ✉️ sales-order-send"]
-  D3["⬜ ✉️ sales-quotation-send"]
-  D4["⬜ ✉️ goods-shipment-send"]
-  D5["⬜ ✉️ purchase-order-send"]
-  D6["⬜ ✉️ return-to-vendor-send"]
+  D1["✅ ✉️ sales-invoice-send<br/><i>verified</i>"]
+  D2["◐ ✉️ sales-order-send"]
+  D3["◐ ✉️ sales-quotation-send"]
+  D4["◐ ✉️ goods-shipment-send"]
+  D5["◐ ✉️ purchase-order-send"]
+  D6["◐ ✉️ return-to-vendor-send"]
   C1["⬜ ✉️ document with attachments"]
   C2["⬜ ✉️ portal: new user / cancelled"]
   C3["⬜ ✉️ [OB Alert] and error notices"]
@@ -94,7 +94,7 @@ graph LR
   K3 --> C3
 
   M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 --> LAYOUT --> PROVIDER
-  D1 & D2 & D3 & D4 & D5 & D6 --> PROVIDER
+  D1 & D2 & D3 & D4 & D5 & D6 --> LAYOUT
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
 
@@ -104,22 +104,22 @@ graph LR
   classDef act fill:#e0f2fe,stroke:#0284c7,color:#075985
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
-  class M1,M2,M3,M4,M7 verified
-  class M5,M6,M8,M9 migrated
-  class D1,D2,D3,D4,D5,D6,C1,C2,C3 todo
+  class M1,M2,M3,M4,M7,D1 verified
+  class M5,M6,M8,M9,D2,D3,D4,D5,D6 migrated
+  class C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**5 verified, 9 migrated, 23 total.** All four greens were opened in a real inbox on 2026-08-25:
+**6 verified, 15 migrated, 23 total.** The account greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
 welcome again on that branch plus the organization-joined notice. Between the two runs, every
 email an Admin or Operator can actually receive has now been seen arriving.
 
-Two ambers remain. `password-changed` renders through the same layout and passes its tests but has
+`password-changed` renders through the same layout and passes its tests but has
 not been looked at; `login-alert` cannot be looked at at all, since no code path reaches it.
 
 Note the invitee branch: accepting an invitation sends a welcome **only when the account is created
@@ -131,8 +131,13 @@ carries the email-verification link, and an invited operator has nothing to veri
 is itself proof that somebody meant to reach the address, and the operator never runs onboarding —
 the only flow the `403 EMAIL_NOT_VERIFIED` gate protects. Its button goes to the dashboard.
 
-The split still falls along the company boundary: everything **Admin and Operator** receive is
-migrated, everything the **Customer or Supplier** receives is not. F3 fixes that.
+**F3 closed the company boundary.** The split used to fall exactly along it — everything Admin and
+Operator received rendered through `EmailLayout`, everything the Customer or Supplier received did
+not. Since 2026-08-26 the six document emails go through the same layout, so an invoice reaching a
+customer now looks like the welcome reaching the admin. `sales-invoice-send` was opened in a real
+inbox that day, PDF download link included; the other five share one implementation
+(`DefaultDocumentSendEmailContract`) and differ only in their catalog entry, so the risk of an
+unseen one looking different is low — but they have not been observed arriving.
 
 Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
 environment-ready once the client, organization and dataset exist, `handleChangePassword` sends the
@@ -159,7 +164,7 @@ template). It is a *fallback, not an override* — SMTP, when configured, still 
 
 ## 3. Master table — every email
 
-### 2.A — Etendo GO: document emails ("send this invoice to the customer")
+### 3.A — Etendo GO: document emails ("send this invoice to the customer")
 
 All of them share one implementation, `DefaultDocumentSendEmailContract`, and are triggered from the
 React shell (`SendDocumentModal` → `documentEmailSend.js`). Contract name convention:
@@ -167,12 +172,24 @@ React shell (`SendDocumentModal` → `documentEmailSend.js`). Contract name conv
 
 | # | Email | Contract name | Trigger | Provider template | Key files |
 |---|---|---|---|---|---|
-| 1 | Sales invoice to customer | `sales-invoice-send` | Send button / kebab in the Sales Invoice window | `invoice` (branded); `custom` if the operator edits subject/message | `contracts/SalesInvoiceSendEmailContract.java`, `contracts/SalesDocumentEmailContractProvider.java`, `contracts/DalInvoiceEmailDocumentResolver.java` |
-| 2 | Sales order to customer | `sales-order-send` | Sales Order window | `custom` | `contracts/SalesOrderSendEmailContract.java`, `contracts/DalOrderEmailDocumentResolver.java` |
-| 3 | Sales quotation to customer | `sales-quotation-send` | Sales Quotation window | `custom` | `contracts/SalesQuotationSendEmailContract.java` |
-| 4 | Goods shipment / delivery note | `goods-shipment-send` | Goods Shipment window | `custom` | `contracts/GoodsShipmentSendEmailContract.java`, `contracts/DalShipmentEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
-| 5 | Purchase order to vendor | `purchase-order-send` | Purchase Order window | `custom` | `contracts/PurchaseOrderSendEmailContract.java`, `contracts/DalPurchaseOrderEmailDocumentResolver.java`, `contracts/PurchaseDocumentEmailContractProvider.java` |
-| 6 | Return to vendor | `return-to-vendor-send` | Return to Vendor window | `custom` | `contracts/ReturnToVendorSendEmailContract.java` |
+| 1 | Sales invoice to customer | `sales-invoice-send` | Send button / kebab in the Sales Invoice window | shared layout | `contracts/SalesInvoiceSendEmailContract.java`, `contracts/SalesDocumentEmailContractProvider.java`, `contracts/DalInvoiceEmailDocumentResolver.java` |
+| 2 | Sales order to customer | `sales-order-send` | Sales Order window | shared layout | `contracts/SalesOrderSendEmailContract.java`, `contracts/DalOrderEmailDocumentResolver.java` |
+| 3 | Sales quotation to customer | `sales-quotation-send` | Sales Quotation window | shared layout | `contracts/SalesQuotationSendEmailContract.java` |
+| 4 | Goods shipment / delivery note | `goods-shipment-send` | Goods Shipment window | shared layout | `contracts/GoodsShipmentSendEmailContract.java`, `contracts/DalShipmentEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
+| 5 | Purchase order to vendor | `purchase-order-send` | Purchase Order window | shared layout | `contracts/PurchaseOrderSendEmailContract.java`, `contracts/DalPurchaseOrderEmailDocumentResolver.java`, `contracts/PurchaseDocumentEmailContractProvider.java` |
+| 6 | Return to vendor | `return-to-vendor-send` | Return to Vendor window | shared layout | `contracts/ReturnToVendorSendEmailContract.java` |
+
+Since F3 (2026-08-26) all six render through `EmailLayout`, and their copy lives in
+`email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
+`document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
+
+> ⚠ **The default subject and body exist in two places.** When the operator sends without editing
+> anything, the backend composes the copy from the catalog above — but the modal shows the operator
+> what will go out by composing the *same* sentences itself (`SendDocumentModal.jsx` →
+> `defaultSubject` / `defaultMessage`, plus `sendModalDefaultMessage` in the locale JSON). This is
+> deliberate: it avoids a round trip on every modal open. The trade only holds while both sides
+> agree, and they diverged once already, so `__tests__/defaultCopyInSync.vitest.js` reads the
+> module's `.properties` and fails when they drift. Fix the mismatch, never the test.
 
 Shared plumbing for 1–6:
 `DefaultDocumentSendEmailContract.java`, `TransactionalEmailService.java`,
@@ -183,7 +200,7 @@ Frontend: `tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx`,
 `documentEmailSend.js`, `windows/custom/shared/useRowEmailModal.jsx`,
 `windows/custom/shared/PreviewActionButtons.jsx`.
 
-### 2.B — Etendo GO: account / auth emails
+### 3.B — Etendo GO: account / auth emails
 
 All of these render through `EmailLayout` since ETP-5003; the provider template column below records
 what they used *before* that work, which is what the branded-template migration removed.
@@ -200,7 +217,7 @@ what they used *before* that work, which is what the branded-template migration 
 | 14 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
 | 15 | Login alert (new IP/device) | `login-alert` | **no in-repo caller found** — contract is registered and reachable over the endpoint only | `login-alert` (branded) | `contracts/LoginAlertEmailContract.java` |
 
-### 2.C — Etendo Core (classic SMTP)
+### 3.C — Etendo Core (classic SMTP)
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
@@ -215,7 +232,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 `src/com/etendoerp/email/spi/{EmailSender,EmailSendContext,DefaultSmtpEmailSender}.java`,
 `src/org/openbravo/email/actionhandler/TestSmtpConnectionActionHandler.java` (test-connection button).
 
-### 2.D — Module-specific emails
+### 3.D — Module-specific emails
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
@@ -231,24 +248,87 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 ## 4. Where does the format live? (the question behind the question)
 
+> **This section changed with ETP-5003.** Before it, the answer was "in three different places, none
+> of them a template file". The two rows that used to describe the GO emails are gone: no GO email
+> is rendered by a provider template any more, and none builds its markup from Java literals.
+
 | Format source | Which emails | What it means for changing the copy |
 |---|---|---|
-| **External provider template** (`invoice`, `reset-password`, `login-alert`) | #1 (untouched sends), #8, #12 | Copy and branding live **outside this repo**, in the API Gateway email service. Java only supplies JSON variables (`name`, `document_number`, `amount`, `download_link`, `link`, `ip`, `date`). Changing the look = changing the provider template. |
-| **Provider `custom` template + subject/body built in Java** | #2–#6, #7, #9, #10, #11, and #1 when the operator edits the message | The provider renders a generic shell; the actual subject/body strings are **hardcoded Java literals** with an `es_ES` / fallback-English branch. No template file. |
+| **`EmailLayout` + message catalog** (this repo) | #1–#14 — every Etendo GO email | The markup lives in exactly one Java class, `email/render/EmailLayout.java`; the words live in `email/render/messages/emails_{es_ES,en_US}.properties`. Changing wording = editing a `.properties` line. Changing the *look* = editing `EmailLayout`, once, for all fourteen. Adding a locale = adding a `.properties` file. |
 | **FreeMarker `.ftl` in the repo** | #14, #15 | `src/org/openbravo/portal/templates/*.ftl` — the only real, editable email template files in the codebase. |
 | **AD data (Application Dictionary)** | #13 (`EmailDefinition` per document template + language), and subject strings of #14–#18 (AD_Message) | Editable by config/translation, no code change needed. |
 | **Plain string in Java** | #16, #17, #18, #19 | Hardcoded; needs a code change (or an AD_Message edit where it uses `OBMessageUtils`). |
 
-### Notable gaps found while mapping (to confirm)
+**Only `EmailLayout` emits markup.** That is the rule the migration bought, and it is worth stating
+plainly: a contract that builds its own `<table>` or inlines its own CSS has reintroduced the problem
+this task existed to remove. Contracts supply an `EmailContent` (greeting, paragraphs, CTA, note,
+signature); the layout decides how it looks.
 
-- **No email template files exist in `com.etendoerp.go`** — `find` for `*.hbs|*.html|*.ftl|*.vm` returns nothing. Every GO email is either provider-rendered or a Java string literal.
-- **Copy is duplicated ES/EN inside Java** (`CoreEmailContractProvider`, `CompanyInvitationEmailContract`) instead of going through i18n. Two locales only; any other language falls back to English.
-- **`login-alert` (#12) has no producer** in either repo — registered contract, never called.
-- **Known divergence documented in code** (`DefaultDocumentSendEmailContract`): the send modal derives the document-type label from the UI locale while `documentTypeLabel()` is a fixed Spanish string → subject differs between modal preview and delivered email under `en_US`.
+### Gaps still open
+
+- **`login-alert` (#6 in the map) has no producer.** The contract is registered and its catalog
+  entries exist in both locales, but nothing in either repo calls it. Either wire it to the sign-in
+  path or drop it — a registered contract nobody sends is a maintenance cost with no user.
+- **Only two locales.** `emails_es_ES` and `emails_en_US`. Anything else resolves to Spanish through
+  the explicit fallback — deliberately, since `ResourceBundle` would otherwise let the *server's*
+  JVM locale pick the language of a customer's email (this is why `EmailMessages` uses
+  `getNoFallbackControl`).
+- **Stack B is untouched.** #15–#23 — the Core SMTP emails, `.ftl` templates, AD_Message subjects —
+  still look nothing like the GO ones. F5 covers the two portal emails; the rest is out of scope.
+
+### Fixed since the first version of this document
+
+- The **document-type label divergence** — the modal derived it from the UI locale while
+  `documentTypeLabel()` returned a fixed Spanish string, so the subject differed between what the
+  operator previewed and what the customer received under `en_US`. It now reads the catalog by
+  language, falling back to the contract's constructor value rather than emitting a raw key.
+- **Copy duplicated ES/EN inside Java** (`CoreEmailContractProvider`,
+  `CompanyInvitationEmailContract`) — replaced by the `.properties` catalogs.
+- **Validity windows stated as literals.** Three separate emails announced a duration that did not
+  match the token behind them (a 7-day invitation saying "24 horas", then "6 días" from a truncating
+  `ChronoUnit.DAYS.between`, and a 30-minute reset link the UI called 15 minutes). Any stated window
+  is now interpolated from the record through `ValidityWindow`, which rounds up.
 
 ---
 
-## 5. Related existing docs
+## 5. Is there a delivery history in the database?
+
+Yes for Stack A, but it is an **anti-abuse ledger, not a readable history** — the distinction
+matters the moment someone asks for "show me what we sent this customer".
+
+Everything lives in one table, `ETGO_Email_Safety`, discriminated by `RECORD_TYPE`
+(`AUDIT`, `THROTTLE`, `KILL_SWITCH`). `DalEmailSafetyStore.recordAudit` writes one `AUDIT` row per
+send attempt; `TransactionalEmailService` uses `InMemoryEmailSafetyStore` only in tests.
+
+**What a row gives you:** `RECORD_TYPE`, `CONTRACT_NAME`, `STATUS` (`SENT` / `DUPLICATE` / a failure),
+`AUDIT_TIME`, `IDEMPOTENCY_KEY`, `TENANT_ID`, and a JSON `PAYLOAD` carrying `recordId`,
+`recipientHash`, `recipientDomain`, `httpStatus`, `providerStatus` and `duplicate`.
+
+**What it does not give you, and this is the part that surprises people:**
+
+- **The recipient is not readable.** `payload.recipientHash` is SHA-256 of the lowercased address.
+  You can *verify* that a known address was written to (hash it and compare) but you cannot list who
+  was mailed. Only `recipientDomain` is in clear.
+- **Neither the subject nor the body is stored,** and neither is the attached PDF or its link.
+- **`payload.userId` is null in practice** — verified against a local instance, 24 of 24 audit rows.
+  The sender is recoverable only from Etendo's own `CREATEDBY` audit column, which does hold the
+  right user. A report reading the JSON for "who sent it" will silently come back empty.
+- **Rows are written with `AD_CLIENT_ID = '0'`** (System), because the write happens under admin mode
+  against a client-0 record. The tenant is in the separate `TENANT_ID` varchar column, so **a
+  per-client report must filter on `TENANT_ID`, not `AD_CLIENT_ID`.**
+- **There is no AD window over the table** — confirmed by query: it has no `AD_Tab`. Today the only
+  way in is SQL.
+
+Stack B leaves no trace here at all: the Core SMTP path never reaches `TransactionalEmailService`.
+
+Consequence for anyone asked to build "sent history" on a document: the `recordId` → `AUDIT_TIME`
+link already exists and is enough for *whether and when*. Showing **to whom** and **what was said**
+needs new columns — the audit deliberately hashes the address, so this is a privacy decision to make
+explicitly, not an oversight to patch.
+
+---
+
+## 6. Related existing docs
 
 - `modules/com.etendoerp.go/docs/transactional-email-contracts.md`
 - `modules/com.etendoerp.go/docs/document-email-contract-implementation.md`

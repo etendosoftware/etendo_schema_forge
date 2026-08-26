@@ -1,8 +1,12 @@
 # ETP-5003 — Plan: one base template for every Etendo email
 
-**Status:** in progress. F0 resolved; **F1 and F2 shipped and verified in a real inbox** on
+**Status:** in progress. F0 resolved; **F1, F2 and F4 shipped and verified in a real inbox** on
 2026-08-25 — the invitation and the password-reset emails render through the shared layout, in
-Spanish, matching the design. F3 (the six document emails) is next.
+Spanish, matching the design. **F3 shipped 2026-08-26**, verified on `sales-invoice-send`: all six
+document emails now render through `EmailLayout`, so every Etendo GO email — 14 of the 23 in the
+inventory — comes out of one template. F4 landed early, alongside F1: the copy went straight into
+the `.properties` catalogs rather than passing through a literals stage. **F5 (the two portal
+emails, Core SMTP) is what remains.**
 **Companion doc:** `docs/email-inventory.md` (what we send today and from where).
 **Goal:** every Etendo email renders through a single layout owned by this repo. Only the content
 block varies per email.
@@ -168,14 +172,18 @@ This keeps one block vocabulary for every email and removes per-tenant asset hos
 | **F0** | Spike: what `custom` wraps (§3) | Gates the rest |
 | **F1** ✅ | Renderer + tokens + tests. Applied to **`company-invitation`** | Its design is already specified — the screenshot in ETP-5003 *is* this email. One email through the whole pipe, validated in real clients (Gmail, Outlook desktop/web, Apple Mail, mobile) before touching anything else |
 | **F2** ✅ | Remaining auth emails: `new-account`, `password-changed`, `environment-ready`, plus **`reset-password` and `login-alert`** migrated off their provider-branded templates | Same shape (greeting + copy + CTA + note), same `custom` template, no external dependency |
-| **F3** | The 6 document emails via `DefaultDocumentSendEmailContract`, including migrating **`invoice`** off its branded template, **plus making the backend the single source of the default subject/message** | One change covers all six. **Fixes two live defects:** a branded sales invoice drops to the bare `<p>` layout the moment an operator edits the message, and the default subject is computed twice — `SendDocumentModal.jsx:406` in JS and `DefaultDocumentSendEmailContract#buildSubject` in Java — which already diverges under `en_US` because the modal takes the document-type label from the UI locale while the backend one is a fixed string. The modal must consume the backend-derived defaults instead of recomputing them, so the copy lives only in the module's properties catalog |
-| **F4** | Move the hardcoded ES/EN literals to a **per-language properties catalog** in the module: `email/render/messages/emails_es_ES.properties`, `emails_en_US.properties`, read through `ResourceBundle` with `es_ES` as the fallback | Decoupled from layout; do it once the blocks are stable so the keys match the block vocabulary. Chosen over AD_Message deliberately: no `export.database` step, no dependency on the translation module, no per-instance message loading — and the copy is reviewed in the PR diff like any other file. Adding a language is one new file. The trade-off accepted: a tenant cannot edit this copy from Etendo, which is correct for platform-owned transactional mail |
+| **F3** ✅ | The 6 document emails via `DefaultDocumentSendEmailContract`, including migrating **`invoice`** off its branded template, **plus making the backend the single source of the default subject/message** | One change covers all six. **Fixes two live defects:** a branded sales invoice drops to the bare `<p>` layout the moment an operator edits the message, and the default subject is computed twice — `SendDocumentModal.jsx:406` in JS and `DefaultDocumentSendEmailContract#buildSubject` in Java — which already diverges under `en_US` because the modal takes the document-type label from the UI locale while the backend one is a fixed string. The modal must consume the backend-derived defaults instead of recomputing them, so the copy lives only in the module's properties catalog |
+| | **Shipped with one deliberate deviation.** The modal does *not* fetch the defaults. A round trip on every modal open was judged too expensive for two sentences, so the modal composes the same copy locally and `__tests__/defaultCopyInSync.vitest.js` reads the module's `.properties` and fails when the two drift. The divergence itself is fixed: `documentTypeLabel(language)` now reads the catalog. Worth recording for whoever tries the endpoint route again — `defaults` is unusable as a third path segment, NEO reserves it for a spec's new-record field defaults and its parser swallows it, which is why that endpoint answered 405 while looking correct in isolation | |
+| **F4** ✅ | Move the hardcoded ES/EN literals to a **per-language properties catalog** in the module: `email/render/messages/emails_es_ES.properties`, `emails_en_US.properties`, read through `ResourceBundle` with `es_ES` as the fallback | Decoupled from layout; do it once the blocks are stable so the keys match the block vocabulary. Chosen over AD_Message deliberately: no `export.database` step, no dependency on the translation module, no per-instance message loading — and the copy is reviewed in the PR diff like any other file. Adding a language is one new file. The trade-off accepted: a tenant cannot edit this copy from Etendo, which is correct for platform-owned transactional mail |
 | **F5** | The 2 portal emails: replace `email-new-user.ftl` / `email-account-cancelled.ftl` with the shared renderer | Core SMTP stack, so it needs the renderer reachable from `EmailInfo.setContent`. Lowest risk if done last |
 
-All three provider-branded templates are migrated (F2/F3), so after this work there is exactly one
-answer to "what does an Etendo email look like", and it is versioned in this repo. Decide in F2
-whether `login-alert` gets a producer at all — it currently has none in either repo
-(`docs/email-inventory.md` §4).
+All three provider-branded templates are now migrated (F2/F3), so for Etendo GO there is exactly one
+answer to "what does an Etendo email look like", and it is versioned in this repo. F5 extends that
+answer to the Core SMTP portal emails.
+
+**Still undecided:** whether `login-alert` gets a producer at all. It was migrated in F2 and has
+catalog entries in both locales, but nothing in either repo calls it, so it cannot be verified in an
+inbox and cannot be said to work. Wire it or drop it — see `docs/email-inventory.md` §4.
 
 ## 8. Dark mode
 

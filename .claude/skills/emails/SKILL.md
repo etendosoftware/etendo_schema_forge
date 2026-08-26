@@ -179,10 +179,25 @@ stop it. If the guard fails, fix the copy; do not relax the test.
 ### The six document emails
 - One implementation, `DefaultDocumentSendEmailContract`, parameterised six times. Contract name is
   always `` `${windowName}-send` ``.
-- An operator who edits subject or message switches that send to the content template.
-- **Known debt:** the default subject is computed twice — `SendDocumentModal.jsx:406` in JS and
-  `buildSubject` in Java — and already diverges under `en_US`. F3 of ETP-5003 makes the backend the
-  single source.
+- All six render through `EmailLayout` since F3 (2026-08-26). Editing the subject or message no
+  longer changes how the email looks — that used to drop a branded invoice to a bare `<p>` layout.
+- The document-type label comes from `{contract}.documentType` in the catalog, read by language,
+  falling back to the contract's constructor value so a missing key never puts a raw key in a
+  customer's subject line.
+- The default copy is duplicated in the frontend on purpose — see the section above.
+
+### The send modal's preview has two modes
+`renderPdfPreviewNode` picks: the real PDF when `pdfBlobUrl` is ready, a spinner while
+`pdfBlobLoading`, and otherwise a **raw HTML fallback** fetched from
+`POST /api/reports/{reportId}/render` with `format: 'html'` and written straight into the iframe.
+That fallback is unpaginated and renders at its natural width, so it looks visibly wrong inside the
+60% panel — content cut off on the right, no PDF viewer chrome.
+
+A caller that passes `pdfBlobUrl` but forgets `pdfBlobLoading` (it defaults to `false`) skips the
+spinner branch entirely and shows that fallback whenever the operator opens the modal before
+jsreport has finished — intermittent by nature, and easy to misread as a rendering bug. Fixed on
+2026-08-26 in `InvoicePreview`, `OrderPreview`, `QuotationPreview` and `GoodsShipmentPreview`; pass
+**both** props when wiring a new one.
 
 ## Body copy is markup
 
@@ -201,6 +216,22 @@ The language is the **recipient's**, passed explicitly in the command. Never rea
   it before giving up, so a server running under `en_US` would answer a `pt_BR` request in English.
 - A frontend that triggers an email must post the operator's locale. `InviteUserDialog` did not, and
   every invitation went out in English until ETP-5003.
+
+## What is recorded in the database
+
+`ETGO_Email_Safety`, one row per send attempt with `RECORD_TYPE = 'AUDIT'`, written by
+`DalEmailSafetyStore.recordAudit`. It is an anti-abuse ledger, **not** a history anyone can read:
+
+- The recipient is stored as **SHA-256**, only the domain is in clear. You can verify a known
+  address, you cannot list who was mailed.
+- **No subject, no body, no attachment** is kept.
+- `payload.userId` is null in practice; the real sender is in Etendo's own `CREATEDBY` column.
+- Rows are written under `AD_CLIENT_ID = '0'`. The tenant is in the `TENANT_ID` column — **filter on
+  that**, not on client, or a per-tenant query returns nothing.
+- There is no AD window over the table; SQL is the only way in.
+
+Stack B writes nothing here. If someone asks for a per-document "sent history" with recipient and
+subject, that is new columns and a privacy decision, not a query.
 
 ## Why an email did not arrive
 
