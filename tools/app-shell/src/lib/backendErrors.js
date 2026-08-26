@@ -6,6 +6,13 @@ const BACKEND_ERROR_MAP = {
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
   'Country needed in an IBAN account.': 'backendError.countryIban',
+  // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
+  // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
+  // Spanish phrasing for one rule.
+  'A bank account with an IBAN must have a country.': 'backendError.countryIban',
+  'The IBAN is too short.': 'backendError.ibanTooShort',
+  'The IBAN is not valid: the check digits do not match.': 'backendError.ibanChecksumInvalid',
+  'Invalid country': 'backendError.invalidCountry',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
   'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank': 'backendError.ibanInvalid',
@@ -304,7 +311,97 @@ function matchSyncFetchFailed(msg) {
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
 // guard against the key echoing back" logic isn't duplicated once per matcher.
+/* ETP-4896: the three String.format-interpolated messages from
+ * `FinancialAccountCountrySupport.validateIbanCountryPair`. They cannot be exact-match entries
+ * above, which is why the QA-reported "Argentina has no IBAN configuration…" reached the user as
+ * raw English. Matching on the literal Java text makes those strings a de facto wire contract —
+ * see the pointer comment in that class before rewording any of them. */
+
+const COUNTRY_NO_IBAN_SUFFIX = ' has no IBAN configuration, so it cannot be used on an account'
+  + ' with an IBAN.';
+
+function matchCountryNoIbanConfig(msg) {
+  if (!msg.endsWith(COUNTRY_NO_IBAN_SUFFIX)) return null;
+  const country = msg.slice(0, -COUNTRY_NO_IBAN_SUFFIX.length);
+  return country ? { country } : null;
+}
+
+const IBAN_PREFIX_MISMATCH_PREFIX = "The IBAN starts with '";
+const IBAN_PREFIX_MISMATCH_MID1 = "' but the selected country is ";
+const IBAN_PREFIX_MISMATCH_SUFFIX = ').';
+
+function matchIbanPrefixCountryMismatch(msg) {
+  if (!msg.startsWith(IBAN_PREFIX_MISMATCH_PREFIX)
+    || !msg.endsWith(IBAN_PREFIX_MISMATCH_SUFFIX)) return null;
+  const middle = msg.slice(
+    IBAN_PREFIX_MISMATCH_PREFIX.length,
+    -IBAN_PREFIX_MISMATCH_SUFFIX.length,
+  );
+  const mid1Idx = middle.indexOf(IBAN_PREFIX_MISMATCH_MID1);
+  if (mid1Idx === -1) return null;
+  const prefix = middle.slice(0, mid1Idx);
+  const rest = middle.slice(mid1Idx + IBAN_PREFIX_MISMATCH_MID1.length);
+  // The country name itself may contain spaces or parentheses, so split on the LAST ' (' —
+  // the ISO code is always the final parenthesised token.
+  const isoIdx = rest.lastIndexOf(' (');
+  if (isoIdx === -1) return null;
+  const country = rest.slice(0, isoIdx);
+  const iso = rest.slice(isoIdx + 2);
+  if (!prefix || !country || !iso) return null;
+  return { prefix, country, iso };
+}
+
+const IBAN_LENGTH_PREFIX = 'An IBAN for ';
+const IBAN_LENGTH_MID1 = ' must have ';
+const IBAN_LENGTH_MID2 = ' characters (received ';
+const IBAN_LENGTH_SUFFIX = ').';
+
+function matchIbanCountryLengthMismatch(msg) {
+  if (!msg.startsWith(IBAN_LENGTH_PREFIX) || !msg.endsWith(IBAN_LENGTH_SUFFIX)) return null;
+  const middle = msg.slice(IBAN_LENGTH_PREFIX.length, -IBAN_LENGTH_SUFFIX.length);
+  const mid1Idx = middle.indexOf(IBAN_LENGTH_MID1);
+  if (mid1Idx === -1) return null;
+  const country = middle.slice(0, mid1Idx);
+  const afterMid1 = middle.slice(mid1Idx + IBAN_LENGTH_MID1.length);
+  const mid2Idx = afterMid1.indexOf(IBAN_LENGTH_MID2);
+  if (mid2Idx === -1) return null;
+  const expected = afterMid1.slice(0, mid2Idx);
+  const actual = afterMid1.slice(mid2Idx + IBAN_LENGTH_MID2.length);
+  if (!country || !expected || !actual) return null;
+  return { country, expected, actual };
+}
+
+/*
+ * Every parameterized matcher below shares one shape: it returns null on no-match, or an object
+ * whose fields ARE the interpolation params. So they dispatch off a table instead of a chain of
+ * near-identical if blocks — which is also what keeps this function under Sonar's cognitive
+ * complexity ceiling (javascript:S3776). The ETP-4891 sync matchers and the ETP-4896 country/IBAN
+ * ones landed on separate branches and together pushed the old chain to 16 against the 15 allowed;
+ * with a table, adding the next matcher is a row here and costs no complexity at all.
+ *
+ * ORDER IS SIGNIFICANT — it is the resolution precedence, preserved verbatim from the chain this
+ * replaced. `matchAccountNotFound` stays hand-written below because it is the one matcher that maps
+ * to two different keys, and omits a param, depending on what it found.
+ */
+const PARAMETERIZED_MATCHERS = [
+  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
+  [matchOrderNotFound, 'backendError.orderNotFound'],
+  [matchShipmentNotFound, 'backendError.shipmentNotFound'],
+  [matchCashCloseNoConcept, 'backendError.cashCloseNoConcept'],
+  [matchCashCloseBackdated, 'backendError.cashCloseDateBeforeLastClose'],
+  [matchCashCloseLineInClosedPeriod, 'backendError.cashCloseLineInClosedPeriod'],
+  [matchCountryNoIbanConfig, 'backendError.countryNoIbanConfig'],
+  [matchIbanPrefixCountryMismatch, 'backendError.ibanPrefixCountryMismatch'],
+  [matchIbanCountryLengthMismatch, 'backendError.ibanCountryLengthMismatch'],
+  [matchIbanAutoFillFailed, 'backendError.ibanAutoFillFailed'],
+  [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
+  [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
+  [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+];
+
 function resolveParameterizedMatch(msg) {
+  // Hand-written: two possible keys, and `group` must be absent from the params (not present and
+  // undefined) when the message carried no BP group.
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
     if (accountMatch.group !== null) {
@@ -316,69 +413,11 @@ function resolveParameterizedMatch(msg) {
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
   }
 
-  const invoiceLineMatch = matchInvoiceLineAlreadyInvoiced(msg);
-  if (invoiceLineMatch) {
-    return {
-      key: 'backendError.invoiceLineAlreadyInvoiced',
-      params: {
-        docNo: invoiceLineMatch.docNo,
-        invoiced: invoiceLineMatch.invoiced,
-        pending: invoiceLineMatch.pending,
-      },
-    };
-  }
-
-  const orderMatch = matchOrderNotFound(msg);
-  if (orderMatch) {
-    return { key: 'backendError.orderNotFound', params: { orderId: orderMatch.orderId } };
-  }
-
-  const shipmentMatch = matchShipmentNotFound(msg);
-  if (shipmentMatch) {
-    return { key: 'backendError.shipmentNotFound', params: { id: shipmentMatch.id } };
-  }
-
-  if (matchCashCloseNoConcept(msg)) {
-    return { key: 'backendError.cashCloseNoConcept', params: {} };
-  }
-
-  const backdatedMatch = matchCashCloseBackdated(msg);
-  if (backdatedMatch) {
-    return { key: 'backendError.cashCloseDateBeforeLastClose', params: { date: backdatedMatch.date } };
-  }
-
-  const closedPeriodMatch = matchCashCloseLineInClosedPeriod(msg);
-  if (closedPeriodMatch) {
-    return {
-      key: 'backendError.cashCloseLineInClosedPeriod',
-      params: { movement: closedPeriodMatch.movement },
-    };
-  }
-
-  const ibanAutoFillMatch = matchIbanAutoFillFailed(msg);
-  if (ibanAutoFillMatch) {
-    return { key: 'backendError.ibanAutoFillFailed', params: { iban: ibanAutoFillMatch.iban } };
-  }
-
-  const transactionsObtainedMatch = matchTransactionsObtained(msg);
-  if (transactionsObtainedMatch) {
-    return {
-      key: 'backendError.transactionsObtainedForAccount',
-      params: { account: transactionsObtainedMatch.account },
-    };
-  }
-
-  const noNewTransactionsMatch = matchNoNewTransactionsFound(msg);
-  if (noNewTransactionsMatch) {
-    return {
-      key: 'backendError.noNewTransactionsForAccount',
-      params: { account: noNewTransactionsMatch.account },
-    };
-  }
-
-  const syncFetchFailedMatch = matchSyncFetchFailed(msg);
-  if (syncFetchFailedMatch) {
-    return { key: 'backendError.syncFetchFailed', params: { detail: syncFetchFailedMatch.detail } };
+  for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
+    const match = matcher(msg);
+    if (match) {
+      return { key, params: { ...match } };
+    }
   }
 
   return null;

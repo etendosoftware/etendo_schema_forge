@@ -68,7 +68,7 @@ window consistent when the active theme changes.
 `index.jsx`, ETP-4530). T3 merged the former separate "Edit bank connection" modal into this one
 (both surfaced the same account data), so there is a single edit entry point everywhere.
 
-The top of the form (Name | Country, IBAN | Type, Currency) sits **outside** both tabs, followed
+The top of the form (Name | Country, IBAN | BIC/SWIFT, Type | Currency) sits **outside** both tabs, followed
 by two tabs built with the shared `Tabs`/`TabsList`/`TabsTrigger` primitives
 (`components/ui/tabs.jsx` — the same primitives `DetailTabs.jsx` uses for the
 Movements/Reconciliation/Statements strip). **Country (ETP-4896) is always in this grid and always
@@ -78,6 +78,15 @@ bank link, since it is descriptive metadata rather than something that rewrites 
 Unlike Currency's Radix `<Select>`, Country uses `CreatableSearchSelect` over the live
 `C_Country_ID` selector (239 options, no local dropdown fits that) — same widget and same
 `countryIbanRules`-backed IBAN cross-check as the New Account form.
+
+**BIC/SWIFT** (ETP-4896 QA follow-up) is also in this grid, right after IBAN. It was previously
+only on the New Account form, so the field could not be maintained from here at all. Gated on the
+account being type Bank (`isBankType`) rather than on `!isCash`, to honour the contract's own
+`displayLogic: "@Type@='B'"` — a card account has no BIC. Optional, no format validation (see the
+SWIFT note under "Known gaps"), and sent only when dirty, so an untouched field never overwrites
+the stored value. Its dirty check compares the *normalized* value (trimmed + upper-cased, the same
+normalization `AccountFormStep` applies), so merely re-typing a stored BIC in a different case is
+not a change.
 
 - **General** (`financeAccountsEditTabGeneral`): bank connection configuration, then reconciliation
   configuration, then the difference settings, in that order.
@@ -204,6 +213,15 @@ edits arrives from two different endpoints:
 |---|---|---|
 | Cuentas **list** (row kebab / pencil) | generic W spec `/sws/neo/financial-account/account` | `eTGODateTolerance` / `eTGOAmountTolerance` |
 | Account **detail** ("Editar" button) | legacy R spec `/sws/neo/financial-accounts-page` (`FinancialAccountsPageHandler` hand-builds the JSON) | `dateTolerance` / `amountTolerance` |
+
+**Every field the modal binds must exist in BOTH shapes** — this split is the recurring source of
+bugs here. The W spec projects whatever the contract declares, so a newly-exposed AD column appears
+there for free; the R spec hand-builds its JSON, so the same column has to be added to
+`ACCOUNTS_SQL` + `AccountRow` + `buildAccountsArray` by hand. ETP-4896 hit this twice: first with
+`country`, then with `swiftCode` (the QA follow-up) — in both cases the field rendered correctly
+from the list and **empty from the detail view** until the R spec caught up. New SQL columns are
+appended **last** on purpose: `loadAccounts` and `FinancialAccountsPageHandlerTest` both read the
+`ResultSet` by position, so inserting mid-list silently shifts every existing index.
 
 `readTolerances()` in `EditAccountModal.jsx` reads the contract key first and falls back to the flat
 one. Two distinct bugs came out of ignoring this split, and both presented identically as *"no se
@@ -464,7 +482,7 @@ options available.
 
 - **Precedence**: a country present in the request body always wins. IBAN→country derivation (the old behavior) is kept only as a fallback for callers (API/MCP) that send an IBAN but no country at all.
 - **Validation** (`FinancialAccountCountrySupport.validateIbanCountryPair`, Java) runs whenever the body touches `iBAN` or `country` on a Bank account with a non-blank effective IBAN, mirroring trigger `FIN_FINANCIAL_ACCOUNT_TRG2`'s own `IF (:NEW.TYPE='B') ... IF (:NEW.IBAN IS NOT NULL)` guards so Cash/Card accounts and IBAN-less Bank accounts are never rejected. A mismatched pair now returns a **readable 400** instead of the trigger's raw `@20259@`/`@20257@`/`@COUNTRY_IBAN@` message, which `NeoErrorSanitizer` would otherwise flatten into a generic 500. The frontend runs the same checks client-side first (`@/lib/countryIban.js`'s `validateIbanForCountry`, mirrored against the `countryIbanRules` catalog) so the 400 is a safety net, not the primary UX.
-- **`countryIbanRules` catalog**: only ~45 of the 243 seeded countries carry IBAN metadata (`IBANCOUNTRY`/`IBANNODIGITS` on `C_Country`); the other ~198 (e.g. Argentina, United States) have none. For those, the prefix/length checks are **skipped, not failed** — only mod-97 applies. The catalog (`{id, iso, name, ibanPrefix, ibanLength}`) is server-cached 24h and served as a sibling of `accounts`/`summary`/`defaults` from all three read surfaces the SPA uses: the `account/defaults` response, `financial-accounts-page`, and the spec W list GET. It is **not** the country picker's option list — the picker itself is the generic, searchable `C_Country_ID` selector (`CreatableSearchSelect`, `serverSearch`), since 239 active countries don't fit a `staticOptions` dropdown the way the ~20-currency picker does.
+- **`countryIbanRules` catalog**: only ~45 of the 243 seeded countries carry IBAN metadata (`IBANCOUNTRY`/`IBANNODIGITS` on `C_Country`); the other ~198 (e.g. Argentina, United States) have none. For those, `validateIbanForCountry`'s prefix/length checks are **skipped, not failed** — only mod-97 applies — because the function receives an already-resolved catalog *row* and cannot tell "no country picked yet" from "picked one with no metadata". But the DB **does** reject an IBAN on such a country (`C_GET_IBAN_DISPLAYED_ACCOUNT` folds the null-metadata case into the same `@20259@` as a mismatch), so the QA follow-up added `countryLacksIbanConfig(countryId, countryIbanRules)`: callers synthesize a `noIbanConfig` error code from it, the same out-of-band pattern already used for `missingCountry`. Its **empty-catalog guard is load-bearing, not defensive noise** — `countryIbanRules` is legitimately `[]` on a non-ok `/defaults`, a network throw, a payload without the key, and on every render before the fetch resolves (both consumers start from `[]`), so an empty catalog means "unknown, defer to the backend" rather than "no country can hold an IBAN". The catalog (`{id, iso, name, ibanPrefix, ibanLength}`) is server-cached 24h and served as a sibling of `accounts`/`summary`/`defaults` from all three read surfaces the SPA uses: the `account/defaults` response, `financial-accounts-page`, and the spec W list GET. It is **not** the country picker's option list — the picker itself is the generic, searchable `C_Country_ID` selector (`CreatableSearchSelect`, `serverSearch`), since 239 active countries don't fit a `staticOptions` dropdown the way the ~20-currency picker does.
 - **Changing the country on an account with a stored IBAN is not free**: the (IBAN, country) pair must stay consistent, so changing one may require changing the other — this is the real, pre-existing DB constraint, not a new restriction.
 - **Salt Edge / "Conectar banco" is restricted to Spain** (ETP-4896 Test Cases 5–7). The service is contracted for Spain only, so an account whose stored country is not `ES` is never offered the connect action. The rule lives in **one** predicate — `components/financial-accounts/saltEdgeEligibility.js`'s `canConnectToSaltEdge(account)` — consumed by all three surfaces that expose the action, so they cannot drift apart:
 
@@ -574,7 +592,8 @@ financeAccountsMenuArchive           "Archive account"
 - **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever Cuenta bancaria/transitoria are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the two accounts at all), not a bug.
 - **Other `FIN_Financial_Account_Acct` columns** (ETP-4530): deposit/withdrawal/credit/debit/bank-fee/revaluation accounts stay `discarded` in `decisions.json` — only Cuenta bancaria/transitoria were in scope for this ticket.
 - **New-account "Con conexión" path is NOT country-gated** (ETP-4896): the Spain-only restriction applies to *accounts*, which is what Test Cases 5–7 specify ("una cuenta … tiene como país X"). In the New Account wizard's CONNECTION step no account and no country exist yet — the account is created *from* whichever bank account Salt Edge returns — so there is nothing to gate on. Consequence worth knowing: a user can still reach Salt Edge from that step and pick a non-Spanish provider via the BankPicker's country filter (`BANK_COUNTRIES` offers ES/IT/FR/DE/PT/GB/NL/BE/IE/AT). Whether that filter should also be restricted to ES is a **product decision left open**, deliberately not assumed here.
-- **SWIFT/BIC format validation** (ETP-4896): intentionally untouched. Classic has no SWIFT format validation either — no regex, no length check, no cross-check against country — only a presence check (`FIN_FINACC_SHOWSWIFT_CHK`) when "Using the SWIFT Code" is on, unrelated to this ticket's scope.
+- **Backend error messages are translated in the SPA, not the backend** (ETP-4896 QA follow-up): `NeoResponse.error` carries only `{message, status}` — no machine-readable `code` — so this window routes `err.message` through the shared `lib/backendErrors.js#translateBackendError`, which recognises Etendo's English literals by text (exact-match table plus prefix/suffix matchers for the interpolated ones) and maps them to `backendError.*` locale keys. Both surfaces use it: `EditAccountModal` (which previously had its own ad-hoc one-entry table, now deleted) and `NewAccountWizard` (which previously showed raw English on create). **Consequence: the Java message literals in `FinancialAccountCountrySupport` are a de facto wire contract** — rewording one silently drops the user back to English, so its matcher and locale key must change in the same commit. The frontend pre-checks are meant to catch these before the request fires; this is the safety net for what slips past (a stale/empty `countryIbanRules`, a race with another tab, an API/MCP-shaped body). A stable `error.code` contract would be sturdier — there is precedent (`MISSING_REQUIRED_FIELDS` in `NeoCrudHandler` ↔ `useEntity`) — but it touches the wire format and its MCP/API consumers, so it stays a **follow-up option**, not part of this fix.
+- **SWIFT/BIC format validation** (ETP-4896): intentionally untouched. Classic has no SWIFT format validation either — no regex, no length check, no cross-check against country — only a presence check (`FIN_FINACC_SHOWSWIFT_CHK`) when "Using the SWIFT Code" is on, unrelated to this ticket's scope. This is why the ticket's Test Case 9 ("la validación del SWIFT se aplica según el país configurado") is not implementable as written: it asks an *existing* validation to start reading the Country field, and there is no existing rule to feed it into. The **field itself** is editable in both creation and edition (the QA follow-up added it to `EditAccountModal`); only the format rule is absent.
 
 ---
 
