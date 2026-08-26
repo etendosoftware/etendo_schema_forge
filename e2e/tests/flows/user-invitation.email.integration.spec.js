@@ -176,7 +176,7 @@ async function prepareInvitedUser(request, neoToken, email) {
   }
   expect(user?.id, userResponseText).toEqual(expect.any(String));
 
-  const roleOptionsResponse = await request.get('/sws/neo/user/userRoles/selectors/role?limit=50&offset=0', {
+  const roleOptionsResponse = await request.get('/sws/neo/user/user/selectors/defaultRole?limit=50&offset=0', {
     headers: { Authorization: `Bearer ${neoToken}` },
   });
   const roleOptionsText = await roleOptionsResponse.text();

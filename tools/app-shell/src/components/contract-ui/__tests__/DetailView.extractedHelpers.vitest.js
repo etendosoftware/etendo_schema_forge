@@ -455,13 +455,21 @@ describe('insertLinesTab', () => {
 });
 
 describe('renderExtraActionButtons', () => {
-  it('calls extraActions once with { data, children } when it is a function', () => {
+  // ETP-4999 — `renderExtraActionButtons` now also passes `onRefresh`
+  // (`() => hook.fetchById?.(data?.id)`, mirroring `topbarExtra`'s own onRefresh)
+  // as a third context field alongside `data`/`children`. See the dedicated
+  // onRefresh coverage in `DetailView.helpers.vitest.jsx`.
+  it('calls extraActions once with { data, children, onRefresh } when it is a function', () => {
     const data = { id: 'rec-1' };
     const hook = { children: [{ id: 'c1' }] };
     const extraActions = vi.fn(() => [{ key: 'x', label: 'X' }]);
     renderExtraActionButtons(extraActions, data, hook, 'save-cls');
     expect(extraActions).toHaveBeenCalledTimes(1);
-    expect(extraActions).toHaveBeenCalledWith({ data, children: hook.children });
+    expect(extraActions).toHaveBeenCalledWith({
+      data,
+      children: hook.children,
+      onRefresh: expect.any(Function),
+    });
   });
 
   it('returns one entry per action', () => {
