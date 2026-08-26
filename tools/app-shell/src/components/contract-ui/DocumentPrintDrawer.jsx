@@ -282,7 +282,10 @@ export async function printDocuments(windowName, documentIds, token, translate =
     // list and printing them must not produce a different layout than printing them one
     // by one from the detail view (ETP-4912).
     const useClient = hasClientPdf(windowName) && apiBaseUrl;
-    console.info(`[print-documents] ${windowName} x${documentIds.length}: ${useClient ? 'client-rendered (same template as preview/email)' : `${reportId} artifact`}`);
+    const renderMode = useClient
+      ? 'client-rendered (same template as preview/email)'
+      : `${reportId} artifact`;
+    console.info(`[print-documents] ${windowName} x${documentIds.length}: ${renderMode}`);
 
     // HTML per document, so they can be concatenated into ONE pdf below. Design A is
     // asked for as HTML (jsreport `recipe: html`) rather than as a PDF for exactly this

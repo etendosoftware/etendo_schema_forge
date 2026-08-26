@@ -292,7 +292,9 @@ describe('computeDocumentQrDataUrl — Verifactu mode', () => {
 });
 
 describe('print-sales-invoice template — Verifactu QR block (ETP-4912)', () => {
-  const templateContent = readFileSync(join(ARTIFACTS_DIR, 'print-sales-invoice', 'template.hbs'), 'utf8');
+  const templateContent = expandDocumentPartials(
+    readFileSync(join(ARTIFACTS_DIR, 'print-sales-invoice', 'template.hbs'), 'utf8'),
+  );
   const helpersPath = join(ARTIFACTS_DIR, 'print-sales-invoice', 'helpers.js');
   const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
 
