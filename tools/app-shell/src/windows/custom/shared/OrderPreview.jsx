@@ -127,7 +127,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useOrderPdf/usePurchaseOrderPdf skip the jsreport round-trip and serve the marked
   // attachment directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft };
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft, recordUpdated: order?.updated ?? null };
   const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
   const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData, pdfCacheConfig);
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = isSalesOrder ? soResult : poResult;
@@ -156,7 +156,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // Draft gate unchanged: cache is only checked/written once Confirmed.
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: order?.updated ?? null,
         documentId: order.id, tableName: 'C_Order', token, apiBaseUrl, onFileChange: setCachedAttachment,
       }
     : {

@@ -81626,7 +81626,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "7d6e8767abd3c6c7da0a72f320457a55058ebc8e216cbb546c83da3dc24d71af",
+      "checksum": "a538b0c171de30ef03b905966500e95fae3641302da5b0f8369b92190ff9e790",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -90182,6 +90182,46 @@
           "orderbyclause": null,
           "readonlylogic": null,
           "reference_name": "Search",
+          "tab_name": "Bank Payments",
+          "tab_seq": "70",
+          "tablename": "PSD2_pis_payment",
+          "tablevel": "1",
+          "valuemax": null,
+          "valuemin": null,
+          "whereclause": null,
+          "window_name": "Payment Out"
+        },
+        {
+          "ad_field_id": null,
+          "ad_reference_id": "14",
+          "ad_tab_id": "0A8FB7989CCE444A967AC1E218AA3586",
+          "ad_val_rule_id": null,
+          "ad_window_id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
+          "callout_class": null,
+          "columnname": "EM_ETGO_Payment_Intent",
+          "defaultvalue": null,
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "entity_alias": null,
+          "entity_classname": "PisPayment",
+          "entity_javapackage": "com.etendoerp.psd2.bank.integration.data",
+          "field_isactive": "Y",
+          "field_name": "EM_ETGO_Payment_Intent",
+          "field_seq": "99999",
+          "fieldlength": "1000000",
+          "filterclause": null,
+          "hqlfilterclause": null,
+          "hqlorderbyclause": null,
+          "hqlwhereclause": "e.status<>'requested'",
+          "isdisplayed": "N",
+          "ismandatory": "N",
+          "isreadonly": "Y",
+          "isshowninstatusbar": "N",
+          "isupdateable": "Y",
+          "orderbyclause": null,
+          "readonlylogic": null,
+          "reference_name": "Text",
           "tab_name": "Bank Payments",
           "tab_seq": "70",
           "tablename": "PSD2_pis_payment",
@@ -114250,7 +114290,7 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
-      "checksum": "5776d569793c2f33febcd4cec1fd8c36b8e44778616498334fa0d4caa3b844b1",
+      "checksum": "e374ce4bba0e3ade244cd9e9c1338287b1a11c83e6fd8eb6e8ec0daf9a26cc74",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
@@ -114318,7 +114358,7 @@
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
-          "isdisplayed": "Y",
+          "isdisplayed": "N",
           "ismandatory": "Y",
           "isreadonly": "N",
           "isshowninstatusbar": "N",

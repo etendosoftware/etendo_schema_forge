@@ -113,6 +113,65 @@ The "Subtotal sin descuento" and "Descuento por producto" rows auto-appear when 
 
 i18n keys added: `invoicePdfSubtotalNoDiscount`, `invoicePdfProductDiscount`, `invoicePdfTotalDiscount` — present in both `en_US.json` and `es_ES.json`.
 
+## Verifactu tax QR on the printable — ETP-4912
+
+The `print-sales-invoice` printable (`artifacts/print-sales-invoice/`, the jsreport/HTML
+document report — **not** the `useInvoicePdf.js` preview described above) renders the
+AEAT-mandated *QR tributario* at the top of the invoice.
+
+**Where the QR content comes from.** We never build the AEAT URL. The classic Verifactu module
+(`modules/com.etendoerp.verifactu`) computes it when the *Registro de Facturación* is generated
+(`GenerateRF.addQRURLToInvoice` → `GenerateQR.encodeQR`) and stores the complete, URL-encoded
+URL in `C_Invoice.EM_Etvfac_Qr_Url`. Classic also owns the base-URL choice, which depends on
+both the environment (test vs production) and whether the issuing system is VERI\*FACTU-verifiable
+(`ValidarQR` vs `ValidarQRNoVerifactu`). The printable reads the column and encodes it verbatim.
+
+> **Apparent contradiction with the SIF tab, resolved.** The section above records
+> `etvfacQRURL` as `"visibility": "discarded"` in `artifacts/sales-invoice/decisions.json`
+> (ETP-4390), and that is still true: the field does not reach the **window's** frontend
+> contract. The **printable** is a different data path — it runs its own SQL
+> (`report-contract.json → sql.header`) straight against `c_invoice`, so it sees the column
+> regardless of the window's field classification. Both statements hold; do not "fix" either.
+
+**How the printable gets the field.** Two constants in the header SQL:
+
+```sql
+to_jsonb(i) ->> 'em_etvfac_qr_url' AS verifactu_qr_url,
+'verifactu' AS qr_mode
+```
+
+`to_jsonb(i) ->>` is deliberate: it yields `NULL` on instances where the `etvfac` module is not
+installed, whereas a direct `i.em_etvfac_qr_url` reference would fail the entire header query at
+parse time and break the printable for every non-Verifactu tenant. `qr_mode` is what tells the
+shared QR helper that this document follows the AEAT rules — the other seven `print-*` reports
+do not emit it and keep their historical internal QR untouched.
+
+**Rendering rules (AEAT spec v0.4.7 — Orden arts. 20-21 and §3).**
+
+| Requirement | Implementation |
+|---|---|
+| 40×40 mm symbol, error correction level **M** | `buildQrEncodeOptions()` in `templates/reports/helpers/report-html-helpers.js`; PNG rendered at 400 px so a 40 mm print keeps ~8.5 px per module |
+| Quiet zone ≥2 mm, 6 mm recommended | `.verifactu-qr-img { padding: 6mm }` — CSS millimetres are exact and do not drift with the symbol version |
+| Label «QR Tributario:» above, phrase «Factura verificable en la sede electrónica de la AEAT» below | hardcoded Spanish legal literals, matching classic's AD messages `ETVFAC_fiscal_QR` / `ETVFAC_verifiable_AEAT` |
+| Font size ≥ the rest of the invoice data | label 10 pt, caption 9 pt (the invoice body is 9 pt) |
+| Top of the invoice, **centred** between the margins | `.verifactu-qr` block, first child of `.doc-container`. The ticket's example image shows it top-right, which the spec does not prefer — the norm wins |
+| First and only QR on the document | the old internal footer QR (`Scan to verify`) was **removed** from this template |
+| Once only, on the first page | the template has no repeating page header |
+
+**No QR at all is a valid state.** When `em_etvfac_qr_url` is empty the printable renders **no
+QR and no block** — not the internal fallback QR, because a non-AEAT QR must never appear on a
+Verifactu invoice. This covers both a non-Verifactu tenant and a Verifactu invoice whose
+Registro de Facturación has not been generated yet (the URL is written at RF generation, not at
+invoice completion, so that window is real).
+
+**Deviation from the ticket's acceptance criteria:** ETP-4912 asked that non-Verifactu documents
+keep their current QR behaviour. Non-Verifactu **invoices** no longer print the decorative
+internal footer QR — that is what makes the "no QR at all" rule expressible without querying the
+Verifactu config table. The other seven printables are untouched.
+
+The VERI\*FACTU logo is **not** rendered: art. 20.1.b requires the *phrase* «Factura verificable
+en la sede electrónica de la AEAT» **or** the «VERI\*FACTU» mark, and the phrase alone complies.
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |

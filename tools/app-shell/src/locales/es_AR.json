@@ -16448,8 +16448,8 @@
     "Connections": {
       "label": "Conexiones"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Revenue this month": {
       "label": "Ingresos del mes"
@@ -20853,8 +20853,8 @@
     "Fiscal Configuration": {
       "label": "Configuración fiscal"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Smart Scan": {
       "label": "Escaneo inteligente"

@@ -267,7 +267,7 @@ describe('ReturnToVendorShipmentPreview', () => {
         'rtvs-1',
         '/api/return-to-vendor-shipment',
         'tok',
-        { tableName: 'M_InOut', storeCondition: true },
+        { tableName: 'M_InOut', storeCondition: true, recordUpdated: null },
       );
     });
   });
