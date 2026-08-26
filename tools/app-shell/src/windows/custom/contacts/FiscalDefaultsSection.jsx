@@ -30,7 +30,7 @@ const aeatsiiKeyListField = [
 // Same wrapper as the Billing Preferences "Bloquear" toggles — label above,
 // switch below. Used here instead of EntityForm's SquareCheckbox for
 // `aeatsiiDefaultsiikey` / `tbaiIssimplifiedinv` per the UX ask (ETP-4784).
-function FiscalToggle({ label, value, onCheckedChange, testId }) {
+function FiscalToggle({ label, value, onCheckedChange, 'data-testid': testId }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
@@ -79,7 +79,7 @@ export default function FiscalDefaultsSection(props) {
                   label={t('EM_Aeatsii_Defaultsiikey')}
                   value={data?.aeatsiiDefaultsiikey}
                   onCheckedChange={(next) => onChange?.('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')}
-                  testId="FiscalToggle__aeatsii-default" />
+                  data-testid="FiscalToggle__aeatsii-default" />
               </div>
               <div className="flex-1 min-w-0">
                 <EntityForm
@@ -99,7 +99,7 @@ export default function FiscalDefaultsSection(props) {
             label={t('EM_Tbai_Issimplifiedinv')}
             value={data?.tbaiIssimplifiedinv}
             onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
-            testId="FiscalToggle__tbai-simplified" />
+            data-testid="FiscalToggle__tbai-simplified" />
         </div>
       </div>
     </div>
