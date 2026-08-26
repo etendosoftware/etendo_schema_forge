@@ -799,19 +799,62 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   await slow(page);
 
   // Select the product by index — fall back to first if nth doesn't exist.
-  // Retry the whole selection if the drawer loads empty (intermittent backend timing).
+  //
+  // This comment used to promise "retry the whole selection if the drawer loads
+  // empty (intermittent backend timing)" while the code only waited longer. Measured
+  // against a live backend with nothing else running, the drawer paints its first
+  // option 2.3s after the field is clicked — the 20s budget is not tight. What breaks
+  // it is the full suite: the same open competes with several paginated
+  // `selectors/C_Tax_ID` reads (447 tax rows over five requests) for the browser's
+  // per-origin connection pool, and the product read waits behind them. Waiting even
+  // longer on a drawer that already rendered empty does not help; reopening it does,
+  // because the second open issues a fresh request once the queue has drained.
   const allProducts = page.locator('[data-testid^="product-search-option-"]');
-  await expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
-  const count = await allProducts.count();
-  const product = allProducts.nth(Math.min(productIndex, count - 1));
+  const optionsAppear = () => expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
+
+  try {
+    await optionsAppear();
+  } catch {
+    // Close and reopen, then give it one more full budget.
+    await page.keyboard.press('Escape').catch(() => {});
+    await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
+    await expect(async () => {
+      await productField.click({ timeout: 3_000 });
+      await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+    await optionsAppear();
+  }
 
   // Start listening for callout (price/tax fill) BEFORE clicking the product
   const productCalloutResponse = page.waitForResponse(
     (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
     { timeout: 30_000 },
   );
-  await product.waitFor({ state: 'visible', timeout: 10_000 });
-  await product.click();
+
+  // Resolve the index and click INSIDE the retry, not before it. The count and the
+  // click used to be separate steps, and the drawer re-renders between them: it keeps
+  // refining the list after the first paint, so an index resolved against the earlier
+  // list can name a node that is gone by the time the click lands. That is the shape
+  // this actually fails in — `.nth(1)` not visible although the count had just
+  // reported two or more — rather than the empty drawer the old comment described.
+  // Re-reading the count on every attempt makes the selection self-correcting.
+  await expect(async () => {
+    let count = await allProducts.count();
+    if (count === 0) {
+      // The drawer paints, then refines: it can go back to empty after the first
+      // options render, so an attempt that finds nothing is not a dead end. Reopen —
+      // a fresh open re-issues the query — and only then give up on this attempt.
+      await page.keyboard.press('Escape').catch(() => {});
+      await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
+      await productField.click({ timeout: 3_000 });
+      await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
+      await expect(allProducts.first()).toBeVisible({ timeout: 10_000 });
+      count = await allProducts.count();
+    }
+    if (count === 0) throw new Error('product drawer rendered no options');
+    const product = allProducts.nth(Math.min(productIndex, count - 1));
+    await product.click({ timeout: 5_000 });
+  }).toPass({ timeout: 45_000 });
   await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
   await productCalloutResponse;
   await slow(page);
