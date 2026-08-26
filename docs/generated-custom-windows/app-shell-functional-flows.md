@@ -35,7 +35,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - `AuthGuard` redirects unauthenticated protected traffic to `/onboarding`.
   - `OnboardingPage` validates the platform token in `localStorage`.
   - Register/login calls the `/sws/go/register` or `/sws/go/login` endpoints.
-  - Successful registration stores the platform token and Etendo Go sends the `new-account` transactional email best-effort after the account commit, including the selected onboarding language as the allowlisted `language` template variable.
+  - Successful registration stores the platform token and Etendo Go sends the `new-account` transactional email best-effort after the account commit, including the selected onboarding language as the allowlisted `language` template variable. Since ETP-4798 that mail's link carries a 24h email-confirmation token, and `/sws/go/me` reports `emailVerified` and `emailVerificationPending`.
+  - While a confirmation is pending the account never reaches onboarding at all: registration lands on a dedicated confirm-your-email wall (`verify-email` step) offering a resend action (`/sws/go/verify-email/resend`) and logout. The wall is decided by `emailVerificationPending` from `/sws/go/me`, checked inside `routeByEnvironments` — the single funnel the mount bootstrap, a fresh login and the post-provisioning re-entry all pass through.
+  - The wall has no "I already confirmed" button and does no polling: every mount re-reads `/sws/go/me`, so a plain browser refresh is the way out. That also covers opening the mail on a phone while the flow sits on a desktop.
+  - Confirmation links open `/onboarding?verifyToken=...`; the token is stripped from the address bar before the request is issued, then `POST /sws/go/verify-email` confirms it and the flow continues into step 1 of onboarding. The confirmation is awaited before `/sws/go/me` is read, so the freshly confirmed state is not overwritten by an in-flight read of the pending one. The endpoint is unauthenticated (the token is the credential) and idempotent, so a re-clicked or prefetched link answers 200 rather than an error.
   - After platform auth, the page fetches `/sws/go/environments`.
   - If at least one environment exists, it auto-enters the first one, stores `sf_auth_token`, user, role, and org context, clears caches, and redirects to `/dashboard`.
   - During new-environment creation, the onboarding backend runs the sequence generator for the selected organization using the new client's admin user/role context, seeds a default customer programmatically, commits the onboarding transaction, and then sends the `environment-ready` transactional email best-effort; the page then logs in, checks Sales Invoice readiness, and redirects.
@@ -52,6 +55,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Password reset confirmation rejects mismatched local form passwords before calling the backend.
   - Password-change failures keep the user on the current setup view without clearing the existing platform token.
   - Environment login failures currently surface browser `alert()` messages.
+  - Creating an environment with an unconfirmed address is still refused with `403 EMAIL_NOT_VERIFIED` before the NDJSON stream opens. The wall is the UX half of that rule, not a replacement for it: the backend remains the gate for a modified client or a direct request.
+  - An account that predates ETP-4798, or one whose *first* confirmation mail could not be sent, is neither verified nor pending: it sees no wall and hits no gate. The flow fails open rather than locking users out over a misconfigured `etendo.go.app.baseUrl` or provider — which is why the routing predicate is `emailVerificationPending` and never `!emailVerified`.
+  - A failed **re-send** is the opposite case and does not un-gate anything: the backend restores the token that was pending before the re-issue, so the wall stays up and the link already in the user's inbox keeps working. Otherwise pressing "resend" until the per-recipient throttle refused would be enough to switch the gate off.
+  - SSO accounts are born confirmed, and signing in through the identity provider clears any confirmation still pending on that address.
 - **Automated evidence:**
   - `../schema_forge_core/packages/etendo-go-core/test/onboardingOwnership.test.js` verifies the Core-owned API, state, SSO, password-policy, draft, and stream contracts. Schema Forge retains product composition coverage in `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx`.
   - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states.
@@ -131,6 +138,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Failure or edge behavior:**
   - List refresh and pagination logout on HTTP 401.
   - If the defaults endpoint fails, the form still opens with an empty object and `defaultsLoading` returns to false. If it merely overruns the 4s budget, `defaultsLoading` also returns to false, but the request keeps running and its defaults are applied when they land.
+  - **ETP-5002 — the required-field gate defers to a pending defaults session.** The hook exposes a second flag, `defaultsPending`, tracking the *request* window rather than the UX window: it goes true with `defaultsLoading` and clears only when the response lands, the request errors, or the session is neutralized — the 4s timer deliberately does **not** touch it. `useEntity` passes `deferBlocking: defaultsPending && !editing?.id` into `useFormValidity`, so while a NEW record's defaults are still in the air the ETP-4933 required-field gate blocks nothing. Without this, the two flags disagreed in exactly the window the budget opens: `defaultsLoading` released the form, the still-flying default left a required field empty, and the gate disabled the primary action on a value the user was never meant to type. `purchase-order` is the concrete case — `warehouse` is `required: true` with no contract default, so every new PO whose defaults request overran 4s rendered **both** Guardar and Confirmar disabled, tooltip "Completa primero los campos obligatorios: Almacén", which is how the rectificativa integration specs failed. The moment the session settles the gate applies in full: if the defaults arrived without the required field, it blocks — correctly, because now we know nobody is going to fill it. The deferral is scoped to new records because an existing one has no defaults session (`fetchById` neutralizes any in flight) and its own `skipUnchangedInvalid` policy already spares untouched empties. The backend's `MISSING_REQUIRED_FIELDS` validation remains the net underneath the deferral window.
   - Known gap (pre-existing, narrowed but not closed by ETP-4741): `DetailView`'s initial-callout latch arms on `editing` becoming non-empty for **any** reason, including the user typing into a plain non-selector field. If that happens before the defaults land — only possible in the window between the 4s gate release and a late response — the latch is consumed while no selector field has a value yet, so the defaults still merge but the callout chain never runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`).
   - Partial or empty batches stop pagination.
   - Save blocked by missing required fields surfaces per-field `fieldErrors` highlights and a toast; the record is not created.
@@ -139,7 +147,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Automated evidence:**
   - `tools/app-shell/src/hooks/__tests__/useEntity-pagination.test.js` verifies first-page and subsequent-page batch windows, sort handling, retry behavior for the default `creationDate` sort, empty datasets, and fetch failures.
   - `tools/app-shell/src/hooks/__tests__/useEntity-defaults.test.js` verifies the defaults URL, bearer header use, non-OK handling, network-error fallback, and missing-defaults fallback.
-  - `tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx` verifies the ETP-4741 race guards: `defaultsLoading`, the 4s gate release (which neither aborts the request nor discards its late response), invalidation of superseded and record-load-neutralized sessions, user-edit merge protection before and after the release, and the `defaults_block` timing event.
+  - `tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx` verifies the ETP-4741 race guards: `defaultsLoading`, the 4s gate release (which neither aborts the request nor discards its late response), invalidation of superseded and record-load-neutralized sessions, user-edit merge protection before and after the release, and the `defaults_block` timing event. It also pins the ETP-5002 contract: `defaultsPending` survives the 4s budget, the required-field gate defers while it is true, and the gate re-arms in full once the session settles (landed with the field, landed without it, failed, or neutralized).
   - `tools/app-shell/src/hooks/__tests__/useEntity-required-validation.test.js` verifies the required-field validation logic: empty required fields are flagged, readOnly and summary-section fields are skipped, whitespace-only strings are treated as empty, and `readOnlyLogic` functions are respected for completed documents.
 - **Manual verification path:**
   1. Open a generated window such as `/sales-order`.
@@ -342,6 +350,31 @@ Backend callout messages are sanitized before display: HTML tags (such as `<br/>
 
 Fields with a `min: 0` constraint — `invoicedQuantity`, `listPrice`, and `etgoDiscount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
 
+### Save-blocking toasts vs. the success toast — ETP-5002
+
+A save-blocking numeric violation (`min` / `integer`, ETP-4542) raises its error toast under a
+STABLE sonner id, `numericFieldToastId(field.key)` → `numeric-field-<key>`, shared by
+EntityForm's on-blur toast and useEntity's save gate so the two dedupe instead of stacking.
+ETP-4830 then gave the post-save SUCCESS toast a stable id of its own,
+`RECORD_SAVE_TOAST_ID` — deliberately, to turn the User window's dismiss-then-add
+`onAfterCreate` race into one atomic in-place update.
+
+Those two decisions interact badly, and the interaction is the thing to remember: **a stable
+id buys atomic replacement but COSTS front-of-stack promotion.** Sonner applies
+`create()`-with-an-existing-id as an in-place UPDATE, so the success toast refreshes its
+older entry instead of jumping the queue. Whenever a save-blocking error toast is newer, that
+error keeps `data-front="true"` — the user who corrected the value and saved successfully is
+still reading the error, and any assertion on the front-most toast reads it too (this is how
+`assets` integration Case 5/6 failed while the underlying `PATCH` returned 200).
+
+`showSaveSuccessToast` therefore retires the errors it supersedes before confirming: ids
+raised with a stable id are recorded by `trackSaveBlockToast` (from both call sites) and
+dismissed by `dismissSaveBlockToasts` on the next successful save. Only ids we minted are
+dismissed — never a bare `toast.dismiss()`, which would also wipe unrelated backend messages
+and reintroduce the very cross-timer race ETP-4830 documented. Dismissing a DIFFERENT id than
+the one being created has no such race. The email/website/phone gates pass no id, still stack
+auto-id toasts, and are deliberately left untracked.
+
 ### Payment modal date validation
 
 The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red asterisk (*) indicating it is required. The "Confirm payment" button is disabled while the date field is empty, preventing submission without a date. When the user attempts submission with no date or when the backend returns a 400 response, a descriptive translated error message is shown instead of the raw "Failed (400)" string. The error message is resolved via the i18n key `paymentDateRequired` in both `en_US.json` and `es_ES.json`.
@@ -350,6 +383,7 @@ The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red 
 - `tools/app-shell/src/components/contract-ui/DataTable.jsx` — `isMissingRequired`, `isBelowMin` helpers; `invalidFields` state in `InlineAddRow`
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `isValueBelowMin` helper; `invalidCell` state; `hasValidationErrorRef` keeps edit mode open on validation failure
 - `tools/app-shell/src/hooks/useEntity.js` — `handleSaveAndProcess` passes `{ silent: true }` to `handleSave` to suppress the intermediate save toast
+- `tools/app-shell/src/lib/numericValidation.js` — `numericFieldToastId`, plus ETP-5002's `trackSaveBlockToast` / `dismissSaveBlockToasts` / `resetSaveBlockToastTracking` bookkeeping
 - `tools/app-shell/src/hooks/useCallout.js` — `sanitizeCalloutMessage` strips HTML and redundant prefixes before passing text to Sonner
 - `tools/app-shell/src/windows/custom/shared/InvoicePaymentModal.jsx` — `invalidField` state, date/amount/account validation, disabled confirm button
 
