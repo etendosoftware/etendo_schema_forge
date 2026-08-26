@@ -87,25 +87,36 @@ export default function BulkDocumentAction({
 
   return (
     <>
-      {/* ETP-4972 — ghost variant (transparent, no border, hover highlight),
-          but keeps its text label: Ale (design) confirmed icon-only is fine
-          for universally-recognized actions (print, clone, delete) but this
-          one needs it — the same checklist icon here means "Confirmar" in
-          some windows and "Procesado masivo" in others depending on
-          `labelKey`, so the icon alone isn't even consistently meaningful.
-          Figma "Confirmar" button (Button 7, verified in Dev Mode): icon
+      {/* ETP-4972 — plain hand-rolled button (not the shared shadcn Button):
+          Button's size="sm" bakes in text-xs + `[&_svg]:size-4`, and that
+          descendant selector beats a child's own `h-3.5 w-3.5` classes on
+          CSS specificity alone regardless of Tailwind/twMerge class order —
+          it was rendering this button smaller-text/bigger-icon than the
+          sibling "Crear factura" button (BulkInvoiceFromShipment.jsx), which
+          made the pair look mismatched even though both are Figma "Size: md".
+          Mirrors that button's classes exactly so both render identically.
+          Keeps its text label: Ale (design) confirmed icon-only is fine for
+          universally-recognized actions (print, clone, delete) but this one
+          needs it — the same checklist icon here means "Confirmar" in some
+          windows and "Procesado masivo" in others depending on `labelKey`,
+          so the icon alone isn't even consistently meaningful. Figma
+          "Confirmar" button (Button 7, verified in Dev Mode): icon
           file-checkmark → lucide FileCheck, padding 7px/12px, gap 4px. */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1 px-3 py-[7px]"
-        title={ui(labelKey)}
-        onClick={handleOpen}
+      <button
+        type="button"
         disabled={running}
+        onClick={handleOpen}
+        title={ui(labelKey)}
+        className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
+        style={{
+          color: 'hsl(var(--floating-toolbar-fg))',
+          cursor: running ? 'not-allowed' : 'pointer',
+          opacity: running ? 0.5 : 1,
+        }}
         data-testid="Button__90fe6a">
         <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__90fe6a" />
         {ui(labelKey)}
-      </Button>
+      </button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
         <DialogContent data-testid="DialogContent__90fe6a">
           <DialogHeader data-testid="DialogHeader__90fe6a">
