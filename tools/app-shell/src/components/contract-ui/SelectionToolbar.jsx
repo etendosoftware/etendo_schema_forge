@@ -75,11 +75,17 @@ import { X } from 'lucide-react';
  *     button.
  *
  * Props:
- *   visible     — mount/show the portal (caller gates by selection length)
- *   closing     — drives the slide-out animation class
- *   onClose     — trailing X button handler (clear selection / hide bar)
- *   closeTitle  — tooltip for the X button
- *   children    — the bar's middle content (counter + action buttons)
+ *   visible      — mount/show the portal (caller gates by selection length)
+ *   closing      — drives the slide-out animation class
+ *   onClose      — trailing X button handler (clear selection / hide bar)
+ *   closeTitle   — tooltip for the X button
+ *   children     — the bar's middle content (counter + action buttons)
+ *   data-testid  — forwarded to the visible pill element. Every one of the
+ *     8 real call sites already passes this (each with its own literal), but
+ *     until this prop existed here it was silently dropped by destructuring
+ *     — caught via 3 failing PeriodsExpandablePanel tests querying for it
+ *     (ETP-4972 test-pass finding, present since the very first migration
+ *     commit, not introduced by any later change).
  */
 function SelectionToolbarDivider() {
   return (
@@ -93,14 +99,16 @@ function SelectionToolbarDivider() {
       // passes here has none of its own — so the divider needs `mx-2` itself
       // or it sits flush against the counter text (ETP-4972 live-QA finding).
       // Reuses --floating-toolbar-fg (near-white, 210 20% 98%) instead of a
-      // literal #FFFFFF — visually indistinguishable and keeps this on the
-      // existing theme-invariant token instead of a new hardcoded literal.
+      // hardcoded pure-white literal — visually indistinguishable and keeps
+      // this on the existing theme-invariant token instead of a new one
+      // (this codebase's semantic-theme-usage lint flags raw hex color
+      // literals in source, comments included — see semanticThemeUsage.test.js).
       className="mx-2 w-px shrink-0 self-stretch bg-[hsl(var(--floating-toolbar-fg)/0.2)]"
     />
   );
 }
 
-export default function SelectionToolbar({ visible, closing, onClose, closeTitle, children }) {
+export default function SelectionToolbar({ visible, closing, onClose, closeTitle, children, 'data-testid': dataTestId }) {
   if (!visible) return null;
 
   // One divider after every top-level segment the caller passed, plus one
@@ -114,6 +122,7 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
       style={{ bottom: 24, left: '50%', transform: 'translateX(-50%)' }}
     >
       <div
+        data-testid={dataTestId}
         className={[
           'selection-toolbar',
           // radius/md = 7px flat (Figma Dev Mode measurement off the close

@@ -386,10 +386,13 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
+  // ETP-4972 — the selection bar's Print/Clone buttons became icon-only
+  // (ghost variant, no visible label); identified by their title tooltip
+  // instead of visible text now.
   it('calls printDocuments with the selected ids from the selection bar print button', () => {
     renderListView();
     fireEvent.click(screen.getByTestId('trigger-select'));
-    fireEvent.click(screen.getByText(/^print/).closest('button'));
+    fireEvent.click(screen.getByTitle('print'));
     expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token', expect.any(Function));
   });
 
@@ -397,7 +400,7 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     const onCloneRow = vi.fn();
     renderListView({ onCloneRow });
     fireEvent.click(screen.getByTestId('trigger-select'));
-    fireEvent.click(screen.getByText(/^cloneOrderBtn/).closest('button'));
+    fireEvent.click(screen.getByTitle('cloneOrderBtn'));
     expect(onCloneRow).toHaveBeenCalled();
   });
 
