@@ -17543,6 +17543,7 @@
     "assignedRolesLabel": "Roles asignados",
     "noRolesAssigned": "Sin roles asignados",
     "saveUserFirstForRoles": "Guarda el usuario primero para asignar roles",
+    "adminRoleNoCompositionMessage": "Este usuario ya tiene el rol Administrador, que otorga acceso completo. No se pueden componer roles adicionales para él.",
     "roleAssignmentSaveFailed": "No se pudieron guardar los roles asignados",
     "roleAssignmentSaveFailedAfterUserSaved": "El usuario se guardó, pero los roles no pudieron actualizarse: {detail}",
     "removeRoleAria": "Quitar rol",

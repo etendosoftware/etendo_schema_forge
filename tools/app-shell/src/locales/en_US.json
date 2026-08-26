@@ -17302,6 +17302,7 @@
     "assignedRolesLabel": "Assigned roles",
     "noRolesAssigned": "No roles assigned",
     "saveUserFirstForRoles": "Save the user first to assign roles",
+    "adminRoleNoCompositionMessage": "This user already has the Admin role, which grants full access. Additional roles can't be composed for it.",
     "roleAssignmentSaveFailed": "Couldn't save the assigned roles",
     "roleAssignmentSaveFailedAfterUserSaved": "The user was saved, but the roles couldn't be updated: {detail}",
     "removeRoleAria": "Remove role",
