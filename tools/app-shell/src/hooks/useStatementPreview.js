@@ -1,6 +1,4 @@
-import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
-import { getApiBase } from './useNeoResource';
+import { useStatementFileRequest } from './useStatementFileRequest';
 
 /**
  * Hook for the multi-step "Importar extracto" modal. Calls
@@ -15,12 +13,16 @@ import { getApiBase } from './useNeoResource';
  *     format: 'C43' | 'GENERIC_CSV',
  *     fileName: string,
  *     lineCount: number,
+ *     discardedLines: number,    // rows dropped for having no amount
  *     totalIn: number,
  *     totalOut: number,
  *     periodFrom: string,        // ISO date
  *     periodTo: string,          // ISO date
  *     lines: Array<{ lineNo, date, description, bpartnerName, reference, cramount, dramount }>,
  *   }
+ *
+ * A rejected call carries `err.status` and, for a known backend failure,
+ * `err.code` (e.g. `NO_VALID_LINES` when the file has nothing importable).
  *
  * @returns {{
  *   previewStatement: (payload: { accountId, fileName, contentBase64 }) => Promise<object>,
@@ -29,51 +31,6 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementPreview() {
-  const { token } = useAuth();
-  const [previewing, setPreviewing] = useState(false);
-  const [error, setError] = useState(null);
-
-  const previewStatement = useCallback(async ({ accountId, fileName, contentBase64 }) => {
-    const url = `${getApiBase()}/sws/neo/bank-statements?action=preview`;
-    setPreviewing(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          FIN_Financial_Account_ID: accountId,
-          fileName,
-          contentBase64,
-        }),
-      });
-      if (!res.ok) {
-        // Read the failure body as text and parse it ourselves: a NEO error body
-        // is JSON and carries `error.code`, but a proxy/gateway failure is not,
-        // and that raw text is then the only clue about what went wrong.
-        const raw = await res.text().catch(() => '');
-        let parsed = null;
-        try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
-        const detail = raw ? `: ${raw}` : '';
-        const err = new Error(parsed?.error?.message || `HTTP ${res.status}${detail}`);
-        err.status = parsed?.error?.status ?? res.status;
-        // Stable machine-readable code (e.g. NO_VALID_LINES) so the caller can
-        // show a translated message instead of a generic failure.
-        err.code = parsed?.error?.code ?? null;
-        throw err;
-      }
-      const json = await res.json();
-      return json?.response?.data ?? {};
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setPreviewing(false);
-    }
-  }, [token]);
-
-  return { previewStatement, previewing, error };
+  const { run, busy, error } = useStatementFileRequest('preview');
+  return { previewStatement: run, previewing: busy, error };
 }
