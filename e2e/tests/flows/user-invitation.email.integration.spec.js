@@ -176,7 +176,12 @@ async function prepareInvitedUser(request, neoToken, email) {
   }
   expect(user?.id, userResponseText).toEqual(expect.any(String));
 
-  const roleOptionsResponse = await request.get('/sws/neo/user/userRoles/selectors/role?limit=50&offset=0', {
+  // ETP-4576 — this asked `user/userRoles/selectors/role`, and `userRoles` is excluded from
+  // the window on purpose (`artifacts/user/decisions.json`: `"userRoles": { "exclude": true }`),
+  // so NEO answers 404 "Entity not found" — correctly. The test never noticed: its describe is
+  // serial and the case before it failed first, so this one had never run. The roles it wants
+  // are the options of the very field it PATCHes two calls below, and that selector does exist.
+  const roleOptionsResponse = await request.get('/sws/neo/user/user/selectors/defaultRole?limit=50&offset=0', {
     headers: { Authorization: `Bearer ${neoToken}` },
   });
   const roleOptionsText = await roleOptionsResponse.text();
