@@ -146,6 +146,26 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - Because it never leaves the system, it cannot be verified in an inbox — treat it as dormant, not
   as working.
 
+### The gateway Lambda is a third repo, and it can silently drop fields
+Document emails send a `Reply-To` carrying the operator's own address, so the customer can answer a
+real person instead of `noreply@`. It reached the gateway and went nowhere: the Lambda read `to`,
+`template` and `data` and **ignored everything else in the payload** — both `replyTo` and the `cc`
+an operator adds in the send modal.
+
+That Lambda is not in either of the two repos. It lives in
+**`etendosoftware/etendo-go-infraestructure`**, at `lambda/ses-email-sender/index.py`, in **Python**,
+and its workflow publishes to AWS account `278186107973` (`eu-west-3`) on merge to `main`. Both
+mappings were added, merged and verified in a real inbox on 2026-08-26 — so there are now **three**
+repos in the path of a document email, not two.
+
+**The lesson is the diagnosis, not the fix:** a field can leave Etendo correctly and still never
+reach the inbox. Before changing Java, POST straight to the gateway with no Java in the path — that
+is what proved it in one request. `EmailSenderIdentity` logs a WARN when it resolves no address, so
+"we never sent one" and "the provider dropped it" are distinguishable from the logs alone.
+
+Adding a new field to `EmailProviderRequest.toProviderPayload()` means adding it to that Lambda too,
+or it is dead weight. Full history: `docs/plans/2026-08-26-reply-to-email-gateway-lambda.md`.
+
 ### Known issue: the document download link (not fixed)
 The link in a document email answers **500 for any document in a real organization**; it only works
 for documents in organization `*`, which is why test datasets and demo instances look healthy.
@@ -162,6 +182,27 @@ A working fix exists and was verified against two clients in real organizations,
 decision. The patch is kept at `docs/plans/drafts/backup-download-fix/` (gitignored); reapply with
 `git am` from the `com.etendoerp.go` repo. Do not re-diagnose this from scratch.
 
+### Emphasis is `**markers**` in the copy, not `<strong>` in Java
+
+Bold is written in the copy itself — `document.body = Le enviamos su {0} **{1}**.` — and turned into
+`<strong>` by `EmailEscape.applyBold`. Both paths use it: the module's own composition and the
+operator's edited message.
+
+It replaced a `emphasised()` helper that wrapped an interpolated value in `<strong>` before it
+reached the sentence. That only worked for copy the module composed itself: **the moment an operator
+edited the message, every bold run disappeared and there was no way to put one back**. Expressing it
+in the copy means the operator reads exactly the markers that will render, and one catalog string
+works on both sides.
+
+**`applyBold` must run after `escapeHtml`, never before.** Asterisks survive escaping untouched, so
+escaping first gives you emphasis *and* an inert `<script>`. Reversed, you are emitting
+caller-controlled markup. `EmailEscapeTest` pins that ordering.
+
+Deliberately bold only. An unclosed `**` is left alone and a run never spans a line break. If a
+second marker is ever wanted (italics, lists, links), reach for a markdown library — do not add a
+second regex. `OrganizationJoinedEmailContract` and `CompanyInvitationEmailContract` still carry
+their own local `emphasised()`; they were left alone and are the remaining callers to migrate.
+
 ### ⚠ The document email default copy lives in TWO places
 The send modal composes the default subject and message itself, and the module composes the same two
 sentences for a send that carries no edits. Both must say the same thing:
@@ -171,8 +212,17 @@ sentences for a send that carries no edits. Both must say the same thing:
 | Modal | `SendDocumentModal.jsx` (`defaultSubject`, `defaultMessage`) + `sendModalDefaultMessage` in `tools/app-shell/src/locales/*.json` |
 | Module | `document.subject.withRecipient` and `document.body` in `emails_*.properties` |
 
+The greeting is part of the modal's **message** box, not something the module adds afterwards — the
+operator has to be able to read and edit how the customer is addressed. So the module skips its own
+greeting whenever a message is supplied, and composes one only for a command carrying no message at
+all. And since ETP-5003 the modal **always** sends subject and message, edited or not: omitting them
+left the module recomposing from its catalog in whatever language the command carried, so a command
+with no `language` rebuilt in Spanish what the operator had just read in English.
+
 The duplication is deliberate — it saves a request on every open of the modal — and it is guarded by
-`defaultCopyInSync.vitest.js`, which reads the module's catalog and fails when the two drift. That
+`defaultCopyInSync.vitest.js`, which reads the module's catalog and fails when the two drift. It
+checks **both** languages and the `**` markers; it compared only `es_ES` until the English pair was
+found to disagree outright ("Hi {0}, / attached below" against "Hello {bpName}, / below"). That
 guard only runs where the `com.etendoerp.go` checkout exists, which is the machine of anyone editing
 either side.
 
@@ -216,7 +266,10 @@ request. Forget it and you have HTML injection in an email, not just a broken wo
 The language is the **recipient's**, passed explicitly in the command. Never read it from
 `OBContext`: the email is built while the *sender's* session is active.
 
-- Missing or unsupported language falls back to **Spanish**, the product's default.
+- Missing or unsupported language falls back to **Spanish**, the product's default. Since ETP-5003
+  the document contract also **logs a warning** when a command arrives without one: the fallback is
+  indistinguishable from a correct Spanish send, so it must not be silent. It stays a fallback
+  rather than a rejection — refusing to send an invoice over a missing header field is worse.
 - `EmailMessages` deliberately refuses the JVM's default locale as a fallback — `getBundle` consults
   it before giving up, so a server running under `en_US` would answer a `pt_BR` request in English.
 - A frontend that triggers an email must post the operator's locale. `InviteUserDialog` did not, and
@@ -246,6 +299,19 @@ Work down this list before suspecting the provider:
 2. **Throttled.** Each contract declares limits per tenant, user, record, recipient, domain and
    globally. `company-invitation` allows 3 per recipient per 15 minutes. Deleting the record does
    not reset the counter, which lives in the safety store.
+
+   **The document-send family blocks development by default:** `perRecord` is **3 sends of the same
+   document per hour**, so the fourth test send of one invoice is refused for the rest of the hour.
+   Per recipient it is 20/hour, which testing against your own address also reaches. Since ETP-5003
+   each ceiling is configurable — set `etendo.go.email.throttle.maxPerRecord` (and `…maxPerRecipient`,
+   `…maxPerUser`, `…maxPerTenant`, `…maxPerDomain`) in the Etendo root `gradle.properties`. Defaults
+   are the production values, so configuring nothing changes nothing.
+
+   Raising a ceiling **resets the counter by itself** — `findThrottle()` matches the row on
+   `maxAttempts`/`windowSeconds` too, so a new ceiling starts a fresh row at zero. Never clear
+   `ETGO_Email_Safety` by hand to unblock someone. A malformed override (`0`, negative, non-numeric)
+   is ignored with a warning rather than honoured: `EmailThrottleRule` clamps with `Math.max(1, …)`,
+   so a typo would otherwise mean *one* email per hour.
 3. **Duplicate.** The idempotency key is server-derived; re-sending the same record to the same
    recipients answers `DUPLICATE`.
 4. **Provider disabled or unconfigured** — `etendo.go.email.provider.enabled` / `.baseUrl` /

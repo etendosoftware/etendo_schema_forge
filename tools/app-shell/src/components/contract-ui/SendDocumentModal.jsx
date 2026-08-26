@@ -416,7 +416,13 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   // while the customer received another. `defaultCopyInSync.test.js` fails when they drift; fix the
   // mismatch rather than relaxing the test.
   const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
-  const defaultMessage = ui('sendModalDefaultMessage', { documentType, documentNo });
+  // ETP-5003 — the greeting is part of the editable message, not something the backend adds
+  // afterwards: the operator has to be able to read and change how the customer is addressed.
+  // The module skips its own greeting whenever a message is supplied, so this is the only one.
+  const defaultMessage = [
+    bpName ? ui('sendModalDefaultGreeting', { bpName }) : null,
+    ui('sendModalDefaultMessage', { documentType, documentNo }),
+  ].filter(Boolean).join('\n\n');
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
@@ -472,13 +478,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       const recipientEdits = editableRecipients
         ? buildRecipientEdits(baseRecipientsRef.current, { to: toRecipients, cc: ccRecipients })
         : null;
-      // Untouched subject/message yield null here, keeping the command
-      // byte-identical to the legacy one (mirrors recipientEdits above).
-      // Either field left as the backend proposed it means no edit at all. When one did change,
-      // both travel: the untouched half round-trips to the very value the backend would rebuild.
-      const messageEdits = (subject !== defaultSubject || message !== defaultMessage)
-        ? { subject, message }
-        : null;
+      // ETP-5003 — subject and message always travel, edited or not. They used to be omitted when
+      // untouched, leaving the module to recompose them from its own catalog in whatever language
+      // the command carried: a command with no language rebuilt them in Spanish while the operator
+      // had just read them in English on this very screen. Sending what is on screen removes the
+      // whole class of divergence — there is no second copy left to drift.
+      const messageEdits = { subject, message };
       await sendDocumentFromModal({
         apiBaseUrl,
         token,

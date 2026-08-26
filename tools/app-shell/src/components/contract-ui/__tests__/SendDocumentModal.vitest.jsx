@@ -254,6 +254,11 @@ describe('SendDocumentModal', () => {
       recordId: 'doc-1',
       intent: 'send-document',
       idempotencyKey: 'sales-invoice-send:doc-1:send:v1',
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
     expect(body.to).toBeUndefined();
     expect(body.template).toBeUndefined();
@@ -334,6 +339,11 @@ describe('SendDocumentModal', () => {
       recordId: 'order-1',
       intent: 'send-document',
       idempotencyKey: 'sales-order-send:order-1:send:v1',
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -370,6 +380,11 @@ describe('SendDocumentModal', () => {
       recordId: 'quotation-1',
       intent: 'send-document',
       idempotencyKey: 'sales-quotation-send:quotation-1:send:v1',
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -796,7 +811,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
   });
 
-  it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
+  it('sends the on-screen subject and message even when the operator changed nothing', async () => {
     // This is a regression guard, not a bug-reproduction test: it documents
     // that a send where the operator never touched subject/message must stay
     // byte-identical to the legacy payload shape (no messageEdits key at all).
@@ -823,7 +838,17 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
       );
     });
     const body = sendRequestBody();
-    expect(body.messageEdits).toBeUndefined();
+    // ETP-5003 — this used to assert the opposite. Omitting an untouched message left the module
+    // recomposing it from its own catalog in whatever language the command carried, so a command
+    // with no language rebuilt in Spanish what the operator had just read in English.
+    expect(body.messageEdits).toBeTruthy();
+    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
+    // The greeting is part of the editable message so the operator can see how the customer is
+    // addressed; the module skips its own whenever a message is supplied.
+    // ui() is mocked as `key:{params}`, so this pins the composition, not the wording.
+    expect(body.messageEdits.message).toBe(
+      'sendModalDefaultGreeting:{"bpName":"ACME"}\n\n'
+      + 'sendModalDefaultMessage:{"documentType":"Invoice","documentNo":"INV-001"}');
   });
 });
 

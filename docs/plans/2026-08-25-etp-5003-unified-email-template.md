@@ -7,6 +7,9 @@ document emails now render through `EmailLayout`, so every Etendo GO email — 1
 inventory — comes out of one template. F4 landed early, alongside F1: the copy went straight into
 the `.properties` catalogs rather than passing through a literals stage. **F5 (the two portal
 emails, Core SMTP) is what remains.**
+**Blocked outside this repo:** `Reply-To` on document emails is emitted correctly and dropped by the
+gateway Lambda — one line to change in AWS, diagnosis and patch in
+`docs/plans/2026-08-26-reply-to-email-gateway-lambda.md`. Do not re-diagnose or "fix" the Java.
 **Companion doc:** `docs/email-inventory.md` (what we send today and from where).
 **Goal:** every Etendo email renders through a single layout owned by this repo. Only the content
 block varies per email.

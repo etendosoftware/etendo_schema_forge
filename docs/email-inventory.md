@@ -331,7 +331,46 @@ explicitly, not an oversight to patch.
 
 ---
 
-## 6. Related existing docs
+## 6. Rate limits — and why they block development
+
+The same `ETGO_Email_Safety` table enforces throttling, and the document-send ceilings are tight
+enough that ordinary development trips them. The one that bites first:
+
+| Scope | Default | What it means |
+|---|---|---|
+| **per record** | **3 / hour** | sends of the **same** document |
+| per recipient | 20 / hour | sends to the same address |
+| per user | 50 / hour | sends by the same operator |
+| per tenant | 100 / hour | sends by the whole client |
+| per domain | 200 / hour | sends to one recipient domain |
+| global | 2000 / minute | burst guard, not configurable |
+
+Testing a template change against one invoice means the fourth send is refused for the rest of the
+hour, with a `THROTTLE` row rather than an error that explains itself. Sending every test to your own
+address adds the per-recipient ceiling on top.
+
+Each ceiling can be raised per environment (ETP-5003), in the Etendo root `gradle.properties`:
+
+```properties
+etendo.go.email.throttle.maxPerRecord=500
+etendo.go.email.throttle.maxPerRecipient=500
+```
+
+Full property/env-var table, plus the two non-obvious behaviours — raising a ceiling resets the
+counter, and a malformed override is ignored rather than honoured — are in
+`modules/com.etendoerp.go/docs/transactional-email-contracts.md` § *Per-environment throttle
+ceilings*. **The defaults are the production values**, so an environment that sets nothing is
+unaffected.
+
+Note these live outside both repos, in the Etendo root, so they do not travel with a clone: a new
+machine needs them set again.
+
+---
+
+## 7. Related existing docs
+
+- `docs/plans/2026-08-26-reply-to-email-gateway-lambda.md` — Reply-To (and CC) mapping in the
+  gateway Lambda, which lives in a third repo: `etendosoftware/etendo-go-infraestructure`
 
 - `modules/com.etendoerp.go/docs/transactional-email-contracts.md`
 - `modules/com.etendoerp.go/docs/document-email-contract-implementation.md`
