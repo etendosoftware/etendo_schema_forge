@@ -63,6 +63,7 @@ async function sendDocumentFromModal({
   onClose,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
@@ -74,6 +75,10 @@ async function sendDocumentFromModal({
     pdfBlobUrl: cachePreviewBeforeSend ? pdfBlobUrl : null,
     recipientEdits,
     messageEdits,
+    // ETP-5003 — the caller passed this all along and it was dropped right here, so every send
+    // reached the module with no language and rendered its catalog copy in Spanish while the
+    // operator was reading English on screen. The module logs a WARN when it arrives empty.
+    language,
   });
 
   if (data.status === 'SENT' || data.status === 'DUPLICATE') {

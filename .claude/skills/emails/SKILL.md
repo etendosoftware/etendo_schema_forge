@@ -240,6 +240,46 @@ stop it. If the guard fails, fix the copy; do not relax the test.
   falling back to the contract's constructor value so a missing key never puts a raw key in a
   customer's subject line.
 - The default copy is duplicated in the frontend on purpose — see the section above.
+- **They close differently from every other email.** Where the rest sign off with
+  `signature` ("Saludos, Equipo de Etendo Go"), a document email closes by telling the customer they
+  can just reply and reach the person who sent it (`document.replyNote`) — which is only true
+  because the operator's address travels in Reply-To. The signature comes back when
+  `EmailSenderIdentity` resolves no address: a reply would then land on the unattended `noreply@`
+  mailbox, and inviting someone to write there is worse than not inviting them. Never make that
+  note unconditional.
+
+### The summary block: which rows each document shows is the resolver's decision
+Document emails carry a small table above the button — document number first, then a few facts about
+the record. **Which rows appear is decided in the DAL resolver, not in the layout or the contract**,
+because it is a per-document-type product decision:
+
+| Contract | Rows besides the number |
+|---|---|
+| `sales-invoice-send` | date, due date, total |
+| `sales-order-send` | date, total |
+| `sales-quotation-send` | date, valid until, total |
+| `goods-shipment-send` | movement date, ship date, order date |
+| `purchase-order-send` | **none — no block at all** |
+| `return-to-vendor-send` | date |
+
+Two rules make this safe to extend:
+
+- **A row with no value is dropped**, never printed as a bare label. So `valid until` on a quotation
+  without one, or `order date` on a shipment that has none, simply does not appear.
+- **A resolver that contributes no rows produces no block.** That is how `purchase-order-send` opts
+  out: the block would otherwise be a one-line table repeating the number from the sentence above it.
+
+The block renders on **every** send, including one where the operator wrote their own message: the
+rows are facts about the record, not part of the copy.
+
+Dates travel **unformatted** from the resolver (`EmailDocumentDetail.date`) and are formatted in the
+contract, where the recipient's language is known — a resolver runs while the *sender's* session is
+active and cannot know it. The pattern itself is catalog copy (`document.detail.dateFormat`), so
+`26/08/2026` and `08/26/2026` are a translation, not a code branch.
+
+Note `return-to-vendor` is an **Order**, not a shipment: it has `orderDate`, never `movementDate`.
+And the total already existed on `EmailDocumentRecord` long before it was ever displayed — it was
+being sent to the gateway and dropped on the floor.
 
 ### The send modal's preview has two modes
 `renderPdfPreviewNode` picks: the real PDF when `pdfBlobUrl` is ready, a spinner while

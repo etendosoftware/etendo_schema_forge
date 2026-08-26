@@ -254,6 +254,9 @@ describe('SendDocumentModal', () => {
       recordId: 'doc-1',
       intent: 'send-document',
       idempotencyKey: 'sales-invoice-send:doc-1:send:v1',
+      // ETP-5003 — the operator's locale travels with every send. Without it the module renders
+      // its catalog copy in Spanish regardless of the language the operator is working in.
+      language: expect.any(String),
       // ETP-5003 — what the operator reads on screen is what is sent, always.
       messageEdits: expect.objectContaining({
         subject: expect.any(String),
@@ -339,6 +342,7 @@ describe('SendDocumentModal', () => {
       recordId: 'order-1',
       intent: 'send-document',
       idempotencyKey: 'sales-order-send:order-1:send:v1',
+      language: expect.any(String),
       // ETP-5003 — what the operator reads on screen is what is sent, always.
       messageEdits: expect.objectContaining({
         subject: expect.any(String),
@@ -380,6 +384,7 @@ describe('SendDocumentModal', () => {
       recordId: 'quotation-1',
       intent: 'send-document',
       idempotencyKey: 'sales-quotation-send:quotation-1:send:v1',
+      language: expect.any(String),
       // ETP-5003 — what the operator reads on screen is what is sent, always.
       messageEdits: expect.objectContaining({
         subject: expect.any(String),
@@ -859,5 +864,32 @@ describe('SendDocumentButton', () => {
     render(<SendDocumentButton onClick={onClick} />);
     await user.click(screen.getByTestId('action-send-email'));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it('posts the operator locale so the module does not fall back to Spanish', async () => {
+    // ETP-5003 — the modal read the locale and handed it to its own send helper, which did not
+    // destructure it, so it never reached the request body. Everything the module resolved from
+    // its catalog (button, link fallback, summary labels, date format) came back in Spanish while
+    // the operator was working in English. The server logs a WARN when this field is missing.
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+
+    await user.click(getSendButton());
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+    expect(sendRequestBody().language).toBeTruthy();
   });
 });
