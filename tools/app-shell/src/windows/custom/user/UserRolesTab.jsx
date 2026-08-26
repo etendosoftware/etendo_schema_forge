@@ -31,8 +31,13 @@ const ROLE_ICONS = {
  * `FiscalStatusBadge.jsx` already use elsewhere in this app — not a new ad-hoc raw-green
  * Tailwind color, since a closer-matching dark-mode-aware convention already exists.
  * `tier === null` (no access, '—') intentionally renders as plain text, no pill.
+ *
+ * `...rest` (e.g. `data-testid`) is spread onto the rendered `<span>` — every call site
+ * passes `data-testid`, and without forwarding it here it was silently dropped (PR
+ * #1211 review finding), so `TierPill__...` never actually reached the DOM despite
+ * every caller setting it.
  */
-function TierPill({ tier, bold, children }) {
+function TierPill({ tier, bold, children, ...rest }) {
   if (!tier) return children;
   const toneClass =
     tier === 'full'
@@ -40,7 +45,7 @@ function TierPill({ tier, bold, children }) {
       : 'border-status-warning-border bg-status-warning text-status-warning-foreground';
   const weightClass = bold ? 'font-bold' : 'font-medium';
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${weightClass} ${toneClass}`}>
+    <span {...rest} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${weightClass} ${toneClass}`}>
       {children}
     </span>
   );
