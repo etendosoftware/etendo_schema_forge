@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Confirmation modal for Sales Order.
@@ -16,7 +17,6 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 export default function OrderConfirmModal({
   orderId,
   data,
-  token,
   apiBaseUrl,
   onClose,
 }) {
@@ -34,10 +34,13 @@ export default function OrderConfirmModal({
   const [needsReload,    setNeedsReload]    = useState(false);
 
   const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — this built `Authorization: Bearer ${token}` by hand, which under the
+  // cookie session sends a credential the backend does not read while omitting the
+  // CSRF proof it does: the reads below kept working (the browser attaches the
+  // session cookie itself) and every POST came back 403 "CSRF validation failed",
+  // surfacing inside this very modal. The builders resolve whichever scheme the
+  // backend actually issued, so the call sites no longer decide.
+  const headers = useMemo(() => jsonHeaders(), []);
 
 
   // Fetch fresh record + line count on mount
@@ -95,7 +98,7 @@ export default function OrderConfirmModal({
       if (!orderProcessed) {
         const processRes = await fetch(
           `${orderUrl}/${orderId}/action/DocAction`,
-          { method: 'POST', headers, body: JSON.stringify({ action: 'CO' }) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({ action: 'CO' }) },
         );
         if (!processRes.ok) {
           const err = await processRes.json().catch(() => null);
@@ -124,7 +127,7 @@ export default function OrderConfirmModal({
       if (createShipment) {
         const res = await fetch(
           `${orderUrl}/${orderId}/action/createShipment`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -147,7 +150,7 @@ export default function OrderConfirmModal({
       if (createInvoice) {
         const res = await fetch(
           `${orderUrl}/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', headers: writeHeaders(), body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
