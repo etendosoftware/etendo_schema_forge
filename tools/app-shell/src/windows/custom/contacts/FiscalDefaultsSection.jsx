@@ -1,3 +1,4 @@
+import CustomerForm from '@generated/contacts/generated/web/contacts/CustomerForm';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI, useLabel } from '@/i18n';
@@ -6,22 +7,33 @@ import { useUI, useLabel } from '@/i18n';
 // Classic, no callout of their own here. (ETP-4784)
 //
 // "Invoice type key" only makes sense once "Default Key" is on, mirroring
-// the AD displayLogic @EM_Aeatsii_Defaultsiikey@='Y' (see
-// artifacts/contacts/contract.json, entity "customer"). Option value/labels
-// copied from that same contract — AD_Ref_List values are static, not
-// derived per-record.
+// the AD displayLogic @EM_Aeatsii_Defaultsiikey@='Y'.
+//
+// The four AD_Ref_List options and their AD_Ref_List_Trl labels are NOT
+// written here: they are read off the generated `CustomerForm.fields` static,
+// which the pipeline emits from `artifacts/contacts/contract.json` (entity
+// "customer", `enumValues[].name` / `enumValues[].labels.es_ES`). That keeps
+// the contract the single source of truth — options and translations follow
+// AD through `make regen` instead of being hand-copied here and silently
+// drifting, which is exactly how this list lost the Spanish label for 'F1'
+// (ETP-4784). Same `@generated` import convention as this window's
+// `ContactsBusinessPartnerForm.jsx`.
+//
+// Only `options` is taken from the contract. The rest of the descriptor stays
+// explicit on purpose: `section` and `displayLogic` are this panel's own
+// layout decisions, and spreading the whole generated field would also drag in
+// its `defaultValue: 'F1'`, which this panel deliberately does not apply.
+const contractSiiKeyOptions = CustomerForm.fields
+  .find((f) => f.key === 'aeatsiiSiikeylist')
+  .options;
+
 const aeatsiiKeyListField = [
   {
     key: 'aeatsiiSiikeylist',
     column: 'EM_Aeatsii_Siikeylist',
     type: 'select',
     section: 'principal',
-    options: [
-      { value: 'R', label: 'Corrective invoice', labels: { es_ES: 'Factura rectificativa' } },
-      { value: 'F1', label: 'Invoice' },
-      { value: 'F2', label: 'Simplified invoice', labels: { es_ES: 'Factura simplificada' } },
-      { value: 'F4', label: 'Simplified invoices summary', labels: { es_ES: 'Asiento resumen facturas simplificadas' } },
-    ],
+    options: contractSiiKeyOptions,
     displayLogic: (record) => !!record?.aeatsiiDefaultsiikey,
   },
 ];

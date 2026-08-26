@@ -9,6 +9,11 @@
 import { render, screen } from '@testing-library/react';
 import FiscalDefaultsSection from '../FiscalDefaultsSection';
 import { EntityForm } from '@/components/contract-ui';
+// Real (non-mocked) generated module + contract: the SII key-list options must
+// be DERIVED from these, never hand-written in the custom component. See the
+// "options are contract-derived" block below.
+import CustomerForm from '@generated/contacts/generated/web/contacts/CustomerForm';
+import contract from '@generated/contacts/contract.json';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
@@ -24,6 +29,29 @@ function findFieldsCall(fieldKey) {
   return EntityForm.mock.calls.find(([props]) =>
     props?.fields?.some((f) => f.key === fieldKey),
   );
+}
+
+/** Renders with the customer gate on and returns the aeatsiiSiikeylist field descriptor. */
+function getSiiKeyListField() {
+  render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+  const call = findFieldsCall('aeatsiiSiikeylist');
+  return call[0].fields.find((f) => f.key === 'aeatsiiSiikeylist');
+}
+
+/** The same field as emitted by the generator into the contract-backed form. */
+function generatedSiiKeyListField() {
+  return CustomerForm.fields.find((f) => f.key === 'aeatsiiSiikeylist');
+}
+
+/**
+ * The aeatsiiSiikeylist enumValues as declared by AD, read from the contract.
+ * Only the `customer` entity carries the translated list — other entities hold a
+ * `system`-visibility copy without labelled enumValues, so select it explicitly.
+ */
+function contractEnumValues() {
+  const customer = contract.frontendContract.entities.customer;
+  const field = customer.fields.find((f) => f.name === 'aeatsiiSiikeylist');
+  return field.enumValues;
 }
 
 describe('FiscalDefaultsSection', () => {
@@ -86,6 +114,88 @@ describe('FiscalDefaultsSection', () => {
       const field = call[0].fields.find((f) => f.key === 'aeatsiiSiikeylist');
       expect(field.displayLogic({ aeatsiiDefaultsiikey: false })).toBe(false);
       expect(field.displayLogic({ aeatsiiDefaultsiikey: true })).toBe(true);
+    });
+  });
+
+  // ── i18n regression guard (ETP-4784) ────────────────────────────────────
+  // The aeatsiiSiikeylist options were once hand-written in this component with
+  // hardcoded English labels and a partial per-locale map — 'F1' had no Spanish
+  // translation at all, so Spanish users saw "Invoice". The options are now
+  // derived from the generated, contract-backed form (the single source of
+  // truth for AD_Ref_List text). These tests lock that in.
+  describe('aeatsiiSiikeylist options are contract-derived, not hardcoded', () => {
+    it('reuses the options emitted by the generated CustomerForm verbatim', () => {
+      const field = getSiiKeyListField();
+
+      expect(field.options).toEqual(generatedSiiKeyListField().options);
+    });
+
+    it('gives every option a non-empty Spanish label', () => {
+      const field = getSiiKeyListField();
+
+      expect(field.options.length).toBeGreaterThan(0);
+      for (const option of field.options) {
+        const es = option.labels?.es_ES;
+        expect(
+          typeof es === 'string' && es.trim().length > 0,
+          `option ${option.value} has no es_ES label`,
+        ).toBe(true);
+      }
+    });
+
+    it('covers exactly the enumValues declared by the contract (no drift from AD)', () => {
+      const field = getSiiKeyListField();
+
+      const optionValues = field.options.map((o) => o.value).sort();
+      const contractValues = contractEnumValues().map((e) => e.value).sort();
+      expect(optionValues).toEqual(contractValues);
+    });
+
+    it('matches the contract text of every enumValue in both locales', () => {
+      const field = getSiiKeyListField();
+
+      for (const enumValue of contractEnumValues()) {
+        const option = field.options.find((o) => o.value === enumValue.value);
+        expect(option, `no option for contract value ${enumValue.value}`).toBeTruthy();
+        expect(option.label).toBe(enumValue.name);
+        expect(option.labels.es_ES).toBe(enumValue.labels.es_ES);
+      }
+    });
+  });
+
+  // Only `options` is contract-derived; the rest of the descriptor stays this
+  // panel's own. These tests pin that boundary in both directions.
+  describe('aeatsiiSiikeylist descriptor is this panel\'s own, apart from the options', () => {
+    it('declares the AD column and select type that the generated field also uses', () => {
+      const field = getSiiKeyListField();
+      const generated = generatedSiiKeyListField();
+
+      expect(field.column).toBe('EM_Aeatsii_Siikeylist');
+      expect(field.type).toBe('select');
+      expect(field.column).toBe(generated.column);
+      expect(field.type).toBe(generated.type);
+    });
+
+    it('renders the field in the principal section', () => {
+      const field = getSiiKeyListField();
+
+      expect(field.section).toBe('principal');
+    });
+
+    it('does not inherit the generated defaultValue', () => {
+      const field = getSiiKeyListField();
+
+      // The generated field defaults to 'F1'; this panel deliberately applies
+      // no default, so pulling in the whole descriptor would be a behavior change.
+      expect(generatedSiiKeyListField().defaultValue).toBe('F1');
+      expect(field.defaultValue).toBeUndefined();
+    });
+
+    it('carries its own displayLogic, which the generated field does not have', () => {
+      const field = getSiiKeyListField();
+
+      expect(typeof field.displayLogic).toBe('function');
+      expect(generatedSiiKeyListField().displayLogic).toBeUndefined();
     });
   });
 
