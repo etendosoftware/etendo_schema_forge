@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { FilePlus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
@@ -58,20 +59,22 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           actions (print, clone, delete) but this one needs the label since a
           generic document icon alone doesn't say "create an invoice from the
           selected shipments". No "(count)" suffix — the pill's own counter
-          segment already shows the selection count. */}
+          segment already shows the selection count. Figma "Crear factura"
+          button (Button 6, verified in Dev Mode): icon file-plus → lucide
+          FilePlus, padding 7px/12px, gap 4px, Hug(149px)×38px. */}
       <button
         type="button"
         disabled={!canCreate}
         onClick={() => setShowModal(true)}
         title={tooltip}
-        className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
+        className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
         style={{
           color: canCreate ? 'hsl(var(--floating-toolbar-fg))' : 'hsl(var(--floating-toolbar-muted))',
           cursor: canCreate ? 'pointer' : 'not-allowed',
           opacity: canCreate ? 1 : 0.5,
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <FilePlus className="h-3.5 w-3.5" data-testid="FilePlus__bulkInvoice" />
         {ui('createInvoiceBtn')}
       </button>
 

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import { ListChecks } from 'lucide-react';
+import { FileCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 
@@ -92,16 +92,18 @@ export default function BulkDocumentAction({
           for universally-recognized actions (print, clone, delete) but this
           one needs it — the same checklist icon here means "Confirmar" in
           some windows and "Procesado masivo" in others depending on
-          `labelKey`, so the icon alone isn't even consistently meaningful. */}
+          `labelKey`, so the icon alone isn't even consistently meaningful.
+          Figma "Confirmar" button (Button 7, verified in Dev Mode): icon
+          file-checkmark → lucide FileCheck, padding 7px/12px, gap 4px. */}
       <Button
         variant="ghost"
         size="sm"
-        className="gap-1.5"
+        className="gap-1 px-3 py-[7px]"
         title={ui(labelKey)}
         onClick={handleOpen}
         disabled={running}
         data-testid="Button__90fe6a">
-        <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__90fe6a" />
+        <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__90fe6a" />
         {ui(labelKey)}
       </Button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
