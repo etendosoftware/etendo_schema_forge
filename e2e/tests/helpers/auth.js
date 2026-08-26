@@ -342,29 +342,51 @@ export async function navigateTo(page, windowSlug) {
  * credential is the `__Host-` session cookie — so the read returned null and
  * every helper that *required* a token threw before its first request.
  *
- * The cookie itself needs no help: `page.request` shares the browser context's
- * cookie jar, so it travels on its own. What an unsafe method still needs is the
- * CSRF proof, and the honest place to get it is the same endpoint the app uses to
- * restore a session — GET /sws/go/session returns the `csrfToken` for the
- * current session. Read through `page.evaluate` so the request is same-origin
- * from the page, exactly like the app's own.
+ * An unsafe request needs THREE things, and `page.request` only supplies one of
+ * them on its own:
  *
- * The header is omitted when the backend reports no token (bearer mode, or CSRF
- * not yet enforced) rather than sent empty, which the backend rejects as
- * malformed.
+ * 1. The session cookie — free: `page.request` shares the browser context's
+ *    cookie jar.
+ * 2. The CSRF proof — read from GET /sws/go/session, the same endpoint the app
+ *    restores from, through `page.evaluate` so it is same-origin like the app's.
+ * 3. **An `Origin` header** — and this is the one that is easy to miss.
+ *    `GoSessionSecurity.authorize()` requires BOTH a valid token and an
+ *    allowlisted origin, and `isOriginAllowed()` fails CLOSED: with neither
+ *    `Origin` nor `Referer` it returns false. `page.request` is an HTTP client,
+ *    not a browser navigation, so it sends neither — the request arrives with a
+ *    perfectly valid CSRF token and is still rejected as "CSRF validation
+ *    failed". Verified: identical POST, 403 without the header and 200 with it.
+ *    The origin sent is the page's own, which is what a browser would send.
+ *
+ * The origin still has to be on the backend's allowlist
+ * (`CorsUtils.DEFAULT_ALLOWED_ORIGINS` or `etgo.allowed.origins`). It ships with
+ * 3100 and 4173 — the app's preview port and the E2E harness's — but a deployment
+ * predating ETP-4575 only trusts 3000 and 5173, so a 403 here on an older backend
+ * means that list, not this header.
  */
 export async function sessionWriteHeaders(page) {
   const csrfToken = await page.evaluate(async () => {
-    try {
-      const res = await fetch('/sws/go/session', { credentials: 'include' });
-      if (!res.ok) return null;
-      return (await res.json())?.csrfToken ?? null;
-    } catch {
-      return null;
+    const res = await fetch('/sws/go/session', { credentials: 'include' });
+    if (!res.ok) {
+      throw new Error(`GET /sws/go/session answered ${res.status}`);
     }
+    return (await res.json())?.csrfToken ?? null;
+  }).catch((err) => {
+    // Loud on purpose. Swallowing this used to return a header bag with no proof,
+    // so the request went out anyway and came back as a backend 403 — hiding the
+    // real cause (the session read) behind an error about the write.
+    throw new Error(
+      `sessionWriteHeaders: could not read the CSRF token for the current session — ${err.message}. `
+      + 'Call login(page) first, and check the session cookie survived.',
+    );
   });
-  return {
+
+  const headers = {
     'Content-Type': 'application/json',
-    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+    Origin: new URL(page.url()).origin,
   };
+  // Absent only when the backend issues no CSRF (bearer mode, or CSRF not yet
+  // enforced). Sending it empty is rejected as malformed, so it is left off.
+  if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
+  return headers;
 }
