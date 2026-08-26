@@ -8,6 +8,7 @@ import {
   buildCompanyFields,
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
+  resolveProductCode,
   useDocumentPdf,
 } from './documentPdf.js';
 import { computeDocumentQrDataUrl } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
@@ -26,6 +27,7 @@ export async function buildInvoiceData(invoiceId, base, token) {
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: resolveProductCode(l),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.invoicedQuantity ?? l.qtyInvoiced ?? 0,
     unitPrice: l.unitPrice ?? l.priceActual ?? 0,

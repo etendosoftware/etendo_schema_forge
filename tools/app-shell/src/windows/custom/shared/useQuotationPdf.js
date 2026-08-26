@@ -9,6 +9,7 @@ import {
   buildCompanyFields,
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
+  resolveProductCode,
   useDocumentPdf,
 } from './documentPdf.js';
 
@@ -26,6 +27,7 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: resolveProductCode(l),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.orderedQuantity ?? 0,
     unitPrice: l.unitPrice ?? 0,

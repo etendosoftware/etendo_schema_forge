@@ -209,7 +209,7 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
     <tbody>
       {{#each lines}}
       <tr>
-        <td class="code">{{this.lineNo}}</td>
+        <td class="code">{{this.productCode}}</td>
         <td class="desc">{{this.productName}}</td>
         <td class="num">{{formatCurrency this.quantity}}</td>
         <td class="num">{{formatCurrency this.unitPrice}}</td>
@@ -274,6 +274,18 @@ export function sortDocumentLines(linesRaw) {
 }
 
 /**
+ * Resolves the printed product code (SKU) for a document line, for the
+ * "CÓD." column in DOCUMENT_TEMPLATE.
+ * ETP-4941: when neither a persisted productCode nor the foreignKey's raw
+ * value (product$_value) is available (e.g. a product with no SKU), this
+ * MUST fall back to '—' — never the line number/index, which reproduces the
+ * original bug (the code column showing the line position instead of a SKU).
+ */
+export function resolveProductCode(line) {
+  return line.productCode || line['product$_value'] || '—';
+}
+
+/**
  * Builds the company identity block for PDF templates.
  * Falls back to header org fields when the session organization is unavailable.
  * bpAddressFallback is used when header.partnerAddress$_identifier is absent (e.g. purchase-order).
@@ -310,6 +322,7 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: resolveProductCode(l),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.orderedQuantity ?? l.qtyOrdered ?? 0,
     unitPrice: l.listPrice ?? l.unitPrice ?? l.priceActual ?? 0,
