@@ -874,3 +874,115 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
     assert.equal(translateBackendError(raw, es), raw);
   });
 });
+
+// ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
+// AD_MESSAGE rows with no real es_ES AD_MESSAGE_TRL (the trl row is a verbatim copy of the
+// English text), so Core resolves the same English string regardless of session locale. `%0` is
+// substituted server-side with the IBAN before the message reaches the frontend, so this is a
+// fixed prefix/suffix around a dynamic IBAN — same shape as the other parameterized matchers.
+describe('translateBackendError — "IBAN could not be set automatically (<iban>)." parameterized match (ETP-4891)', () => {
+  const en = fakeUiTranslator({
+    'backendError.ibanAutoFillFailed': 'IBAN could not be set automatically ({iban}). Enter it manually in the Financial Account.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.ibanAutoFillFailed': 'No se pudo establecer el IBAN automáticamente ({iban}). Introduce el IBAN manualmente en la cuenta financiera.',
+  });
+  const RAW = 'IBAN could not be set automatically (DE89370400440532013000). '
+    + 'Please enter it manually in the Financial Account.';
+
+  it('translates the rendered backend message to es_ES, interpolating the IBAN', () => {
+    assert.equal(
+      translateBackendError(RAW, es),
+      'No se pudo establecer el IBAN automáticamente (DE89370400440532013000). '
+        + 'Introduce el IBAN manualmente en la cuenta financiera.',
+    );
+  });
+
+  it('translates the rendered backend message to en_US (differently worded, proving the matcher — not a passthrough)', () => {
+    assert.equal(
+      translateBackendError(RAW, en),
+      'IBAN could not be set automatically (DE89370400440532013000). '
+        + 'Enter it manually in the Financial Account.',
+    );
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    assert.equal(translateBackendError(RAW, (k) => k), RAW);
+  });
+
+  it('does not match a message with a blank IBAN (empty capture guard)', () => {
+    const blank = 'IBAN could not be set automatically (). Please enter it manually in the Financial Account.';
+    assert.equal(translateBackendError(blank, es), blank);
+  });
+
+  it('does not match an unrelated message that merely mentions IBAN', () => {
+    const unrelated = 'The IBAN format is invalid. Please check and enter a valid IBAN.';
+    assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+});
+
+// ETP-4891 follow-up: the "Sincronizar extractos" toast (ImportedStatementsTab.jsx and
+// EditAccountModal.jsx's notifySyncResult — same bridge, two UI entry points). Same root cause as
+// the IBAN-autofill matcher above: com.etendoerp.psd2 ships no real es_ES translation for these
+// AD_MESSAGEs. Note the literal " ." (space before the period) on the first two — genuinely what
+// the AD_MESSAGE template contains (verified against ad_message.msgtext), not a typo.
+describe('translateBackendError — bank-statement sync result (ETP-4891)', () => {
+  const es = fakeUiTranslator({
+    'backendError.transactionsObtainedForAccount': 'Movimientos obtenidos para la cuenta: {account}.',
+    'backendError.noNewTransactionsForAccount': 'No se encontraron movimientos nuevos para la cuenta: {account}.',
+    'backendError.syncFetchFailed': 'El banco reportó un error al sincronizar: {detail}.',
+  });
+
+  describe('"Transactions obtained for the account: <name> ." parameterized match', () => {
+    const RAW = 'Transactions obtained for the account: Cuenta pais españa .';
+
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Movimientos obtenidos para la cuenta: Cuenta pais españa.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"No new transactions found for the account: <name> ." parameterized match', () => {
+    const RAW = 'No new transactions found for the account: Cuenta pais españa .';
+
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'No se encontraron movimientos nuevos para la cuenta: Cuenta pais españa.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The bank reported an error while synchronizing: <detail>." parameterized match', () => {
+    const RAW = 'The bank reported an error while synchronizing: connection timed out.';
+
+    it('translates to es_ES, interpolating the error detail', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'El banco reportó un error al sincronizar: connection timed out.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  it('does not cross-match between the three sync skeletons', () => {
+    const raw = 'Transactions obtained for the account: Cuenta pais españa .';
+    // Sanity: the "no new transactions" and "sync failed" translations must NOT appear.
+    const result = translateBackendError(raw, es);
+    assert.doesNotMatch(result, /No se encontraron/);
+    assert.doesNotMatch(result, /reportó un error/);
+  });
+});

@@ -29,8 +29,8 @@ import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
@@ -138,7 +138,11 @@ function buildReauthMessage(status, locale, ui) {
 
 /** Maps the bridge sync result ({status, message}) to a toast. */
 function notifySyncResult(res, ui) {
-  const msg = res?.message;
+  // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these AD_MESSAGEs
+  // (see backendErrors.js), so Core always resolves the English text regardless of session
+  // locale — route it through the same frontend translation map every other untranslated backend
+  // message uses, same fix as ImportedStatementsTab's identical sync-result handler.
+  const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
   if (res?.status === 'ERROR') {
     toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
   } else if (res?.status === 'WARNING') {

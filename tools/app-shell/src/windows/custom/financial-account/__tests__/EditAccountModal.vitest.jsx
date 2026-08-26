@@ -12,8 +12,12 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
+// uiMock is a vi.fn() (not a plain arrow) so a single test below can override its
+// implementation to prove the ETP-4891 translateBackendError wiring on the sync-result toast,
+// while every other test keeps the default key-echoing behavior.
+const uiMock = vi.fn((key) => key);
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => uiMock,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
@@ -159,6 +163,8 @@ describe('EditAccountModal', () => {
       statementGrouping: '1BD',
     });
     sync.mockResolvedValue({ status: 'OK', message: 'done' });
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
     saveImportSettings.mockResolvedValue({});
     disconnect.mockResolvedValue({});
     // Reset the accounting-config fetch/save back to the neutral default before every test so
@@ -306,6 +312,26 @@ describe('EditAccountModal', () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await user.click(await screen.findByTestId('bank-connection-edit-sync'));
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
+    });
+
+    // ETP-4891 follow-up: com.etendoerp.psd2's AD_MESSAGE for this toast has no real es_ES
+    // translation (Core resolves the same English text regardless of session locale — see
+    // backendErrors.js), so the raw sync-result message must be run through translateBackendError
+    // before it reaches the toast, not passed straight through like an unmapped string.
+    it('translates the "No new transactions found" sync toast instead of showing the raw English', async () => {
+      uiMock.mockImplementation((key, params) => (key === 'backendError.noNewTransactionsForAccount'
+        ? `No se encontraron movimientos nuevos para la cuenta: ${params.account}.`
+        : key));
+      const user = userEvent.setup();
+      sync.mockResolvedValue({
+        status: 'WARNING',
+        message: 'No new transactions found for the account: Cuenta pais españa .',
+      });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith(
+        'No se encontraron movimientos nuevos para la cuenta: Cuenta pais españa.',
+      ));
     });
 
     it('maps a BANK_CONNECTION_TIMEOUT sync failure to the timeout label', async () => {
