@@ -277,8 +277,10 @@ async function confirmDeleteDialog(user) {
 // title={ui('delete')}, so a plain screen.getByTitle('delete') is ambiguous
 // once SelectionToolbar's inline delete segment mounts. Disambiguate by
 // scoping to `.selection-toolbar` — the class SelectionToolbar itself sets
-// on its pill (see SelectionToolbar.jsx), not a per-render testid (the
-// component does not forward/spread a `data-testid` prop onto its DOM).
+// on its pill (see SelectionToolbar.jsx). SelectionToolbar does forward a
+// `data-testid` prop (fixed in ETP-4972), but each caller in this file sets
+// its own literal testid on the pill, not on this specific delete button, so
+// the class scope remains the simplest disambiguator here.
 function getSelectionToolbarDeleteButton() {
   const button = screen.getAllByTitle('delete').find((el) => el.closest('.selection-toolbar'));
   if (!button) throw new Error('SelectionToolbar delete button not found');

@@ -351,14 +351,15 @@ describe('MovementsTab — bulk delete selection bar', () => {
   });
 
   // ETP-4972 — BulkDeleteSelectionBar now renders through the shared,
-  // portaled `SelectionToolbar` shell instead of an in-flow `<div>`. The
-  // `bulk-delete-selection-bar` testid was on that outer wrapper, which
-  // `SelectionToolbar` does not forward (it only spreads its own named
-  // props onto the DOM, not an arbitrary `data-testid`) — the bar's
-  // presence is asserted via `bulk-delete-selection-count`, a testid on a
-  // real child element, instead. The trigger button also became icon-only
-  // (no more `{label} ({count})` text) and the standalone Cancel button was
-  // dropped in favor of `SelectionToolbar`'s own built-in close (X) button.
+  // portaled `SelectionToolbar` shell instead of an in-flow `<div>`.
+  // `SelectionToolbar` forwards a `data-testid` prop onto its pill (so
+  // `bulk-delete-selection-bar`, set by BulkDeleteSelectionBar.jsx, is a
+  // valid query too), but these tests assert presence via
+  // `bulk-delete-selection-count` — a testid on a real child element —
+  // which works the same regardless and predates this forwarding fix. The
+  // trigger button also became icon-only (no more `{label} ({count})` text)
+  // and the standalone Cancel button was dropped in favor of
+  // `SelectionToolbar`'s own built-in close (X) button.
   it('is hidden with no selection, and appears once a row is selected', () => {
     renderTab();
     expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
