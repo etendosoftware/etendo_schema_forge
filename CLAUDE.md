@@ -119,6 +119,11 @@ All commits MUST follow Etendo Git Police conventions as defined by the `/etendo
 - **Epic:** `Epic ETP-1234: Description`
 - **No `Co-Authored-By`** — Git Police rejects it.
 - Always validate first line length (`<= 80 chars`) before committing.
+- **PR titles: Git Police CLOSES the PR** (it does not merely warn) when the title contains
+  `"`, `'`, `` ` ``, `$`, `\`, `•`, `°`, `©`, `®`, `¿`, `¡` or a tab/newline. An English
+  possessive is the usual casualty — `Expose the record's updated` was closed on sight
+  (ETP-4912). Validate the title before `gh pr create`; full rule, the one-line check and the
+  recovery procedure live in `.claude/agents/workflow.md` under `<pr_conventions>`.
 - Branch naming: `feature/ETP-1234`, `hotfix/#N-ETP-1234`, `epic/ETP-1234`
 
 ## Resolving GitHub Issues

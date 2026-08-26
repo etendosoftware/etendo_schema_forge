@@ -17,39 +17,33 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
     assert.match(src, /import ReturnWindowShell from '\.\.\/shared\/ReturnWindowShell'/);
   });
 
-  describe('ETP-4718 — emailAction wiring for row-hover "Enviar"', () => {
-    it('imports useReturnToVendorPdf from the local PDF hook', () => {
-      assert.match(src, /import\s*\{\s*useReturnToVendorPdf\s*\}\s*from\s*['"]\.\/useReturnToVendorPdf\.js['"]/);
+  describe('ETP-4717 — no emailAction (row-hover "Enviar" removed)', () => {
+    // QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" action for this
+    // window: the frontend derived the email contract name as
+    // `${windowName}-send` (`return-to-vendor-shipment-send`), but the
+    // backend only registers `ReturnToVendorSendEmailContract.NAME` =
+    // `return-to-vendor-send`, so every send failed with "Unknown email
+    // contract". `decisions.json → window.sendDocument.enabled: false`
+    // already suppresses the row-hover Email icon via `sendDocument`
+    // (which RowQuickActions prioritizes over `documentPreview`); the
+    // `emailAction` prop itself was removed as dead-code cleanup, matching
+    // the sibling `return-material-receipt/index.jsx` (no `emailAction`
+    // either). These assertions guard against `emailAction` (and its
+    // now-unused imports) creeping back in.
+    it('does not import useReturnToVendorPdf', () => {
+      assert.doesNotMatch(src, /import\s*\{\s*useReturnToVendorPdf\s*\}\s*from\s*['"]\.\/useReturnToVendorPdf\.js['"]/);
     });
 
-    it('imports useMenuLabel from @/i18n', () => {
-      assert.match(src, /import\s*\{\s*useMenuLabel\s*\}\s*from\s*['"]@\/i18n['"]/);
+    it('does not import useMenuLabel from @/i18n', () => {
+      assert.doesNotMatch(src, /import\s*\{\s*useMenuLabel\s*\}\s*from\s*['"]@\/i18n['"]/);
     });
 
-    it('resolves tMenu via useMenuLabel()', () => {
-      assert.match(src, /const tMenu = useMenuLabel\(\);/);
+    it('does not resolve a tMenu const via useMenuLabel()', () => {
+      assert.doesNotMatch(src, /const tMenu = useMenuLabel\(\);/);
     });
 
-    it('passes an emailAction prop to ReturnWindowShell', () => {
-      assert.match(src, /emailAction=\{\{/);
-    });
-
-    it('wires emailAction.usePdf to useReturnToVendorPdf', () => {
-      assert.match(src, /emailAction=\{\{[\s\S]{0,300}usePdf:\s*useReturnToVendorPdf,/);
-    });
-
-    it("wires emailAction.documentType to tMenu('Return to Vendor Shipment')", () => {
-      assert.match(
-        src,
-        /emailAction=\{\{[\s\S]{0,300}documentType:\s*tMenu\(['"]Return to Vendor Shipment['"]\),/,
-      );
-    });
-
-    it("gates emailAction.visibleWhen to \"@documentStatus@='CO'\" (only Confirmado is sendable)", () => {
-      assert.match(
-        src,
-        /emailAction=\{\{[\s\S]{0,300}visibleWhen:\s*"@documentStatus@='CO'",/,
-      );
+    it('does not pass an emailAction prop to ReturnWindowShell', () => {
+      assert.doesNotMatch(src, /emailAction=/);
     });
   });
 

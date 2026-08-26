@@ -17,3 +17,30 @@
 .dark {
   --scrim: 0 0% 0%;
 }
+
+/*
+ * Entry/exit animation for panels positioned by INSET (top/left/right/bottom) rather than
+ * centred.
+ *
+ * The core's `modal-enter` / `modal-exit` interpolate `translate(-50%, -50%)`, because they
+ * were written for `dialog.jsx`, which centres itself with exactly that transform. Applied to
+ * a panel that is already placed by its edges, that transform is not a no-op: it shoves the
+ * panel half a viewport left and up for the duration of the animation, so the panel visibly
+ * jumps on open and on close (ETP-4912).
+ *
+ * These keyframes animate only opacity and a small vertical offset — no centring transform —
+ * so they are safe for an inset-positioned panel. Same easing and durations as the core pair,
+ * so the two feel identical. `imp-pop` in ImportStatementModal.jsx is the same idea, inlined
+ * there; prefer these shared ones.
+ */
+@keyframes inset-panel-enter {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.inset-panel-enter { animation: inset-panel-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes inset-panel-exit {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(6px) scale(0.985); }
+}
+.inset-panel-exit { animation: inset-panel-exit 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
