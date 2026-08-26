@@ -102,6 +102,8 @@ number — every downward correction above was a Step-3.5 question that should h
 | Date added | Row added (section) | Provisional value | Rationale / analogy | Status |
 |------------|---------------------|-------------------|---------------------|--------|
 | 2026-06 | §1 "adapting what already exists" group + §2b discount factors | see table | reuse-cascade investigation (adaptation-task) | ⏳ awaiting first actual |
+| 2026-08-26 | §1 `floating-toolbar-shell` (5 pts) | 5, analogy to `kanban-or-calendar-layout` | ETP-4972: new generic viewport-fixed/portal shell (`SelectionToolbar.jsx`) most windows now consume | ⏳ awaiting first actual |
+| 2026-08-26 | §1 `cross-codebase-consistency-audit` (2 pts) | 2, analogy to `refactor-extract` | ETP-4972: two full-codebase sweeps to confirm every bulk-delete surface uses the same component/format | ⏳ awaiting first actual |
 
 > _Append a row each time Step 3.6 fires. Graduate confirmed rows into a dated calibration entry above._
 

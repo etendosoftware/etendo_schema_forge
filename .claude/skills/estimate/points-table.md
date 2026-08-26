@@ -27,6 +27,7 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `status-bar` | 1 | Declarative metric cards / status bar |
 | `kpi-cards` | 2 | KPI cards above a list |
 | `kanban-or-calendar-layout` | 5 | Non-standard layout type (kanban, calendar, gallery) |
+| `floating-toolbar-shell` | 5 | New generic viewport-fixed/portal UI shell most windows will consume (positioning architecture, chrome, enter/exit animation, close affordance) — cheap for later callers, who each score `extend-shared-component` instead. Provisional, first exercised on ETP-4972. |
 
 ### UI — interactions
 
@@ -94,6 +95,7 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `bugfix-small` | 1 | Localized fix, clear cause |
 | `bugfix-medium` | 3 | Fix touching multiple files or unclear cause |
 | `refactor-extract` | 2 | Extract a reusable component/helper (per target) |
+| `cross-codebase-consistency-audit` | 2 | Systematic grep/read sweep across the whole codebase to confirm every call site of a pattern/component landed consistent (not code-heavy, but genuinely thorough). Provisional, first exercised on ETP-4972. |
 
 ---
 
