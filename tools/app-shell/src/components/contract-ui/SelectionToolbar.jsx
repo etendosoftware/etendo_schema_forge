@@ -148,11 +148,15 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
         ].join(' ')}
         style={{ boxShadow: '0px 10px 30px hsl(var(--scrim) / 0.35), 0px 2px 8px hsl(var(--scrim) / 0.2)' }}
       >
-        {segments.map((segment, i) => (
-          <Fragment key={i}>
+        {segments.map((segment) => (
+          // `Children.toArray` (used to build `segments` above) assigns every
+          // element a stable, non-index `.key` — reuse it here instead of the
+          // array position (Sonar S6479: index-based keys break identity
+          // across reorders/insertions, though this list itself is static).
+          (<Fragment key={segment.key}>
             {segment}
             <SelectionToolbarDivider data-testid="SelectionToolbarDivider__b532f6" />
-          </Fragment>
+          </Fragment>)
         ))}
         <button
           type="button"

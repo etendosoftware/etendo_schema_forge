@@ -12,23 +12,19 @@
  *
  * Same value in both themes on purpose: a scrim darkens whatever sits behind it, so it does not
  * follow the surface palette the way `--background` / `--card` do.
+ *
+ * Floating selection toolbar (ETP-4972) — the "Floating Toolbar | Dark" Figma
+ * component, in the same theme-invariant `:root, .dark` block above (Sonar
+ * css:S4666 flags a second block reusing this selector) rather than a
+ * separate rule. It is a fixed dark pill regardless of the active app theme
+ * (it does NOT invert like --inverse does), so it needs its own
+ * theme-invariant tokens rather than --foreground/--background — those flip
+ * per theme and would leave the pill's own text nearly unreadable against its
+ * own background in one of the two themes. Used by SelectionToolbar.jsx.
  */
 :root,
 .dark {
   --scrim: 0 0% 0%;
-}
-
-/*
- * Floating selection toolbar (ETP-4972) — the "Floating Toolbar | Dark" Figma
- * component. It is a fixed dark pill regardless of the active app theme (it
- * does NOT invert like --inverse does), so it needs its own theme-invariant
- * tokens rather than --foreground/--background — those flip per theme and
- * would leave the pill's own text nearly unreadable against its own
- * background in one of the two themes. Same value in both blocks on purpose,
- * mirroring --scrim above. Used by SelectionToolbar.jsx.
- */
-:root,
-.dark {
   --floating-toolbar-bg: 222 47% 11%;
   --floating-toolbar-fg: 210 20% 98%;
   --floating-toolbar-muted: 215 16% 72%;
