@@ -87,12 +87,15 @@ function SelectionToolbarDivider() {
       aria-hidden="true"
       // `self-stretch` (not a fixed h-* + self-center) so this fills the
       // row's full cross-axis height regardless of which sibling ends up
-      // tallest — matches Figma's `height: Fill`. No `mx-*`: Figma's outer
-      // frame gap is 0, spacing comes from each segment's own padding.
+      // tallest — matches Figma's `height: Fill`. Figma's own outer frame
+      // gap is 0 (each Button-type segment there carries its own horizontal
+      // padding baked in), but the plain-text counter segment every caller
+      // passes here has none of its own — so the divider needs `mx-2` itself
+      // or it sits flush against the counter text (ETP-4972 live-QA finding).
       // Reuses --floating-toolbar-fg (near-white, 210 20% 98%) instead of a
       // literal #FFFFFF — visually indistinguishable and keeps this on the
       // existing theme-invariant token instead of a new hardcoded literal.
-      className="w-px shrink-0 self-stretch bg-[hsl(var(--floating-toolbar-fg)/0.2)]"
+      className="mx-2 w-px shrink-0 self-stretch bg-[hsl(var(--floating-toolbar-fg)/0.2)]"
     />
   );
 }
