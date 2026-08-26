@@ -31,7 +31,16 @@ test.describe('Purchase Order — readOnlyLogic when processed', () => {
     const hasProcessedRow = await processedStatusCell.isVisible({ timeout: 5_000 }).catch(() => false);
     test.skip(!hasProcessedRow, 'No processed purchase order available in the real backend dataset');
 
+    // A row click opens the preview modal; the detail view is one step further, behind
+    // its Edit button. This spec asserted the pre-preview behaviour and never noticed,
+    // because the `test.skip` above kept it from ever running: it needs a processed
+    // purchase order in the dataset, and until the rest of the integration suite could
+    // confirm documents there was never one. Same navigation the mocked suite pins in
+    // row-quick-actions.mocked.spec.js ("Edit button navigates to detail from preview").
     await processedStatusCell.locator('xpath=ancestor::tr').click();
+    const preview = page.getByTestId('generic-preview-modal');
+    await preview.waitFor({ state: 'visible', timeout: 10_000 });
+    await preview.getByRole('button', { name: /editar|edit/i }).click();
     await page.getByTestId('detail-view').waitFor({ state: 'visible', timeout: 10_000 });
   });
 
