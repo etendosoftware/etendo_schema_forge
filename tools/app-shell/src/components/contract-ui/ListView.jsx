@@ -945,25 +945,32 @@ export function ListView({
                 <span role="status" className="text-sm font-medium" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
+                {/* ETP-4972 — ghost variant, icon-only (title tooltip, no visible
+                    label, no border/box): Figma's floating pill keeps only the
+                    destructive "Eliminar" action bordered; secondary actions like
+                    this one sit directly on the pill background and only highlight
+                    on hover. Nothing is hidden behind a menu — just narrower and
+                    borderless. */}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('print')}
+                    aria-label={ui('print')}
                     onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
-                    {ui('print')} ({selectedRows.length})
                   </Button>
                 )}
                 {onCloneRow && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('cloneOrderBtn')}
+                    aria-label={ui('cloneOrderBtn')}
                     onClick={() => onCloneRow(selectedRows)}
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
-                    {ui('cloneOrderBtn')} ({selectedRows.length})
                   </Button>
                 )}
                 {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
@@ -976,19 +983,23 @@ export function ListView({
                     ETP-4871 — additionally disabled (with an explanatory tooltip) once the
                     selection includes a row the host's `isRowDeletable` rejects; absent, this
                     never differs from the pre-existing behavior. */}
+                {/* ETP-4972 — icon-only, no visible "Eliminar" label: the actual
+                    placed Figma instance (not the abstract component showcase) has
+                    this button's `Button Text` property set to false — confirmed in
+                    Dev Mode on the applied "Usuarios" mockup, the icon+text version
+                    was only the component's own illustrative default. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
                     variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    size="icon"
                     disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
                     title={blockedDeleteCount > 0
                       ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : undefined}
+                      : ui('delete')}
+                    aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
-                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}

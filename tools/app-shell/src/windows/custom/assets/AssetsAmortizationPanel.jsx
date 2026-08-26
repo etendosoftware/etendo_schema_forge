@@ -265,15 +265,17 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         <span className="text-sm font-medium">
           {ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
         </span>
+        {/* ETP-4972 — icon-only, no visible "Eliminar" label: the applied Figma
+            instance has this button's Button Text property set to false. */}
         <button
           type="button"
           disabled={deleting}
           title={ui('delete') ?? 'Eliminar'}
+          aria-label={ui('delete') ?? 'Eliminar'}
           onClick={handleDeleteSelected}
-          className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
-          {ui('delete') ?? 'Eliminar'}
         </button>
       </SelectionToolbar>
     </div>

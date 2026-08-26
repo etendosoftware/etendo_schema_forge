@@ -87,15 +87,19 @@ export default function BulkDocumentAction({
 
   return (
     <>
+      {/* ETP-4972 — ghost variant, icon-only, title tooltip only: only the
+          destructive "Eliminar" action keeps a visible text label and border
+          in the floating pill, per the Figma spec. Nothing here is hidden,
+          just narrower and borderless. */}
       <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5"
+        variant="ghost"
+        size="icon"
+        title={ui(labelKey)}
+        aria-label={ui(labelKey)}
         onClick={handleOpen}
         disabled={running}
         data-testid="Button__90fe6a">
         <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__90fe6a" />
-        {ui(labelKey)} ({selectedRows.length})
       </Button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
         <DialogContent data-testid="DialogContent__90fe6a">

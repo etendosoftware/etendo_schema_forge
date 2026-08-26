@@ -81,16 +81,17 @@ export default function ContactsWindow(props) {
   // this one was a visually-broken duplicate (an old light-bar X next to the
   // new dark-pill one). The trash button is restyled for legibility on the
   // dark pill (was `bg-card` — a near-white chip, invisible against the
-  // pill) and now shows the "Eliminar" label, not just the icon, matching
-  // the other SelectionToolbar delete buttons across the app.
+  // pill). Icon-only, no visible "Eliminar" label: the applied Figma
+  // instance has this button's Button Text property set to false.
   const selectionBarRightActions = useCallback(
     ({ selectedRows, token, apiBaseUrl, reselectFailed }) => (
       <button
         onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
-        className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+        title={ui('delete')}
+        aria-label={ui('delete')}
+        className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10"
       >
         <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__ef097c" />
-        {ui('delete')}
       </button>
     ),
     [ui]

@@ -113,6 +113,22 @@
   color: hsl(var(--floating-toolbar-fg));
 }
 
+/* Ghost-variant icon buttons (Print/Clone/Confirmar/kebab — ETP-4972 second
+   review round: these previously used `outline`, whose `border-input`
+   became a visible box around every one of them once the rule above made
+   that border legible against the dark pill — Figma only borders the
+   destructive "Eliminar" button, everything else sits flush on the pill and
+   only highlights on hover). `ghost`'s only static styling is
+   `hover:bg-accent hover:text-accent-foreground`; `--accent` is a light
+   near-white made for a light page background, so left alone it flashes
+   white against the dark pill on hover. Swap it for the same subtle
+   floating-toolbar-fg tint the close button and the rule above already use,
+   for one consistent hover feel across every icon in the pill. */
+.selection-toolbar button[class*="hover:bg-accent"]:hover {
+  background-color: hsl(var(--floating-toolbar-fg) / 0.1);
+  color: hsl(var(--floating-toolbar-fg));
+}
+
 /* Delete-flavored shadcn buttons read as destructive red, matching the
    hand-styled "Eliminar" buttons at every other SelectionToolbar call site
    (see e.g. AssetsAmortizationPanel.jsx, detailViewHelpers.jsx). Keyed off

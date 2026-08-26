@@ -535,9 +535,13 @@ export function renderDetailBulkActionBar({
             {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
           </button>
         ))}
+        {/* ETP-4972 — icon-only, no visible label: applied Figma instance has
+            this button's Button Text property set to false. */}
         {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
           <button
             disabled={deletingChildren}
+            title={getDeleteChildButtonLabel(deletingChildren, ui)}
+            aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
             onClick={async () => {
               if (!(await confirmDelete())) return;
               setDeletingChildren(true);
@@ -557,11 +561,10 @@ export function renderDetailBulkActionBar({
                 setDeletingChildren(false);
               }
             }}
-            className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >
             <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
-            {getDeleteChildButtonLabel(deletingChildren, ui)}
           </button>
         )}
       </div>

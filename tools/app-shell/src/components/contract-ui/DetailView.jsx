@@ -538,15 +538,17 @@ function secondaryAddLineBar(props) {
             closeTitle={props.closeTitle}
             data-testid="SelectionToolbar__fa3275">
             <span className="text-sm font-medium">{props.selectedLabel}</span>
+            {/* ETP-4972 — icon-only, no visible label: applied Figma instance
+                has this button's Button Text property set to false. */}
             <button
               type="button"
               disabled={props.secondaryDeleting[props.st.key] ?? false}
               title={props.deleteLabel}
+              aria-label={props.deleteLabel}
               onClick={props.onDelete}
-              className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
-              {props.deleteLabel}
             </button>
           </SelectionToolbar>
       )}
@@ -3507,16 +3509,17 @@ export function DetailView({
                                         }}
                                         closeTitle={ui('close')}
                                         data-testid="SelectionToolbar__fa3275">
-                                        <div className="flex flex-col items-start">
-                                          <span className="text-sm font-medium">
-                                            {ui('selected', { count: selectedChildRows.length })}
-                                          </span>
-                                          {getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data) != null && (
-                                            <span className="text-xs text-[hsl(var(--floating-toolbar-muted))]">
-                                              {getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data)}
-                                            </span>
-                                          )}
-                                        </div>
+                                        {/* ETP-4972 — no amount subtitle here: the Figma "Floating
+                                            Toolbar | Dark" spec shows only the plain "N Seleccionados"
+                                            counter, nothing else in that segment. The previous
+                                            LinesSelectionBar carried an optional totalLabel line (the
+                                            selected-rows subtotal) that Figma doesn't have — dropped to
+                                            match. getSelectedLinesTotalLabel() itself is kept (still
+                                            covered by its own tests) in case a future design brings
+                                            the total back, just not called from here. */}
+                                        <span className="text-sm font-medium">
+                                          {ui('selected', { count: selectedChildRows.length })}
+                                        </span>
                                         <button
                                           type="button"
                                           disabled={deletingChildren}
@@ -3545,10 +3548,10 @@ export function DetailView({
                                               setDeletingChildren(false);
                                             }
                                           }}
-                                          className="inline-flex items-center gap-1.5 rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                                          aria-label={ui('delete')}
+                                          className="inline-flex items-center justify-center rounded-md border border-destructive p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
-                                          {ui('delete')}
                                         </button>
                                       </SelectionToolbar>
                                     )}
