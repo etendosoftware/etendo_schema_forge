@@ -7,6 +7,7 @@ import {
   waitForEmail,
 } from '../helpers/email-sink.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
+import { t } from '../helpers/i18n.js';
 
 function loadCredentials(accountNumber = 1) {
   try {
@@ -429,13 +430,19 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
           // before asserting the company switcher, matching the real user path.
           const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
           if (await expandMenu.isVisible()) await expandMenu.click();
-          await expect(page.getByLabel('switchCompany')).toContainText(org2Name);
-          await page.getByLabel('switchCompany').click();
+          // ETP-4576 — these looked the control up by the i18n KEY, but SideMenu renders
+          // `aria-label={ui('switchCompany')}`, i.e. the resolved label: "Cambiar empresa"
+          // in es_ES, "Switch company" in en_US. Both locales define it, so the key never
+          // reaches the DOM and this could not match under any locale. The sibling specs
+          // in this suite already resolve labels through `t()`; this one did not.
+          const switchCompany = page.getByLabel(t('switchCompany'));
+          await expect(switchCompany).toContainText(org2Name);
+          await switchCompany.click();
           const options = page.locator('[data-testid^="company-option-"]');
           await expect(options).toHaveCount(2, { timeout: 30_000 });
           await options.filter({ hasText: org1Name }).click();
           await page.waitForURL('**/dashboard', { timeout: 60_000 });
-          await expect(page.getByLabel('switchCompany')).toContainText(org1Name);
+          await expect(page.getByLabel(t('switchCompany'))).toContainText(org1Name);
           await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
           await captureScreenshot(page, {
             path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
