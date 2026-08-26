@@ -1121,11 +1121,19 @@ same convention as `AD_Role.EM_ETGO_Show_Acct_Fields`) that flags the ONE user w
 self-service registration for a client, that client's "owner" — used to lock down PUT/PATCH and
 role-reassignment on that user's own `AD_User` record to the owner alone. Because the column
 defaults `'N'`, every tenant provisioned BEFORE this column shipped reads back with **zero**
-owner-flagged users, so both enforcement checks
-(`UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`,
-`UserRoleCompositionService#enforceOwnerProtection`) are silent no-ops for them — not a security
-hole (nothing is left more permissive than before this ticket), just a feature that has not yet
-reached tenants that already existed.
+owner-flagged users, so `UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`'s PUT/PATCH guard is
+a silent no-op for them — not a security hole (nothing is left more permissive than before this
+ticket), just a feature that has not yet reached tenants that already existed.
+
+**`UserRoleCompositionService#enforceOwnerProtection` is only a PARTIAL no-op for these tenants
+(ETP-5019 update):** it now also rejects role composition for any user who CURRENTLY holds the
+client-admin role — a signal read live off `AD_Role.is_client_admin`, entirely independent of the
+`EM_ETGO_Is_Owner` backfill. Because a tenant's owner IS, by construction, its client-admin role
+holder, a pre-existing tenant's real admin user is already protected against the self-overwrite
+bug ETP-5019 fixed (composing a template role onto the admin silently replacing their Admin role
+with a fresh personal role), even with zero owner-flagged rows. Only an unflagged non-admin edge
+case would still fall through unprotected until the backfill lands. Full mechanism:
+`com.etendoerp.go`'s `docs/neo-headless.md` §8d.
 
 **Root cause:** the column is only auto-set going forward, once, right after
 `EtendoGoJwtServlet#createClient` provisions a BRAND NEW client
