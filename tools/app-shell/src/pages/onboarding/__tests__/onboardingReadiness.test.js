@@ -59,6 +59,25 @@ const readyResponses = [
   { includes: READINESS_ENDPOINTS.customers, status: 200, body: { items: [{ id: 'BP_1', label: 'QA Customer' }] } },
 ];
 
+/**
+ * Answers 401 on every endpoint for the first pass, then the ready responses — the
+ * shape a rotated session cookie produces when the probes read before it applies.
+ */
+function createFetchThatSettlesAfterFirstPass() {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    const settled = calls.length > 4;
+    if (!settled) return jsonResponse(401, {});
+    const entry = readyResponses.find(response => url.includes(response.includes));
+    if (!entry) throw new Error(`Unexpected URL: ${url}`);
+    return jsonResponse(entry.status, entry.body);
+  };
+  fetchImpl.calls = calls;
+  return fetchImpl;
+}
+
+
 describe('checkSalesInvoiceReadiness', () => {
   it('passes when session, defaults, payment terms, customers, and document type are usable', async () => {
     const fetchImpl = createFetchByUrl(readyResponses);
@@ -151,5 +170,50 @@ describe('checkSalesInvoiceReadiness', () => {
       status: 200,
       documentType: '0',
     });
+  });
+
+  // ETP-4576 — `POST /sws/go/session/environment` rotates the session cookie, and these
+  // four probes go out in parallel immediately after it. Under load the read can land
+  // before the rotated cookie applies, and the backend rejects the superseded one on all
+  // four at once — telling the user their new environment cannot invoice while naming
+  // five things that are all present.
+  it('retries once when every probe is rejected, which is the rotated-cookie window', async () => {
+    const fetchImpl = createFetchThatSettlesAfterFirstPass();
+
+    const result = await checkSalesInvoiceReadiness(fetchImpl, '');
+
+    assert.equal(result.ready, true, 'a session that settles must be reported as ready');
+    assert.equal(fetchImpl.calls.length, 8, 'exactly two passes: no more, no less');
+  });
+
+  it('does not retry a genuine gap, so a real provisioning failure is still reported at once', async () => {
+    // One probe failing is what a missing dataset looks like; retrying it would only
+    // delay the report and hide the gap behind a spurious second chance.
+    const fetchImpl = createFetchByUrl([
+      readyResponses[0],
+      readyResponses[1],
+      { includes: READINESS_ENDPOINTS.paymentTerms, status: 200, body: { items: [] } },
+      readyResponses[3],
+    ]);
+
+    const result = await checkSalesInvoiceReadiness(fetchImpl, '');
+
+    assert.equal(result.ready, false);
+    assert.deepEqual(result.failures, [{ key: READINESS_FAILURE_KEYS.paymentTerms, status: 200 }]);
+    assert.equal(fetchImpl.calls.length, 4, 'a single pass — the gap is real, not a timing artefact');
+  });
+
+  it('still fails when the session never settles, rather than retrying forever', async () => {
+    const fetchImpl = createFetchByUrl([
+      { includes: READINESS_ENDPOINTS.session, status: 401, body: {} },
+      { includes: READINESS_ENDPOINTS.defaults, status: 401, body: {} },
+      { includes: READINESS_ENDPOINTS.paymentTerms, status: 401, body: {} },
+      { includes: READINESS_ENDPOINTS.customers, status: 401, body: {} },
+    ]);
+
+    const result = await checkSalesInvoiceReadiness(fetchImpl, '');
+
+    assert.equal(result.ready, false);
+    assert.equal(fetchImpl.calls.length, 8, 'one retry, then it reports the failure');
   });
 });
