@@ -1182,3 +1182,21 @@ The stub always invoked `onAuthenticated`, so the test asserted the page's react
 **Fix:** render the real `LoginStep` / `RegisterStep` and stub only genuine external boundaries — the i18n dictionaries, the SSO provider SDK (no Google Identity script exists in jsdom), and `fetch`. Verified by reverting the ETP-4958 fix in the pinned core build and confirming the SSO test fails.
 
 **Lesson:** mock the *boundary*, never the collaborator whose contract the test exists to verify. A stub that hard-codes the happy path turns a consumer test into a test of the stub. The tell is a mock factory that reimplements behaviour (branching, callbacks, state) rather than returning canned data — if you find yourself writing an `onSubmit` handler inside `vi.mock`, the seam is in the wrong place.
+
+---
+
+## [2026-08-25] ETP-4717 — Unverified "the contract already exists" claim shipped a broken Enviar action (`return-to-vendor-shipment`)
+
+**Component:** `tools/app-shell/src/components/contract-ui/documentEmailSend.js` (`resolveDocumentEmailContract`) vs `com.etendoerp.go`'s `ReturnToVendorSendEmailContract`.
+
+**Symptom:** QA (Emilio Polliotti) rejected ETP-4717 (a prior QA cycle in the same epic) because the "Enviar" action on the "Return to Vendor Shipment" window failed with "Unknown email contract" every time it was clicked, from both the grid row-hover quick action and the row-preview panel.
+
+**Root cause:** the frontend derives the document-email contract name generically as `${windowName}-send` (`resolveDocumentEmailContract`), i.e. `return-to-vendor-shipment-send` for this window's spec name. The backend only registers `ReturnToVendorSendEmailContract.NAME = "return-to-vendor-send"` — no `-shipment` segment. This is a naming mismatch, not a missing feature: the backend contract exists, it's just named differently than the frontend's convention expects.
+
+**Why it shipped:** ETP-4718 (the ticket that wired the "Enviar" action for this window) documented in `docs/generated-custom-windows/return-to-vendor-shipment.md` that the backend contract "already existed in `com.etendoerp.go`" — but that claim was written from the contract's *existence*, not from actually calling it end-to-end with the frontend's derived name. Nobody diffed `resolveDocumentEmailContract`'s output against `ReturnToVendorSendEmailContract.NAME` before shipping.
+
+**Also worth flagging:** `window.sendDocument` auto-enables for any window whose header exposes `documentNo` (per `docs/decisions-reference.md`) — so a window can silently gain a live "Enviar" affordance the moment ANY change (in this case ETP-4718's preview-panel work) makes the eligibility heuristic true, with no explicit decision recorded in `decisions.json`. `return-to-vendor-shipment` never explicitly declared `sendDocument` either way until this ticket.
+
+**Fix (this ticket, ETP-4717):** QA asked to remove the action from this window rather than reconcile the contract name (out of scope). Fixed by re-declaring `decisions.json → window.sendDocument: { enabled: false }` (regenerated via `make regen`) plus removing the window-specific `emailAction`/`isSendable`/`onEmail` wiring that ETP-4718 had added directly in `index.jsx` and `ReturnToVendorShipmentPreview.jsx` (that wiring bypassed the generic `sendDocument` gate entirely on the grid surface — `documentPreview: true` is hardcoded in the shared `ReturnWindowShell.jsx`, so without the `sendDocument` prop threaded in, the row-hover icon would have kept showing regardless of the decisions.json flag). Full detail: `docs/generated-custom-windows/return-to-vendor-shipment.md` — Gap assessment, ETP-4717 bullet.
+
+**Recommendation:** if the backend contract name is ever reconciled (rename `ReturnToVendorSendEmailContract.NAME` to `return-to-vendor-shipment-send`, or special-case the frontend's derivation), re-enable via the same `decisions.json` flag and re-add the `onEmail`/`emailAction` wiring — do not assume "the backend contract exists" is sufficient evidence again; call it end-to-end (or at minimum diff the derived name against the registered `NAME` constant) before flipping `sendDocument.enabled` back to `true`/removing it.
