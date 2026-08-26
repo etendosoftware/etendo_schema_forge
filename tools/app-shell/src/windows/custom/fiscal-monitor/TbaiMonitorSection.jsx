@@ -15,9 +15,39 @@ function buildValidationMap(validationResults) {
   for (const r of (validationResults ?? [])) {
     const key = r.tbaiSyncinvoiceID;
     if (!key) continue;
-    (map[key] ??= []).push({ codigo: r.codigo, descripcion: r.descripcion });
+    map[key] ??= [];
+    map[key].push({ codigo: r.codigo, descripcion: r.descripcion });
   }
   return map;
+}
+
+/**
+ * Formats the validation results of one sincronización row as a single line —
+ * `[codigo] descripcion` joined by " | ". Shared by the on-screen "Error Reason"
+ * column and the CSV export so both always show the exact same text.
+ */
+function formatValidationEntries(entries) {
+  return (entries ?? [])
+    .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
+    .join(' | ');
+}
+
+/**
+ * Resolves the click handler of a row's status pill: error rows open the error
+ * detail (falling back to the business-partner popup), pending rows with an
+ * invoice open the invoice. Returns undefined when the pill is not clickable.
+ */
+function resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen }) {
+  if (isErrorStatus(row.estado)) {
+    // Always clickable on error — even if businessPartner is null
+    return onErrorClick
+      ? () => onErrorClick(row.businessPartner ?? null, null, row.estado)
+      : () => onBpClick?.(row.businessPartner);
+  }
+  if (isPendingStatus(row.estado) && row.invoice) {
+    return () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
+  }
+  return undefined;
 }
 
 const STATUS_FIELD = 'estado';
@@ -41,9 +71,7 @@ function buildTbaiExportCols(validationMap) {
     { label: 'Status',      get: r => r.estado ?? '' },
     {
       label: 'Error Reason',
-      get: r => (validationMap[r.id] ?? [])
-        .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
-        .join(' | '),
+      get: r => formatValidationEntries(validationMap[r.id]),
     },
   ];
 }
@@ -225,15 +253,8 @@ export default function TbaiMonitorSection({
               ) : rows.map((row, i) => {
                 const inv = parseIdentifier(row);
                 const isSigned = row.estado === 'Recibido';
-                let pillClick;
-                if (isErrorStatus(row.estado)) {
-                  // Always clickable on error — even if businessPartner is null
-                  pillClick = onErrorClick
-                    ? () => onErrorClick(row.businessPartner ?? null, null, row.estado)
-                    : () => onBpClick?.(row.businessPartner);
-                } else if (isPendingStatus(row.estado) && row.invoice) {
-                  pillClick = () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
-                }
+                const rowErrors = validationMap[row.id] ?? [];
+                const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
                 return (
                   <tr key={row.id ?? i}>
                     <td><Checkbox
@@ -264,12 +285,8 @@ export default function TbaiMonitorSection({
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
                         data-testid="StatusPill__dd7710" />
                     </td>
-                    <td style={{ color: (validationMap[row.id]?.length) ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
-                      {(validationMap[row.id] ?? []).length > 0
-                        ? (validationMap[row.id] ?? [])
-                            .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
-                            .join(' | ')
-                        : '—'}
+                    <td style={{ color: rowErrors.length ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                      {rowErrors.length > 0 ? formatValidationEntries(rowErrors) : '—'}
                     </td>
                   </tr>
                 );

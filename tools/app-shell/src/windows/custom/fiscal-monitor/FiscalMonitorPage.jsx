@@ -103,22 +103,27 @@ function useDebugState(orgId, apiBaseUrl) {
     tbaiValidationResults: realTbaiValidationResults, refetch,
   } = useFiscalMonitor(orgId, apiBaseUrl);
 
-  const profile = (debugMode && debugProfile) ? debugProfile : realProfile;
+  // Debug panel gates: mock rows/KPIs and the profile override are only ever
+  // active while debug mode itself is on.
+  const useMockData      = debugMode && !!mockData;
+  const useProfileOverride = debugMode && !!debugProfile;
+
+  const profile = useProfileOverride ? debugProfile : realProfile;
 
   let kpis;
-  if (debugMode && mockData) {
+  if (useMockData) {
     kpis = computeKpis(profile, MOCK_MONITOR_DATA);
-  } else if (debugMode && debugProfile) {
+  } else if (useProfileOverride) {
     kpis = computeKpis(debugProfile, {});
   } else {
     kpis = realKpis;
   }
 
-  const siiMockRows  = (debugMode && mockData) ? MOCK_SII_ROWS  : null;
-  const tbaiMockRows = (debugMode && mockData) ? MOCK_TBAI_ROWS : null;
-  const vfMockRows   = (debugMode && mockData) ? MOCK_VF_ROWS   : null;
-  const tbaiValidationResults = (debugMode && mockData) ? MOCK_TBAI_VALIDATION_RESULTS : realTbaiValidationResults;
-  const debugOverrideActive = debugMode && !!debugProfile;
+  const siiMockRows  = useMockData ? MOCK_SII_ROWS  : null;
+  const tbaiMockRows = useMockData ? MOCK_TBAI_ROWS : null;
+  const vfMockRows   = useMockData ? MOCK_VF_ROWS   : null;
+  const tbaiValidationResults = useMockData ? MOCK_TBAI_VALIDATION_RESULTS : realTbaiValidationResults;
+  const debugOverrideActive = useProfileOverride;
 
   return {
     loading, error, profile, kpis, siiParentId,
