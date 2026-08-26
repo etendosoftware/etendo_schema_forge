@@ -1,0 +1,14 @@
+[
+  {
+    "fixId": "20260727T114306Z__R16-tenant-roles-and-webhook-access",
+    "checksum": "85a6d9911e21eb2e20e41a0a12295d84b7c214b9e08444393ed9e0b01efd11ce",
+    "checksumAlgorithm": "sha256",
+    "reason": "Superseded by ETP-4852's system-level template roles (SystemRoleTemplates + per-user AD_Role_Inheritance composition via UserRoleCompositionService). R16's own @check has no awareness it was superseded and would keep firing for any untouched tenant, recreating obsolete per-client Finance/Sales/Purchasing/Inventory role clones -- and could re-insert AD_Window_Access rows onto an already-deactivated legacy role (see R27-deactivate-r16-duplicate-roles.sql) if the reference client (GOClient) ever gains a new grant on one of those 4 roles later. R16's .sql file itself stays byte-for-byte untouched (already applied to real tenants, immutable, checksum tracked here) -- this retirement list is the mechanism, not an edit to the fix.",
+    "retiredBy": "ETP-4877",
+    "retiredUtc": "2026-08-26T12:30:00.000Z",
+    "supersededBy": [
+      "20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit",
+      "20260826T121500Z__R27-deactivate-r16-duplicate-roles"
+    ]
+  }
+]
