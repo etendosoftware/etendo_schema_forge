@@ -185,6 +185,13 @@ export default function SalesInvoiceWindow(props) {
           {...props}
           draftMode={draftModeOverride}
           bottomSection={InvoiceBottomPanel}
+          /* ETP-5027 — this prop SHADOWS the customComponents.topbarRight
+             declared in artifacts/sales-invoice/decisions.json (which the
+             generated HeaderPage.jsx passes as its own default): the explicit
+             prop here always wins, so the decisions-declared component is
+             never mounted directly — SalesInvoiceTopbar nests it instead.
+             Keep both in sync; a component added on only one side is either
+             invisible or rendered twice. */
           topbarRight={SalesInvoiceTopbar}
           notesField="description"
           onAfterSave={true}

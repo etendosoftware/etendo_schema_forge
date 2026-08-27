@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import InvoiceTopbarExtra from '@generated/sales-invoice/custom/InvoiceTopbarExtra';
-import SendToSifButton from '../shared/SendToSifButton.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@etendosoftware/app-shell-core';
@@ -31,16 +30,14 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
         onClick={() => setShowClone(true)}
         title={ui('cloneOrderBtn')}
         data-testid="CloneButton__5c4da7" />
-      <SendToSifButton
-        data={data}
-        recordId={recordId}
-        apiBaseUrl={apiBaseUrl}
-        status={data?.documentStatus}
-        data-testid="SendToSifButton__5c4da7" />
       <CopyRecordLinkButton
         recordId={recordId}
         windowName="sales-invoice"
         data-testid="CopyRecordLinkButton__5c4da7" />
+      {/* ETP-5027 — SendToSifButton is owned by InvoiceTopbarExtra (it renders it
+          next to the other document actions, and passes `token` too). Do NOT
+          re-add it here: this toolbar nests InvoiceTopbarExtra, so a second
+          instance renders the "Enviar a SIF" button twice. */}
       <InvoiceTopbarExtra
         data={data}
         recordId={recordId}
