@@ -186,7 +186,7 @@ function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected
     backgroundClass = 'bg-card';
   }
   return [
-    // `hover:relative hover:z-10` lifts the row above its neighbors so the
+    // `hover:relative hover:z-20` lifts the row above its neighbors so the
     // shadow can spill onto the rows below without being clipped by them.
     'group/row flex items-stretch border-b transition-shadow',
     backgroundClass,
