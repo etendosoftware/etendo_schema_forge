@@ -26,7 +26,12 @@ export function WebMcpEtendoGoTools() {
     window: current,
   }), [current, location.pathname, location.search]);
   const getContext = useCallback(async () => context, [context]);
-  const openChat = useCallback(async () => copilot.open(), [copilot]);
+  const openChat = useCallback(async ({ message } = {}) => {
+    copilot.open();
+    if (message?.trim() && typeof copilot.actions?.sendMessage === 'function') {
+      await copilot.actions.sendMessage(message);
+    }
+  }, [copilot.actions, copilot.open]);
 
   return (
     <>
