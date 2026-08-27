@@ -1,6 +1,6 @@
 import { uploadAndMarkMainAttachment } from '../copilot/ocr/listAttachments.js';
 
-import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }
@@ -127,6 +127,8 @@ export async function cacheDocumentPreviewFile({
 async function resolvePreviewBlob(pdfBlob, pdfBlobUrl) {
   if (pdfBlob) return pdfBlob;
   if (!pdfBlobUrl) return null;
+  // A blob: URL created by the preview, NOT an API endpoint — it takes no auth headers
+  // and no base URL, so it stays a raw fetch (ETP-5022).
   const res = await fetch(pdfBlobUrl);
   if (!res.ok) {
     throw new Error(`Preview PDF fetch failed (${res.status})`);
@@ -155,12 +157,10 @@ export async function sendDocumentEmail({
     pdfBlob,
     pdfBlobUrl,
   });
-  const res = await fetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
+  const res = await apiFetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? authHeaders(token) : {}),
-    },
+    baseUrl: '',
+    token,
     body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
   });
   return readEmailContractResponse(res);

@@ -1,4 +1,4 @@
-import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Instance-wide currency number-formatting configuration (thousands/decimal separators,
  * and the per-currency symbol side).
@@ -87,7 +87,7 @@ export function isCurrencySymbolRightSide(currencyCode) {
 export function fetchCurrencyFormatConfig() {
   if (fetchPromise) return fetchPromise;
 
-  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`, { headers: authHeaders() })
+  fetchPromise = apiFetch('/sws/neo/currency-format', { baseUrl: detectBaseUrl() })
     .then((res) => {
       if (!res.ok) throw new Error(`currency-format fetch failed: ${res.status}`);
       return res.json();
