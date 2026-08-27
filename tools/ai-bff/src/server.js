@@ -63,7 +63,7 @@ export async function handleChat(req, res) {
   try {
     mcpClient = await createMCPClient({
       transport: {
-        type: 'http',
+        type: 'sse',
         url: mcpUrl,
         headers: { Authorization: authorization },
       },

@@ -539,7 +539,7 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 dev: ensure-locale ## Start app-shell and AI BFF dev servers
 	@$(MAKE) -s ai-bff-install
-	@cd tools/ai-bff && npm run dev & bff_pid=$$!; \
+	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && npm run dev
 
@@ -549,8 +549,16 @@ ai-bff-install:
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
 	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
+	@for port in 3100 3400; do \
+		pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo ">> Stopping process(es) on port $$port: $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+			while lsof -tiTCP:$$port -sTCP:LISTEN >/dev/null 2>&1; do sleep 1; done; \
+		fi; \
+	done
 	@$(MAKE) -s ai-bff-install
-	@cd tools/ai-bff && npm run dev & bff_pid=$$!; \
+	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
