@@ -8,9 +8,9 @@ vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
 }));
 vi.mock('@/components/contract-ui', () => ({
-  EntityForm: ({ fields }) => (
+  EntityForm: vi.fn(({ fields }) => (
     <div data-testid="entity-form">{fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>
-  ),
+  )),
 }));
 
 // Replicate internal resolveId
@@ -24,6 +24,10 @@ function resolveId(value) {
 }
 
 describe('BillingPreferencesForm', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('resolveId (pure helper)', () => {
     it('returns null for null/undefined/empty', () => {
       expect(resolveId(null)).toBeNull();
@@ -70,3 +74,10 @@ describe('BillingPreferencesForm', () => {
     });
   });
 });
+
+// NOTE: the SII (AEAT) invoicing-default fields (`aeatsiiDefaultsiikey` /
+// `aeatsiiSiikeylist`) were extracted out of this component and into
+// `FiscalDefaultsSection.jsx` (ETP-4784 part 2 UX fix — grouping fiscal
+// defaults into one section instead of leaving them as stray fields in the
+// Customer billing block). Their regression coverage moved with them to
+// `FiscalDefaultsSection.vitest.jsx`.

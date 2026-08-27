@@ -179,4 +179,107 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     expect(keyWarning).toBe(false);
     consoleError.mockRestore();
   });
+
+  // ETP-4795 companion bug reported by QA on the payment flow (ETP-4895): a payment confirmed
+  // outside this sidebar (e.g. from the invoice's own payment modal) backfilled its activity entry
+  // from `paymentDate`, a date-only AD column — parseAdDate defaults the missing time to midnight,
+  // so a payment actually confirmed at 12:10 rendered as "· 00:00".
+  it('backfills the confirmed event time from `updated` instead of a fabricated midnight off `paymentDate`', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updated: '2026-08-24 12:10:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('12:10');
+    expect(dateLine.textContent).not.toContain('00:00');
+  });
+
+  it('shows a bare date instead of a fabricated 00:00 when no source carries a real time of day', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updated: undefined,
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).not.toContain('00:00');
+    expect(dateLine.textContent).not.toBe('');
+  });
+
+  // The first fix above aimed at `updated`, which the runtime never sends: the push to
+  // ETGO_SF_FIELD drops audit columns, so declaring it in decisions.json (where it already is)
+  // does not reach NEO. ReactivatePaymentHandler now injects `updatedAt` for exactly this.
+  it('takes the confirmed event time from the injected `updatedAt` (ETP-4895)', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updatedAt: '2026-08-24T12:10:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('12:10');
+  });
+
+  it('prefers `updatedAt` over `updated` when both arrive', async () => {
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updatedAt: '2026-08-24T12:10:00',
+      updated: '2026-08-24 09:05:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('12:10');
+    expect(dateLine.textContent).not.toContain('09:05');
+  });
+
+  it('discards a stored midnight event and re-derives the real time (ETP-4895)', async () => {
+    // The old backfill persisted its midnight guess to localStorage. Those entries are already in
+    // users' browsers, and because the backfill only runs when nothing is stored, they were never
+    // revisited — a payment confirmed at 12:10 kept rendering "· 00:00" forever.
+    window.localStorage.setItem(
+      'etgo:payment:pay-1:events',
+      JSON.stringify([{ type: 'confirmed', at: new Date(2026, 7, 24, 0, 0, 0, 0).toISOString() }]),
+    );
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updatedAt: '2026-08-24T12:10:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('12:10');
+    expect(dateLine.textContent).not.toContain('00:00');
+  });
+
+  it('keeps a stored event that carries a real time of day', async () => {
+    // Only midnight is treated as an artifact — a genuine live-recorded event must survive, since
+    // it is the most accurate timestamp available.
+    window.localStorage.setItem(
+      'etgo:payment:pay-1:events',
+      JSON.stringify([{ type: 'confirmed', at: new Date(2026, 7, 24, 15, 42, 0, 0).toISOString() }]),
+    );
+    const data = baseData({
+      status: 'PWNC',
+      paymentDate: '2026-08-24',
+      updatedAt: '2026-08-24T12:10:00',
+    });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const label = await screen.findByText('cobroConfirmado');
+    const dateLine = label.parentElement.nextSibling;
+    expect(dateLine.textContent).toContain('15:42');
+  });
 });

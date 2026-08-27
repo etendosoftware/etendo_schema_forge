@@ -23,6 +23,7 @@ vi.mock('../useFiscalMonitor.js', () => ({
     profile: 'sii',
     kpis: { sii: { issued: 2, received: 1, issuedPrevious: 0, receivedPrevious: 0 } },
     siiParentId: 'parent-1',
+    tbaiValidationResults: [{ tbaiSyncinvoiceID: 't1', codigo: '5040', descripcion: 'mock reason' }],
     refetch: vi.fn(),
   }),
   SII_SPEC: 'sii-monitor',
@@ -49,6 +50,7 @@ vi.mock('../fiscalMonitorMockData.js', () => ({
   MOCK_SII_ROWS: [],
   MOCK_TBAI_ROWS: [],
   MOCK_VF_ROWS: [],
+  MOCK_TBAI_VALIDATION_RESULTS: [],
 }));
 vi.mock('../SiiMonitorSection.jsx', () => ({
   default: (props) => <div data-testid="sii-section" data-parent={props.parentId} />,

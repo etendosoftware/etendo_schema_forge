@@ -10,7 +10,11 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const navigateMock = vi.fn();
+
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {

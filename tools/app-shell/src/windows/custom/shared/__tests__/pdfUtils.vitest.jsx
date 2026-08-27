@@ -246,6 +246,67 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     expect(result.current.pdfBlob).toBe(builtBlob);
   });
 
+  // ETP-4787 — the cache invalidates itself by comparing the marked attachment's
+  // uploadedAt against the record's own `updated`. Before this, a completed document
+  // kept serving the PDF rendered at first open forever, whatever changed afterwards.
+  it('stale cache: attachment older than the record is ignored and rebuilt', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2026-08-24T10:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+        recordUpdated: '2026-08-24T12:15:30+02:00',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // The blob of a stale attachment is never even downloaded.
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('fresh cache: attachment newer than the record is still served', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2026-08-24T11:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+        recordUpdated: '2026-08-24T12:15:30+02:00',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(buildBlobFn).not.toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(cachedBlob);
+  });
+
+  // A window that does not pass recordUpdated (or a backend without the `updated`
+  // exemption in NeoFieldFilter) must keep the old behaviour — cache on, never
+  // invalidated — rather than silently losing its cache.
+  it('no recordUpdated: cache is served regardless of how old the attachment is', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2001-01-01T00:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(buildBlobFn).not.toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(cachedBlob);
+  });
+
   it('cacheConfig omitted (backward-compat): calls buildBlobFn and never attempts a cache lookup', async () => {
     const { result } = renderHook(() =>
       usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn),

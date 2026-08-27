@@ -48,7 +48,13 @@ vi.mock('../useSavedPreviewRecord.js', () => ({
 }));
 
 const fetchOptionalJson = vi.fn();
-vi.mock('../pdfUtils.js', () => ({
+// Partial mock: only fetchOptionalJson is stubbed. The rest must stay real because the
+// module graph now reaches pdfUtils through documentPdfRegistry.js -> the movement-document
+// hooks, which read COMMON_HANDLEBARS_HELPERS and the MOVEMENT_TEMPLATE_* constants at
+// import time (ETP-4912). A total mock silently breaks as soon as another module in the
+// graph needs one of those.
+vi.mock('../pdfUtils.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchOptionalJson: (...args) => fetchOptionalJson(...args),
 }));
 

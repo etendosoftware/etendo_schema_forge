@@ -35,7 +35,13 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   // the marked attachment directly when one already exists, instead of
   // regenerating on every open. Only relevant for the sales branch (purchase
   // never calls this hook at all — its documentId/apiBaseUrl are null above).
-  const pdfCacheConfig = { tableName: 'C_Invoice', storeCondition: invoiceData?.documentStatus !== 'DR' };
+  // ETP-4787 — `recordUpdated` makes that cache self-invalidating: a marked attachment
+  // older than the record's last edit is ignored and re-rendered.
+  const pdfCacheConfig = {
+    tableName: 'C_Invoice',
+    storeCondition: invoiceData?.documentStatus !== 'DR',
+    recordUpdated: invoiceData?.updated ?? null,
+  };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useInvoicePdf(
     isSalesInvoice ? invoiceData?.id : null,
     isSalesInvoice ? apiBaseUrl : null,

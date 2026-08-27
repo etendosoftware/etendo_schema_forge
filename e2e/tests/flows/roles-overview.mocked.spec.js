@@ -244,11 +244,11 @@ test.describe('Roles overview — admin/client-admin', () => {
       await expect(card).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__content-${role.id}`)).toBeVisible();
       await expect(page.getByTestId(`RoleSummaryCard__userCount-${role.id}`)).toContainText(String(role.userCount));
-      await expect(page.getByTestId(`RoleSummaryCard__usersIcon-${role.id}`)).toBeVisible();
-      // `rolesWindowCount` is i18n'd ("{count} Windows"/"{count} Ventanas") —
-      // assert the interpolated count is present rather than hardcoding the
-      // rendered locale string.
-      await expect(page.getByTestId(`RoleSummaryCard__windowCount-${role.id}`)).toContainText(String(role.windowCount));
+      // ETP-4999 — the window-count badge/icon was removed from the card
+      // entirely (Figma spec); `RoleSummaryCard__windowsIcon-*`/
+      // `RoleSummaryCard__windowCount-*` no longer exist in the DOM at all, so
+      // the assertions that used to check them here are gone (the fixture
+      // still carries `role.windowCount`, unused by this component now).
     }
 
     // Real DOM order of the card grid's direct children — a direct proxy for
@@ -375,4 +375,88 @@ test.describe('Roles overview — non-admin', () => {
   // need `handleRolesOverviewRequest()` to gain the same kind of admin-gate
   // `handleWindowAccessMapRequest()` already has (a follow-up for whoever
   // owns `mockFetch.js`, not a QA fix).
+});
+
+/**
+ * ETP-4999 — clicking a role summary card click-through-navigates to the Users
+ * window pre-filtered by that role: `/user?role=<role.id>`, read once on mount by
+ * `UserHeaderTable.jsx`'s `roleFilter` lazy initializer (see that file's own
+ * ETP-4999 doc comment). Mirrors the grid-mock fixtures/route shapes established by
+ * `user-role-assignment.mocked.spec.js`'s "Users grid role filter" describe block
+ * (`systemroletemplates`/`userroleassignments`/`user/user` list) — this spec's own
+ * `installRolesOverviewMock` already covers `/sws/neo/rolesoverview**` for the
+ * `/roles` page itself, reused as-is for the grid's own `useUserRoleGridData` call.
+ */
+test.describe('Roles overview — click-through to filtered Users grid (ETP-4999)', () => {
+  const SYSTEM_TEMPLATE_ROLES = ROLES_FIXTURE.filter((role) => !role.isClientAdmin);
+
+  const GRID_ROWS = [
+    { id: 'row-001', name: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', locked: false, defaultRole: 'role-personal-ada' },
+    { id: 'row-002', name: 'Grace Hopper', firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', locked: false, defaultRole: 'role-personal-grace' },
+  ];
+  const ASSIGNMENTS = {
+    'row-001': [ROLE_IDS.finance],
+    'row-002': [ROLE_IDS.sales],
+  };
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installRolesOverviewMock(page);
+    // See user-role-assignment.mocked.spec.js's identical route + doc comment —
+    // `RoleChipsCell.jsx`'s `useUserRoleGridData` also calls `fetchTemplateRoles()`.
+    await page.route('**/sws/neo/systemroletemplates**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ roles: SYSTEM_TEMPLATE_ROLES }),
+    }));
+    await page.route('**/sws/neo/userroleassignments**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ assignments: ASSIGNMENTS }),
+    }));
+    await page.route('**/sws/neo/user/user**', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: GRID_ROWS, totalRows: GRID_ROWS.length } }),
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/roles');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('RolesOverviewPage__content')).toBeVisible();
+  });
+
+  test('clicking the Finance role card navigates to /user?role=<id> with the grid pre-filtered', async ({ page }) => {
+    await page.getByTestId(`RoleSummaryCard__${ROLE_IDS.finance}`).click();
+
+    await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.finance}$`));
+    await expect(page.getByTestId('UserHeaderTable__toolbar')).toBeVisible();
+
+    // The dropdown trigger's visible label already reflects the seeded filter —
+    // no click/open needed to prove it arrived pre-set (DistinctValuesFilter's
+    // `triggerLabel` renders `labelFor(value)` once `value` is non-null).
+    // `DistinctValuesFilter` never destructures/applies its own `data-testid` prop
+    // (see `RoleFilterControl.jsx`'s doc comment / the identical gotcha noted in
+    // `user-role-assignment.mocked.spec.js`), so — mirroring that spec's own
+    // workaround — locate the trigger button structurally inside the toolbar.
+    const filterTrigger = page.getByTestId('UserHeaderTable__toolbar').locator('button').first();
+    await expect(filterTrigger).toContainText('Finanzas');
+
+    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
+    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
+  });
+
+  test('keyboard Enter on a focused role card also navigates and pre-filters', async ({ page }) => {
+    const card = page.getByTestId(`RoleSummaryCard__${ROLE_IDS.sales}`);
+    await card.focus();
+    await card.press('Enter');
+
+    await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.sales}$`));
+    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toBeVisible();
+    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toHaveCount(0);
+  });
 });

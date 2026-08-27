@@ -97,12 +97,22 @@ describe('useInvoicePreview — pdfCacheConfig wiring into useInvoicePdf (ETP-43
 
   it('passes { tableName: "C_Invoice", storeCondition: false } when the invoice is DR (draft)', () => {
     renderUseInvoicePreview({ invoice: { ...defaultInvoice, documentStatus: 'DR' } });
-    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: false });
+    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: false, recordUpdated: null });
   });
 
   it('passes { tableName: "C_Invoice", storeCondition: true } when the invoice is CO (non-draft)', () => {
     renderUseInvoicePreview({ invoice: { ...defaultInvoice, documentStatus: 'CO' } });
-    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: true });
+    expect(lastCacheConfig()).toEqual({ tableName: 'C_Invoice', storeCondition: true, recordUpdated: null });
+  });
+
+  // ETP-4787 — the invoice's own `updated` rides along so usePdfGenerator can discard a
+  // cached attachment older than the last edit (the Verifactu QR is written after
+  // completion, which is exactly how a cached PDF ends up missing it).
+  it("forwards the invoice's `updated` as recordUpdated", () => {
+    renderUseInvoicePreview({
+      invoice: { ...defaultInvoice, documentStatus: 'CO', updated: '2026-08-24T12:15:30+02:00' },
+    });
+    expect(lastCacheConfig().recordUpdated).toBe('2026-08-24T12:15:30+02:00');
   });
 
   it('passes recordId/apiBaseUrl as null to useInvoicePdf for the purchase-invoice branch (hook never renders a sales PDF)', () => {
@@ -113,7 +123,7 @@ describe('useInvoicePreview — pdfCacheConfig wiring into useInvoicePdf (ETP-43
     expect(lastCall[1]).toBeNull();
     // cacheConfig is still computed unconditionally (harmless — usePdfGenerator
     // never fires its effect without a recordId/apiBaseUrl anyway).
-    expect(lastCall[3]).toEqual({ tableName: 'C_Invoice', storeCondition: true });
+    expect(lastCall[3]).toEqual({ tableName: 'C_Invoice', storeCondition: true, recordUpdated: null });
   });
 });
 

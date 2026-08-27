@@ -146,6 +146,14 @@ const VIEW_TO_SUBTITLE_KEY = {
   success:   'financeAccountStatementsImportSubtitleDone',
 };
 
+// Backend error code → i18n key for the `error` view. Anything not listed falls
+// back to the generic "unsupported format" copy. Values are i18n KEYS resolved
+// via ui(...) at render, not user-facing literals.
+// i18n-allowlist: ["financeAccountStatementsImportNoValidLines"]
+const ERROR_CODE_TO_KEY = {
+  NO_VALID_LINES: 'financeAccountStatementsImportNoValidLines',
+};
+
 function formatPeriod(from, to, bcpLocale) {
   if (from === to) return formatDate(from, bcpLocale);
   return `${formatDate(from, bcpLocale)} – ${formatDate(to, bcpLocale)}`;
@@ -362,40 +370,47 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
           <span>{ui('financeAccountStatementsImportColCharge')}</span>
           <span>{ui('financeAccountStatementsImportColCredit')}</span>
         </div>
-        {shown.map((l) => {
-          const cr = Number(l.cramount) || 0;
-          const dr = Number(l.dramount) || 0;
-          return (
-            <div
-              key={lineKeyOf(l)}
-              className={cn(PREV_GRID, 'border-b border-[hsl(var(--border-subtle))] py-2 last:border-0')}
-            >
-              <span className="text-sm text-[hsl(var(--foreground))]">{formatDate(l.date, bcpLocale)}</span>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{l.description || '—'}</span>
-                {l.bpartnerName ? (
-                  <span className="truncate text-xs font-medium text-[hsl(var(--muted-foreground))]">{l.bpartnerName}</span>
-                ) : null}
+        {/* Once every line is shown the list scrolls inside its own card, so the
+            column header above and the toggle below stay visible. */}
+        <div
+          className={cn(showAll && 'max-h-[46vh] overflow-y-auto')}
+          data-testid="import-preview-lines-scroll"
+        >
+          {shown.map((l) => {
+            const cr = Number(l.cramount) || 0;
+            const dr = Number(l.dramount) || 0;
+            return (
+              <div
+                key={lineKeyOf(l)}
+                className={cn(PREV_GRID, 'border-b border-[hsl(var(--border-subtle))] py-2 last:border-0')}
+              >
+                <span className="text-sm text-[hsl(var(--foreground))]">{formatDate(l.date, bcpLocale)}</span>
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{l.description || '—'}</span>
+                  {l.bpartnerName ? (
+                    <span className="truncate text-xs font-medium text-[hsl(var(--muted-foreground))]">{l.bpartnerName}</span>
+                  ) : null}
+                </div>
+                <span className="text-right text-sm font-semibold tabular-nums">
+                  <AmountCell
+                    value={dr}
+                    sign="−"
+                    toneClass="text-[hsl(var(--destructive))]"
+                    currency={currency}
+                    data-testid="AmountCell__de9647" />
+                </span>
+                <span className="text-right text-sm font-semibold tabular-nums">
+                  <AmountCell
+                    value={cr}
+                    sign="+"
+                    toneClass="text-[var(--status-success-fg)]"
+                    currency={currency}
+                    data-testid="AmountCell__de9647" />
+                </span>
               </div>
-              <span className="text-right text-sm font-semibold tabular-nums">
-                <AmountCell
-                  value={dr}
-                  sign="−"
-                  toneClass="text-[hsl(var(--destructive))]"
-                  currency={currency}
-                  data-testid="AmountCell__de9647" />
-              </span>
-              <span className="text-right text-sm font-semibold tabular-nums">
-                <AmountCell
-                  value={cr}
-                  sign="+"
-                  toneClass="text-[var(--status-success-fg)]"
-                  currency={currency}
-                  data-testid="AmountCell__de9647" />
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
       {hasMore ? (
         <div className="flex justify-center">
@@ -422,7 +437,7 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
 // cognitive complexity below Sonar's threshold.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePickFile, reset }) {
+function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePickFile, reset, errorKey }) {
   return (
     <>
       <input
@@ -449,7 +464,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-[var(--status-destructive-bg)] py-3 pl-1.5 pr-2">
           <AlertTriangle className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
           <span className="flex-1 px-1 text-sm font-medium leading-6 text-[hsl(var(--destructive))]">
-            {ui('financeAccountStatementsImportErrorBody')}
+            {ui(errorKey ?? 'financeAccountStatementsImportErrorBody')}
           </span>
           <button
             type="button"
@@ -510,6 +525,18 @@ function PreviewBody({ previewData, accountCurrency, bcpLocale, ui }) {
         currency={accountCurrency}
         ui={ui}
         data-testid="SummaryWidget__de9647" />
+      {previewData.discardedLines > 0 ? (
+        <div
+          className="flex items-start gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+          style={{ backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
+          data-testid="import-discarded-lines"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
+          <span>
+            {ui('financeAccountStatementsImportDiscardedLines', { count: previewData.discardedLines })}
+          </span>
+        </div>
+      ) : null}
       <PreviewLines
         lines={lines}
         currency={accountCurrency}
@@ -526,7 +553,7 @@ function PreviewBody({ previewData, accountCurrency, bcpLocale, ui }) {
  * branch behind a small helper.
  */
 function ModalBody({
-  view, file, previewData, previewing, localLineCount,
+  view, file, previewData, previewing, localLineCount, errorKey,
   accountCurrency, bcpLocale, ui, inputRef, dragging, setDragging, handlePickFile, reset,
 }) {
   if (view === 'empty' || view === 'error') {
@@ -534,6 +561,7 @@ function ModalBody({
       <EmptyOrErrorBody
         view={view}
         ui={ui}
+        errorKey={errorKey}
         inputRef={inputRef}
         dragging={dragging}
         setDragging={setDragging}
@@ -700,6 +728,9 @@ export function ImportStatementModal({
 
   // view: empty | analyzing | selected | preview | importing | error
   const [view, setView] = useState('empty');
+  // i18n key of the failure shown in the `error` view. null → generic
+  // "unsupported format" copy, which is what most failures actually are.
+  const [errorKey, setErrorKey] = useState(null);
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -709,6 +740,7 @@ export function ImportStatementModal({
     setFile(null);
     setPreviewData(null);
     setLocalLineCount(0);
+    setErrorKey(null);
     setView('empty');
   };
 
@@ -738,8 +770,10 @@ export function ImportStatementModal({
       const contentBase64 = await fileToBase64(file);
       const data = await previewStatement({ accountId, fileName: file.name, contentBase64 });
       setPreviewData(data);
+      setErrorKey(null);
       setView('preview');
-    } catch {
+    } catch (err) {
+      setErrorKey(ERROR_CODE_TO_KEY[err?.code] ?? null);
       setView('error');
     }
   };
@@ -752,10 +786,14 @@ export function ImportStatementModal({
       const res = await importStatement({ accountId, fileName: file.name, contentBase64 });
       const name = file.name.replace(/\.[^./\\]+$/, '');
       const count = res?.lineCount ?? previewData?.lineCount ?? 0;
+      const discarded = res?.discardedLines ?? previewData?.discardedLines ?? 0;
       onSuccess?.();
-      toast.success(ui('financeAccountStatementsImportSuccessToast', { name, count }));
+      toast.success(discarded > 0
+        ? ui('financeAccountStatementsImportSuccessToastPartial', { name, count, discarded })
+        : ui('financeAccountStatementsImportSuccessToast', { name, count }));
       handleClose();
-    } catch {
+    } catch (err) {
+      setErrorKey(ERROR_CODE_TO_KEY[err?.code] ?? null);
       setView('error');
       toast.error(ui('financeAccountStatementsImportError'));
     }
@@ -770,7 +808,10 @@ export function ImportStatementModal({
       data-testid="Dialog__de9647">
       <DialogContent
         className={cn(
-          'imp-modal-enter overflow-hidden p-0',
+          // max-h + flex column: with "Mostrar todas" on a 100+ line file the
+          // body used to grow past the viewport and push the footer (and the
+          // Importar button) off screen. Same pattern as NewTransactionModal.
+          'imp-modal-enter flex max-h-[90vh] flex-col overflow-hidden p-0',
           wide ? 'max-w-[720px]' : 'max-w-[600px]',
         )}
         style={{ background: 'var(--surface-overlay, hsl(var(--card)))' }}
@@ -793,14 +834,15 @@ export function ImportStatementModal({
         {/* Stepper */}
         <Stepper step={stepIndex} ui={ui} data-testid="Stepper__de9647" />
 
-        {/* Body */}
-        <div className="px-6 py-4">
+        {/* Body — the only scrollable region, so the footer stays reachable */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <ModalBody
             view={view}
             file={file}
             previewData={previewData}
             previewing={previewing}
             localLineCount={localLineCount}
+            errorKey={errorKey}
             accountCurrency={accountCurrency}
             bcpLocale={bcpLocale}
             ui={ui}

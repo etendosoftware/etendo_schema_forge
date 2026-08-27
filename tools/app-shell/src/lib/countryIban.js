@@ -22,6 +22,35 @@ export function expectedIbanLength(country) {
 }
 
 /**
+ * `true` when `countryId` names a country that CANNOT carry an IBAN at all — the ~198 of 243
+ * countries whose `C_COUNTRY.IBANCOUNTRY`/`IBANNODIGITS` are null (Argentina, the United States, …).
+ *
+ * The equivalence is exact by construction: the backend's `countryIbanRules` catalog is built with
+ * `IBANCODE IS NOT NULL AND IBANLENGTH IS NOT NULL`, and `C_GET_IBAN_DISPLAYED_ACCOUNT` rejects an
+ * IBAN whenever either column is null (folded into the same `@20259@` as a prefix/length
+ * mismatch). So "absent from the catalog" ⟺ "the trigger will reject this IBAN".
+ *
+ * This is deliberately NOT folded into {@link validateIbanForCountry}: that function receives an
+ * already-resolved catalog ROW and so cannot tell "no country picked yet" from "picked, but not in
+ * the catalog" — both arrive as `null`. Callers synthesize a `noIbanConfig` code from this
+ * predicate instead, the same out-of-band pattern `EditAccountModal` already uses for
+ * `missingCountry`.
+ *
+ * **The empty-catalog guard is load-bearing, not defensive noise.** `countryIbanRules` legitimately
+ * arrives empty in four situations (see `useAccountMutations.fetchDefaults`): a non-ok `/defaults`
+ * response, a network throw, a payload without the key, and — the common one — every render before
+ * the fetch resolves, since both consumers initialize the state to `[]`. Treating an empty catalog
+ * as "every country lacks IBAN config" would block every valid save in all four. Empty means
+ * "unknown", so we defer to the backend, which reads live data.
+ */
+export function countryLacksIbanConfig(countryId, countryIbanRules) {
+  if (!countryId || !Array.isArray(countryIbanRules) || countryIbanRules.length === 0) {
+    return false;
+  }
+  return !countryIbanRules.some((country) => country?.id === countryId);
+}
+
+/**
  * Validates `iban` against `country`, on top of the existing mod-97 check.
  *
  * @returns {{ ok: boolean, code: 'invalid'|'countryMismatch'|'lengthMismatch'|null }}

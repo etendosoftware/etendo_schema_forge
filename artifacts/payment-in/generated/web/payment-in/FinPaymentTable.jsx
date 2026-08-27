@@ -7,7 +7,7 @@ const columns = [
   { key: 'paymentDate', column: 'Paymentdate', type: 'date', label: 'Payment Date' },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Received From' },
   { key: 'amount', column: 'Amount', type: 'amount', label: 'Amount', required: true },
-  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc' }, required: true },
+  { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' }, required: true },
 ];
 // @sf-generated-end columns:finPayment
 

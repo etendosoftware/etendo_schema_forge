@@ -182,15 +182,51 @@ describe('ManualStatementModal', () => {
     expect(createStatement).not.toHaveBeenCalled();
   });
 
-  it('blocks saving an incomplete line (missing Reference No) with an error toast', async () => {
+  it('saves a line with no Reference No — it is optional in both flows, blank becomes ** server-side', async () => {
     const user = userEvent.setup();
     renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    // An amount makes the row non-blank, but the missing Reference No keeps it incomplete.
     await fillFirstLine(user, { ref: null, in: '100' });
+    await user.click(screen.getByTestId('manual-statement-save'));
+    expect(toastError).not.toHaveBeenCalled();
+    expect(createStatement).toHaveBeenCalledTimes(1);
+    expect(createStatement.mock.calls[0][0].lines[0].reference).toBe('');
+  });
+
+  it('does not mark the Reference No column as required', () => {
+    renderModal();
+    const header = screen.getByText('financeAccountStatementsManualColReference').closest('span');
+    expect(header.textContent).not.toContain('*');
+  });
+
+  it('blocks saving a line with no amount on either side (out and in both 0)', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+    // A reference makes the row non-blank, but with no amount it is incomplete.
+    await fillFirstLine(user, { ref: 'REF-1', out: '0', in: '0' });
     await user.click(screen.getByTestId('manual-statement-save'));
     expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
     expect(createStatement).not.toHaveBeenCalled();
+  });
+
+  it('blocks saving a line whose amounts are both left empty', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+    await fillFirstLine(user, { ref: 'REF-1' });
+    // Wipe both amount cells so they are genuinely empty, not "0".
+    const row = within(firstEditRow());
+    await user.clear(row.getByTestId('manual-line-out'));
+    await user.clear(row.getByTestId('manual-line-in'));
+    await user.click(screen.getByTestId('manual-statement-save'));
+    expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+    expect(createStatement).not.toHaveBeenCalled();
+  });
+
+  it('does not render the import-only "file name" header field', () => {
+    renderModal();
+    expect(screen.queryByTestId('manual-statement-filename')).not.toBeInTheDocument();
   });
 
   it('groups thousands in the summary widget totals (1000-9999 range silently drops the separator without explicit useGrouping)', async () => {

@@ -4,6 +4,8 @@ import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
+import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
@@ -129,24 +131,37 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .finally(() => setLoading(false));
   }, [recordId, apiBaseUrl, token]);
 
+  // ETP-4981 — a failed DELETE (e.g. blocked server-side for a line whose
+  // amortization plan is already confirmed) was never surfaced: Promise
+  // .allSettled swallowed every rejection and the panel always cleared the
+  // selection + refetched, so the row silently reappeared with zero
+  // feedback. Reuses the shared ETP-4656 triage/toast helpers, same
+  // onSuccess contract as AmortizationLinesTable.bulkDelete: all succeeded
+  // -> clear selection; partial -> keep only the failed ids selected; all
+  // failed -> leave selection untouched and skip the refetch.
   const handleDeleteSelected = useCallback(async () => {
     if (!apiBaseUrl || selectedRows.size === 0) return;
     setDeleting(true);
     try {
-      await Promise.allSettled(
-        [...selectedRows].map(id =>
-          fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
-            method: 'DELETE',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          })
-        )
+      const ids = [...selectedRows];
+      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
+        fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          return id;
+        }),
       );
-      clearSelection();
-      fetchLines();
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+      if (succeeded.length > 0) {
+        setSelectedRows(new Set(failed));
+        fetchLines();
+      }
     } finally {
       setDeleting(false);
     }
-  }, [apiBaseUrl, token, selectedRows, fetchLines]);
+  }, [apiBaseUrl, token, selectedRows, fetchLines, ui]);
 
   useEffect(() => {
     fetchLines();

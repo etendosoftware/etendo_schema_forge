@@ -98,3 +98,7 @@ e2e/.auth-credentials-*.json
 # Brainstorming / downtime plans — never versioned. Move a draft up to
 # docs/plans/ when it graduates into real work.
 docs/plans/drafts/
+
+# report-server Docker build context — assembled on demand from this repo plus
+# a schema_forge_core checkout (make report-server-context). Derived, never committed.
+.report-server-context/

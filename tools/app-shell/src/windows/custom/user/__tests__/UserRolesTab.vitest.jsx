@@ -20,6 +20,18 @@ vi.mock('@/lib/menuTree.js', () => ({
   fetchMenuTree: vi.fn(),
 }));
 
+// ETP-4999 item 5 — render the Radix tooltip pieces inline so the winner tooltip's
+// content is synchronously in the DOM (no portal / hover / act warnings), same
+// pattern as ComputedFreshnessHint.vitest.jsx. `TooltipTrigger`'s `asChild` child
+// (the `<span data-testid="WinnerBadge__...">`) is rendered as-is so existing
+// `getByTestId('WinnerBadge__...')` queries keep working unchanged.
+vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }) => <>{children}</>,
+  Tooltip: ({ children }) => <>{children}</>,
+  TooltipTrigger: ({ children }) => <>{children}</>,
+  TooltipContent: (props) => <div data-testid={props['data-testid']}>{props.children}</div>,
+}));
+
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import UserRolesTab from '../UserRolesTab.jsx';
@@ -95,21 +107,34 @@ function renderTab({ isNew = false, onVisibilityChange = vi.fn(), selectedRoleId
   );
 }
 
+// ETP-4999 item 5 — `TierPill` only renders an actual `<span>` (class `rounded-full`,
+// among others) when `tier` is non-null; a `tier === null` ('—', no access) cell
+// renders plain text with no pill span at all. The cell's own outer wrapper `<span>`
+// (`inline-flex items-center justify-center gap-1`, always present) never carries
+// `rounded-full`, so this selector reaches the pill specifically, not the wrapper.
+function pillSpanIn(cell) {
+  return cell.querySelector('span.rounded-full');
+}
+
 describe('UserRolesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('new (not-yet-persisted) user', () => {
-    it('renders nothing when isNew', () => {
-      const { container } = renderTab({ isNew: true });
-      expect(container).toBeEmptyDOMElement();
+    // ETP-4999 — the tab used to hide itself entirely (and render nothing) for a
+    // brand-new, unsaved user; it now stays visible and shows the SAME empty-state
+    // placeholder an existing user with zero roles selected sees (a new user can
+    // never have any roles selected pre-save either, so the outcome is identical).
+    it('renders the same empty-state placeholder as an existing user with zero roles selected', () => {
+      renderTab({ isNew: true });
+      expect(screen.getByTestId('UserRolesTab__empty')).toHaveTextContent('userRolesTabEmptyState');
     });
 
-    it('reports itself as hidden via onVisibilityChange(false) when isNew', () => {
+    it('reports itself as visible via onVisibilityChange(true) when isNew', () => {
       const onVisibilityChange = vi.fn();
       renderTab({ isNew: true, onVisibilityChange });
-      expect(onVisibilityChange).toHaveBeenCalledWith(false);
+      expect(onVisibilityChange).toHaveBeenCalledWith(true);
     });
 
     it('never fetches the menu tree, roles overview, or template roles when isNew', () => {
@@ -288,6 +313,180 @@ describe('UserRolesTab', () => {
       // The two real categories are unaffected by the classic-only one being dropped.
       const categoryHeaders = within(table).getAllByText(/^(Comercial|Compras)$/);
       expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Comercial', 'Compras']);
+    });
+
+    // ETP-4999 item 5 — the table's header row must stay pinned while scrolling through a
+    // potentially long list of window rows. The sticky CSS itself is a visual/CSS concern
+    // (verified manually via `make dev`, see the task report), so this only pins that the
+    // `<thead>` carries the class that makes it possible.
+    it('marks the <thead> sticky with an opaque background so it can pin while the body scrolls', async () => {
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const thead = table.querySelector('thead');
+      expect(thead.className).toContain('sticky');
+      expect(thead.className).toContain('top-0');
+      expect(thead.className).toContain('bg-card');
+    });
+
+    // ETP-4999 item 5 regression guard — an earlier pass wrapped the table in a LOCAL
+    // `max-h-[60vh] overflow-auto` div on the (incorrect) assumption that `sticky` needed
+    // a locally-owned scroll context. A human live-tested that build and found a real bug:
+    // a blank gap at the bottom of the tab whenever the table's content was shorter than
+    // the enclosing `DetailView.jsx` panel's full-viewport height, because the local
+    // wrapper created a SECOND, artificially short scroll region nested inside the panel's
+    // own (always full-height) outer scroll column. Live verification (Playwright) then
+    // confirmed the panel's EXISTING outer `overflow-y-auto` column is itself a valid
+    // `position: sticky` ancestor, so the local wrapper was unnecessary as well as buggy —
+    // it was removed entirely. This test pins that removal: if a local bounding wrapper is
+    // ever reintroduced here, it will reintroduce that same live-confirmed bottom-gap bug.
+    it('does NOT bound the wrapper with a local max-h/overflow — that previously caused a live-confirmed bottom-gap bug', async () => {
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const wrapper = await screen.findByTestId('UserRolesTab');
+      expect(wrapper.className).not.toContain('max-h-[60vh]');
+      expect(wrapper.className).not.toContain('overflow-auto');
+    });
+  });
+
+  // ETP-4999 item 5 — "permission comparison view": when a row's roles disagree on the
+  // access level for a window, the highest-ranked tier ('full' > 'readonly' > no access)
+  // is the "winner" — its pill text goes bold and an info-icon tooltip (`WinnerBadge__...`)
+  // explains why. Per human design feedback (revised from the first pass), losing cells
+  // get NO visual marker at all — they render exactly like a cell in a row where every
+  // role agrees (plain `TierPill`, `font-medium`, no badge). The earlier strikethrough
+  // treatment (`line-through text-muted-foreground/50`) was dropped as too visually harsh.
+  // A later design revision (left-most tie-break): when several columns TIE at the
+  // highest rank, only the LEFT-MOST tied column (lowest `columns` index) is marked as
+  // the winner — every other column tied at that same rank renders exactly like a
+  // losing cell (no badge, `font-medium`, not `font-bold`). Only ONE cell per
+  // disagreeing row can ever carry the marker now.
+  describe('winner/loser indicator (ETP-4999 item 5)', () => {
+    beforeEach(() => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+    });
+
+    it('marks the higher tier as winner with a bold pill + tooltip, and renders the lower tier plainly, when two roles disagree (readonly vs no access, w2)', async () => {
+      // w2 (Clientes): Finance has no entry ('—' / null tier), Sales has 'readonly'.
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w2');
+      // Sales (readonly) outranks Finance (no access) — Sales wins.
+      const winnerBadge = screen.getByTestId('WinnerBadge__w2-role-sales');
+      expect(winnerBadge).toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w2-role-fin')).not.toBeInTheDocument();
+
+      const cells = within(row).getAllByRole('cell');
+      const financeCell = cells[1];
+      const salesCell = cells[2];
+
+      // Finance has no access at all (tier === null) — `TierPill` renders no pill span,
+      // just the plain '—' text, identical to any other non-disagreeing '—' cell.
+      expect(pillSpanIn(financeCell)).toBeNull();
+
+      // Sales is the winner — its pill text goes bold.
+      expect(pillSpanIn(salesCell).className).toContain('font-bold');
+      expect(pillSpanIn(salesCell).className).not.toContain('font-medium');
+
+      // The tooltip explains why Sales is marked.
+      const tooltipContent = screen.getByTestId('WinnerTooltipContent__w2-role-sales');
+      expect(tooltipContent).toHaveTextContent('userRolesTabWinnerTooltipTitle');
+      expect(tooltipContent).toHaveTextContent('userRolesTabWinnerTooltipDescription');
+      expect(winnerBadge).toHaveAttribute('aria-label', 'userRolesTabWinnerTooltipTitle');
+    });
+
+    it('renders no winner badge or bold pill when both roles have no access at all (— / — tie, w3)', async () => {
+      // w3 (Proveedores): neither Finance nor Sales has any entry for it — both '—'.
+      // Ranks tie at the bottom (0 === 0), so `resolveRowWinner` reports
+      // `disagree: false` and no cell is marked winner, same as any other agreeing
+      // row. Complements the w1 test below, which pins the full/full tie.
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w3');
+      expect(within(row).queryByTestId(/^WinnerBadge__w3-/)).not.toBeInTheDocument();
+      const cells = within(row).getAllByRole('cell');
+      // Both cells are '—' (tier === null) — neither renders a pill span at all.
+      expect(pillSpanIn(cells[1])).toBeNull();
+      expect(pillSpanIn(cells[2])).toBeNull();
+    });
+
+    it('renders no winner badge and font-medium (not bold) pills when every column agrees (w1 — both roles full)', async () => {
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w1');
+      expect(screen.queryByTestId('WinnerBadge__w1-role-fin')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w1-role-sales')).not.toBeInTheDocument();
+      const cells = within(row).getAllByRole('cell');
+      expect(pillSpanIn(cells[1]).className).toContain('font-medium');
+      expect(pillSpanIn(cells[1]).className).not.toContain('font-bold');
+      expect(pillSpanIn(cells[2]).className).toContain('font-medium');
+      expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
+    });
+
+    it('renders no winner badge for the hardcoded GENERAL_ROWS, which always agree by construction', async () => {
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      await screen.findByTestId('UserRolesTab');
+      for (const key of ['dashboard', 'favorites', 'copilot']) {
+        const row = screen.getByTestId(`UserRolesTab__row-${key}`);
+        expect(within(row).queryByTestId(new RegExp(`^WinnerBadge__${key}-`))).not.toBeInTheDocument();
+        const cells = within(row).getAllByRole('cell');
+        expect(pillSpanIn(cells[1]).className).toContain('font-medium');
+        expect(pillSpanIn(cells[2]).className).toContain('font-medium');
+      }
+    });
+
+    it('marks a role with a real full grant as winner (bold + tooltip) and a role with no access at all plainly (full vs no-access, w1)', async () => {
+      // Distinct disagreement shape from the w2 case above (readonly vs no-access): here
+      // Sales has NO entry at all for w1 (global TEMPLATE_ROLES fixture always gives it
+      // 'full' there), so Finance's real 'full' grant is the row's only real access.
+      // Confirms "no-access never wins against a real grant" for the 'full' tier too
+      // (the w2 test above already confirms it for 'readonly').
+      fetchTemplateRoles.mockResolvedValueOnce({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'w1', tier: 'full' }] },
+          { id: 'role-sales', name: 'Sales', windows: [] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w1');
+      expect(screen.getByTestId('WinnerBadge__w1-role-fin')).toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w1-role-sales')).not.toBeInTheDocument();
+      const cells = within(row).getAllByRole('cell');
+      expect(pillSpanIn(cells[1]).className).toContain('font-bold'); // Finance — full, wins
+      expect(pillSpanIn(cells[2])).toBeNull(); // Sales — no access, no pill at all
+    });
+
+    it('marks only the left-most column tied at the top rank as winner when two roles share the highest tier and a third trails', async () => {
+      // 3-column row: Finance and Sales both 'full' on w1 (tied at the top rank),
+      // Purchasing only 'readonly' — `resolveRowWinner` marks only the LEFT-MOST tied
+      // column (Finance, `columns` index 0) as the winner (`winnerIndex` via
+      // `ranks.indexOf(maxRank)`'s first-match semantics). Sales ties at the same rank
+      // but is NOT the left-most, so it renders exactly like a losing cell (no badge,
+      // font-medium). Purchasing loses outright (lower rank, rendered plainly too).
+      fetchTemplateRoles.mockResolvedValueOnce({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'w1', tier: 'full' }] },
+          { id: 'role-sales', name: 'Sales', windows: [{ id: 'w1', tier: 'full' }] },
+          { id: 'role-purchasing', name: 'Purchasing', windows: [{ id: 'w1', tier: 'readonly' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales', 'role-purchasing'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w1');
+      expect(screen.getByTestId('WinnerBadge__w1-role-fin')).toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w1-role-sales')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('WinnerBadge__w1-role-purchasing')).not.toBeInTheDocument();
+      const cells = within(row).getAllByRole('cell');
+      expect(pillSpanIn(cells[1]).className).toContain('font-bold'); // Finance — left-most tied, wins
+      expect(pillSpanIn(cells[1]).className).not.toContain('font-medium');
+      expect(pillSpanIn(cells[2]).className).toContain('font-medium'); // Sales — tied but not left-most, loses
+      expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
+      expect(pillSpanIn(cells[3]).className).toContain('font-medium'); // Purchasing — lower rank, loses, plain
+      expect(pillSpanIn(cells[3]).className).not.toContain('font-bold');
     });
   });
 });

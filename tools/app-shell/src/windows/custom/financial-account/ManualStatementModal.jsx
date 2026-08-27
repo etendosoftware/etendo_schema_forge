@@ -107,14 +107,14 @@ function isBlankLine(r) {
 }
 
 /**
- * A line is "complete" (committable / saveable) when it has its transaction date,
- * a Reference No, and at least one amount entered (a statement line is an inflow
- * OR an outflow, so the other side is left empty = 0). The contact / G/L item are
- * optional. Empty amount fields count as 0.
+ * A line is "complete" (committable / saveable) when it has its transaction date
+ * and at least one amount entered (a statement line is an inflow OR an outflow,
+ * so the other side is left empty = 0). Reference No, contact and G/L item are
+ * all optional — a blank reference is stored as `**`, exactly like the CSV
+ * import does. Empty amount fields count as 0.
  */
 function isLineComplete(r) {
   return !!r.date
-    && r.reference.trim() !== ''
     && (parseAmount(r.out) > 0 || parseAmount(r.in) > 0);
 }
 
@@ -143,7 +143,7 @@ function HeaderFields({ form, setForm, ui }) {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <FieldRow
           label={ui('financeAccountStatementsManualName')}
           required
@@ -173,14 +173,6 @@ function HeaderFields({ form, setForm, ui }) {
             onChange={(iso) => setForm((f) => ({ ...f, importDate: iso }))}
             data-testid="manual-statement-importdate"
           />
-        </FieldRow>
-        <FieldRow
-          label={ui('financeAccountStatementsManualFileName')}
-          optional={ui('financeAccountStatementsManualOptional')}
-          data-testid="FieldRow__6b4086">
-          <input type="text" value={form.fileName} onChange={set('fileName')}
-            placeholder={ui('financeAccountStatementsManualFileNamePlaceholder')}
-            data-testid="manual-statement-filename" className={inputClass} />
         </FieldRow>
       </div>
       <FieldRow
@@ -231,7 +223,6 @@ function LinesHeader({ ui }) {
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColReference')}
-        required
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColDesc')}
@@ -650,8 +641,9 @@ export function ManualStatementModal({
       toast.error(ui('financeAccountStatementsManualErrorLines'));
       return;
     }
-    // Every non-blank line must have its required fields (date, Reference No,
-    // both amounts) — an incomplete line cannot be saved.
+    // Every non-blank line must carry its transaction date and an amount on one
+    // of the two sides. Unlike the CSV import — which drops amount-less rows the
+    // way Classic does — here the user is present, so it is a validation error.
     if (usable.some((r) => !isLineComplete(r))) {
       toast.error(ui('financeAccountStatementsManualErrorIncompleteLine'));
       return;
@@ -670,6 +662,10 @@ export function ManualStatementModal({
       name: form.name.trim(),
       transactionDate: toIsoUtc(form.transactionDate),
       importDate: toIsoUtc(form.importDate),
+      // The file name field is import-only and no longer rendered in this modal —
+      // its presence suggested a file could be attached here. It stays in the
+      // form state as an invisible passthrough so editing a draft that already
+      // carries one does not wipe it.
       fileName: form.fileName.trim(),
       notes: form.notes.trim(),
       process,

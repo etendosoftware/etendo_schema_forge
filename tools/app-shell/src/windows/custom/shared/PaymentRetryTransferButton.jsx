@@ -3,6 +3,7 @@ import { RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
 
 import { PAYMENT_STATUS_ERROR, pisOutcome } from './paymentStatuses';
 import { notifyRecordUpdated } from './useRecordRefreshSignal';
@@ -58,8 +59,7 @@ export default function PaymentRetryTransferButton({
       }
       // Same popup the invoice modal opens, so the bank flow looks identical from either entry
       // point. The payment goes back to "in progress" server-side the moment the order is placed.
-      popupRef.current = window.open(url, 'saltEdgePisWidget',
-        'popup=yes,width=500,height=720,resizable=yes,scrollbars=yes');
+      popupRef.current = openCenteredPopup(url, 'saltEdgePisWidget', 'popup=yes,resizable=yes,scrollbars=yes');
       window.dispatchEvent(new CustomEvent('neo:processSuccess',
         { detail: { recordId: paymentId, process: { columnName: 'retryPisPayment' } } }));
       // Follow the new attempt to its resolution. Nothing else will: the invoice modal's poll

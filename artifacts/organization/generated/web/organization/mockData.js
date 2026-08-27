@@ -209,3 +209,102 @@ export const information = [
     "organizationId": "mock-organization-012"
   }
 ];
+
+export const actividadesDelIae = [
+  {
+    "id": "mock-actividadesDelIae-001",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-001"
+  },
+  {
+    "id": "mock-actividadesDelIae-002",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-002"
+  },
+  {
+    "id": "mock-actividadesDelIae-003",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-003"
+  },
+  {
+    "id": "mock-actividadesDelIae-004",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-004"
+  },
+  {
+    "id": "mock-actividadesDelIae-005",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-005"
+  },
+  {
+    "id": "mock-actividadesDelIae-006",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-006"
+  },
+  {
+    "id": "mock-actividadesDelIae-007",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-007"
+  },
+  {
+    "id": "mock-actividadesDelIae-008",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-008"
+  },
+  {
+    "id": "mock-actividadesDelIae-009",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-009"
+  },
+  {
+    "id": "mock-actividadesDelIae-010",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-010"
+  },
+  {
+    "id": "mock-actividadesDelIae-011",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-011"
+  },
+  {
+    "id": "mock-actividadesDelIae-012",
+    "epgrafeIAE": "Sample epgrafeIAE",
+    "default": "Sample default",
+    "epiaeType": "Sample epiaeType",
+    "epiaeCode": "Sample epiaeCode",
+    "organizationId": "mock-organization-012"
+  }
+];
