@@ -417,21 +417,31 @@ describe('OrderPreview', () => {
     it('sales-order: passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {
       renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'DR' } });
       const cfg = lastOrderPdfCacheConfig();
-      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: false });
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: false, recordUpdated: null });
     });
 
     it('sales-order: passes { tableName: "C_Order", storeCondition: true } when documentStatus is CO (non-draft)', () => {
       renderOrderPreview({ specName: 'sales-order', order: { ...defaultOrder, documentStatus: 'CO' } });
       const cfg = lastOrderPdfCacheConfig();
-      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: true });
+      expect(cfg).toEqual({ tableName: 'C_Order', storeCondition: true, recordUpdated: null });
     });
 
     it('purchase-order: passes the same { tableName: "C_Order", storeCondition } shape (shared C_Order table)', () => {
       renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
-      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false, recordUpdated: null });
 
       renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'CO' } });
-      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
+      expect(lastPurchaseOrderPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true, recordUpdated: null });
+    });
+
+    // ETP-4787 — the record's own `updated` rides along so usePdfGenerator can discard a
+    // cached attachment older than the last edit.
+    it("forwards the order's `updated` as recordUpdated", () => {
+      renderOrderPreview({
+        specName: 'sales-order',
+        order: { ...defaultOrder, documentStatus: 'CO', updated: '2026-08-24T12:15:30+02:00' },
+      });
+      expect(lastOrderPdfCacheConfig().recordUpdated).toBe('2026-08-24T12:15:30+02:00');
     });
   });
 

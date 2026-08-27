@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
+import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
@@ -9,15 +12,17 @@ import { writeHeaders } from '@/lib/sessionHeaders.js';
  *
  * All visible strings are passed as props (resolved by the caller via useUI()).
  *
- * ETP-4576 — it used to take a `headers` prop, and every caller handed it the READ
- * bag (`jsonHeaders()`), which carries no CSRF proof. Both requests below are
- * POSTs, so confirming a shipment or a receipt answered 403 while everything else
- * in the same window worked. Building the write headers here is what makes that
- * unrepresentable: a caller can no longer supply the wrong bag, because it supplies
- * none.
+ * ETP-4942 — showPriceListPicker: when true, shows the same tariff selector
+ * CreateInvoiceConfirmModal already offers on the post-completion "Crear factura"
+ * button (ETP-4028), but only while the invoice toggle below is active. Required
+ * (blocks confirm) when the source document has no linked sales order — the
+ * backend cannot derive a price list on its own in that case. Optional/pre-filled
+ * when `hasLinkedOrder` is true, since the backend already resolves the tariff
+ * from the linked order.
  */
 export default function ConfirmInOutModal({
   base,
+  headers,
   recordId,
   specName,
   entityName,
@@ -35,12 +40,26 @@ export default function ConfirmInOutModal({
   confirmWithInvoiceLabel,
   processingLabel,
   cancelLabel,
+  showPriceListPicker = false,
+  isSOTrx = true,
+  hasLinkedOrder = false,
   onConfirmed,
   onClose,
 }) {
+  const ui = useUI();
   const [createInvoice, setCreateInvoice] = useState(skipDocumentAction ? true : defaultCreateInvoice);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const invoiceRequested = skipDocumentAction || createInvoice;
+  const pickerActive = showPriceListPicker && !!invoiceAction && invoiceRequested;
+  const priceListRequired = pickerActive && !hasLinkedOrder;
+  const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
+    enabled: pickerActive,
+    isSOTrx,
+    base,
+  });
+  const canConfirm = !priceListRequired || !!priceListId;
 
   const { documentNo, bpName, total, currency } = docInfo || {};
 
@@ -51,6 +70,7 @@ export default function ConfirmInOutModal({
   ].filter(Boolean);
 
   const handleConfirm = async () => {
+    if (!canConfirm) return;
     setLoading(true);
     setError(null);
     try {
@@ -67,9 +87,10 @@ export default function ConfirmInOutModal({
       }
 
       let invoice = null;
-      if ((skipDocumentAction || createInvoice) && invoiceAction) {
+      if (invoiceRequested && invoiceAction) {
+        const invoiceBody = pickerActive && priceListId ? { priceListId } : {};
         const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers: writeHeaders(), body: JSON.stringify({}),
+          method: 'POST', headers: writeHeaders(), body: JSON.stringify(invoiceBody),
         });
         if (!invRes.ok) {
           const body = await invRes.json().catch(() => null);
@@ -85,13 +106,13 @@ export default function ConfirmInOutModal({
 
       onConfirmed({ invoice });
     } catch (err) {
-      setError(err.message);
+      setError(translateBackendError(err.message, ui));
       setLoading(false);
     }
   };
 
   const toggle = () => { if (!skipDocumentAction) setCreateInvoice(v => !v); };
-  const primaryLabel = (skipDocumentAction || createInvoice) && confirmWithInvoiceLabel
+  const primaryLabel = invoiceRequested && confirmWithInvoiceLabel
     ? confirmWithInvoiceLabel
     : confirmLabel;
 
@@ -197,6 +218,16 @@ export default function ConfirmInOutModal({
             <ToggleSwitch on={createInvoice} data-testid="ToggleSwitch__3b3aca" />
           </div>}
 
+          {pickerActive && (
+            <PriceListSelectField
+              priceLists={priceLists}
+              priceListId={priceListId}
+              onChange={setPriceListId}
+              loading={loadingPriceLists}
+              idPrefix="confirm-modal-price-list"
+              data-testid="confirm-modal-price-list-field" />
+          )}
+
           {error && (
             <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', padding: '8px 12px', borderRadius: 6 }}>
               {error}
@@ -221,8 +252,8 @@ export default function ConfirmInOutModal({
             type="button"
             data-testid="confirm-modal-confirm-btn"
             onClick={handleConfirm}
-            disabled={loading}
-            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? 'var(--status-info-border)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: loading ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
+            disabled={loading || !canConfirm}
+            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: (loading || !canConfirm) ? 'var(--status-info-border)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
             onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
           >

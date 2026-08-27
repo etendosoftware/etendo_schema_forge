@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerResolveProductCodeHookTests } from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useQuotationPdf.js'), 'utf8');
@@ -60,6 +61,8 @@ describe('useQuotationPdf', () => {
   it('maps lineTotal using lineNetAmount with 0 as fallback', () => {
     assert.match(src, /l\.lineNetAmount \?\? 0/);
   });
+
+  registerResolveProductCodeHookTests(assert, src, sharedSrc);
 
   it('includes validUntil in the returned data derived from header.validUntil', () => {
     assert.match(src, /validUntil: header\.validUntil/);

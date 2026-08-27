@@ -4,10 +4,12 @@ import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
+import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
-import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 function PeriodLink({ label, onClick }) {
   return (
@@ -33,7 +35,7 @@ function StatusBadge({ isProcessed, ui }) {
   );
 }
 
-export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, apiBaseUrl, onCountChange }) {
+export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange }) {
   const ui = useUI();
   const navigate = useNavigate();
   const orgCurrency = useCurrency() ?? 'USD';
@@ -104,7 +106,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     const url = `${apiBaseUrl}/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`;
-    fetch(url, { headers: readCredentialHeaders() })
+    fetch(url, { headers: jsonHeaders() })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -115,7 +117,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         const ids = [...new Set(normalizedRows.map(l => l.amortization).filter(Boolean))];
         return Promise.all(
           ids.map(id =>
-            fetch(`${amortBase}/header/${id}`, { headers: readCredentialHeaders() })
+            fetch(`${amortBase}/header/${id}`, { headers: jsonHeaders() })
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
@@ -128,30 +130,40 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .then(entries => setProcessedMap(new Map(entries ?? [])))
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl]);
+  }, [recordId, apiBaseUrl, token]);
 
+  // ETP-4981 — a failed DELETE (e.g. blocked server-side for a line whose
+  // amortization plan is already confirmed) was never surfaced: Promise
+  // .allSettled swallowed every rejection and the panel always cleared the
+  // selection + refetched, so the row silently reappeared with zero
+  // feedback. Reuses the shared ETP-4656 triage/toast helpers, same
+  // onSuccess contract as AmortizationLinesTable.bulkDelete: all succeeded
+  // -> clear selection; partial -> keep only the failed ids selected; all
+  // failed -> leave selection untouched and skip the refetch.
   const handleDeleteSelected = useCallback(async () => {
     if (!apiBaseUrl || selectedRows.size === 0) return;
     setDeleting(true);
     try {
-      await Promise.allSettled(
-        [...selectedRows].map(id =>
-          fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
-            method: 'DELETE',
-            // ETP-4576 — this used to be `token ? { Authorization: ... } : {}`,
-            // which under the cookie scheme resolved to the empty branch: an
-            // unauthenticated DELETE with no CSRF proof.
-            credentials: 'include',
-            headers: writeHeaders(),
-          })
-        )
+      const ids = [...selectedRows];
+      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
+        fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
+          method: 'DELETE',
+          headers: writeHeaders(),
+          credentials: 'include',
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          return id;
+        }),
       );
-      clearSelection();
-      fetchLines();
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+      if (succeeded.length > 0) {
+        setSelectedRows(new Set(failed));
+        fetchLines();
+      }
     } finally {
       setDeleting(false);
     }
-  }, [apiBaseUrl, selectedRows, fetchLines]);
+  }, [apiBaseUrl, token, selectedRows, fetchLines, ui]);
 
   useEffect(() => {
     fetchLines();

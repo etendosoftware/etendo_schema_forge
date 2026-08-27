@@ -1,3 +1,4 @@
+import './productFkResolvers.js';
 import './productImportDescriptor.js';
 import ProductPage from '@generated/product/generated/web/product/ProductPage';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';

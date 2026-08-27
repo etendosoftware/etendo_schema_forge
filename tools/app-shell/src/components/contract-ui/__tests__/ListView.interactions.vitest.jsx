@@ -23,13 +23,6 @@
  * ListView's public output — it is a container whose whole job is deriving them.
  */
 import { render, screen, fireEvent, act } from '@testing-library/react';
-
-// ETP-4576 — ListView reads the CSRF proof from the auth context for the writes
-// useEntity issues, so mounting it needs that context. Shared mock; the default
-// value is restored before each test by src/test/setup.js.
-vi.mock('@/auth/AuthContext.jsx', async () =>
-  (await import('@/test/authContextMock.js')).authContextMock);
-
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 
@@ -834,14 +827,16 @@ describe('ListView — selection bar actions', () => {
     expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
-  it('prints the selected documents with the window name', async () => {
+  it('prints the selected documents with the window name and the translator', async () => {
     const user = userEvent.setup();
     render(<ListView {...defaultProps} />);
     selectRows();
 
     await user.click(screen.getByText(/^print/).closest('button'));
 
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function), 'http://localhost/api');
   });
 
   it('hands the selected rows to onCloneRow', async () => {
@@ -861,7 +856,9 @@ describe('ListView — selection bar actions', () => {
     act(() => { tableProps.onSelectionChange(['r1', 'r2']); });
 
     await user.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], expect.any(Function), 'http://localhost/api');
   });
 
   it('renders host-supplied bulkActions with the selection context', () => {

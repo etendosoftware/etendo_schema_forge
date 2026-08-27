@@ -61,14 +61,23 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => jsonHeaders(), []);
+  const headers = useMemo(() => (jsonHeaders()), []);
 
   // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
   // "PDF not configured" fallback. Hook is called unconditionally at top level
   // (before the early returns below) to respect the rules of hooks. Keyed on the
   // same id the modal passes as documentId (data?.id).
-  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl);
+  // ETP-4912 — generate on demand, not on mount. This hook used to run with the
+  // invoice id unconditionally, so merely opening a completed invoice in edit mode
+  // rendered a full PDF through jsreport that nobody had asked for (ETP-4315's design
+  // doc calls the same shape on the preview side "pure wasted compute"). Passing a
+  // null id keeps the hook call itself unconditional — rules of hooks — while the
+  // generator idles until one of the two consumers is actually opened.
+  const wantsPdf = showSendModal;
+  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(
+    wantsPdf ? (data?.id ?? null) : null, apiBaseUrl, token,
+  );
 
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = data?.grandTotalAmount ?? 0;
@@ -354,6 +363,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           installments exist, which in practice already implies CO). */}
       {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
 
+
+
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
         <InvoicePaymentHistoryModal
@@ -376,6 +387,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           apiBaseUrl={apiBaseUrl}
           documentId={data?.id}
           windowName="sales-invoice"
+          token={token}
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}

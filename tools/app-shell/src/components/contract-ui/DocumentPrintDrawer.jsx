@@ -3,7 +3,8 @@ import { X, ChevronLeft, ChevronRight, Loader2, Download, Printer } from 'lucide
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
-import { writeHeaders } from '../../lib/sessionHeaders.js';
+import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/custom/shared/documentPdfRegistry.js';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
@@ -59,10 +60,26 @@ async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
  * Preview drawer: shows document preview one at a time with < > navigation.
  * Report ID convention: print-{windowName} (e.g., print-purchase-order)
  */
-export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [] }) {
+/*
+ * ETP-4912 — which template this drawer shows.
+ *
+ * For a window listed in `documentPdfRegistry.js` the drawer builds the SAME
+ * client-rendered PDF the preview panel and the email modal show, so all three are one
+ * document. For every other window it renders that window's `print-*` artifact, exactly
+ * as before.
+ *
+ * This changes only WHICH template a print produces — never whether the Print button is
+ * offered. Visibility still comes from `hidePrint` / `hidePrintWhen` in the window's
+ * decisions.json, evaluated by DetailView/ListView as it always was.
+ */
+export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [], token, apiBaseUrl }) {
   const ui = useUI();
   const { shouldRender, isClosing } = useAnimatedOpen(open, 200);
   const iframeRef = useRef(null);
+  // Object URL of the client-rendered PDF, reused by Download/Print and revoked
+  // when it is replaced or the drawer closes, so paging through documents does not
+  // leak one blob per view.
+  const clientUrlRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -74,16 +91,34 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
   const currentDocId = documentIds[currentIndex];
 
   const renderDocument = useCallback(async (docId) => {
-    // ETP-4576 — the `!token` conjunct used to live here. Under the cookie
-    // scheme it was permanently true, so the print drawer opened on an empty
-    // iframe with no error: the render POST was never issued.
+    // Design A when this window has a client-side builder.
+    if (hasClientPdf(windowName) && docId) {
+      console.info(`[print-drawer] ${docId}: client-rendered PDF (same template as preview/email)`);
+      setLoading(true);
+      setError(null);
+      try {
+        const blob = await buildClientPdfBlob({ windowName, documentId: docId, apiBaseUrl, token, ui });
+        if (clientUrlRef.current) URL.revokeObjectURL(clientUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        clientUrlRef.current = url;
+        const iframe = iframeRef.current;
+        if (iframe) iframe.src = `${url}#toolbar=0&navpanes=0`;
+      } catch (err) {
+        console.error('[print-drawer] client PDF failed:', err);
+        setError(err.message);
+      }
+      setLoading(false);
+      return;
+    }
     if (!reportId || !docId) return;
+    console.info(`[print-drawer] ${docId}: rendering the ${reportId} artifact (separate design)`);
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -100,19 +135,33 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setError(err.message);
     }
     setLoading(false);
-  }, [reportId]);
+  }, [reportId, token, windowName, apiBaseUrl, ui]);
 
   useEffect(() => { if (open && currentDocId) renderDocument(currentDocId); }, [open, currentDocId, renderDocument]);
   useEffect(() => { if (open) setCurrentIndex(0); }, [open]);
+  useEffect(() => () => {
+    if (clientUrlRef.current) { URL.revokeObjectURL(clientUrlRef.current); clientUrlRef.current = null; }
+  }, []);
 
   const handleDownload = async () => {
     if (!currentDocId || downloading) return;
     setDownloading(true);
     try {
+      if (clientUrlRef.current) {
+        const a = document.createElement('a');
+        a.href = clientUrlRef.current;
+        a.download = `${windowName}-${currentDocId.slice(0, 8)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setDownloading(false);
+        return;
+      }
       // Get HTML
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });
       if (!res.ok) throw new Error(ui('actionFailed'));
@@ -141,7 +190,12 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     if (!currentDocId || printing) return;
     setPrinting(true);
     try {
-      await printDocuments(windowName, [currentDocId], ui);
+      if (clientUrlRef.current) {
+        const printWin = window.open(clientUrlRef.current, '_blank');
+        if (printWin) printWin.onload = () => { printWin.print(); };
+      } else {
+        await printDocuments(windowName, [currentDocId], ui);
+      }
     } finally {
       setPrinting(false);
     }
@@ -152,7 +206,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
   return (
     <>
       <div className={`fixed inset-0 bg-foreground/30 z-50 ${isClosing ? 'scrim-fade-out' : 'scrim-fade-in'}`} onClick={onClose} />
-      <div className={`fixed top-[10%] left-[20%] right-[20%] bottom-[10%] z-50 flex flex-col bg-card rounded-xl shadow-2xl overflow-hidden ${isClosing ? 'modal-exit' : 'modal-enter'}`}>
+      <div className={`fixed top-[10%] left-[20%] right-[20%] bottom-[10%] z-50 flex flex-col bg-card rounded-xl shadow-2xl overflow-hidden ${isClosing ? 'inset-panel-exit' : 'inset-panel-enter'}`}>
         {/* Header bar */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-muted shrink-0">
           <div className="flex items-center gap-3">
@@ -221,17 +275,36 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  * `toast.error()` instead of propagating as an unhandled promise rejection
  * (the previous behavior: this function's caller never awaits/catches it).
  */
-export async function printDocuments(windowName, documentIds, translate = (key) => key) {
+export async function printDocuments(windowName, documentIds, translate = (key) => key, apiBaseUrl = null) {
   const reportId = `print-${windowName}`;
   if (!reportId || documentIds.length === 0) return;
 
   try {
-    // Fetch HTML for each document
+    // Which template each document uses — same rule as the drawer: design A when the
+    // window is in the registry, its print-* artifact otherwise. Selecting rows in the
+    // list and printing them must not produce a different layout than printing them one
+    // by one from the detail view (ETP-4912).
+    const useClient = hasClientPdf(windowName) && apiBaseUrl;
+    const renderMode = useClient
+      ? 'client-rendered (same template as preview/email)'
+      : `${reportId} artifact`;
+    console.info(`[print-documents] ${windowName} x${documentIds.length}: ${renderMode}`);
+
+    // HTML per document, so they can be concatenated into ONE pdf below. Design A is
+    // asked for as HTML (jsreport `recipe: html`) rather than as a PDF for exactly this
+    // reason — concatenating PDFs in the browser would need a pdf library.
     const htmlParts = [];
     for (const docId of documentIds) {
+      if (useClient) {
+        htmlParts.push(await buildClientHtml({
+          windowName, documentId: docId, apiBaseUrl, ui: translate,
+        }));
+        continue;
+      }
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         headers: writeHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error(translate('actionFailed'));

@@ -1,9 +1,13 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
-import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
+import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
+import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
-const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'creditLimit', 'taxID'];
+// `creditLimit` used to be listed here with no matching decisions.json column, so nothing
+// could ever populate it — the mirror image of the "column with no consumer" problem.
+const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'etgoIsperson', 'taxID'];
 const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
 const HAS_ADDRESS = (row) => Boolean(row.address || row.city || row.postal || row.country);
 const businessPartnerCategoriesCache = new Map();
@@ -21,7 +25,7 @@ async function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: readCredentialHeaders() });
+    const res = await fetch(url, { credentials: 'include', headers: jsonHeaders() });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -58,12 +62,91 @@ function derivePersonName(firstName, lastName) {
 // businessPartner create through /batch that omits this field hits it). '1' ("NIF") is
 // confirmed a valid value in the field's own AD_Ref_List, so setting it explicitly here
 // sidesteps the broken server-side default path entirely rather than working around a
-// symptom. Not exposed as a decisions.import field for v1 — every imported contact gets
-// this identical default until a real per-row tax-id-type CSV column is needed.
+// symptom. '1' matches the AD default configured on the column itself
+// (C_BPartner.EM_OBTIK_Tax_ID_Key, defaultvalue '1'), so a row that says nothing about its
+// tax-id type lands on exactly the value the manual create flow would have produced.
 const DEFAULT_TAX_ID_KEY = '1';
 
+// AD_Ref_List for C_BPartner.EM_OBTIK_Tax_ID_Key (AD_Reference FF8081812FFD74ED012FFE428D290033),
+// read straight from the instance: 1=NIF, 2=NOI, 3=Pasaporte, 4=Documento oficial de
+// identificacion expedido por el pais, 5=Certificado de residencia fiscal, 6=Otro documento
+// probatorio, 7=No Censado. Before ETP-4995 the column accepted ONLY the raw code, so a user
+// who typed the label they see in the UI ("NIF") had the row rejected by the list reference.
+const TAX_ID_KEY_VALUES = {
+  // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
+  // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
+  // tax-id column is labelled "CIF/NIF". A QA plan authored independently used 'CIF' here
+  // too, which is evidence enough that rejecting it would just be pedantry.
+  1: ['NIF', 'CIF', 'CIF/NIF', 'NIF/CIF'],
+  2: ['NOI'],
+  3: ['Pasaporte', 'Passport'],
+  4: ['Documento oficial de identificacion expedido por el pais', 'Documento oficial de identificacion', 'Documento oficial'],
+  5: ['Certificado de residencia fiscal', 'Certificado de residencia'],
+  6: ['Otro documento probatorio', 'Otro documento'],
+  7: ['No Censado'],
+};
+
+// C_BPartner.EM_Etgo_Isperson is an AD Yes/No column (AD_Reference 20), NOT a list — its
+// stored values are 'Y'/'N' and its AD default is 'N' (a company). Without a column here the
+// descriptor never wrote the field at all, so every imported row landed on the same type.
+const IS_PERSON_VALUES = {
+  Y: ['Persona', 'Persona fisica', 'Fisica', 'Particular', 'Individuo', 'Person', 'Si', 'True'],
+  N: ['Empresa', 'Persona juridica', 'Juridica', 'Sociedad', 'Compania', 'Company', 'Organizacion', 'No', 'False'],
+};
+
+const DEFAULT_IS_PERSON = 'N';
+
+const SEARCH_KEY_MAX_LENGTH = 40;
+const SEARCH_KEY_HASH_LENGTH = 7;
+
+/**
+ * FNV-1a (32-bit) as base36. Deterministic and dependency-free — `crypto.subtle` is async
+ * and would force this whole hot path to change shape. Determinism matters: re-importing
+ * the same file must produce the same searchKey, not a second near-duplicate contact.
+ */
+function fnv1a32(input) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36).padStart(SEARCH_KEY_HASH_LENGTH, '0').slice(-SEARCH_KEY_HASH_LENGTH);
+}
+
+/**
+ * C_BPartner.Value is capped at 40 chars, but a blind `.slice(0, 40)` collapses every
+ * commercial name that shares a 40-char prefix onto ONE key — e.g. two "Asociacion
+ * Espanola de Fabricantes de …" rows, which then fight over the same business partner.
+ * Names that fit are used verbatim (readable keys for the common case); longer ones keep a
+ * readable prefix and take a deterministic hash of the FULL name as a discriminator.
+ */
+function deriveSearchKey(name) {
+  const full = String(name ?? '').trim();
+  if (full.length <= SEARCH_KEY_MAX_LENGTH) return full;
+  const prefix = full.slice(0, SEARCH_KEY_MAX_LENGTH - SEARCH_KEY_HASH_LENGTH - 1);
+  return `${prefix}-${fnv1a32(full)}`;
+}
+
+/**
+ * C_BPartner.Name is mandatory and `searchKey` is derived from it, so a row that reaches
+ * here without one produces a business partner with no commercial name and an empty key.
+ * That used to happen silently whenever a CSV's only name column was "nombre" (which
+ * mapped to etgoFirstname). "nombre" now maps to `name`, and a person-only row still works
+ * because first+last name compose one — but a row with neither must fail loudly.
+ */
+function resolveBusinessPartnerName(bpFields, config) {
+  const explicit = String(bpFields.name ?? '').trim();
+  if (explicit) return explicit;
+  const derived = derivePersonName(bpFields.etgoFirstname, bpFields.etgoLastname);
+  if (derived) return derived;
+  const message = typeof config.translate === 'function'
+    ? config.translate('importErrorMissingContactName')
+    : 'This row has no commercial name and no first/last name, so the contact cannot be created.';
+  throw new Error(message);
+}
+
 async function resolveCategoryId(row, config) {
-  if (!Boolean(row.categoryCode || row.categoryName || row.category)) return null;
+  if (!row.category) return null;
   const categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
   const runCache = getResolutionCache(config.token || 'contacts-import');
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
@@ -86,9 +169,10 @@ async function resolveCategoryId(row, config) {
     return { id: createdId, searchKey, name };
   });
   const categoryResolution = await resolveOrAutoCreateDependentEntity({
-    code: row.categoryCode,
-    name: row.categoryName,
-    fallbackValue: row.category,
+    // ETP-4995: categoryCode/categoryName/category were three separate columns for one
+    // concept. `category` is now the only declared column, so the cell is probed against
+    // the existing codes first and only then treated as a name (see asDependentEntityInput).
+    ...asDependentEntityInput(row.category, categories),
     existingRecords: categories,
     allowCreate: true,
     createFn,
@@ -145,7 +229,27 @@ registerImportDescriptor('contacts', async (row, config) => {
   // ETP-4156: BusinessPartnerHandler.handle() now applies the same fallback+truncation
   // server-side for every create path (this /batch one included, BatchService routes
   // through handleWithHooks), so this line is belt-and-braces rather than the only guard.
-  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: String(bpFields.name || '').slice(0, 40) };
+  // ETP-4995: every AD-coded default is applied AFTER the row's own fields, not before.
+  // The Tax ID Type column IS declared in decisions.json (`oBTIKTaxIDKey`), so
+  // buildTemplateCsv emits it into the downloaded template — and a user who leaves that
+  // column empty produces `''`, not `undefined`. With the default spread first,
+  // `...bpFields` then overwrote '1' with '', and the mandatory column failed with
+  // MISSING_REQUIRED_FIELDS for EVERY row: the template the popup itself hands out could
+  // not be imported without manually deleting the column. Only a non-blank, VALID cell
+  // may override a default; an unrecognized one fails its own row with a message naming
+  // the accepted values, instead of a bare 400 from the backend.
+  const bpName = resolveBusinessPartnerName(bpFields, config);
+  const bpBody = {
+    ...bpFields,
+    name: bpName,
+    oBTIKTaxIDKey: resolveCodedCellOrThrow(bpFields.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
+      defaultCode: DEFAULT_TAX_ID_KEY, fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate: config.translate,
+    }),
+    etgoIsperson: resolveCodedCellOrThrow(bpFields.etgoIsperson, IS_PERSON_VALUES, {
+      defaultCode: DEFAULT_IS_PERSON, fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate: config.translate,
+    }),
+    searchKey: deriveSearchKey(bpName),
+  };
 
   const categoryId = await resolveCategoryId(row, config);
   if (categoryId) bpBody.businessPartnerCategory = categoryId;

@@ -1,6 +1,4 @@
-import { useCallback, useState } from 'react';
-import { writeHeaders } from '@/lib/sessionHeaders.js';
-import { getApiBase } from './useNeoResource';
+import { useStatementFileRequest } from './useStatementFileRequest';
 
 /**
  * Hook for the multi-step "Importar extracto" modal. Calls
@@ -15,12 +13,16 @@ import { getApiBase } from './useNeoResource';
  *     format: 'C43' | 'GENERIC_CSV',
  *     fileName: string,
  *     lineCount: number,
+ *     discardedLines: number,    // rows dropped for having no amount
  *     totalIn: number,
  *     totalOut: number,
  *     periodFrom: string,        // ISO date
  *     periodTo: string,          // ISO date
  *     lines: Array<{ lineNo, date, description, bpartnerName, reference, cramount, dramount }>,
  *   }
+ *
+ * A rejected call carries `err.status` and, for a known backend failure,
+ * `err.code` (e.g. `NO_VALID_LINES` when the file has nothing importable).
  *
  * @returns {{
  *   previewStatement: (payload: { accountId, fileName, contentBase64 }) => Promise<object>,
@@ -29,42 +31,6 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementPreview() {
-  const [previewing, setPreviewing] = useState(false);
-  const [error, setError] = useState(null);
-
-  const previewStatement = useCallback(async ({ accountId, fileName, contentBase64 }) => {
-    const url = `${getApiBase()}/sws/neo/bank-statements?action=preview`;
-    setPreviewing(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
-        // bearer token. Unsafe method, so the backend also requires the CSRF proof.
-        headers: writeHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({
-          FIN_Financial_Account_ID: accountId,
-          fileName,
-          contentBase64,
-        }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        const detail = text ? `: ${text}` : '';
-        const err = new Error(`HTTP ${res.status}${detail}`);
-        err.status = res.status;
-        throw err;
-      }
-      const json = await res.json();
-      return json?.response?.data ?? {};
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setPreviewing(false);
-    }
-  }, []);
-
-  return { previewStatement, previewing, error };
+  const { run, busy, error } = useStatementFileRequest('preview');
+  return { previewStatement: run, previewing: busy, error };
 }

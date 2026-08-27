@@ -30,12 +30,16 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     tableName: cfg.tableName ?? null,
     storeCondition: cfg.storeCondition ?? false,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
+    recordUpdated: cfg.recordUpdated ?? null,
   });
 
+  // ETP-4787 — a stale stored file is reported as no file at all. Consumers use this to
+  // decide whether to serve the cached bytes (InvoicePreview's Download does), and a
+  // rendering older than the record must not win over the freshly rendered one.
   useEffect(() => {
-    cfg.onFileChange?.(attachment.storedFile);
+    cfg.onFileChange?.(attachment.storedFileIsStale ? null : attachment.storedFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachment.storedFile]);
+  }, [attachment.storedFile, attachment.storedFileIsStale]);
 
   const autoStoreAttempted = useRef(false);
   const autoStoreDocKey = `${cfg.documentId}::${cfg.tableName}`;
@@ -49,7 +53,11 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     if (!cfg.storeCondition) return;
     const hasSource = cfg.sourceBlob || cfg.sourceUrl;
     if (!hasSource) return;
-    if (attachment.storedFile || attachment.isBusy) return;
+    // A stale stored file is treated as absent so the fresh rendering overwrites it —
+    // `uploadAndMark` deletes the previous marked attachment in the same transaction.
+    // Without this the staleness check would be permanent: every open re-renders and
+    // nothing ever refreshes the cache.
+    if ((attachment.storedFile && !attachment.storedFileIsStale) || attachment.isBusy) return;
     if (autoStoreAttempted.current) return;
     autoStoreAttempted.current = true;
     const fileName = `${cfg.documentId ?? 'preview'}.pdf`;
@@ -59,7 +67,8 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
       attachment.storeUrl(cfg.sourceUrl, fileName).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfg.storeCondition, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId, attachment.storedFile, attachment.isBusy]);
+  }, [cfg.storeCondition, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId,
+      attachment.storedFile, attachment.storedFileIsStale, attachment.isBusy]);
 
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -211,6 +220,11 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  *                                 record's attachments, so it appears in the Attachments
  *                                 tab (ETP-4855). Omit it for generated-PDF caches —
  *                                 nobody attached those. See usePreviewAttachment.
+ *     recordUpdated?: string,   - the record's `updated` (ETP-4787). When the marked
+ *                                 attachment predates it, the cache is treated as absent:
+ *                                 the fresh sourceBlob overwrites it and onFileChange
+ *                                 reports null meanwhile. Omit it and the cache behaves
+ *                                 exactly as before — never invalidated.
  *     token: string,
  *     apiBaseUrl: string,
  *   }

@@ -250,6 +250,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     documentId: invoice.id,
     tableName: 'C_Invoice',
     storeCondition: !isDraft,
+    // ETP-4787 — a cached rendering older than the invoice's last edit is discarded and
+    // overwritten by this fresh pdfBlob. The purchase branch below deliberately omits it:
+    // that slot holds the supplier's OWN document, which no edit of ours makes stale.
+    recordUpdated: invoice?.updated ?? null,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
     token,

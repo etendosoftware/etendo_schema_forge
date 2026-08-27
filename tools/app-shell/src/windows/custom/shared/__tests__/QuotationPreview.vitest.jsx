@@ -299,22 +299,31 @@ describe('QuotationPreview', () => {
     function lastQuotationPdfCacheConfig() {
       const calls = vi.mocked(useQuotationPdf).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      return calls[calls.length - 1][4];
+      return calls[calls.length - 1][3];
     }
 
     it('passes { tableName: "C_Order", storeCondition: false } when documentStatus is DR (draft)', () => {
       renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
-      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: false, recordUpdated: null });
     });
 
     it('passes { tableName: "C_Order", storeCondition: true } when documentStatus is UE (under evaluation)', () => {
       renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
-      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true, recordUpdated: null });
     });
 
     it('passes { tableName: "C_Order", storeCondition: true } when documentStatus is CO (completed)', () => {
       renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'CO' } });
-      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true });
+      expect(lastQuotationPdfCacheConfig()).toEqual({ tableName: 'C_Order', storeCondition: true, recordUpdated: null });
+    });
+
+    // ETP-4787 — the record's own `updated` rides along so usePdfGenerator can discard a
+    // cached attachment older than the last edit.
+    it("forwards the quotation's `updated` as recordUpdated", () => {
+      renderQuotationPreview({
+        quotation: { ...defaultQuotation, documentStatus: 'CO', updated: '2026-08-24T12:15:30+02:00' },
+      });
+      expect(lastQuotationPdfCacheConfig().recordUpdated).toBe('2026-08-24T12:15:30+02:00');
     });
   });
 

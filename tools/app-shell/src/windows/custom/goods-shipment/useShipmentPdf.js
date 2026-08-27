@@ -4,7 +4,7 @@ import {
   MOVEMENT_TEMPLATE_OPEN, MOVEMENT_TEMPLATE_HEADER, MOVEMENT_TEMPLATE_PARTIES,
   MOVEMENT_TEMPLATE_SIGNATURE, MOVEMENT_TEMPLATE_NOTES, MOVEMENT_TEMPLATE_FOOTER,
   fetchJson, fetchAll, fetchOptionalJson, fetchLocationAddress, fetchImageDataUrl,
-  buildLocationAddressLines, renderPdf, usePdfGenerator,
+  buildLocationAddressLines, renderPdf, renderHtml, usePdfGenerator,
 } from '../shared/pdfUtils.js';
 
 // ---------------------------------------------------------------------------
@@ -69,15 +69,15 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 // ---------------------------------------------------------------------------
 // Build shipment data for the template
 // ---------------------------------------------------------------------------
-async function buildShipmentData(shipmentId, base) {
+export async function buildShipmentData(shipmentId, base, token) {
   const [header, linesRaw, session] = await Promise.all([
-    fetchJson(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
-    fetchAll(`${base}/goods-shipment/goodsShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`),
-    fetchOptionalJson(`${base}/session`),
+    fetchJson(`${base}/goods-shipment/goodsShipment/${shipmentId}`, token),
+    fetchAll(`${base}/goods-shipment/goodsShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`, token),
+    fetchOptionalJson(`${base}/session`, token),
   ]);
   const [companyLogoDataUrl, partnerLocation] = await Promise.all([
-    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base),
-    fetchLocationAddress(header.partnerAddress, base),
+    fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token),
+    fetchLocationAddress(header.partnerAddress, base, token),
   ]);
 
   const linesSorted = [...linesRaw].sort(
@@ -161,8 +161,15 @@ export function getShipmentPdfLabels(ui) {
 
 // ETP-4702 — kept for GoodsShipmentMoreMenu.jsx's "Download PDF" kebab-menu item,
 // which generates the PDF on demand instead of via the useShipmentPdf hook above.
-export async function generateShipmentPdf(shipmentId, apiBaseUrl, labels) {
+export async function generateShipmentPdf(shipmentId, apiBaseUrl, token, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-  const data = await buildShipmentData(shipmentId, base);
+  const data = await buildShipmentData(shipmentId, base, token);
   return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+}
+
+/** HTML twin of generateShipmentPdf, for the list view's multi-document print. */
+export async function generateShipmentHtml(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildShipmentData(recordId, base, token);
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
 }

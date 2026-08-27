@@ -73,6 +73,82 @@ function parseAdDate(raw) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * True when an AD date-or-timestamp string carries an actual time-of-day component (an
+ * `HH:mm` group after the date), as opposed to a date-only value that `parseAdDate` would
+ * otherwise silently default to midnight.
+ */
+function hasTimeComponent(raw) {
+  return !!raw && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(String(raw));
+}
+
+/**
+ * True for a stored event whose timestamp is exactly midnight local time.
+ *
+ * Such an entry is an artifact of the old backfill, which derived the "confirmed" event from
+ * `paymentDate` — a date-only AD column that `parseAdDate` defaults to midnight — and persisted the
+ * result. Those entries are already sitting in users' browsers and are why a payment confirmed at
+ * 12:10 still renders as "· 00:00" (ETP-4895): the backfill only runs when nothing is stored, so a
+ * poisoned entry is never revisited. Treating them as absent lets the real server timestamp win. A
+ * genuine confirmation at exactly 00:00:00.000 is vanishingly rare, and preferring the server's
+ * own audit timestamp is no worse for it.
+ */
+function isMidnightArtifact(ev) {
+  if (!ev || ev.type !== 'confirmed' || !ev.at) return false;
+  const d = new Date(ev.at);
+  return !Number.isNaN(d.getTime())
+    && d.getHours() === 0 && d.getMinutes() === 0
+    && d.getSeconds() === 0 && d.getMilliseconds() === 0;
+}
+
+/**
+ * The payment's real time of day, preferring the audit timestamp the backend injects for this
+ * (`updatedAt`, see ReactivatePaymentHandler) over the `updated` property, which the runtime does
+ * not actually send — the push to ETGO_SF_FIELD drops audit columns.
+ */
+function auditTimestamp(data) {
+  return data?.updatedAt || data?.updated;
+}
+
+/**
+ * The activity history to display: whatever was recorded live, minus the midnight artifacts of the
+ * old backfill, plus a synthetic "confirmed" entry when nothing usable is left.
+ *
+ * Backfilling is now the NORMAL path for a bank transfer, not a legacy fallback:
+ * PisReturnCallbackServlet registers the payment server-side, so the modal that used to record the
+ * live event may never have been open (ETP-4895). `paymentDate` stays last in the chain because it
+ * is a date-only AD column — it is what made a payment confirmed at 12:10 render as "· 00:00", since
+ * parseAdDate defaults a bare date to midnight. When no source carries a time component nothing is
+ * written on purpose, and the caller's "no confirmed event" fallback shows a date-only line rather
+ * than fabricating an hour that was never recorded.
+ */
+function resolveConfirmedEvents(data, isDraft) {
+  const stored = readEvents(data.id).filter(ev => !isMidnightArtifact(ev));
+  if (stored.length > 0 || isDraft) return stored;
+
+  const source = auditTimestamp(data) || data.paymentDate;
+  if (!hasTimeComponent(source)) return stored;
+  const backfill = parseAdDate(source);
+  if (!backfill) return stored;
+
+  const events = [{ type: 'confirmed', at: backfill.toISOString() }];
+  try {
+    window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(events));
+  } catch { /* non-fatal */ }
+  return events;
+}
+
+/** When the accounting entry was posted: the recorded moment, else the audit timestamp. */
+function resolvePostedAt(data, isDraft) {
+  const stored = readEventAt(data.id, 'postedAt');
+  if (stored) return stored;
+  if (isDraft || data.posted !== 'Y') return null;
+
+  const backfill = parseAdDate(auditTimestamp(data));
+  if (backfill) writeEventAt(data.id, 'postedAt', backfill);
+  return backfill;
+}
+
 function fmtNow(d) {
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
@@ -200,29 +276,9 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, apiBaseU
 
   useEffect(() => {
     if (!data?.id) return;
-    let stored = readEvents(data.id);
-    // Backfill a single synthetic "confirmed" entry for payments confirmed
-    // before this history feature existed — there's no way to recover the
-    // full past history, only the one timestamp AD still tracks.
-    if (stored.length === 0 && !isDraft && data.paymentDate) {
-      const backfill = parseAdDate(data.paymentDate);
-      if (backfill) {
-        stored = [{ type: 'confirmed', at: backfill.toISOString() }];
-        try { window.localStorage.setItem(eventsStorageKey(data.id), JSON.stringify(stored)); } catch { /* non-fatal */ }
-      }
-    }
-    setEvents(stored);
-
-    const storedPosted = readEventAt(data.id, 'postedAt');
-    if (storedPosted) {
-      setPostedAt(storedPosted);
-    } else if (!isDraft && data.posted === 'Y' && data.updated) {
-      const backfill = parseAdDate(data.updated);
-      if (backfill) {
-        writeEventAt(data.id, 'postedAt', backfill);
-        setPostedAt(backfill);
-      }
-    }
+    setEvents(resolveConfirmedEvents(data, isDraft));
+    const posted = resolvePostedAt(data, isDraft);
+    if (posted) setPostedAt(posted);
   }, [data?.id, data?.posted]);
 
   useEffect(() => {
@@ -334,7 +390,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, apiBaseU
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),
       confirmedAt: postedAt,
-      date: data?.updated,
+      date: data?.updatedAt || data?.updated,
       dot: 'hsl(var(--text-disabled))',
     }] : []),
   ].map((item, index) => ({

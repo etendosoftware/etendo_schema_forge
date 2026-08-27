@@ -16,15 +16,15 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 // ── SO related-documents helpers ─────────────────────────────────────────────
 
 const SO_SPECS = [
-  { key: 'shipment',      type: 'shipment',      fetch: (id, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, base) },
-  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, base) },
+  { key: 'shipment',      type: 'shipment',      fetch: (id, token, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, base) },
+  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, token, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, token, base) },
 ];
 
-async function fetchPaymentsIn(orderId, apiBaseUrl) {
-  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, apiBaseUrl);
+async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
+  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
   if (plans.length === 0) return [];
   const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, apiBaseUrl))
+    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
   );
   const seen = new Set();
   const paymentIds = detailResults.flat()
@@ -32,7 +32,7 @@ async function fetchPaymentsIn(orderId, apiBaseUrl) {
     .map(d => { seen.add(d.payment); return d.payment; });
   if (paymentIds.length === 0) return [];
   const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, apiBaseUrl))
+    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, token, apiBaseUrl))
   );
   return results.filter(Boolean).map(doc => ({ type: 'payment-in', doc }));
 }
@@ -74,6 +74,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
       {isSalesOrder && (
         <RelatedDocumentsCard
           documentId={order.id}
+          token={token}
           apiBaseUrl={apiBaseUrl}
           specs={SO_SPECS}
           fetchExtra={fetchPaymentsIn}
@@ -114,6 +115,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     docCurrencyCode: order?.['currency$_identifier'],
     orderDate: order?.orderDate,
     apiBaseUrl,
+    token,
   });
   const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
     record: order,
@@ -125,7 +127,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useOrderPdf/usePurchaseOrderPdf skip the jsreport round-trip and serve the marked
   // attachment directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft };
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraft, recordUpdated: order?.updated ?? null };
   const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, currencyData, pdfCacheConfig);
   const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, currencyData, pdfCacheConfig);
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = isSalesOrder ? soResult : poResult;
@@ -154,7 +156,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // Draft gate unchanged: cache is only checked/written once Confirmed.
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: order?.updated ?? null,
         documentId: order.id, tableName: 'C_Order', token, apiBaseUrl, onFileChange: setCachedAttachment,
       }
     : {
@@ -253,6 +255,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
           apiBaseUrl={apiBaseUrl}
           documentId={order.id}
           windowName={specName}
+          token={token}
           pdfBlobUrl={pdfUrl}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}

@@ -102,6 +102,72 @@ describe('useMainAttachment', () => {
     });
   });
 
+  // ── Staleness (ETP-4787) ────────────────────────────────────────────────────
+
+  // The hook keeps showing a stale file (blanking the panel mid-refresh would be worse)
+  // but flags it, so ManagedLeftPanel overwrites it with the freshly rendered PDF
+  // instead of skipping the auto-store because "a file already exists".
+  describe('storedFileIsStale', () => {
+    it('flags an attachment uploaded before the record\'s last edit', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2026-08-24T10:00:00Z' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, recordUpdated: '2026-08-24T12:15:30+02:00' }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFileIsStale).toBe(true);
+      expect(result.current.storedFile).not.toBeNull();
+    });
+
+    it('does not flag an attachment newer than the record', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2026-08-24T11:00:00Z' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, recordUpdated: '2026-08-24T12:15:30+02:00' }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFileIsStale).toBe(false);
+    });
+
+    it('never flags anything when the caller passes no recordUpdated', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2001-01-01T00:00:00Z' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+
+      const { result } = renderHook(() => useMainAttachment(BASE_PARAMS));
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFileIsStale).toBe(false);
+    });
+
+    it('clears the flag once a fresh file replaces the stale one', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2026-08-24T10:00:00Z' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+      uploadAndMarkMainAttachment.mockResolvedValue({ id: 'att-2' });
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, recordUpdated: '2026-08-24T12:15:30+02:00' }),
+      );
+      await waitFor(() => expect(result.current.storedFileIsStale).toBe(true));
+
+      await act(async () => {
+        await result.current.storeBlob(new Blob(['%PDF-fresh']), 'fresh.pdf');
+      });
+
+      // uploadAndMarkMainAttachment deletes the previously marked file server-side, so
+      // the record's cache IS this blob — the loop terminates instead of re-rendering
+      // on every subsequent open.
+      expect(result.current.storedFileIsStale).toBe(false);
+      expect(result.current.storedFile.attachmentId).toBe('att-2');
+    });
+  });
+
   // ── No-op guard ──────────────────────────────────────────────────────────────
 
   describe('when inactive', () => {

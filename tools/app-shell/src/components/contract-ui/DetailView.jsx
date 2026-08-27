@@ -7,7 +7,6 @@ import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -78,6 +77,7 @@ import {
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
 // (value, currency) — keep that signature here, delegating to the shared
@@ -223,7 +223,7 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
   return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
@@ -299,6 +299,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {number} deps.stIdx - current secondary tab index
  * @param {object} deps.api - resolved API config (for crud detail URLs)
  * @param {string} deps.apiBaseUrl - base URL for NEO Headless requests
+ * @param {string} [deps.token] - bearer token
  * @param {object} deps.secondaryHooks - per-tab child entity hooks
  * @param {Function} deps.ui - i18n label resolver
  * @param {Function} deps.extractErrorMessage - response error extractor
@@ -318,7 +319,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  */
 export function buildSecondaryLineHandlers(deps) {
   const {
-    st, stIdx, api, apiBaseUrl, secondaryHooks, ui,
+    st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
     extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
     selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
     setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -611,6 +612,7 @@ export function SecondaryTableTab(props) {
                 apiBaseUrl: props.apiBaseUrl,
                 secondaryHooks: props.secondaryHooks,
                 stIdx: props.stIdx,
+                token: props.token,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
                 isDocumentReadOnly: tabReadOnly,
@@ -1170,11 +1172,6 @@ export function DetailView({
   // above for why the global allowlist itself must never include 'product'.
   dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
-  // ETP-4576 — nothing in this component decides how a request authenticates, so
-  // no credential is read here and none is threaded into the exported helpers
-  // below. They build their headers through the shared builders, which are plain
-  // functions over the active scheme — not hooks — so the 15 test files that
-  // import and invoke them without mounting the component still work.
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
@@ -1206,11 +1203,7 @@ export function DetailView({
       : (Form?.fields ?? []).filter(f => !gateExclusions.includes(f.key))),
     [Form, gateExclusions]
   );
-  // ETP-4576 — no `token` in the options: useEntity's own buildHeaders() asks the
-  // shared session builders, so the credential is the active scheme's rather than a
-  // value threaded from here (and undefined under cookie). ETP-4933's contractFields
-  // gate is kept exactly as the epic wrote it.
-  const hook = useEntity(entity, detailEntity, { apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1243,11 +1236,11 @@ export function DetailView({
   // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
   // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
   // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
-  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
@@ -1405,8 +1398,8 @@ export function DetailView({
       .map(([key]) => key),
     [lineDisplayLogic?.visibility, trustedDimensionKeys]
   );
-  const { calloutResult, executeCallout } = useCallout(entity, { apiBaseUrl });
-  const docAction = useDocumentAction({ apiBaseUrl, entity });
+  const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
+  const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl });
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
@@ -1910,8 +1903,6 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    // ETP-4576 — the request below is already scheme-driven; `token` here only
-    // stopped it from ever being issued under a cookie session.
     if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
@@ -1921,7 +1912,8 @@ export function DetailView({
       try {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         const sessionRes = await fetch(`${neoBase}/session`, {
-          headers: jsonHeaders(), credentials: 'include',
+          headers: jsonHeaders(),
+          credentials: 'include',
         });
         if (!sessionRes.ok || cancelled) return;
         const session = await sessionRes.json();
@@ -2324,12 +2316,6 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    // ETP-4576 — `token` was a POSITIVE conjunct here, not a `!token` guard, so it
-    // read as a normal precondition rather than a credential gate. Under a cookie
-    // session it is undefined, so the whole rate validation was skipped and a
-    // currency with no conversion rate was silently accepted — the opposite of
-    // what this block exists to prevent. The request below is already
-    // scheme-driven.
     if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
@@ -2341,7 +2327,8 @@ export function DetailView({
           };
           try {
             const sessionRes = await fetch(`${neoBase}/session`, {
-              headers: jsonHeaders(), credentials: 'include',
+              headers: jsonHeaders(),
+              credentials: 'include',
             });
             if (!sessionRes.ok) { revert(); return; }
             const session = await sessionRes.json();
@@ -2417,10 +2404,6 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    // ETP-4576 — same as the header callout in useCallout.js: under the cookie
-    // scheme `token` is structurally undefined, so this gate was permanently
-    // closed and NO line callout ever fired — no request, no error, just fields
-    // that never auto-filled.
     if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -2625,7 +2608,7 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
 
   const othersRef = useRef(null);
 
@@ -3402,6 +3385,7 @@ export function DetailView({
                                     setDeletingChildren={setDeletingChildren}
                                     confirmDelete={confirmDelete}
                                     apiBaseUrl={apiBaseUrl}
+                                    token={token}
                                     hook={hook}
                                     selectedLine={selectedLine}
                                     setSelectedLine={setSelectedLine}
@@ -3425,7 +3409,7 @@ export function DetailView({
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, extractErrorMessage, ui, fields: allEntryFields })}
-                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
+                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
                                     active: addingLine,
@@ -3521,7 +3505,8 @@ export function DetailView({
                                             }
                                             const res = await fetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: writeHeaders(), credentials: 'include',
+                                              headers: writeHeaders(),
+                                              credentials: 'include',
                                               body: JSON.stringify({ fieldValues }),
                                             });
                                             if (res.ok) {
@@ -3550,7 +3535,8 @@ export function DetailView({
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
                                             const res = await fetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: writeHeaders(), credentials: 'include',
+                                              headers: writeHeaders(),
+                                              credentials: 'include',
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -3623,7 +3609,7 @@ export function DetailView({
                                             // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
                                             // pattern this bar predates.
                                             const { succeeded, failed } = await deleteSelectedChildRows({
-                                              selectedChildRows, api, detailEntity, apiBaseUrl,
+                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
                                             });
                                             for (const row of succeeded) {
                                               hook.handleDeleteChild(row.id);
@@ -3739,7 +3725,8 @@ export function DetailView({
                                                 normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
-                                                  headers: writeHeaders(), credentials: 'include',
+                                                  headers: writeHeaders(),
+                                                  credentials: 'include',
                                                   body: JSON.stringify(fieldValues),
                                                 });
                                                 if (res.ok) {
@@ -3750,7 +3737,8 @@ export function DetailView({
                                                   // derived fields (lineNetAmount, discounts) on save.
                                                   try {
                                                     const freshRes = await fetch(childUrl, {
-                                                      headers: jsonHeaders(), credentials: 'include',
+                                                      headers: jsonHeaders(),
+                                                      credentials: 'include',
                                                     });
                                                     if (freshRes.ok) {
                                                       const freshJson = await freshRes.json();
@@ -3797,7 +3785,8 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
                                               const res = await fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: writeHeaders(), credentials: 'include',
+                                                headers: writeHeaders(),
+                                                credentials: 'include',
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -3861,7 +3850,7 @@ export function DetailView({
                           // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
                           if (!isActiveTab && !st.Panel) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
-                            st, stIdx, api, apiBaseUrl, secondaryHooks, ui,
+                            st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
                             extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
                             selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
                             setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -4165,6 +4154,8 @@ export function DetailView({
         onClose={() => setShowPrint(false)}
         windowName={windowName}
         documentIds={getDocumentIds(recordId)}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
         data-testid="DocumentPrintDrawer__fa3275" />
       {deleteConfirmModal ? (
         showDeleteConfirm && (
@@ -4229,7 +4220,8 @@ export function DetailView({
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
                   const res = await fetch(secUrl, {
                     method: 'DELETE',
-                    headers: writeHeaders(), credentials: 'include',
+                    headers: writeHeaders(),
+                    credentials: 'include',
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

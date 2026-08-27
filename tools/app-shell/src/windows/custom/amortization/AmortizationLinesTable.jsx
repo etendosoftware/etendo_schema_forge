@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ChevronDown, Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
+import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
@@ -23,7 +26,7 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
-import { readCredentialHeaders, writeHeaders } from '../../../lib/sessionHeaders.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
@@ -150,7 +153,7 @@ export default function AmortizationLinesTable({
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`, {
-      headers: readCredentialHeaders(),
+      headers: jsonHeaders(),
     })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
@@ -222,6 +225,11 @@ export default function AmortizationLinesTable({
     return () => document.removeEventListener('mousedown', handler);
   }, [editingLineId]);
 
+  // ETP-4981 — a failed DELETE (e.g. blocked server-side for a confirmed
+  // amortization line) must never be silent: no toast + no fetchLines()/
+  // onRefresh() meant the row visually reappeared after the optimistic-looking
+  // refresh with zero feedback about why. Mirrors DetailView's
+  // buildDeleteRowHandler (recordDeleted / extractErrorMessage / networkError).
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
@@ -229,24 +237,47 @@ export default function AmortizationLinesTable({
         method: 'DELETE',
         headers: writeHeaders(),
       });
-      if (res.ok) { fetchLines(); onRefresh?.(); }
+      if (res.ok) {
+        fetchLines();
+        onRefresh?.();
+        toast.success(ui('recordDeleted'));
+      } else {
+        toast.error(await extractErrorMessage(res, ui));
+      }
+    } catch (err) {
+      toast.error(err?.message || ui('networkError'));
     } finally { setDeleting(null); }
   }
 
+  // ETP-4981 — same silent-failure bug for the bulk path, plus it always
+  // cleared the whole selection and refetched even when every request failed
+  // (or was network-rejected via `.catch(() => null)`), so failed rows
+  // vanished from the selection with no way to retry and no explanation.
+  // Reuses the shared ETP-4656 triage/toast helpers (runBatchDelete +
+  // toastBatchDeleteOutcome) and follows the same onSuccess contract as
+  // useBulkRowDelete: all succeeded -> clear selection; partial -> keep only
+  // the failed ids selected; all failed -> leave selection untouched (and
+  // skip the refetch, since nothing changed server-side).
   async function bulkDelete() {
     const ids = [...selectedRows];
     if (ids.length === 0) return;
     setBulkDeleting(true);
     try {
-      await Promise.all(ids.map(id =>
+      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
         fetch(`${apiBaseUrl}/lines/${id}`, {
           method: 'DELETE',
           headers: writeHeaders(),
-        }).catch(() => null),
-      ));
-      setSelectedRows(new Set());
-      fetchLines();
-      onRefresh?.();
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          return id;
+        }),
+      );
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+      if (succeeded.length > 0) {
+        setSelectedRows(new Set(failed));
+        fetchLines();
+        onRefresh?.();
+      }
     } finally { setBulkDeleting(false); }
   }
 

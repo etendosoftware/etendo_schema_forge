@@ -529,6 +529,7 @@ export function ListView({
   const { initialSortColumn, initialSortDirection } = parseListSortBy(listSortBy);
 
   const hook = useEntity(entity, null, {
+    token,
     apiBaseUrl,
     baseFilter: effectiveFilter,
     columnDefs,
@@ -936,7 +937,7 @@ export function ListView({
                   <Button
                     size={selectionBarSize}
                     className="gap-1.5"
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), ui)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                     {ui('print')} ({selectedRows.length})
@@ -1202,6 +1203,7 @@ export function ListView({
           title={label}
           apiBaseUrl={apiBaseUrl}
           entity={entity}
+          token={token}
           sortColumn={hook.sortColumn}
           sortDirection={hook.sortDirection}
           data-testid="ReportDrawer__620cbc" />
@@ -1220,6 +1222,7 @@ export function ListView({
             apiBaseUrl={apiBaseUrl}
             documentId={emailRow.id}
             windowName={windowName}
+            token={token}
             allowEmail={allowEmail}
             sendPolicy={effectiveSendDocument}
             onClose={() => setEmailRow(null)}

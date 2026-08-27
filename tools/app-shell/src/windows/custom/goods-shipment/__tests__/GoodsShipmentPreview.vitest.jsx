@@ -433,12 +433,21 @@ describe('GoodsShipmentPreview', () => {
 
     it('passes { tableName: "M_InOut", storeCondition: false } when shipment.documentStatus is DR (draft)', () => {
       renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
-      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: false });
+      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: false, recordUpdated: null });
     });
 
     it('passes { tableName: "M_InOut", storeCondition: true } when shipment.documentStatus is CO (non-draft)', () => {
       renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
-      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: true });
+      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: true, recordUpdated: null });
+    });
+
+    // ETP-4787 — the record's own `updated` rides along so usePdfGenerator can discard a
+    // cached attachment older than the last edit.
+    it("forwards the shipment's `updated` as recordUpdated", () => {
+      renderGSPreview({
+        shipment: { ...defaultShipment, documentStatus: 'CO', updated: '2026-08-24T12:15:30+02:00' },
+      });
+      expect(lastShipmentPdfCacheConfig().recordUpdated).toBe('2026-08-24T12:15:30+02:00');
     });
   });
 });

@@ -4,9 +4,9 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
-import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * CreatableSearchSelect — generic search-style selector with an inline "Create X" action.
@@ -44,6 +44,7 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  * @param {string}   resolvedLabel    - Translated field label shown in the placeholder.
  * @param {string}   selectorUrl      - Server endpoint for fetching options.
  * @param {object}   selectorContext  - Extra query params appended to every selector request.
+ * @param {string}   token            - JWT bearer token.
  * @param {string}   [createLabel]    - Text for the create action, e.g. "+ Add address".
  *                                     When omitted the create option is not rendered.
  * @param {Function} [onCreateRequest] - `(query: string, onCreated: (id, name) => void) => void`
@@ -70,13 +71,22 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  *                                      filtering the full list client-side would silently miss
  *                                      records outside the initial page. Typing >= 2 chars sends
  *                                      `?q=<term>` to `selectorUrl` (debounced 300ms); the shown
- *                                      options ARE the server's response (not locally re-filtered),
- *                                      capped to 20. An initial page loads on first focus/open with
- *                                      an empty query. When `value` is set without `displayValue`,
- *                                      the label is resolved via a `?id=<value>` fetch into the
- *                                      same `resolvedDisplay` fallback used by the fetch-once mode.
- *                                      Default false preserves the original fetch-once + local
- *                                      filter behaviour untouched.
+ *                                      options ARE the server's response (not locally re-filtered).
+ *                                      An initial page loads on first focus/open with an empty
+ *                                      query. Both the initial load and every search fetch a page
+ *                                      of `SERVER_SEARCH_PAGE` items (`limit`/`offset` sent
+ *                                      explicitly); scrolling near the bottom of the dropdown
+ *                                      (ETP-4975) fetches the next page and appends it — mirroring
+ *                                      `SelectorInput.jsx`'s `fetchPage`/scroll-listener pattern —
+ *                                      so the full catalog (e.g. 1214 IAE activity rows) stays
+ *                                      reachable by scrolling instead of being capped at one page.
+ *                                      A new query (typed or a parent change) always REPLACES the
+ *                                      list and resets pagination to offset 0; scrolling for more
+ *                                      of the SAME query APPENDS. When `value` is set without
+ *                                      `displayValue`, the label is resolved via a `?id=<value>`
+ *                                      fetch into the same `resolvedDisplay` fallback used by the
+ *                                      fetch-once mode. Default false preserves the original
+ *                                      fetch-once + local filter behaviour untouched.
  *
  * ## Usage example (address picker wired to LocationEditorModal)
  * ```jsx
@@ -89,6 +99,7 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  *   resolvedLabel={resolvedLabel}
  *   selectorUrl={selectorUrl}
  *   selectorContext={selectorContext}
+ *   token={token}
  *   createLabel={ui('addAddress')}
  *   onCreateRequest={(query, onCreated) => {
  *     // open modal; on save call onCreated(newId, newName)
@@ -117,34 +128,40 @@ function computeSelectDisplayState({
   return { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown };
 }
 
+// Page size for serverSearch mode's paginated fetches (initial load, search, and
+// scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE so both
+// selector styles page at the same granularity (ETP-4975).
+const SERVER_SEARCH_PAGE = 50;
+
 /** Builds the query params for a server-search request: base `selectorContext`, the
- * dependsOn filter (when configured), and `q` only once the typed term is long enough to be
- * worth sending — mirrors SearchInput's `triggerServerSearch` (EntityForm.jsx). Extracted so
- * the fetch call site itself stays a simple `fetch(...)` chain. */
-function buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query }) {
+ * dependsOn filter (when configured), `q` only once the typed term is long enough to be
+ * worth sending — mirrors SearchInput's `triggerServerSearch` (EntityForm.jsx) — and explicit
+ * `limit`/`offset` for pagination (ETP-4975). Extracted so the fetch call site itself stays a
+ * simple `fetch(...)` chain. */
+function buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit }) {
   const params = { ...selectorContext };
   if (parentKey && parentValue && filterKey) params[filterKey] = parentValue;
   if (query && query.trim().length >= 2) params.q = query.trim();
+  params.limit = limit;
+  params.offset = offset;
   return params;
 }
 
-/** Fetches and maps selector options from the server for the server-search mode. Shared by
- * the debounced typing flow and the initial on-focus/on-open load (ETP-4600 Phase 2a). */
-/**
- * ETP-4576 — every fetch here is authenticated by the `__Host-` session cookie
- * and carries no credential header. All three are GETs, so none needs the CSRF
- * proof. The `!token` gates that used to guard them are gone: once the client
- * stopped holding a token they were permanently false, which silently left this
- * dropdown, its display-value lookup and its server search with no data at all.
- */
-function fetchServerOptions({ selectorUrl, selectorContext, parentKey, parentValue, filterKey, query }) {
-  const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query });
+/** Fetches and maps one page of selector options from the server for the server-search mode.
+ * Shared by the debounced typing flow, the initial on-focus/on-open load, and the
+ * scroll-triggered "load more" (ETP-4600 Phase 2a; pagination added ETP-4975). Returns
+ * `hasMore` (inferred the same way as SelectorInput.jsx: a short page means the server is
+ * exhausted) alongside the mapped `items` so the caller can decide whether to keep paginating. */
+function fetchServerOptions({ selectorUrl, selectorContext, token, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
+  const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
   return fetch(buildUrlWithParams(selectorUrl, params), {
     headers: jsonHeaders(),
-    credentials: 'include',
   })
     .then(res => (res.ok ? res.json() : null))
-    .then(data => (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i })));
+    .then(data => {
+      const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
+      return { items, hasMore: items.length >= limit };
+    });
 }
 
 /** Pinned "create X" / "use typed value" action rendered at the top of the dropdown panel. */
@@ -173,11 +190,13 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
   );
 }
 
-/** Contents of the portaled options panel: empty-choice, create action, loading, list, no-results. */
+/** Contents of the portaled options panel: empty-choice, create action, loading, list, no-results,
+ * and (serverSearch mode only) a "loading more" footer while a scroll-triggered next page fetches
+ * (ETP-4975) — mirrors SelectorInput.jsx's `{hasMore && selectorUrl && (...)}` footer. */
 function SearchSelectOptionsPanel({
   field, ui, query, showEmptyOption, emptyOptionLabel, onSelectEmpty,
   createLabel, onCreateRequest, onCreate, loading, filteredOptions, onSelect,
-  activeIndex, onHoverOption,
+  activeIndex, onHoverOption, serverSearch, hasMore,
 }) {
   return (
     // min-w-full + w-max: sizes this inner content wrapper to the widest option's natural
@@ -234,6 +253,11 @@ function SearchSelectOptionsPanel({
           {ui('noResultsFor')} &ldquo;{query}&rdquo;
         </div>
       )}
+      {serverSearch && !loading && hasMore && filteredOptions.length > 0 && (
+        <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">
+          {ui('loading')}
+        </div>
+      )}
     </div>
   );
 }
@@ -247,6 +271,7 @@ export function CreatableSearchSelect({
   resolvedLabel,
   selectorUrl,
   selectorContext,
+  token,
   createLabel,
   onCreateRequest,
   emptyOptionLabel,
@@ -281,10 +306,17 @@ export function CreatableSearchSelect({
   // Keyboard navigation index over `filteredOptions` (ETP-4600 Gap A). -1 = nothing
   // highlighted (mouse-only interaction so far).
   const [activeIndex, setActiveIndex] = useState(-1);
-  // serverSearch mode only: the server's current result page. `null` means "not loaded yet"
-  // (distinct from `[]` = "loaded, no matches") so the on-focus initial load only fires once
-  // per reset (ETP-4600 Phase 2a).
+  // serverSearch mode only: the server's current result page (all pages loaded so far,
+  // concatenated). `null` means "not loaded yet" (distinct from `[]` = "loaded, no matches")
+  // so the on-focus initial load only fires once per reset (ETP-4600 Phase 2a).
   const [serverOptions, setServerOptions] = useState(null);
+  // serverSearch mode only: whether another page might exist beyond the loaded ones — drives
+  // the "loading" footer and gates scroll-triggered fetches (ETP-4975, mirrors SelectorInput.jsx).
+  const [hasMore, setHasMore] = useState(true);
+  // serverSearch mode only: true while a scroll-triggered NEXT page is fetching — kept separate
+  // from `loading` (which is reserved for offset-0 fetches: initial load / new search) so
+  // paginating never blanks the already-loaded options behind a "loading" placeholder.
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Tracks whether the user is actively typing to prevent external syncs from fighting input
   const isEditingRef = useRef(false);
@@ -292,6 +324,20 @@ export function CreatableSearchSelect({
   const loadedForRef = useRef(null);
   // Debounce timer for serverSearch mode's typing-triggered fetch.
   const debounceRef = useRef(null);
+  // serverSearch mode only: mirrors `hasMore`/next-page offset in refs so the scroll handler
+  // (which fires outside React's render cycle) always reads the latest value synchronously,
+  // exactly like SelectorInput.jsx's hasMoreRef/offsetRef.
+  const hasMoreRef = useRef(true);
+  const offsetRef = useRef(0);
+  // Guards against a scroll-triggered fetch overlapping another already in flight.
+  const fetchInFlightRef = useRef(false);
+  // serverSearch mode only: tags every fetch with the search "generation" it belongs to
+  // (ETP-4975 BUG-2). Incremented each time a NEW search starts (offset===0 — typed or via
+  // focus/open); a scroll-triggered "load more" (offset>0) keeps whatever generation was
+  // current when it was launched. `triggerServerSearch` compares the captured generation against
+  // the current one before applying a resolved fetch's result, so a stale in-flight request from
+  // an already-superseded search can never overwrite/append onto a newer one's results.
+  const searchGenerationRef = useRef(0);
   const inputRef = useRef(null);
   // Anchor for the portaled options panel — its bounding rect drives the panel's
   // fixed position so the panel never affects the modal's scroll height.
@@ -379,7 +425,6 @@ export function CreatableSearchSelect({
 
     fetch(buildUrlWithParams(selectorUrl, params), {
       headers: jsonHeaders(),
-      credentials: 'include',
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -407,7 +452,7 @@ export function CreatableSearchSelect({
   // selectorContext intentionally omitted — it is memoized upstream and its reference
   // is stable across renders for all current callers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, parentValue, selectorUrl, filterKey, refreshKey]);
+  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey]);
 
   // When options load and we still lack a display label for the current value, resolve
   // one locally so the chip is never blank while the caller catches up (ETP-4600 Gap B —
@@ -431,7 +476,6 @@ export function CreatableSearchSelect({
     let cancelled = false;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
       headers: jsonHeaders(),
-      credentials: 'include',
     })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
@@ -443,21 +487,51 @@ export function CreatableSearchSelect({
     return () => { cancelled = true; };
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, value, displayValue, selectorUrl]);
+  }, [serverSearch, value, displayValue, selectorUrl, token]);
 
-  // serverSearch mode only: debounced fetch triggered by typing, and the initial page load
-  // triggered on first focus/open (both call this). Cleared on unmount so no stale timer
-  // fires a setState after the component is gone.
-  const triggerServerSearch = useCallback((searchQuery) => {
+  // serverSearch mode only: fetches one page. Called with offset 0 for the debounced
+  // typing-triggered search AND the initial page load on first focus/open (both REPLACE the
+  // list — a new query/open always starts from page 0); called with offset > 0 from the
+  // scroll listener below to APPEND the next page (ETP-4975, mirrors SelectorInput.jsx's
+  // fetchPage). Cleared on unmount so no stale timer fires a setState after the component
+  // is gone (the debounce timer; this function itself has no timer of its own).
+  const triggerServerSearch = useCallback((searchQuery, offset = 0) => {
     if (!serverSearch || !selectorUrl) return;
-    setLoading(true);
-    fetchServerOptions({ selectorUrl, selectorContext, parentKey, parentValue, filterKey, query: searchQuery })
-      .then(items => setServerOptions(items))
-      .catch(() => setServerOptions([]))
-      .finally(() => setLoading(false));
+    if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
+    // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
+    // focus/open); offset>0 (scroll-triggered "load more") is tagged with whatever generation
+    // was already current when it fired — it never starts one of its own. When the fetch
+    // resolves, only apply it if that captured generation is still the current one; otherwise a
+    // newer search has already superseded it and the stale result is discarded silently instead
+    // of overwriting/appending onto the newer search's state (serverOptions/offsetRef/hasMoreRef).
+    if (offset === 0) searchGenerationRef.current += 1;
+    const requestGeneration = searchGenerationRef.current;
+    fetchInFlightRef.current = true;
+    if (offset === 0) setLoading(true); else setLoadingMore(true);
+    fetchServerOptions({
+      selectorUrl, selectorContext, token, parentKey, parentValue, filterKey,
+      query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
+    })
+      .then(({ items, hasMore: more }) => {
+        if (searchGenerationRef.current !== requestGeneration) return;
+        setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
+        offsetRef.current = offset + items.length;
+        hasMoreRef.current = more;
+        setHasMore(more);
+      })
+      .catch(() => {
+        if (searchGenerationRef.current !== requestGeneration) return;
+        if (offset === 0) setServerOptions([]);
+        hasMoreRef.current = false;
+        setHasMore(false);
+      })
+      .finally(() => {
+        fetchInFlightRef.current = false;
+        if (offset === 0) setLoading(false); else setLoadingMore(false);
+      });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, selectorUrl, parentKey, parentValue, filterKey]);
+  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey]);
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -469,15 +543,20 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!serverSearch) return;
     setServerOptions(null);
+    offsetRef.current = 0;
+    hasMoreRef.current = true;
+    setHasMore(true);
     if (parentKey && !parentValue && valueRef.current) onChangeRef.current('', '');
   }, [serverSearch, parentKey, parentValue]);
 
   // Options shown in the dropdown:
-  // - serverSearch mode: the server's own result page IS the filtered list (no local
-  //   re-filtering — the server already applied `q`), capped to 20 to match SearchInput.
+  // - serverSearch mode: the server's own (paginated, concatenated) result pages ARE the
+  //   filtered list — no local re-filtering (the server already applied `q`) and no local
+  //   truncation (pagination — see triggerServerSearch/the scroll listener below — is what
+  //   grows this list beyond the first page, ETP-4975).
   // - fetch-once mode (default): narrow the pre-fetched list by the typed query locally.
   const filteredOptions = useMemo(() => {
-    if (serverSearch) return (serverOptions ?? []).slice(0, 20);
+    if (serverSearch) return serverOptions ?? [];
     const q = query.trim().toLowerCase();
     if (!q) return options;
     return options.filter(o => o.name.toLowerCase().includes(q));
@@ -784,9 +863,15 @@ export function CreatableSearchSelect({
             setQuery(newQuery);
             if (!open) setOpen(true);
             if (serverSearch) {
+              // A new typed term is a NEW search, not "load more of the old one" — reset
+              // pagination to page 0 up front (ETP-4975) so a scroll event firing during the
+              // 300ms debounce window can't append a stale page under the new query.
+              offsetRef.current = 0;
+              hasMoreRef.current = true;
+              setHasMore(true);
               if (debounceRef.current) clearTimeout(debounceRef.current);
               debounceRef.current = setTimeout(() => {
-                triggerServerSearch(newQuery);
+                triggerServerSearch(newQuery, 0);
               }, 300);
             }
           }}
@@ -802,7 +887,10 @@ export function CreatableSearchSelect({
               // saves. One fetch per real focus event: not a loop, since focus only fires
               // once per open gesture.
               setServerOptions(null);
-              triggerServerSearch(query);
+              offsetRef.current = 0;
+              hasMoreRef.current = true;
+              setHasMore(true);
+              triggerServerSearch(query, 0);
               return;
             }
             // Lazy-load: if options for the current parent are not yet fetched, trigger fetch
@@ -823,7 +911,7 @@ export function CreatableSearchSelect({
           }}
         />
       )}
-      {loading ? (
+      {loading || loadingMore ? (
         <Loader2
           className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
@@ -880,6 +968,18 @@ export function CreatableSearchSelect({
               e.currentTarget.scrollTop += e.deltaY;
             }
           }}
+          onScroll={(e) => {
+            // serverSearch-only infinite scroll (ETP-4975): this outer `overflow-auto` div IS
+            // the real scrollable container for the options list (there's no separate
+            // Radix/cmdk viewport in this component, unlike SelectorInput.jsx's SelectContent),
+            // so the scroll listener attaches directly here via onScroll instead of a
+            // querySelector'd child. Same 100px-from-bottom threshold as SelectorInput.jsx.
+            if (!serverSearch) return;
+            const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+              triggerServerSearch(query, offsetRef.current);
+            }
+          }}
         >
           <SearchSelectOptionsPanel
             field={field}
@@ -896,6 +996,8 @@ export function CreatableSearchSelect({
             onSelect={handleSelect}
             activeIndex={activeIndex}
             onHoverOption={setActiveIndex}
+            serverSearch={serverSearch}
+            hasMore={hasMore}
             data-testid={"SearchSelectOptionsPanel__" + field.id} />
         </div>,
         document.body,

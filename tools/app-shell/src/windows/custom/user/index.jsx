@@ -12,7 +12,6 @@ import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
 import OwnerBadge from './OwnerBadge.jsx';
 
@@ -99,69 +98,81 @@ function ActiveStatusToggle({ data, recordId, apiBaseUrl, onRefresh }) {
 }
 
 /**
- * ETP-4830 item #2 — "Resend invitation" button, rendered next to the pill (human-
- * confirmed placement — see this ticket's design decisions). Visible only when
- * `data.invitationStatus` is one of `RESENDABLE_INVITATION_STATUSES`; the server-side
- * gate in `CompanyInvitationService#resendInvitation` is the real boundary (this is
- * only a UX nicety — don't offer a click that would just 400).
+ * ETP-4999 — "Resend invitation" as a right-side toolbar action (kebab, then this,
+ * then Guardar), matching the Figma spec's convention for this class of action —
+ * moved out of `TopbarExtra` (left side, ETP-4830's original placement) into
+ * `DetailView.jsx`'s `extraActions` extension point instead. `extraActions` as a
+ * FUNCTION receives `{ data, onRefresh }` (see `detailViewHelpers.jsx`'s
+ * `renderExtraActionButtons` — `onRefresh` there mirrors `topbarExtra`'s own,
+ * `() => hook.fetchById?.(data?.id)`), which is everything this action needs: no
+ * `recordId` fallback required since a resend-eligible record always already has
+ * `data.id` (a brand-new, unsaved user can never have an invitation to resend).
  *
- * On success: mints a fresh token, marks any still-open prior invitation REVOKED (see
- * that method's javadoc), sends a new email, and calls `onRefresh` so the pill's status
- * flips (PENDING/SENT/EXPIRED/DELIVERY_FAILED all become SENT or DELIVERY_FAILED again,
- * per the actual send outcome — not assumed optimistically).
+ * `sending` lives in `UserWindow`'s own state (not local to a button component,
+ * since `extraActions` renders through a shared generic `<Button>` in
+ * `detailViewHelpers.jsx`, not a custom component) so the label can swap to a
+ * spinner and the button can disable itself for the duration of the request.
+ *
+ * On success: mints a fresh token, marks any still-open prior invitation REVOKED
+ * (see `CompanyInvitationService#resendInvitation`'s javadoc), sends a new email,
+ * and calls `onRefresh` so the pill's status flips (PENDING/SENT/EXPIRED/
+ * DELIVERY_FAILED all become SENT or DELIVERY_FAILED again, per the actual send
+ * outcome — not assumed optimistically).
  */
-function ResendInvitationButton({ data, recordId, onRefresh }) {
+function useResendInvitationExtraActions() {
   const ui = useUI();
   const [sending, setSending] = useState(false);
-  const id = data?.id || recordId;
-  const status = data?.invitationStatus;
 
-  if (!id || id === 'new' || !RESENDABLE_INVITATION_STATUSES.has(status)) return null;
+  return useCallback(({ data, onRefresh }) => {
+    const id = data?.id;
+    const status = data?.invitationStatus;
+    if (!id || id === 'new' || !RESENDABLE_INVITATION_STATUSES.has(status)) return [];
 
-  const handleClick = async () => {
-    setSending(true);
-    try {
-      await resendInvitation(id);
-      toast.success(ui('resendInvitationSuccessToast'));
-      onRefresh?.();
-    } catch (err) {
-      toast.error(err?.message || ui('resendInvitationErrorFallback'));
-    } finally {
-      setSending(false);
-    }
-  };
+    const handleClick = async () => {
+      setSending(true);
+      try {
+        await resendInvitation(id);
+        toast.success(ui('resendInvitationSuccessToast'));
+        onRefresh?.();
+      } catch (err) {
+        toast.error(err?.message || ui('resendInvitationErrorFallback'));
+      } finally {
+        setSending(false);
+      }
+    };
 
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="gap-1.5"
-      disabled={sending}
-      onClick={handleClick}
-      data-testid="ResendInvitationButton">
-      {sending
-        ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__ResendInvitation" />
-        : <Send className="h-3.5 w-3.5" data-testid="Send__ResendInvitation" />}
-      <span>{ui('resendInvitationAction')}</span>
-    </Button>
-  );
+    return [{
+      key: 'resend-invitation',
+      disabled: sending,
+      onClick: handleClick,
+      label: (
+        <span className="flex items-center gap-1.5" data-testid="ResendInvitationButton">
+          {sending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__ResendInvitation" />
+            : <Send className="h-3.5 w-3.5" data-testid="Send__ResendInvitation" />}
+          <span>{ui('resendInvitationAction')}</span>
+        </span>
+      ),
+    }];
+  }, [sending, ui]);
 }
 
 /**
- * ETP-4830 — composite `topbarExtra` component: the owner badge (item #4) first — a
- * static identity marker about the account, not a workflow state — then the
- * pending-invitation pill, then the resend button (item #2), then the active/inactive
- * toggle, matching the reference screenshot's visual order for the latter three
- * (pill-then-toggle is the reasonable default absent a pixel-exact mockup; resend sits
- * next to the pill it acts on, per this ticket's own design decision). `ActiveStatusToggle`
- * and `ResendInvitationButton` read straight off the same props `DetailView.jsx` passes
- * into `topbarExtra` (`data`, `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread
- * straight through. `PendingInvitationPill`/`OwnerBadge` (each extracted into their own
- * file so the Users LIST GRID can render the identical pill/badge per row — see each
- * file's own doc comment) only need their own raw value, so only `data?.invitationStatus`/
- * `data?.isOwner` are pulled out of `props` for them, rather than spreading the whole prop
- * bag.
+ * ETP-4830/ETP-4999 — composite `topbarExtra` component: the owner badge (item #4)
+ * first — a static identity marker about the account, not a workflow state — then
+ * the pending-invitation pill, then the active/inactive toggle. The resend button
+ * that used to sit here (ETP-4830 item #2) moved to the RIGHT-side toolbar via
+ * `extraActions` (see `useResendInvitationExtraActions` above and the `<UserPage>`
+ * render below) — this Figma-driven revision matches this app's convention for
+ * this class of action (kebab, then extra actions, then Guardar), rather than the
+ * left-side cluster with Cancelar/Activo/the pill. `ActiveStatusToggle` reads
+ * straight off the same props `DetailView.jsx` passes into `topbarExtra` (`data`,
+ * `recordId`, `token`, `apiBaseUrl`, `onRefresh`, ...) — spread straight through.
+ * `PendingInvitationPill`/`OwnerBadge` (each extracted into their own file so the
+ * Users LIST GRID can render the identical pill/badge per row — see each file's
+ * own doc comment) only need their own raw value, so only `data?.invitationStatus`/
+ * `data?.isOwner` are pulled out of `props` for them, rather than spreading the
+ * whole prop bag.
  */
 function TopbarExtra(props) {
   return (
@@ -172,7 +183,6 @@ function TopbarExtra(props) {
       <PendingInvitationPill
         status={props.data?.invitationStatus}
         data-testid="PendingInvitationPill__toolbar" />
-      <ResendInvitationButton {...props} data-testid="ResendInvitationButton__toolbar" />
       <ActiveStatusToggle {...props} data-testid="ActiveStatusToggle__toolbar" />
     </div>
   );
@@ -229,6 +239,7 @@ export default function UserWindow(props) {
   const { recordId, apiBaseUrl, windowName = 'user' } = props;
   const ui = useUI();
   const navigate = useNavigate();
+  const resendInvitationExtraActions = useResendInvitationExtraActions();
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const appliedRoleIdsRef = useRef([]);
   const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
@@ -305,12 +316,14 @@ export default function UserWindow(props) {
   // this window (currently `{ tableName: 'AD_User', config: {} }`) — re-check
   // `artifacts/user/generated/web/user/UserPage.jsx`'s own `customTabs` prop after any
   // `make regen ONLY=user` that touches `window.attachments`.
+  // ETP-4999 — "Configuración del correo electrónico" was removed from this window
+  // entirely (not relevant to this window — see `artifacts/user/decisions.json`'s
+  // `exclude: true`d `emailConfiguration` entity); "Attachments" stays, unaffected.
   const customTabs = useMemo(() => [
     // ETP-4906 Round 4 — `tabOrder: 0` places "Roles del usuario" before the
     // `attachments` custom tab below (default weight 999) — see `DetailView.jsx`'s
     // `buildInitialTabs` (`detailViewHelpers.jsx`), which sorts by weight then
-    // insertion index. `attachments` is left at its implicit default so it keeps
-    // sorting after both `roles` and the email-config lines tab below.
+    // insertion index.
     { key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab', tabOrder: 0, props: { selectedRoleIds } },
     { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'AD_User', config: {} } },
   ], [selectedRoleIds]);
@@ -394,24 +407,11 @@ export default function UserWindow(props) {
         {...props}
         newLabel={ui('newUser')}
         topbarExtra={TopbarExtra}
+        extraActions={resendInvitationExtraActions}
         onAfterCreate={handleAfterCreate}
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}
         customTabs={customTabs}
-        // ETP-4906 Round 5 (DEV wave 10) — "Configuración del correo electrónico" is NOT
-        // a plain secondaryTabs entry; the generated `UserPage.jsx` renders it via
-        // `DetailTable={EmailConfigurationTable}`, which `buildInitialTabs` treats as the
-        // special LINES-tab slot (`detailViewHelpers.jsx`'s `computeLinesEntryKey`). With
-        // no `detailTabOrder`/`detailTabIndex` passed anywhere, that slot silently
-        // defaulted to `LINES_DEFAULT_WEIGHT = -1` — LOWER than `roles`' `tabOrder: 0` —
-        // so email-config kept sorting first despite Round 4's fix (confirmed live by the
-        // human, not just theorized). `detailTabOrder` is the helper's own documented
-        // "preferred" mechanism for this: passed straight through `UserPage`'s `{...props}`
-        // spread into `DetailView`, same path as `onAfterExistingSave`/`additionalDirtyState`
-        // above. `1` sits strictly between `roles` (0) and `attachments` (999, implicit),
-        // giving the final order: Roles del usuario, Configuración del correo
-        // electrónico, Adjuntos.
-        detailTabOrder={1}
         data-testid="UserPage__853799" />
     </RoleSelectionProvider>
   );

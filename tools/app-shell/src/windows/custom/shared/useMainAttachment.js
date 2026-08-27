@@ -11,7 +11,8 @@ import {
   notifyAttachmentsChanged,
   useAttachmentsChanged,
 } from '@/components/attachments/attachmentsBus';
-import { readCredentialHeaders } from '@/lib/sessionHeaders.js';
+import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
+import { jsonHeaders, readCredentialHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
@@ -44,17 +45,20 @@ export function useMainAttachment({
   tableName = null,
   storeCondition = false,
   apiBaseUrl = null,
+  recordUpdated = null,
 } = {}) {
   const [storedFile, setStoredFile] = useState(null);
+  // ETP-4787 — the stored file is still shown while it lasts, but callers are told it
+  // predates the record so they can overwrite it with a fresh rendering. Reported
+  // separately from `storedFile` rather than by hiding it: the panel would otherwise
+  // blank out for the duration of the re-upload.
+  const [storedFileIsStale, setStoredFileIsStale] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [storeFailed, setStoreFailed] = useState(false);
   const objectUrlRef = useRef(null);
   const sourceRef = useRef(null);
   if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
 
-  // ETP-4576 — `token` was part of this condition, and under a cookie session it
-  // is structurally undefined, so the whole hook was inert: no attachment ever
-  // loaded, uploaded or got marked, with nothing logged.
   const active = !!(storeCondition && documentId && tableName);
 
   const revokeUrl = useCallback(() => {
@@ -81,8 +85,10 @@ export function useMainAttachment({
       if (!main) {
         revokeUrl();
         setStoredFile(null);
+        setStoredFileIsStale(false);
         return;
       }
+      setStoredFileIsStale(isAttachmentStale(main, recordUpdated));
       objectUrl = await fetchAttachmentBlobUrl({ attachmentId: main.id, apiBaseUrl });
       if (objectUrl) applyAttachment(main.id, main.name, main.dataType, objectUrl);
     } catch {
@@ -90,7 +96,7 @@ export function useMainAttachment({
     } finally {
       setIsBusy(false);
     }
-  }, [active, tableName, documentId, apiBaseUrl, applyAttachment, revokeUrl]);
+  }, [active, tableName, documentId, apiBaseUrl, recordUpdated, applyAttachment, revokeUrl]);
 
   // Restore from server on mount / whenever the record identity changes.
   useEffect(() => {
@@ -98,7 +104,7 @@ export function useMainAttachment({
     (async () => { if (!cancelled) await refresh(); })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, tableName, documentId, apiBaseUrl]);
+  }, [active, tableName, documentId, apiBaseUrl, recordUpdated]);
 
   // Another view (Attachments tab, another mounted OcrSidePanel/preview) wrote
   // to this same record — reload so this instance stops showing stale data.
@@ -120,6 +126,9 @@ export function useMainAttachment({
     }
     const objectUrl = URL.createObjectURL(blob);
     applyAttachment(created.id, fileName, mimeType, objectUrl);
+    // `markAsMain=true` deleted the previous marked attachment in the same transaction,
+    // so the record's cache is now this blob — by construction not stale.
+    setStoredFileIsStale(false);
     notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
   }, [active, tableName, documentId, apiBaseUrl, applyAttachment]);
 
@@ -188,8 +197,12 @@ export function useMainAttachment({
     if (!result?.ok) return;
     revokeUrl();
     setStoredFile(null);
+    setStoredFileIsStale(false);
     notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
   }, [active, storedFile, apiBaseUrl, revokeUrl, tableName, documentId]);
 
-  return { storedFile, isBusy, storeFailed, storeFile, storeBlob, storeUrl, markExisting, deleteFile };
+  return {
+    storedFile, storedFileIsStale, isBusy, storeFailed,
+    storeFile, storeBlob, storeUrl, markExisting, deleteFile,
+  };
 }

@@ -1,20 +1,23 @@
-import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import {
   Download,
   OctagonAlert, TriangleAlert, CircleCheck,
   Calculator, Loader2, TrendingUp, TrendingDown,
-  ClipboardCheck, ReceiptText, FileCheck,
+  ClipboardCheck, ReceiptText, FileCheck, Landmark,
 } from 'lucide-react';
 import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
-import AeatSubmitFlow from './AeatSubmitFlow.jsx';
+import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.jsx';
+import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // AD table name backing the AEAT justificante attachments store — both the
 // server-side auto-attach on a successful telematic submission and the
@@ -69,11 +72,10 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
   if (res.sources) setLiveSources(res.sources);
 }
 
-function fetchOrgIdent(apiBaseUrl, setOrgIdent) {
+function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
   if (!apiBaseUrl) return;
   fetch(`${neoBase(apiBaseUrl)}/session`, {
     headers: jsonHeaders(),
-        credentials: 'include',
   })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -201,9 +203,15 @@ function buildIncidentVariants(blocking, warning, t) {
 
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUrl }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
+  // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
+  // (see handleGenerate). Requires a Router/AuthProvider ancestor — every test
+  // that mounts this page must wrap it in both, or mock `react-router-dom`'s
+  // `useNavigate` and `@/auth/AuthContext.jsx`'s `useAuth`.
+  const navigate = useNavigate();
+  const { selectedOrg } = useAuth();
   const [status, setStatus] = useState(decl.status);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
@@ -241,6 +249,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
   const { upload: uploadReceipt } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
+    token,
     apiBaseUrl,
     isActive: false,
   });
@@ -258,6 +267,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
+  // Distinguishes the missing-default-IAE-activity pre-flight guard (ETP-4975) from every
+  // other `genError` (IBAN required, generic backend failure) so only ITS banner gets the
+  // "Go to Organization" CTA — mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
+  const [missingIaeGuard, setMissingIaeGuard] = useState(false);
 
   // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
   // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
@@ -267,7 +280,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
   const [incidents, setIncidents] = useState(decl.incidents ?? { blocking: 0, warning: 0, items: [] });
 
   async function refreshIncidents() {
-    const fresh = await fetchDeclarationIncidents(decl.id, { apiBaseUrl });
+    const fresh = await fetchDeclarationIncidents(decl.id, { token, apiBaseUrl });
     setIncidents(fresh);
   }
 
@@ -277,12 +290,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
     if (!apiBaseUrl) return;
     refreshIncidents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decl.id, apiBaseUrl]);
+  }, [decl.id, token, apiBaseUrl]);
 
   async function handleCompute() {
     setComputing(true);
     try {
-      const res = await computeBoxes303(decl, { apiBaseUrl });
+      const res = await computeBoxes303(decl, { token, apiBaseUrl });
       applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     } finally {
       setComputing(false);
@@ -308,13 +321,40 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
 
   async function handleGenerate({ filename } = {}) {
     setGenError(null);
+    setMissingIaeGuard(false);
     setGenerating(true);
-    const result = await generate303File(decl, { apiBaseUrl, identChecks, manualOverrides, filename });
+    // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
+    // (see that file for the full rationale). "Generar fichero 303" hits the exact same
+    // backend AEAT303Report code path as "Marcar como Presentado" for the last period of
+    // the fiscal year, so without this it round-trips to an untranslated
+    // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
+    // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
+    // any fetch/network error (never blocks a generation that might otherwise succeed).
+    if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
+      try {
+        const iaeRes = await fetch(
+          `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
+          { headers: jsonHeaders() },
+        );
+        if (iaeRes.ok) {
+          const iaeRows = (await iaeRes.json())?.response?.data ?? [];
+          if (isMissingDefaultIaeActivity(iaeRows)) {
+            setMissingIaeGuard(true);
+            setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+            setGenerating(false);
+            return;
+          }
+        }
+      } catch (_) {
+        // fail open — see comment above.
+      }
+    }
+    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
     if (!result.ok) applyGenerateError(result, t, setGenError);
   }
 
-  useEffect(() => { fetchOrgIdent(apiBaseUrl, setOrgIdent); }, [apiBaseUrl]);
+  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
 
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
@@ -375,11 +415,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
     if (isSubmitted || !apiBaseUrl) return;
     if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
     manualDataSaveTimer.current = setTimeout(() => {
-      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { apiBaseUrl });
+      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });
     }, 800);
     return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identChecks, manualOverrides, isSubmitted, apiBaseUrl, decl.id]);
+  }, [identChecks, manualOverrides, isSubmitted, token, apiBaseUrl, decl.id]);
 
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
@@ -577,9 +617,24 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
           display: 'flex',
           alignItems: 'center',
           gap: 8,
+          flexWrap: 'wrap',
         }}>
           <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
           {genError}
+          {/* CTA only for the missing-default-IAE-activity guard — every other genError
+              (IBAN required, generic backend failure) has no dedicated settings screen to
+              send the user to. Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. */}
+          {missingIaeGuard && (
+            <button
+              type="button"
+              className="fm-btn fm-btn--primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}
+              onClick={() => navigate('/organization')}
+            >
+              <Landmark size={14} data-testid="Landmark__gen303GoToOrganization" />
+              {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
+            </button>
+          )}
         </div>
       )}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
@@ -634,6 +689,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
             (<AttachmentsTab
               tableName={FISCAL_DECL_TABLE}
               recordId={decl.id}
+              token={token}
               apiBaseUrl={apiBaseUrl}
               isActive={activeTab === 'receipt'}
               config={{ allowedMimeTypes: ['application/pdf'] }}
@@ -656,6 +712,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, apiBaseUr
           orgIdent={orgIdent}
           identChecks={identChecks}
           summary={summary}
+          token={token}
           apiBaseUrl={apiBaseUrl}
           onSuccess={(newStatus) => handleStatusChange(newStatus)}
           onAttached={handleAeatAttached}

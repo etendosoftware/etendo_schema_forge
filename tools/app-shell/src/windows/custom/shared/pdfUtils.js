@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
+import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
-// Relative, not `@/`: keeps this loadable from `node --test`, which cannot
-// resolve the Vite alias.
-import { jsonHeaders, readCredentialHeaders } from '../../../lib/sessionHeaders.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
@@ -108,42 +107,41 @@ function fmt(v) {
 // ---------------------------------------------------------------------------
 // Shared fetch helpers
 // ---------------------------------------------------------------------------
-export async function fetchJson(url) {
+export async function fetchJson(url, token) {
   const res = await fetch(url, {
     headers: jsonHeaders(),
-    credentials: 'include',
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   const d = await res.json();
   return d?.response?.data?.[0] ?? d?.response?.data ?? d;
 }
 
-export async function fetchAll(url) {
+export async function fetchAll(url, token) {
   const res = await fetch(url, {
     headers: jsonHeaders(),
-    credentials: 'include',
   });
   if (!res.ok) return [];
   const d = await res.json();
   return d?.response?.data ?? (Array.isArray(d) ? d : []);
 }
 
-export async function fetchOptionalJson(url) {
-  try { return await fetchJson(url); } catch { return null; }
+export async function fetchOptionalJson(url, token) {
+  try { return await fetchJson(url, token); } catch { return null; }
 }
 
-export async function fetchExchangeRate(fromCurrencyId, toCurrencyId, date, base) {
+export async function fetchExchangeRate(fromCurrencyId, toCurrencyId, date, base, token) {
   if (!fromCurrencyId || !toCurrencyId || !date) return null;
   if (fromCurrencyId === toCurrencyId) return null;
   return fetchOptionalJson(
     `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrencyId)}&toCurrency=${encodeURIComponent(toCurrencyId)}&date=${encodeURIComponent(date)}`,
+    token,
   );
 }
 
-export async function fetchLocationAddress(locationId, base) {
+export async function fetchLocationAddress(locationId, base, token) {
   if (!locationId) return null;
   try {
-    return await fetchJson(`${base}/contacts/locationAddress/${locationId}`);
+    return await fetchJson(`${base}/contacts/locationAddress/${locationId}`, token);
   } catch { return null; }
 }
 
@@ -158,13 +156,11 @@ export function blobToDataUrl(blob) {
   });
 }
 
-export async function fetchImageDataUrl(imageId, base) {
+export async function fetchImageDataUrl(imageId, base, token) {
   if (!imageId) return null;
   try {
-    // An image GET with no body: no Content-Type, so no needless CORS preflight.
     const res = await fetch(`${base}/image/${imageId}`, {
-      headers: readCredentialHeaders(),
-      credentials: 'include',
+      headers: jsonHeaders(),
     });
     if (!res.ok) return null;
     return await blobToDataUrl(await res.blob());
@@ -185,6 +181,33 @@ export function downloadBlobAsFile(blob, filename) {
 // ---------------------------------------------------------------------------
 // Shared jsreport renderer (A4, chrome-pdf, handlebars)
 // ---------------------------------------------------------------------------
+/**
+ * Same template, same helpers, same data as `renderPdf` — but asks jsreport for the
+ * compiled HTML instead of a PDF (`recipe: 'html'`).
+ *
+ * Needed by the list view's multi-document print: that flow concatenates one document's
+ * markup after another with page breaks and sends the whole thing to chrome-pdf once, so
+ * it needs HTML per document, not a PDF per document. Handlebars compilation stays on
+ * jsreport's side, so the browser bundle does not grow a template engine.
+ *
+ * @returns {Promise<string>} the rendered HTML
+ */
+export async function renderHtml(content, css, helpers, data) {
+  const res = await fetch('/jsreport/api/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      template: { content, engine: 'handlebars', recipe: 'html', helpers },
+      data: { css, ...data },
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`jsreport ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res.text();
+}
+
 export async function renderPdf(content, css, helpers, data) {
   const payload = {
     template: {
@@ -291,9 +314,22 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // ---------------------------------------------------------------------------
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
-async function fetchCachedBlob({ tableName, recordId, apiBaseUrl, isCancelled }) {
+/**
+ * The cached rendering of this record, or null when there is none or it no longer
+ * matches the record (ETP-4787 — see `lib/attachmentFreshness.js`). Returning null on
+ * staleness is all the invalidation the read side needs: the caller's next step is
+ * already "render fresh".
+ */
+async function fetchCachedBlob({ tableName, recordId, apiBaseUrl, recordUpdated, isCancelled }) {
   const main = await fetchMainAttachment({ tableName, recordId, apiBaseUrl });
   if (isCancelled() || !main?.id) return null;
+  if (isAttachmentStale(main, recordUpdated)) {
+    console.info(
+      `[pdf] ${tableName}/${recordId}: cached attachment is stale `
+      + `(written ${main.updatedAt || main.uploadedAt}, record updated ${recordUpdated}) — re-rendering`,
+    );
+    return null;
+  }
   return fetchAttachmentBlob({ attachmentId: main.id, apiBaseUrl });
 }
 
@@ -318,11 +354,12 @@ export function usePdfGenerator(recordId, apiBaseUrl, buildBlobFn, cacheConfig =
 
   const cacheTableName = cacheConfig?.tableName ?? null;
   const cacheStoreCondition = !!cacheConfig?.storeCondition;
+  // ETP-4787 — the record's own `updated`, so a cached PDF older than the last edit is
+  // ignored. Absent (window not passing it, or a backend without the `updated`
+  // exemption) means "cache as before", never "cache off".
+  const cacheRecordUpdated = cacheConfig?.recordUpdated ?? null;
 
   useEffect(() => {
-    // ETP-4576 — `token` was part of this gate, and under a cookie session it is
-    // structurally undefined, so no PDF was ever generated: the preview opened
-    // and jsreport was never called, with nothing logged.
     if (!recordId || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     let cancelled = false;
@@ -337,9 +374,19 @@ export function usePdfGenerator(recordId, apiBaseUrl, buildBlobFn, cacheConfig =
         if (cacheStoreCondition && cacheTableName) {
           blob = await fetchCachedBlob({
             tableName: cacheTableName, recordId, apiBaseUrl,
+            recordUpdated: cacheRecordUpdated,
             isCancelled: () => cancelled,
           });
           if (cancelled) return;
+        }
+        // Which of the two paths produced this PDF is invisible from the outside —
+        // both end up as the same pdfUrl — yet it is the difference between a render
+        // that cost a jsreport round-trip and one that did not. Staleness logs its own
+        // line inside fetchCachedBlob, so the three cases stay distinguishable.
+        if (blob) {
+          console.info(`[pdf] ${cacheTableName}/${recordId}: served from cached attachment (no re-render)`);
+        } else {
+          console.info(`[pdf] ${cacheTableName ?? 'no-cache'}/${recordId}: rendering fresh${cacheStoreCondition ? ' (cache miss)' : ' (cache disabled)'}`);
         }
         if (!blob) {
           blob = await buildRef.current(recordId, base);
@@ -364,7 +411,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, buildBlobFn, cacheConfig =
         prevUrlRef.current = null;
       }
     };
-  }, [recordId, apiBaseUrl, cacheTableName, cacheStoreCondition]);
+  }, [recordId, apiBaseUrl, cacheTableName, cacheStoreCondition, cacheRecordUpdated]);
 
   return { pdfUrl, pdfBlob, loading, error };
 }
