@@ -194,7 +194,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TARGET="${{ inputs.environment }}"
           elif [[ "${{ github.ref_name }}" == "develop" ]]; then
-            TARGET="staging"
+            # ETP-5028: develop now feeds the experimental infrastructure, which
+            # becomes the pre-production environment (staging has been retired).
+            TARGET="experimental"
           elif [[ "${{ github.ref_name }}" == "main" ]]; then
             TARGET="production"
           else
