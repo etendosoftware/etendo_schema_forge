@@ -17,7 +17,7 @@
 /** Reveals the internal Proof of Concept section in the side menu. */
 export const PROOF_OF_CONCEPT_MENU = 'proof-of-concept-menu';
 
-/** Enables the in-page WebMCP tools that connect browser agents to Etendo Go. */
+/** Enables the AI SDK Copilot agent integration; native browser WebMCP is deferred. */
 export const WEBMCP_AGENT_CHAT = 'webmcp-agent-chat';
 
 export const FLAG_DEFAULTS = Object.freeze({
