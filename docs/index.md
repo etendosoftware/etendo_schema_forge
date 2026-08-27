@@ -151,6 +151,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 
 | File | Description |
 |------|-------------|
+| [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md) | Recurring monthly billing, configurable resource limits and plan change (ETP-5045/5046/5047/5048/5049/5050/5051/5053) — supersedes the one-off checkout PRD for forward scope. **Draft for team validation** |
 | [plans/2026-08-03-etp-4315-attachment-preview-sync.md](plans/2026-08-03-etp-4315-attachment-preview-sync.md) | ETP-4315 — Purchase invoice/goods receipt attachment vs. preview sync: root cause, window inventory, reverse-plan rejection, forward-plan cost, open questions — **investigation in progress** |
 | [plans/completed/2026-03-12/process-and-report-pipeline.md](plans/completed/2026-03-12/process-and-report-pipeline.md) | Process & Report Pipeline — **All 4 phases complete** (processes, reports, form detection, unified entry point) |
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |

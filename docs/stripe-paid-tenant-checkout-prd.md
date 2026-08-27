@@ -1,5 +1,12 @@
 # PRD: Reusable Paid Tenant Checkout with Stripe
 
+> **Status: shipped, and superseded for forward scope.** This document is the record of the one-off
+> paid-tenant checkout delivered by ETP-4686 → ETP-4800 → ETP-4861 → ETP-4966, and its requirements
+> still bind — in particular the idempotency-across-restarts and reconcilability requirements, which
+> remain unmet because payment state is still held in memory. It does **not**
+> describe recurring billing, resource limits or plan change. For those, see
+> [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md).
+
 ## 1. Summary
 
 Replace the feature-flagged mock card payment used during productive tenant creation with a real Stripe-hosted Checkout integration, initially operating in Stripe Test Mode.
