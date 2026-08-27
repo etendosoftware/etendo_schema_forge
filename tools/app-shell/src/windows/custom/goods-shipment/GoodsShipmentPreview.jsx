@@ -247,6 +247,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           windowName="goods-shipment"
           token={token}
           pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
           data-testid="SendDocumentModal__5d626b" />
