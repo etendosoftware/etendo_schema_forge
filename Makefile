@@ -549,6 +549,9 @@ ai-bff-install:
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
 	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
+	@$(MAKE) -s ai-bff-install
+	@cd tools/ai-bff && npm run dev & bff_pid=$$!; \
+	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
 dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
