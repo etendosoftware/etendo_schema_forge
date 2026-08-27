@@ -25,7 +25,11 @@ import { getMissingRequiredDescriptors } from '@/lib/requiredFields.js';
  * correctness is irrelevant here; byte-stable determinism is the whole requirement.
  * Do not "simplify" this back to `.sort()` or forward to `.sort(localeCompare)`.
  */
-const byCodeUnit = (a, b) => (a < b ? -1 : (a > b ? 1 : 0));
+function byCodeUnit(a, b) {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+}
 
 /**
  * Stable, order-insensitive signature of a key collection. Used as a memo dependency
