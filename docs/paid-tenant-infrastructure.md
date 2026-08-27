@@ -133,6 +133,40 @@ One related subtlety: the badge is withheld, rather than shown as *Demo*, when t
 environment cannot be resolved at all (a session with no platform token cannot list environments).
 Labelling that case *Demo* would report a plan derived from a missing value.
 
+## 1.5 Which token the account-scoped endpoints accept
+
+`GET /sws/go/environments` and its siblings — `/sws/go/me`, `/sws/go/login`,
+`/sws/go/checkout/sessions`, `/sws/go/onboarding/draft`, the company-invitation endpoints — are
+*account*-scoped, not tenant-scoped. They accept two different credentials and resolve both to one
+`ETGO_ACCOUNT` (`EtendoGoJwtDalHelper.findActiveAccountByBearerToken`):
+
+1. the **account session token**, matched directly against `etgo_account.session_token`; and
+2. the **environment JWT** of the tenant the user is currently inside — the credential the browser
+   prefers, because it stays valid when another tab refreshes the account token.
+
+Resolving the second one is not a string comparison. `AD_User.email` is empty for every tenant
+onboarding creates (`InitialSetupUtility.insertUser` writes only `username`), so the account
+identity lives in the username — and onboarding names the *first* environment user after the plain
+account email and every later one `<accountEmail>+<clientName>`
+(`EtendoGoJwtSupport.buildClientUsername`). Recovering the account therefore means stripping that
+suffix, which is what `GoAccountResolver.findAccountByUsername` does, splitting on the **last** `+`
+so a plus-addressed account email survives intact.
+
+ETP-4985 is what happens when that step is skipped: an exact-match-only lookup resolves the first
+tenant and silently fails for every later one, so a perfectly valid, freshly issued token is
+answered with `401 Invalid or expired token`. The affected population is exactly the accounts that
+own more than one tenant — the ones the paid upgrade targets. Two consequences worth keeping in
+mind when touching this path:
+
+- **Stripping the suffix is not a relaxation of tenant isolation.** The `clientBelongsToAccountEmail`
+  check still runs afterwards: the client the JWT was issued for must be owned by the resolved
+  account. Suffix recovery decides *which* account is asking, never *what* it may reach.
+- **A failed lookup is not the same as an account with no tenants.** `/upgrade` treats an empty
+  environment list as "your first tenant is free" and a failed lookup as "checkout, but warn":
+  the convert-this-environment option cannot be rendered without the list, so the page says so and
+  offers a retry instead of quietly presenting a create-a-new-tenant form to someone who wanted to
+  upgrade the tenant they are in.
+
 ---
 
 # Part 2 — The feature flag architecture

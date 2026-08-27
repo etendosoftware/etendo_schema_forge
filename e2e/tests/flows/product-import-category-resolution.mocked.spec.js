@@ -88,12 +88,13 @@ test('imports a product and creates its missing category', async ({ page }) => {
     name: 'products-etp-4905.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      'codigo,nombre,nombrecategoria',
+      // ETP-4995: one `categoria` column replaces categoryCode/categoryName/category.
+      'codigo,nombre,categoria',
       'PROD-ETP-4905,Mesa de comedor,Muebles y Hogar',
     ].join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Category Name');
+  await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
   await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-review.png'),
     fullPage: true,
@@ -190,10 +191,11 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
     name: 'products-etp-4905-corner-cases.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      'codigo,nombre,precio,nombrecategoria',
+      // `precio` still maps — it stays an alias of the sales price column (ETP-4995).
+      'codigo,nombre,precio,categoria',
       'BAD-PRICE-4905,Producto precio inválido,not-a-number,',
       'AMBIG-4905,Producto categoría ambigua,,Servicios',
-      'VALID-4905,Producto válido,,,',
+      'VALID-4905,Producto válido,,',
     ].join('\n')),
   });
 

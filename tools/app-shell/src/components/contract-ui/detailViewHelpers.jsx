@@ -3,14 +3,23 @@
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
+import {Trash2} from 'lucide-react';
+import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import {computeBalance} from '@/lib/balanceTotals';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
+import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+// Re-exported (not defined here) so this file's own React-component-heavy import
+// graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
+// like DataTable.jsx's inline-toggle error handling — that only need this one
+// pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
+export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -391,25 +400,6 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
   }
 }
 
-export async function parseBackendErrorMessage(res) {
-  let raw;
-  try {
-    const data = await res.json();
-    // NEO Headless top-level format: { error: { message, status } }
-    if (data?.error?.message) raw = data.error.message;
-    else {
-      // Etendo JsonDataService format: { response: { error: { message } | string } }
-      const err = data?.response?.error;
-      if (err?.message) raw = err.message;
-      else if (typeof err === 'string') raw = err;
-      else if (data?.message) raw = data.message;
-    }
-  } catch {
-    // Ignore non-JSON error bodies.
-  }
-  return raw;
-}
-
 export function getDocumentIds(recordId) {
   return recordId ? [recordId] : [];
 }
@@ -494,6 +484,92 @@ export function getLinesContainerClassName(linesLayout, embedded) {
 
 export function getDeleteChildButtonLabel(deletingChildren, ui) {
   return deletingChildren ? ui('loading') : ui('delete');
+}
+
+/**
+ * Bulk-action toolbar for classic (non-inlineEditable) lines tables: delete +
+ * detail-process buttons for the currently selected rows.
+ *
+ * ETP-4972 — was the standalone `LinesBulkActionBar.jsx`, an inline
+ * `sticky top-0` bar (removed). Now rendered inside a viewport-fixed
+ * `SelectionToolbar`, reusing the primary tab's `selectionBarVisible`/
+ * `selectionBarClosing` lifecycle: this bar and the inlineEditable
+ * LinesSelectionBar/SelectionToolbar path are mutually exclusive by
+ * `linesLayout` (see isBulkDeleteBarVisible vs shouldShowInlineDeleteSelectionBar),
+ * so they never compete for the same state.
+ *
+ * The process-button styling uses the pill's own theme-invariant
+ * `--floating-toolbar-fg` token instead of `border-primary`/`text-primary`:
+ * `--primary` collapses to nearly the same dark navy as the pill background
+ * in light theme, which made those buttons unreadable.
+ */
+export function renderDetailBulkActionBar({
+  visible, closing, linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess, executeDetailProcessImpl,
+  detailProcessDeps, tMenu, deletingChildren, setDeletingChildren, confirmDelete, apiBaseUrl, token,
+  hook, selectedLine, setSelectedLine, setSelectedChildRows,
+}) {
+  return (
+    <SelectionToolbar
+      visible={visible}
+      closing={closing}
+      onClose={() => setSelectedChildRows([])}
+      closeTitle={ui('close')}
+      data-testid="SelectionToolbar__7c75ad">
+      <span className="text-sm font-medium">{ui('selected', {count: selectedChildRows.length})}</span>
+      <div className="flex items-center gap-2">
+        {detailProcesses.map(p => (
+          <button
+            key={p.name}
+            disabled={executingDetailProcess}
+            onClick={() => {
+              if (p.params?.some(param => !param.hidden)) {
+                setDetailParamDialogProcess({...p, _rows: [...selectedChildRows]});
+              } else {
+                executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--floating-toolbar-fg)/0.3)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+            data-testid="Button__detail-process"
+          >
+            {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
+          </button>
+        ))}
+        {/* ETP-4972 — icon-only, no visible label: applied Figma instance has
+            this button's Button Text property set to false. */}
+        {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
+          <button
+            disabled={deletingChildren}
+            title={getDeleteChildButtonLabel(deletingChildren, ui)}
+            aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
+            onClick={async () => {
+              if (!(await confirmDelete())) return;
+              setDeletingChildren(true);
+              try {
+                const {succeeded, failed} = await deleteSelectedChildRows({
+                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                });
+                for (const row of succeeded) {
+                  hook.handleDeleteChild(row.id);
+                  if (selectedLine?.id === row.id) setSelectedLine(null);
+                }
+                setSelectedChildRows([]);
+                toastBatchDeleteOutcome(ui, {succeeded, failed, total: selectedChildRows.length});
+              } catch (err) {
+                toast.error(err.message || ui('networkError'));
+              } finally {
+                setDeletingChildren(false);
+              }
+            }}
+            className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            data-testid="detail-bulk-delete-button"
+          >
+            <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
+          </button>
+        )}
+      </div>
+    </SelectionToolbar>
+  );
 }
 
 export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
@@ -622,7 +698,11 @@ export function buildInitialTabs(p) {
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
-    children: hook.children
+    children: hook.children,
+    // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
+    // so an `extraActions` entry can refresh the record after a side-effecting
+    // action (e.g. resend-invitation) the same way a `topbarExtra` component can.
+    onRefresh: () => hook.fetchById?.(data?.id),
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button
@@ -631,6 +711,7 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
             size="default"
             className={`${action.className || ''} ${saveBtnCls}`.trim()}
             onClick={action.onClick}
+            disabled={!!action.disabled}
             data-testid="Button__fa3275">
             {action.label}
           </Button>
@@ -1063,4 +1144,94 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
         ? parseFloat((gross / taxFactor).toFixed(6))
         : gross;
   }
+}
+
+/**
+ * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
+ * `saveBeforeProcesses` participate; every other window keeps the previous behavior
+ * (returns true immediately, no save). When the form has pending changes (`isDirty`,
+ * the same signal that drives the Save button), the changes are persisted silently
+ * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
+ * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
+ * violation, or a backend error — `handleSave` has already surfaced the error and returns
+ * a record without an id; this returns false so the caller aborts without opening the
+ * confirm modal, param dialog, or firing the process POST.
+ *
+ * Originally defined in DetailView.jsx; moved here (R1: no test was edited — DetailView.jsx
+ * re-exports it) because that file is growth-guarded (see .claude/hooks/check-detailview-growth.mjs).
+ *
+ * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
+ */
+export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
+  if (!saveBeforeProcesses || !isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
+/**
+ * ETP-4940: unconditional (no per-window opt-in — unlike maybeSaveBeforeProcess above)
+ * "save before confirm" gate for draftMode windows whose `draftMode.onConfirm` is a
+ * custom callback (e.g. dispatches a DOM event that opens the window's own confirm
+ * modal — sales-order, purchase-order, sales-quotation, goods-receipt, goods-shipment
+ * all do this). That callback fully bypasses `hook.handleSaveAndProcess` (which already
+ * calls `handleSave` first for the non-custom draftMode path), so without this gate a
+ * header edit made right before clicking Confirm — without clicking Save first — was
+ * silently discarded: the document confirmed with the previously-persisted value.
+ * No-op when there is nothing pending (`isDirty` false, the same signal that drives the
+ * Save Draft button). On save failure, `handleSave` has already surfaced the error
+ * (toast / field errors) — this returns false so the caller aborts instead of opening
+ * the confirm modal on stale data.
+ *
+ * @returns {Promise<boolean>} true → proceed to draftMode.onConfirm(); false → abort.
+ */
+export async function maybeSaveBeforeConfirm({ isDirty, handleSave }) {
+  if (!isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+/**
+ * ETP-4830 / ETP-5002 — keeps the `'new'` route's `editing` state honest.
+ *
+ * ETP-4830's need is real: `useEntity()` lives INSIDE `DetailView`, so navigating from an
+ * existing record straight to `'new'` (no stop at the list route) does not remount it, and
+ * a fully-populated OTHER record stays in `editing` on what the route considers a blank
+ * page. That record's real `id` then leaks into `data`, which is how the user window
+ * rendered its interactive role editor for a user that was never saved.
+ *
+ * But the predicate it shipped — `isNew && (!editing || editing.id)` — conflated "editing
+ * is stale" with "editing has an id", and that cost duplicated documents (ETP-5002).
+ * `isNew` stays true across the gap between `handleSave` writing the persisted record into
+ * `editing` and the `navigate()` to `/{window}/{id}` committing. On that render the guard
+ * fired MID-SAVE, wiping `editing` and opening a fresh creation session; the caller went on
+ * working and persisted a SECOND record. `sales-order-happy-path` created two orders,
+ * confirmed the first (`documentAction` 200) and left the UI showing the second, whose
+ * status pill legitimately still read "Borrador" — the backend was never wrong. The
+ * `assets` flow lost a required numeric the same way and got a 400 from `processAsset`.
+ *
+ * So the reset keys off ARRIVING at the `'new'` route, not off any render while sitting on
+ * it: only a `recordId` that actually changed can be carrying a record left over from
+ * before. Once we are already on `'new'`, an id appearing in `editing` is our own save
+ * landing and must be left alone. Tracked with a ref rather than `location.state.justSaved`
+ * because the navigation has not happened yet at the moment this has to decide.
+ *
+ * Lives here rather than inline in DetailView.jsx so the reasoning is testable on its own
+ * and does not add to that file's guarded line budget
+ * (`.claude/hooks/check-detailview-growth.mjs`).
+ */
+export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord }) {
+  if (!isNew) return false;
+  // No editing state at all — a genuinely fresh mount on the creation route.
+  if (!editing) return true;
+  // A persisted record we did NOT just create here: stale leftover, clear it.
+  return Boolean(arrivedFromAnotherRecord && editing.id);
+}
+
+/** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
+  const prevRecordIdRef = useRef(recordId);
+  useEffect(() => {
+    const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
+    prevRecordIdRef.current = recordId;
+    if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
+  }, [isNew, recordId, editing, handleNew]);
 }

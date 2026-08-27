@@ -173,3 +173,151 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ steps.target.outputs.cf_distribution }} \
             --paths "/*"
+
+  # The SPA job above only publishes the report *catalog* (dist/api/reports, a
+  # static S3 object). The report *renderer* is a separate ECS service whose
+  # artifacts/ are baked into its Docker image, and nothing rebuilt that image
+  # after 2026-04-16 — so for months every deployed report rendered its April
+  # template while the sidebar, fed by the always-fresh S3 catalog, showed the
+  # current contract. Nothing looked broken until someone compared a report
+  # against local. This job closes that gap: same trigger, same commit, one
+  # image per deploy.
+  deploy-report-server:
+    name: Build & deploy report-server image
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve deployment target
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ inputs.environment }}"
+          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+            TARGET="staging"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            TARGET="production"
+          else
+            TARGET="experimental"
+          fi
+          echo "env_label=$TARGET" >> $GITHUB_OUTPUT
+
+          case "$TARGET" in
+            production)   echo "ecs_cluster=${{ vars.ECS_CLUSTER_PRODUCTION }}" >> $GITHUB_OUTPUT ;;
+            staging)      echo "ecs_cluster=${{ vars.ECS_CLUSTER_STAGING }}" >> $GITHUB_OUTPUT ;;
+            *)            echo "ecs_cluster=${{ vars.ECS_CLUSTER_EXPERIMENTAL }}" >> $GITHUB_OUTPUT ;;
+          esac
+
+      # The AWS coordinates for report-server (ECR repository, ECS cluster and
+      # service) are repository variables, not literals, because they were never
+      # captured in code — the service was stood up by hand in April 2026 and
+      # only partially written down in docs/ops/cloudfront-alb-routing.md. Until
+      # someone with console access fills them in, this job reports loudly and
+      # exits green instead of failing every push and blocking the SPA deploy.
+      - name: Check report-server deployment is configured
+        id: configured
+        run: |
+          missing=""
+          [ -n "${{ vars.ECR_REPOSITORY_REPORT_SERVER }}" ] || missing="$missing ECR_REPOSITORY_REPORT_SERVER"
+          [ -n "${{ steps.target.outputs.ecs_cluster }}" ] || missing="$missing ECS_CLUSTER_${{ steps.target.outputs.env_label }}"
+          [ -n "${{ vars.ECS_SERVICE_REPORT_SERVER }}" ] || missing="$missing ECS_SERVICE_REPORT_SERVER"
+          [ -n "${{ secrets.CORE_REPO_TOKEN }}" ] || missing="$missing CORE_REPO_TOKEN(secret)"
+
+          if [ -n "$missing" ]; then
+            echo "::warning title=report-server not deployed::Skipped. Unset repository variables:$missing. Until these are set, server-rendered reports stay frozen on whatever image ECS currently runs — see docs/ops/cloudfront-alb-routing.md."
+            echo "ready=false" >> $GITHUB_OUTPUT
+          else
+            echo "ready=true" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.configured.outputs.ready == 'true'
+
+      # server.js, its package.json and the report descriptor live in
+      # schema_forge_core; artifacts/ and templates/ live here. Neither repo can
+      # build this image alone.
+      - name: Checkout schema_forge_core
+        if: steps.configured.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: etendosoftware/schema_forge_core
+          token: ${{ secrets.CORE_REPO_TOKEN }}
+          path: .schema_forge_core
+
+      - name: Assemble build context
+        if: steps.configured.outputs.ready == 'true'
+        run: CORE_DIR=.schema_forge_core ./scripts/assemble-report-server-context.sh .report-server-context --clean
+
+      - name: Build image
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          docker build \
+            -f .report-server-context/tools/report-server/Dockerfile \
+            -t report-server:${{ github.sha }} \
+            .report-server-context
+
+      # Boots the image right here and asserts every artifact inside it is
+      # byte-identical to this checkout. Runs BEFORE the push so a stale or
+      # non-booting image never reaches ECR — and it needs no NEO credentials.
+      - name: Verify image carries current artifacts
+        if: steps.configured.outputs.ready == 'true'
+        run: ./scripts/verify-report-server-image.sh report-server:${{ github.sha }}
+
+      - name: Configure AWS credentials
+        if: steps.configured.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        if: steps.configured.outputs.ready == 'true'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push image
+        if: steps.configured.outputs.ready == 'true'
+        id: push
+        run: |
+          REPO="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY_REPORT_SERVER }}"
+          docker tag report-server:${{ github.sha }} "$REPO:${{ github.sha }}"
+          docker tag report-server:${{ github.sha }} "$REPO:${{ steps.target.outputs.env_label }}"
+          docker push "$REPO:${{ github.sha }}"
+          docker push "$REPO:${{ steps.target.outputs.env_label }}"
+          echo "image=$REPO:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Deploying by immutable digest-style tag (the commit SHA) rather than
+      # re-pointing a mutable tag: a force-new-deployment on an unchanged task
+      # definition is exactly what made this service look "redeployed" while
+      # still serving April's artifacts.
+      - name: Register task definition revision and update service
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          CLUSTER="${{ steps.target.outputs.ecs_cluster }}"
+          SERVICE="${{ vars.ECS_SERVICE_REPORT_SERVER }}"
+
+          CURRENT_TD=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          echo "current task definition: $CURRENT_TD"
+
+          aws ecs describe-task-definition --task-definition "$CURRENT_TD" \
+            --query 'taskDefinition' --output json > td.json
+
+          jq --arg IMAGE "${{ steps.push.outputs.image }}" '
+            .containerDefinitions |= map(.image = $IMAGE)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+          ' td.json > td-new.json
+
+          NEW_TD=$(aws ecs register-task-definition --cli-input-json file://td-new.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "new task definition: $NEW_TD"
+
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --task-definition "$NEW_TD" >/dev/null
+
+          echo "waiting for the service to stabilise..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "report-server deployed: ${{ steps.push.outputs.image }}"

@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.12.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-08-03T18:55:28.096Z",
-  "checksum": "68ca7a8c50c51372",
+  "updatedAt": "2026-08-20T15:17:34.024Z",
+  "checksum": "026f6f93d2302e44",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -955,7 +955,7 @@
             "apiKey": "summaryLevel",
             "column": "IsSummary",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1067,7 +1067,7 @@
             "apiKey": "parentTaxRate",
             "column": "Parent_Tax_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1083,7 +1083,7 @@
             "apiKey": "oBSPTIEquivalentCharge",
             "column": "EM_OBSPTI_IsEquivalentCharge",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {

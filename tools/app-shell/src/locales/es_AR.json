@@ -16448,8 +16448,8 @@
     "Connections": {
       "label": "Conexiones"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Revenue this month": {
       "label": "Ingresos del mes"
@@ -16606,6 +16606,18 @@
     }
   },
   "genericLabels": {
+    "onboardingEmailVerifyResendCooldown": "Reenviar en {seconds} s",
+    "onboardingVerifyEmailTitle": "Confirmá tu correo",
+    "onboardingVerifyEmailSent": "Te enviamos un enlace para confirmar tu correo electrónico. Abrilo para empezar a configurar tu entorno.",
+    "onboardingVerifyEmailSentToAddress": "Enviamos un enlace a {email}. Abrilo para empezar a configurar tu entorno.",
+    "onboardingVerifyEmailHint": "¿No lo encontrás? Revisá tu carpeta de spam o volvé a enviar el enlace.",
+    "onboardingEmailVerifyResend": "Reenviar enlace",
+    "onboardingEmailVerifyResending": "Enviando…",
+    "onboardingEmailVerifyResent": "Enlace enviado. Revisá tu bandeja de entrada.",
+    "onboardingEmailVerifyResendFailed": "No pudimos enviar el enlace. Volvé a intentarlo en unos instantes.",
+    "onboardingEmailNotVerified": "Confirmá tu correo electrónico antes de crear tu entorno. Buscá en tu bandeja de entrada el enlace que te enviamos.",
+    "onboardingEmailVerifyInvalid": "Ese enlace de confirmación ya no es válido. Solicitá uno nuevo.",
+    "onboardingEmailVerifyFailed": "No pudimos confirmar tu correo electrónico. Volvé a intentarlo.",
     "computedFreshnessQueued": "Este valor se calcula en segundo plano y puede tardar unos minutos en actualizarse.",
     "computedFreshnessManual": "Este valor se calcula y se actualiza manualmente.",
     "computedFreshnessAria": "Valor calculado — puede estar desactualizado",
@@ -16666,9 +16678,17 @@
     "importErrorDependentKeyConflict": "El código derivado \"{key}\" entra en conflicto con el registro existente \"{existing}\".",
     "importErrorInvalidPrice": "El precio \"{value}\" no es un número válido.",
     "importErrorNoPriceList": "No hay ninguna lista de precios de venta configurada, así que no se pudo importar el precio. Importa el producto sin precio o configura primero una lista de precios de venta.",
+    "importErrorInvalidCodedValue": "El valor \"{value}\" no es válido para \"{field}\". Valores aceptados: {accepted}.",
+    "importErrorMissingContactName": "Esta fila no tiene razón social ni nombre y apellido, así que no se puede crear el contacto.",
+    "importErrorUomUnresolved": "No se pudo asociar la unidad de medida \"{uom}\" con un registro existente.",
+    "importErrorNoPurchasePriceList": "No hay ninguna lista de precios de compra configurada, así que no se pudo importar el precio de compra. Importa el producto sin precio de compra o configura primero una lista de precios de compra.",
+    "importFieldTaxIdType": "Tipo de identificación fiscal",
+    "importFieldContactType": "Tipo de contacto",
+    "importFieldProductType": "Tipo de producto",
     "balanced": "Cuadrado",
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
+    "saveMissingRequired": "Completa primero los campos obligatorios: {fields}",
     "journalUnbalancedCompleteBlocked": "El debe y el haber deben ser iguales y distintos de cero antes de completar",
     "totalCredit": "Total haber",
     "totalDebit": "Total debe",
@@ -16994,7 +17014,7 @@
     "commercialDescription": "Configuración comercial secundaria del producto.",
     "availability": "Disponibilidad",
     "stockManagement": "Gestión de stock",
-    "productStocked": "Almacenado",
+    "productStocked": "Almacenable",
     "productReturnable": "Retornable",
     "categoryConfiguration": "Configuración",
     "categoryDefault": "Valor por defecto",
@@ -17298,6 +17318,7 @@
     "sendModalNoEmail": "No se encontró email para este contacto",
     "sendModalSubject": "Asunto",
     "sendModalMessage": "Mensaje",
+    "sendModalDefaultMessage": "Le enviamos su {documentType} {documentNo}.",
     "sendModalMessagePlaceholder": "Añade un mensaje personal...",
     "sendModalSend": "Enviar",
     "sendModalSending": "Enviando...",
@@ -17798,6 +17819,7 @@
     "financeAccountsReconcileToast": "El panel de conciliación llega en T6 (ETP-4100)",
     "financeAccountsColAccount": "Cuenta",
     "financeAccountsColType": "Tipo",
+    "financeAccountsColIban": "IBAN",
     "financeAccountsColBalance": "Saldo",
     "financeAccountsColPending": "Por conciliar",
     "financeAccountsBalanceTitle": "Saldo",
@@ -17936,6 +17958,8 @@
     "cpAmountInAccount": "Importe en moneda de la cuenta",
     "cpConversionRateRequired": "Ingresá la tasa de conversión",
     "cpConversionRateInvalid": "La tasa de conversión debe ser distinta de 1",
+    "cpPsd2InactiveBody": "La conexión bancaria de esta cuenta está inactiva, por lo que no se puede ejecutar la transferencia. Reconectala desde la configuración de la cuenta para continuar.",
+    "cpPsd2InactiveAction": "Editar cuenta",
     "financeAccountTransferReceiveAmount": "La cuenta destino recibirá",
     "financeAccountTransferBankFee": "Aplicar comisión bancaria",
     "financeAccountTransferBankFeeFrom": "Comisión · origen",
@@ -18032,7 +18056,7 @@
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
     "financeReconcileFilterStatusPending": "Pendiente",
-    "financeReconcileFilterStatusSuggested": "Sugerido",
+    "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Diferencias",
     "financeReconcileFilterStatusReconciled": "Conciliadas",
@@ -18043,6 +18067,8 @@
     "financeReconcileFilterDocTypeReceipts": "Cobros",
     "financeReconcileFilterDocTypePayments": "Pagos",
     "financeReconcileFilterDocTypeSearchPlaceholder": "Buscar tipo de documento...",
+    "financeReconcileEmpty": "No se han encontrado movimientos",
+    "financeReconcileEmptyHint": "Probá con otro rango de fechas o cambiá el filtro de estado.",
     "financeReconcileSearchPlaceholder": "Buscar...",
     "financeReconcileColDate": "Fecha",
     "financeReconcileColDescription": "Descripción",
@@ -18051,7 +18077,7 @@
     "financeReconcileColPendingBalance": "Saldo pendiente",
     "financeReconcileColAmount": "Importe",
     "financeReconcileColSelect": "Seleccionar",
-    "financeReconcileBadgeSuggested": "Sugerida",
+    "financeReconcileBadgeSuggested": "Con sugerencia",
     "financeReconcileBadgeByRule": "Por regla",
     "financeReconcileBadgeDifference": "Diferencia",
     "financeReconcileBadgePending": "Pendiente",
@@ -18230,6 +18256,7 @@
     "financeAccountMovementsColDescription": "Descripción",
     "financeAccountMovementsColStatus": "Estado",
     "financeAccountMovementsColType": "Tipo",
+    "financeAccountMovementsColPosted": "Contabilizado",
     "financeAccountMovementsTypeBPD": "Cobro",
     "financeAccountMovementsTypeBPW": "Pago",
     "financeAccountMovementsTypeBF": "Comisión bancaria",
@@ -18323,7 +18350,7 @@
     "financeAccountStatementsManualSaving": "Guardando…",
     "financeAccountStatementsManualErrorName": "Introduce un nombre para el extracto",
     "financeAccountStatementsManualErrorLines": "Añade al menos una línea con importe",
-    "financeAccountStatementsManualErrorIncompleteLine": "Completa los campos obligatorios de cada línea (fecha, Reference No, salida y entrada)",
+    "financeAccountStatementsManualErrorIncompleteLine": "Completá los campos obligatorios de cada línea (fecha y un importe de salida o entrada)",
     "financeAccountStatementsManualDiscardTitle": "¿Descartar cambios?",
     "financeAccountStatementsManualDiscardBody": "Si cierras ahora perderás los datos no guardados de este extracto.",
     "financeAccountStatementsManualDiscardKeep": "Seguir editando",
@@ -18406,6 +18433,11 @@
     "financeAccountStatementsImportDropDrop": "Suelta el archivo para subirlo",
     "financeAccountStatementsImportDropHint": "Cuaderno 43, CSV o Excel · máx. 10 MB",
     "financeAccountStatementsImportErrorBody": "No podemos leer este archivo. Sube un Cuaderno 43 (.c43), un CSV o un Excel exportado desde tu banco.",
+    "financeAccountStatementsImportShowAll": "Mostrar todas",
+    "financeAccountStatementsImportShowLess": "Mostrar menos",
+    "financeAccountStatementsImportSuccessToastPartial": "Extracto '{name}' importado · {count} movimientos agregados · {discarded} línea/s omitidas por no tener importe",
+    "financeAccountStatementsImportDiscardedLines": "{count} línea/s no se van a importar porque no tienen importe.",
+    "financeAccountStatementsImportNoValidLines": "El archivo no tiene líneas válidas para importar.",
     "financeAccountStatementsImportKpiLines": "LÍNEAS",
     "financeAccountStatementsImportKpiCredits": "ABONOS",
     "financeAccountStatementsImportKpiDebits": "CARGOS",
@@ -18898,7 +18930,7 @@
     "onboardingResetEmailSentTitle": "Revisa tu correo",
     "onboardingResetEmailSentSubtitle": "Si existe una cuenta asociada a este email, enviamos un enlace a: {email}",
     "onboardingResetLinkValidity": "El enlace es válido por {duration}.",
-    "onboardingResetLinkDuration": "15 minutos",
+    "onboardingResetLinkDuration": "30 minutos",
     "onboardingResendPrompt": "¿No lo recibiste?",
     "onboardingResendLinkAction": "Reenviar enlace",
     "onboardingResetPasswordTitle": "Crear nueva contraseña",
@@ -19391,6 +19423,10 @@
     "backendError.matchRuleRegexComplex": "La expresión regular es demasiado compleja (posible backtracking catastrófico)",
     "backendError.matchRuleRegexInvalid": "Expresión regular no válida",
     "backendError.matchRulePriorityConflict": "Ya existe una regla con esta prioridad para el ámbito seleccionado",
+    "backendError.ibanAutoFillFailed": "No se pudo establecer el IBAN automáticamente ({iban}). Ingresalo manualmente en la cuenta financiera.",
+    "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
+    "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
+    "backendError.syncFetchFailed": "El banco reportó un error al sincronizar: {detail}.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",
@@ -20830,8 +20866,8 @@
     "Fiscal Configuration": {
       "label": "Configuración fiscal"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Smart Scan": {
       "label": "Escaneo inteligente"

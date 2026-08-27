@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { AlertTriangle } from 'lucide-react';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -9,6 +12,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
@@ -92,6 +96,58 @@ const PIS_POLL_INTERVAL_MS = 3000;
 // HTTP blip is NOT a bank-side failure — the previous code synthesized a literal 'failed' status
 // on any fetch error, which was indistinguishable from a real rejection.
 const PIS_MAX_TRANSPORT_ERRORS = 5;
+// ETP-4895: there is NO periodic poll any more, and no retry loop either — exactly ONE check runs
+// per event worth checking for.
+//
+// PisReturnCallbackServlet resolves the status and creates the payment server-side the moment the
+// bank redirects the browser back, mirroring Classic's own return_to servlet. So while the user is
+// still authenticating at their bank there is nothing to ask about (the payment does not exist yet
+// and its status cannot have moved), and by the time we DO ask, the answer is already settled
+// server-side. Checking on a clock through all of that was pure waste.
+//
+// A check therefore runs only when something actually happened: the bank redirected the popup back
+// (the "pis-completed" postMessage our callback page sends), or the user closed the popup. And it
+// runs once, not two or three times: if Salt Edge has not settled yet at that moment, retrying for
+// a few more seconds is not what saves the payment — PisDeferredPaymentService#reconcileAttemptsFor
+// does, by re-reading the stored status (which the PSD2 webhook and its refresh job keep current)
+// every time a payment list is opened. So a not-yet-resolutive answer costs the user a later look
+// at the invoice, never the payment itself.
+const PIS_MAX_CHECKS = 1;
+
+/**
+ * How long to wait before the next tick.
+ *
+ * A triggered check runs with no delay at all: by the time it is armed, the servlet has already
+ * resolved the payment, so the answer is a local read (see PIS_MAX_CHECKS). Once the check is spent
+ * this becomes the quiet, no-network watch of `popup.closed`. The single exception is a retry after
+ * a transport error — there the request itself failed, so giving the network a moment is the point.
+ */
+function nextCheckDelay(checkingNow, retryingAfterTransportError) {
+  if (!checkingNow) return PIS_WATCH_INTERVAL_MS;
+  return retryingAfterTransportError ? PIS_POLL_INTERVAL_MS : 0;
+}
+
+/**
+ * Folds one pisPaymentStatus answer into the wait state.
+ *
+ * A real answer spends the check, whatever it says: a resolutive status ends the wait, and a
+ * not-yet-settled one means holding the modal open buys nothing (see PIS_MAX_CHECKS). A transport
+ * failure taught us nothing, so it does NOT spend the check and is asked again — bounded by
+ * PIS_MAX_TRANSPORT_ERRORS so a server that is simply down cannot retry forever.
+ */
+function withCheckResult(prev, status) {
+  const elapsedMs = (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS;
+  if (!status) {
+    const transportErrors = (prev.transportErrors || 0) + 1;
+    const spent = transportErrors >= PIS_MAX_TRANSPORT_ERRORS;
+    return { ...prev, elapsedMs, transportErrors, attempt: spent ? (prev.attempt || 0) + 1 : (prev.attempt || 0) };
+  }
+  return { ...prev, status, elapsedMs, transportErrors: 0, attempt: (prev.attempt || 0) + 1 };
+}
+// Cadence of the quiet, no-network watch between checks: just re-reads the popup's own `.closed`
+// property (a local, synchronous DOM read) to notice if the user closes it — the only thing, short
+// of the bank redirecting it, that is worth waking up for.
+const PIS_WATCH_INTERVAL_MS = 2000;
 
 // Template search-keys (match the AD "Template List for Bank Payments" ref-list values).
 const PIS_TEMPLATE_SEPA = 'SEPA';
@@ -202,6 +258,10 @@ function mapAccounts(json) {
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
     bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
+    // ETP-4891: bank connection established and then switched off, link still alive. Distinct
+    // from "never connected" (both flags false), which keeps the ordinary manual flow. Absent on
+    // older backends → false, i.e. degrade to "don't block", never to a payment nobody can make.
+    bankReconnectable: !!a.bankReconnectable,
     // ETP-4797 write-off cap. Absent when unconfigured → null, read as "no limit".
     writeoffLimit: a.writeoffLimit ?? null,
   }));
@@ -229,17 +289,27 @@ function looksLikeTransfer(methodName) {
 }
 
 /**
+ * True when `method` IS the bank-transfer payment method.
+ *
+ * Prefers the backend's own `EM_PSD2_Is_Bank_Transfer` flag (ETP-4891) and falls back to the name
+ * regex only when the field is absent, i.e. on a backend predating that change. The flag matters
+ * because this predicate no longer just decides whether to OFFER the PIS section: it also decides
+ * whether a payment is BLOCKED outright, and a method merely named "Transferencia interna" must
+ * not block one.
+ */
+function isTransferMethod(method) {
+  return typeof method?.isBankTransfer === 'boolean'
+    ? method.isBankTransfer
+    : looksLikeTransfer(method?.name);
+}
+
+/**
  * Opens the Salt Edge SCA widget in a centered popup WINDOW (not a browser tab), matching the
- * Classic "Generate Bank Payment" behaviour. Passing window features (and a named target, so a
- * second confirm reuses the same window) makes the browser open a popup instead of a tab.
+ * Classic "Generate Bank Payment" behaviour — 70% of the screen, same as every other Salt Edge
+ * popup (see lib/popupWindow.js). A named target lets a second confirm reuse the same window.
  */
 function openPisPopup(url) {
-  const w = 500;
-  const h = 720;
-  const left = Math.max(0, (window.screen?.width || 1024) / 2 - w / 2);
-  const top = Math.max(0, (window.screen?.height || 768) / 2 - h / 2);
-  const features = `popup=yes,width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`;
-  return window.open(url, 'saltEdgePisWidget', features);
+  return openCenteredPopup(url, 'saltEdgePisWidget', 'popup=yes,resizable=yes,scrollbars=yes');
 }
 
 /**
@@ -258,7 +328,10 @@ function pisStatusKey(status) {
  * notice after repeated transport errors, otherwise the current status label. The lost-contact
  * notice deliberately does not claim the transfer failed — we simply cannot reach our own backend.
  */
-function pisWaitingLabel(pisPolling, pisWindowClosed, ui) {
+function pisWaitingLabel(pisPolling, pisWindowClosed, ui, checking) {
+  // "Verifying" only while a request is genuinely in flight, so the label never claims work that
+  // is not happening: while the user is at their bank nothing is running on our side.
+  if (checking) return ui('cpPisVerifying');
   if (pisWindowClosed) return ui('cpPisWindowClosed');
   if ((pisPolling.transportErrors || 0) >= PIS_MAX_TRANSPORT_ERRORS) return ui('cpPisConnectionLost');
   return ui(pisStatusKey(pisPolling.status));
@@ -270,7 +343,13 @@ function accountSupportsMethod(account, methodId) {
 
 function mapMethods(json) {
   const items = json?.items || json?.response?.data || [];
-  return items.map(m => ({ id: m.id, name: m.label || m._identifier || m.name }));
+  return items.map(m => ({
+    id: m.id, name: m.label || m._identifier || m.name,
+    // ETP-4891: authoritative EM_PSD2_Is_Bank_Transfer from the backend. `undefined` on an older
+    // backend, which is why every read goes through isTransferMethod() below rather than reading
+    // the field directly — the name heuristic stays as the fallback for those deployments only.
+    isBankTransfer: m.isBankTransfer,
+  }));
 }
 
 function mapSources(json) {
@@ -339,11 +418,28 @@ function extractSaveError(json, ui) {
     || ui('cpSaveFailed');
 }
 
+/**
+ * True when a confirm must be refused client-side regardless of the (already-disabled) Confirm
+ * button: a transfer aimed at an account whose PSD2 connection is inactive (ETP-4891). A draft
+ * save is never blocked — it moves no money. Extracted so `submit`'s own guard is a single-term
+ * `if`, keeping the function's cognitive complexity down (javascript:S3776).
+ */
+function blocksPsd2Confirm(psd2Blocked, process) {
+  return psd2Blocked && process === 'confirm';
+}
+
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+  // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
+  // states split three ways here, and only for Payment OUT (PIS never initiates inbound money):
+  //   connected            → pisEligible, full PIS form
+  //   reconnectable        → psd2Blocked, warning instead of the form (revive it from Editar Cuenta)
+  //   never connected      → neither, ordinary manual payment as before
+  const isTransfer = isTransferMethod(selectedMethodObj);
+  const psd2Blocked = dir === 'out' && isTransfer && !!selectedAccount?.bankReconnectable;
   const pisEligible = dir === 'out'
     && !!selectedAccount?.bankConnected
-    && looksLikeTransfer(selectedMethodObj?.name)
+    && isTransfer
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
   // rate — otherwise the backend would silently apply 1:1 and post the wrong ledger amount.
@@ -363,9 +459,15 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
     iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
   });
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling || !pisReady;
+  // Only Confirm is gated on psd2Blocked. Saving a DRAFT stays allowed on purpose: with Automatic
+  // Withdrawn off for transfers (ETP-4891) a draft moves no money and creates no bank transaction,
+  // so there is nothing to protect the user from — and losing the typed values would be worse.
+  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling
+    || !pisReady || psd2Blocked;
   const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
-  return { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel };
+  return {
+    pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
+  };
 }
 
 function Check({ checked, size = 18 }) {
@@ -618,6 +720,39 @@ function PisTextField({ label, value, onChange, placeholder, testid }) {
   );
 }
 
+/**
+ * Warning shown instead of the payment form when a transfer is aimed at an account whose PSD2
+ * connection was switched off (ETP-4891).
+ *
+ * A transfer is executed by the bank over PIS, so with the connection down there is no channel to
+ * execute it — the payment cannot proceed until the account is reconnected. The button navigates
+ * to the account's own window with `?edit=true`, which opens the Editar Cuenta modal where the
+ * Reconectar action lives; the payment modal is discarded in the process, which costs nothing
+ * because the payment was blocked anyway.
+ */
+function Psd2InactiveWarning({ ui, accountId }) {
+  const navigate = useNavigate();
+  return (
+    <InfoBanner
+      tone="warning"
+      icon={AlertTriangle}
+      data-testid="cp-psd2-inactive-warning"
+    >
+      <span>{ui('cpPsd2InactiveBody')}</span>
+      {accountId && (
+        <button
+          type="button"
+          onClick={() => navigate(`/financial-account/${accountId}?edit=true`)}
+          data-testid="cp-psd2-inactive-edit-account"
+          style={{ marginLeft: 8, padding: 0, border: 'none', background: 'none', outline: 'none', cursor: 'pointer', font: '600 14px/20px Inter', color: 'inherit', textDecoration: 'underline' }}
+        >
+          {ui('cpPsd2InactiveAction')}
+        </button>
+      )}
+    </InfoBanner>
+  );
+}
+
 // ─── PIS transfer section (Figma "Transferencia bancaria (PIS) – Salt Edge") ──
 // Purchase-invoice payments only: lets the user hand off a real bank transfer
 // to Salt Edge instead of just recording a manual payment. The template (from the AD
@@ -760,7 +895,7 @@ function PisTransferSection({
 /** Footer actions (cancel / save draft / confirm, or the PIS-waiting state) — extracted to keep
  * the main component's cognitive complexity down. */
 function PaymentModalFooter({
-  saving, pisPolling, pisWindowClosed, ui, requestClose, cancelPisWait, onReopenPis,
+  saving, pisPolling, pisWindowClosed, pisChecking, ui, requestClose, cancelPisWait, onReopenPis,
   saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
 }) {
   return (
@@ -769,8 +904,21 @@ function PaymentModalFooter({
       {pisPolling ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
-            {pisWaitingLabel(pisPolling, pisWindowClosed, ui)}
+            {/* Spinner only while a request is really in flight; the rest of the wait is the user
+                at their bank, where a static dot is the honest signal. */}
+            {pisChecking ? (
+              <svg
+                data-testid="cp-pis-spinner" className="animate-spin" style={{ flexShrink: 0, color: AMBER }}
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            ) : (
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
+            )}
+            {pisWaitingLabel(pisPolling, pisWindowClosed, ui, pisChecking)}
           </span>
           {pisWindowClosed && (
             <button
@@ -924,6 +1072,15 @@ export default function NewPaymentEntryModal({
   // from an early manual close, and we'd wrongly tell the user "you closed the window" right after
   // they successfully authorized.
   const pisReturnedRef = useRef(false);
+  // True once the idle watch has already reacted to the popup being closed (started a fresh check
+  // burst) for the CURRENT attempt. Without this, every idle-watch tick after the first would see
+  // the same already-closed popup and keep restarting bursts forever. Reset whenever a new popup
+  // is opened (confirm or reopen).
+  const pisCloseHandledRef = useRef(false);
+  // True only for the real duration of an in-flight pisPaymentStatus request — never padded, never
+  // held open artificially. It is what turns the static amber dot into a spinner, so the modal shows
+  // motion exactly when it is actually doing something and stops the instant the answer lands.
+  const [pisChecking, setPisChecking] = useState(false);
 
   // Org currency (ETP-4504) — a receipt may only leave an overpayment as customer credit when
   // the invoice is in the organization currency; a foreign-currency invoice must adjust instead.
@@ -1141,8 +1298,9 @@ export default function NewPaymentEntryModal({
 
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
-  const { pisEligible, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel } =
-    computePaymentModalState({
+  const {
+    pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
+  } = computePaymentModalState({
       dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId,
       accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber,
       pisSortCode, ui,
@@ -1187,22 +1345,26 @@ export default function NewPaymentEntryModal({
       if (event.data?.type === 'pis-completed') {
         pisReturnedRef.current = true;
         setPisWindowClosed(false);
-        // The user is back from the bank, so the status has almost certainly just moved. Re-arm
-        // the poll immediately (new object identity re-runs the effect, which schedules the next
-        // tick) instead of leaving the user waiting out the remainder of the 3s interval — this
-        // is what makes the modal close promptly on return.
-        setPisPolling(prev => (prev ? { ...prev, transportErrors: 0 } : prev));
+        // The user is back from the bank: this is the one moment worth asking about, so re-arm the
+        // single check (see PIS_MAX_CHECKS) rather than leaving this idle-watching.
+        setPisPolling(prev => (prev ? { ...prev, attempt: 0, transportErrors: 0 } : prev));
       }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA authorization. Re-runs on
-  // every status change (new object identity), scheduling the next poll or reacting to a resolved
-  // outcome inline. `pisOutcome` collapses the 8 ref-list statuses into success/failure/pending;
-  // pending covers unknown statuses too, so an unrecognized value keeps the transfer alive rather
-  // than reporting a failure that never happened.
+  // Runs ONE pisPaymentStatus check per event worth checking for — the bank redirected the popup
+  // back, or the user closed it (ETP-4895). No periodic poll and no retries: see PIS_MAX_CHECKS for
+  // why, now that PisReturnCallbackServlet resolves the status and creates the payment server-side
+  // on return. Otherwise this sits on a quiet, NO-NETWORK watch (PIS_WATCH_INTERVAL_MS) that only
+  // reads the popup's own `.closed` property, so a user spending ten minutes at their bank costs
+  // zero requests.
+  //
+  // Re-runs on every status/attempt change (new object identity), scheduling the next check or
+  // reacting to a resolved outcome inline. `pisOutcome` collapses the 8 ref-list statuses into
+  // success/failure/pending; pending covers unknown statuses too, so an unrecognized value keeps
+  // the transfer alive rather than reporting a failure that never happened.
   useEffect(() => {
     if (!pisPolling) return undefined;
     const outcome = pisOutcome(pisPolling.status);
@@ -1240,14 +1402,26 @@ export default function NewPaymentEntryModal({
       setPisPolling(null);
       return undefined;
     }
-    // Still running. Stop watching after PIS_MAX_POLL_MS — but only once the user has left the
-    // bank window. While it is still open they are mid-authentication (logging in, waiting for an
-    // SMS, approving on their phone), which legitimately takes minutes; timing out there would
-    // yank the bank's own window away and abort the transfer they are in the middle of
-    // authorizing. The countdown only applies to a transfer nobody is attending to any more.
+    // Still running. Two ways to stop waiting, neither of them a failure — the transfer can still
+    // complete at the bank, so the modal closes with an "in progress" notice and the bank window is
+    // left alone.
     //
-    // Giving up is NOT a failure either: the transfer can still complete at the bank, so the modal
-    // closes with an "in progress" notice instead of an error, and the bank window is left alone.
+    // (1) The user came back and our one check found the status not yet settled. There is nothing
+    // to gain by holding the modal open: retrying for a few seconds is not what rescues the
+    // payment, reconcileAttemptsFor on the next payment-list read is (see PIS_MAX_CHECKS). So close
+    // now and tell them it is in progress, instead of making them watch a spinner.
+    if (pisReturnedRef.current && (pisPolling.attempt || 0) >= PIS_MAX_CHECKS) {
+      pisPopupRef.current?.close();
+      pisPopupRef.current = null;
+      toast.info(ui('cpPisStillInProgress'));
+      onSaved?.(pisResultRef.current || {}, 'pending');
+      setPisPolling(null);
+      return undefined;
+    }
+    // (2) Nobody is attending to it any more. This countdown only applies once the user has left
+    // the bank window: while it is open they are mid-authentication (logging in, waiting for an
+    // SMS, approving on their phone), which legitimately takes minutes, and timing out there would
+    // yank the bank's own window away and abort the transfer they are authorizing.
     const bankWindowGone = !pisPopupRef.current || pisPopupRef.current.closed;
     if (bankWindowGone && (pisPolling.elapsedMs || 0) >= PIS_MAX_POLL_MS) {
       pisPopupRef.current = null;
@@ -1257,17 +1431,48 @@ export default function NewPaymentEntryModal({
       return undefined;
     }
 
+    const attempt = pisPolling.attempt || 0;
+    const checkingNow = attempt < PIS_MAX_CHECKS;
+    // A triggered check runs IMMEDIATELY. PIS_POLL_INTERVAL_MS was a polling cadence, and there is
+    // no polling left to pace: by the time "pis-completed" arrives, PisReturnCallbackServlet has
+    // already consulted Salt Edge, reconciled, and only then redirected the popup — so the answer
+    // is already in the database and handlePisPaymentStatus serves it as a local read (it skips
+    // re-consulting Salt Edge on a terminal status). Waiting 3s before asking left the user staring
+    // at "Iniciado" for three seconds after everything was done.
+    //
+    // The one case that still waits is a retry after a transport error: there the request itself
+    // failed, so giving the network a moment before asking again is the whole point.
+    const retryingAfterTransportError = (pisPolling.transportErrors || 0) > 0;
+    const delay = nextCheckDelay(checkingNow, retryingAfterTransportError);
+
     let cancelled = false;
     const timer = setTimeout(async () => {
-      // Surface whether the user closed the Salt Edge window before authorizing. We keep polling
+      // Surface whether the user closed the Salt Edge window before authorizing. We keep watching
       // regardless (the bank webhook can still confirm an authorization completed just before the
       // window was closed), but the UI offers to reopen it. window.closed is only reliable for
       // popups we opened ourselves, which is the case here. Skip this when the popup already
       // reached our own callback route (pisReturnedRef) — its auto-close on success would
       // otherwise look identical to the user bailing out early.
+      const nowClosed = !!pisPopupRef.current && pisPopupRef.current.closed && !pisReturnedRef.current;
       if (!cancelled) {
-        setPisWindowClosed(!!pisPopupRef.current && pisPopupRef.current.closed && !pisReturnedRef.current);
+        setPisWindowClosed(nowClosed);
       }
+
+      if (!checkingNow) {
+        // Idle-watch tick: purely local, no network call. Only worth waking a fresh burst up the
+        // FIRST time we notice the popup is closed (pisCloseHandledRef) — otherwise every tick
+        // after that would see the same already-closed popup and restart a burst forever.
+        if (cancelled) return;
+        if (nowClosed && !pisCloseHandledRef.current) {
+          pisCloseHandledRef.current = true;
+          setPisPolling(prev => (prev ? { ...prev, attempt: 0, elapsedMs: (prev.elapsedMs || 0) + PIS_WATCH_INTERVAL_MS } : prev));
+        } else {
+          setPisPolling(prev => (prev ? { ...prev, elapsedMs: (prev.elapsedMs || 0) + PIS_WATCH_INTERVAL_MS } : prev));
+        }
+        return;
+      }
+
+      if (!cancelled) setPisChecking(true);
       try {
         const res = await apiFetch(`/${specName}/header/${invoiceId}/action/pisPaymentStatus`, {
           method: 'POST', body: JSON.stringify({ pisPaymentId: pisPolling.pisPaymentId }),
@@ -1275,32 +1480,31 @@ export default function NewPaymentEntryModal({
         const json = await readJson(res);
         if (cancelled) return;
         // A transport-level problem (non-ok response → readJson null, or a thrown fetch) is NOT a
-        // bank rejection: keep the last known status and try again. Only after
-        // PIS_MAX_TRANSPORT_ERRORS consecutive failures do we tell the user we lost contact —
-        // still without claiming the transfer failed.
-        setPisPolling(prev => {
-          if (!prev) return prev;
-          const elapsedMs = (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS;
-          if (!json?.status) {
-            return { ...prev, elapsedMs, transportErrors: (prev.transportErrors || 0) + 1 };
-          }
-          return { ...prev, status: json.status, elapsedMs, transportErrors: 0 };
-        });
+        // bank rejection: keep the last known status and ask again. This is the ONE case that earns
+        // a retry — a failed request taught us nothing at all, unlike a successful one saying "not
+        // settled yet" — so it does not spend the check (`attempt` is left alone) until
+        // PIS_MAX_TRANSPORT_ERRORS consecutive failures, at which point we stop and tell the user we
+        // lost contact, still without claiming the transfer failed.
+        setPisPolling(prev => (prev ? withCheckResult(prev, json?.status) : prev));
       } catch {
         if (!cancelled) {
-          setPisPolling(prev => prev ? {
-            ...prev,
-            elapsedMs: (prev.elapsedMs || 0) + PIS_POLL_INTERVAL_MS,
-            transportErrors: (prev.transportErrors || 0) + 1,
-          } : prev);
+          setPisPolling(prev => (prev ? withCheckResult(prev, null) : prev));
         }
+      } finally {
+        // Cleared on every path, including the cancelled one — a stale spinner outliving its
+        // request would be exactly the fake progress this is meant to avoid.
+        setPisChecking(false);
       }
-    }, PIS_POLL_INTERVAL_MS);
-    return () => { cancelled = true; clearTimeout(timer); };
+    }, delay);
+    return () => { cancelled = true; setPisChecking(false); clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pisPolling]);
   // ── save / confirm ────────────────────────────────────────────────────────
   const submit = useCallback(async (process) => {
+    // The Confirm button is already disabled here, but a confirm must never depend on the button
+    // alone: it would hand a payment to a bank channel that is switched off (ETP-4891). A draft
+    // stays allowed — it moves no money.
+    if (blocksPsd2Confirm(psd2Blocked, process)) return;
     if (!date) { setDateInvalid(true); setError(ui('paymentDateRequired')); return; }
     if (!scheduleId) { setError(ui('paymentRequestFailed')); return; }
     if (!accountId) { setError(ui('paymentAccountRequired')); return; }
@@ -1351,8 +1555,11 @@ export default function NewPaymentEntryModal({
         pisResultRef.current = data;
         pisPopupRef.current = openPisPopup(data.pisPaymentUrl);
         pisReturnedRef.current = false;
+        pisCloseHandledRef.current = false;
         setPisWindowClosed(false);
-        setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
+        // Armed but idle (attempt already at the budget): the user is on their way to the bank, so
+        // there is nothing to ask yet. The first burst waits for them to come back.
+        setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested', attempt: PIS_MAX_CHECKS });
         return;
       }
       onSaved?.(data, process === 'confirm' ? 'deposited' : 'draft');
@@ -1362,7 +1569,8 @@ export default function NewPaymentEntryModal({
       setSaving(false);
     }
   }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved,
-    pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, isForeign, rate]);
+    pisEligible, psd2Blocked, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode,
+    isForeign, rate]);
 
   // Cancel a pending PIS wait: the payment was already processed to PPM (so the invoice shows as
   // paid), but the transfer was never authorized — so we ask the backend to reactivate + delete it
@@ -1408,8 +1616,10 @@ export default function NewPaymentEntryModal({
       pisResultRef.current = data;
       pisPopupRef.current = openPisPopup(data.pisPaymentUrl);
       pisReturnedRef.current = false;
-      // Track the NEW attempt: the old one was abandoned server-side and will never resolve.
-      setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
+      pisCloseHandledRef.current = false;
+      // Track the NEW attempt: the old one was abandoned server-side and will never resolve. Idle
+      // for the same reason as the first arm — the user has only just been sent to the bank again.
+      setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested', attempt: PIS_MAX_CHECKS });
     } catch {
       setError(ui('cpPisReopenFailed'));
     }
@@ -1482,8 +1692,11 @@ export default function NewPaymentEntryModal({
             </div>
           </div>
 
-          {/* 4 compact fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
+          {/* 4 compact fields — Método and Cuenta survive a psd2Blocked render (ETP-4891) so the
+              user can pick a different account and carry on paying without reopening the modal;
+              Importe and Fecha go with the rest of the form body. */}
+          <div style={{ display: 'grid', gridTemplateColumns: psd2Blocked ? '1fr 1fr' : '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
+            {!psd2Blocked && (<>
             <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
               <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 {(() => {
@@ -1508,6 +1721,7 @@ export default function NewPaymentEntryModal({
                 className={dateInvalid ? 'border-destructive focus-within:ring-destructive' : ''}
                 data-testid="DateField__7727b3" />
             </Field>
+            </>)}
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
               {loading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-method-select-skeleton" />
@@ -1540,6 +1754,13 @@ export default function NewPaymentEntryModal({
             </Field>
           </div>
 
+          {psd2Blocked && (
+            <div style={{ padding: '0 20px' }}>
+              <Psd2InactiveWarning ui={ui} accountId={accountId} data-testid="Psd2InactiveWarning__7727b3" />
+            </div>
+          )}
+
+          {!psd2Blocked && (<>
           {/* multi-currency conversion (ETP-4504) — only when invoice currency ≠ account currency */}
           <ConversionFields
             visible={isForeign}
@@ -1630,6 +1851,7 @@ export default function NewPaymentEntryModal({
               canLeaveCredit={canLeaveCredit}
               data-testid="ExcessBand__7727b3" />
           </div>
+          </>)}
           {error && <div style={{ padding: '0 20px', font: '500 12px/16px Inter', color: RED_FG }}>{error}</div>}
         </div>
 
@@ -1638,6 +1860,7 @@ export default function NewPaymentEntryModal({
           saving={saving}
           pisPolling={pisPolling}
           pisWindowClosed={pisWindowClosed}
+          pisChecking={pisChecking}
           ui={ui}
           requestClose={requestClose}
           cancelPisWait={cancelPisWait}

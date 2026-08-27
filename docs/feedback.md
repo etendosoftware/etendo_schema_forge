@@ -1123,6 +1123,43 @@ run (2 passed, 1 flaky, 0 failed).
 
 ---
 
+## Latent CÓD. column bug still present in 3 shipment/return PDFs (2026-08-21, ETP-4941)
+
+**Status:** open, deferred. Out of scope for ETP-4941 — flagged for a follow-up ticket.
+
+**Component:** `useShipmentPdf.js` (goods-shipment), `useReturnToVendorPdf.js`
+(return-to-vendor-shipment), `useReturnReceiptPdf.js` (return-material-receipt).
+
+**Symptom:** ETP-4941 fixed the printable PDF's "CÓD." (product code) column for Sales Quotation,
+Sales Order, Sales Invoice, and Purchase Order, which were showing the line's 1-based position number
+instead of the product's SKU whenever the product had no search key. The same bug — same root
+cause, same fallback expression shape — is still present, unchanged, in these three other document
+PDFs, each of which builds its line's `productCode` independently instead of going through the
+shared helper:
+
+```js
+productCode: l.productCode || l['product$_value'] || String(idx + 1),
+```
+
+**Root cause:** each of these three hooks predates the shared `resolveProductCode(line)` helper added
+in `tools/app-shell/src/windows/custom/shared/documentPdf.js` by ETP-4941, and none of them were
+migrated to it — they still inline the old no-SKU fallback (`String(idx + 1)`), so a product with no
+SKU on a goods shipment, return-to-vendor shipment, or return-material-receipt still prints the
+line's position number where the SKU should be, indistinguishable from a real code.
+
+**Fix:** not applied here — deliberately out of scope for ETP-4941 (different tickets, different
+windows). The correct fix is the same pattern already shipped: replace the inline expression above
+with `resolveProductCode(l)` imported from `documentPdf.js` in each of the three files, so the
+fallback becomes `'—'` instead of the line position, matching the four documents already fixed.
+
+**Lesson:** when a shared helper is extracted to fix a bug (`resolveProductCode`), grep for the
+literal buggy pattern being replaced (`String(idx + 1)` fallback for a product-code column) across
+the whole `windows/custom/**` tree before closing the ticket — sibling files with the identical
+bug, one call short of using the new helper, are easy to miss when the fix only touches the windows
+named in the ticket's acceptance criteria.
+
+---
+
 ## Mocking the Component Under Test (Invitation SSO Dead End)
 
 **Component:** `InviteAcceptancePage.vitest.jsx` — consumer test for the shared `LoginStep` (ETP-4960, follow-up to ETP-4958)
@@ -1145,3 +1182,21 @@ The stub always invoked `onAuthenticated`, so the test asserted the page's react
 **Fix:** render the real `LoginStep` / `RegisterStep` and stub only genuine external boundaries — the i18n dictionaries, the SSO provider SDK (no Google Identity script exists in jsdom), and `fetch`. Verified by reverting the ETP-4958 fix in the pinned core build and confirming the SSO test fails.
 
 **Lesson:** mock the *boundary*, never the collaborator whose contract the test exists to verify. A stub that hard-codes the happy path turns a consumer test into a test of the stub. The tell is a mock factory that reimplements behaviour (branching, callbacks, state) rather than returning canned data — if you find yourself writing an `onSubmit` handler inside `vi.mock`, the seam is in the wrong place.
+
+---
+
+## [2026-08-25] ETP-4717 — Unverified "the contract already exists" claim shipped a broken Enviar action (`return-to-vendor-shipment`)
+
+**Component:** `tools/app-shell/src/components/contract-ui/documentEmailSend.js` (`resolveDocumentEmailContract`) vs `com.etendoerp.go`'s `ReturnToVendorSendEmailContract`.
+
+**Symptom:** QA (Emilio Polliotti) rejected ETP-4717 (a prior QA cycle in the same epic) because the "Enviar" action on the "Return to Vendor Shipment" window failed with "Unknown email contract" every time it was clicked, from both the grid row-hover quick action and the row-preview panel.
+
+**Root cause:** the frontend derives the document-email contract name generically as `${windowName}-send` (`resolveDocumentEmailContract`), i.e. `return-to-vendor-shipment-send` for this window's spec name. The backend only registers `ReturnToVendorSendEmailContract.NAME = "return-to-vendor-send"` — no `-shipment` segment. This is a naming mismatch, not a missing feature: the backend contract exists, it's just named differently than the frontend's convention expects.
+
+**Why it shipped:** ETP-4718 (the ticket that wired the "Enviar" action for this window) documented in `docs/generated-custom-windows/return-to-vendor-shipment.md` that the backend contract "already existed in `com.etendoerp.go`" — but that claim was written from the contract's *existence*, not from actually calling it end-to-end with the frontend's derived name. Nobody diffed `resolveDocumentEmailContract`'s output against `ReturnToVendorSendEmailContract.NAME` before shipping.
+
+**Also worth flagging:** `window.sendDocument` auto-enables for any window whose header exposes `documentNo` (per `docs/decisions-reference.md`) — so a window can silently gain a live "Enviar" affordance the moment ANY change (in this case ETP-4718's preview-panel work) makes the eligibility heuristic true, with no explicit decision recorded in `decisions.json`. `return-to-vendor-shipment` never explicitly declared `sendDocument` either way until this ticket.
+
+**Fix (this ticket, ETP-4717):** QA asked to remove the action from this window rather than reconcile the contract name (out of scope). Fixed by re-declaring `decisions.json → window.sendDocument: { enabled: false }` (regenerated via `make regen`) plus removing the window-specific `emailAction`/`isSendable`/`onEmail` wiring that ETP-4718 had added directly in `index.jsx` and `ReturnToVendorShipmentPreview.jsx` (that wiring bypassed the generic `sendDocument` gate entirely on the grid surface — `documentPreview: true` is hardcoded in the shared `ReturnWindowShell.jsx`, so without the `sendDocument` prop threaded in, the row-hover icon would have kept showing regardless of the decisions.json flag). Full detail: `docs/generated-custom-windows/return-to-vendor-shipment.md` — Gap assessment, ETP-4717 bullet.
+
+**Recommendation:** if the backend contract name is ever reconciled (rename `ReturnToVendorSendEmailContract.NAME` to `return-to-vendor-shipment-send`, or special-case the frontend's derivation), re-enable via the same `decisions.json` flag and re-add the `onEmail`/`emailAction` wiring — do not assume "the backend contract exists" is sufficient evidence again; call it end-to-end (or at minimum diff the derived name against the registered `NAME` constant) before flipping `sendDocument.enabled` back to `true`/removing it.

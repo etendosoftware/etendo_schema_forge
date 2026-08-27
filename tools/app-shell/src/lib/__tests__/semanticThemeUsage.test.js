@@ -20,6 +20,7 @@ const COLOR_LITERAL_EXCEPTIONS = new Map([
   ['windows/custom/product/ProductSidebar.jsx', 'warehouse data-series identity'],
   ['windows/custom/shared/documentPdf.js', 'PDF document contract'],
   ['windows/custom/shared/pdfUtils.js', 'PDF document contract'],
+  ['windows/custom/user/UserDebugPanel.jsx', 'developer diagnostic palette'],
   // Landed via an unrelated epic branch after this enforcement test was written —
   // not yet migrated. Tracked as a follow-up, not in scope for the branch that
   // brought this test in.
@@ -39,16 +40,6 @@ const DATA_COLOR_LITERALS = new Map([
   // purple). Proposed: --status-corrective-bg/-fg, pending design confirmation.
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
-  ])],
-  // Support chat "talk to a human" escalate CTA: a deliberate brand-navy matching a specific
-  // reference design, with no existing semantic precedent (checked --primary/--foreground —
-  // --primary collapses to near-black in light mode, not this blue). See the comment above
-  // .sc-escalate-btn in support-chat.css for the same rationale.
-  // Matched fragments are truncated by COLOR_LITERAL's `\brgba?\(\s*\d` (captures only up to
-  // the first digit, e.g. "rgba(3" for "rgba(32,36,82,.32)") — both box-shadow values below
-  // happen to share that same first digit, so one "rgba(3" entry covers both occurrences.
-  ['components/support/support-chat.css', new Set([
-    '#202452', '#2c3168', 'rgba(3',
   ])],
   // Model-tag colors for the fiscal models list (303 blue / 349 purple), no
   // existing semantic precedent — same rationale as ReversedInvoicesPanel above.

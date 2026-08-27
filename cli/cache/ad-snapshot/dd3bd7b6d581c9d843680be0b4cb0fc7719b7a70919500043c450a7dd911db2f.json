@@ -2,7 +2,7 @@
   "sql": "SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID AND rlt_es.AD_Language = 'es_ES' WHERE rl.AD_Reference_ID = ANY($1) AND rl.IsActive = 'Y' ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE \"C\", rl.Value COLLATE \"C\", rl.AD_Reference_ID COLLATE \"C\", rl.AD_Ref_List_ID COLLATE \"C\"",
   "versions": {
     "09137cda8a4710d11b3c7b8733f2f71bb965ecd27a302829e4ddfa8900e06af4": {
-      "checksum": "8a438d617ecfe822293c442f55434f996b1dd133131d9f1cd71362313dc11c9a",
+      "checksum": "c1627c1c152d5d0aa087820756f123991fe340976640e007b4618ff5faa91166",
       "params": [
         [
           "150",
@@ -69,6 +69,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
@@ -1654,7 +1660,7 @@
       ]
     },
     "292dffcc06f348c4ec0075d2f5a2480c447ec36ea06e3e8b7460e3e1d5ce8fed": {
-      "checksum": "41ff2484781c99b2c071d97152c5e13124c1f2b23e42f9408204ce480736d05d",
+      "checksum": "7f503d734cab961b3dcd34d15fd7a1e92a2595291c1d1c3fd6b47e0376568f57",
       "params": [
         [
           "131",
@@ -1784,7 +1790,7 @@
         {
           "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
           "name": "Payment Error",
-          "name_es": null,
+          "name_es": "Payment Error",
           "value": "ETGOERR"
         },
         {
@@ -2120,7 +2126,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": null,
+          "name_es": "Coste No Calculado",
           "value": "NC"
         },
         {
@@ -2144,7 +2150,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": null,
+          "name_es": "Deshabilitado Para Background",
           "value": "d"
         },
         {
@@ -2156,13 +2162,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": null,
+          "name_es": "Documento Deshabilitado",
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": null,
+          "name_es": "Documento Bloqueado",
           "value": "L"
         },
         {
@@ -2192,13 +2198,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": null,
+          "name_es": "Error",
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": null,
+          "name_es": "Error, No hay coste",
           "value": "C"
         },
         {
@@ -2336,7 +2342,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": null,
+          "name_es": "Cuenta No Válida",
           "value": "i"
         },
         {
@@ -2444,19 +2450,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": null,
+          "name_es": "Sin Fecha Contable",
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": null,
+          "name_es": "Sin tipo de Documento",
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": null,
+          "name_es": "Sin PO Relacionada",
           "value": "NO"
         },
         {
@@ -2468,13 +2474,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": null,
+          "name_es": "No Balanceado",
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": null,
+          "name_es": "No Convertible (no hay rango)",
           "value": "c"
         },
         {
@@ -2588,7 +2594,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": null,
+          "name_es": "Pendiente de Actualización",
           "value": "l"
         },
         {
@@ -2600,7 +2606,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": null,
+          "name_es": "Periodo Cerrado",
           "value": "p"
         },
         {
@@ -2618,7 +2624,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": null,
+          "name_es": "Contabilidad Preparada",
           "value": "y"
         },
         {
@@ -2630,7 +2636,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": null,
+          "name_es": "Contabilizado",
           "value": "Y"
         },
         {
@@ -2894,7 +2900,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": null,
+          "name_es": "Tabla Deshabilitada",
           "value": "T"
         },
         {
@@ -2936,7 +2942,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": null,
+          "name_es": "No Contabilizado",
           "value": "N"
         },
         {
@@ -4423,7 +4429,7 @@
       ]
     },
     "518bc71f3c5600c82be1f355a91bf2aa0a5ee50531e8abd1f9f73ba244952ddb": {
-      "checksum": "dbc923f5a0ee8156b7fdf83db3a3a4ef32e91103ff261cdc1b82aaa25b1e37c2",
+      "checksum": "7401584bcbb08b5338a2164a3a46792fc03908c6d59159bb3a9fe3ba17412709",
       "params": [
         [
           "131",
@@ -4550,6 +4556,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "882685CC8C44444BB088A582991D804E",
@@ -5866,7 +5878,7 @@
       ]
     },
     "5fc1dff9a36777660f285eb3aab1b7ab1d980d2bba012e02e3d5958df4193011": {
-      "checksum": "1ec5b9f771636e101336241b2d35233af479b9ae0bade7389f9e75b8a49aed7b",
+      "checksum": "6c257cd90e2e4d0b3266ac2e27f38b4a9d03e662c2c8c49dce1636a0f233b274",
       "params": [
         [
           "575BCB88A4694C27BC013DE9C73E6FE7",
@@ -5927,6 +5939,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "D7CF99470E8B49B59D7486947F01D7A7",
@@ -6213,7 +6231,7 @@
       ]
     },
     "620d7faf94e5ec718ab4928e107a9649c5aedc52a1ba4341c3719b375660a75d": {
-      "checksum": "138de485955fbb83df2005faf92c4ba0a309278c4bee2d13e1c1cbabba480f6f",
+      "checksum": "73ad176ed96469ff1344c57fba032f0b7cc755e34478a802fbe365551856caf1",
       "params": [
         [
           "575BCB88A4694C27BC013DE9C73E6FE7",
@@ -6276,6 +6294,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "D5483E7D91134499B42BBD963BC2F9CC",
@@ -7205,7 +7229,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "eabdef031d6ff8fa8ba35a3fe984cfa75824555c1803d96f360ae1deb863b236",
+      "checksum": "b05b12731d9755b263651256c4d54f1fa048a44aa3d7f1067ef413da23196893",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -7366,6 +7390,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "183",
@@ -9314,7 +9344,7 @@
       ]
     },
     "98b34d1d4444abfaf694f634fec63ba7fb32b30b631a1100720b8f0bba71a009": {
-      "checksum": "8a438d617ecfe822293c442f55434f996b1dd133131d9f1cd71362313dc11c9a",
+      "checksum": "c1627c1c152d5d0aa087820756f123991fe340976640e007b4618ff5faa91166",
       "params": [
         [
           "FF80818130217A350130218D802B0011",
@@ -9381,6 +9411,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "8CF7102AA0944DF9938A84EB20452018",
@@ -15831,7 +15867,7 @@
       ]
     },
     "f8bea71ef840d358f36d37f7e68a2edc6774ea79a0d71a13f99479c675e7266d": {
-      "checksum": "de89351d5ba7f09cb938ad2f277da5da99f868e9cfe5547c6602dcd60e5d9642",
+      "checksum": "76e3788f302e1624a712b259f4122ebc50f2b03d6a862a36ca4146fa0d39681f",
       "params": [
         [
           "D7CF99470E8B49B59D7486947F01D7A7",
@@ -15915,6 +15951,12 @@
           "name": "Payment Cleared",
           "name_es": "Conciliado",
           "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
         },
         {
           "ad_reference_id": "B22E500A17BA479AA27E5A5AD945C4B8",

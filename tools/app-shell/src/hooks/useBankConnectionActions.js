@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
 
 const BASE_PATH = '/sws/neo/financial-account-bank-connection';
 
@@ -29,7 +30,7 @@ function buildQuery(params) {
  *   without completing the bank authentication
  */
 export async function launchSaltEdgePopup(getConnectUrl) {
-  const popup = openCenteredPopup();
+  const popup = openCenteredPopup('', 'bank-connection-connect');
   if (!popup) {
     throw new Error('POPUP_BLOCKED');
   }
@@ -46,14 +47,6 @@ export async function launchSaltEdgePopup(getConnectUrl) {
   }
   popup.location.href = url;
   return waitForConnection(popup);
-}
-
-function openCenteredPopup() {
-  const w = Math.floor(window.screen.width * 0.7);
-  const h = Math.floor(window.screen.height * 0.7);
-  const left = Math.floor((window.screen.width - w) / 2);
-  const top = Math.floor((window.screen.height - h) / 2);
-  return window.open('', 'bank-connection-connect', `width=${w},height=${h},left=${left},top=${top}`);
 }
 
 function waitForConnection(popup) {

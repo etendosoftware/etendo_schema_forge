@@ -96,7 +96,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useQuotationPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: quotation?.documentStatus !== 'DR' };
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: quotation?.documentStatus !== 'DR', recordUpdated: quotation?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
     quotation?.id,
     apiBaseUrl,
@@ -162,6 +162,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         storeCondition: true,
         sourceBlob: pdfBlob,
         autoFetch: true,
+        recordUpdated: quotation?.updated ?? null,
         documentId: quotation.id,
         tableName: 'C_Order',
         token,
@@ -237,6 +238,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
           windowName={windowName}
           token={token}
           pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
           data-testid="SendDocumentModal__7eb018" />

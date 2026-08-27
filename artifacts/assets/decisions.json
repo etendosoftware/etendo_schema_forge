@@ -313,6 +313,7 @@
     },
     "assetAmortization": {
       "name": "amortizationLine",
+      "javaQualifier": "amortizationLineHandler",
       "fields": {
         "sEQNoAsset": {
           "visibility": "readOnly",

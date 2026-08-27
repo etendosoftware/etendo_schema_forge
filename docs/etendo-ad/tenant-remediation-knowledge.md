@@ -391,6 +391,80 @@
   provisioning-gap taxonomy (A=accounting, B=org tree, C=period, D=legal entity, E=session,
   F=default customer/org info). Used `@gap: G1` for R14 and noted it in the map §4. Future
   payment-config gaps continue the `G` series.
+- **2026-08-21 — `Automatic Withdrawn` on the bank-transfer method is an invariant, not a
+  connection-state consequence (ETP-4891, `@gap: G4`, R24).** Etendo GO pays transfers over PIS: the
+  `FIN_Finacc_Transaction` is created by the Salt Edge callback once the bank reports execution, so
+  auto-withdrawing on processing duplicates the movement AND destroys `PPM`'s meaning of "confirmed
+  but not withdrawn" (what the payment windows render as "Pago en progreso"). ETP-4406 patched this
+  dynamically in `FinancialAccountBankConnectionHandler` — clear on connect, **restore to `'Y'` on a
+  permanent disconnect** — which left two holes: a connected-then-disconnected account drifted back
+  to `'Y'`, and an account never connected was never touched. Both call sites and the 3 private
+  helpers are now deleted; the flag is off for the method, always. **Apply:** when a flag's correct
+  value does not actually depend on the state being tracked, do not track it — the inverse operation
+  is where the drift lives. Preventive front is dataset-only (`FIN_PAYMENTMETHOD.xml` +
+  `FIN_FINACC_PAYMENTMETHOD.xml`, both already whitelisted in `OnboardingDatasetDefinition`), plus a
+  runtime guard in `FinancialAccountSupport.createLink` so a legacy template still on `'Y'` cannot
+  propagate it to a new link. Only Payment OUT — `automatic_deposit` is untouched, PIS initiates
+  outbound transfers only. No `ONBOARDING_PROVISIONED_THROUGH` bump (same reasoning as G1/R14).
+- **2026-08-21 — Live sweep behind R24: the flag predicate is now sufficient on its own.** Counting
+  by the R14/R15 predicate: `fin_paymentmethod` had **45 rows in `'Y'` across 44 tenants and ZERO in
+  `'N'`** (i.e. every tenant's template was wrong), `fin_finacc_paymentmethod` 61 in `'Y'` / 8 in
+  `'N'` across 2 tenants (exactly the tenants that had connected an account from the SPA, i.e. the
+  old connect-time clear). Separately verified that NO method is matched by the name arm alone
+  (`name IN (...) AND em_psd2_is_bank_transfer <> 'Y'` → 0 rows), so R15 has normalised the flag
+  fleet-wide and the name fallback in R24 is belt-and-braces for a tenant that has not had R15
+  applied. **Apply:** keep the name arm anyway — it costs nothing and the four copies of this
+  predicate (R14, R15, R24, `isBankTransferMethod`) must stay in lockstep. Validated on GOClient in a
+  rolled-back tx: `@check` 15 rows → `@apply` 1 template + 14 links → `@check` 0.
+- **2026-08-21 — A name regex is fine for OFFERING a feature and wrong for BLOCKING one.** The
+  payment modal decided "is this a transfer?" with `/transfer|transferencia/i` on the method label.
+  Harmless while it only added an optional PIS section; once the same predicate started blocking a
+  payment (transfer + inactive PSD2 connection → cannot pay), a method called "Transferencia interna"
+  would have blocked a legitimate payment. `invoicePaymentMethods` now emits `isBankTransfer` from
+  `EM_PSD2_Is_Bank_Transfer` and the regex survives only as a fallback for older backends. **Apply:**
+  when tightening a heuristic-gated feature into a hard gate, re-derive the gate from real data first
+  — the failure mode inverts from "missing nicety" to "blocked user".
+
+---
+
+## Imported Bank Statement "Estado" stuck at Borrador after PSD2 sync — R25 (L1)
+
+- **2026-08-24 — `EM_ETGO_STATUS` only ever got recomputed by CODE WE CONTROL, never by a header-level
+  observer.** `BankStatementAggregates.apply()` derives the SPA's "Estado" column from `(Processed,
+  lineCount, matchedCount)`, but until today it was only ever CALLED from `BankStatementsHandler`'s
+  own create/process/reactivate flows and from `BankStatementLineAggregateHandler` (fires on LINE
+  changes). A statement imported through the PSD2 bank-connection sync
+  (`SaltEdgeAccountLinkHelper#fetchAccountTransactions`, external `com.etendoerp.psd2` module) never
+  touches either: its LINES still get counted correctly (the per-line observer fires for each insert,
+  since the external sync's bulk insert isn't wrapped in our `suppress()`), but at that instant
+  `Processed` is still `'N'`, so the status the line events compute — correctly, for that moment — is
+  `DRAFT`. The sync then flips `Processed` to `'Y'` directly on the header, and nothing re-derives the
+  status afterward, since no LINE event fires for a header-only column change. **Apply:** when adding
+  an aggregate/derived column, audit every code path that can flip the fields it depends on — not just
+  the ones inside your own module's handlers. An external module writing directly to a shared entity
+  is exactly the blind spot a per-field-change (not per-write-flow) observer exists to catch.
+- **2026-08-24 — User-visible symptom chain, confirmed live.** GO's list showed "Borrador" for a
+  statement whose Core `Processed` flag was actually `'Y'` (confirmed in Classic and via direct DB
+  read). Clicking "Procesar" in GO then failed with a 400: `"Only draft (unprocessed) statements can be
+  modified"` — the backend guard (`BankStatementsHandler.requireDraft`) is CORRECT (it reads the real
+  flag, already true) but reads as a contradiction to a user trusting the "Borrador" label. **Apply:**
+  a stale display column doesn't just mislead — it can make a correct backend rejection look like a
+  bug, generating a support round-trip for something that was never broken server-side.
+- **2026-08-24 — Fix is a NEW `FIN_BankStatement` NEW/UPDATE observer, not a change to the existing
+  line observer.** `BankStatementHeaderStatusHandler` mirrors
+  `BankStatementLinePendingAmountHandler`'s technique exactly: write the derived value onto the
+  in-flight event state via `event.setCurrentState(...)`, never call `recompute()`+`save()` on the same
+  entity being observed (that WOULD re-trigger the same `EntityUpdateEvent`, since — unlike the line
+  observer, which saves a DIFFERENT entity, the parent statement — this one's target IS the statement
+  being saved). Safe to run unconditionally, no `suppress()` gate needed: it only reads the header's own
+  already-correct `EM_ETGO_LINE_COUNT`/`EM_ETGO_MATCHED_COUNT` (no query), so it's cheap and idempotent
+  even when it fires redundantly during our own `recompute()`-triggered saves.
+- **2026-08-24 — Live sweep found 5 stuck statements, all on GOClient, all `PENDING` (0 matched
+  lines).** `R25-bankstatement-stale-status` repairs them: one guarded `UPDATE`, `IS DISTINCT FROM`
+  against the same derivation formula so a re-run is a no-op. Deliberately does NOT join
+  `fin_bankstatementline` — the header's own stored counters were never wrong, only `EM_ETGO_STATUS`
+  itself was stale. New gap-label series `L` (runtime aggregate-consistency drift) — not a
+  provisioning gap, so it doesn't fit A–K; noted in the map §L1.
 
 ---
 
@@ -1120,3 +1194,241 @@
   inside `modules/com.etendoerp.go` fails with a Gradle-version mismatch (module pins Gradle
   9.4.1, root pins 8.12.1), a pre-existing, diff-independent quirk; always run it as
   `./gradlew ":modules:com.etendoerp.go:compileJava"` from the etendo root.
+
+## Cheque → Recibo payment-method replacement (G3 / R24, 2026-08-21)
+
+- **2026-08-21 — The six `*use` columns on BOTH `fin_paymentmethod` and `fin_finacc_paymentmethod`
+  (`uponreceiptuse`, `upondeposituse`, `inuponclearinguse`, `uponpaymentuse`, `uponwithdrawaluse`,
+  `outuponclearinguse`) are NULLABLE, and comparing them with `=` inside a `NOT ( ... )` guard is a
+  silent correctness bug.** `col = 'CLE'` evaluates to NULL when the column is NULL, `NOT (NULL)` is
+  NULL, and the row is never matched — so the divergent row is skipped by `@apply` AND reported as
+  already-fixed by `@check`. Hit live while trialling R24: the migrated Bank link kept empty
+  reconciliation accounts while `@check` returned 0 rows on the re-run, i.e. a falsely-green
+  convergence. **Apply:** in any data-fix guard over a nullable column use `IS NOT DISTINCT FROM`
+  (or `IS NULL`), never `=`. Only the SET clauses may use `=`. R24 carries a regression test.
+- **2026-08-21 — NOTHING in the schema has a foreign key pointing AT `fin_finacc_paymentmethod`**
+  (verified against `information_schema`). **Apply:** per-account payment-method links can be
+  repointed to a different method or deleted outright without cascade risk — a method swap does not
+  need to recreate them. The one constraint to respect is `fin_finacc_paymentmethod_un UNIQUE
+  (fin_paymentmethod_id, fin_financial_account_id)`, so a repoint must be guarded against an
+  account that already carries a link to the target method (R24 Effect 2 → 2b handles this by
+  repointing what it can and deleting the rest).
+- **2026-08-21 — The Etendo GO tenant signature is a payment method named `Transferencia bancaria`,
+  NOT one named `Cheque`.** `F&B International Group` (Openbravo demo data,
+  `referencedata/sampledata/F_B_International_Group/FIN_PAYMENTMETHOD.xml`) ships its own unrelated
+  method literally named `Cheque`, alongside `Check`, `Wire Transfer`, `Cash`, `Al contado` and
+  `Transferencia`. Live counts: 36 tenants have a `Cheque`, only 35 have `Transferencia bancaria`
+  — the extra one is F&B. **Apply:** gate any payment-method data-fix on `Transferencia bancaria`;
+  gating on `Cheque` corrupts F&B (and any other demo client) instead of the GO fleet.
+- **2026-08-21 — Deactivating a payment method is NOT enough: `Cheque` was the default method of 34
+  `c_bpartner` rows.** Leaving `c_bpartner.fin_paymentmethod_id` (and `po_paymentmethod_id`)
+  pointing at an `isactive='N'` method makes every new invoice for those partners inherit a method
+  the selectors will not offer. **Apply:** a method retirement must repoint the forward-looking
+  configuration references — `c_bpartner`×2, `c_paymenttermline`, `c_project`, `c_projectproposal`,
+  `fin_payment_proposal` — and, so open work stays operable, the UNPROCESSED documents
+  (`c_invoice`/`c_order`/`fin_payment` with `processed='N'`, plus the `fin_payment_schedule` rows
+  hanging off them). Processed documents are deliberately left behind so history keeps its original
+  label; that is the reason to create a NEW method rather than rename the old one in place.
+- **2026-08-21 — Card accounts (`fin_financial_account.type='CA'`) never had a Cheque link: 0 of 34
+  live, versus 55 of 66 Bank accounts.** So "associate Recibo to Bank AND Card accounts" is a
+  migration on Bank and brand-new behaviour on Card. **Apply:** never assume a per-account link set
+  is symmetric across account types — count them (`type` ref list is `B` Bank / `C` Cash / `CA`
+  Card) before writing the fix, or the `CA` half is silently missed.
+- **2026-08-21 — `FinancialAccountSupport.createLink` did NOT copy `INUponClearingUse` /
+  `OUTUponClearingUse` from the method template**, even though the surrounding comment already
+  explains that fields with no sane default must be copied or "every new account's transaction
+  handling silently diverges". It now does. Note the entity's setters are spelled
+  `setINUponClearingUse` / `setOUTUponClearingUse` (property names `iNUponClearingUse` /
+  `oUTUponClearingUse`), not `setInUponClearingUse`.
+- **2026-08-21 — In `PAYMENT_METHODS_BY_TYPE` the FIRST method of each list becomes the account's
+  default** (`assignDefaultPaymentMethods` → `createLink(account, method, i == 0)`). **Apply:** to
+  add a method to an account type without stealing its default, append it — never prepend. R24 uses
+  `B: [Transferencia, Recibo, Tarjeta]` and `CA: [Tarjeta, Recibo]` for exactly this reason, and the
+  corrective `.sql` inserts new links with `isdefault='N'` and never writes `isdefault` in a SET.
+- **2026-08-21 — There is NO `EntityPersistenceEventObserver` on `FIN_FinancialAccount` anywhere in
+  `com.etendoerp.go`.** The automatic method-linking fires from exactly two call sites, both Neo
+  handlers: `FinancialAccountHandler#afterHandle` (manual "sin conexión" creation) and
+  `FinancialAccountBankConnectionHandler#handleCreateAndLink` (Salt Edge create-and-link).
+  **Apply:** an account created straight from the Etendo Classic window gets no automatic links.
+  Accepted scope for G3 (explicit product call), but any requirement phrased as "every new account,
+  however created" needs an event handler that does not exist yet.
+- **2026-08-21 — `get_uuid()` is the right PK minter for a data-fix that inserts N rows** (precedent:
+  R1, R7, R9, R10, R16, R17, R18, R20, R22, R23). Reserve the `@uuid_<KEY>@` placeholder for
+  singleton rows whose id other statements must reference; for N-row inserts call `get_uuid()` in
+  the SELECT list. R24 uses `@uuid_RECIBO@` for the one method row and `get_uuid()` for the
+  per-account links.
+- **2026-08-21 — `parseFix(text, fixId)` takes the file CONTENTS first and the fix id (file name
+  without `.sql`) second.** Passing the path first "succeeds" far enough to produce a confusing
+  `missing or empty @check section` error whose message is the entire file. **Apply:** when
+  trialling a fix by hand, mirror `run.js`'s templating order exactly — `inlineParams` →
+  `inlineClientName` (only if `@name_client@` is present) → `inlineFreshUuids` — then run
+  `@check`/`@apply`/`@report` inside a `BEGIN … ROLLBACK` against the real DB. Sweeping all tenants
+  in one rolled-back transaction (44 tenants for R24) is the cheapest way to prove convergence and
+  catch the NULL-comparison class of bug before review.
+- **2026-08-21 — A data-fix that repoints a column via a scalar subquery must guard that the
+  subquery has a row, or it BLANKS the column instead.** `SET fin_paymentmethod_id = (SELECT …
+  WHERE name='Recibo')` yields NULL — not "no change" — on any tenant where `Recibo` does not
+  exist, so the `WHERE` filter matching on the OLD method is not enough. **Apply:** pair every
+  `SET col = (scalar subquery)` with `AND EXISTS (<same subquery>)`.
+- **2026-08-21 — Put the tenant-identification gate on EVERY `@apply` statement, not only on
+  `@check`.** The runner does evaluate `@check` first and skips `@apply` on 0 rows
+  (`run.js` `applyFix`, and `--fix`/`cmdTargetedFix` goes through the same path), so `@check` alone
+  is sufficient in normal operation — which is exactly why the omission is easy to miss in review.
+  It stops being sufficient the moment anyone replays `@apply` by hand (the standard way to trial a
+  fix) or a future runner change reorders the two. Measured on R24: replaying the un-gated `@apply`
+  straight onto `F&B International Group` **deleted its `Cheque` payment method and one account
+  link**; with the gate on all 18 statements the same replay is a no-op. **Apply:** gate every
+  statement, and prove it by running `@apply` alone against a tenant the fix must not touch, inside
+  `BEGIN … ROLLBACK`, comparing a before/after snapshot.
+- **2026-08-21 — Never write `:org_id` (or any bind placeholder you don't want resolved) anywhere
+  inside a fix's `@check`/`@apply`/`@report` body — INCLUDING in a comment.** `run.js` decides
+  whether to resolve the tenant's operative org with a raw substring test over the concatenated
+  section text (`` `${fix.check}\n${fix.apply}\n${fix.report}`.includes(':org_id') ``), and
+  `parseFix` keeps comment lines inside the section bodies. R24 mentioned the placeholder only in
+  an explanatory comment saying it deliberately does NOT use it — which was enough to switch org
+  resolution on, and the run then died on the first tenant with no operative org
+  (`:org_id used but tenant … has no operative org`), aborting the whole chain after 22 of 44
+  tenants with an already-committed partial result. **Apply:** keep placeholder names out of prose
+  (say "the runner's operative-org bind" instead), and after authoring a fix assert
+  `parseFix(...)` → `check+apply+report` does not contain `:org_id` unless you mean it.
+- **2026-08-21 — A targeted `--fix` run that throws does NOT roll back the tenants it already
+  committed.** Each tenant is its own transaction, and `cmdTargetedFix` has no try/catch around the
+  per-tenant loop, so an exception thrown by `applyFix`'s *pre*-flight (bind resolution, before any
+  `BEGIN`) propagates out of the loop and leaves the earlier tenants APPLIED and the rest untouched
+  (exit code 2). **Apply:** the fix is idempotent, so the remedy is simply to re-run it once the
+  cause is fixed — already-APPLIED tenants come back `SKIPPED_NOT_NEEDED — kept prior success
+  state` via the ledger's no-downgrade guard. Always check the exit code and the APPLIED+SKIPPED
+  count against the announced tenant count; a truncated console listing looks identical to success.
+- **2026-08-21 — When auditing a data-fix by splitting `@apply` into statements, STRIP full-line
+  comments first, or adjacent prose makes an ungated statement look gated.** Splitting the raw
+  section text on `;\n` puts each statement's preceding comment block inside that statement's chunk,
+  so a substring test for the gate literal matches the comment, not the SQL. This produced a real
+  gap on R24: the comment above Effect 4 read "…`isdefault='N'` so **Transferencia bancaria** /
+  Tarjeta keep the default…", so both the audit census AND the script that inserted the gate
+  (sharing the same contaminated predicate) skipped that one statement — the census reported
+  "0 ungated" while the executable SQL of the `INSERT INTO fin_finacc_paymentmethod` had no gate at
+  all. It was structurally safe only second-order (its `CROSS JOIN` on `name='Recibo'` yields no
+  rows for a tenant without that method), which is exactly the kind of safety that evaporates when
+  someone renames something. **Apply:** any per-statement assertion — in an audit script or in a
+  test — must run on comment-stripped SQL, and the two numbers (raw vs comment-stripped) should be
+  compared explicitly, because agreeing is what proves the audit is not measuring prose.
+- **2026-08-21 — Open framework footgun (NOT fixed): `run.js:249` decides whether to resolve
+  `:org_id` with a raw `.includes(':org_id')` over the concatenated section bodies, comments
+  included.** R24 is hardened by a test, but the next fix that names a bind in prose repeats the
+  incident. Root fix would be to strip comments before the `.includes()` (or scan executable SQL
+  only) in `cli/src/data-fixes/run.js`, with its own test — deliberately left out of ETP-4893's
+  scope as shared-runner surface.
+
+## ETP-4877 — Existing-tenant system-role-templates retrofit (2026-08-26)
+
+Closes L1 (Tenant Ownership, `onboarding-gaps.md`) on the corrective front. Ships
+`R26-tenant-owner-and-personal-role-retrofit.sql` (owner detection + personal-role backfill +
+org-access/defaults backfill for pre-existing personal-role holders + `AD_User_Roles` cleanup +
+`EM_ETGO_Show_Acct_Fields` derived-flag sync) and `R27-deactivate-r16-duplicate-roles.sql`
+(deactivates confirmed-unused R16-era per-client role clones), plus the `retired.json` mechanism
+that permanently retires R16 at the runner level. Full field-verified findings below.
+
+- **2026-08-26 — `AD_User.C_BPartner_ID IS NULL` is the load-bearing distinction between a real
+  staff/login user and a BP-contact row that happens to live in `AD_User`.** Confirmed live: every
+  BP-contact-linked row (the F1-gap "Default Customer Contact" seeded per org, plus a large
+  population of orphaned BP-contact test users left over on several E2E tenants — names like
+  "Andres1787679884486 Name", "Julia... Legacy", "Lucia... Code") has `C_BPartner_ID` SET and holds
+  ZERO `AD_User_Roles` rows; every genuine staff/login user (the ones with a `username`, the ones
+  an admin actually manages via "Usuarios") has `C_BPartner_ID` NULL. Live count on this DB: 127
+  active `AD_User` rows across 41 real tenants, only 47 with `C_BPartner_ID IS NULL`. **Apply:** any
+  fix that needs to enumerate "real users" of a tenant (not BP contacts) must filter
+  `C_BPartner_ID IS NULL` — minting a personal role, granting access, or counting "how many users"
+  without this filter massively over-counts and touches rows that are never login principals.
+- **2026-08-26 — `UserRoleCompositionService#isReusablePersonalRole`'s definition does NOT check
+  a role's NAME.** A role named anything (e.g. GOClient's "Classic Role") counts as a genuine,
+  reusable "personal role" for a user as long as it is active, non-template, non-client-admin, same
+  client, not itself an `AD_Role_Inheritance` `InheritFrom` target, and has 0 or exactly 1 active
+  `AD_User_Roles` row (and if 1, it's this user's). **Apply generally:** never assume the
+  `"Personal – "` name prefix is how the Java code recognizes a personal role — it's a display
+  convention `buildPersonalRoleName` applies when CREATING one, not a check anything reads back.
+- **2026-08-26 — Corrupting-bug found+fixed while building R26: TWO DIFFERENT users legitimately
+  sharing ONE non-personal role via `Default_Ad_Role_ID` (zero `AD_User_Roles` rows for either) is
+  real, live data on this DB** — GOClient's "11111" and "test" both point `Default_Ad_Role_ID` at
+  the SAME "Classic Role". Per the identity check above, EITHER user individually sees that role as
+  "reusable" (0 assignments = "never assigned yet, safe to reuse"). A first draft of R26 scoped its
+  org-access/defaults/`AD_User_Roles`-cleanup steps to "any non-template, non-admin default role" —
+  broke immediately: the `AD_User_Roles` enforcement step would insert ONE row per user pointing at
+  the SAME shared role, instantly breaking that role's own exclusivity for both (2 active rows, not
+  0 or 1) and manufacturing real login access neither user previously had via `AD_User_Roles` — well
+  outside what a "cleanup extra rows" step should ever do. **Fix:** those three steps only ever
+  touch a user's default role when it is EITHER the fix's own deterministic personal-role id OR
+  already named `"Personal – %"` (the established convention) — never an arbitrary reusable-but-
+  unnamed default role. Caught by full-fleet idempotency testing (`@check` after `@apply` returned
+  1 row instead of 0) — proves why "re-run the check after apply, inside the same transaction" is
+  worth doing for every non-trivial fix, not just the ones that look risky on paper.
+- **2026-08-26 — Deterministic (hashed) role ids, not `get_uuid()`, for a multi-step `@apply` that
+  needs to reference a row it just inserted.** `get_uuid()` (Postgres-side, used everywhere else in
+  this catalog) can't be "read back" by a LATER separate top-level statement in the same `@apply`
+  without a data-modifying CTE with `RETURNING` — and CTEs don't span multiple statements. R26 needs
+  the SAME personal-role id in ~6 separate statements (role INSERT, inheritance INSERT, window-access
+  INSERT, `Default_Ad_Role_ID` UPDATE, org-access INSERT, defaults UPDATE, `AD_User_Roles`
+  INSERT/DELETE). Solution: `UPPER(MD5(u.ad_user_id || ':ETP4877-personal-role'))` — a stable,
+  32-hex-uppercase (matches the Etendo id format exactly), collision-safe-enough (128-bit hash
+  space) id every step can independently RE-DERIVE from `u.ad_user_id` alone, with no read-back
+  needed. Bonus: a retried run after a mid-chain failure recomputes the IDENTICAL id instead of
+  minting a second orphaned role. **Apply generally:** this pattern generalizes to any future fix
+  that needs a fresh row's id available to several later statements in the same `@apply` — prefer a
+  deterministic hash of a stable natural key over `get_uuid()` when that's the case.
+- **2026-08-26 — `AD_Role_Inheritance` alone grants NOTHING; the window/tab/field/process-access
+  rows must be separately materialized.** Confirmed by reading `UserRoleCompositionService`'s own
+  javadoc: core's `RoleInheritanceEventHandler`/`WindowAccessInjector` do this via a Hibernate event
+  observer, not a DB trigger. But R16 (2026-07-27) already proved a plain SQL
+  `INSERT INTO ad_window_access ... SELECT ... FROM <source role's own ad_window_access>` reaches
+  the identical end state without Hibernate — R26 Step 2b reuses that exact pattern (source = the
+  resolved system template, not a fixed GOClient row), reading the template's CURRENT grants so a
+  future widening (ETP-4878) is picked up automatically on the next run, not hardcoded. This is WHY
+  R26 could stay `@type: sql` instead of escalating to `@type: webhook` despite needing to replicate
+  `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
+- **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
+  never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
+  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
+  currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
+  responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
+  ETP-4877. **Confirmed live, real bug (not hypothetical):** the system Finance template itself read
+  `'N'` (should always be `'Y'`), and 24 active, non-template, non-client-admin roles fleet-wide
+  already inherited from Finance via `AD_Role_Inheritance` yet still read `'N'` — including
+  GOClient's "RoleFinanzas" (the BUG-1 role from the ETP-4906 QA finding — see the header note in
+  R26 for why BUG-1's window-access-ownership corruption does NOT affect this fix; it's a completely
+  separate column) and "Classic Role". Fixed both directions (R26 Step 8b: `'Y'` iff a matching
+  active inheritance row exists, `'N'` otherwise) and added
+  `UserRoleCompositionService#syncShowAccountingFieldsFlag`, called unconditionally at the end of
+  every `reconcileInheritances`, so `AssignTemplateRolesControl`'s live save path self-heals this
+  going forward. **Apply generally:** a "derived" column with no read-time join is a classic drift
+  trap — whenever a column looks like it SHOULD be computed from another table but a native-SQL read
+  shows it's just stored, audit every WRITE path that could invalidate it, not just the one you're
+  currently touching.
+- **2026-08-26 — This DB is a SHARED, actively-mutated dev/QA environment, not a static fixture —
+  re-running the SAME read-only diagnostic query minutes apart can return DIFFERENT results.**
+  F&B International Group showed 1 active `is_client_admin` holder in an early diagnostic pass and
+  0 in a later one, with no write from this session in between. Root cause not chased (plausible:
+  background E2E suites continuously creating/mutating "E2E User ..." tenants, or a scheduled data
+  refresh) — not a bug in any fix here. **Apply generally:** on this DB specifically, do not treat
+  an early count as still-true evidence later in the same session; a fix's OWN `@check`/`@report`
+  re-evaluating live state at apply time is what actually matters, not a diagnostic snapshot taken
+  earlier. This is exactly why the ticket's own instruction ("re-run your own audit queries against
+  the actual DB... do not size off assumed counts") matters in practice, not just in principle.
+- **2026-08-26 — `schema_forge_core`'s mirrored `cli/src/data-fixes/` copy is confirmed still stale
+  (tops out at R8) and on an unrelated branch (`mergeblock/ETP-4962`)** — same finding as the R23
+  entry above, reconfirmed for ETP-4877. No `retired.json` exists there at all. Per this repo's own
+  documented drift-handling convention (`CLAUDE.md` repo-topology section: "treat this repo's copy
+  as authoritative for functional-tenant remediation and flag the drift") and the established R23
+  precedent, NOT reconciled here — flagged in the PR/final report only, reconciling the two catalogs
+  is a separate task.
+- **2026-08-26 — `retired.json` (ETP-4877) is new shared-runner infrastructure, the first fix ever
+  to actually need `@type: webhook`-adjacent framework work despite staying `@type: sql` itself.**
+  Item 7's ask ("skip retired fixes entirely, BEFORE parsing/evaluating any fix... checksum
+  double-check... fails loudly on mismatch") is implemented as `loadRetiredList()` (reads
+  `retired.json`, tolerant of a missing file) → `verifyRetiredList(catalog, retired)` (throws
+  immediately on a retired fixId missing from the catalog, or a live sha256 checksum mismatch) →
+  `loadCatalogWithRetirement()` (the one function every CLI entry point — full run, `--fix`,
+  `--list-clients` — now calls instead of the bare `loadCatalog()`, so `fix.retired` is always set
+  before `applyChain`/`cmdTargetedFix` ever see a fix). The full general `CHECKSUM_MISMATCH` ledger
+  status (deferred per the runner's own Phase-0 docs) was deliberately NOT built — only the narrow
+  checksum verification `retired.json` itself needs, computed on-demand for retired fixIds only, not
+  stored anywhere or computed for the whole catalog on every run.

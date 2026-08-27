@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Home, MessageCircle, HelpCircle, ChevronRight, Search, X, ExternalLink } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useCopilot } from '@/components/CopilotContext';
 import { useSupportChat } from './SupportChatContext.jsx';
 import { ConversationView } from './ConversationView.jsx';
 import { TicketList } from './TicketList.jsx';
@@ -311,6 +312,9 @@ export function SupportChatWidget() {
     messages, input, isSending, isLoadingConversations,
     isLoadingMessages, pendingFiles, unreadCount,
   } = state;
+  // Copilot's own panel docks to the same bottom-right corner — shift ours clear of it
+  // while both are open instead of the two floating windows stacking on top of each other.
+  const { isOpen: copilotIsOpen } = useCopilot();
 
   const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -329,6 +333,10 @@ export function SupportChatWidget() {
   }, [isOpen, activeConversationId]);
 
   const handleStartChat = () => {
+    // Deliberately always a fresh conversation (own id, own ticket) — the user may have
+    // several open conversations at once, each pinned to a different Jira ticket. Continuity
+    // is handled by navigating to an EXISTING conversation from Mensajes (handleSelectTicket
+    // below), not by guessing which one to resume from here.
     actions.selectConversation('new');
     actions.setTab('mensajes');
   };
@@ -459,7 +467,7 @@ export function SupportChatWidget() {
 
   return (
     <div className="sc-overlay" aria-modal="true" role="dialog">
-      <div className={`sc-panel${isExpanded ? ' expanded' : ''}`}>
+      <div className={`sc-panel${isExpanded ? ' expanded' : ''}${copilotIsOpen ? ' sc-panel--copilot-open' : ''}`}>
         <div className="sc-scroll">
           {panelContent}
         </div>

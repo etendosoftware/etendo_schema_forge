@@ -17,7 +17,9 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
+import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
+import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
@@ -530,41 +532,12 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
 
 }
 
-export function getReadOnly(editing) {
-    return (f) => {
-        if (f.readOnly === true) return true;
-        try {
-            return typeof f.readOnlyLogic === 'function'
-                ? Boolean(f.readOnlyLogic(editing))
-                : false;
-        } catch {
-            return false;
-        }
-    };
-}
-
-export function getVisible(editing) {
-    return (f) => {
-        if (typeof f.displayLogic !== 'function') return true;
-        try {
-            return !!f.displayLogic(editing ?? {});
-        } catch {
-            return true;
-        }
-    };
-}
-
-export function getMissingRequiredFields(fields, editing) {
-    const isReadOnly = getReadOnly(editing);
-    const isVisible = getVisible(editing);
-    return fields
-        .filter(f => f.required && !isReadOnly(f) && isVisible(f) && f.type !== 'checkbox' && f.section !== 'summary')
-        .filter(f => {
-            const v = editing?.[f.key];
-            return v == null || v === '' || (typeof v === 'string' && v.trim() === '');
-        })
-        .map(f => f.key);
-}
+// ETP-4933: getReadOnly / getVisible / getMissingRequiredFields moved to
+// lib/requiredFields.js so useFormValidity can reuse the predicate without importing
+// this module (that would be a cycle, since we import useFormValidity below).
+// Re-exported here because ten call sites across components/, windows/ and __tests__/
+// still import them from useEntity — moving them outright would be a needless break.
+export { getReadOnly, getVisible, getMissingRequiredFields };
 
 // Returns the keys of visible, editable fields whose non-empty value fails the
 // given format check (getError returns an i18n key, or null when valid/empty/not
@@ -632,6 +605,10 @@ export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSavi
     // email/website/phone assertions that expect the pre-ETP-4542 single-arg call.
     if (toastId) {
         toast.error(msg, { id: toastId });
+        // ETP-5002: remember it so a later successful save can clear it — see
+        // trackSaveBlockToast. Only stable-id toasts are trackable; the
+        // email/website/phone gates stack auto-id toasts and are left as they were.
+        trackSaveBlockToast(toastId);
     } else {
         toast.error(msg);
     }
@@ -767,8 +744,33 @@ export async function resolveSavedRecordAfterSave(saved, {
     }
 }
 
+// ETP-4830 — stable id for the generic post-save toast. Any caller that needs to
+// REPLACE this toast with its own (e.g. a window's `onAfterCreate` showing a custom
+// "record created, do X next" message) MUST pass this same id to `toast.success()`
+// rather than calling `toast.dismiss()` first: sonner's `ToastState.create()` treats
+// a toast whose id already exists as an in-place UPDATE (one synchronous `publish`,
+// same code path as a fresh toast — see node_modules/sonner's `Observer.create`),
+// while `toast.dismiss()` with no id schedules its removal via `requestAnimationFrame`
+// on a DIFFERENT internal timer than the `setTimeout` a subsequent `toast.success()`
+// uses to add itself — two independently-scheduled callbacks with no ordering
+// guarantee between them. Calling dismiss() then success() back-to-back (as the
+// User window's onAfterCreate originally did) raced exactly that: on a real page,
+// with a route navigation and a heavier re-render immediately following in the same
+// tick, the dismiss-then-add race can resolve so the replacement toast never mounts.
+// Passing the SAME id turns "dismiss the old one, show a new one" into a single
+// atomic update — no race window at all.
+export const RECORD_SAVE_TOAST_ID = 'record-save-toast';
+
 export function showSaveSuccessToast(silent, isNew, ui) {
-    if (!silent) toast.success(getSaveSuccessMessage(isNew, ui));
+    if (silent) return;
+    // ETP-5002: retire the save-blocking error toasts this success supersedes BEFORE
+    // showing the confirmation. RECORD_SAVE_TOAST_ID's in-place update (ETP-4830) does
+    // not promote the toast to the front, so a newer error toast would otherwise keep
+    // `data-front` and the user who just fixed the value would still see the error.
+    // Dismissing a DIFFERENT id than the one we are about to create means there is no
+    // cross-timer race here — unlike ETP-4830's dismiss-then-add of the same toast.
+    dismissSaveBlockToasts(toast.dismiss);
+    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
@@ -807,6 +809,12 @@ export function useEntity(entity, childEntity, {
     specName = null,
     initialSortColumn = 'creationDate',
     initialSortDirection = 'desc',
+    // ETP-4933: the contract-declared descriptor set (`Form.fields`, emitted as a
+    // static by the generator). When supplied it REPLACES the mounted-form registry
+    // for validity, because the registry only knows what is currently rendered and
+    // the "Others" tab mounts only while it is the active tab. Optional: surfaces
+    // whose form predates the static fall back to the registry (see below).
+    contractFields = null,
 }) {
     const logout = useLogout();
     const ui = useUI();
@@ -826,6 +834,17 @@ export function useEntity(entity, childEntity, {
     // ETP-4741: true while handleNew's defaults request is in flight, so the
     // creation form can gate itself instead of letting the user race the merge.
     const [defaultsLoading, setDefaultsLoading] = useState(false);
+    // ETP-5002: true while the defaults SESSION is still pending — which is NOT the
+    // same window as defaultsLoading above. defaultsLoading is a 4s UX budget: it
+    // releases early so the user can start working while the request keeps running.
+    // This flag tracks the request itself, and only clears when the response lands,
+    // errors, or the session is neutralized. The required-field gate (ETP-4933) needs
+    // the request window, not the UX window: on a slow `GET /<entity>/defaults` the
+    // budget expired, the form unlocked, and the gate then blocked the primary action
+    // on a required field whose default was still in the air (`purchase-order`
+    // /`warehouse`, the ETP-5002 rectificativa E2E failures). Blocking is deferred
+    // until we actually know whether the value is coming.
+    const [defaultsPending, setDefaultsPending] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // ETP-4542: identifier of the header process currently running (POST in flight),
@@ -858,6 +877,20 @@ export function useEntity(entity, childEntity, {
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
     const formFieldsRef = useRef(new Map());
+    // ETP-4933: reactive mirror of the registry above, so the Save button can gate on
+    // required-field completeness instead of only reporting it after the click.
+    //
+    // We mirror a SIGNATURE, not the field arrays. The registering effect in
+    // EntityForm re-runs on every visibility change (its `displayFields` are
+    // recomputed each render), so a state write on that path would re-render →
+    // recompute → re-fire the effect → loop. The guard is the identity return in the
+    // updater below: when the signature is unchanged React bails out of the re-render
+    // entirely, so a re-registration carrying the same fields costs nothing.
+    const [registeredFieldsKey, setRegisteredFieldsKey] = useState('');
+    const syncRegisteredFields = useCallback(() => {
+        const next = fieldsSignature([...formFieldsRef.current.values()].flat());
+        setRegisteredFieldsKey(prev => (prev === next ? prev : next));
+    }, []);
 
     // True when editing has diverged from the last-saved selected state.
     // For new records (selected === null): dirty as soon as any non-id field has a value.
@@ -1047,6 +1080,7 @@ export function useEntity(entity, childEntity, {
         defaultsAbortRef.current = null;
         defaultsEpochRef.current += 1;
         setDefaultsLoading(false);
+        setDefaultsPending(false);
         controller.abort();
     }, []);
 
@@ -1208,6 +1242,8 @@ export function useEntity(entity, childEntity, {
         }, DEFAULTS_TIMEOUT_MS);
 
         setDefaultsLoading(true);
+        // ETP-5002: deliberately NOT cleared by timeoutId above — see the state decl.
+        setDefaultsPending(true);
         try {
             const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
             if (!isCurrent()) return;
@@ -1241,6 +1277,7 @@ export function useEntity(entity, childEntity, {
                 clearTimeout(timeoutId);
                 defaultsAbortRef.current = null;
                 setDefaultsLoading(false);
+                setDefaultsPending(false);
             }
         }
     }, [apiBaseUrl, entity, token, headers]);
@@ -1268,7 +1305,9 @@ export function useEntity(entity, childEntity, {
         } else {
             formFieldsRef.current.set(formId, Array.isArray(fields) ? fields : []);
         }
-    }, []);
+        // ETP-4933: keep the reactive mirror in step. Guarded — see syncRegisteredFields.
+        syncRegisteredFields();
+    }, [syncRegisteredFields]);
 
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
@@ -1616,10 +1655,52 @@ export function useEntity(entity, childEntity, {
         setEditing({ ...saved });
     }, []);
 
+    // ETP-4933: the registered fields, re-read whenever the mirrored signature moves.
+    // Reading the ref during render is safe precisely because the signature is what
+    // gates this memo — and any VALUE change re-renders anyway (via `editing`), so
+    // validity stays live per keystroke without the fields themselves being state.
+    const registeredFields = useMemo(
+        () => [...formFieldsRef.current.values()].flat(),
+        [registeredFieldsKey],
+    );
+
+    // `skipUnchangedInvalid` is on only for existing records (ETP-4933 §3.2): a legacy
+    // row with an empty required column must stay saveable, or the user cannot correct
+    // an unrelated field. New records validate everything, matching handleSave.
+    // ETP-4933: UNION of the contract set and what actually got registered — neither is
+    // sufficient alone, and picking one loses required fields either way.
+    //
+    // The contract is mount-independent, so it covers sections the registry never sees
+    // (`section: 'other'` was entirely invisible to validation before). But it only
+    // carries fields the generator emitted, i.e. `form: true` in the contract: `assets`
+    // marks its 10 required fields `form: false` and renders them from a hand-written
+    // formFooter panel, so a contract-only gate saw 3 optional fields, found nothing
+    // missing, and left Save enabled on an empty new record.
+    //
+    // Union is the safe direction: it can only ever ADD a required field, never drop
+    // one. Deduped by key, contract descriptor winning — it is the richer one (carries
+    // readOnlyLogic / displayLogic straight from the AD).
+    const validationFields = useMemo(
+        () => mergeValidationFields(contractFields, registeredFields),
+        [contractFields, registeredFields]
+    );
+    // ETP-5002: `deferBlocking` while the creation defaults are still pending. Scoped to
+    // NEW records on purpose — an existing record has no defaults session (fetchById
+    // neutralizes any in flight), and its own policy (skipUnchangedInvalid) already
+    // spares untouched empties, so widening this would only mask a real block.
+    const { isValid, missingRequired, missingRequiredFields } = useFormValidity({
+        fields: validationFields,
+        values: editing,
+        changedKeys: userChangedKeysRef.current,
+        skipUnchangedInvalid: Boolean(editing?.id),
+        deferBlocking: defaultsPending && !editing?.id,
+    });
+
     return {
-        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
+        isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,

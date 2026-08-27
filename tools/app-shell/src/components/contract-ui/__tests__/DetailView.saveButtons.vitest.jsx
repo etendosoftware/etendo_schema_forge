@@ -38,6 +38,14 @@ const mockHook = {
   handleChange: vi.fn(),
   handleSave: vi.fn(() => Promise.resolve({ id: '123' })),
   handleSaveAndProcess: vi.fn(() => Promise.resolve({ id: '123' })),
+  // ETP-4830 — DetailView's own isNew-gated effect now calls this whenever `editing`
+  // still holds a DIFFERENT persisted record's id (see DetailView.jsx). This file's
+  // `resetHook()` always seeds `editing` from the "existing record" fixture (`rec`,
+  // id: '123'), which the "new record" tests below render with `recordId="new"`
+  // without overriding — previously harmless (the old guard never re-fired once
+  // `editing` held any value), now exercised. A no-op stub is enough: these tests
+  // assert on handleSave/onAfterCreate/navigate, not on handleNew's own behavior.
+  handleNew: vi.fn(),
   handleCreate: vi.fn(),
   handleDelete: vi.fn(),
   handleAddChild: vi.fn(),
@@ -190,6 +198,100 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     fireEvent.click(screen.getByTestId('action-save'));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect(mockHook.handleSaveAndProcess).not.toHaveBeenCalled();
+  });
+
+  // ETP-4940 — draftMode windows whose Confirm button uses a custom `onConfirm`
+  // callback (sales-order, purchase-order, sales-quotation, goods-receipt,
+  // goods-shipment all dispatch a DOM event here to open their own confirm
+  // modal) fully bypass `handleSaveAndProcess`, which is the only place that
+  // otherwise calls `handleSave` first. Without the maybeSaveBeforeConfirm gate
+  // in `renderDraftModeSaveActions`, a header edit made right before clicking
+  // Confirm — without clicking Save first — was silently discarded: the
+  // document confirmed with the previously-persisted value.
+  describe('draftMode with onConfirm: save-before-confirm guard (ETP-4940)', () => {
+    it('dirty header + click Confirm → saves silently BEFORE the custom onConfirm fires', async () => {
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // BASE_PROPS.additionalDirtyState=true → isDirty is true.
+      render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
+
+    it('dirty header + save fails → the custom onConfirm does NOT fire', async () => {
+      // handleSave returns null on validation/required/numeric/backend
+      // failure — it has already surfaced the error itself.
+      mockHook.handleSave = vi.fn(() => Promise.resolve(null));
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+      expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('no pending changes → the custom onConfirm fires without an extra save call', async () => {
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // Override additionalDirtyState so isDirty is false (mockHook.isDirtyHeader
+      // is already false via resetHook, and there are no pending line edits).
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).not.toHaveBeenCalled();
+    });
+
+    // The two tests above drive isDirty via additionalDirtyState (BASE_PROPS'
+    // default true / the override false); neither actually sets
+    // mockHook.isDirtyHeader, so neither one pins the ticket's literal scenario
+    // (a HEADER field edited without clicking Save). The two tests below make
+    // the two distinct dirty sources explicit and mutually exclusive, so a
+    // future change that special-cases one of them (e.g. reading only
+    // hook.isDirtyHeader here, mirroring the DetailMoreActionsMenu W1 gap) would
+    // break one of these without the other masking it.
+    it('ETP-4940 ticket scenario — header field edited (isDirtyHeader), nothing else dirty → saves BEFORE onConfirm', async () => {
+      mockHook.isDirtyHeader = true;
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // additionalDirtyState=false isolates isDirtyHeader as the only dirty source.
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
+
+    it('line-edit dirty only (isDirtyHeader stays false) + click Confirm → still saves BEFORE onConfirm', async () => {
+      // computeIsDirty ORs in lineEdits/addingLine/addingSecondaryLine alongside
+      // isDirtyHeader (see computeIsDirty tests in DetailView.helpers.vitest.jsx).
+      // additionalDirtyState stands in here for "a pending line-row edit", the
+      // same OR branch a real inline line edit would set. The point: the
+      // draftMode Confirm button reads the FULL `isDirty` (not hook.isDirtyHeader
+      // alone), so a line edit with a clean header still gets saved first — this
+      // is exactly the coverage the kebab path is MISSING (see the paired "known
+      // gap W1" test in DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx).
+      expect(mockHook.isDirtyHeader).toBe(false); // sanity: header is clean
+      const callOrder = [];
+      mockHook.handleSave = vi.fn(async () => { callOrder.push('save'); return { id: '123' }; });
+      const onConfirm = vi.fn(() => { callOrder.push('confirm'); });
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} additionalDirtyState draftMode={draftMode} />);
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+      expect(mockHook.handleSave).toHaveBeenCalledWith({ silent: true });
+      expect(callOrder).toEqual(['save', 'confirm']);
+    });
   });
 
   it('new record: Save persists then navigates to the created record', async () => {

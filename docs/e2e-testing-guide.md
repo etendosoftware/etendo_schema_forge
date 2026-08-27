@@ -120,13 +120,68 @@ Run it explicitly:
 make test-e2e-onboarding-integration
 ```
 
-This sets `E2E_ONBOARDING_INTEGRATION=1` and runs only that spec file against `BASE_URL` (default `http://localhost:3100`). Override the backend with:
+This sets `E2E_ONBOARDING_INTEGRATION=1` and runs only that spec file against `BASE_URL` (default
+`http://localhost:3100`, i.e. `make dev`). Point it at another **front-end** origin with:
 
 ```bash
-BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e-onboarding-integration
+BASE_URL=http://localhost:4173 make test-e2e-onboarding-integration
 ```
 
+`BASE_URL` must be an origin with no path. The spec navigates with `page.goto('/onboarding')`, and a
+leading slash resolves against the origin alone — so a value carrying a context path (say
+`http://localhost:8080/etendo/web/com.etendoerp.go`) silently becomes `http://localhost:8080/onboarding`
+and every test dies on a Tomcat 404 page. If `BASE_URL` is exported in your shell from an earlier
+run, `unset` it rather than guessing.
+
 Each run creates a unique user (random suffix), so the test is repeatable without manual cleanup.
+
+### Email sink — required since ETP-4798
+
+Registration no longer lands on the profile step. It stops at a confirm-your-email wall, and the
+only way past it is to follow the link the backend actually mailed. So this spec — and therefore
+every `integration` spec that depends on it for a provisioned tenant — needs a mailbox the test can
+read.
+
+`E2E_EMAIL_SINK=1` (now the default for the integration suite, both in `make
+test-e2e-onboarding-integration` and in `scripts/run-e2e-full.sh`) starts the local sink at
+`http://127.0.0.1:8025`. **That is only half the wiring.** Playwright starts the sink; it cannot
+tell Etendo GO to deliver there. The instance under test must be pointed at it.
+
+Edit the properties file **the running Tomcat actually reads**, which is not always the obvious one
+— a SmartTomcat/IDE launch uses its own `catalina.base` and serves the webapp from a `docBase`
+somewhere else entirely, so a stale `webapps/etendo/` copy can look right and be ignored. Find it:
+
+```bash
+PID=$(lsof -nP -iTCP:8080 -sTCP:LISTEN -t | head -1)
+ps -ww -o command= -p "$PID" | tr ' ' '\n' | grep catalina.base
+# then read the <Context docBase="..."> for the app under that base's conf/Catalina/localhost/
+```
+
+Set it there, and in `config/Openbravo.properties` too so the next build does not put the real
+provider back:
+
+```properties
+etendo.go.email.provider.baseUrl=http\://127.0.0.1\:8025/send
+etendo.go.email.provider.apiKey=e2e-only-secret
+```
+
+The API key must match `E2E_EMAIL_SINK_API_KEY` in `playwright.config.js`; the adapter sends it as
+`x-api-key` and the sink rejects a mismatch with 401. `config/Openbravo.properties` is gitignored,
+so this stays a local change. Same wiring the ETP-4894 invitation-email spec already needed — see
+`artifacts/delivery-evidence/ETP-4894/README.md`.
+
+Without it the mail goes to the real provider, the wall stays up with no readable inbox, and
+`passEmailConfirmationWall` fails naming both remedies.
+
+**The escape hatch** is the backend's own fail-open: leave `etendo.go.email.provider.apiKey` or
+`baseUrl` unset (or set `etendo.go.email.provider.enabled=false`) and the send fails, the backend
+drops the verification token, the account is never gated and registration reaches the profile step
+exactly as before ETP-4798. That unblocks a run at the cost of leaving the gate untested — fine for
+an unrelated debugging pass, not for validating this feature.
+
+**Retries:** `reuseExistingServer` is off under `CI=true`, which `run-e2e-full.sh` sets. If a
+Playwright-managed sink exits between retries and leaves port 8025 held, start the sink yourself
+(`node e2e/support/email-sink.mjs`) and re-run with `E2E_EMAIL_SINK=0`.
 
 ---
 
@@ -729,6 +784,37 @@ Document-aware components expose status via `data-*` attributes for test asserti
 | `data-doc-status` | Detail view container (`data-testid="detail-view"`) | `DR` (draft), `CO` (completed), `VO` (voided), `CL` (closed) |
 | `data-row-status` | List view rows (`data-testid="row-{id}"`) | Same as above |
 | `data-status` | Status badge (`data-testid="document-status-pill"`) | Same as above |
+
+### Gotcha: opening a record from a list that has a row preview
+
+Two facts make `row.dblclick()` the wrong way to reach a detail view, and both
+produce the same misleading symptom — a `getByTestId('detail-view')` timeout
+that looks like a slow page instead of a wrong click:
+
+1. **Row activation does not navigate on preview-enabled lists.** When a window
+   passes `renderPreview` to `ListView` (purchase-invoice, sales-invoice, …),
+   `buildRowNavigateHandler()` (`components/contract-ui/ListView.jsx`) swaps the
+   navigate handler for "open the row-preview overlay". Double-clicking a row
+   there opens `GenericPreviewModal`, never the detail.
+2. **`GenericPreviewModal` has no Escape handler.** Its only exits are the header
+   close button and a click on its full-viewport backdrop (the modal card's
+   parent element; the card is inset 8px, so a click at `y < 8` always lands on
+   the backdrop). `page.keyboard.press('Escape')` does *not* dismiss it — and
+   while it is up, its `fixed inset-0` backdrop swallows every pointer event
+   aimed at the list underneath.
+
+The reliable route into a record from a list is the row's own quick action:
+hover the row, then click `row-quick-action-edit` **scoped to that row**. That
+button is icon-only — its label lives in `aria-label`/`title` — so a
+`page.locator('button', { hasText: /editar|edit/i })` locator can never match
+it and silently resolves to some other button on the page.
+
+`e2e/tests/helpers/purchase-helpers.js` wraps all of this:
+`dismissPreviewModal(page)`, `openListRow(page, rowLocator)`,
+`openRowByStatus(page, { status })`, and `rowByDocumentStatus(page, status)`
+(which prefers `data-row-status` over translated cell text). Prefer
+`page.getByTestId('row-<id>')` whenever the test already knows the record id —
+"the first Completed row" also matches leftovers from earlier runs.
 
 ## Toast selectors
 

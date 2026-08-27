@@ -114,6 +114,12 @@ vi.mock('../MovementsTable.jsx', () => ({
       </button>
     </div>
   ),
+  // The tab builds these from the table module (the sort state lives in the tab since
+  // ETP-4921, so its toolbar can host the "Ordenar por" popover).
+  useTrxTypeLabel: () => (m) => m.trxType,
+  buildMovementSortCtx: () => ({}),
+  buildMovementSortAccessors: () => ({}),
+  buildMovementSortColumns: () => [],
 }));
 
 // Stub the new-transaction modal — its internals (useCreateMovement → useAuth,
@@ -344,24 +350,42 @@ describe('MovementsTab — bulk delete selection bar', () => {
     toastError.mockReset();
   });
 
+  // ETP-4972 — BulkDeleteSelectionBar now renders through the shared,
+  // portaled `SelectionToolbar` shell instead of an in-flow `<div>`.
+  // `SelectionToolbar` forwards a `data-testid` prop onto its pill (so
+  // `bulk-delete-selection-bar`, set by BulkDeleteSelectionBar.jsx, is a
+  // valid query too), but these tests assert presence via
+  // `bulk-delete-selection-count` — a testid on a real child element —
+  // which works the same regardless and predates this forwarding fix. The
+  // trigger button also became icon-only (no more `{label} ({count})` text)
+  // and the standalone Cancel button was dropped in favor of
+  // `SelectionToolbar`'s own built-in close (X) button.
   it('is hidden with no selection, and appears once a row is selected', () => {
     renderTab();
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
 
     act(() => screen.getByTestId('toggle-select-a').click());
 
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-delete-selection-trigger')).toHaveTextContent('(1)');
+    // No i18n provider is mounted in this harness (real useUI() falls back to
+    // the raw, un-interpolated key), so the exact "N Selected" text can't be
+    // asserted here — the actual selection count is already covered via
+    // `selected-ids`'s textContent in the sibling "selection toggle" tests.
+    // This just proves the bar mounts once a row is selected.
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeInTheDocument();
   });
 
   it('Cancel clears the selection and hides the bar', () => {
     renderTab();
     act(() => screen.getByTestId('toggle-select-a').click());
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
 
-    act(() => screen.getByTestId('bulk-delete-selection-cancel').click());
+    // The testid lives on SelectionToolbar's inner <X> svg icon, not the
+    // <button> itself — jsdom's SVGElement has no .click(), so target the
+    // actual button via closest().
+    act(() => screen.getByTestId('SelectionToolbar__close').closest('button').click());
 
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
     expect(screen.getByTestId('selected-ids').textContent).toBe('');
   });
 
@@ -381,7 +405,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
     expect(toastSuccess).toHaveBeenCalled();
     expect(toastWarning).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
   });
 
   it('partial failure (e.g. a payment-linked movement): reloads, fires ONE warning toast, and keeps only the failed movement selected', async () => {
@@ -416,7 +440,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onReload).not.toHaveBeenCalled();
     expect(screen.getByTestId('selected-ids').textContent).toBe('a');
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
   });
 });
 

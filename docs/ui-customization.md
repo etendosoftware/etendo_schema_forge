@@ -131,7 +131,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
@@ -142,6 +142,8 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
 ---
 
@@ -174,6 +176,8 @@ Adds actions to the triple-dot menu in the detail view. Visibility can be gated 
 | `component` | string | Imports a custom component from `windows/custom/{window}/` and opens it as a detail-menu modal. The component receives `currentRecord`, `token`, `apiBaseUrl`, `onClose`, and `onSaved`. |
 
 Handler precedence: `documentAction` > `columnName` > `action` > `component` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+
+**Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
@@ -444,11 +448,16 @@ never renders rows that can be picked — so it never sees a selection bar eithe
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
 
-Note that a window doing this swaps two bars, not stacks them: `ListView` renders
-its selection bar as a **sibling above** the slot and cannot reach inside it, so
-the slot must hide its own toolbar while a selection exists. To let it, `ListView`
-now forwards its authoritative **`selectedRows`** in the Table-slot props
-(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+Note that a window doing this swaps two toolbars, not stacks them — but since
+ETP-4972 (see §9e) the selection bar itself (`SelectionToolbar`) is a
+viewport-fixed portal to `document.body`, not a DOM sibling of the slot at
+all, so "swap" here means the **slot's own toolbar unmounts** while a
+selection exists, not that the selection bar takes its place in the slot's
+layout flow — the floating pill appears elsewhere in the viewport regardless
+of where the slot sits on the page. To let the slot know when to unmount its
+own toolbar, `ListView` forwards its authoritative **`selectedRows`** in the
+Table-slot props (read-only for the slot; `DataTable` has no such prop, so the
+spread is inert):
 
 ```jsx
 function MyHeaderTable({ data, meta, selectedRows, ...props }) {
@@ -539,8 +548,9 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   passed straight to `ListView` (through a generated page's `{...props}` spread, same as
   `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
 - When present, `ListView` recomputes on every selection change how many of the
-  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
-  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  **currently selected** rows fail the predicate. If any do, the generic delete button
+  (icon-only `Trash2`, no visible text label since ETP-4972 — see §9e) disables
+  (`bulkDeleting || blockedDeleteCount > 0`) and its `title`/`aria-label` tooltip switches to
   `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
   batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
   exists as a defense-in-depth backstop for a row that changed state between selection and
@@ -554,6 +564,110 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   only concerns `ListView`'s own generic bulk-delete button.
 - **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
   the only current consumer.
+
+### 9e. `SelectionToolbar` — the floating bulk-selection toolbar (ETP-4972)
+
+Every checkbox-selectable list/tab (grid multi-select in `ListView`, and every
+lines table that supports row selection — Sales Order, Physical Inventory,
+Amortization, Assets' Amortization Plan tab, Financial Accounts' Movimientos/
+Extractos tabs, the Periods panel's document bulk-open/close bar, contacts'
+secondary tabs) shares one component for the bar that appears once ≥1 row is
+checked: `tools/app-shell/src/components/contract-ui/SelectionToolbar.jsx`.
+It replaces the pre-ETP-4972 `LinesSelectionBar` (kept only as a one-line
+re-export shim, `LinesSelectionBar.jsx → SelectionToolbar.jsx`, for stragglers
+importing the old filename — do not add new imports of it).
+
+**Architecture — a true viewport-fixed portal, not an anchored one.** The old
+`LinesSelectionBar` was portaled to `document.body` with `position: fixed`,
+but its `top`/`left` came from `getBoundingClientRect()` on a sentinel
+`<div>` placed at the end of the scrollable list (some callers additionally
+tracked it via a `ResizeObserver` on a `barAnchorRef`). On a long list, once
+that sentinel scrolled out of view, the "fixed" bar scrolled out of view with
+it — a "floating" bar that wasn't actually anchored to the viewport.
+`SelectionToolbar` has no ref/rect-measuring code at all: it portals to
+`document.body` and hardcodes real viewport coordinates —
+`position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%)` —
+so it is bottom-center of the screen unconditionally, regardless of list
+length, scroll position, or which container it's logically nested under.
+That bug class cannot recur because there is no measured rect left to go
+stale.
+
+**Additive, not a swap, at the `ListView` idle-bar level.** Before ETP-4972,
+`ListView` rendered the selection bar and the idle filter bar (Filtros,
+ViewToggle, Nuevo, …) as either branch of one ternary occupying the same DOM
+slot — selecting a row replaced the idle bar outright. Since the selection
+bar is now a portal that floats independently of everything else on the
+page, `ListView` renders both as independent siblings: the idle bar **stays
+visible** while rows are selected, and the floating pill appears additively
+on top. (This is unrelated to the slot-level "swap" described in §9c above —
+a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
+selection is active, because that toolbar and the grid live in the same
+slot; see the corrected note there.)
+
+**Composition — children, not a data-driven `actions[]` prop.**
+`SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
+the portal, the true fixed placement, the dark-pill visual chrome (radius,
+shadow, enter/exit slide animation), a 1px divider rendered after every
+top-level child, and a trailing close (`X`) button that calls `onClose`. It
+does **not** impose a generic `actions[]` shape on callers — the selection
+counter, action buttons, and any destructive "Eliminar" affordance are all
+passed as plain `children`, one top-level element per segment (a divider is
+auto-inserted after each):
+
+```jsx
+<SelectionToolbar
+  visible={selectedRows.length > 0}
+  onClose={clearSelection}
+  closeTitle={ui('close')}
+>
+  <span className="text-sm font-medium">
+    {ui('selected').replace('{count}', selectedRows.length)}
+  </span>
+  <div className="flex items-center gap-2 h-10">
+    {/* action buttons */}
+  </div>
+</SelectionToolbar>
+```
+
+Because the shell no longer provides its own cancel/X affordance for callers
+to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
+hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
+button** — `SelectionToolbar` always renders one as the trailing segment.
+
+**Gotcha — use a plain `<button>`, not the shared shadcn `<Button
+size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
+in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
+selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
+regardless of Tailwind/twMerge class order. Two text-bearing action buttons
+in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
+rendered at visibly different icon/text sizes until both were rewritten as
+plain hand-rolled `<button>` elements with the same explicit classes,
+matching Figma's "Size: md" spec (padding `7px 12px`, gap `4px`) instead of
+inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
+with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
+any new bulk-toolbar action button, rather than `<Button size="sm">`.
+
+**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
+The Figma spec for the two text-bearing buttons above sources its icons
+(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
+draw the plus/check as a badge overlapping the file's corner with a heavier
+stroke — visually different from this app's lucide-react set (`FilePlus`/
+`FileCheck`), which draws the same glyphs contained inside the file body
+with a thinner stroke. This is a **confirmed, deliberate decision, not a
+drift from Figma to fix**: lucide-react's versions were kept for visual
+consistency with every other icon already in this toolbar (`Trash2`, `X`,
+`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
+Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
+shape without re-confirming with design first.
+
+**Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
+usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
+`tools/app-shell/src/components/financial-accounts/BulkDeleteSelectionBar.jsx`
+(Financial Accounts' Movimientos/Extractos tabs), `windows/custom/calendar/
+PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
+contacts/index.jsx`.
 
 ---
 
@@ -932,6 +1046,16 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 **Real example — "tax needs SIF configuration" trigger (ETP-4888 point 5, design-polish round):** on `sales-invoice`'s and `purchase-invoice`'s lines grid, the `tax` cell shows an amber warning icon (`text-status-warning-foreground` — the same warning-color token `SifTab.jsx`'s `PILL_CLS.pending` uses) right next to the tax value itself, ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII (which has nothing to configure at tax level; see `docs/decisions-reference.md`'s `lineTaxSifTrigger` row). Clicking it opens `TaxSifModal.jsx` (see `docs/ui-design-guidelines.md`-compliant modal: rounded card, tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer). Unlike the superseded `rowActions` placement, this badge is NOT gated by hover or `isDocumentReadOnly` — the shortcut edits the TAX record, not the invoice, so it stays actionable even on a completed invoice.
 
+**Follow-up round — extended to `sales-order`/`purchase-order`:** the identical mechanism (hand-mirrored `LINE_TAX_SIF_TRIGGER_ENABLED` + `useTaxSifLineRowActions()` + `lineCellBadges` wiring) was added to these two order windows' `index.jsx` after a real-world sales-order line used a tax missing its "Clave Régimen Especial IVA" and the user only found out via a cryptic Classic error from `C_Order_Post` at confirmation time — exactly the failure mode this feature exists to surface earlier. Both order windows route their detail view through `GeneratedApp` (`@generated/{spec}/generated/web/{spec}/index.jsx`) rather than importing `HeaderPage` directly, but `GeneratedApp` spreads its own `...rest` straight into `HeaderPage`, which itself spreads `{...props}` into `DetailView` — so passing `lineCellBadges` on `<GeneratedApp>` reaches the line grid exactly like it does on invoices' `<HeaderPage>`, with zero extra plumbing. `useTaxSifLineRowActions()` and `TaxSifModal.jsx` required **no frontend changes** — both already took `apiBaseUrl`/`token`/`recordId`/`windowCategory` as generic params with no invoice-specific hardcoding. `goods-shipment` (albarán) is explicitly OUT OF SCOPE: its `lines` entity carries no fields at all in Etendo's data model, so there is no `tax` field to attach a badge to.
+
+**Backend scoping MUST be extended too, or the badge false-positives:** `InvoiceLineTaxSifSelectorPolicy`'s enrichment (see below) is scoped by `AD_Window_Id`, and `useTaxSifLineRowActions.jsx`'s `isTaxSifMissing()` treats an ABSENT enrichment column the same as a genuinely BLANK one (`value == null || value === ''`), while `selectSifFields()` still resolves a régimen field even without the `taxExempt`/`notTaxable` enrichment flags. So adding a window's `index.jsx` wiring alone, without adding its `AD_Window_Id` to the backend policy's `IN_SCOPE_WINDOW_IDS`, does not merely "show no badge" — it makes the badge fire on every TBAI/Verifactu tax on that window, including correctly configured ones. `IN_SCOPE_WINDOW_IDS` now covers all four windows (`167`/`183`/`143`/`181`).
+
+**Compound/summary-tax resolution (ETP-4888 follow-up — replaces the earlier backend-only fallback):** a live incident showed a Spanish compound tax ("Entregas IVA+RE 21+5.2% ISP", `c_tax.issummary='Y'`) attached to an order line while its "Clave Régimen Especial IVA" lived on a CHILD tax row (`parent_tax_id` pointing back at the summary, `em_obspti_isequivalentcharge='N'` — the base-rate component; a sibling child with `='Y'` is the equivalence-charge/"Recargo" component and never needs the key). Filling the field on the summary tax — what the trigger opened against before this fix — never satisfied Classic's completion check, which reads the CHILD's own column. Two earlier defensive fallbacks (a `COALESCE` with the parent in `ETVFAC_ORDER_VFAC_VALIDATION.xml`, a `VerifactuUtils.resolveRegimeKey()` fallback in `InitialValidator.java`, both in `com.etendoerp.verifactu`) patched the READ side; this follow-up fixes the WRITE side at the source instead, so the ambiguity no longer needs a fallback at all:
+
+- `TaxSifModal.jsx` resolves the record it actually edits: it fetches the tax `taxId` names, and if `summaryLevel` (`IsSummary`) is true, fetches its children via `fetchByCriteria(tax, tax, 'parentTaxRate', taxId, …)` and picks the ONE child where `oBSPTIEquivalentCharge` (`EM_OBSPTI_IsEquivalentCharge`) is not true (`pickRegimeChild()` in `TaxSifField.jsx` — the shared pure rule, documented there in full, mirroring the exact criterion `ETVFAC_ORDER_VFAC_VALIDATION.xml`/`InitialValidator.java` use). It then reads/PATCHes THAT child, not the summary. The summary tax's own name still shows as the top badge (that's what the user clicked), and a caption clarifies which rate component is actually being edited whenever it differs. Zero or more than one non-equivalent-charge child is treated as unresolved — the modal falls back to editing the summary tax directly (the pre-follow-up behavior) rather than guessing.
+- `isTaxSifMissing()` needed the same fix on the READ side: the completeness map (`taxById`) is keyed by the id that appears on the line — the summary tax — so checking its own (always-blank) SIF columns made the badge either never clear (after a correct child-level save) or never appear (if the summary's own irrelevant field looked filled). `resolveEffectiveTaxRow(taxRow, taxById)` applies the SAME `pickRegimeChild()` rule client-side, using the child's own entry already present in the SAME full-catalog `taxById` map — no extra request. This requires 3 extra enrichment columns from the backend: `InvoiceLineTaxSifSelectorPolicy` (`com.etendoerp.go`) now also projects `isSummary`/`parentTaxId`/`isEquivalentCharge` alongside the existing SIF value columns.
+- The `tax` spec's `summaryLevel`/`parentTaxRate`/`oBSPTIEquivalentCharge` fields were promoted from `visibility: "discarded"` to `visibility: "system"` in `artifacts/tax/decisions.json` (hidden from the Tax window's own UI, but now present in the CRUD entity's GET response and usable as a `fetchByCriteria` filter — see `docs/decisions-reference.md`'s Field-Level Overrides table for what `discarded` vs `system` means for API exposure) — a pure decisions.json/regen change, no new `generate-frontend.js` capability needed.
+
 ```
 tools/app-shell/src/windows/custom/shared/
   useTaxSifLineRowActions.jsx  // hook: builds `cellBadges.tax` (§14e shape) + the modal JSX
@@ -941,7 +1065,7 @@ tools/app-shell/src/components/contract-ui/
   EnumSearchSelect.jsx         // generic searchable code+description picker for static enum fields
 ```
 
-The "missing" check needs each row's tax record without an extra per-tax fetch. Instead of enriching every invoice line's own GET response, the hook reads the whole tax catalog from the SAME tax selector (`{apiBaseUrl}/lines/selectors/C_Tax_ID`) the tax field's own search combo uses, **paging through it** with an `offset`/`hasMore` loop until the server reports `hasMore: false` — the backend (`InvoiceLineTaxSifSelectorPolicy` in `com.etendoerp.go`, a `SelectorEnrichmentPolicy`) projects `taxExempt`/`notTaxable` plus the TBAI/Verifactu key columns onto each selector item, scoped to exactly these two windows via `NeoSelectorService.SOURCE_WINDOW_ID_PARAM` (AD_Window_Id `167`/`183`) so no other window's tax/product selectors are affected. The frontend then re-runs `selectSifFields()` against each enriched tax row and flags it "missing" when any resolved field's value is blank — the same pure function decides WHICH fields apply on both the Tax window's own form and this modal, so the business rule is never duplicated.
+The "missing" check needs each row's tax record without an extra per-tax fetch. Instead of enriching every line's own GET response, the hook reads the whole tax catalog from the SAME tax selector (`{apiBaseUrl}/lines/selectors/C_Tax_ID`) the tax field's own search combo uses, **paging through it** with an `offset`/`hasMore` loop until the server reports `hasMore: false` — the backend (`InvoiceLineTaxSifSelectorPolicy` in `com.etendoerp.go`, a `SelectorEnrichmentPolicy`) projects `taxExempt`/`notTaxable` plus the TBAI/Verifactu key columns onto each selector item, scoped via `NeoSelectorService.SOURCE_WINDOW_ID_PARAM` to exactly the in-scope windows' `AD_Window_Id`s so no other window's tax/product selectors are affected. As of the ETP-4888 follow-up round `IN_SCOPE_WINDOW_IDS` covers all four consuming windows — sales-invoice (`167`), purchase-invoice (`183`), sales-order (`143`), purchase-order (`181`) — the class/file name stays invoice-flavored (kept as a single diff, not a rename; a spec-neutral rename is a reasonable future Alex-review call). The frontend then re-runs `selectSifFields()` against each enriched tax row and flags it "missing" when any resolved field's value is blank — the same pure function decides WHICH fields apply on both the Tax window's own form and this modal, so the business rule is never duplicated.
 
 The paging loop is NOT premature generality: `NeoSelectorService.MAX_LIMIT` (100) silently clamps whatever `limit` the client asks for, so the hook's requested `TAX_SELECTOR_PAGE_LIMIT = 200` never actually returns more than 100 items. A client whose catalog exceeds one page (seen live: 179 taxes) came back truncated with `hasMore: true`, and every tax outside the first page was silently treated as "nothing to fix" — the ETP-4888 bug the loop exists to prevent. Consequences of that clamp, all handled in `loadTaxCatalog()`:
 - `offset` advances by **each page's own item count**, never by the requested `limit`, so the cursor stays correct despite the server-side clamp.
@@ -951,7 +1075,7 @@ The paging loop is NOT premature generality: `NeoSelectorService.MAX_LIMIT` (100
 
 One more request precedes the paging: the selector **fails closed** (returns an EMPTY catalog, not the full one) unless it receives the same context params `InlineSearchCombo` sends in edit mode (`parentId`, `isSOTrx`/`IsSOTrx`, `priceList`, `DateInvoiced`, `C_BPartner_Location_ID`, `currency`). The hook therefore fetches the invoice's own header record (`{apiBaseUrl}/header/{recordId}`, unwrapping NEO's `{ response: { data: [...] } }` envelope) and feeds it to `buildLineSelectorContext` — the SAME helper `DetailView.jsx` uses — rather than hand-rolling a second context builder.
 
-**`DetailView`'s `lineCellBadges` prop** mirrors §14d's `lineRowActions` exactly: `<DetailTable ... cellBadges={lineCellBadges} />`, defaulting to `{}` so every window that doesn't pass it renders byte-for-byte the same as before this prop existed. `sales-invoice`/`purchase-invoice`'s `index.jsx` hand-wire it from `useTaxSifLineRowActions`'s `cellBadges` return value, same convention as §14d.
+**`DetailView`'s `lineCellBadges` prop** mirrors §14d's `lineRowActions` exactly: `<DetailTable ... cellBadges={lineCellBadges} />`, defaulting to `{}` so every window that doesn't pass it renders byte-for-byte the same as before this prop existed. `sales-invoice`/`purchase-invoice`/`sales-order`/`purchase-order`'s `index.jsx` each hand-wire it from `useTaxSifLineRowActions`'s `cellBadges` return value, same convention as §14d.
 
 ---
 

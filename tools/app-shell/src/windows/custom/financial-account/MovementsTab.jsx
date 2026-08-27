@@ -1,7 +1,16 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, useMemo } from 'react';
 import { AccountSummaryStrip } from './AccountSummaryStrip';
 import { MovementsToolbar } from './MovementsToolbar/index';
-import { MovementsTable } from './MovementsTable';
+import {
+  MovementsTable,
+  useTrxTypeLabel,
+  buildMovementSortCtx,
+  buildMovementSortAccessors,
+  buildMovementSortColumns,
+} from './MovementsTable';
+import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { useClientSort } from '@/hooks/useClientSort';
+import { useUI } from '@/i18n';
 import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
 import { applyAdvancedFilter } from './movementAdvancedFilter';
@@ -147,6 +156,24 @@ export const MovementsTab = forwardRef(function MovementsTab(
     [movements, filters, advancedFilter],
   );
 
+  // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in the toolbar,
+  // which is the table's sibling. Same split as ListView/DataTable. Client-side because this
+  // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
+  const ui = useUI();
+  const getTrxTypeLabel = useTrxTypeLabel();
+  const sortAccessors = useMemo(
+    () => buildMovementSortAccessors(buildMovementSortCtx(ui, getTrxTypeLabel)),
+    // `ui` and `getTrxTypeLabel` are stable per locale; rebuilding on every render would defeat
+    // the memo the accessors feed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const sortColumns = useMemo(() => buildMovementSortColumns(ui), [ui]);
+  const {
+    sorted: sortedMovements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
+    isDefaultSort,
+  } = useClientSort(filteredMovements, { accessors: sortAccessors });
+
   // Latest filtered list is also reachable via ref so the parent's Export
   // button can read it on click without subscribing to filter changes.
   const filteredRef = useRef(filteredMovements);
@@ -179,16 +206,16 @@ export const MovementsTab = forwardRef(function MovementsTab(
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {selectedIds.size > 0 && (
-        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
-          <BulkDeleteSelectionBar
-            count={selectedIds.size}
-            deleting={bulkDeleting}
-            onCancel={clearSelection}
-            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-            data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
-        </div>
-      )}
+      {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
+          viewport-fixed pill via SelectionToolbar; it no longer occupies a
+          slot in this flow (the wrapping div here used to reserve space for
+          the old in-flow bar). */}
+      <BulkDeleteSelectionBar
+        count={selectedIds.size}
+        deleting={bulkDeleting}
+        onCancel={clearSelection}
+        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+        data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
@@ -197,6 +224,16 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         rows={movements}
+        sortControl={(
+          <ListSortPopover
+            columns={sortColumns}
+            sortColumn={sortKey}
+            sortDirection={sortDirection}
+            onSelect={selectSort}
+            onClear={clearSort}
+            isDefaultSort={isDefaultSort}
+            data-testid="ListSortPopover__c1f76a" />
+        )}
         data-testid="MovementsToolbar__c1f76a" />
       <AccountSummaryStrip
         account={account}
@@ -205,12 +242,15 @@ export const MovementsTab = forwardRef(function MovementsTab(
         data-testid="AccountSummaryStrip__c1f76a" />
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <MovementsTable
-          movements={filteredMovements}
+          movements={sortedMovements}
           loading={loading}
           enabledDimensions={enabledDimensions}
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}
           highlightTxnId={highlightTxnId}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={toggleSort}
           onReload={onReload}
           onEdit={setEditMovement}
           data-testid="MovementsTable__c1f76a" />

@@ -6,6 +6,7 @@ import {
   invitationLinkFromEmail,
   waitForEmail,
 } from '../helpers/email-sink.js';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 function loadCredentials(accountNumber = 1) {
   try {
@@ -45,6 +46,34 @@ const invitationCredential = process.env.E2E_INVITATION_PASSWORD
 
 function uniqueEmail(label) {
   return `e2e-${label}-${Date.now()}@example.com`;
+}
+
+// Mirrors the unwrap logic in tools/app-shell/src/lib/neoWebhookClient.js
+// (fetchNeoWebhookJson): the NEO pseudo-spec bridge wraps a webhook's Java
+// `responseVars.put("result", jsonObject.toString())` into `{"result": "<JSON
+// string>"}` — `result` is a JSON-stringified payload, not the payload itself.
+// Only endpoints reached through that bridge (e.g. /sws/neo/*) need this second
+// unwrap; the plain-servlet /sws/go/* endpoints write their JSON body directly
+// and do not need it.
+function unwrapNeoWebhookResult(body) {
+  if (typeof body?.result === 'string') {
+    try { return JSON.parse(body.result); } catch { throw new Error('NEO webhook returned an invalid result payload'); }
+  }
+  if (body?.result && typeof body.result === 'object') return body.result;
+  return body;
+}
+
+// Counts sink messages already addressed to `recipient` at the moment this is called
+// (no waiting/polling) — used to assert a dedup no-op did NOT send a second email, by
+// comparing the count immediately before and after the no-op call. The backend sends
+// synchronously within the HTTP request/response it belongs to (see
+// CompanyInvitationService#issueFreshInvitation), so by the time that call's HTTP
+// response has returned, any email it might have sent is already in the sink.
+async function countEmailMessages(request, recipient, baseURL = EMAIL_SINK_URL) {
+  const response = await request.get(`${baseURL}/messages`);
+  const { messages = [] } = await response.json();
+  return messages.filter((candidate) => candidate.to === recipient
+    || candidate.to?.includes?.(recipient)).length;
 }
 
 async function expectInvitationResolves(request, inviteLink) {
@@ -95,7 +124,19 @@ async function loginAsAdmin(request, configuredCredentials = onboardingCredentia
   const environmentsText = await environmentsResponse.text();
   expect(environmentsResponse.status(), environmentsText).toBe(200);
   const environmentsBody = JSON.parse(environmentsText);
-  const environment = environmentsBody?.environments?.find((item) => item.adminUserId);
+  // ETP-4894: once an account belongs to 2+ clients (e.g. after accepting a
+  // cross-client invitation), `environments` holds one entry per client and a
+  // plain "first truthy adminUserId" pick can land on either admin's
+  // environment for BOTH accounts (backend sorts by plan tier then
+  // clientName, not by which environment is this account's "home" one). Each
+  // environment's `adminUser` is always the bare account login email (see
+  // `EtendoGoJwtDalHelper#buildEnvironmentJson` -> `FIELD_ADMIN_USER`, set
+  // from `environmentUser.getUsername()`), so prefer the environment whose
+  // adminUser matches this call's own credentials — falling back to the old
+  // "first truthy adminUserId" behavior for single-environment accounts.
+  const environment = environmentsBody?.environments?.find(
+    (item) => item.adminUser?.toLowerCase() === credentials.email.toLowerCase(),
+  ) || environmentsBody?.environments?.find((item) => item.adminUserId);
   expect(environment?.adminUserId, environmentsText).toEqual(expect.any(String));
 
   const neoLoginResponse = await request.get(
@@ -115,6 +156,25 @@ async function loginAsAdmin(request, configuredCredentials = onboardingCredentia
   };
 }
 
+/**
+ * Creates (or reuses) the AD_User for `email` via `POST`/`GET /sws/neo/user/user`, then
+ * assigns it a role through the real role-composition webhook
+ * (`GET /sws/neo/assignuserroles`) — the same mechanism `AssignTemplateRolesControl.jsx`
+ * uses in production. See the role-assignment block below for why a raw `PATCH
+ * defaultRole` is deliberately NOT used here.
+ *
+ * ETP-4830: when this actually creates a NEW user, that `POST` itself now auto-fires
+ * a company invitation as part of user creation
+ * (`UserRoleAssignmentHandler.afterHandle` -> `inviteNewlyCreatedUser`,
+ * `com.etendoerp.go/.../handlers/UserRoleAssignmentHandler.java`). So calling this for
+ * an email that does not exist yet IS the invite trigger — the caller should wait for
+ * that email directly rather than issuing a separate explicit
+ * `POST /sws/go/company-invitations` afterward, which would just dedup to a no-op
+ * against the invitation this call already sent
+ * (`CompanyInvitationService#existingInvitationResponse`). The explicit endpoint is
+ * still needed to invite a user that already existed before this flow started (see
+ * the first test in this file, which never calls this helper).
+ */
 async function prepareInvitedUser(request, neoToken, email) {
   const criteria = encodeURIComponent(JSON.stringify([
     { fieldName: 'email', operator: 'equals', value: email },
@@ -146,22 +206,41 @@ async function prepareInvitedUser(request, neoToken, email) {
   }
   expect(user?.id, userResponseText).toEqual(expect.any(String));
 
-  const roleOptionsResponse = await request.get('/sws/neo/user/userRoles/selectors/role?limit=50&offset=0', {
+  // Pick any one of the 4 fixed system-level template roles (Finance/Sales/Purchasing/
+  // Inventory) — always available to any admin/client-admin caller. Which one doesn't
+  // matter for this helper's purposes.
+  const templateRolesResponse = await request.get('/sws/neo/systemroletemplates', {
     headers: { Authorization: `Bearer ${neoToken}` },
   });
-  const roleOptionsText = await roleOptionsResponse.text();
-  expect(roleOptionsResponse.status(), roleOptionsText).toBe(200);
-  const roleOptionsBody = JSON.parse(roleOptionsText);
-  const role = roleOptionsBody?.items?.[0] || roleOptionsBody?.response?.data?.[0];
-  expect(role?.id, roleOptionsText).toEqual(expect.any(String));
+  const templateRolesText = await templateRolesResponse.text();
+  expect(templateRolesResponse.status(), templateRolesText).toBe(200);
+  const templateRolesBody = unwrapNeoWebhookResult(JSON.parse(templateRolesText));
+  const templateRoleId = templateRolesBody?.roles?.[0]?.id;
+  expect(templateRoleId, templateRolesText).toEqual(expect.any(String));
 
-  const roleResponse = await request.patch(`/sws/neo/user/user/${user.id}`, {
-    headers: { Authorization: `Bearer ${neoToken}` },
-    data: { defaultRole: role.id },
-  });
-  const roleText = await roleResponse.text();
-  expect([200, 201], roleText).toContain(roleResponse.status());
-  return { userId: user.id, roleId: role.id };
+  // The REAL role-assignment mechanism — the same webhook "Roles del usuario" /
+  // AssignTemplateRolesControl.jsx calls in production. It resolves-or-creates the
+  // user's one fixed personal role, composes the given template role(s) onto it as
+  // AD_Role_Inheritance rows, and points BOTH Default_Ad_Role_ID and
+  // EM_SMFSWS_Default_WS_Role_ID at that same personal role
+  // (UserRoleCompositionService#assignTemplateRoles). A raw
+  // `PATCH /sws/neo/user/user/{id} { defaultRole }` bypasses all of that: it swaps
+  // Default_Ad_Role_ID to an arbitrary, unrelated role and desyncs it from
+  // EM_SMFSWS_Default_WS_Role_ID, which never gets touched.
+  //
+  // The endpoint always answers HTTP 200 — even on a domain-validation rejection — so
+  // the outcome must be read from the JSON body's own `success` flag, not the status
+  // code alone.
+  const assignResponse = await request.get(
+    `/sws/neo/assignuserroles?UserId=${encodeURIComponent(user.id)}&TemplateRoleIds=${encodeURIComponent(templateRoleId)}`,
+    { headers: { Authorization: `Bearer ${neoToken}` } },
+  );
+  const assignText = await assignResponse.text();
+  expect(assignResponse.status(), assignText).toBe(200);
+  const assignBody = unwrapNeoWebhookResult(JSON.parse(assignText));
+  expect(assignBody.success, assignText).toBe(true);
+  expect(assignBody.personalRoleId, assignText).toEqual(expect.any(String));
+  return { userId: user.id, roleId: assignBody.personalRoleId };
 }
 
 async function createInvitationAsAdmin(request, sessionToken, email) {
@@ -202,7 +281,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await expect(page.getByTestId('invite-authenticated-step')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('action-accept-invitation').click();
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-joined-company.png`,
       fullPage: true,
     });
@@ -210,7 +289,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-dashboard.png`,
       fullPage: true,
     });
@@ -227,7 +306,7 @@ async function verifyAcceptedLinkIsIdempotent(browser, inviteLink, evidencePath)
   try {
     await page.goto(inviteLink);
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({ path: evidencePath, fullPage: true });
+    await captureScreenshot(page, { path: evidencePath, fullPage: true });
   } finally {
     await context.close();
   }
@@ -252,36 +331,43 @@ async function acceptNewInvitation(browser, inviteLink, email) {
 
 test.describe('Company User Invitations — email integration E2E — ETP-4894', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo Go, E2E_USE_MOCK=0, BASE_URL, credentials, and the email sink (E2E_EMAIL_SINK=1).');
-  test.describe.configure({ mode: 'serial' });
-  test.setTimeout(180_000);
+  test.describe.configure({ mode: 'serial', timeout: 180_000 });
 
   test('captures the real invitation link and completes the existing-account flow', async ({
     request,
     browser,
   }) => {
-    const credentials = onboardingCredentials || {
-      email: process.env.E2E_USER || 'goadmin@etendo.software',
-      password: process.env.E2E_PASSWORD,
-    };
-    const email = credentials.email;
+    test.skip(!secondAdminCredentials, 'Requires the second onboarding credentials generated by the JSON account fixture.');
+
+    // "existing-account" needs an invitee that can actually log in, so the
+    // resolve call hits the `existing_account` branch instead of
+    // `registration_required` — a real onboarding fixture account, not a
+    // throwaway registration. Invite it via prepareInvitedUser's ETP-4830
+    // NEO-create path (requireExistingRole=false internally), not the explicit
+    // POST /sws/go/company-invitations endpoint: that endpoint always requires
+    // a pre-existing role in the admin's org (requireExistingRole=true), which a
+    // freshly-onboarded account living in its OWN separate org never has —
+    // calling it here fails with 400 INVITED_USER_NO_ROLE.
+    const inviteeEmail = secondAdminCredentials.email;
+    const inviteePassword = secondAdminCredentials.password;
 
     await clearEmailSink(request, EMAIL_SINK_URL);
     const adminTokens = await loginAsAdmin(request);
 
-    await createInvitationAsAdmin(request, adminTokens.sessionToken, email);
+    await prepareInvitedUser(request, adminTokens.neoToken, inviteeEmail);
     const message = await waitForEmail(request, {
-      recipient: email,
+      recipient: inviteeEmail,
       template: 'custom',
       baseURL: EMAIL_SINK_URL,
     });
 
-    expect(message.to).toBe(email);
+    expect(message.to).toBe(inviteeEmail);
     expect(message.template).toBe('custom');
     expect(message.data?.link).toEqual(expect.stringContaining('/invite?token='));
     expect(message.data?.body).toContain(message.data.link);
     const inviteLink = invitationLinkFromEmail(message);
     await expectInvitationResolves(request, inviteLink);
-    await acceptExistingInvitation(browser, inviteLink, email, credentials.password);
+    await acceptExistingInvitation(browser, inviteLink, inviteeEmail, inviteePassword);
   });
 
   test('captures the real invitation link and completes the new-account flow without onboarding', async ({
@@ -292,8 +378,10 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
 
     await clearEmailSink(request, EMAIL_SINK_URL);
     const adminTokens = await loginAsAdmin(request);
+    // Creating the user IS the invite trigger now (see prepareInvitedUser's doc
+    // comment) — wait for the email it auto-sends directly, no separate explicit
+    // invite call needed to make it arrive.
     await prepareInvitedUser(request, adminTokens.neoToken, email);
-    await createInvitationAsAdmin(request, adminTokens.sessionToken, email);
     const message = await waitForEmail(request, {
       recipient: email,
       template: 'custom',
@@ -305,6 +393,17 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
     expect(message.data?.body).toContain(message.data.link);
     const inviteLink = invitationLinkFromEmail(message);
     await expectInvitationResolves(request, inviteLink);
+
+    // Lock in the dedup contract this now depends on
+    // (CompanyInvitationService#existingInvitationResponse): an explicit admin
+    // invite for the same (client, email) that already has an open invitation must
+    // report success against that SAME invitation, and must NOT send a second email.
+    const messagesBeforeDedup = await countEmailMessages(request, email, EMAIL_SINK_URL);
+    const dedupResult = await createInvitationAsAdmin(request, adminTokens.sessionToken, email);
+    expect(dedupResult.message).toMatch(/already pending/i);
+    const messagesAfterDedup = await countEmailMessages(request, email, EMAIL_SINK_URL);
+    expect(messagesAfterDedup).toBe(messagesBeforeDedup);
+
     await acceptNewInvitation(browser, inviteLink, email);
   });
 
@@ -322,12 +421,29 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
     expect(org1Name).not.toBe(org2Name);
 
     // Client 2 needs the same AD_User, with a role in Admin B's organization,
-    // before the email-only invitation can be created. This is the same action
-    // performed by the administrator in the User window.
+    // before it can receive an invitation there. This is the same action performed
+    // by the administrator in the User window — and, since ETP-4830, creating the
+    // user this way is ITSELF what fires client B's company invitation
+    // (see prepareInvitedUser's doc comment). Capture that invitation right here,
+    // before any clearEmailSink() call can wipe it and before the client-A flow
+    // below runs — a later explicit invite for this same (client B, email) pair
+    // would just dedup to a no-op against the invitation this call already sent.
+    await clearEmailSink(request, EMAIL_SINK_URL);
     const preparedUser = await prepareInvitedUser(request, adminB.neoToken, invitee.email);
     expect(preparedUser.userId).toEqual(expect.any(String));
     expect(preparedUser.roleId).toEqual(expect.any(String));
 
+    const secondMessage = await waitForEmail(request, {
+      recipient: invitee.email,
+      template: 'custom',
+      baseURL: EMAIL_SINK_URL,
+    });
+    const secondInviteLink = invitationLinkFromEmail(secondMessage);
+    const secondResolution = await expectInvitationResolves(request, secondInviteLink);
+    expect(secondResolution.clientName).toBe(org2Name);
+
+    // Client A's invitation is a genuinely fresh dedup key ((client A, email) has no
+    // open invitation yet), so the explicit endpoint is still the right way to fire it.
     await clearEmailSink(request, EMAIL_SINK_URL);
     await createInvitationAsAdmin(request, adminA.sessionToken, invitee.email);
     const firstMessage = await waitForEmail(request, {
@@ -352,17 +468,6 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
       '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-idempotent.png',
     );
 
-    await clearEmailSink(request, EMAIL_SINK_URL);
-    await createInvitationAsAdmin(request, adminB.sessionToken, invitee.email);
-    const secondMessage = await waitForEmail(request, {
-      recipient: invitee.email,
-      template: 'custom',
-      baseURL: EMAIL_SINK_URL,
-    });
-    const secondInviteLink = invitationLinkFromEmail(secondMessage);
-    const secondResolution = await expectInvitationResolves(request, secondInviteLink);
-    expect(secondResolution.clientName).toBe(org2Name);
-
     const secondHttpSignals = await acceptExistingInvitation(
       browser,
       secondInviteLink,
@@ -371,19 +476,43 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
       {
         evidenceStem: 'ETP-4894-cross-client-org2',
         afterDashboard: async (page) => {
-          // The dashboard opens with the Etendo side menu collapsed. Expand it
-          // before asserting the company switcher, matching the real user path.
-          const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
-          if (await expandMenu.isVisible()) await expandMenu.click();
-          await expect(page.getByLabel('switchCompany')).toContainText(org2Name);
-          await page.getByLabel('switchCompany').click();
-          const options = page.locator('[data-testid^="company-option-"]');
-          await expect(options).toHaveCount(2, { timeout: 30_000 });
-          await options.filter({ hasText: org1Name }).click();
-          await page.waitForURL('**/dashboard', { timeout: 60_000 });
-          await expect(page.getByLabel('switchCompany')).toContainText(org1Name);
+          // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
+          // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
+          // getByLabel('switchCompany') matches nothing once a locale dictionary loads.
+          const companySwitcher = page.getByTestId('company-switcher');
+          // The dashboard opens with the Etendo side menu collapsed, and the switcher only
+          // renders while it is expanded. Expanding is a click plus an explicit wait for the
+          // switcher — the click landing is not proof the menu finished opening, and the
+          // switch below re-navigates, which collapses the menu again.
+          const openSideMenu = async () => {
+            const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
+            if (await expandMenu.isVisible()) await expandMenu.click();
+            await expect(companySwitcher).toBeVisible({ timeout: 30_000 });
+          };
+          // Switching is only possible TOWARDS the other company: SideMenu renders every
+          // membership as an option but leaves the current one `disabled`, so a click on
+          // the company you are already in would hang waiting for it to become clickable.
+          const switchToCompany = async (targetName) => {
+            await openSideMenu();
+            await companySwitcher.click();
+            const options = page.locator('[data-testid^="company-option-"]');
+            await expect(options).toHaveCount(2, { timeout: 30_000 });
+            await options.filter({ hasText: targetName }).click();
+            await page.waitForURL('**/dashboard', { timeout: 60_000 });
+            await openSideMenu();
+            await expect(companySwitcher).toContainText(targetName);
+          };
+
+          await openSideMenu();
+          // Accepting an invitation does NOT move the session into the invited company:
+          // InviteAcceptancePage's "go to app" only does navigate('/'), so the session opens
+          // on the user's OWN default client. What this test proves is that both memberships
+          // now exist and are reachable from the switcher — hence org1, then org2, then back.
+          await expect(companySwitcher).toContainText(org1Name);
+          await switchToCompany(org2Name);
+          await switchToCompany(org1Name);
           await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-          await page.screenshot({
+          await captureScreenshot(page, {
             path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
             fullPage: true,
           });

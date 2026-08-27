@@ -1,8 +1,8 @@
 {
-  "version": "0.84.1",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-20T15:53:05.006Z",
-  "checksum": "7d0872c484db4fb7",
+  "version": "0.73.0",
+  "generatedAt": "2026-08-27T11:59:52.819Z",
+  "updatedAt": "2026-08-27T12:32:31.187Z",
+  "checksum": "78521b8c9c034582",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -71,9 +71,6 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -280,9 +277,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['posted'] === true || (record['processed'] === true && (record['documentStatus'] !== 'VO')) || ((record['aeatsiiEstado'] === 'CO' || record['aeatsiiEstado'] === 'AE') && record['isSotrx'] === true)"
             }
           },
           {
@@ -2856,9 +2852,6 @@
           "C_DocTypeTarget_ID": "Document Type"
         }
       },
-      "listViewOptions": {
-        "hidePrint": true
-      },
       "subsetFilters": [
         {
           "label": "allTab"
@@ -3446,7 +3439,7 @@
             "apiKey": "etvfacQRURL",
             "column": "EM_Etvfac_Qr_Url",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
