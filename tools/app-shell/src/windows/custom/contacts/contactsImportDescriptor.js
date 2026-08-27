@@ -1,7 +1,8 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
-import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
+import { resolveCodedCellOrThrow, codedCellError } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
@@ -209,6 +210,22 @@ async function resolveLocation(row, config) {
     },
   };
 }
+
+/**
+ * ETP-4996: the two AD-coded columns are checked while the user is still REVIEWING the
+ * file, not when the row is sent. Before this, a mistyped "Persona Fisica" sat in the
+ * Correctas tab, and the user only discovered the problem after confirming the import.
+ *
+ * Same tables and same wording as the send path below — see `codedCellError`.
+ */
+registerImportRowValidator('contacts', (row, { translate } = {}) => [
+  codedCellError(row.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
+    target: 'oBTIKTaxIDKey', fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate,
+  }),
+  codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
+    target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
+  }),
+].filter(Boolean));
 
 registerImportDescriptor('contacts', async (row, config) => {
   const bpFields = pick(row, BP_TARGETS);

@@ -392,3 +392,45 @@ Regression coverage: `contactsImportDescriptor.vitest.js`, plus
 `windows/custom/__tests__/importTemplateRoundTrip.vitest.js`, which downloads the template,
 fills it without deleting a column, and asserts it maps, validates and builds operations —
 the end-to-end path none of the per-unit tests covered.
+
+## ETP-4996 — Import engine: duplicate policy, review-time validation, template i18n
+
+**Duplicates are detected before the send, not after.** `window.import.dedupe.scope` is now
+`"database"`. Before confirming, the review queue queries `businessPartner` for the file's
+`taxID` values through the same `criteria=` list request the grid uses (so it inherits the
+window's org/client security filtering), and marks matching rows **Saltada**. Re-importing an
+already-imported file therefore shows **0 rows in Correctas and N in Saltadas** instead of
+showing everything as Correcta and surfacing the duplicates only after the send.
+
+⚠️ **The dedupe key and the unique index are not the same thing, and that is deliberate.**
+`c_bpartner`'s only unique index is on `value` (the searchKey, derived from the name), so the
+database alone can never reject two contacts that share a CIF/NIF under different trade names —
+they were silently created twice. Checking the *declared* dedupe key (`taxID`) is what makes that
+case detectable at all. **Upsert/overwrite remains out of scope**: skip is the only policy. The
+pre-flight check is not a lock either — a record created between the check and the send still
+collides server-side, and that path is unchanged.
+
+**The AD-coded columns are validated during review.** `oBTIKTaxIDKey` and `etgoIsperson` are
+checked by the descriptor's registered row validator (`registerImportRowValidator('contacts', …)`)
+in the same pass as `validateRow`. Previously `resolveCodedCellOrThrow` only ran inside
+`buildOperations`, so a mistyped "Persona Fisica" showed up in Correctas and the user learned it
+was wrong only after confirming. Both halves share `resolveCodedValue` and one message builder
+(`codedCellError` / `resolveCodedCellOrThrow` in `lib/codedValue.js`), so the preview cannot
+accept a value the send would reject. Blank still falls back to the AD default — that
+distinction is the ETP-4995 blocker and must not regress.
+
+**Template.** Required columns carry a trailing `*` and the file ships a sample row built from
+each field's `example` in `decisions.json`. Headers are written in the session language via the
+field's AD `column`, backfilled into `window.import.fields` by `generate-contract.js`;
+`mapColumns` strips the `*` and the localized header joins the field's aliases, so the template
+round-trips in any language.
+
+**i18n.** The review queue's own messages were hardcoded English in `validateRows.js`
+("Required field is missing.", "Not a valid email address.", the FK-unmatched message) plus the
+two skip messages in `ImportDialog.jsx`. All six now resolve through `translate` with the English
+text kept as fallback; keys live in `genericLabels` in all three locales.
+
+Regression coverage: `importRowValidators.vitest.js`, the extended
+`importTemplateRoundTrip.vitest.js`, and in app-shell-core `existingRecordLookup.test.js`,
+`parseImportNumber.test.js`, `rowValidators.test.js`, plus the ETP-4996 block in
+`ImportDialog.test.jsx`.

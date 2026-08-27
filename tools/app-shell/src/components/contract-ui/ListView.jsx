@@ -628,6 +628,52 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+
+  // ETP-4996 — the import dialog's two injected capabilities.
+  //
+  // `importFieldLabel` writes the downloaded CSV template's headers in the SESSION language.
+  //
+  // The base comes from the AD label dictionary (`t(column)`, which already applies the
+  // window's own `labelOverrides`) — those translations exist and are maintained, so the
+  // template should not carry a second copy of them. `labelKey` is the escape hatch for the
+  // handful of columns AD cannot serve: `EM_Etgo_Isperson` has no dictionary entry, and
+  // address/city/postal/region are C_Location columns the descriptor writes directly, so they
+  // are not entity fields and have no AD label at all.
+  //
+  // `headerScope: "contact"` appends a localized qualifier. A Contacts row is split across the
+  // business partner and its contact person, and the AD label for both halves is identical
+  // ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
+  // qualifier the template writes the same header twice, which `parseDelimited` rejects
+  // outright — the file could not be uploaded at all.
+  const importFieldLabel = useCallback((field) => {
+    const base = (field.labelKey ? ui(field.labelKey) : null)
+      || (field.column ? t(field.column) : null)
+      || field.label || field.target;
+    return field.headerScope === 'contact'
+      ? `${base} (${ui('importHeaderScopeContact')})`
+      : base;
+  }, [t, ui]);
+
+  // `importExistingKeys` answers "which of these rows already exist?" before the user
+  // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
+  // post-send duplicates. Goes through the same `criteria=` list query the grid itself
+  // uses, so it inherits the window's org/client security filtering for free.
+  const importExistingKeys = useCallback(async (criteria, keyTargets) => {
+    const params = new URLSearchParams();
+    params.append('criteria', JSON.stringify(criteria));
+    params.append('_startRow', '0');
+    params.append('_endRow', '1000');
+    const res = await fetch(`${apiBaseUrl}/${importConfig.entity}?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data ?? json?.data ?? [];
+    // Only the key columns are read back; anything else the endpoint returns is ignored.
+    return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
+      keyTargets.map((target) => [target, record[target]]),
+    ));
+  }, [apiBaseUrl, token, importConfig?.entity]);
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -1238,6 +1284,8 @@ export function ListView({
             simSearchFn={simSearch}
             labels={importLabels}
             translate={ui}
+            fieldLabelFn={importFieldLabel}
+            existingKeyFetchFn={importExistingKeys}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing
