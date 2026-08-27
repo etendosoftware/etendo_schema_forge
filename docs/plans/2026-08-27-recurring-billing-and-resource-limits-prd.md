@@ -367,6 +367,29 @@ Every tenant carrying the `productive` preference gets a subscription row on a g
 
 That ETP-5050 blocks ETP-5046 is a real cost of making the resource catalog data rather than schema. It is stated rather than hidden, and it is worth paying once.
 
+### 14.1 Incremental delivery is a requirement, not a preference
+
+**Each task is handed over for testing the moment it meets its own acceptance criteria.** The block is not delivered as one drop at the end. This is a constraint on how the tasks are built, not only on how they are reported: a task that cannot be exercised without three others being finished has been scoped wrong and must be re-cut.
+
+Two consequences bind every task in §14:
+
+- **No task may depend on a later task to be observable.** Every one ships its own Classic window, log surface or endpoint response, so its effect is visible the day it lands.
+- **Every task carries a manual verification path** — the concrete sequence below — that a human can run against a real environment without reading code. If that path cannot be written, the task is not done.
+
+**ETP-5045 is Critical** and is the first handover. It is the only task in the block that fixes a defect currently costing money: a customer can be charged today and receive nothing, with no recovery.
+
+### 14.2 Per-task verification path
+
+| Task | How to verify it in isolation |
+|---|---|
+| **ETP-5045** | Create a checkout session, pay with the test card, and **restart Tomcat before returning from Stripe**. Today the payment is lost and the flow dead-ends; after this task the flow completes. Then `stripe events resend` the same event and confirm the Billing events window shows one `applied` and one `duplicate`. Needs nothing else from the block, and is the exact regression that costs money. |
+| **ETP-5050** | Run the recompute over a past month and compare the Usage window against a hand-written count query for a few tenants. Then add a catalog row with an HQL restriction from the Classic window, re-run, and confirm the new resource is counted. Writes only to its own table, so it is safe to run in a real environment on day one. |
+| **ETP-5046** | Create and price a plan from the Classic window, add a quota row, assign it to a tenant, and confirm the environment payload reports the plan and status. Verify a currently-productive tenant still reads productive after the backfill, and that re-running it creates nothing. |
+| **ETP-5047** | With the kill switch **off**: cancel the subscription in the Stripe dashboard, confirm the Subscriptions window shows `canceled` and that environment login still works. Then flip the switch **on** and confirm login is denied with the right code. The switch is what makes this testable in a real environment without risking a lockout. |
+| **ETP-5048** | Reproduce the orphan on purpose: pay with `stripe listen` stopped, confirm nothing was provisioned, then run reconciliation from the menu and confirm the tenant is created and the repair is visible in the Classic window. |
+| **ETP-5051** | First confirm that with no quota rows nothing changed at all. Then add one quota row in `warn`, exceed it, see the warning; switch the same row to `block` and confirm the denial; switch to `off` and confirm it stops — all without a deploy or a restart. That sequence *is* the configuration-not-development claim, demonstrated live. |
+| **ETP-5053** | Upgrade a tenant mid-period and assert the billing date did not move — that is the one to watch. Then schedule a downgrade, confirm it shows as pending, upgrade over it, and confirm the pending change was cleared. |
+
 ---
 
 ## 15. Open decisions
