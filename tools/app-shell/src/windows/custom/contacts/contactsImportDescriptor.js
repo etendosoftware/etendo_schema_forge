@@ -3,7 +3,7 @@ import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResol
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
-import { jsonHeaders } from '@/lib/sessionHeaders.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
 // could ever populate it — the mirror image of the "column with no consumer" problem.

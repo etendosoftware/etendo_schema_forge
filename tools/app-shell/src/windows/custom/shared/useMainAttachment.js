@@ -12,7 +12,7 @@ import {
   useAttachmentsChanged,
 } from '@/components/attachments/attachmentsBus';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
-import { jsonHeaders, readCredentialHeaders } from '@/lib/sessionHeaders.js';
+import { readCredentialHeaders } from '@/lib/sessionHeaders.js';
 
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read

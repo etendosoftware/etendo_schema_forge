@@ -4,7 +4,7 @@ import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResol
 import { parseBoolean } from '@/lib/parseBoolean.js';
 import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
-import { jsonHeaders } from '@/lib/sessionHeaders.js';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 // Columns copied verbatim onto the product body. Everything else declared in
 // `window.import.fields` needs interpreting first: `productType` and `uOM` are resolved

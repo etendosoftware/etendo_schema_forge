@@ -42,7 +42,6 @@ export default function CreateInvoiceConfirmModal({
   const [pendingQty, setPendingQty] = useState(null);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const priceListHeaders = useMemo(() => (jsonHeaders()), []);
   const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
     enabled: showPriceListPicker,
     isSOTrx,
