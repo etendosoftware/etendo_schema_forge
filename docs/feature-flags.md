@@ -173,8 +173,10 @@ registration is intentionally deferred until browser support is mature.
 
 The popup also provides client-side tools for `navigate_to`, `open_form`,
 `get_current_context`, and `open_copilot`; navigation is restricted to internal
-application paths. The flag is a presentation/integration toggle only, never an
-authorization boundary.
+application paths. Assistant and user messages in the popup render the supported
+Markdown subset (headings, lists, emphasis, inline code, and HTTPS links); unsafe
+link protocols remain plain text. The flag is a presentation/integration toggle
+only, never an authorization boundary.
 
 ```bash
 VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true}' make dev
