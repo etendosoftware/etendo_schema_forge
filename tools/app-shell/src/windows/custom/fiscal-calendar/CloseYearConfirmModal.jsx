@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const CLOSED_STATUSES = new Set(['C', 'P']);
 const ACTION_BY_DIRECTION = { close: 'closeYear', undo: 'undoCloseYear' };
 
@@ -27,6 +27,7 @@ function yearCriteria(yearId) {
 
 export default function CloseYearConfirmModal({ direction, isOpen, currentRecord, token, apiBaseUrl, onClose, onSaved }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [allClosed, setAllClosed] = useState(false);
   const [precheckError, setPrecheckError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -35,8 +36,8 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
   useEffect(() => {
     if (!isOpen || !currentRecord?.id) return;
     setPrecheckError(false);
-    fetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?${yearCriteria(currentRecord.id)}`, {
-      headers: authHeaders(token),
+    apiFetch(`${periodControlApiBase(apiBaseUrl)}/periodControl?${yearCriteria(currentRecord.id)}`, {
+      baseUrl: '',
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -55,16 +56,15 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
         setAllClosed(false);
         setPrecheckError(true);
       });
-  }, [isOpen, currentRecord?.id, apiBaseUrl, token]);
+  }, [isOpen, currentRecord?.id, apiBaseUrl, apiFetch]);
 
   const handleConfirm = async () => {
     setSubmitting(true);
     setSubmitError(false);
     try {
       const action = ACTION_BY_DIRECTION[direction];
-      const res = await fetch(`${apiBaseUrl}/year/${currentRecord.id}/action/${action}`, {
+      const res = await apiFetch(`/year/${currentRecord.id}/action/${action}`, {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);

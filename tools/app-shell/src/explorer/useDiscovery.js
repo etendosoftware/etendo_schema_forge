@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { buildHeaders } from '@/auth/api.js';
+import { apiFetch } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');
@@ -19,28 +20,18 @@ function getAdminToken() {
   return localStorage.getItem('sf_admin_token') || getToken();
 }
 
-// ETP-5022: was a local header builder with no Accept-Language, so explorer requests
-// resolved reference data in the user's AD language instead of the UI locale. Delegates
-// to the canonical builder now; the getToken() fallback is the only local behaviour left.
-function authHeaders(token) {
-  return buildHeaders(token || getToken());
-}
-
-function adminAuthHeaders() {
-  return authHeaders(getAdminToken());
-}
-
 // ── Discovery hooks ──
 
 export function useSpecs({ useAdmin = false } = {}) {
   const [specs, setSpecs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const neoFetch = useApiFetch(NEO_BASE);
 
   const refresh = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`${NEO_BASE}/`, { headers: useAdmin ? adminAuthHeaders() : authHeaders() })
+    neoFetch('/', { token: useAdmin ? getAdminToken() : getToken() })
       .then(r => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -48,7 +39,7 @@ export function useSpecs({ useAdmin = false } = {}) {
       .then(data => setSpecs(data.specs || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [useAdmin]);
+  }, [useAdmin, neoFetch]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -59,12 +50,13 @@ export function useSpecDetail(specName) {
   const [spec, setSpec] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const neoFetch = useApiFetch(NEO_BASE);
 
   const refresh = useCallback(() => {
     if (!specName) { setSpec(null); return; }
     setLoading(true);
     setError(null);
-    fetch(`${NEO_BASE}/${specName}`, { headers: authHeaders() })
+    neoFetch(`/${specName}`, { token: getToken() })
       .then(r => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -72,7 +64,7 @@ export function useSpecDetail(specName) {
       .then(data => setSpec(data))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [specName]);
+  }, [specName, neoFetch]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -82,13 +74,11 @@ export function useSpecDetail(specName) {
 // ── NEO fetch (for testing endpoints) ──
 
 export function useNeoFetch() {
+  const neoFetch = useApiFetch(NEO_BASE);
   return useCallback(async (path, options = {}) => {
-    const url = `${NEO_BASE}${path.startsWith('/') ? path : '/' + path}`;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const start = performance.now();
-    const res = await fetch(url, {
-      ...options,
-      headers: { ...authHeaders(), ...options.headers },
-    });
+    const res = await neoFetch(normalizedPath, { ...options, token: getToken() });
     const elapsed = Math.round(performance.now() - start);
     let body;
     const ct = res.headers.get('content-type') || '';
@@ -98,16 +88,16 @@ export function useNeoFetch() {
       body = await res.text();
     }
     return { status: res.status, statusText: res.statusText, elapsed, body };
-  }, []);
+  }, [neoFetch]);
 }
 
 // ── Webhook calls (for managing specs) ──
 
 async function callWebhook(name, params) {
-  const url = `${WEBHOOK_BASE}/${name}`;
-  const res = await fetch(url, {
+  const res = await apiFetch(`${WEBHOOK_BASE}/${name}`, {
     method: 'POST',
-    headers: adminAuthHeaders(),
+    baseUrl: '',
+    token: getAdminToken(),
     body: JSON.stringify(params),
   });
   const text = await res.text();

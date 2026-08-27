@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { getApiBase } from './useNeoResource';
-
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const DEBOUNCE_MS = 200;
 
 /**
@@ -16,6 +14,7 @@ const DEBOUNCE_MS = 200;
  */
 function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
   const { token } = useAuth();
+  const apiFetch = useApiFetch();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -26,14 +25,11 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    const url = `${getApiBase()}/sws/neo/financial-account-transactions?action=${action}&q=${encodeURIComponent(q ?? '')}${extraParams}`;
+    const path = `/sws/neo/financial-account-transactions?action=${action}&q=${encodeURIComponent(q ?? '')}${extraParams}`;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(url, {
-        headers: authHeaders(token),
-        signal: ctrl.signal,
-      });
+      const res = await apiFetch(path, { signal: ctrl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setResults(json?.response?.data?.[resultKey] ?? []);
@@ -42,7 +38,7 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
     } finally {
       setLoading(false);
     }
-  }, [action, resultKey, extraParams, token]);
+  }, [action, resultKey, extraParams, apiFetch]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -101,6 +97,7 @@ export function useDimensionLookup(query, dimension) {
  */
 export function useOutstandingInvoices(bpartnerId, doc = 'in') {
   const { token } = useAuth();
+  const apiFetch = useApiFetch();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -114,11 +111,11 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
 
     // A blank bpartnerId returns invoices of all contacts (the backend treats it
     // as "no partner scope"), so a payment can be allocated to any contact.
-    const url = `${getApiBase()}/sws/neo/financial-account-transactions?action=outstanding-invoices`
+    const path = `/sws/neo/financial-account-transactions?action=outstanding-invoices`
       + `&bpartnerId=${encodeURIComponent(bpartnerId ?? '')}&doc=${doc === 'out' ? 'out' : 'in'}`;
     setLoading(true);
     setError(null);
-    fetch(url, { headers: authHeaders(token), signal: ctrl.signal })
+    apiFetch(path, { signal: ctrl.signal })
       .then((res) => {
         if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
         return res.json();
@@ -128,7 +125,7 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
       .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
 
     return () => ctrl.abort();
-  }, [bpartnerId, doc, token]);
+  }, [bpartnerId, doc, apiFetch, token]);
 
   return { invoices, loading, error };
 }

@@ -1,7 +1,7 @@
 /**
  * Tests for useWindowFilterPresets: refresh (load), savePreset (PUT),
  * deletePreset (DELETE), guard early-returns, and error handling.
- * Auth + api helpers are mocked.
+ * Auth + the shared apiFetch helper are mocked.
  */
 
 let mockToken = 'tok';
@@ -10,10 +10,14 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: mockToken }),
 }));
 
-vi.mock('@/auth/api.js', () => ({
-  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
-  buildHeaders: (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES' }),
-  detectBaseUrl: () => 'https://base',
+const mockApiFetch = (path, options) => globalThis.fetch(`https://base${path}`, {
+  headers: { Authorization: `Bearer ${mockToken}`, 'Accept-Language': 'es_ES' },
+  credentials: 'include',
+  ...options,
+});
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 import { renderHook, act, waitFor } from '@testing-library/react';

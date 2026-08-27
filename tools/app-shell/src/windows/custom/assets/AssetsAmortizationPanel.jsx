@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function PeriodLink({ label, onClick }) {
   return (
     <button
@@ -43,6 +43,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [processedMap, setProcessedMap] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const recordId = recordIdProp ?? data?.id;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [barVisible, setBarVisible] = useState(false);
@@ -105,8 +106,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
-    const url = `${apiBaseUrl}/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`;
-    fetch(url, { headers: authHeaders(token) })
+    apiFetch(`/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`)
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -117,7 +117,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         const ids = [...new Set(normalizedRows.map(l => l.amortization).filter(Boolean))];
         return Promise.all(
           ids.map(id =>
-            fetch(`${amortBase}/header/${id}`, { headers: authHeaders(token) })
+            apiFetch(`${amortBase}/header/${id}`, { baseUrl: '' })
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
@@ -130,7 +130,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .then(entries => setProcessedMap(new Map(entries ?? [])))
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl, apiFetch]);
 
   // ETP-4981 — a failed DELETE (e.g. blocked server-side for a line whose
   // amortization plan is already confirmed) was never surfaced: Promise
@@ -146,10 +146,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     try {
       const ids = [...selectedRows];
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
-          method: 'DELETE',
-          headers: token ? authHeaders(token) : {},
-        }).then(async (res) => {
+        apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;
         }),
@@ -162,7 +159,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     } finally {
       setDeleting(false);
     }
-  }, [apiBaseUrl, token, selectedRows, fetchLines, ui]);
+  }, [apiFetch, selectedRows, fetchLines, ui]);
 
   useEffect(() => {
     fetchLines();

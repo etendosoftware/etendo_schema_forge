@@ -95,7 +95,7 @@ describe('ContactsFinanceProvider', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-stats?businessPartnerId=BP1'),
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) }),
+        expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) }),
       );
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-trend?businessPartnerId=BP1'),

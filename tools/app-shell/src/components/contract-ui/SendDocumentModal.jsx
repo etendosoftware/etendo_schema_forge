@@ -7,7 +7,7 @@ import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ETP-4226 — default send policy: editable To/CC recipients everywhere unless
 // the window's `decisions.json → window.sendDocument` override says otherwise.
 const DEFAULT_SEND_POLICY = { editableRecipients: true, cc: true, maxRecipients: 10 };
@@ -91,13 +91,13 @@ async function sendDocumentFromModal({
   toast.error(errorMessage);
 }
 
-async function renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError) {
+async function renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError) {
   setPdfLoading(true);
   setPdfError(null);
   try {
-    const res = await fetch(`/api/reports/${reportId}/render`, {
+    const res = await apiFetch(`/api/reports/${reportId}/render`, {
       method: 'POST',
-      headers: buildHeaders(token),
+      baseUrl: '',
       body: JSON.stringify({ format: 'html', params: { documentId } }),
     });
     if (!res.ok) throw new Error(`Preview failed (${res.status})`);
@@ -203,17 +203,17 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChang
   );
 }
 
-async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token) {
-  const res = await fetch(`/api/reports/${reportId}/render`, {
+async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, apiFetch) {
+  const res = await apiFetch(`/api/reports/${reportId}/render`, {
     method: 'POST',
-    headers: buildHeaders(token),
+    baseUrl: '',
     body: JSON.stringify({ format: 'html', params: { documentId } }),
   });
   if (!res.ok) throw new Error('Failed to render');
   const html = await res.text();
-  const pdfRes = await fetch('/jsreport/api/report', {
+  const pdfRes = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify({ template: { content: html, engine: 'none', recipe: 'chrome-pdf', chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' } }, data: {} }),
   });
   if (!pdfRes.ok) throw new Error('PDF generation failed');
@@ -234,11 +234,9 @@ function resolveContactsBaseUrl(apiBaseUrl) {
   return apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
 }
 
-async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmail, setTo, isCancelled }) {
+async function loadBusinessPartnerEmail({ apiBaseUrl, apiFetch, bPartnerId, hasEmail, setTo, isCancelled }) {
   const contactsBaseUrl = resolveContactsBaseUrl(apiBaseUrl);
-  const response = await fetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, {
-    headers: buildHeaders(token),
-  });
+  const response = await apiFetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, { baseUrl: '' });
   const data = response.ok ? await response.json() : null;
   if (isCancelled()) return;
   const records = data?.response?.data ?? data?.data ?? [];
@@ -246,7 +244,7 @@ async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmai
   if (!hasEmail && withEmail.length > 0) setTo(withEmail[0].etgoEmail);
 }
 
-function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, token, reportId, setPdfError, setPdfLoading }) {
+function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, token, apiFetch, reportId, setPdfError, setPdfLoading }) {
   if (pdfBlobUrl) {
     node.src = `${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=1`;
     setPdfError(null);
@@ -261,7 +259,7 @@ function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, to
   }
 
   if (documentId && token) {
-    renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError);
+    renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError);
   }
 }
 
@@ -343,6 +341,7 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  */
 export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // ETP-4912 — most callers hand over the PDF their own useXxxPdf hook produced. The
   // generic one (ListView's fallback modal) has no hook, so it used to leave this empty
@@ -391,7 +390,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     setEmailLoading(true);
     loadBusinessPartnerEmail({
       apiBaseUrl,
-      token,
+      apiFetch,
       bPartnerId,
       hasEmail,
       setTo: (email) => {
@@ -404,7 +403,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       .catch(() => {})
       .finally(() => { if (!cancelled) setEmailLoading(false); });
     return () => { cancelled = true; };
-  }, [hasEmail, bPartnerId, apiBaseUrl, token]);
+  }, [hasEmail, bPartnerId, apiBaseUrl, token, apiFetch]);
 
   // Cross-channel precedence mirror (backend `to > cc`): an address present in
   // To is silently dropped from CC, and adding it to CC merges into To.
@@ -456,11 +455,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       pdfBlobLoading: effectivePdfLoading,
       documentId,
       token,
+      apiFetch,
       reportId,
       setPdfError,
       setPdfLoading,
     });
-  }, [documentId, token, reportId, effectivePdfUrl, effectivePdfLoading]);
+  }, [documentId, token, apiFetch, reportId, effectivePdfUrl, effectivePdfLoading]);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -473,7 +473,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
 
     setDownloading(true);
     try {
-      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token);
+      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, apiFetch);
     } catch (err) {
       toast.error(err.message);
     }

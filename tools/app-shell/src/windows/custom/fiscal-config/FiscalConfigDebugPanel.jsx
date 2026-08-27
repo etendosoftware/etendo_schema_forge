@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 import CertModal from './CertModal.jsx';
 import { useDraggable } from '../fiscal-monitor/useDraggable.js';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // PK fields are now extracted via IsKey='Y' (schema_forge_core commit 5d363ad2f), so
 // NeoFieldFilter no longer renames them to a per-system name — the API always returns
 // the PK as `id`. idField stays null so deleteNeoRecord() falls back to r.id.
@@ -85,15 +85,13 @@ const CERT_MODAL_STATES = [
 
 // ── Delete helpers ────────────────────────────────────────────────────────────
 
-async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
+async function deleteNeoRecord(apiFetch, base, spec, entity, orgId, idField) {
   const listUrl = `${base}/${spec}/${encodeURIComponent(entity)}?${new URLSearchParams({
     organization: orgId,
     _startRow: '0',
     _endRow: '49',
   })}`;
-  const res = await fetch(listUrl, {
-    headers: buildHeaders(token),
-  });
+  const res = await apiFetch(listUrl, { baseUrl: '' });
   if (!res.ok) throw new Error(`GET ${spec} HTTP ${res.status}`);
   const json = await res.json();
   const responseBody = json?.response ?? {};
@@ -105,9 +103,9 @@ async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
   let deleted = 0;
   await Promise.all(records.map(async (r) => {
     const rid = idField ? (r[idField] ?? r.id) : r.id;
-    const delRes = await fetch(`${base}/${spec}/${encodeURIComponent(entity)}/${rid}`, {
+    const delRes = await apiFetch(`${base}/${spec}/${encodeURIComponent(entity)}/${rid}`, {
       method: 'DELETE',
-      headers: authHeaders(token),
+      baseUrl: '',
     });
     if (!delRes.ok) throw new Error(`DELETE ${spec}/${rid} HTTP ${delRes.status}`);
     deleted++;
@@ -115,10 +113,10 @@ async function deleteNeoRecord(base, spec, entity, orgId, token, idField) {
   return deleted;
 }
 
-async function deleteCertificates(base, orgId, token) {
-  const res = await fetch(`${base}/certificate?${new URLSearchParams({ orgId })}`, {
+async function deleteCertificates(apiFetch, base, orgId) {
+  const res = await apiFetch(`${base}/certificate?${new URLSearchParams({ orgId })}`, {
     method: 'DELETE',
-    headers: authHeaders(token),
+    baseUrl: '',
   });
   if (!res.ok) throw new Error(`Delete certificate HTTP ${res.status}`);
   const json = await res.json().catch(() => ({}));
@@ -171,6 +169,7 @@ const CERT_EXPIRY_OPTIONS = [
 
 export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDeleted, onSetMock, activeMockKey, mockCertDays, onSetCertDays }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState({});
   const [certDebug, setCertDebug] = useState(null);
@@ -183,9 +182,9 @@ export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDel
       const base = neoBase(apiBaseUrl);
       let deleted;
       if (cfg.key === 'cert') {
-        deleted = await deleteCertificates(base, orgId, token);
+        deleted = await deleteCertificates(apiFetch, base, orgId);
       } else {
-        deleted = await deleteNeoRecord(base, cfg.spec, cfg.entity, orgId, token, cfg.idField);
+        deleted = await deleteNeoRecord(apiFetch, base, cfg.spec, cfg.entity, orgId, cfg.idField);
       }
       setStatus(s => ({ ...s, [cfg.key]: { loading: false, msg: ui('fiscalDebug.status.deleted', { count: deleted }) } }));
       onDeleted?.();

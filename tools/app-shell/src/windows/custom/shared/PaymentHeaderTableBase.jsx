@@ -7,8 +7,8 @@ import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import PaymentEditModalLauncher from './PaymentEditModalLauncher';
 import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { buildHeaders } from '@/auth/api.js';
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
 /* eslint-disable react/prop-types */
@@ -384,15 +384,14 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
   const [confirmRow, setConfirmRow] = useState(null);
   const rootRef = useRef(null);
   const token = props.token;
+  const apiFetch = useApiFetch(apiBaseUrl);
   const entity = ENTITY_BY_SPEC[specName];
   const columns = useMemo(() => buildColumns(dir, ui, locale), [dir, ui, locale]);
 
   const runAction = async (row, action, okKey, errorKey) => {
-    const url = `${apiBaseUrl}/${entity}/${row.id}/action/${action}`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(`/${entity}/${row.id}/action/${action}`, {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({}),
       });
       if (res.ok) {
@@ -424,11 +423,9 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
   // and updates the related invoices; a bare header DELETE fails on FK
   // constraints the moment any invoice has ever been applied to the payment.
   const handleDelete = async (row) => {
-    const url = `${apiBaseUrl}/${entity}/${row.id}/action/eTPRRemovePayment`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(`/${entity}/${row.id}/action/eTPRRemovePayment`, {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({}),
       });
       if (res.ok) {

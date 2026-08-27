@@ -6,7 +6,7 @@ import { TrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { sanitizeImageName } from '@/lib/imageUpload.js';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Upload constraints (shared across stretch and non-stretch modes)
 const IMAGE_MAX_SIZE_MB = 30;
 const IMAGE_MAX_WIDTH = 7680;
@@ -64,6 +64,7 @@ async function validateImageFile(file, ui) {
  */
 export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = false, fieldKey = 'image', stretch = false, label = null }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [blobUrl, setBlobUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -84,7 +85,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
       return;
     }
     let cancelled = false;
-    fetch(`${imageBase}/${imageId}`, { headers: authHeaders(token) })
+    apiFetch(`${imageBase}/${imageId}`, { baseUrl: '' })
       .then(res => res.ok ? res.blob() : null)
       .then(blob => {
         if (!cancelled && blob) {
@@ -96,7 +97,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, token, imageBase]);
+  }, [imageId, token, imageBase, apiFetch]);
 
   // Cleanup blob URL on unmount
   useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, []);
@@ -112,9 +113,9 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await fetch(imageBase, {
+      const res = await apiFetch(imageBase, {
         method: 'POST',
-        headers: buildHeaders(token),
+        baseUrl: '',
         body: JSON.stringify({ name: sanitizeImageName(file.name), mimeType: file.type || 'application/octet-stream', data: base64 }),
       });
       if (!res.ok) throw new Error((await res.text()) || `Upload failed (${res.status})`);
