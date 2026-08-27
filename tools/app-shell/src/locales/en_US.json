@@ -20264,6 +20264,7 @@
     "fiscal.onboarding.applied.row.env": "Environment",
     "fiscal.onboarding.applied.row.activated": "Activated",
     "fiscal.onboarding.applied.env.sandbox": "Sandbox · testing",
+    "fiscal.onboarding.applied.env.production": "Production",
     "fiscal.onboarding.applied.volume.high": "> 6,010,121 €",
     "fiscal.onboarding.applied.volume.low": "≤ 6,010,121 €",
     "fiscal.onboarding.applied.national.active": "Active",
