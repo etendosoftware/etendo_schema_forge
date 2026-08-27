@@ -573,8 +573,13 @@ export function SecondaryTableTab(props) {
   // Exchange Rates) still need "no records" feedback instead of a blank area, same
   // as the primary Lines tab (shouldShowLinesEmptyState has no such gate). Only the
   // "+ Add" CTA itself stays conditional on the tab actually supporting manual add.
+  // Must still yield to an open side detail panel (secondaryDetailSidebar below) —
+  // same guard it uses — otherwise a still-selected/closing line's edit panel gets
+  // replaced by the empty-state illustration whenever its tab's children are empty.
+  const detailSidebarOpen = props.st.Form && !props.st.Panel
+    && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine);
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && !props.st.customAddModal && !tabReadOnly;
+    && props.hook.editing && !props.st.customAddModal && !tabReadOnly && !detailSidebarOpen;
   if (showEmptyState) {
     const canAddViaEmptyState = hasAddFields && canAddMore;
     return secondaryTabEmptyState({
