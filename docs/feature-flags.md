@@ -164,6 +164,18 @@ that is the floor for rendering a menu item, and it stays greppable through the
 VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
 ```
 
+The `webmcp-agent-chat` flag is off by default. When enabled, the app shell
+registers three optional WebMCP tools in browsers that expose
+`document.modelContext`: `get_current_window_context`, `navigate_application`, and
+`open_application_chat`. It is a presentation/integration toggle only; the browser
+capability is not an authorization boundary, and all business data access and
+mutations remain protected by the authenticated NEO APIs and existing Copilot
+confirmation flow.
+
+```bash
+VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true}' make dev
+```
+
 `VITE_FEATURE_FLAGS` holds every flag in one variable, so adding a flag needs no
 new environment plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming
 convention to keep in sync. Non-boolean values are ignored.
