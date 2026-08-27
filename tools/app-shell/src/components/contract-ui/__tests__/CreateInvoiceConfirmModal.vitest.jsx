@@ -262,7 +262,10 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
     });
 
-    expect(fetch).toHaveBeenCalledWith('/api/pending', { headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } });
+    expect(fetch).toHaveBeenCalledWith('/api/pending', {
+      credentials: 'include',
+      headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
+    });
   });
 
   it('falls back to generic subtitle when pendingQtyUrl fetch fails', async () => {

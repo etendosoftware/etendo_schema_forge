@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
-
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -20,6 +19,7 @@ import { authHeaders, buildHeaders } from '@/auth/api.js';
 export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_API_BASE || '' }) { // NOSONAR -- intentional finite invitation state machine.
   const ui = useUI();
   const navigate = useNavigate();
+  const apiFetch = useApiFetch(apiBase);
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
@@ -58,11 +58,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       setLoading(true);
       setErrorState(null);
       try {
-        // ETP-5022: tokenless is correct here (pre-login), but the locale still must travel —
-        // the invitation error strings are composed by the backend.
-        const res = await fetch(
-          `${apiBase}/sws/go/company-invitations/resolve?token=${encodeURIComponent(token.trim())}`,
-          { headers: authHeaders() }
+        // ETP-5022: tokenless is correct here (pre-login); apiFetch still sends the
+        // locale header, and a domain-mapped 401 (invalid/expired token) must not be
+        // swallowed into a generic logout, hence on401: 'ignore'.
+        const res = await apiFetch(
+          `/sws/go/company-invitations/resolve?token=${encodeURIComponent(token.trim())}`,
+          { on401: 'ignore' }
         );
         const data = await res.json().catch(() => ({}));
         if (!isMounted) return;
@@ -93,7 +94,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return () => {
       isMounted = false;
     };
-  }, [token, apiBase]);
+  }, [token, apiFetch]);
 
   const handleExistingAuthenticated = async () => {
     setActionError(null);
@@ -104,13 +105,14 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     setActionError(null);
     setSubmitting(true);
     try {
+      // ETP-5022: the platform session token is read from localStorage, not the
+      // app's auth context (this flow runs before/outside it), so it is passed as an
+      // explicit override; on401: 'ignore' keeps the existing domain error handling below.
       const sessionToken = globalThis.localStorage?.getItem('sf_platform_token') || '';
-      const res = await fetch(`${apiBase}/sws/go/company-invitations/accept`, {
+      const res = await apiFetch('/sws/go/company-invitations/accept', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken ? authHeaders(sessionToken) : {}),
-        },
+        token: sessionToken,
+        on401: 'ignore',
         body: JSON.stringify({ token: token.trim() }),
       });
       const data = await res.json().catch(() => ({}));
@@ -145,9 +147,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
+      // ETP-5022: anonymous registration (pre-login); on401: 'ignore' keeps the
+      // domain error handling below instead of an automatic logout.
+      const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
         method: 'POST',
-        headers: buildHeaders(),
+        on401: 'ignore',
         body: JSON.stringify({
           token: token.trim(),
           name: trimmedName,
@@ -185,9 +189,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   };
 
   const registerInvitationAccount = async ({ name: accountName, password: accountPassword }) => {
-    const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
+    // ETP-5022: anonymous registration (pre-login); on401: 'ignore' keeps the
+    // domain error handling below instead of an automatic logout.
+    const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
       method: 'POST',
-      headers: buildHeaders(),
+      on401: 'ignore',
       body: JSON.stringify({
         token: token.trim(),
         name: accountName.trim(),

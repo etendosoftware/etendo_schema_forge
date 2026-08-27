@@ -2,11 +2,10 @@ import {useState, useEffect, useMemo, useRef} from 'react';
 import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
 import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
-import {useAuth} from '@/auth/AuthContext.jsx';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -42,8 +41,8 @@ function normalizeText(value) {
         .toLowerCase();
 }
 
-async function fetchSelectorPage(url, headers) {
-    const response = await fetch(url, {headers});
+async function fetchSelectorPage(apiFetch, url) {
+    const response = await apiFetch(url);
     if (!response.ok) {
         throw new Error(`Selector request failed: ${response.status}`);
     }
@@ -198,7 +197,7 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
-    const {token} = useAuth();
+    const apiFetch = useApiFetch(contactsApiBase);
     const [form, setForm] = useState(EMPTY_FORM);
     // ETP-5022: this modal holds its own form state, so DetailView's isDirty does not see it.
     // Without registering here, a language change (which reloads) or an F5 threw the typed
@@ -234,8 +233,6 @@ export default function LocationEditorModal({
     const regionSearchRef = useRef(null);
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
-
-    const authHeader = authHeaders(token);
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -355,7 +352,7 @@ export default function LocationEditorModal({
                         limit: String(SELECTOR_PAGE_SIZE),
                         offset: '0',
                     });
-                    const {items, hasMore} = await fetchSelectorPage(`${baseUrl}?${params.toString()}`, authHeader);
+                    const {items, hasMore} = await fetchSelectorPage(apiFetch, `${baseUrl}?${params.toString()}`);
                     hasSuccessfulRequest = true;
                     if (items.length > 0 || hasMore) {
                         if (cancelled) return;
@@ -393,7 +390,7 @@ export default function LocationEditorModal({
             setInitialLoading(true);
             // The handler enriches the GET-by-ID response with C_Location fields
             // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
-            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
+            apiFetch(`/${entityPath}/${bplLinkId}`)
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
@@ -496,8 +493,8 @@ export default function LocationEditorModal({
 
                 try {
                     const {items, hasMore} = await fetchSelectorPage(
-                        `${baseUrl}?${params.toString()}`,
-                        authHeader
+                        apiFetch,
+                        `${baseUrl}?${params.toString()}`
                     );
 
                     if (!fallbackSuccess) {
@@ -587,7 +584,7 @@ export default function LocationEditorModal({
                     offset: String(countryOffset),
                 });
 
-                fetchSelectorPage(`${countrySelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${countrySelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setCountries(prev => [...prev, ...items]);
                         setCountryOffset(prev => prev + items.length);
@@ -612,7 +609,7 @@ export default function LocationEditorModal({
         countryHasMore,
         countryOffset,
         countriesLoading,
-        token,
+        apiFetch,
     ]);
 
     useEffect(() => {
@@ -644,7 +641,7 @@ export default function LocationEditorModal({
                     offset: String(regionOffset),
                 });
 
-                fetchSelectorPage(`${regionSelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${regionSelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setRegions(prev => [...prev, ...items]);
                         setRegionOffset(prev => prev + items.length);
@@ -670,7 +667,7 @@ export default function LocationEditorModal({
         regionOffset,
         regionsLoading,
         form.country,
-        token,
+        apiFetch,
     ]);
 
     function setField(key, value) {
@@ -747,14 +744,11 @@ export default function LocationEditorModal({
                 payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
                 payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
             }
-            const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
-
             if (bplLinkId) {
                 // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
                 // 'location' updates the plain C_Location.
-                const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
+                const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
-                    headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
@@ -770,15 +764,14 @@ export default function LocationEditorModal({
             // CREATE:
             //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
             //   'location' → creates a plain C_Location, no business partner link
-            const createUrl = saveMode === 'location'
-                ? `${contactsApiBase}/${entityPath}`
-                : `${contactsApiBase}/locationAddress?parentId=${bpId}`;
+            const createPath = saveMode === 'location'
+                ? `/${entityPath}`
+                : `/locationAddress?parentId=${bpId}`;
             const createBody = saveMode === 'location'
                 ? payload
                 : {...payload, businessPartner: bpId};
-            const res = await fetch(createUrl, {
+            const res = await apiFetch(createPath, {
                 method: 'POST',
-                headers: postHeaders,
                 body: JSON.stringify(createBody),
             });
 

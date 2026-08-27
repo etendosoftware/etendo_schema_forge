@@ -2,18 +2,15 @@ import { useState, useEffect, forwardRef } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { aggregateProducts } from './warehouseUtils';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const inFlightCounts = new Map();
 
-async function fetchProductCount(warehouseId, token, apiBaseUrl) {
+async function fetchProductCount(warehouseId, apiFetch, apiBaseUrl) {
   const key = `${apiBaseUrl}|${warehouseId}`;
   if (inFlightCounts.has(key)) return inFlightCounts.get(key);
 
   const promise = (async () => {
-    const res = await fetch(
-      `${apiBaseUrl}/storageBin?parentId=${warehouseId}&_startRow=0&_endRow=100`,
-      { headers: authHeaders(token) },
-    );
+    const res = await apiFetch(`/storageBin?parentId=${warehouseId}&_startRow=0&_endRow=100`);
     if (!res.ok) return null;
     const binsJson = await res.json();
     const bins = binsJson?.response?.data ?? binsJson?.data ?? [];
@@ -21,10 +18,7 @@ async function fetchProductCount(warehouseId, token, apiBaseUrl) {
 
     const allContents = await Promise.all(
       bins.map(b =>
-        fetch(
-          `${apiBaseUrl}/binContents?parentId=${b.id}&_startRow=0&_endRow=1000`,
-          { headers: authHeaders(token) },
-        )
+        apiFetch(`/binContents?parentId=${b.id}&_startRow=0&_endRow=1000`)
           .then(r => (r.ok ? r.json() : null))
           .then(data => data?.response?.data ?? data?.data ?? [])
           .catch(() => []),
@@ -44,15 +38,16 @@ async function fetchProductCount(warehouseId, token, apiBaseUrl) {
 
 function WarehouseProductCountCell({ row, token, apiBaseUrl }) {
   const [count, setCount] = useState(undefined);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     if (!row.id) return;
     let active = true;
-    fetchProductCount(row.id, token, apiBaseUrl).then(n => {
+    fetchProductCount(row.id, apiFetch, apiBaseUrl).then(n => {
       if (active) setCount(n);
     });
     return () => { active = false; };
-  }, [row.id, token, apiBaseUrl]);
+  }, [row.id, apiFetch, apiBaseUrl]);
 
   if (count === undefined || count === null) {
     return <span className="text-muted-foreground text-sm">—</span>;

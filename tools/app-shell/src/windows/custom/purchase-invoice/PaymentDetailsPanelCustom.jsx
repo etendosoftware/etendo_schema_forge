@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { authHeaders } from '@/auth/api.js';
 const PAYMENT_STATUS = {
   E:      'Executed',
   P:      'Pending',
@@ -33,6 +33,7 @@ const PAYMENT_STATUS = {
  */
 export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -40,16 +41,14 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
     if (!parentId || !token) return;
     setLoading(true);
 
-    const headers = authHeaders(token);
-
-    fetch(`${apiBaseUrl}/paymentPlan?parentId=${parentId}`, { headers })
+    apiFetch(`/paymentPlan?parentId=${parentId}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((data) => {
         const schedules = data?.response?.data ?? data?.data ?? [];
         if (schedules.length === 0) return [];
         return Promise.all(
           schedules.map((s) =>
-            fetch(`${apiBaseUrl}/paymentDetails?parentId=${s.id}`, { headers })
+            apiFetch(`/paymentDetails?parentId=${s.id}`)
               .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
               .then((d) => d?.response?.data ?? d?.data ?? [])
               .catch(() => [])
@@ -59,7 +58,7 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
       .then((details) => setRows(details))
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
-  }, [parentId, apiBaseUrl, token]);
+  }, [parentId, apiFetch, token]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground py-4 text-center">{ui('loading')}</p>;
