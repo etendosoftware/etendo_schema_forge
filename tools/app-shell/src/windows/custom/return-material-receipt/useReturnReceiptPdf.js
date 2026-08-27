@@ -15,6 +15,7 @@ import {
   fetchImageDataUrl,
   buildLocationAddressLines,
   renderPdf,
+  renderHtml,
   usePdfGenerator,
   buildReturnDocCommonFields,
   sortLinesByLineNo,
@@ -61,7 +62,7 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
 
-async function buildReceiptData(receiptId, base, token) {
+export async function buildReceiptData(receiptId, base, token) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/return-material-receipt/returnMaterialReceipt/${receiptId}`, token),
     fetchAll(`${base}/return-material-receipt/returnMaterialReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=200`, token),
@@ -120,4 +121,28 @@ export function getReturnReceiptPdfLabels(ui) {
     signatureReceiver: ui('shipmentPdfSignatureReceiver'),
     signatureDate:     ui('shipmentPdfSignatureDate'),
   };
+}
+
+/**
+ * The movement document as a PDF, outside React — used by the print flow via
+ * `documentPdfRegistry.js`. These documents deliberately do NOT use the commercial
+ * DOCUMENT_TEMPLATE: they carry quantities and a receiver signature, not prices and
+ * totals. See `docs/document-printables.md`.
+ *
+ * @param {string} recordId
+ * @param {string} apiBaseUrl  full base, as the hook receives it
+ * @param {string} token
+ * @param {object} labels      from getReturnReceiptPdfLabels(ui)
+ */
+export async function generateReturnReceiptPdf(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildReceiptData(recordId, base, token);
+  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+}
+
+/** HTML twin of generateReturnReceiptPdf, for the list view's multi-document print. */
+export async function generateReturnReceiptHtml(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildReceiptData(recordId, base, token);
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
 }

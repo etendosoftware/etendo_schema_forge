@@ -628,6 +628,52 @@ report-stop: ## Stop jsreport Docker container
 report-preview: ## Preview Business Partner listing report
 	$(SF) sf-report-preview --artifact business-partner --report listing
 
+# report-server is the deployed service behind POST /api/reports/:id/render. It
+# needs server.js from schema_forge_core AND artifacts/ + templates/ from here,
+# so neither repo can build it alone. See scripts/assemble-report-server-context.sh
+# and docs/ops/cloudfront-alb-routing.md.
+REPORT_SERVER_CTX ?= .report-server-context
+CORE_DIR ?= ../schema_forge_core
+
+report-server-context: ## Assemble the report-server Docker build context (CORE_DIR=, REPORT_SERVER_CTX=)
+	CORE_DIR=$(CORE_DIR) ./scripts/assemble-report-server-context.sh $(REPORT_SERVER_CTX) --clean
+
+report-server-image: report-server-context ## Build the report-server image locally (TAG=report-server:local)
+	docker build -f $(REPORT_SERVER_CTX)/tools/report-server/Dockerfile \
+		-t $(or $(TAG),report-server:local) $(REPORT_SERVER_CTX)
+
+report-server-verify: report-server-image ## Build, boot the image and assert the current artifacts are inside it
+	@./scripts/verify-report-server-image.sh $(or $(TAG),report-server:local)
+
+# report-server-verify boots a container, checks it and DELETES it — it validates,
+# it does not leave you a service. This is the one that leaves it running.
+REPORT_SERVER_NAME ?= report-server-local
+REPORT_SERVER_PORT ?= 3001
+GRADLE_PROPS       := ../gradle.properties
+gradle_prop         = $(shell awk -F= '/^bbdd\.$(1)[ \t]*=/{gsub(/[ \t\r]/,"",$$2); print $$2}' $(GRADLE_PROPS))
+
+report-server-up: report-server-image ## Rebuild and (re)start the report-server on :3001 — the one-command refresh
+	@docker rm -f $(REPORT_SERVER_NAME) >/dev/null 2>&1 || true
+	@docker run -d --name $(REPORT_SERVER_NAME) \
+	  -p $(REPORT_SERVER_PORT):3001 \
+	  -e JSREPORT_URL=http://host.docker.internal:5488 \
+	  -e ETENDO_URL=http://host.docker.internal:8080/etendo \
+	  -e BBDD_HOST=host.docker.internal \
+	  -e BBDD_PORT=$(call gradle_prop,port) \
+	  -e BBDD_USER=$(call gradle_prop,user) \
+	  -e BBDD_PASSWORD=$(call gradle_prop,password) \
+	  -e BBDD_SID=$(call gradle_prop,sid) \
+	  $(or $(TAG),report-server:local) >/dev/null
+	@for i in $$(seq 1 30); do \
+	  curl -sf http://localhost:$(REPORT_SERVER_PORT)/api/reports >/dev/null 2>&1 && break || sleep 1; \
+	done
+	@curl -sf http://localhost:$(REPORT_SERVER_PORT)/api/reports >/dev/null 2>&1 \
+	  && echo "==> report-server ready on http://localhost:$(REPORT_SERVER_PORT) (artifacts rebuilt from this working tree)" \
+	  || { echo "ERROR: container did not come up. Logs:"; docker logs $(REPORT_SERVER_NAME) 2>&1 | tail -20; exit 1; }
+
+report-server-down: ## Stop and remove the local report-server container
+	@docker rm -f $(REPORT_SERVER_NAME) >/dev/null 2>&1 && echo "stopped" || echo "not running"
+
 # --- Static Analysis (SonarQube) ---
 
 sonar: ## Run SonarQube analysis on Schema Forge JS/JSX code

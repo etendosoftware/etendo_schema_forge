@@ -102,19 +102,19 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
       name: 'products-etp-4905-tomcat.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from([
-        'codigo,nombre,descripcion,precio,codigocategoria,nombrecategoria,categoria',
-        `${productRows[0].code},${productRows[0].name},${productRows[0].description},${productRows[0].price},${existingCategoryCode},,`,
-        `${productRows[1].code},${productRows[1].name},${productRows[1].description},${productRows[1].price},, ${String(existingCategoryName).toLowerCase()} ,`,
-        `${productRows[2].code},${productRows[2].name},${productRows[2].description},${productRows[2].price},,${newCategoryName},`,
-        `${productRows[3].code},${productRows[3].name},${productRows[3].description},${productRows[3].price},,${newCategoryName},`,
-        `${productRows[4].code},${productRows[4].name},${productRows[4].description},${productRows[4].price},,,${existingCategoryName}`,
-        `${optionalRow.code},${optionalRow.name},,,, ,`,
+        // ETP-4995: one `categoria` column instead of three. The cell resolves by exact code
+        // first and by name otherwise, so both addressing styles still work from one column.
+        'codigo,nombre,descripcion,precio,categoria',
+        `${productRows[0].code},${productRows[0].name},${productRows[0].description},${productRows[0].price},${existingCategoryCode}`,
+        `${productRows[1].code},${productRows[1].name},${productRows[1].description},${productRows[1].price}, ${String(existingCategoryName).toLowerCase()} `,
+        `${productRows[2].code},${productRows[2].name},${productRows[2].description},${productRows[2].price},${newCategoryName}`,
+        `${productRows[3].code},${productRows[3].name},${productRows[3].description},${productRows[3].price},${newCategoryName}`,
+        `${productRows[4].code},${productRows[4].name},${productRows[4].description},${productRows[4].price},${existingCategoryName}`,
+        `${optionalRow.code},${optionalRow.name},,, `,
       ].join('\n')),
     });
 
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('7/7');
-    await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Category Code');
-    await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Category Name');
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/5');
     await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
     await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-review.png'),

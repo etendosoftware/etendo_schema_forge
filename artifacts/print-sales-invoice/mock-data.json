@@ -17,7 +17,9 @@
     "org_taxid": "B12345678",
     "org_address": "Avenida de la Innovación 8",
     "org_postal": "41020",
-    "org_city": "Sevilla"
+    "org_city": "Sevilla",
+    "verifactu_qr_url": "https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B12345678&numserie=FV%2F2026-000142&fecha=14-07-2026&importe=3630.00",
+    "qr_mode": "verifactu"
   },
   "lines": [
     { "line": 10, "product_name": "Agua Mineral 1,5L (caja 12)", "quantity": 100, "uom": "Caja", "priceactual": 12.00, "linenetamt": 1200.00 },

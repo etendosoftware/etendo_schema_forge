@@ -26,9 +26,12 @@ const VF_PARCIAL_ENTITY    = 'facturasParcialmenteAceptadas';
 const VF_RECHAZADAS_ENTITY = 'facturasRechazadas';
 const VF_INVALIDAS_ENTITY  = 'facturasInválidas';
 
-// ── TBAI entity name ──────────────────────────────────────────────────────────
+// ── TBAI entity names ─────────────────────────────────────────────────────────
 const TBAI_SPEC   = 'tbai-facturas-enviadas';
 const TBAI_ENTITY = 'sincronización';
+// Validation results (Tbai_Valcode) — 0..N error reasons per sincronización row,
+// joined client-side via tbaiSyncinvoiceID → Tbai_Syncinvoice_ID (row.id).
+const TBAI_VALIDATION_ENTITY = 'resultadoValidación';
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function get(apiFetch, spec, entity, params) {
@@ -128,6 +131,26 @@ async function fetchTbaiData(apiFetch, orgId) {
   return { totalCount: total, receivedCount: received, rejectedCount: rejected, errorCount: error, pendingCount: pending };
 }
 
+/**
+ * Fetches every resultadoValidación row for the org (Tbai_Valcode table) — the
+ * error-reason detail (codigo/descripcion) for TBAI rows in Rechazado/Error
+ * status. There's no per-invoice endpoint, so we fetch the full set once and
+ * join client-side by tbaiSyncinvoiceID → sincronización row id (see
+ * TbaiMonitorSection.jsx). 404 (module/spec not installed) resolves to [].
+ */
+async function fetchTbaiValidationResults(apiFetch, orgId) {
+  try {
+    const resp = await get(apiFetch, TBAI_SPEC, TBAI_VALIDATION_ENTITY, {
+      organization: orgId,
+      _startRow: '0',
+      _endRow: '9999',
+    });
+    return resp.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function useFiscalMonitor(orgId, apiBaseUrl) {
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [state, setState] = useState({
@@ -137,11 +160,12 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
     monitorData: {},
     kpis: {},
     siiParentId: null,
+    tbaiValidationResults: [],
   });
 
   const load = useCallback(async () => {
     if (!orgId) {
-      setState({ loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {}, siiParentId: null });
+      setState({ loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {}, siiParentId: null, tbaiValidationResults: [] });
       return;
     }
     setState(s => ({ ...s, loading: true, error: null }));
@@ -157,13 +181,19 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
 
       let monitorData = {};
       let siiParentId = null;
+      let tbaiValidationResults = [];
       if (profile === 'sii' || profile === 'sii-navarra' || profile === 'sii+tbai') {
         const siiResult = await fetchSiiMonitorData(apiFetch, orgId);
         monitorData.sii = siiResult.counts;
         siiParentId = siiResult.parentId;
       }
       if (profile === 'tbai' || profile === 'sii+tbai') {
-        monitorData.tbai = await fetchTbaiData(apiFetch, orgId);
+        const [tbaiCounts, tbaiValidation] = await Promise.all([
+          fetchTbaiData(apiFetch, orgId),
+          fetchTbaiValidationResults(apiFetch, orgId),
+        ]);
+        monitorData.tbai = tbaiCounts;
+        tbaiValidationResults = tbaiValidation;
       }
       if (profile === 'verifactu') {
         monitorData.verifactu = await fetchVerifactuMonitorData(apiFetch, orgId);
@@ -176,6 +206,7 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
         monitorData,
         kpis: computeKpis(profile, monitorData),
         siiParentId,
+        tbaiValidationResults,
       });
     } catch (err) {
       setState(s => ({ ...s, loading: false, error: err.message }));
@@ -193,5 +224,5 @@ export {
   SII_EMITIDAS_ANT_ENTITY, SII_RECIBIDAS_ANT_ENTITY,
   VF_SPEC, VF_ACEPTADAS_ENTITY, VF_PARCIAL_ENTITY,
   VF_RECHAZADAS_ENTITY, VF_INVALIDAS_ENTITY,
-  TBAI_SPEC, TBAI_ENTITY,
+  TBAI_SPEC, TBAI_ENTITY, TBAI_VALIDATION_ENTITY,
 };

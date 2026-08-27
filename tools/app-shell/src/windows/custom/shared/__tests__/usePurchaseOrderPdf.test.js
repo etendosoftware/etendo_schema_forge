@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertPersistedTaxDerivation } from './testUtils/documentPdfPersistedTotalsAssertions.js';
+import { registerResolveProductCodeSharedTests } from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'usePurchaseOrderPdf.js'), 'utf8');
@@ -77,6 +78,8 @@ describe('usePurchaseOrderPdf', () => {
   it('sorts lines by lineNo before mapping', () => {
     assert.match(sharedSrc, /linesSorted.*sort|sort.*lineNo/s);
   });
+
+  registerResolveProductCodeSharedTests(assert, sharedSrc);
 
   it('imports computeDocumentTotals to derive printed totals', () => {
     assert.match(sharedSrc, /import \{ computeDocumentTotals \} from '@\/lib\/documentTotals';/);
