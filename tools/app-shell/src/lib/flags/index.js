@@ -1,5 +1,6 @@
 export {
   PROOF_OF_CONCEPT_MENU,
+  WEBMCP_AGENT_CHAT,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';
