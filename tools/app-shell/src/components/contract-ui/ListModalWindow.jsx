@@ -27,8 +27,8 @@ import { useClientSort } from '@/hooks/useClientSort';
 import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { buildHeaders } from '@/auth/api.js';
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
 function labelOrFallback(ui, key, fallbackKey) {
@@ -202,6 +202,7 @@ export function ListModalWindow({
     () => apiBaseUrlProp || (api?.baseUrl ? `${getApiBase()}${api.baseUrl}` : getApiBase()),
     [apiBaseUrlProp, api],
   );
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const label = tMenu(entityLabel) || entityLabel || entity;
   const fullBreadcrumb = breadcrumb
@@ -285,8 +286,6 @@ export function ListModalWindow({
   const [deleting, setDeleting] = useState(false);
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
-
-  const authHeaders = useCallback(() => (buildHeaders(token)), [token]);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -376,13 +375,12 @@ export function ListModalWindow({
     setSaving(true);
     setFormError(null);
     // Generic NEO W CRUD: POST {entity} creates, PUT {entity}/{id} updates.
-    const url = editingRow
-      ? `${apiBaseUrl}/${entity}/${encodeURIComponent(editingRow.id)}`
-      : `${apiBaseUrl}/${entity}`;
+    const path = editingRow
+      ? `/${entity}/${encodeURIComponent(editingRow.id)}`
+      : `/${entity}`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(path, {
         method: editingRow ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -396,16 +394,15 @@ export function ListModalWindow({
     } finally {
       setSaving(false);
     }
-  }, [missingRequired, editingRow, apiBaseUrl, entity, formData, authHeaders, ui, closeModal, reload, errorMessage]);
+  }, [missingRequired, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
 
   // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload.
   const handleToggle = useCallback(async (row, col, nextChecked) => {
     const key = `${row.id}:${col.key}`;
     setSavingToggles(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(row.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(row.id)}`, {
         method: 'PATCH',
-        headers: authHeaders(),
         body: JSON.stringify({ [col.key]: nextChecked }),
       });
       if (!res.ok) {
@@ -422,16 +419,15 @@ export function ListModalWindow({
         return next;
       });
     }
-  }, [apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [entity, apiFetch, errorMessage, reload, ui]);
 
   // Delete confirmed from the dialog: DELETE {entity}/{id}, then reload.
   const handleDeleteConfirmed = useCallback(async () => {
     if (!deletingRow) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(deletingRow.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(deletingRow.id)}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       if (!res.ok) {
         toast.error(await errorMessage(res));
@@ -444,7 +440,7 @@ export function ListModalWindow({
     } finally {
       setDeleting(false);
     }
-  }, [deletingRow, apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [deletingRow, entity, apiFetch, errorMessage, reload, ui]);
 
   const handleBack = useCallback(() => {
     if (config?.backTo) navigate(config.backTo);

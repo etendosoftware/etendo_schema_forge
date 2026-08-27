@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Fetch data from a NEO Headless widget endpoint.
  *
@@ -9,6 +9,7 @@ import { buildHeaders } from '@/auth/api.js';
  * @returns {{ data: any, loading: boolean, error: string|null, refresh: () => void }}
  */
 export function useWidget(specName, { token, apiBaseUrl }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,9 +18,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
     if (!token || !apiBaseUrl) return;
     setLoading(true);
     setError(null);
-    fetch(`${apiBaseUrl}/${specName}/data`, {
-      headers: buildHeaders(token),
-    })
+    apiFetch(`/${specName}/data`)
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
@@ -32,7 +31,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
         setError(err.message);
         setLoading(false);
       });
-  }, [apiBaseUrl, specName, token]);
+  }, [apiFetch, specName, token, apiBaseUrl]);
 
   useEffect(() => {
     if (token) refresh();

@@ -6,8 +6,8 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
 const PAGE_SIZE = 30;
 
 export const COLORS = [
@@ -52,13 +52,12 @@ export function formatQty(raw) {
 export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, sizeClass = 'w-11 h-11' }) {
   const [src, setSrc] = useState(imageUrl || null);
   const objectUrlRef = useRef(null);
+  const apiFetch = useApiFetch(neoBaseUrl);
 
   useEffect(() => {
     if (src || !imageId || !neoBaseUrl || !token) return;
     let cancelled = false;
-    fetch(`${neoBaseUrl}/image/${imageId}`, {
-      headers: authHeaders(token),
-    })
+    apiFetch(`/image/${imageId}`)
       .then(r => r.ok ? r.blob() : null)
       .then(blob => {
         if (blob && !cancelled) {
@@ -69,7 +68,7 @@ export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, 
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, neoBaseUrl, token, src]);
+  }, [imageId, neoBaseUrl, token, src, apiFetch]);
 
   // Revoke object URL only on unmount.
   useEffect(() => {
@@ -107,15 +106,14 @@ export function useProductImages({ open, selectorUrl, token }) {
   const [imageMap, setImageMap] = useState({});
   const neoBaseUrl = selectorUrl ? selectorUrl.replace(/\/[^/]+\/[^/]+\/selectors\/.*$/, '') : '';
   const imageUrl = neoBaseUrl ? `${neoBaseUrl}/product/product` : null;
+  const apiFetch = useApiFetch(neoBaseUrl);
 
   useEffect(() => {
     if (!open) return undefined;
     setImageMap({});
     if (!imageUrl || !token) return undefined;
     let cancelled = false;
-    fetch(`${imageUrl}?_startRow=0&_endRow=500`, {
-      headers: buildHeaders(token),
-    })
+    apiFetch('/product/product?_startRow=0&_endRow=500')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled) return;
@@ -131,7 +129,7 @@ export function useProductImages({ open, selectorUrl, token }) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [open, imageUrl, token]);
+  }, [open, imageUrl, token, apiFetch]);
 
   return { imageMap, neoBaseUrl };
 }
@@ -202,6 +200,7 @@ export function useProductSelectorFetch({
   const fetchTimer = useRef(null);
   const abortRef = useRef(null);
   const rawOffsetRef = useRef(0);
+  const apiFetch = useApiFetch();
 
   // Keep stable refs to callbacks so doFetch's dep array stays stable even when
   // the caller passes inline arrow functions on every render.
@@ -235,8 +234,8 @@ export function useProductSelectorFetch({
       if (!append) abortRef.current = controller;
       const params = { ...selectorContextRef.current, limit: PAGE_SIZE, offset };
       if (q) params.q = q.trim();
-      fetch(buildUrlWithParams(selectorUrl, params), {
-        headers: buildHeaders(token),
+      apiFetch(buildUrlWithParams(selectorUrl, params), {
+        baseUrl: '',
         signal: controller.signal,
       })
         .then(r => r.ok ? r.json() : null)
@@ -272,7 +271,7 @@ export function useProductSelectorFetch({
           }
         });
     }, delay);
-  }, [selectorUrl, token, transform, autoWaterfallMin]);
+  }, [selectorUrl, token, transform, autoWaterfallMin, apiFetch]);
 
   // Reset all transient state and fire the initial fetch when the drawer opens.
   useEffect(() => {

@@ -35,7 +35,7 @@ describe('useWidget', () => {
         'http://localhost/api/sales-kpis/data',
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES',
+            'Accept-Language': 'es_ES',
           }),
         }),
       );

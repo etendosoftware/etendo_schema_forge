@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { trackTransactionPosted } from '@/lib/observability/health-events.js';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Invokes Etendo DocAction buttons via NEO Headless.
  * POST {apiBaseUrl}/{entity}/{recordId}/action/documentAction { docAction }
@@ -9,8 +9,7 @@ import { buildHeaders } from '@/auth/api.js';
 export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const headers = useMemo(() => (buildHeaders(token)), [token]);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const execute = useCallback(async (recordId, docAction, { onSuccess, onError } = {}) => {
     if (!recordId || !docAction) {
@@ -22,9 +21,9 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/${entity}/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction }) },
+      const res = await apiFetch(
+        `/${entity}/${recordId}/action/documentAction`,
+        { method: 'POST', body: JSON.stringify({ docAction }) },
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -45,7 +44,7 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, entity, headers]);
+  }, [entity, apiFetch]);
 
   const clearError = useCallback(() => setError(null), []);
 

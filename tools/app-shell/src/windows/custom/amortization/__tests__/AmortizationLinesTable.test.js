@@ -39,12 +39,13 @@ describe('AmortizationLinesTable — fetch pattern', () => {
     assert.match(src, /_sortBy=sEQNoAsset/);
   });
 
-  it('sends Authorization Bearer token in fetch header', () => {
-    // ETP-5022 — the header is no longer a literal here: it comes from the canonical
-    // builder, which also attaches Accept-Language. Asserting the builder call is the
-    // stronger check, and test/auth-header-policy.test.js fails the build if any file
-    // goes back to hand-rolling the header.
-    assert.match(src, /(authHeaders|buildHeaders)\s*\(/);
+  it('sends Authorization Bearer token via the shared apiFetch helper', () => {
+    // ETP-5022 — the header is no longer built here at all: useApiFetch's apiFetch
+    // already attaches Authorization + Accept-Language on every request. Asserting
+    // the helper is used is the stronger check now that the header-builder import
+    // is gone from this file.
+    assert.match(src, /from '@\/auth\/useApiFetch\.js'/);
+    assert.match(src, /useApiFetch\(apiBaseUrl\)/);
   });
 
   it('calls onCountChange after fetching lines', () => {
@@ -84,8 +85,10 @@ describe('AmortizationLinesTable — inline editing', () => {
     assert.match(src, /data-row-id/);
   });
 
-  it('saves to apiBaseUrl/lines/{id} via PUT', () => {
-    assert.match(src, /`\$\{apiBaseUrl\}\/lines\/\$\{lineId\}`/);
+  it('saves to /lines/{id} via PUT through apiFetch', () => {
+    // ETP-5022 — apiFetch prefixes apiBaseUrl itself, so the literal source path
+    // no longer includes it; the wire URL is unchanged.
+    assert.match(src, /`\/lines\/\$\{lineId\}`/);
     assert.match(src, /method.*PUT/);
   });
 
@@ -198,8 +201,10 @@ describe('AmortizationLinesTable — add and delete lines', () => {
     assert.match(src, /label=\{ui\('addLine'\)\}/);
   });
 
-  it('posts new line to apiBaseUrl/lines with amortization parent id', () => {
-    assert.match(src, /`\$\{apiBaseUrl\}\/lines`/);
+  it('posts new line to /lines through apiFetch with amortization parent id', () => {
+    // ETP-5022 — apiFetch prefixes apiBaseUrl itself, so the literal source path
+    // no longer includes it; the wire URL is unchanged.
+    assert.match(src, /apiFetch\('\/lines',/);
     assert.match(src, /method.*POST/);
     assert.match(src, /amortization.*recordId/);
   });

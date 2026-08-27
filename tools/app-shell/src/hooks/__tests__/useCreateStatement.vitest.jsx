@@ -1,10 +1,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useCreateStatement } from '../useCreateStatement.js';
+
+// ETP-5022: useCreateStatement now goes through useApiFetch, which reads the
+// token from the real core AuthProvider (or falls back to the ambient session)
+// rather than from a mocked `useAuth`. A mocked `@/auth/AuthContext.jsx` never
+// crosses the `useApiFetch` shim (it imports auth via the core package's own
+// relative path, which the `@/auth` alias does not intercept), so a real
+// AuthProvider seeded with a token is required instead.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {

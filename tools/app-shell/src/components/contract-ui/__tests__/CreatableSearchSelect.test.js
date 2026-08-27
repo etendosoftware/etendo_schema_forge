@@ -50,11 +50,12 @@ describe('CreatableSearchSelect', () => {
   });
 
   it('fetches options from selectorUrl with Authorization header', () => {
-    // ETP-5022 — the header is no longer a literal here: it comes from the canonical
-    // builder, which also attaches Accept-Language. Asserting the builder call is the
-    // stronger check, and test/auth-header-policy.test.js fails the build if any file
-    // goes back to hand-rolling the header.
-    assert.match(src, /(authHeaders|buildHeaders)\s*\(/);
+    // ETP-5022 — the header is no longer a literal here: it comes from useApiFetch,
+    // which attaches the canonical Authorization + Accept-Language headers for every
+    // request. Asserting the hook is wired up is the stronger check, and
+    // test/auth-header-policy.test.js fails the build if any file goes back to
+    // hand-rolling the header.
+    assert.match(src, /useApiFetch\s*\(/);
     assert.match(src, /buildUrlWithParams/);
   });
 

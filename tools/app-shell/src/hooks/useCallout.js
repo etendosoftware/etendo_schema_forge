@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function sanitizeCalloutMessage(raw) {
   return raw
     .replace(/<br[^>]{0,10}>/gi, ' ')
@@ -26,6 +26,7 @@ function sanitizeCalloutMessage(raw) {
  * executeCallout(field, value, formState, meta): triggers the callout (debounced 300ms).
  */
 export function useCallout(entity, { token, apiBaseUrl }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [calloutResult, setCalloutResult] = useState(null);
   const [calloutLoading, setCalloutLoading] = useState(false);
   // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each other
@@ -55,9 +56,8 @@ export function useCallout(entity, { token, apiBaseUrl }) {
           formState: state,
           ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
         };
-        const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
+        const res = await apiFetch(`/${entity}/callout`, {
           method: 'POST',
-          headers: buildHeaders(token),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
@@ -91,7 +91,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         setCalloutLoading(false);
       }
     }, 300);
-  }, [entity, token, apiBaseUrl]);
+  }, [entity, token, apiBaseUrl, apiFetch]);
 
   return { calloutResult, calloutLoading, executeCallout };
 }

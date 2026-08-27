@@ -27,7 +27,7 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', reference: 'Asset', inputMode: 'selector', required: true, readOnlyLogic: (r) => r['posted'] === 'Y' },
@@ -69,6 +69,7 @@ export default function AmortizationLinesTable({
   const orgCurrency = useCurrency() ?? 'USD';
   const navigate = useNavigate();
   const location = useLocation();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -152,9 +153,7 @@ export default function AmortizationLinesTable({
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
-    fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`, {
-      headers: authHeaders(token),
-    })
+    apiFetch(`/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`)
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -171,7 +170,7 @@ export default function AmortizationLinesTable({
       })
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl, apiFetch]);
 
   useEffect(() => { fetchLines(); }, [fetchLines]);
 
@@ -200,9 +199,8 @@ export default function AmortizationLinesTable({
   async function saveField(lineId, line, fieldKey, value) {
     if (String(line[fieldKey] ?? '') === String(value ?? '')) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
+      const res = await apiFetch(`/lines/${lineId}`, {
         method: 'PUT',
-        headers: buildHeaders(token),
         body: JSON.stringify({ [fieldKey]: value }),
       });
       if (res.ok) { fetchLines(); onRefresh?.(); }
@@ -233,9 +231,8 @@ export default function AmortizationLinesTable({
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
-      const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
+      const res = await apiFetch(`/lines/${lineId}`, {
         method: 'DELETE',
-        headers: authHeaders(token),
       });
       if (res.ok) {
         fetchLines();
@@ -264,9 +261,8 @@ export default function AmortizationLinesTable({
     setBulkDeleting(true);
     try {
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        fetch(`${apiBaseUrl}/lines/${id}`, {
+        apiFetch(`/lines/${id}`, {
           method: 'DELETE',
-          headers: authHeaders(token),
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;
@@ -287,9 +283,8 @@ export default function AmortizationLinesTable({
     if (!newLine.asset) return;
     setSaving('new');
     try {
-      const res = await fetch(`${apiBaseUrl}/lines`, {
+      const res = await apiFetch('/lines', {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({ ...newLine, amortization: recordId, currency: data?.currency }),
       });
       if (res.ok) {

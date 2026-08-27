@@ -1,8 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from './useNeoResource';
-
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Data access for the cash-close screen of cash-type financial accounts (ETP-4795).
  *
@@ -37,7 +35,7 @@ function buildQuery(params) {
  * @returns {{ post: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */
 function useNeoPost(action) {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -45,10 +43,8 @@ function useNeoPost(action) {
     setLoading(true);
     setError(null);
     try {
-      const url = `${getApiBase()}${BASE_PATH}?action=${action}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify(payload),
       });
 
@@ -68,7 +64,7 @@ function useNeoPost(action) {
     } finally {
       setLoading(false);
     }
-  }, [token, action]);
+  }, [apiFetch, action]);
 
   return { post, loading, error };
 }

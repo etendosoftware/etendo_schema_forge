@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
-import { authHeaders } from './financialAccountHttp';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from './useNeoResource';
 
 /**
@@ -41,14 +40,14 @@ async function buildRequestError(res) {
  * POSTs a statement file to one of the two actions and returns its response data.
  *
  * @param {string} action `preview` or `import`
- * @param {string} token bearer token
+ * @param {(path: string, options?: object) => Promise<Response>} apiFetch authenticated fetch
  * @param {{ accountId: string, fileName: string, contentBase64: string }} payload
  * @returns {Promise<object>} the `response.data` payload (never null)
  */
-export async function postStatementFile(action, token, { accountId, fileName, contentBase64 }) {
-  const res = await fetch(`${getApiBase()}${BASE_PATH}?action=${action}`, {
+export async function postStatementFile(action, apiFetch, { accountId, fileName, contentBase64 }) {
+  const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
     method: 'POST',
-    headers: authHeaders(token),
+    on401: 'ignore',
     body: JSON.stringify({
       FIN_Financial_Account_ID: accountId,
       fileName,
@@ -70,7 +69,7 @@ export async function postStatementFile(action, token, { accountId, fileName, co
  * @returns {{ run: (payload: object) => Promise<object>, busy: boolean, error: Error|null }}
  */
 export function useStatementFileRequest(action) {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -78,14 +77,14 @@ export function useStatementFileRequest(action) {
     setBusy(true);
     setError(null);
     try {
-      return await postStatementFile(action, token, payload);
+      return await postStatementFile(action, apiFetch, payload);
     } catch (err) {
       setError(err);
       throw err;
     } finally {
       setBusy(false);
     }
-  }, [action, token]);
+  }, [action, apiFetch]);
 
   return { run, busy, error };
 }
