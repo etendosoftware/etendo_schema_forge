@@ -74,9 +74,6 @@
           "Foreign_Amount": "Target Currency Amount"
         }
       },
-      "listViewOptions": {
-        "hidePrint": true
-      },
       "subsetFilters": [
         {
           "label": "allTab"
@@ -2859,9 +2856,6 @@
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {
