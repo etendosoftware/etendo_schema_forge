@@ -1,8 +1,8 @@
 {
   "version": "0.90.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-24T15:27:51.866Z",
-  "checksum": "e81504d14bd7d267",
+  "updatedAt": "2026-08-27T14:01:53.993Z",
+  "checksum": "11dcf242d899deb9",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -4460,6 +4460,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "noTrailing": true,
             "validation": {
               "required": true,
               "maxLength": 15
@@ -4471,8 +4472,7 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            },
-            "noTrailing": true
+            }
           }
         ],
         "searchableFields": [],
