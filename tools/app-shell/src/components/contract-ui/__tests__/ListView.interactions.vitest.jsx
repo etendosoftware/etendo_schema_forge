@@ -835,7 +835,9 @@ describe('ListView — selection bar actions', () => {
     // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
     await user.click(screen.getByTitle('print'));
 
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function), 'http://localhost/api');
   });
 
   it('hands the selected rows to onCloneRow', async () => {
@@ -857,7 +859,9 @@ describe('ListView — selection bar actions', () => {
 
     // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
     await user.click(screen.getByTitle('print'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function), 'http://localhost/api');
   });
 
   it('renders host-supplied bulkActions with the selection context', () => {

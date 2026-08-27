@@ -392,8 +392,11 @@ describe('ListView — ETP-4603 coverage top-up', () => {
   it('calls printDocuments with the selected ids from the selection bar print button', () => {
     renderListView();
     fireEvent.click(screen.getByTestId('trigger-select'));
+    // ETP-4972: the selection bar's print button is icon-only now, queried by
+    // its title tooltip instead of visible text.
     fireEvent.click(screen.getByTitle('print'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token', expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — see documentPdfRegistry.js
+    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token', expect.any(Function), '/api');
   });
 
   it('invokes onCloneRow with the selected rows from the selection-bar clone button', () => {

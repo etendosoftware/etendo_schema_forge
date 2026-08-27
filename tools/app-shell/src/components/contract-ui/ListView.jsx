@@ -957,7 +957,7 @@ export function ListView({
                     size="icon"
                     title={ui('print')}
                     aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                   </Button>

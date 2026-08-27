@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { validateIbanForCountry } from '@/lib/countryIban.js';
+import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 
@@ -28,6 +28,8 @@ const IBAN_ERROR_KEYS = {
   invalid: 'financeAccountsNewIbanInvalid',
   countryMismatch: 'financeAccountsNewIbanCountryMismatch',
   lengthMismatch: 'financeAccountsNewIbanLengthMismatch',
+  // Not a code validateIbanForCountry returns — synthesized from countryLacksIbanConfig below.
+  noIbanConfig: 'financeAccountsNewIbanCountryNoConfig',
 };
 
 /**
@@ -106,7 +108,14 @@ export function AccountFormStep({
 
   const isBank = mode === 'bank';
   const ibanCheck = isBank ? validateIbanForCountry(iban, selectedCountry) : { ok: true, code: null };
-  const ibanInvalid = isBank && iban.trim() !== '' && !ibanCheck.ok;
+  // `validateIbanForCountry` only sees the resolved catalog ROW, so it cannot distinguish "no
+  // country picked yet" from "picked a country that cannot carry an IBAN" — both are `null`. The
+  // second case is a real error the DB trigger rejects, and before this it sailed through to the
+  // backend and came back as an untranslated English toast (ETP-4896 QA follow-up).
+  const countryNoIbanConfig = isBank && iban.trim() !== ''
+    && countryLacksIbanConfig(countryId, countryIbanRules);
+  const ibanInvalid = isBank && iban.trim() !== '' && (!ibanCheck.ok || countryNoIbanConfig);
+  const ibanErrorCode = countryNoIbanConfig ? 'noIbanConfig' : ibanCheck.code;
   const canSubmit = name.trim() !== '' && currencyId !== '' && countryId !== '' && !ibanInvalid && !submitting;
 
   const handleSubmit = (event) => {
@@ -194,7 +203,7 @@ export function AccountFormStep({
               />
               {ibanInvalid && ibanTouched ? (
                 <p className="text-xs text-[hsl(var(--destructive))]" data-testid="account-form-iban-error">
-                  {ui(IBAN_ERROR_KEYS[ibanCheck.code] || IBAN_ERROR_KEYS.invalid)}
+                  {ui(IBAN_ERROR_KEYS[ibanErrorCode] || IBAN_ERROR_KEYS.invalid)}
                 </p>
               ) : null}
             </div>
