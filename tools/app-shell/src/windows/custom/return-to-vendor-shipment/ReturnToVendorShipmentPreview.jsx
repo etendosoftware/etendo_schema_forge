@@ -7,10 +7,6 @@ import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
 
-// ETP-4718 — the "Enviar" (send-email) action is only meaningful once the document
-// is Confirmado; Borrador (and any other non-final state) has nothing to send yet.
-const SENDABLE_STATUS = 'CO';
-
 export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -21,7 +17,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useReturnToVendorPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR' };
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR', recordUpdated: shipment?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnToVendorPdf(
     shipment?.id ?? null,
     apiBaseUrl,
@@ -40,7 +36,6 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const partnerName = shipment['businessPartner$_identifier'] || '—';
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
   const windowLabel = tMenu('Return to Vendor Shipment');
-  const isSendable = shipment.documentStatus === SENDABLE_STATUS;
   const isDraft = shipment.documentStatus === 'DR';
 
   const handleDownload = () => {
@@ -54,7 +49,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // generated-PDF windows.
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true,
+        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: shipment?.updated ?? null,
         documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl,
       }
     : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
@@ -74,11 +69,21 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
       data-testid="PreviewPdfPanel__93f029" />
   );
 
+  // ETP-4717 — QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" action on this
+  // window: the frontend derives the email contract name as `${windowName}-send`
+  // (`return-to-vendor-shipment-send`), but the backend only registers
+  // `ReturnToVendorSendEmailContract.NAME` = `return-to-vendor-send`, so every click
+  // fails with "Unknown email contract". QA explicitly asked to remove the action
+  // from this window rather than reconcile the contract name — no `onEmail` is wired
+  // to `buildReturnPreviewContent`, matching the sibling `return-material-receipt`
+  // preview's pattern (see `ReturnMaterialReceiptPreview.jsx`), so the "Enviar" button
+  // never renders here (`PreviewActionButtons` only shows it when `onEmail` is set).
+  // `sendModal`/`ReceiptSendModal` stay wired below in case a future ticket fixes the
+  // contract mismatch and re-enables Send for this window.
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: shipment, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
     canDownload: isDownloadable,
-    onEmail: isSendable ? sendModal.openEmailModal : undefined,
   });
 
   return (

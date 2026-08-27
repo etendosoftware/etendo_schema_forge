@@ -25,23 +25,33 @@ import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx'
  * `expiresAt` rather than relying on a stored column nothing ever wrote (see that
  * method's own javadoc); it also gives the new "Resend invitation" button (rendered
  * next to this pill, see `index.jsx`'s `TopbarExtra`) something to sit beside instead
- * of floating with no status indicator. Every other value (`ACCEPTED`, `REVOKED`,
- * `null`, or any unrecognized string) renders nothing — a blank cell in the grid,
- * nothing in the toolbar.
+ * of floating with no status indicator. `ACCEPTED` gets its own green/success pill
+ * (ETP-4999 — a blank cell for an accepted invitation reads as "no invitation was
+ * ever sent", misleading for a user who already accepted theirs). `REVOKED`, `null`,
+ * and any unrecognized string still render nothing — there is genuinely no
+ * outstanding/relevant invitation state to show in those cases.
  *
  * Purely reactive to `status` — no local state or polling. In the grid, this means a
  * row updates the next time its data reloads (same as every other cell); in the
  * detail header, it means the pill disappears once the backend flips `invitationStatus`
  * to a terminal state (e.g. once the invitee accepts).
+ *
+ * ETP-4999 — the Figma spec uses two different wordings for the SAME status set: the
+ * dense list grid gets a short label ("Pendiente", "Caducada", ...) while the detail
+ * form's single pill gets the full sentence ("Invitación pendiente", ...). `compact`
+ * (default `false`, i.e. the form's full wording) switches ONLY the label text via the
+ * `*GridBadge` i18n keys below — tone/status/testid mapping stays identical either way,
+ * so this is still the one place that owns the status→treatment mapping; only the copy
+ * varies per call site. `UserHeaderTable.jsx`'s grid cell is the only `compact` caller.
  */
-export default function PendingInvitationPill({ status, 'data-testid': dataTestId = 'PendingInvitationPill' }) {
+export default function PendingInvitationPill({ status, compact = false, 'data-testid': dataTestId = 'PendingInvitationPill' }) {
   const ui = useUI();
   if (status === 'PENDING' || status === 'SENT') {
     return (
       <DocumentStatusPill
         status={status}
         tone="warning"
-        label={ui('pendingInvitationBadge')}
+        label={ui(compact ? 'pendingInvitationGridBadge' : 'pendingInvitationBadge')}
         data-testid={dataTestId} />
     );
   }
@@ -50,7 +60,7 @@ export default function PendingInvitationPill({ status, 'data-testid': dataTestI
       <DocumentStatusPill
         status={status}
         tone="destructive"
-        label={ui('invitationDeliveryFailedBadge')}
+        label={ui(compact ? 'invitationDeliveryFailedGridBadge' : 'invitationDeliveryFailedBadge')}
         data-testid={dataTestId} />
     );
   }
@@ -59,7 +69,16 @@ export default function PendingInvitationPill({ status, 'data-testid': dataTestI
       <DocumentStatusPill
         status={status}
         tone="neutral"
-        label={ui('invitationExpiredBadge')}
+        label={ui(compact ? 'invitationExpiredGridBadge' : 'invitationExpiredBadge')}
+        data-testid={dataTestId} />
+    );
+  }
+  if (status === 'ACCEPTED') {
+    return (
+      <DocumentStatusPill
+        status={status}
+        tone="success"
+        label={ui(compact ? 'invitationAcceptedGridBadge' : 'invitationAcceptedBadge')}
         data-testid={dataTestId} />
     );
   }

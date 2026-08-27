@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-08-19T15:15:00.244Z",
-  "checksum": "3a2812db53cc826c",
+  "updatedAt": "2026-08-24T16:47:21.989Z",
+  "checksum": "31fd92d903feb69c",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -1002,7 +1002,8 @@
               "source": "SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
             }
           }
-        ]
+        ],
+        "javaQualifier": "amortizationLineHandler"
       },
       "assetAcct": {
         "tableName": "A_Asset_Acct",
@@ -1936,7 +1937,8 @@
             "visibility": "system",
             "required": false
           }
-        ]
+        ],
+        "javaQualifier": "amortizationLineHandler"
       },
       "assetAcct": {
         "tableName": "A_Asset_Acct",

@@ -45,11 +45,43 @@
   .doc-notes-label { font-weight: 600; color: #1e293b; }
   .doc-footer { border-top: 1px solid #e2e8f0; padding-top: 3mm; font-size: 7pt; color: #94a3b8; text-align: center; }
 
+  /* Verifactu tax QR (ETP-4912) — geometry mandated by the AEAT spec v0.4.7:
+     40x40mm symbol (art. 21.1), >=2mm quiet zone on all four sides with 6mm
+     recommended (section 3) applied as padding here because CSS millimetres are exact
+     and do not drift with the QR's symbol version, and label/caption at a font size
+     equal to or larger than the rest of the invoice data (art. 20.1.b) — the invoice
+     body is 9pt, so these must not be smaller. */
+  .verifactu-qr { text-align: center; margin-bottom: 6mm; }
+  .verifactu-qr-label { font-size: 10pt; font-weight: 600; color: #1e293b; }
+  .verifactu-qr-img { width: 40mm; height: 40mm; padding: 6mm; box-sizing: content-box; background: #fff; display: block; margin: 0 auto; }
+  .verifactu-qr-caption { font-size: 9pt; color: #1e293b; line-height: 1.3; max-width: 100mm; margin: 0 auto; }
+
   @page { margin: 10mm; size: A4 portrait; }
   @media print { .doc-container { padding: 0; } }
 </style>
 </head>
 <body><div class="doc-container">
+
+  {{!-- Verifactu tax QR — AEAT-mandated block (ETP-4912).
+        Placed at the top and centred per the spec (section 3): for portrait invoices the QR
+        goes at the top, preferably centred between the left and right margins. The ticket's
+        example image puts it top-right, which the spec does not prefer — the norm wins.
+        It renders once, on the first page, because this template has no repeating header.
+        Label and caption are deliberately hardcoded in Spanish: they are legal literals
+        (art. 20.1.b / section 3), not UI strings, and classic's own AD messages
+        ETVFAC_fiscal_QR / ETVFAC_verifiable_AEAT carry an identical en_US translation.
+        The VERI*FACTU logo is not included: the article requires the PHRASE or the mark,
+        and the phrase alone complies.
+        Guard: qrDataUrl is empty unless classic has issued the AEAT URL, so a non-Verifactu
+        invoice — or a Verifactu one with no Registro de Facturacion yet — shows no QR at all,
+        never the internal document QR. --}}
+  {{#if header.qrDataUrl}}
+  <div class="verifactu-qr">
+    <div class="verifactu-qr-label">QR Tributario:</div>
+    <img src="{{header.qrDataUrl}}" class="verifactu-qr-img" />
+    <div class="verifactu-qr-caption">Factura verificable en la sede electrónica de la AEAT</div>
+  </div>
+  {{/if}}
 
   {{!-- Document Header --}}
   <div class="doc-header">
@@ -142,12 +174,10 @@
   </div>
   {{/if}}
 
-  {{!-- Footer with QR --}}
-  <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6mm; padding-top:4mm; border-top:1px solid #e2e8f0;">
-    <div style="flex-shrink:0;">
-      <img src="{{header.qrDataUrl}}" width="80" height="80" style="display:block;" />
-      <div style="font-size:6pt; color:#94a3b8; margin-top:1mm; max-width:80px; text-align:center;">Scan to verify</div>
-    </div>
+  {{!-- Footer. The internal document QR that used to live here was removed with ETP-4912:
+        the AEAT tax QR must be the FIRST and only QR on the invoice (spec section 3), and a
+        second, non-AEAT QR on a fiscal document is exactly what the norm warns against. --}}
+  <div style="display:flex; justify-content:flex-end; align-items:flex-end; margin-top:6mm; padding-top:4mm; border-top:1px solid #e2e8f0;">
     <div style="font-size:7pt; color:#94a3b8; text-align:right;">
       Generated on {{formatDate meta.generatedAt}}<br>{{header.org_name}}
     </div>
