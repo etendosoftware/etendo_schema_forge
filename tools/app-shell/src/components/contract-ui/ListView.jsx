@@ -15,6 +15,7 @@ import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -910,10 +911,17 @@ export function ListView({
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
-          {/* Selection bar or filter bar */}
-          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
-              ternary whose alternate is a plain `&&`: nesting one ternary inside
-              another here is what Sonar S3358 flags.
+          {/* Selection toolbar AND filter/idle bar — rendered independently, not as
+              either/or branches of one ternary (ETP-4972 Finding 4). Before ETP-4972
+              the selection bar occupied this same DOM slot as the idle bar (an inline
+              "replace the toolbar" design), so a ternary made sense. Now that
+              SelectionToolbar is a viewport-fixed portal to document.body, the two
+              no longer compete for the same space — and per ETP-4972's own "Floating
+              Toolbar vs Gmail/Drive-style replace" decision, the floating pill is
+              explicitly ADDITIVE: the idle bar (Filtros, ViewToggle, Nuevo, etc.) must
+              stay visible while rows are selected, not disappear behind the pill.
+              Rendering both as independent `&&` expressions below achieves that with
+              no nested-ternary risk (Sonar S3358 doesn't apply to two siblings).
 
               ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
               selection bar. The flag exists because a custom headerTable draws the
@@ -927,31 +935,42 @@ export function ListView({
               unreachable unless the grid is selectable, so a custom headerTable that
               wants no selection at all simply keeps `selectable={false}` on its own
               DataTable and never renders rows that can be picked. */}
-          {selectedRows.length > 0 ? (
-            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
+          {selectedRows.length > 0 && (
+            <SelectionToolbar
+              visible={selectedRows.length > 0}
+              onClose={clearSelection}
+              closeTitle={ui('close')}
+              data-testid="SelectionToolbar__620cbc">
               <div className="flex items-center gap-3 h-10">
-                <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
+                <span role="status" className="text-sm font-medium" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
+                {/* ETP-4972 — ghost variant, icon-only (title tooltip, no visible
+                    label, no border/box): Figma's floating pill keeps only the
+                    destructive "Eliminar" action bordered; secondary actions like
+                    this one sit directly on the pill background and only highlight
+                    on hover. Nothing is hidden behind a menu — just narrower and
+                    borderless. */}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('print')}
+                    aria-label={ui('print')}
                     onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
-                    {ui('print')} ({selectedRows.length})
                   </Button>
                 )}
                 {onCloneRow && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('cloneOrderBtn')}
+                    aria-label={ui('cloneOrderBtn')}
                     onClick={() => onCloneRow(selectedRows)}
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
-                    {ui('cloneOrderBtn')} ({selectedRows.length})
                   </Button>
                 )}
                 {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
@@ -964,19 +983,24 @@ export function ListView({
                     ETP-4871 — additionally disabled (with an explanatory tooltip) once the
                     selection includes a row the host's `isRowDeletable` rejects; absent, this
                     never differs from the pre-existing behavior. */}
+                {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
+                    zoomed straight into the applied Figma instance's canvas
+                    render (not just the Dev Mode property panel) and confirmed
+                    no stroke/box around the trash icon at all — ghost, same as
+                    every other secondary action, distinguished only by its red
+                    icon color. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
                     disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
                     title={blockedDeleteCount > 0
                       ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : undefined}
+                      : ui('delete')}
+                    aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
-                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
@@ -996,8 +1020,9 @@ export function ListView({
                   reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
-            </div>
-          ) : !listBarHidden && (
+            </SelectionToolbar>
+          )}
+          {!listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
