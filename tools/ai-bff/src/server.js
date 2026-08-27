@@ -7,9 +7,10 @@ import { StreamableHTTPTransport } from './streamable-http-transport.js';
 
 const port = Number(process.env.BFF_PORT || 3400);
 const mcpUrl = process.env.ETENDO_MCP_URL || 'http://localhost:8080/etendo/sws/mcp';
-const modelId = process.env.OPENCODE_MODEL || 'opencode-go/kimi-k2.6';
+const modelId = process.env.OPENCODE_MODEL || 'kimi-k2.6';
 const maxBodyBytes = Number(process.env.BFF_MAX_BODY_BYTES || 1_000_000);
 const mcpTimeoutMs = Number(process.env.ETENDO_MCP_TIMEOUT_MS || 10_000);
+const modelTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 60_000);
 
 export function hasConfiguredSecret(value) {
   return Boolean(value && !['null', 'undefined'].includes(value.trim().toLowerCase()));
@@ -99,6 +100,10 @@ export async function handleChat(req, res) {
       messages: convertToCoreMessages(body.messages || []),
       tools,
       maxSteps: 8,
+      abortSignal: AbortSignal.timeout(modelTimeoutMs),
+      onError: ({ error }) => {
+        console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
+      },
       onFinish: async () => mcpClient.close(),
     });
     result.pipeDataStreamToResponse(res);
