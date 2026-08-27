@@ -1184,6 +1184,71 @@ uses, per this repo's own root `CLAUDE.md` convention ("Etendo AD findings go in
 `R27-deactivate-r16-duplicate-roles.sql`, plus the R16 retirement mechanism and the
 `EM_ETGO_Show_Acct_Fields` derived-flag sync). Both fronts now closed.
 
+### L2 — `AD_User.Email` NULL for pre-existing tenant owners (ETP-5019)
+
+**Symptom:** every `EM_ETGO_Is_Owner='Y'` `AD_User` row has `Email IS NULL` — the owner's "Correo
+electrónico" field renders empty in the Users window. Confirmed by direct query: 69/69 owners on
+this DB, 2026-08-27. Distinct from L1 (which is about the owner FLAG being unset) — this is about
+a genuinely different column on the SAME row, and can occur even for a tenant whose owner flag
+was already correctly backfilled by L1's fix (the flag and the email are two unrelated writes).
+
+**Root cause:** core Etendo's `InitialSetupUtility#insertUser` (the primitive
+`InitialClientSetup` calls to provision a brand-new client's admin `AD_User`) sets
+`Name`/`Description`/`Username` but never `Email` — so the column is genuinely `NULL` in the DB
+after onboarding, not a frontend display bug. Same root-cause shape as L1: a column onboarding
+never wrote, only auto-set going forward once the preventive fix ships.
+
+**Email source (the crux — do not use `Username` blindly):** `AD_User.Username` is NOT reliably
+the owner's real account email. Onboarding names the FIRST environment a founder creates after
+their plain account email, and every LATER environment
+`<accountEmail>+<clientName>` (`EtendoGoJwtSupport#buildClientUsername`) to dodge the
+`AD_User.Username` uniqueness constraint — so an owner who is the founder of a second (or later)
+tenant under the same account has a suffixed username that is NOT their email as-is. The
+canonical, already-proven-in-production inverse of that naming is
+`GoAccountResolver#findAccountByUsername` (`com.etendoerp.go/.../common/GoAccountResolver.java`)
+— used by `EtendoGoJwtDalHelper#findAccountForEnvironmentUser` to resolve a RETURNING owner's
+identity on every login: try an exact `username = account.email` match first; if that misses,
+split the username on the LAST `'+'` (never the first — the client-name suffix alphabet is
+`[a-z0-9]` only, so it can never itself contain `'+'`, which keeps a legitimately plus-addressed
+account email like `user+tag@example.com` intact) and retry the exact match on the prefix. The
+corrective fix mirrors this exact two-step resolution in SQL rather than inventing a new
+heuristic, so it can never disagree with the runtime login path about whose email a given owner
+really has.
+
+**Preventive front (shipped same session, ETP-5019, commit `986b543a`):**
+`EtendoGoJwtSupport#applyClientAdminEmail(username, email)`, called from
+`EtendoGoJwtServlet#resolveOrCreateClient` right after the existing `applyClientAdminDisplayName`
+call, backfills `Email` at client-creation time from `accountEmail` (the verified
+login/registration email held on the founder's `ETGO_Account` — NOT `clientUser`/`username`,
+which may carry the client-name suffix above). New tenants onboarded from this deploy onward are
+born with `Email` already set.
+
+**Corrective fix:** `20260827T120000Z__R28-owner-email-backfill.sql` — resolves each
+`EM_ETGO_Is_Owner='Y'` row with `Email IS NULL` against `ETGO_Account` using the exact same
+exact-then-suffix resolution as `GoAccountResolver#findAccountByUsername`, then backfills
+`Email`. Live sweep (2026-08-27): 69/69 owners resolved via the exact branch alone (no owner on
+this DB currently has a suffixed username) — 0 ambiguous, 0 left unresolved; verified end-to-end
+in a rolled-back transaction against `acreedortest` (`@check` 1 row → `@apply` 1 row → `@report`
+empty → re-`@check` 0 rows), then rolled back (not yet applied for real — awaiting operator
+confirmation before a real run, per this session's standing carefulness norm). `--dry-run`
+against the full tenant universe: 69 `WOULD_APPLY` / 26 `SKIPPED_NOT_NEEDED`, matching the live
+sweep exactly.
+
+**`ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped.** The current CUT
+(`2026-08-11T12:00:00Z`, R23) predates four intervening fixes (`R24`×2, `R25`×2, and the L1
+`R26`/`R27` pair above) that this session did not individually re-verify each have their own
+preventive front shipped. Bumping the single shared CUT constant past all of them to match R28's
+timestamp would risk silently skipping one of THEIR corrective fixes for a brand-new tenant if
+any turns out to be corrective-only — exactly the mistake the framework's own "never bump CUT
+without confirming every intervening fix's preventive parity" rule exists to prevent. Per the
+framework's documented trade-off table, shipping the `.sql` + preventive without a CUT bump is
+always safe (a new tenant's `@check` is a cheap no-op skip, since `Email` is already set by the
+preventive fix above) — merely redundant, never incorrect.
+
+**Status:** preventive front shipped (2026-08-27, ETP-5019); corrective `.sql` written and
+live-validated in a rolled-back transaction, **not yet run for real** — pending explicit
+go-ahead before a live run against the shared dev DB.
+
 ---
 
 ## Recommended Order of Operations
