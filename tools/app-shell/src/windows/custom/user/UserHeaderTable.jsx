@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import RoleChipsCell, { resolveDefaultRoleId, resolveUserId, useUserRoleGridData } from './RoleChipsCell.jsx';
@@ -83,7 +84,13 @@ const filters = ['name', 'email'];
 
 export default function UserHeaderTable(props) {
   const { roles, rolesById, adminRoleId, assignments, loading } = useUserRoleGridData();
-  const [roleFilter, setRoleFilter] = useState(null);
+  const [searchParams] = useSearchParams();
+  // ETP-4999 — a role summary card on the Roles overview page (`RoleSummaryCard.jsx`)
+  // links here as `/user?role=<id>`; a lazy initializer applies it exactly once, on
+  // mount, as the SAME `roleFilter` state `RoleFilterControl`'s dropdown already owns
+  // and can change afterward — this is a starting value, not a controlled sync back
+  // to the URL (no `useEffect` re-reading `searchParams` on every render).
+  const [roleFilter, setRoleFilter] = useState(() => searchParams.get('role'));
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   // ETP-4830 (item #4) — dev/QA-only debug panel, activated by typing `debuguser` anywhere in
@@ -145,6 +152,7 @@ export default function UserHeaderTable(props) {
     render: (row) => (
       <PendingInvitationPill
         status={row?.invitationStatus}
+        compact
         data-testid="PendingInvitationPill__grid" />
     ),
   }), [ui]);

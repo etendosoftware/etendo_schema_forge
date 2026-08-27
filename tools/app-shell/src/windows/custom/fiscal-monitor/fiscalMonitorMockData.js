@@ -48,6 +48,16 @@ export const MOCK_TBAI_ROWS = [
   { id: 't10',invoiceDate: '23/05/2025', invoice: 'J0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5', invoiceIdentifier: '2025/A/0050', descripcion: 'Servicio limpieza oficinas mayo',              estado: 'Pendiente' },
 ];
 
+// ── TBAI validation results (Tbai_Valcode) — error reason(s) per rejected/error row ──
+// tbaiSyncinvoiceID joins to MOCK_TBAI_ROWS[].id. t4/t6 (Rechazado/Error) carry a
+// single reason each; t8 (Rechazado) carries two, to exercise the 0..N rendering path.
+export const MOCK_TBAI_VALIDATION_RESULTS = [
+  { id: 'tv1', tbaiSyncinvoiceID: 't4', codigo: '5040', descripcion: 'Existe una factura con la misma serie, número de factura y año de expedición para este emisor' },
+  { id: 'tv2', tbaiSyncinvoiceID: 't6', codigo: '1001', descripcion: 'Error de conexión con la sede de Hacienda Foral' },
+  { id: 'tv3', tbaiSyncinvoiceID: 't8', codigo: '2103', descripcion: 'Firma XAdES no válida: certificado revocado' },
+  { id: 'tv4', tbaiSyncinvoiceID: 't8', codigo: '2201', descripcion: 'El NIF del destinatario no es válido' },
+];
+
 // ── Verifactu — AEAT mainland, March 2025, SHA fingerprints, four status types ─
 export const MOCK_VF_ROWS = [
   { id: 'v1', invoiceDate: '2025-04-01', invoice: 'SV-2025-1001', issuerTaxID: 'B28912345', typeOperation: 'F1', cSV: 'VFT-8A3F-KL02', verifactuSendingStatus: 'accepted',          codeError: null,   errorReason: null },

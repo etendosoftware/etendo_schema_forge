@@ -541,7 +541,7 @@
           "visibility": "discarded"
         },
         "etvfacQRURL": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "etvfacIssueDescription": {
           "visibility": "readOnly",

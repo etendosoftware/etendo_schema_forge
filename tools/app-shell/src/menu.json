@@ -368,8 +368,8 @@
       "items": [
         {
           "name": "authorize",
-          "label": "Connect AI assistant",
-          "favname": "Connect AI assistant"
+          "label": "Connect AI agent",
+          "favname": "Connect AI agent"
         }
       ]
     },
