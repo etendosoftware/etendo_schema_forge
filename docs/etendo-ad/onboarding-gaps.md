@@ -1229,10 +1229,11 @@ exact-then-suffix resolution as `GoAccountResolver#findAccountByUsername`, then 
 `Email`. Live sweep (2026-08-27): 69/69 owners resolved via the exact branch alone (no owner on
 this DB currently has a suffixed username) — 0 ambiguous, 0 left unresolved; verified end-to-end
 in a rolled-back transaction against `acreedortest` (`@check` 1 row → `@apply` 1 row → `@report`
-empty → re-`@check` 0 rows), then rolled back (not yet applied for real — awaiting operator
-confirmation before a real run, per this session's standing carefulness norm). `--dry-run`
-against the full tenant universe: 69 `WOULD_APPLY` / 26 `SKIPPED_NOT_NEEDED`, matching the live
-sweep exactly.
+empty → re-`@check` 0 rows) before running for real. **Run for real against the shared dev DB
+(2026-08-27T14:18:28Z), full tenant universe:** 69 `APPLIED` / 26 `SKIPPED_NOT_NEEDED` (owner
+already had an email) / 0 `FAILED` — matching the earlier dry-run exactly. A subsequent re-run
+confirmed convergence: 0 rows left needing the fix (all tenants `SKIPPED_NOT_NEEDED`), proving
+idempotency in production, not just in a rolled-back transaction.
 
 **`ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped.** The current CUT
 (`2026-08-11T12:00:00Z`, R23) predates four intervening fixes (`R24`×2, `R25`×2, and the L1
@@ -1245,9 +1246,10 @@ framework's documented trade-off table, shipping the `.sql` + preventive without
 always safe (a new tenant's `@check` is a cheap no-op skip, since `Email` is already set by the
 preventive fix above) — merely redundant, never incorrect.
 
-**Status:** preventive front shipped (2026-08-27, ETP-5019); corrective `.sql` written and
-live-validated in a rolled-back transaction, **not yet run for real** — pending explicit
-go-ahead before a live run against the shared dev DB.
+**Status:** preventive front shipped (2026-08-27, ETP-5019); corrective `.sql` written,
+live-validated in a rolled-back transaction, then **run for real against the shared dev DB**
+(2026-08-27T14:18:28Z) — 69 owners backfilled, 26 already had an email, 0 failures; a re-run
+confirmed 0 rows remaining (idempotent).
 
 ---
 

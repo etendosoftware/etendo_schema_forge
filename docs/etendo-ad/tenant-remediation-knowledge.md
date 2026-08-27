@@ -1474,6 +1474,16 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   skipped as "unneeded YAGNI") because an owner CAN legitimately found a second tenant under the
   same account, which DOES suffix their username — kept for correctness even though it is
   provably a no-op on today's data, not merely "future-proofing" speculation.
+- **2026-08-27 — R28 run for real against the shared dev DB, not just validated in a
+  rolled-back tx.** `node cli/src/data-fixes/run.js` (no `--dry-run`, no `--client` — full
+  tenant universe) at 2026-08-27T14:18:28Z: 69 `APPLIED`, 26 `SKIPPED_NOT_NEEDED` (owner already
+  had an email), 0 `FAILED` — matching the earlier dry-run and rolled-back-tx validation exactly.
+  A subsequent re-run confirmed convergence — 0 rows left needing the fix, every tenant
+  `SKIPPED_NOT_NEEDED` — proving idempotency in production. **Apply generally:** once a fix like
+  this has actually been run for real, any earlier "verified in a rolled-back tx, not yet run"
+  language elsewhere (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file) must be
+  corrected in the same PR — a stale "not yet run" claim sitting next to a live-applied ledger
+  row is exactly the doc-drift class REVIEW must catch.
 - **2026-08-27 — In-flight branch discovered R26 (×2) and R27 already claimed on the unmerged
   `feature/ETP-4877` branch (both repos) — same recurring trap as ETP-4245's R9 discovery.**
   `git rev-list --all | xargs git ls-tree` (schema_forge side) surfaced
