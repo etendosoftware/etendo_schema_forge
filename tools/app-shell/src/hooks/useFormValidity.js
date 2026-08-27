@@ -13,6 +13,21 @@ import { useMemo } from 'react';
 import { getMissingRequiredDescriptors } from '@/lib/requiredFields.js';
 
 /**
+ * Deterministic lexicographic (UTF-16 code-unit) comparator, reproducing exactly what
+ * `Array.prototype.sort()` does by default on strings.
+ *
+ * It is spelled out rather than left implicit ONLY to satisfy sonarjs S2871, which
+ * flags every comparator-less `.sort()`. It is deliberately NOT `localeCompare`:
+ * that is locale- and ICU-sensitive, so the same key collection could order
+ * differently across runtimes and produce two different signatures for identical
+ * input — destroying the very stability these signatures exist to guarantee. The
+ * signature is an internal memo key that is never shown to a user, so collation
+ * correctness is irrelevant here; byte-stable determinism is the whole requirement.
+ * Do not "simplify" this back to `.sort()` or forward to `.sort(localeCompare)`.
+ */
+const byCodeUnit = (a, b) => (a < b ? -1 : (a > b ? 1 : 0));
+
+/**
  * Stable, order-insensitive signature of a key collection. Used as a memo dependency
  * so a freshly-built array/Set carrying the same keys does not invalidate the memo.
  *
@@ -23,7 +38,7 @@ import { getMissingRequiredDescriptors } from '@/lib/requiredFields.js';
  * and takes the file out of review, blame and Sonar's line-level reach.
  */
 function keysSignature(keys) {
-    return [...keys].sort().join('\0');
+    return [...keys].sort(byCodeUnit).join('\0');
 }
 
 /**
