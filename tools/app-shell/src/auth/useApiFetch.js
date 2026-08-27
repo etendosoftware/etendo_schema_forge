@@ -25,10 +25,15 @@ export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
   const token = auth?.token ?? null;
   const logout = useLogout();
+  // Depend on WHETHER there is a session, never on the context object's identity: a provider
+  // (or a test double) that hands back a fresh object each render would otherwise produce a
+  // fresh request function each render, and any effect that lists it as a dependency would
+  // re-fire forever.
+  const hasSession = auth != null;
 
   return useMemo(() => createApiFetch(
     baseUrl,
-    auth ? () => token : getAmbientToken,
+    hasSession ? () => token : getAmbientToken,
     logout,
-  ), [baseUrl, auth, token, logout]);
+  ), [baseUrl, hasSession, token, logout]);
 }

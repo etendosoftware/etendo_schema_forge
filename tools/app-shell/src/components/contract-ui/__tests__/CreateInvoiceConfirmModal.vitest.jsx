@@ -1,4 +1,11 @@
 // Mocks BEFORE imports
+// ETP-5022 — the component's requests now come from `useApiFetch`, which reads the bearer
+// token from the session instead of from the `token` prop.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
     if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
@@ -354,9 +361,16 @@ describe('CreateInvoiceConfirmModal', () => {
       mockPriceListFetch([makePriceList()]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, token: 'test-token' });
       await waitFor(() => {
+        // ETP-5022 — the request goes through the shared apiFetch: same URL and same
+        // headers, plus the `credentials: 'include'` every call site used to have to
+        // remember on its own. The token comes from the session (mocked above) rather
+        // than from the `token` prop.
         expect(fetch).toHaveBeenCalledWith(
           '/sws/neo/goods-shipment/price-list/priceList?_startRow=0&_endRow=200',
-          { headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } },
+          {
+            credentials: 'include',
+            headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
+          },
         );
       });
     });
