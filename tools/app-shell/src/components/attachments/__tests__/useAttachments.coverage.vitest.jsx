@@ -331,7 +331,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/file/att-1',
-        { headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
       );
       expect(anchorClick).toHaveBeenCalledTimes(1);
       expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
@@ -379,7 +379,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/C_Order/REC-1/zip',
-        { headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
       );
       expect(downloadName).toBe('attachments-REC-1.zip');
     });

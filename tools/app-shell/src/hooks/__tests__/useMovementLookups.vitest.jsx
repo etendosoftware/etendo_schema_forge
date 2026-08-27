@@ -66,7 +66,7 @@ describe('useMovementLookups — useBPartnerLookup', () => {
     });
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(
-      '/etendo/sws/neo/financial-account-transactions?action=bpartner-lookup&q=acme',
+      'https://base/sws/neo/financial-account-transactions?action=bpartner-lookup&q=acme',
     );
     expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.signal).toBeDefined();
@@ -172,7 +172,7 @@ describe('useMovementLookups — useGLItemLookup', () => {
     });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(
-      '/etendo/sws/neo/financial-account-transactions?action=glitem-lookup&q=bank',
+      'https://base/sws/neo/financial-account-transactions?action=glitem-lookup&q=bank',
     );
 
     await waitFor(() =>

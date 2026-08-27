@@ -11,15 +11,17 @@ import FmCatalogPage from './FmCatalogPage.jsx';
 import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch } from '@/auth/api.js';
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
+// Module-level helper (not the component/hook), so it uses the ambient `apiFetch`
+// bound to the session, taking the explicit `token` it already receives as an
+// override rather than a React hook it has no component body to call from.
 async function computeBoxes303Real(decl, { token, apiBaseUrl } = {}) {
   if (!token || !apiBaseUrl) throw new Error('missing credentials');
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const params = new URLSearchParams({ year: decl.year, period: decl.period });
-  const res = await fetch(`${base}/fiscal303/boxes?${params}`, {
-    headers: authHeaders(token),
-  });
+  const res = await apiFetch(`${base}/fiscal303/boxes?${params}`, { baseUrl: '', token });
   if (!res.ok) throw new Error(`boxes fetch failed: ${res.status}`);
   return await res.json();
 }
@@ -404,19 +406,18 @@ function getComputedForDecl(decl, isDraft, maps) {
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [decls, setDecls] = useState(propDecls ?? []);
 
   useEffect(() => {
     if (!token || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${base}/fiscal303/declarations`, {
-      headers: authHeaders(token),
-    })
+    apiFetch(`${base}/fiscal303/declarations`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
       .catch(() => {});
-  }, [token, apiBaseUrl]);
+  }, [token, apiBaseUrl, apiFetch]);
 
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize
@@ -454,14 +455,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   useEffect(() => {
     if (!token || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${base}/fiscal-models-catalog`, {
-      headers: authHeaders(token),
-    })
+    apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setActiveModels(data ?? {}))
       .catch(() => {})
       .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl]);
+  }, [token, apiBaseUrl, apiFetch]);
 
   const draftDecls303 = useMemo(
     () => decls.filter(d => d.model === '303' && d.status === 'draft'),
@@ -568,16 +567,16 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
     if (token && apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-      fetch(`${base}/fiscal303/declarations`, {
+      apiFetch(`${base}/fiscal303/declarations`, {
         method: 'POST',
-        headers: buildHeaders(token),
+        baseUrl: '',
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created), ...ds]))
         .catch(() => {});
     }
-  }, [token, apiBaseUrl]);
+  }, [token, apiBaseUrl, apiFetch]);
 
   const yearOptions = useMemo(
     () => Array.from(new Set(decls.map(d => String(d.year)))).sort((a, b) => b - a)
@@ -909,9 +908,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             setShowCatalog(false);
             if (token && apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-              fetch(`${base}/fiscal-models-catalog`, {
+              apiFetch(`${base}/fiscal-models-catalog`, {
                 method: 'PUT',
-                headers: buildHeaders(token),
+                baseUrl: '',
                 body: JSON.stringify(newActive),
               })
                 .then(r => { if (!r.ok) throw new Error(r.status); })

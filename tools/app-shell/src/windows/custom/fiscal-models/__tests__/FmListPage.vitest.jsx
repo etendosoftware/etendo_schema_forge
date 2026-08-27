@@ -2,6 +2,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -145,10 +146,16 @@ async function waitForCatalogLoad() {
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('fetch not mocked for this test')));
+  // FmListPage now goes through useApiFetch (ETP-5022), which resolves its bearer
+  // token from the ambient session when no AuthProvider wraps the tree (as here) —
+  // not from the `token` prop directly. Registering it with the same TOKEN constant
+  // keeps the "bearer token" assertions below meaningful without weakening them.
+  registerApiSession({ getToken: () => TOKEN });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetApiSessionForTests();
 });
 
 // ── Rendering ─────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
-import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
+import { throwHttpError } from '@/hooks/financialAccountHttp.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Write operations against the `financial-account` NEO spec.
@@ -35,9 +35,10 @@ import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode, countryId }`;
  * this hook maps it to the DAL property names the W contract persists
  * (`currency`, `iBAN`, `country`). `useNeoResource` only handles GETs, so these mutations
- * use `fetch` directly with the same bearer-token auth. Errors throw with the
- * backend message and an attached `status` so callers can branch (e.g. 409
- * duplicate name → inline error).
+ * go through `useApiFetch` directly instead (ETP-5022), with `on401: 'ignore'` since none
+ * of them logged the user out on 401 before the migration — a 401 still surfaces here as
+ * a plain non-ok response. Errors throw with the backend message and an attached `status`
+ * so callers can branch (e.g. 409 duplicate name → inline error).
  */
 
 const BASE_PATH = '/sws/neo/financial-account';
@@ -93,30 +94,30 @@ function parseSelectorItems(json) {
 }
 
 export function useAccountMutations() {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
 
   const createAccount = useCallback(async (payload) => {
-    const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
+    const res = await apiFetch(ENTITY_PATH, {
       method: 'POST',
-      headers: authHeaders(token),
+      on401: 'ignore',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [apiFetch]);
 
   const updateAccount = useCallback(async (accountId, payload) => {
-    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, {
+    const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await apiFetch(url, {
       method: 'PUT',
-      headers: authHeaders(token),
+      on401: 'ignore',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [apiFetch]);
 
   /**
    * Soft-archives an account (`IsActive` to 'N'). ETP-4871: this used to be the DELETE verb
@@ -125,15 +126,15 @@ export function useAccountMutations() {
    * mirror of {@link unarchiveAccount} below, and DELETE is reserved for {@link deleteAccount}.
    */
   const archiveAccount = useCallback(async (accountId) => {
-    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, {
+    const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await apiFetch(url, {
       method: 'PATCH',
-      headers: authHeaders(token),
+      on401: 'ignore',
       body: JSON.stringify({ active: false }),
     });
     if (!res.ok) await throwHttpError(res);
     return true;
-  }, [token]);
+  }, [apiFetch]);
 
   /**
    * Permanently deletes an account (ETP-4871). Only ever reachable from the UI when the row's
@@ -142,11 +143,11 @@ export function useAccountMutations() {
    * between the list load and this call.
    */
   const deleteAccount = useCallback(async (accountId) => {
-    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
+    const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await apiFetch(url, { method: 'DELETE', on401: 'ignore' });
     if (!res.ok) await throwHttpError(res);
     return true;
-  }, [token]);
+  }, [apiFetch]);
 
   /**
    * Restores an archived account (`IsActive` back to 'Y').
@@ -159,15 +160,15 @@ export function useAccountMutations() {
    * CRUD. No backend change was needed for this.
    */
   const unarchiveAccount = useCallback(async (accountId) => {
-    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, {
+    const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await apiFetch(url, {
       method: 'PATCH',
-      headers: authHeaders(token),
+      on401: 'ignore',
       body: JSON.stringify({ active: true }),
     });
     if (!res.ok) await throwHttpError(res);
     return true;
-  }, [token]);
+  }, [apiFetch]);
 
   /**
    * Currency list + session default for the New/Edit account forms, served by
@@ -176,11 +177,10 @@ export function useAccountMutations() {
    * so the form components stay unchanged. The default is best-effort.
    */
   const fetchDefaults = useCallback(async () => {
-    const headers = authHeaders(token);
-    const selectorsUrl = `${getApiBase()}${ENTITY_PATH}/selectors/C_Currency_ID?limit=200`;
-    const defaultsUrl = `${getApiBase()}${ENTITY_PATH}/defaults`;
+    const selectorsUrl = `${ENTITY_PATH}/selectors/C_Currency_ID?limit=200`;
+    const defaultsUrl = `${ENTITY_PATH}/defaults`;
 
-    const res = await fetch(selectorsUrl, { headers });
+    const res = await apiFetch(selectorsUrl, { on401: 'ignore' });
     if (!res.ok) await throwHttpError(res);
     const selectorJson = await res.json();
     const currencies = parseSelectorItems(selectorJson).map((row) => ({
@@ -195,7 +195,7 @@ export function useAccountMutations() {
     let defaultCountryId = '';
     let countryIbanRules = [];
     try {
-      const defRes = await fetch(defaultsUrl, { headers });
+      const defRes = await apiFetch(defaultsUrl, { on401: 'ignore' });
       if (defRes.ok) {
         const defJson = await defRes.json();
         defaultCurrencyId = defJson?.defaults?.currency || '';
@@ -210,7 +210,7 @@ export function useAccountMutations() {
     }
 
     return { currencies, defaultCurrencyId, defaultCountryId, countryIbanRules };
-  }, [token]);
+  }, [apiFetch]);
 
   return {
     createAccount, updateAccount, archiveAccount, unarchiveAccount, deleteAccount, fetchDefaults,

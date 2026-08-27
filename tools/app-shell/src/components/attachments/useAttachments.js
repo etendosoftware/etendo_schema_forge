@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Format a byte size into a human readable string.
  *
@@ -99,6 +99,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const attachmentsBase = apiBaseUrl
     ? apiBaseUrl.split('/sws/neo/')[0]
     : '';
+  const apiFetch = useApiFetch(attachmentsBase);
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(!!(tableName && recordId));
@@ -122,12 +123,6 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
 
-  // Build the read headers (auth + UI locale). ETP-5022: this used to send Authorization
-  // only, so attachment listings came back in the AD language. `authHeaders` is deliberately
-  // the Content-Type-free builder — this hook uploads FormData, and declaring
-  // application/json would break the multipart boundary.
-  const buildAuthHeaders = useCallback(() => authHeaders(token), [token]);
-
   const resetAbortController = useCallback(() => {
     if (abortRef.current) {
       abortRef.current.abort();
@@ -144,9 +139,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { headers: buildAuthHeaders(), signal: ctrl.signal },
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}`,
+        { signal: ctrl.signal, token, on401: 'ignore' },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -162,7 +157,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, tableName, recordId, buildAuthHeaders, resetAbortController, ui]);
+  }, [apiFetch, tableName, recordId, token, resetAbortController, ui]);
 
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
@@ -195,10 +190,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const form = new FormData();
       form.append('file', file);
-      // NOTE: do NOT set Content-Type manually — the browser sets the boundary.
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { method: 'POST', headers: buildAuthHeaders(), body: form },
+      // NOTE: apiFetch drops Content-Type for a FormData body — the browser sets the boundary.
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}`,
+        { method: 'POST', body: form, token, on401: 'ignore' },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -223,15 +218,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiBaseUrl, tableName, recordId, buildAuthHeaders, list, ui, announceChange]);
+  }, [apiFetch, tableName, recordId, token, list, ui, announceChange]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
     if (!attachment?.id) return;
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachment.id}`,
-        { headers: buildAuthHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachment.id}`,
+        { token, on401: 'ignore' },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -242,15 +237,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, buildAuthHeaders, ui]);
+  }, [apiFetch, token, ui]);
 
   // ── download all (zip) ──────────────────────────────────────────────────
   const downloadAll = useCallback(async () => {
     if (!tableName || !recordId) return;
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}/zip`,
-        { headers: buildAuthHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}/zip`,
+        { token, on401: 'ignore' },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -261,7 +256,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, tableName, recordId, buildAuthHeaders, ui]);
+  }, [apiFetch, tableName, recordId, token, ui]);
 
   // ── remove (optimistic) ─────────────────────────────────────────────────
   const remove = useCallback(async (attachmentId) => {
@@ -269,9 +264,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     const snapshot = itemsRef.current;
     setItems(snapshot.filter((it) => it.id !== attachmentId));
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
-        { method: 'DELETE', headers: buildAuthHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachmentId}`,
+        { method: 'DELETE', token, on401: 'ignore' },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -283,7 +278,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiBaseUrl, buildAuthHeaders, ui, announceChange]);
+  }, [apiFetch, token, ui, announceChange]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -293,9 +288,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       await Promise.all(
         snapshot.map((it) =>
-          fetch(`${attachmentsBase}/sws/neo/attachments/file/${it.id}`, {
+          apiFetch(`/sws/neo/attachments/file/${it.id}`, {
             method: 'DELETE',
-            headers: buildAuthHeaders(),
+            token,
+            on401: 'ignore',
           }).then((res) => {
             if (!res.ok) return res.text().then((t) => { throw new Error(t || `HTTP ${res.status}`); });
           })
@@ -307,7 +303,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiBaseUrl, buildAuthHeaders, ui, announceChange]);
+  }, [apiFetch, token, ui, announceChange]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -315,12 +311,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     const snapshot = itemsRef.current;
     setItems(snapshot.map((it) => (it.id === attachmentId ? { ...it, description } : it)));
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachmentId}`,
         {
           method: 'PATCH',
-          headers: { ...buildAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({ description }),
+          token,
+          on401: 'ignore',
         },
       );
       if (!res.ok) {
@@ -332,7 +329,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiBaseUrl, buildAuthHeaders, ui]);
+  }, [apiFetch, token, ui]);
 
   return {
     items,

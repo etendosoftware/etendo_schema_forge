@@ -3,7 +3,7 @@ import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { apiFetch } from '@/auth/api.js';
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
 // ---------------------------------------------------------------------------
@@ -108,18 +108,14 @@ function fmt(v) {
 // Shared fetch helpers
 // ---------------------------------------------------------------------------
 export async function fetchJson(url, token) {
-  const res = await fetch(url, {
-    headers: buildHeaders(token),
-  });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   const d = await res.json();
   return d?.response?.data?.[0] ?? d?.response?.data ?? d;
 }
 
 export async function fetchAll(url, token) {
-  const res = await fetch(url, {
-    headers: buildHeaders(token),
-  });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) return [];
   const d = await res.json();
   return d?.response?.data ?? (Array.isArray(d) ? d : []);
@@ -159,9 +155,7 @@ export function blobToDataUrl(blob) {
 export async function fetchImageDataUrl(imageId, base, token) {
   if (!imageId) return null;
   try {
-    const res = await fetch(`${base}/image/${imageId}`, {
-      headers: authHeaders(token),
-    });
+    const res = await apiFetch(`${base}/image/${imageId}`, { baseUrl: '', token });
     if (!res.ok) return null;
     return await blobToDataUrl(await res.blob());
   } catch { return null; }
@@ -193,9 +187,9 @@ export function downloadBlobAsFile(blob, filename) {
  * @returns {Promise<string>} the rendered HTML
  */
 export async function renderHtml(content, css, helpers, data) {
-  const res = await fetch('/jsreport/api/report', {
+  const res = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify({
       template: { content, engine: 'handlebars', recipe: 'html', helpers },
       data: { css, ...data },
@@ -228,9 +222,9 @@ export async function renderPdf(content, css, helpers, data) {
     data: { css, ...data },
   };
 
-  const res = await fetch('/jsreport/api/report', {
+  const res = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify(payload),
   });
 

@@ -14,16 +14,15 @@ import {
 } from '@/lib/productUsageTelemetry.js';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
-import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
-// ETP-5022: header policy has ONE home (app-shell-core/auth). This module used to
-// carry its own buildHeaders copy, which is how header sets drift apart.
-import { buildHeaders } from '@/auth/api.js';
+// ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
+// through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
@@ -718,16 +717,15 @@ export function shouldRefetchAfterSave(saved, refetchAfterSave) {
 }
 
 export async function resolveSavedRecordAfterSave(saved, {
-    apiBaseUrl,
     entity,
-    headers,
+    apiFetch,
     refetchAfterSave,
 }) {
     if (!shouldRefetchAfterSave(saved, refetchAfterSave)) {
         return saved;
     }
     try {
-        const refetchRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { headers });
+        const refetchRes = await apiFetch(`/${entity}/${saved.id}`);
         const refetchData = refetchRes.ok ? await refetchRes.json() : null;
         return normalizeRecord(refetchData?.response?.data?.[0] ?? refetchData ?? saved, entity);
     } catch {
@@ -807,8 +805,8 @@ export function useEntity(entity, childEntity, {
     // whose form predates the static fall back to the registry (see below).
     contractFields = null,
 }) {
-    const logout = useLogout();
     const ui = useUI();
+    const apiFetch = useApiFetch(apiBaseUrl);
     const [items, setItems] = useState([]);
     // The list response envelope minus the rows — i.e. any sibling of `response.data`
     // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
@@ -896,8 +894,6 @@ export function useEntity(entity, childEntity, {
         );
     }, [editing, selected]);
 
-    const headers = buildHeaders(token);
-
     const refresh = useCallback(() => {
         startRowRef.current = 0;
         setHasMore(true);
@@ -913,12 +909,8 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        apiFetch(`/${entity}?${queryParams.toString()}`)
             .then(res => {
-                if (res.status === 401) {
-                    logout();
-                    throw new Error('401');
-                }
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
@@ -937,7 +929,7 @@ export function useEntity(entity, childEntity, {
                 setHasMore(false);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [entity, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, apiFetch]);
 
     const loadMore = useCallback(() => {
         if (!hasMore || loadingMore || loading) return;
@@ -954,12 +946,8 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        apiFetch(`/${entity}?${queryParams.toString()}`)
             .then(res => {
-                if (res.status === 401) {
-                    logout();
-                    throw new Error('401');
-                }
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
@@ -979,7 +967,7 @@ export function useEntity(entity, childEntity, {
                 setLoadingMore(false);
                 setHasMore(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [entity, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, apiFetch]);
 
     // List fetch is a mount-time decision. Flipping skipListFetch after mount
     // (e.g. a detail view whose recordId goes 'new' → ':id') must NOT retroactively
@@ -1010,7 +998,7 @@ export function useEntity(entity, childEntity, {
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
-        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers })
+        apiFetch(`/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1023,7 +1011,7 @@ export function useEntity(entity, childEntity, {
             // at just because one background request failed transiently.
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, token, childSortBy]);
+    }, [childEntity, childSortBy, apiFetch]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1035,7 +1023,7 @@ export function useEntity(entity, childEntity, {
             return {};
         }
         try {
-            const res = await fetch(`${apiBaseUrl}/${childEntity}/defaults?parentId=${parentId}`, { headers });
+            const res = await apiFetch(`/${childEntity}/defaults?parentId=${parentId}`);
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
             // Copy the resolved defaults and drop the backend id (never seeded into
@@ -1051,12 +1039,7 @@ export function useEntity(entity, childEntity, {
             setChildDefaults({});
             return {};
         }
-        // NOTE: `headers` is intentionally omitted — buildHeaders(token) returns a
-        // fresh object every render, so depending on it would make this callback
-        // unstable and re-fire DetailView's fetch effect every render (infinite
-        // loop / network never idles). token covers the only header that changes.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiBaseUrl, childEntity, token]);
+    }, [childEntity, apiFetch]);
 
     // ETP-4741 (QA BUG-1) — loading an EXISTING record while a /new defaults
     // request is still in flight must kill that request the same way a newer
@@ -1079,7 +1062,7 @@ export function useEntity(entity, childEntity, {
         if (!id) return;
         neutralizePendingDefaults();
         setLoading(true);
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        apiFetch(`/${entity}/${id}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1092,7 +1075,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren, neutralizePendingDefaults]);
+    }, [entity, fetchChildren, neutralizePendingDefaults, apiFetch]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1100,7 +1083,7 @@ export function useEntity(entity, childEntity, {
     // Only server-computed fields (totals, sequence numbers) get updated in editing.
     const refreshHeaderTotals = useCallback((id) => {
         if (!id) return;
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        apiFetch(`/${entity}/${id}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1134,7 +1117,7 @@ export function useEntity(entity, childEntity, {
             })
             .catch(() => {
             });
-    }, [apiBaseUrl, entity, headers]);
+    }, [entity, apiFetch]);
 
     // ETP-4751 — surface the invoice-line handler's transient exemption-cause signals
     // (exemptionCauseAutoFilled / exemptionCauseWarning) to the header state so the SIF
@@ -1236,7 +1219,7 @@ export function useEntity(entity, childEntity, {
         // ETP-5002: deliberately NOT cleared by timeoutId above — see the state decl.
         setDefaultsPending(true);
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
+            const res = await apiFetch(`/${entity}/defaults`, { signal: controller.signal });
             if (!isCurrent()) return;
             if (res.ok) {
                 const data = await res.json();
@@ -1271,7 +1254,7 @@ export function useEntity(entity, childEntity, {
                 setDefaultsPending(false);
             }
         }
-    }, [apiBaseUrl, entity, token, headers]);
+    }, [apiBaseUrl, entity, apiFetch]);
 
     const handleChange = useCallback((field, value) => {
         userChangedKeysRef.current.add(field);
@@ -1374,14 +1357,15 @@ export function useEntity(entity, childEntity, {
         // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
         const body = JSON.stringify(payload);
         try {
-            const res = await fetch(url, { method, headers, body });
+            // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
+            // keeps it from being prefixed a second time.
+            const res = await apiFetch(url, { method, body, baseUrl: '' });
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
                 const resolvedSaved = await resolveSavedRecordAfterSave(saved, {
-                    apiBaseUrl,
                     entity,
-                    headers,
+                    apiFetch,
                     refetchAfterSave,
                 });
                 setSelected(resolvedSaved);
@@ -1413,7 +1397,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui, fetchChildren]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1421,7 +1405,7 @@ export function useEntity(entity, childEntity, {
     const handleDelete = useCallback(async () => {
         if (!selected?.id) return false;
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers });
+            const res = await apiFetch(`/${entity}/${selected.id}`, { method: 'DELETE' });
             if (res.ok) {
                 setSelected(null);
                 setEditing(null);
@@ -1438,7 +1422,7 @@ export function useEntity(entity, childEntity, {
             toast.error(err?.message || 'Network error');
             return false;
         }
-    }, [selected, apiBaseUrl, entity, token, refresh, ui]);
+    }, [selected, entity, refresh, ui, apiFetch]);
 
     const handleAddChild = useCallback(async (childData) => {
         if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
@@ -1460,9 +1444,8 @@ export function useEntity(entity, childEntity, {
             // Include parentId in the body — the backend resolves it to the correct FK field name
             // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).
             body.parentId = selected.id;
-            const res = await fetch(`${apiBaseUrl}/${childEntity}`, {
+            const res = await apiFetch(`/${childEntity}`, {
                 method: 'POST',
-                headers,
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -1493,7 +1476,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals]);
+    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
@@ -1537,13 +1520,11 @@ export function useEntity(entity, childEntity, {
         if (!saved?.id) return null;
 
         const { processField, processValue, extraParams } = draftModeConfig;
-        const url = `${apiBaseUrl}/${entity}/${saved.id}/action/${processField}`;
         // `extraParams` are merged at the top level of the body (not inside fieldValues)
         // so processes whose AD parameters are validated against the request root —
         // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
-        const res = await fetch(url, {
+        const res = await apiFetch(`/${entity}/${saved.id}/action/${processField}`, {
             method: 'POST',
-            headers,
             body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
         });
         if (!res.ok) {
@@ -1569,7 +1550,7 @@ export function useEntity(entity, childEntity, {
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {
-            const updatedRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { method: 'GET', headers });
+            const updatedRes = await apiFetch(`/${entity}/${saved.id}`, { method: 'GET' });
             if (updatedRes.ok) {
                 const data = await updatedRes.json();
                 const updated = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -1579,7 +1560,7 @@ export function useEntity(entity, childEntity, {
         } catch { /* ignore, fall back to saved */
         }
         return saved;
-    }, [handleSave, apiBaseUrl, entity, specName, token, refresh, ui]);
+    }, [handleSave, entity, specName, refresh, ui, apiFetch]);
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
@@ -1595,11 +1576,9 @@ export function useEntity(entity, childEntity, {
             if (p.hidden) fieldValues[p.key] = p.value;
         }
         Object.assign(fieldValues, paramValues);
-        const url = `${apiBaseUrl}/${entity}/${selected.id}/action/${process.columnName ?? process.name}`;
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(`/${entity}/${selected.id}/action/${process.columnName ?? process.name}`, {
                 method: 'POST',
-                headers,
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
@@ -1633,7 +1612,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
+    }, [selected, entity, specName, refresh, fetchById, ui, apiFetch]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST
