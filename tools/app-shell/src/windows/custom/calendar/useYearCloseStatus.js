@@ -27,7 +27,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     }
     let cancelled = false;
     setClosed(undefined);
-    apiFetch(`/accounting?year=${yearId}`, { token, on401: 'ignore' })
+    apiFetch(`/accounting?year=${yearId}`, { token })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();

@@ -47,7 +47,6 @@ async function buildRequestError(res) {
 export async function postStatementFile(action, apiFetch, { accountId, fileName, contentBase64 }) {
   const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
     method: 'POST',
-    on401: 'ignore',
     body: JSON.stringify({
       FIN_Financial_Account_ID: accountId,
       fileName,

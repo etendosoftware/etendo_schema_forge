@@ -36,7 +36,6 @@ export function useCreateStatement() {
     try {
       const res = await apiFetch('/sws/neo/bank-statements?action=create', {
         method: 'POST',
-        on401: 'ignore',
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,
           name,

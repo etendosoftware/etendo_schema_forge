@@ -14,7 +14,7 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   useEffect(() => {
     if (!parentId) return;
     setRows(undefined);
-    apiFetch(`/accounting?year=${parentId}`, { token, on401: 'ignore' })
+    apiFetch(`/accounting?year=${parentId}`, { token })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();

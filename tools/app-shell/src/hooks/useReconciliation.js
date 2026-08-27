@@ -35,7 +35,6 @@ function useNeoPost(action) {
     try {
       const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
         method: 'POST',
-        on401: 'ignore',
         body: JSON.stringify(payload),
       });
 

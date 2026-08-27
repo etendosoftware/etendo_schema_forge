@@ -36,7 +36,7 @@ export function useDimensionValues(dimensions, enabled = true) {
     Promise.all(keys.map(async (key) => {
       const path = `/sws/neo/financial-account-transactions?action=dimension-values&dimension=${encodeURIComponent(key)}`;
       try {
-        const res = await apiFetch(path, { signal: ctrl.signal, on401: 'ignore' });
+        const res = await apiFetch(path, { signal: ctrl.signal });
         if (!res.ok) return [key, []];
         const json = await res.json();
         const values = json?.response?.data?.values;

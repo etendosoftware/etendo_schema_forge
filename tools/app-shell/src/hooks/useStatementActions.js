@@ -34,7 +34,6 @@ export function useStatementActions() {
     try {
       const res = await apiFetch(`/sws/neo/bank-statements?action=${action}`, {
         method: 'POST',
-        on401: 'ignore',
         body: JSON.stringify(body),
       });
       if (!res.ok) {

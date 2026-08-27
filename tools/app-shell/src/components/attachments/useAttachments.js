@@ -141,7 +141,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${recordId}`,
-        { signal: ctrl.signal, token, on401: 'ignore' },
+        { signal: ctrl.signal, token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -193,7 +193,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       // NOTE: apiFetch drops Content-Type for a FormData body — the browser sets the boundary.
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${recordId}`,
-        { method: 'POST', body: form, token, on401: 'ignore' },
+        { method: 'POST', body: form, token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -226,7 +226,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/file/${attachment.id}`,
-        { token, on401: 'ignore' },
+        { token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -245,7 +245,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${recordId}/zip`,
-        { token, on401: 'ignore' },
+        { token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -266,7 +266,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/file/${attachmentId}`,
-        { method: 'DELETE', token, on401: 'ignore' },
+        { method: 'DELETE', token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -291,7 +291,6 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
           apiFetch(`/sws/neo/attachments/file/${it.id}`, {
             method: 'DELETE',
             token,
-            on401: 'ignore',
           }).then((res) => {
             if (!res.ok) return res.text().then((t) => { throw new Error(t || `HTTP ${res.status}`); });
           })
@@ -317,7 +316,6 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
           method: 'PATCH',
           body: JSON.stringify({ description }),
           token,
-          on401: 'ignore',
         },
       );
       if (!res.ok) {

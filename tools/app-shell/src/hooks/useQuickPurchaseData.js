@@ -13,10 +13,10 @@ function guessCategory(name) {
   return 'Other';
 }
 
-// 401 is treated as a domain error (setError), never a global logout, so every
-// call passes `on401: 'ignore'` and leaves the existing !res.ok handling in charge.
+// A 401 here means the session expired, so it goes through apiFetch's default logout path
+// (ETP-5022); every other non-ok status stays a domain error handled by the !res.ok check.
 async function fetchJSON(apiFetch, path) {
-  const res = await apiFetch(path, { on401: 'ignore' });
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

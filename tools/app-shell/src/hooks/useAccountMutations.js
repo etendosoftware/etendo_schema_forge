@@ -35,9 +35,10 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode, countryId }`;
  * this hook maps it to the DAL property names the W contract persists
  * (`currency`, `iBAN`, `country`). `useNeoResource` only handles GETs, so these mutations
- * go through `useApiFetch` directly instead (ETP-5022), with `on401: 'ignore'` since none
- * of them logged the user out on 401 before the migration — a 401 still surfaces here as
- * a plain non-ok response. Errors throw with the backend message and an attached `status`
+ * go through `useApiFetch` directly instead (ETP-5022). A 401 there means the session
+ * expired, so it routes to the logout choke point rather than surfacing as one more failed
+ * save — before the migration these call sites had no 401 handling at all, and the user
+ * just saw "could not save". Errors throw with the backend message and an attached `status`
  * so callers can branch (e.g. 409 duplicate name → inline error).
  */
 
@@ -99,7 +100,6 @@ export function useAccountMutations() {
   const createAccount = useCallback(async (payload) => {
     const res = await apiFetch(ENTITY_PATH, {
       method: 'POST',
-      on401: 'ignore',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
@@ -111,7 +111,6 @@ export function useAccountMutations() {
     const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await apiFetch(url, {
       method: 'PUT',
-      on401: 'ignore',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
@@ -129,7 +128,6 @@ export function useAccountMutations() {
     const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await apiFetch(url, {
       method: 'PATCH',
-      on401: 'ignore',
       body: JSON.stringify({ active: false }),
     });
     if (!res.ok) await throwHttpError(res);
@@ -144,7 +142,7 @@ export function useAccountMutations() {
    */
   const deleteAccount = useCallback(async (accountId) => {
     const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await apiFetch(url, { method: 'DELETE', on401: 'ignore' });
+    const res = await apiFetch(url, { method: 'DELETE' });
     if (!res.ok) await throwHttpError(res);
     return true;
   }, [apiFetch]);
@@ -163,7 +161,6 @@ export function useAccountMutations() {
     const url = `${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await apiFetch(url, {
       method: 'PATCH',
-      on401: 'ignore',
       body: JSON.stringify({ active: true }),
     });
     if (!res.ok) await throwHttpError(res);
@@ -180,7 +177,7 @@ export function useAccountMutations() {
     const selectorsUrl = `${ENTITY_PATH}/selectors/C_Currency_ID?limit=200`;
     const defaultsUrl = `${ENTITY_PATH}/defaults`;
 
-    const res = await apiFetch(selectorsUrl, { on401: 'ignore' });
+    const res = await apiFetch(selectorsUrl);
     if (!res.ok) await throwHttpError(res);
     const selectorJson = await res.json();
     const currencies = parseSelectorItems(selectorJson).map((row) => ({
@@ -195,7 +192,7 @@ export function useAccountMutations() {
     let defaultCountryId = '';
     let countryIbanRules = [];
     try {
-      const defRes = await apiFetch(defaultsUrl, { on401: 'ignore' });
+      const defRes = await apiFetch(defaultsUrl);
       if (defRes.ok) {
         const defJson = await defRes.json();
         defaultCurrencyId = defJson?.defaults?.currency || '';

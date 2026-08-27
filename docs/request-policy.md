@@ -67,7 +67,7 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 
 | Option | Use it when |
 |---|---|
-| `on401: 'ignore'` | the endpoint's 401 is a domain answer, not an expired session — `lib/upgrade/api.js` maps it to its own `sessionExpired` code; a probe reads it as "feature unavailable" |
+| `on401: 'ignore'` | the endpoint's 401 is a domain answer, not an expired session — `lib/upgrade/api.js` maps it to its own `sessionExpired` code; a probe reads it as "feature unavailable". **"This file did not log out before the migration" is NOT a reason**: that was the defect, and applying it as a rule would opt every call site out of the fix. Today only four places use it: `InviteAcceptancePage` (pre-login, the 401 body carries the domain code), `ImportLinesModal` (a per-line loop that must not abort on one failure), `App.jsx`'s window-access map (fail-closed during hydration, where a logout would loop), and `useDashboardData` (a failed widget degrades to `null`) |
 | `baseUrl: ''` | the URL is already complete, or points outside the base (`buildCreateUrl` returns a sibling path from the app root) |
 | `token` | a plain module was handed a specific token by its caller |
 | `credentials` | overrides the default `'include'` |
