@@ -6,6 +6,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { isPaymentProcessed, paymentDisplayState } from './paymentStatuses';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
@@ -529,8 +530,7 @@ export default function InvoicePaymentHistoryModal({
         setRetryError(ui('cpRetryTransferFailed'));
         return;
       }
-      window.open(url, 'saltEdgePisWidget',
-        'popup=yes,width=500,height=720,resizable=yes,scrollbars=yes');
+      openCenteredPopup(url, 'saltEdgePisWidget', 'popup=yes,resizable=yes,scrollbars=yes');
       setLoading(true);
       fetchData();
     } catch {

@@ -175,6 +175,36 @@ export default defineConfig(({ mode }) => {
 
   return {
   base: '/',
+  // E2E_BUILD only — overrides `.env.production`'s hardcoded `VITE_API_BASE=/etendo`
+  // with an EMPTY STRING (not the real context path — see PR #1211 review), so the
+  // built bundle's own `import.meta.env.VITE_API_BASE` (read by `App.jsx`'s
+  // `detectBasePath()`, and by every other consumer via the same `VITE_API_BASE || ''`
+  // convention: `neoWebhookClient.js`, `menuTree.js`, `useNeoResource.js`,
+  // `InviteAcceptancePage.jsx`, `OnboardingPage.jsx`, ...) falls back to bare,
+  // unprefixed API calls (`/sws/...`), same-origin, for ANY developer's context name.
+  // Those already route correctly through the plain `/sws`/`/oauth2`/`/webhooks`
+  // preview-proxy rules below, which target the full context-aware `ETENDO_URL`.
+  //
+  // An earlier version of this fix set `VITE_API_BASE` to the REAL context path
+  // (`new URL(ETENDO_URL).pathname`, e.g. `/etendogoclean`) instead. That happened to
+  // work for a context name that starts with the literal substring `etendo` — Vite's
+  // proxy keys are plain string-prefix matches, so `/etendo` as a proxy key ALSO
+  // matches any path starting with `/etendogoclean`, `/etendofoo`, etc., purely by
+  // coincidence — but is not correct for a context name that doesn't share that
+  // prefix (e.g. `/mycompany`), which would still 404 with no matching proxy rule.
+  // The empty-string override sidesteps the whole `/etendo`-prefix special case.
+  //
+  // Without SOME override here, `scripts/run-e2e-full.sh`'s production-mode E2E build
+  // always calls out under the hardcoded `/etendo` prefix, landing on a context that
+  // doesn't exist for any developer whose local Tomcat context isn't literally
+  // `/etendo`, so login never completes and every integration spec times out waiting
+  // for the post-login redirect. `ETENDO_URL` itself (server-side proxy targets,
+  // `mcpRetryProxy`) was already context-aware; this was the one remaining hardcoded
+  // assumption, only reachable via a production/preview build, so `make dev`'s
+  // dev-server proxy (relative API calls, no `VITE_API_BASE` at all) never hit it —
+  // which is why a developer's own `make dev`-backed manual E2E run works fine while
+  // the pre-push hook's dedicated E2E build did not.
+  ...(E2E_BUILD ? { define: { 'import.meta.env.VITE_API_BASE': JSON.stringify('') } } : {}),
   plugins: [
     react(),
     sliceLabelsPlugin(),

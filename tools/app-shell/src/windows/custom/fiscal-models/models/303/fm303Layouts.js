@@ -475,6 +475,21 @@ export function applyPatch(ops) {
 
 // ── Public API ────────────────────────────────────────────────────
 
+/**
+ * True when `period` denotes the last period of the fiscal year: T4
+ * (quarterly) or month 12 (monthly December) — accepts both the string and
+ * numeric forms `getLayout303`'s callers have historically passed
+ * (`'T4'`/`'4'`/`4` for quarterly, `'12'`/`12` for monthly). Shared with
+ * `AeatSubmitFlow.jsx`'s pre-flight IAE-activity guard (ETP-4975) so both call
+ * sites agree on exactly which periods count as "last" — this used to be an
+ * inline check duplicated ad hoc, which is exactly the kind of drift that
+ * survives review (see neo-headless.md's ETP-4838 lesson on re-deriving a
+ * query instead of calling the one place that already computes the answer).
+ */
+export function isLastPeriodOfYear(period) {
+  return period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
+}
+
 export function getLayout303(year, period) {
   const ops =
     PATCHES[`${year}_${period}`] ??
@@ -485,9 +500,8 @@ export function getLayout303(year, period) {
     ? applyPatch(ops).sections
     : BASE.sectionOrder.map(id => ({ id, ...BASE.sections[id] })).filter(s => s.titleKey || s.titleKeyMap);
 
-  // Box 44 (prorrata definitiva) is only applicable in the last period of the fiscal year:
-  // T4 (quarterly) or month 12 (monthly December). Hide it for all other periods.
-  const isLastPeriod = period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
+  // Box 44 (prorrata definitiva) is only applicable in the last period of the fiscal year.
+  const isLastPeriod = isLastPeriodOfYear(period);
   const filteredSections = isLastPeriod ? sections : sections.map(sec => {
     if (sec.id !== 'iva_deducible' || !sec.rows) return sec;
     return { ...sec, rows: sec.rows.filter(r => r.id !== 'prorrata_definitiva') };
