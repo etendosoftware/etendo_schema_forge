@@ -164,13 +164,17 @@ that is the floor for rendering a menu item, and it stays greppable through the
 VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
 ```
 
-The `webmcp-agent-chat` flag is off by default. When enabled, the app shell
-registers three optional WebMCP tools in browsers that expose
-`document.modelContext`: `get_current_window_context`, `navigate_application`, and
-`open_application_chat`. It is a presentation/integration toggle only; the browser
-capability is not an authorization boundary, and all business data access and
-mutations remain protected by the authenticated NEO APIs and existing Copilot
-confirmation flow.
+The `webmcp-agent-chat` flag is off by default. When enabled, the existing
+Copilot popup uses the AI SDK client and sends the conversation to the
+server-side AI BFF. The BFF keeps the OpenCode Go credential private, forwards
+the current browser session token to the Etendo MCP endpoint, and exposes the
+MCP tools to the model. Browser-native `document.modelContext` WebMCP
+registration is intentionally deferred until browser support is mature.
+
+The popup also provides client-side tools for `navigate_to`, `open_form`,
+`get_current_context`, and `open_copilot`; navigation is restricted to internal
+application paths. The flag is a presentation/integration toggle only, never an
+authorization boundary.
 
 ```bash
 VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true}' make dev

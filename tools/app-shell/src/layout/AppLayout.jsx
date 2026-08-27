@@ -16,7 +16,6 @@ import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
 import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
 import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
-import { WebMcpEtendoGoTools } from '@/components/webmcp/WebMcpEtendoGoTools.jsx';
 import { Button } from '@/components/ui/button';
 import { useLogout } from '@/auth/useLogout.js';
 import { useUI } from '@/i18n';
@@ -62,7 +61,6 @@ function AppLayoutInner({ menuGroups, embedded }) {
 
   return (
     <>
-      <WebMcpEtendoGoTools />
       {!embedded && (
         <SideMenu
           menuGroups={menuGroups}
