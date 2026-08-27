@@ -25,6 +25,7 @@ import { apiFetch as ambientApiFetch } from '@/auth/api.js';
 async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
   let pdfRes;
   try {
+    // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
     pdfRes = await fetch('/jsreport/api/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

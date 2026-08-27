@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { apiFetch } from '@/auth/api.js';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 function detectBase() {
   const path = window.location.pathname;

@@ -53,11 +53,13 @@ describe('useInvoicePdf', () => {
 
   it('sends Bearer token in all API requests', () => {
     // fetch helpers live in pdfUtils.js (shared), re-exported via documentPdf.js
-    // ETP-5022 — the header is no longer a literal here: it comes from the canonical
-    // builder, which also attaches Accept-Language. Asserting the builder call is the
-    // stronger check, and test/auth-header-policy.test.js fails the build if any file
-    // goes back to hand-rolling the header.
-    assert.match(pdfUtilsSrc, /(authHeaders|buildHeaders)\s*\(/);
+    // ETP-5022 — neither the header nor the request is assembled here any more: the module
+    // goes through the shared `apiFetch`, which supplies Authorization AND Accept-Language.
+    // Asserting that is the stronger check, and two repo-root guardrails fail the build if
+    // a call site regresses — test/auth-header-policy.test.js on a hand-rolled header,
+    // test/no-raw-fetch.test.js on a bare fetch that bypasses the helper entirely.
+    assert.match(pdfUtilsSrc, /\bapiFetch\s*\(/);
+    assert.match(pdfUtilsSrc, /import \{ apiFetch \}/);
   });
 
   // ── PDF rendering ─────────────────────────────────────────────────────────

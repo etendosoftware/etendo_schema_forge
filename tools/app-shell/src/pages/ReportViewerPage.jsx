@@ -1756,6 +1756,7 @@ export default function ReportViewerPage() {
   const reportId = searchParams.get('report');
 
   useEffect(() => {
+    // raw-fetch-ok: dev-server report catalogue (vite-plugins/report-api.js), no token expected
     fetch('/api/reports')
       .then(r => r.json())
       .then(setReports)

@@ -21,6 +21,7 @@ import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx'
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
+import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -222,6 +223,16 @@ function SurveyManager() {
   );
 }
 
+// ETP-4492 / ETP-5022 — session-scoped UI state that must not survive a logout. Wired into
+// AuthProvider's `onSessionChange` rather than only into the explicit logout paths, because
+// the automatic 401 auto-logout inside the shared request helper does not go through them:
+// after the raw-`fetch` sweep, ANY of ~290 call sites can be the one that discovers the
+// expired session. Reacting to the session losing its token covers every path at once, and
+// `useLogout` stays as the explicit clear-then-logout choke point for the UI entry points.
+function clearSessionScopedState(session) {
+  if (!session?.token) clearStoredDateRange();
+}
+
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
@@ -289,7 +300,7 @@ export default function App() {
         menuGroups={menuGroups}
         routes={routes}
         layout={AppLayout}
-        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess, onSessionChange: clearSessionScopedState }}
         locale={renderedLocale}
         setLocale={guardedSetLocale}
         dictionaries={dictionaries}

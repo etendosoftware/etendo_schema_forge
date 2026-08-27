@@ -3,7 +3,7 @@ import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
-import { apiFetch } from '@/auth/api.js';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
 // ---------------------------------------------------------------------------

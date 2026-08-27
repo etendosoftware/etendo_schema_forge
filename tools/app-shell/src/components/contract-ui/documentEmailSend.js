@@ -127,8 +127,8 @@ export async function cacheDocumentPreviewFile({
 async function resolvePreviewBlob(pdfBlob, pdfBlobUrl) {
   if (pdfBlob) return pdfBlob;
   if (!pdfBlobUrl) return null;
-  // A blob: URL created by the preview, NOT an API endpoint — it takes no auth headers
-  // and no base URL, so it stays a raw fetch (ETP-5022).
+  // raw-fetch-ok: a blob: URL created by the preview, NOT an API endpoint — it takes no
+  // auth headers and no base URL (ETP-5022).
   const res = await fetch(pdfBlobUrl);
   if (!res.ok) {
     throw new Error(`Preview PDF fetch failed (${res.status})`);

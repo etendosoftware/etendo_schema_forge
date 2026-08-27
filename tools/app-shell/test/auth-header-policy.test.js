@@ -39,6 +39,19 @@ const HAND_ROLLED = [
   /\.set\(\s*(?:'Authorization'|"Authorization")\s*,\s*`Bearer /,
 ];
 
+/**
+ * Blanks out comments while preserving the line count, so prose that merely NAMES a
+ * builder or spells out a header does not read as code. Needed once the sweep started
+ * leaving explanatory comments behind: `PeriodsExpandablePanel.jsx` mentions
+ * "useEntity.js's buildHeaders()" in a block comment and was reported as an unresolved
+ * call (ETP-5022).
+ */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+}
+
 function handRolls(source) {
   return HAND_ROLLED.some((rx) => rx.test(source));
 }
@@ -62,7 +75,7 @@ describe('auth header policy (ETP-5022)', () => {
   it('no source file hand-rolls an Authorization header', () => {
     const offenders = collectSourceFiles(SRC)
       .filter((file) => !ALLOWED.has(relative(SRC, file)))
-      .filter((file) => handRolls(readFileSync(file, 'utf8')))
+      .filter((file) => handRolls(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(SRC, file).split(sep).join('/'));
 
     assert.deepEqual(
@@ -85,7 +98,7 @@ describe('auth header policy (ETP-5022)', () => {
     // test caught it. This check is cheaper than that test and covers every file.
     const offenders = [];
     for (const file of collectSourceFiles(SRC)) {
-      const src = readFileSync(file, 'utf8');
+      const src = stripComments(readFileSync(file, 'utf8'));
       const importMatch = src.match(/import \{([^}]*)\} from '@\/auth\/api(?:\.js)?';/);
       const imported = importMatch
         ? new Set(importMatch[1].split(',').map((s) => s.trim()).filter(Boolean))
