@@ -498,12 +498,18 @@ describe('DetailView — detailProcesses (ETP-4248)', () => {
     });
   });
 
-  // Regression test (ETP-4452) ————————————————————————————————————————————
+  // Regression test (originally ETP-4452, superseded by ETP-4972) ——————————
   // The bulk action bar used to scroll away with the lines list, hiding the
-  // selection count and the action button. It must stay pinned to the top of
-  // the scrollable detail-content container while the user scrolls.
-  describe('sticky bulk action bar (ETP-4452)', () => {
-    it('renders the bulk action bar with sticky positioning classes', async () => {
+  // selection count and the action button. ETP-4452 fixed it by pinning the
+  // bar with `sticky top-0` inside the scrollable detail-content container —
+  // ETP-4972 replaced that mechanism entirely: the bar (renderDetailBulkActionBar,
+  // detailViewHelpers.jsx) now renders through the shared `SelectionToolbar`,
+  // portaled straight to `document.body` with true `position: fixed`
+  // coordinates, so it can never be inside — or scroll with — any container
+  // in the first place. There is no `sticky`/`top-0` class left to assert on;
+  // this test now verifies the portal/fixed mechanism supersedes it.
+  describe('floating bulk action bar (ETP-4972 — supersedes the ETP-4452 sticky positioning)', () => {
+    it('renders the bulk action bar as a viewport-fixed SelectionToolbar, not a sticky in-flow element', async () => {
       const user = userEvent.setup();
       renderDetailView({
         detailProcesses: [{ name: 'processA', label: 'Process A', params: [] }],
@@ -511,10 +517,14 @@ describe('DetailView — detailProcesses (ETP-4248)', () => {
 
       await user.click(screen.getByTestId('trigger-selection'));
 
-      const bar = screen.getByTestId('detail-bulk-action-bar');
+      const processButton = screen.getByTestId('Button__detail-process');
+      const bar = processButton.closest('.selection-toolbar');
       expect(bar).toBeInTheDocument();
-      expect(bar.className).toContain('sticky');
-      expect(bar.className).toContain('top-0');
+      expect(bar.className).not.toContain('sticky');
+      // The SelectionToolbar pill sits inside its own `fixed` positioning
+      // wrapper (see SelectionToolbar.jsx) — that's the whole mechanism that
+      // makes the ETP-4452 sticky-scroll bug structurally impossible now.
+      expect(bar.closest('.fixed')).toBeTruthy();
     });
   });
 });

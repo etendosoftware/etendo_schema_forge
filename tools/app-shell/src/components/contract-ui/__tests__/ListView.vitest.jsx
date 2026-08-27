@@ -199,8 +199,9 @@ describe('ListView', () => {
     fireEvent.click(screen.getByTestId('trigger-select'));
 
     // Clone button only shows when onCloneRow is passed (uses the <Copy> icon
-    // sized by iconSizeClass).
-    const cloneBtn = screen.getByText(/^cloneOrderBtn/).closest('button');
+    // sized by iconSizeClass). ETP-4972 — icon-only, identified by its
+    // title tooltip rather than visible text.
+    const cloneBtn = screen.getByTitle('cloneOrderBtn');
     expect(cloneBtn).toBeInTheDocument();
     expect(cloneBtn.querySelector('.h-3\\.5.w-3\\.5')).toBeInTheDocument();
   });
@@ -210,8 +211,9 @@ describe('ListView', () => {
 
     fireEvent.click(screen.getByTestId('trigger-select'));
 
-    // selectionBarSize !== 'sm' → iconSizeClass returns 'h-4 w-4'.
-    const printBtn = screen.getByText(/^print/).closest('button');
+    // selectionBarSize !== 'sm' → iconSizeClass returns 'h-4 w-4'. ETP-4972 —
+    // icon-only, identified by its title tooltip rather than visible text.
+    const printBtn = screen.getByTitle('print');
     expect(printBtn.querySelector('.h-4.w-4')).toBeInTheDocument();
     expect(printBtn.querySelector('.h-3\\.5.w-3\\.5')).not.toBeInTheDocument();
   });
