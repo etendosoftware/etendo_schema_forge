@@ -1,5 +1,14 @@
 # Raw `fetch` inventory — app-shell frontend
 
+> **Completed 2026-08-27 (ETP-5022).** All 293 calls were migrated in the same ticket; the
+> "Scope note" at the bottom, which argued for deferring the sweep, was overtaken by that
+> decision and is kept as the record of what was weighed. The durable reference — how to make
+> a request, the helper's options, the two guardrails and the documented exceptions — is
+> `docs/request-policy.md`. This file survives only as the measurement that scoped the work.
+>
+> Outcome: 0 raw `fetch` calls outside the documented exceptions, enforced by
+> `tools/app-shell/test/no-raw-fetch.test.js`. `npm test` 6585/0, `vitest` 13458/0.
+
 Counts every direct `fetch(` call in `tools/app-shell/src`. Tests, mocks and spec files
 are excluded, and comments are stripped before counting (prose such as "overrides the
 fetch (used by tests)" would otherwise inflate the total). Measured 2026-08-27 while

@@ -85,6 +85,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | Path | Description |
 |------|-------------|
 | [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
+| [request-policy.md](request-policy.md) | **Request reference**: the single authenticated-`fetch` helper (`useApiFetch` / `apiFetch`), its options (`on401`, `baseUrl`, `token`), 401-to-logout wiring, how to give a test a session, and the two guardrails that keep raw `fetch` out |
 
 ## Feature Flags
 
