@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
@@ -43,18 +44,16 @@ const STEP = {
 /** Stable keys for the bank-picker loading skeleton (avoids array-index keys, Sonar S6479). */
 const BANK_SKELETON_KEYS = Array.from({ length: 9 }, (_, i) => `bank-skeleton-${i}`);
 
-/** Curated country list for the bank picker dropdown (Salt Edge providers are fetched per country). */
+/**
+ * Countries the bank picker offers (Salt Edge providers are fetched per country).
+ *
+ * Spain only for now. The list used to carry ten countries, which put a country selector in front
+ * of every user even though only Spain is actually supported. Kept as a list, and the picker still
+ * renders a dropdown as soon as it holds more than one entry, so widening it later is a one-line
+ * change here and nothing else.
+ */
 const BANK_COUNTRIES = [
   { code: 'ES', flag: '🇪🇸' },
-  { code: 'IT', flag: '🇮🇹' },
-  { code: 'FR', flag: '🇫🇷' },
-  { code: 'DE', flag: '🇩🇪' },
-  { code: 'PT', flag: '🇵🇹' },
-  { code: 'GB', flag: '🇬🇧' },
-  { code: 'NL', flag: '🇳🇱' },
-  { code: 'BE', flag: '🇧🇪' },
-  { code: 'IE', flag: '🇮🇪' },
-  { code: 'AT', flag: '🇦🇹' },
 ];
 
 function resolveContentWidth(step) {
@@ -188,7 +187,9 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       if (err.status === 409) {
         setFormError(ui('financeAccountsNewNameExists'));
       } else {
-        toast.error(err.message || ui('financeAccountsNewCreateError'));
+        // ETP-4896 QA follow-up: this used to show the backend's raw English literal. Routed
+        // through the shared translator so the create flow matches the edit modal.
+        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsNewCreateError'));
       }
     } finally {
       setSubmitting(false);
@@ -400,36 +401,49 @@ function BankPicker({ ui, query, onQueryChange, country, onCountryChange, onPick
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewBankLabel')}</p>
         <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
-          <DropdownMenu data-testid="DropdownMenu__24760b">
-            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
-              <button
-                type="button"
-                data-testid="new-account-bank-country"
-                aria-label={ui('financeAccountsNewBankCountry')}
-                className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
-              >
-                <span className="text-base leading-none">{selectedFlag}</span>
-                <ChevronDown
-                  className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
-                  data-testid="ChevronDown__24760b" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-[260px] overflow-y-auto"
-              data-testid="DropdownMenuContent__24760b">
-              {BANK_COUNTRIES.map((c) => (
-                <DropdownMenuItem
-                  key={c.code}
-                  onClick={() => onCountryChange(c.code)}
-                  data-testid={`new-account-bank-country-${c.code}`}
+          {/* With a single supported country there is nothing to choose, so the flag is shown as a
+              plain label rather than a dropdown that only ever offers one option. The dropdown
+              comes back on its own the moment BANK_COUNTRIES holds more than one entry. */}
+          {BANK_COUNTRIES.length === 1 ? (
+            <span
+              data-testid="new-account-bank-country"
+              aria-label={ui('financeAccountsNewBankCountry')}
+              className="flex h-full w-[60px] shrink-0 items-center justify-center border-r border-[hsl(var(--border-subtle))] text-base leading-none"
+            >
+              {selectedFlag}
+            </span>
+          ) : (
+            <DropdownMenu data-testid="DropdownMenu__24760b">
+              <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
+                <button
+                  type="button"
+                  data-testid="new-account-bank-country"
+                  aria-label={ui('financeAccountsNewBankCountry')}
+                  className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
                 >
-                  <span className="text-base leading-none">{c.flag}</span>
-                  <span className="text-sm text-[hsl(var(--foreground))]">{c.code}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <span className="text-base leading-none">{selectedFlag}</span>
+                  <ChevronDown
+                    className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
+                    data-testid="ChevronDown__24760b" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-[260px] overflow-y-auto"
+                data-testid="DropdownMenuContent__24760b">
+                {BANK_COUNTRIES.map((c) => (
+                  <DropdownMenuItem
+                    key={c.code}
+                    onClick={() => onCountryChange(c.code)}
+                    data-testid={`new-account-bank-country-${c.code}`}
+                  >
+                    <span className="text-base leading-none">{c.flag}</span>
+                    <span className="text-sm text-[hsl(var(--foreground))]">{c.code}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}

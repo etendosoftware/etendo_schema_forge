@@ -1,6 +1,8 @@
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
+import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
+import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 
@@ -25,6 +27,7 @@ function ReturnMaterialReceiptBulkActions(props) {
 }
 
 export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
+  const tMenu = useMenuLabel();
   return (
     <ReturnWindowShell
       windowName={windowName}
@@ -48,6 +51,14 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
       duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
       hideLink
       bulkActions={ReturnMaterialReceiptBulkActions}
+      // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
+      // modal had no client PDF and sent the print-* artifact instead of the document the
+      // preview shows. Mirrors return-to-vendor-shipment.
+      emailAction={{
+        usePdf: useReturnReceiptPdf,
+        documentType: tMenu('Return Material Receipt'),
+        visibleWhen: "@documentStatus@='CO'",
+      }}
       {...rest}
       data-testid="ReturnWindowShell__4e1c28" />
   );

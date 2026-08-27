@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-20T12:56:15.195Z",
-  "checksum": "4ea2c3b3435699fa",
+  "updatedAt": "2026-08-25T14:35:49.995Z",
+  "checksum": "f6d274f65844ac8e",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -123,39 +123,52 @@
             "type": "textarea"
           },
           {
-            "required": false,
-            "type": "string",
-            "target": "price",
+            "target": "productType",
             "aliases": [
-              "precio"
+              "tipo",
+              "tipo de producto"
             ],
-            "label": "Price"
+            "label": "Product Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "unidad",
+              "um",
+              "uom"
+            ],
+            "label": "Unit of Measure",
+            "matchEntity": "UOM",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "UOM"
           },
           {
             "required": false,
             "type": "string",
-            "target": "categoryCode",
+            "target": "salesPrice",
             "aliases": [
-              "codigocategoria",
-              "códigocategoría",
-              "codigo_categoria",
-              "código_categoría",
-              "category_code"
+              "precio de venta",
+              "precio venta",
+              "precio",
+              "pvp"
             ],
-            "label": "Category Code"
+            "label": "Sales Price"
           },
           {
             "required": false,
             "type": "string",
-            "target": "categoryName",
+            "target": "purchasePrice",
             "aliases": [
-              "nombrecategoria",
-              "nombrecategoría",
-              "nombre_categoria",
-              "nombre_categoría",
-              "category_name"
+              "precio de compra",
+              "precio compra",
+              "coste",
+              "costo"
             ],
-            "label": "Category Name"
+            "label": "Purchase Price"
           },
           {
             "required": false,
@@ -163,7 +176,11 @@
             "target": "category",
             "aliases": [
               "categoria",
-              "categoría"
+              "categoría",
+              "codigo categoria",
+              "código categoría",
+              "nombre categoria",
+              "nombre categoría"
             ],
             "label": "Category"
           }
@@ -2520,39 +2537,52 @@
             "type": "textarea"
           },
           {
-            "required": false,
-            "type": "string",
-            "target": "price",
+            "target": "productType",
             "aliases": [
-              "precio"
+              "tipo",
+              "tipo de producto"
             ],
-            "label": "Price"
+            "label": "Product Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "unidad",
+              "um",
+              "uom"
+            ],
+            "label": "Unit of Measure",
+            "matchEntity": "UOM",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "UOM"
           },
           {
             "required": false,
             "type": "string",
-            "target": "categoryCode",
+            "target": "salesPrice",
             "aliases": [
-              "codigocategoria",
-              "códigocategoría",
-              "codigo_categoria",
-              "código_categoría",
-              "category_code"
+              "precio de venta",
+              "precio venta",
+              "precio",
+              "pvp"
             ],
-            "label": "Category Code"
+            "label": "Sales Price"
           },
           {
             "required": false,
             "type": "string",
-            "target": "categoryName",
+            "target": "purchasePrice",
             "aliases": [
-              "nombrecategoria",
-              "nombrecategoría",
-              "nombre_categoria",
-              "nombre_categoría",
-              "category_name"
+              "precio de compra",
+              "precio compra",
+              "coste",
+              "costo"
             ],
-            "label": "Category Name"
+            "label": "Purchase Price"
           },
           {
             "required": false,
@@ -2560,7 +2590,11 @@
             "target": "category",
             "aliases": [
               "categoria",
-              "categoría"
+              "categoría",
+              "codigo categoria",
+              "código categoría",
+              "nombre categoria",
+              "nombre categoría"
             ],
             "label": "Category"
           }

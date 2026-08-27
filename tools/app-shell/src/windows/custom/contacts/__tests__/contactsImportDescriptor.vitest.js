@@ -107,6 +107,106 @@ describe('contacts import descriptor', () => {
     assert.equal(ops[0].body.oBTIKTaxIDKey, '3');
   });
 
+  // ETP-4995 (P0): the CSV template the import popup hands out ALWAYS contains the Tax ID
+  // Type column ("clave nif pais residencia" — buildTemplateCsv emits every declared
+  // field's first alias). A user who fills the template without deleting that column sends
+  // an EMPTY cell, which arrives as '' (defined), not undefined — so `pick()` copies it and
+  // the old default-first spread let it overwrite '1'. Result: MISSING_REQUIRED_FIELDS on
+  // the mandatory column for every row, with no workaround other than deleting the column.
+  it('regression (ETP-4995): an empty oBTIKTaxIDKey cell falls back to the default instead of overriding it', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', oBTIKTaxIDKey: '' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.oBTIKTaxIDKey, '1');
+  });
+
+  it('regression (ETP-4995): a whitespace-only oBTIKTaxIDKey cell also falls back to the default', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', oBTIKTaxIDKey: '   ' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.oBTIKTaxIDKey, '1');
+  });
+
+  // ETP-4995: the codes AD stores ('1'…'7', 'Y'/'N') are not what a human types into a
+  // spreadsheet. Before this, only the raw code was accepted and anything else was
+  // rejected by the list reference with a bare 400.
+  describe('AD-coded columns', () => {
+    it('accepts the human label for the Tax ID Type column and stores its AD code', async () => {
+      const [op] = await buildOperations({ name: 'Acme Corp', oBTIKTaxIDKey: 'NIF' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.oBTIKTaxIDKey, '1');
+    });
+
+    it('matches the Tax ID Type label case- and accent-insensitively', async () => {
+      const [op] = await buildOperations({ name: 'Acme Corp', oBTIKTaxIDKey: '  PASAPORTE ' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.oBTIKTaxIDKey, '3');
+    });
+
+    it("accepts 'CIF' as the Tax ID Type, since the column is labelled CIF/NIF", async () => {
+      const [byCif] = await buildOperations({ name: 'Importadora Test SL', oBTIKTaxIDKey: 'CIF' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      const [bySlash] = await buildOperations({ name: 'Otra SL', oBTIKTaxIDKey: 'cif/nif' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(byCif.body.oBTIKTaxIDKey, '1');
+      assert.equal(bySlash.body.oBTIKTaxIDKey, '1');
+    });
+
+    it('still accepts the raw AD code, so an Etendo-exported CSV round-trips', async () => {
+      const [op] = await buildOperations({ name: 'Acme Corp', oBTIKTaxIDKey: '5' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.oBTIKTaxIDKey, '5');
+    });
+
+    it('fails the row with the accepted values when the Tax ID Type cell is unrecognized', async () => {
+      await assert.rejects(
+        () => buildOperations({ name: 'Acme Corp', oBTIKTaxIDKey: 'Cedula' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' }),
+        /Cedula.*Accepted values.*1 \(NIF\)/s,
+      );
+    });
+
+    it('imports a person and a company through the etgoIsperson column', async () => {
+      const [person] = await buildOperations({ name: 'Lucia Fernandez', etgoIsperson: 'Persona' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      const [company] = await buildOperations({ name: 'Acme Corp', etgoIsperson: 'Empresa' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(person.body.etgoIsperson, 'Y');
+      assert.equal(company.body.etgoIsperson, 'N');
+    });
+
+    it('defaults etgoIsperson to the AD default (company) when the column is absent', async () => {
+      const [op] = await buildOperations({ name: 'Acme Corp' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.etgoIsperson, 'N');
+    });
+
+    it('fails the row when the contact-type cell is unrecognized', async () => {
+      await assert.rejects(
+        () => buildOperations({ name: 'Acme Corp', etgoIsperson: 'Cooperativa' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' }),
+        /Cooperativa/,
+      );
+    });
+
+    it('localizes the invalid-coded-value error through config.translate', async () => {
+      const translate = (key, params) => (key === 'importErrorInvalidCodedValue'
+        ? `Valor invalido: ${params.value}`
+        : key);
+      await assert.rejects(
+        () => buildOperations({ name: 'Acme Corp', oBTIKTaxIDKey: 'Cedula' }, { ...{ spec: 'contacts', descriptorName: 'contacts', token: 't' }, translate }),
+        /Valor invalido: Cedula/,
+      );
+    });
+  });
+
+  // ETP-4995: a CSV whose only name column was "nombre" used to map to etgoFirstname,
+  // leaving both the commercial name and the derived searchKey empty — a silently
+  // malformed business partner. "nombre" now maps to `name`; this guards the descriptor
+  // itself for any caller that still reaches it without one.
+  describe('commercial name guard', () => {
+    it('falls back to the person name when the row carries no commercial name', async () => {
+      const [op] = await buildOperations({ etgoFirstname: 'Lucia', etgoLastname: 'Fernandez' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.name, 'Lucia Fernandez');
+      assert.equal(op.body.searchKey, 'Lucia Fernandez');
+    });
+
+    it('fails the row instead of creating a business partner with no name at all', async () => {
+      await assert.rejects(
+        () => buildOperations({ etgoEmail: 'nobody@example.com' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' }),
+        /no commercial name/,
+      );
+    });
+  });
+
   it('carries typical company contact data into the businessPartner operation', async () => {
     const row = {
       name: 'Acme Iberia', etgoFirstname: 'Ana', etgoLastname: 'García',
@@ -116,6 +216,7 @@ describe('contacts import descriptor', () => {
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     assert.deepEqual(ops[0].body, {
       oBTIKTaxIDKey: '1',
+      etgoIsperson: 'N',
       name: 'Acme Iberia',
       etgoFirstname: 'Ana',
       etgoLastname: 'García',
@@ -192,9 +293,36 @@ describe('contacts import descriptor', () => {
     assert.ok(longName.length > 40);
     const row = { name: longName, etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.searchKey, longName.slice(0, 40));
     assert.equal(ops[0].body.searchKey.length, 40);
+    assert.ok(ops[0].body.searchKey.startsWith(longName.slice(0, 32)));
     assert.equal(ops[0].body.name, longName);
+  });
+
+  // ETP-4995: a blind `.slice(0, 40)` gave every name sharing a 40-char prefix the SAME
+  // C_BPartner.Value, so two distinct companies collided onto one business partner.
+  it('regression (ETP-4995): two commercial names sharing a 40-char prefix get different searchKeys', async () => {
+    const shared = 'Asociacion Espanola de Fabricantes de ';
+    assert.ok(shared.length < 40);
+    const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
+    const [a] = await buildOperations({ name: `${shared}Componentes Electronicos` }, config);
+    const [b] = await buildOperations({ name: `${shared}Componentes Mecanicos` }, config);
+    assert.equal(a.body.searchKey.length, 40);
+    assert.equal(b.body.searchKey.length, 40);
+    assert.notEqual(a.body.searchKey, b.body.searchKey);
+  });
+
+  it('regression (ETP-4995): the derived searchKey is deterministic across runs', async () => {
+    const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
+    const row = { name: 'Consorcio Internacional de Servicios Logisticos Integrados' };
+    const [first] = await buildOperations(row, config);
+    const [second] = await buildOperations(row, config);
+    assert.equal(first.body.searchKey, second.body.searchKey);
+  });
+
+  it('leaves a commercial name that already fits within 40 chars verbatim as the searchKey', async () => {
+    const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
+    const [op] = await buildOperations({ name: 'Acme Iberia' }, config);
+    assert.equal(op.body.searchKey, 'Acme Iberia');
   });
 
   describe('contact category resolution and auto-creation', () => {
@@ -211,23 +339,23 @@ describe('contacts import descriptor', () => {
       ...overrides,
     });
 
-    it('resolves an existing contact category by exact categoryCode', async () => {
+    it('resolves an existing contact category by exact code in the single category column', async () => {
       const ops = await buildOperations(
-        { name: 'Acme Corp', categoryCode: 'CLIENTS' },
+        { name: 'Acme Corp', category: 'CLIENTS' },
         contactConfig('contacts-cat-code'),
       );
       assert.equal(ops[0].body.businessPartnerCategory, 'BPG-CLIENTS');
     });
 
-    it('resolves an existing contact category by normalized categoryName', async () => {
+    it('resolves an existing contact category by normalized name in the single category column', async () => {
       const ops = await buildOperations(
-        { name: 'Acme Corp', categoryName: '  CLIENTÉS  ' },
+        { name: 'Acme Corp', category: '  CLIENTÉS  ' },
         contactConfig('contacts-cat-name'),
       );
       assert.equal(ops[0].body.businessPartnerCategory, 'BPG-CLIENTS');
     });
 
-    it('resolves an existing contact category through the legacy category column', async () => {
+    it('resolves an existing contact category by name through the category column', async () => {
       const ops = await buildOperations(
         { name: 'Acme Corp', category: 'Proveedores' },
         contactConfig('contacts-cat-legacy'),
@@ -265,7 +393,7 @@ describe('contacts import descriptor', () => {
     it('rejects ambiguous normalized category names without guessing', async () => {
       await assert.rejects(
         () => buildOperations(
-          { name: 'Acme Corp', categoryName: 'Servicios' },
+          { name: 'Acme Corp', category: 'Servicios' },
           contactConfig('contacts-cat-ambiguous'),
         ),
         /Multiple records match "Servicios"/,

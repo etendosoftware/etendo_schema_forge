@@ -2,15 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
-
-// Radix Select has no empty-string value, so the picker uses '__empty__' as its
-// placeholder sentinel — translate it back to '' before it reaches priceListId,
-// and back to the sentinel when feeding the current value into the Select.
-const resolvePriceListValue = (val) => (val === '__empty__' ? '' : val);
-const toPriceListSelectValue = (id) => id || '__empty__';
-const priceListPlaceholder = (ui, isLoading) => (isLoading ? ui('loading') : ui('noPriceListsAvailable'));
+import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 
 /**
  * Generic "Create Invoice" confirmation modal — used by both goods-shipment and
@@ -48,11 +41,15 @@ export default function CreateInvoiceConfirmModal({
   const ui = useUI();
   const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
-  const [priceLists, setPriceLists] = useState([]);
-  const [priceListId, setPriceListId] = useState('');
-  const [loadingPriceLists, setLoadingPriceLists] = useState(showPriceListPicker);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
+  const priceListHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
+    enabled: showPriceListPicker,
+    isSOTrx,
+    base,
+    headers: priceListHeaders,
+  });
 
   const documentNo  = data?.documentNo || '';
   const bpName      = data?.['businessPartner$_identifier'] || '';
@@ -85,29 +82,6 @@ export default function CreateInvoiceConfirmModal({
     return () => { cancelled = true; };
   }, [pendingQtyUrl, token]);
 
-  useEffect(() => {
-    if (!showPriceListPicker || !base) return;
-    let cancelled = false;
-    setLoadingPriceLists(true);
-    (async () => {
-      try {
-        const res = await fetch(`${base}/price-list/priceList?_startRow=0&_endRow=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok || cancelled) return;
-        const all = (await res.json())?.response?.data || [];
-        const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
-        if (cancelled) return;
-        setPriceLists(matches);
-        const preferred = matches.find(p => p.default) || matches[0];
-        if (preferred) setPriceListId(preferred.id);
-      } catch { /* silent */ } finally {
-        if (!cancelled) setLoadingPriceLists(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [showPriceListPicker, isSOTrx, base, token]);
-
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
@@ -135,29 +109,14 @@ export default function CreateInvoiceConfirmModal({
         </div>
 
         {showPriceListPicker && (
-          <div style={{ padding: '0 20px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="invoice-confirm-price-list" style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
-              {ui('salesPriceListField')}
-            </label>
-            <Select
-              value={toPriceListSelectValue(priceListId)}
-              onValueChange={val => setPriceListId(resolvePriceListValue(val))}
-              disabled={loadingPriceLists || priceLists.length === 0}
-              data-testid="Select__invoice-confirm-price-list"
-            >
-              <SelectTrigger id="invoice-confirm-price-list" data-testid="invoice-confirm-price-list-select">
-                <SelectValue placeholder={priceListPlaceholder(ui, loadingPriceLists)} data-testid="SelectValue__invoice-confirm-price-list" />
-              </SelectTrigger>
-              <SelectContent data-testid="SelectContent__invoice-confirm-price-list">
-                {loadingPriceLists && <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-loading">{ui('loading')}</SelectItem>}
-                {!loadingPriceLists && priceLists.length === 0 && (
-                  <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-empty">{ui('noPriceListsAvailable')}</SelectItem>
-                )}
-                {priceLists.map(p => (
-                  <SelectItem key={p.id} value={p.id} data-testid={`option-invoice-confirm-price-list-${p.id}`}>{p['name'] ?? p.id}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div style={{ padding: '0 20px 14px' }}>
+            <PriceListSelectField
+              priceLists={priceLists}
+              priceListId={priceListId}
+              onChange={setPriceListId}
+              loading={loadingPriceLists}
+              idPrefix="invoice-confirm-price-list"
+              data-testid="invoice-confirm-price-list-field" />
           </div>
         )}
 

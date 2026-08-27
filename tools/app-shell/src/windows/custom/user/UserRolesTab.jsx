@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
-import { TrendingUp, Package, Landmark, FileText } from 'lucide-react';
+import { TrendingUp, Package, Landmark, FileText, Info } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useRoleSelection } from './roleSelectionContext.js';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 /**
  * ETP-4906 Manual QA Feedback Round 6 (DEV wave 11) — one small semantic icon per role
@@ -30,17 +31,95 @@ const ROLE_ICONS = {
  * `FiscalStatusBadge.jsx` already use elsewhere in this app — not a new ad-hoc raw-green
  * Tailwind color, since a closer-matching dark-mode-aware convention already exists.
  * `tier === null` (no access, '—') intentionally renders as plain text, no pill.
+ *
+ * `...rest` (e.g. `data-testid`) is spread onto the rendered `<span>` — every call site
+ * passes `data-testid`, and without forwarding it here it was silently dropped (PR
+ * 1211 review finding), so `TierPill__...` never actually reached the DOM despite
+ * every caller setting it.
  */
-function TierPill({ tier, children }) {
+function TierPill({ tier, bold, children, ...rest }) {
   if (!tier) return children;
   const toneClass =
     tier === 'full'
       ? 'border-status-success-border bg-status-success text-status-success-foreground'
       : 'border-status-warning-border bg-status-warning text-status-warning-foreground';
+  const weightClass = bold ? 'font-bold' : 'font-medium';
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${toneClass}`}>
+    <span {...rest} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${weightClass} ${toneClass}`}>
       {children}
     </span>
+  );
+}
+
+/**
+ * ETP-4999 item 5 — tier ranking for the winner/loser comparison below: no access
+ * ('—', `tier === null`) is lowest, `'readonly'` is middle, `'full'` is highest.
+ * Self-contained to this file by design — do NOT import from `pages/roles/`
+ * (`RolesAccessMatrix.jsx`'s own winner logic there is a separate, unrelated
+ * feature that is being reverted in parallel; the two must not share code).
+ */
+const TIER_RANK = { full: 2, readonly: 1 };
+function tierRank(tier) {
+  return TIER_RANK[tier] ?? 0;
+}
+
+/**
+ * Given one row's per-column `{ tier }` values, decides whether the row's roles
+ * disagree on the access level for this window (ETP-4999 item 5 — the ticket's
+ * "permission comparison view" ask: a user with multiple roles that grant
+ * different access levels for the same window). `GENERAL_ROWS` below always
+ * passes every column the same `tier: 'full'`, so `disagree` is always `false`
+ * for those rows by construction — they render exactly as before, unaffected.
+ *
+ * When several columns tie at the highest rank, only the LEFT-MOST one is the
+ * "winner" (`winnerIndex`, via `Array.indexOf`'s first-match semantics) — a
+ * later human design revision of the original "mark every tied column" pass,
+ * to keep exactly one marker per disagreeing row instead of one per tied column.
+ */
+function resolveRowWinner(cellsForRow) {
+  const ranks = cellsForRow.map((cell) => tierRank(cell.tier));
+  const maxRank = Math.max(...ranks);
+  const minRank = Math.min(...ranks);
+  const disagree = maxRank !== minRank;
+  return { disagree, winnerIndex: disagree ? ranks.indexOf(maxRank) : -1 };
+}
+
+/**
+ * One `<td>` in the matrix body, rendering `TierPill` plus (ETP-4999 item 5, revised
+ * per human design feedback) an "effective permission" marker when this cell holds
+ * the row's highest-ranked tier while the row's columns disagree: the pill text goes
+ * bold and an info (`Info`) icon with a tooltip explains why. Deliberately NOT a
+ * strikethrough on the losing cells (the first-pass design) — the human flagged that
+ * as visually too harsh; a losing cell now renders exactly like a row with no
+ * disagreement at all, and only the winner is called out.
+ */
+function MatrixRoleCell({ role, tier, text, isWinner, testIdKey, winnerTooltipTitle, winnerTooltipDescription }) {
+  return (
+    <td className="py-2.5 px-3 text-center text-foreground">
+      <span className="inline-flex items-center justify-center gap-1">
+        <TierPill tier={tier} bold={isWinner} data-testid={`TierPill__${testIdKey}-${role.id}`}>{text}</TierPill>
+        {isWinner && (
+          <TooltipProvider data-testid={`WinnerTooltipProvider__${testIdKey}-${role.id}`}>
+            <Tooltip delayDuration={150} data-testid={`WinnerTooltip__${testIdKey}-${role.id}`}>
+              <TooltipTrigger asChild data-testid={`WinnerBadgeTrigger__${testIdKey}-${role.id}`}>
+                <span
+                  tabIndex={0}
+                  aria-label={winnerTooltipTitle}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help"
+                  data-testid={`WinnerBadge__${testIdKey}-${role.id}`}
+                >
+                  <Info className="h-4 w-4" aria-hidden="true" data-testid={`WinnerBadgeIcon__${testIdKey}-${role.id}`} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent data-testid={`WinnerTooltipContent__${testIdKey}-${role.id}`}>
+                <p className="font-semibold">{winnerTooltipTitle}</p>
+                <p>{winnerTooltipDescription}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </span>
+    </td>
   );
 }
 
@@ -133,13 +212,17 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Never render (nor even show the tab strip entry for) an in-progress user creation —
-  // SFAssignUserRoles requires an existing AD_User_ID (see the plan's Global Constraints:
-  // "Never attempt SFAssignUserRoles before an AD_User_ID exists"). DetailView defaults every
-  // tab-placement custom component to visible until it explicitly reports otherwise.
+  // ETP-4999 — the tab itself now stays visible even for an in-progress user creation
+  // (see the `isNew` render branch below, which shows the same empty-state placeholder
+  // as an existing user with zero roles selected); only the LIVE fetches + network-backed
+  // matrix are still gated on an existing `AD_User_ID` (SFAssignUserRoles/SFSystemRoleTemplates
+  // still require one — see the plan's Global Constraints: "Never attempt SFAssignUserRoles
+  // before an AD_User_ID exists"). Previously this hid the tab strip entry entirely while
+  // isNew, which made the placeholder inconsistent between the pre-save and post-save empty
+  // states for no functional reason — the placeholder text is identical either way.
   useEffect(() => {
-    onVisibilityChange?.(!isNew);
-  }, [isNew, onVisibilityChange]);
+    onVisibilityChange?.(true);
+  }, [onVisibilityChange]);
 
   useEffect(() => {
     if (isNew) return undefined;
@@ -217,8 +300,23 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     return allTemplateRoles.filter((role) => selected.has(String(role.id)));
   }, [allTemplateRoles, selectedRoleIds]);
 
+  // ETP-4999 — a brand-new, not-yet-saved user can never have any roles selected yet
+  // (`AssignTemplateRolesControl` only renders its interactive chip editor once
+  // `data?.id` exists — see that component's own save-first placeholder), so the
+  // outcome is always "zero roles selected", i.e. exactly the same empty state an
+  // EXISTING user with zero roles sees below. Render it directly here — no need to
+  // reach the loading/error/fetch machinery at all, since there is nothing to fetch:
+  // `selectedRoleIds` is guaranteed empty and the matrix would have zero columns
+  // regardless of what the fetches returned.
   if (isNew) {
-    return null;
+    return (
+      <div
+        className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
+        data-testid="UserRolesTab__empty"
+      >
+        {ui('userRolesTabEmptyState')}
+      </div>
+    );
   }
 
   // loading/error MUST be checked before the "no roles selected" empty state below:
@@ -265,10 +363,22 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
       : { tier: 'readonly', text: ui('accessTierReadOnly') };
   };
 
+  const winnerTooltipTitle = ui('userRolesTabWinnerTooltipTitle');
+  const winnerTooltipDescription = ui('userRolesTabWinnerTooltipDescription');
+
   return (
-    <div className="overflow-x-auto" data-testid="UserRolesTab">
+    // ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
+    // pass added one, on the assumption `sticky` needed a locally-owned scroll context —
+    // live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
+    // column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
+    // a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
+    // local wrapper here instead created a SECOND, artificially short scroll region
+    // inside the (always full-viewport-height) outer panel — the empty space between
+    // where this region's content ended and the panel's own bottom edge is exactly what
+    // a human caught live: comparing against a pre-item-5 build showed no such gap.
+    <div data-testid="UserRolesTab">
       <table className="w-full text-sm">
-        <thead>
+        <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">
             <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
               {ui('userRolesTabWindowColumn')}
@@ -296,16 +406,34 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                 {ui('userRolesTabGeneralCategory')}
               </th>
             </tr>
-            {GENERAL_ROWS.map((row) => (
-              <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
-                <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
-                {columns.map((role) => (
-                  <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                    <TierPill tier="full" data-testid={`TierPill__${row.key}-${role.id}`}>{'✓'}</TierPill>
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {GENERAL_ROWS.map((row) => {
+              // Always 'full' for every column by construction — `resolveRowWinner`
+              // always returns `disagree: false` here, so this row renders exactly
+              // as it did before item 5 (no tooltip marker).
+              const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
+              const { winnerIndex } = resolveRowWinner(cellsForRow);
+              return (
+                <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
+                  <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
+                  {columns.map((role, i) => {
+                    const { tier, text } = cellsForRow[i];
+                    const isWinner = i === winnerIndex;
+                    return (
+                      <MatrixRoleCell
+                        key={role.id}
+                        role={role}
+                        tier={tier}
+                        text={text}
+                        isWinner={isWinner}
+                        testIdKey={row.key}
+                        winnerTooltipTitle={winnerTooltipTitle}
+                        winnerTooltipDescription={winnerTooltipDescription}
+                        data-testid="MatrixRoleCell__71bdc9" />
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </Fragment>
           {categoryGroups.map((group) => (
             <Fragment key={group.category}>
@@ -317,19 +445,31 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
                   {tMenu(group.category)}
                 </th>
               </tr>
-              {group.rows.map((row) => (
-                <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
-                  <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
-                  {columns.map((role) => {
-                    const { tier, text } = cellValue(row, role);
-                    return (
-                      <td key={role.id} className="py-2.5 px-3 text-center text-foreground">
-                        <TierPill tier={tier} data-testid={`TierPill__${row.windowId}-${role.id}`}>{text}</TierPill>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {group.rows.map((row) => {
+                const cellsForRow = columns.map((role) => cellValue(row, role));
+                const { winnerIndex } = resolveRowWinner(cellsForRow);
+                return (
+                  <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
+                    <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
+                    {columns.map((role, i) => {
+                      const { tier, text } = cellsForRow[i];
+                      const isWinner = i === winnerIndex;
+                      return (
+                        <MatrixRoleCell
+                          key={role.id}
+                          role={role}
+                          tier={tier}
+                          text={text}
+                          isWinner={isWinner}
+                          testIdKey={row.windowId}
+                          winnerTooltipTitle={winnerTooltipTitle}
+                          winnerTooltipDescription={winnerTooltipDescription}
+                          data-testid="MatrixRoleCell__71bdc9" />
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </Fragment>
           ))}
         </tbody>

@@ -249,14 +249,6 @@ for (const spec of SPECS) {
         }
       });
 
-      const container = page.getByTestId('notes-textarea');
-      // The new-record form may or may not render a notes field depending on
-      // the window config. Skip gracefully if not present.
-      if (await container.count() === 0) {
-        test.skip(true, `No notes-textarea in new-record form for ${spec}`);
-        return;
-      }
-
       const ta = await focusNotesTextarea(page);
       await ta.fill('Text in new record');
 

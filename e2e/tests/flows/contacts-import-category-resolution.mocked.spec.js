@@ -137,18 +137,18 @@ test('imports contacts with existing, normalized, new, and legacy category input
     name: 'contacts-etp-4905.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      ['nombre comercial', 'nombre', 'apellido', 'email', 'telefono', 'web', 'cif/nif', 'direccion', 'ciudad', 'codigo postal', 'pais', 'region', 'codigocategoria', 'nombrecategoria', 'categoria', 'email de contacto'],
-      ['Contacto por código', 'Lucia', 'Fernandez', 'lucia.code@example.com', '+34 910 000 001', 'https://code.example', 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', 'CLIENTS', '', '', 'lucia.code.person@example.com'],
-      ['Contacto por nombre', 'Andres', 'Rojaz', 'andres.name@example.com', '+34 910 000 002', 'https://name.example', 'B12345679', '', '', '', '', '', '', ' clientes ', '', 'andres.name.person@example.com'],
-      ['Contacto nuevo uno', 'Paula', 'Gomez', 'paula.one@example.com', '+34 910 000 003', 'https://new-one.example', 'B12345680', '', '', '', '', '', '', '', 'Distribución Especial', 'paula.one.person@example.com'],
-      ['Contacto nuevo dos', 'Martin', 'Diaz', 'martin.two@example.com', '+34 910 000 004', 'https://new-two.example', 'B12345681', '', '', '', '', '', '', '', 'Distribución Especial', 'martin.two.person@example.com'],
-      ['Contacto legacy', 'Julia', 'Perez', 'julia.legacy@example.com', '+34 910 000 005', 'https://legacy.example', 'B12345682', '', '', '', '', '', '', '', '', 'julia.legacy.person@example.com'],
+      // ETP-4995: the three category columns collapsed into one, and "nombre" now maps to the
+      // commercial name, so the person's first name uses its own header.
+      ['nombre comercial', 'nombre de pila', 'apellido', 'email', 'telefono', 'web', 'cif/nif', 'direccion', 'ciudad', 'codigo postal', 'pais', 'region', 'categoria', 'email de contacto'],
+      ['Contacto por código', 'Lucia', 'Fernandez', 'lucia.code@example.com', '+34 910 000 001', 'https://code.example', 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', 'CLIENTS', 'lucia.code.person@example.com'],
+      ['Contacto por nombre', 'Andres', 'Rojaz', 'andres.name@example.com', '+34 910 000 002', 'https://name.example', 'B12345679', '', '', '', '', '', ' clientes ', 'andres.name.person@example.com'],
+      ['Contacto nuevo uno', 'Paula', 'Gomez', 'paula.one@example.com', '+34 910 000 003', 'https://new-one.example', 'B12345680', '', '', '', '', '', 'Distribución Especial', 'paula.one.person@example.com'],
+      ['Contacto nuevo dos', 'Martin', 'Diaz', 'martin.two@example.com', '+34 910 000 004', 'https://new-two.example', 'B12345681', '', '', '', '', '', 'Distribución Especial', 'martin.two.person@example.com'],
+      ['Contacto legacy', 'Julia', 'Perez', 'julia.legacy@example.com', '+34 910 000 005', 'https://legacy.example', 'B12345682', '', '', '', '', '', '', 'julia.legacy.person@example.com'],
     ].map((row) => row.join(',')).join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('16/16');
-  await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Contact Category Code');
-  await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Contact Category Name');
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/14');
   await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-review.png'), fullPage: true });
 
@@ -230,10 +230,11 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
     name: 'contacts-etp-4905-corner-cases.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      'nombre comercial,nombre,apellido,codigocategoria,nombrecategoria,categoria,email de contacto',
-      'Contacto válido,Val,Id,VALID,,,valid@example.com',
-      'Categoría ambigua,Ana,Lopez,,Servicios,,ambiguous@example.com',
-      'Error creando categoría,Leo,Diaz,,,Nueva Categoría,error@example.com',
+      // ETP-4995: cif/nif is now required at import level, so every fixture row carries one.
+      'nombre comercial,nombre de pila,apellido,categoria,cif/nif,email de contacto',
+      'Contacto válido,Val,Id,VALID,B20000001,valid@example.com',
+      'Categoría ambigua,Ana,Lopez,Servicios,B20000002,ambiguous@example.com',
+      'Error creando categoría,Leo,Diaz,Nueva Categoría,B20000003,error@example.com',
     ].join('\n')),
   });
   await page.getByTestId('ImportDialog__importButton').click();
@@ -251,7 +252,7 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
   expect(state.batchBodies[0].operations[0].body.businessPartnerCategory).toBe('bpg-valid');
 });
 
-test('skips an in-file duplicate company email before sending the batch', async ({ page }) => {
+test('skips an in-file duplicate tax id before sending the batch', async ({ page }) => {
   const evidenceDir = resolve(import.meta.dirname, '../../../artifacts/delivery-evidence/ETP-4905');
   mkdirSync(evidenceDir, { recursive: true });
   const state = { batchBodies: [], contacts: [] };
@@ -280,9 +281,11 @@ test('skips an in-file duplicate company email before sending the batch', async 
     name: 'contacts-etp-4905-duplicate.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      'nombre comercial,nombre,apellido,email',
-      'Contacto original,Lucia,Fernandez,duplicate@example.com',
-      'Contacto repetido,Lucia,Fernandez,duplicate@example.com',
+      // ETP-4995: the dedupe key is taxID, not etgoEmail — email is optional, and a blank key
+      // made dedupeRows skip deduplication entirely. Same tax id = same legal entity.
+      'nombre comercial,nombre de pila,apellido,cif/nif,email',
+      'Contacto original,Lucia,Fernandez,B30000001,original@example.com',
+      'Contacto repetido,Lucia,Fernandez,B30000001,repeated@example.com',
     ].join('\n')),
   });
 
@@ -302,7 +305,7 @@ test('skips an in-file duplicate company email before sending the batch', async 
   expect(state.batchBodies[0].operations[0].body.name).toBe('Contacto original');
 });
 
-test('imports a minimal company row with only legal name and optional email', async ({ page }) => {
+test('imports a minimal company row with only the required legal name and tax id', async ({ page }) => {
   const evidenceDir = resolve(import.meta.dirname, '../../../artifacts/delivery-evidence/ETP-4905');
   mkdirSync(evidenceDir, { recursive: true });
   const state = { batchBodies: [] };
@@ -327,8 +330,8 @@ test('imports a minimal company row with only legal name and optional email', as
     name: 'contacts-etp-4905-minimal.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
-      'nombre comercial,email',
-      'Cliente solo con razón social,minimal@example.com',
+      'nombre comercial,cif/nif,email',
+      'Cliente solo con razón social,B40000001,minimal@example.com',
     ].join('\n')),
   });
 

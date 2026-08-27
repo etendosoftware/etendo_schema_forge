@@ -3,7 +3,15 @@
   "window": {
     "category": "configuration",
     "name": "Organización",
-    "layoutType": "custom"
+    "layoutType": "custom",
+    "detailEntity": "information",
+    "secondaryTabs": {
+      "actividadesDelIae": {
+        "tabOrder": 10,
+        "label": "Actividades del IAE",
+        "addLineFields": ["epgrafeIAE", "epiaeType", "epiaeCode", "default"]
+      }
+    }
   },
   "entities": {
     "organization": {
@@ -115,7 +123,49 @@
       "exclude": true
     },
     "actividadesDelIae": {
-      "exclude": true
+      "fields": {
+        "organization": {
+          "visibility": "system"
+        },
+        "active": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "defaultValue": "Y"
+        },
+        "lineNo": {
+          "visibility": "system"
+        },
+        "epgrafeIAE": {
+          "visibility": "editable"
+        },
+        "default": {
+          "visibility": "editable"
+        },
+        "epiaeType": {
+          "visibility": "editable"
+        },
+        "epiaeCode": {
+          "visibility": "editable"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "id": {
+          "visibility": "system"
+        },
+        "creationDate": {
+          "visibility": "system"
+        },
+        "createdBy": {
+          "visibility": "system"
+        },
+        "updated": {
+          "visibility": "system"
+        },
+        "updatedBy": {
+          "visibility": "system"
+        }
+      }
     },
     "warehouse": {
       "exclude": true
@@ -236,13 +286,16 @@
           "derivation": "fromConfig"
         },
         "etsgHasSIIConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "etsgHasTbaiConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "etsgHasVfactuConfig": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "derivation": "fromConfig"
         },
         "updated": {
           "visibility": "system",

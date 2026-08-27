@@ -84,3 +84,45 @@ describe('buildOrderData — ETP-4777 Case 2 (Send/Preview PDF for Sales/Purchas
     expect(result.grandTotal).toBe(89.21);
   });
 });
+
+// ETP-4941 — the printed "CÓD." column must show the product SKU
+// (product$_value), not the line number. buildOrderData() is shared by
+// sales-order and purchase-order.
+describe('buildOrderData — ETP-4941 (CÓD. column shows product SKU, not line number)', () => {
+  it('sets productCode from product$_value on each line', async () => {
+    mockFetchAll.mockResolvedValue([
+      { lineNo: 1, orderedQuantity: 1, listPrice: 70, discount: 0, lineGrossAmount: 70, 'product$_value': 'SKU-001' },
+    ]);
+    const result = await buildOrderData('sales-order', 'REC123', 'https://api.example', 'tok');
+    expect(result.lines[0].productCode).toBe('SKU-001');
+    expect(result.lines[0].productCode).not.toBe(result.lines[0].lineNo);
+  });
+
+  it('falls back to line.productCode when set directly on the raw line', async () => {
+    mockFetchAll.mockResolvedValue([
+      { lineNo: 1, orderedQuantity: 1, listPrice: 70, discount: 0, lineGrossAmount: 70, productCode: 'DIRECT-CODE' },
+    ]);
+    const result = await buildOrderData('sales-order', 'REC123', 'https://api.example', 'tok');
+    expect(result.lines[0].productCode).toBe('DIRECT-CODE');
+  });
+
+  it('falls back to "—" (never the line number) when neither productCode nor product$_value is present — AC: product with no SKU', async () => {
+    mockFetchAll.mockResolvedValue([
+      { lineNo: 5, orderedQuantity: 1, listPrice: 70, discount: 0, lineGrossAmount: 70 },
+    ]);
+    const result = await buildOrderData('sales-order', 'REC123', 'https://api.example', 'tok');
+    expect(result.lines[0].productCode).toBe('—');
+    // Must not be indistinguishable from the original bug (line number shown as code).
+    expect(result.lines[0].productCode).not.toBe(String(result.lines[0].lineNo));
+    expect(result.lines[0].productCode).not.toBe('5');
+    expect(result.lines[0].productCode).not.toBe('1');
+  });
+
+  it('applies the same productCode resolution to Purchase Order lines', async () => {
+    mockFetchAll.mockResolvedValue([
+      { lineNo: 1, orderedQuantity: 1, listPrice: 70, discount: 0, lineGrossAmount: 70, 'product$_value': 'PO-SKU-9' },
+    ]);
+    const result = await buildOrderData('purchase-order', 'REC456', 'https://api.example', 'tok');
+    expect(result.lines[0].productCode).toBe('PO-SKU-9');
+  });
+});

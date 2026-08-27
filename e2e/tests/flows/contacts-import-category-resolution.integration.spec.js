@@ -83,18 +83,19 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       name: 'contacts-etp-4905-tomcat.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from([
-        'nombre comercial,nombre,apellido,email,telefono,web,cif/nif,direccion,ciudad,codigo postal,pais,region,codigocategoria,nombrecategoria,categoria,email de contacto',
-        [rows[0].name, rows[0].first, rows[0].last, `e2e-company-${unique}@example.com`, '+34 910 000 001', `https://e2e-${unique}.example`, 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', existingCategoryCode, '', '', `e2e-contact-code-${unique}@example.com`].join(','),
-        [rows[1].name, rows[1].first, rows[1].last, `e2e-company-name-${unique}@example.com`, '+34 910 000 002', `https://name-${unique}.example`, 'B12345679', '', '', '', '', '', '', String(existingCategoryName).toLowerCase(), '', `e2e-contact-name-${unique}@example.com`].join(','),
-        [rows[2].name, rows[2].first, rows[2].last, `e2e-company-new-one-${unique}@example.com`, '+34 910 000 003', `https://new-one-${unique}.example`, 'B12345680', '', '', '', '', '', '', newCategoryName, '', `e2e-contact-new-one-${unique}@example.com`].join(','),
-        [rows[3].name, rows[3].first, rows[3].last, `e2e-company-new-two-${unique}@example.com`, '+34 910 000 004', `https://new-two-${unique}.example`, 'B12345681', '', '', '', '', '', '', newCategoryName, '', `e2e-contact-new-two-${unique}@example.com`].join(','),
-        [rows[4].name, rows[4].first, rows[4].last, `e2e-company-legacy-${unique}@example.com`, '+34 910 000 005', `https://legacy-${unique}.example`, 'B12345682', '', '', '', '', '', '', '', existingCategoryName, `e2e-contact-legacy-${unique}@example.com`].join(','),
+        // ETP-4995: one `categoria` column instead of codigocategoria/nombrecategoria/categoria,
+        // and "nombre" now maps to the commercial name so the person's first name has its own
+        // header. The single cell still resolves by exact code first, then by name.
+        'nombre comercial,nombre de pila,apellido,email,telefono,web,cif/nif,direccion,ciudad,codigo postal,pais,region,categoria,email de contacto',
+        [rows[0].name, rows[0].first, rows[0].last, `e2e-company-${unique}@example.com`, '+34 910 000 001', `https://e2e-${unique}.example`, 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', existingCategoryCode, `e2e-contact-code-${unique}@example.com`].join(','),
+        [rows[1].name, rows[1].first, rows[1].last, `e2e-company-name-${unique}@example.com`, '+34 910 000 002', `https://name-${unique}.example`, 'B12345679', '', '', '', '', '', String(existingCategoryName).toLowerCase(), `e2e-contact-name-${unique}@example.com`].join(','),
+        [rows[2].name, rows[2].first, rows[2].last, `e2e-company-new-one-${unique}@example.com`, '+34 910 000 003', `https://new-one-${unique}.example`, 'B12345680', '', '', '', '', '', newCategoryName, `e2e-contact-new-one-${unique}@example.com`].join(','),
+        [rows[3].name, rows[3].first, rows[3].last, `e2e-company-new-two-${unique}@example.com`, '+34 910 000 004', `https://new-two-${unique}.example`, 'B12345681', '', '', '', '', '', newCategoryName, `e2e-contact-new-two-${unique}@example.com`].join(','),
+        [rows[4].name, rows[4].first, rows[4].last, `e2e-company-legacy-${unique}@example.com`, '+34 910 000 005', `https://legacy-${unique}.example`, 'B12345682', '', '', '', '', '', existingCategoryName, `e2e-contact-legacy-${unique}@example.com`].join(','),
       ].join('\n')),
     });
 
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('16/16');
-    await expect(page.getByTestId('ImportColumnMapping__chip-codigocategoria')).toContainText('Contact Category Code');
-    await expect(page.getByTestId('ImportColumnMapping__chip-nombrecategoria')).toContainText('Contact Category Name');
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/14');
     await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-review.png'), fullPage: true });
 

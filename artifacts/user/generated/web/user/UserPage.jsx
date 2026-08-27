@@ -4,8 +4,6 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import UserTable from '@/windows/custom/user/UserHeaderTable';
 import UserForm from './UserForm';
-import EmailConfigurationTable from './EmailConfigurationTable';
-import EmailConfigurationForm from './EmailConfigurationForm';
 import AssignTemplateRolesControl from '@/windows/custom/user/AssignTemplateRolesControl';
 import { AttachmentsTab } from '@/components/attachments';
 import UserRolesTab from '@/windows/custom/user/UserRolesTab';
@@ -37,12 +35,6 @@ const processes = [
 ];
 // @sf-generated-end processes:user
 
-// @sf-generated-start detailProcesses:emailConfiguration
-const detailProcesses = [
-  { name: 'smtpconnectiontest', label: 'Test SMTP Connection', style: 'positive' },
-];
-// @sf-generated-end detailProcesses:emailConfiguration
-
 // @sf-generated-start draftMode:user
 const draftMode = null;
 // @sf-generated-end draftMode:user
@@ -51,31 +43,7 @@ const draftMode = null;
 const requiredHeaderFields = ['name', 'active', 'email', 'locked', 'lastPasswordUpdate'];
 // @sf-generated-end requiredHeaderFields:user
 
-// @sf-generated-start addLineFields:emailConfiguration
-const addLineFields = {
-  entry: [
-    { key: 'active', column: 'Isactive', type: 'checkbox', required: true, label: 'Active' },
-    { key: 'smtpServer', column: 'Smtpserver', type: 'text', required: true, label: 'Smtp Server' },
-    { key: 'sMTPAuthentification', column: 'IsSmtpAuthorization', type: 'checkbox', required: true, label: 'SMTP Authentification' },
-    { key: 'smtpServerAccount', column: 'Smtpserveraccount', type: 'text', label: 'Smtp Server Account' },
-    { key: 'smtpServerPassword', column: 'Smtpserverpassword', type: 'text', label: 'Smtp Server Password' },
-    { key: 'smtpServerSenderAddress', column: 'Smtpserversenderaddress', type: 'text', label: 'Smtp Server Sender Address' },
-    { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'select', required: true, label: 'SMTP Connection Security' },
-    { key: 'smtpPort', column: 'Smtpport', type: 'number', required: true, label: 'Smtp Port', defaultValue: 25 },
-    { key: 'smtpConnectionTimeout', column: 'SmtpTimeout', type: 'number', label: 'Smtp Connection Timeout', defaultValue: 600 },
-    { key: 'fromName', column: 'Smtpserverfromname', type: 'text', label: 'From Name' },
-    { key: 'replyToAddress', column: 'Smtpreplytoaddress', type: 'text', label: 'Reply-To Address' },
-    { key: 'smtpconnectiontest', column: 'Smtpconnectiontest', type: 'text', required: true, label: 'Test SMTP Connection', defaultValue: 'N' },
-    { key: 'defaultConfiguration', column: 'Isdefaultconfig', type: 'checkbox', required: true, label: 'Default' },
-  ],
-  derived: [
 
-  ],
-  hidden: [
-
-  ],
-};
-// @sf-generated-end addLineFields:emailConfiguration
 
 export const api = {
   "specName": "user",
@@ -93,19 +61,6 @@ export const api = {
       "supportedFilters": [
         "name",
         "email"
-      ]
-    },
-    "emailConfiguration": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/user/emailConfiguration",
-      "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
-      "supportedFilters": [
-        "smtpServer"
       ]
     }
   },
@@ -208,14 +163,6 @@ export const api = {
       "url": "/sws/neo/user/user/{id}/action/grantPortalAccess",
       "processId": "97FFD59B991D49BFB5153C309B009272",
       "processType": "obuiapp"
-    },
-    {
-      "entity": "emailConfiguration",
-      "field": "smtpconnectiontest",
-      "column": "Smtpconnectiontest",
-      "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
-      "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
-      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -250,24 +197,19 @@ export default function UserPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="user"
-        detailEntity="emailConfiguration"
         Form={UserForm}
-        DetailTable={EmailConfigurationTable}
-        DetailForm={EmailConfigurationForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        detailProcesses={detailProcesses}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="User"
-        detailLabel="Email Configuration"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
         formFooter={AssignTemplateRolesControl}
+        hidePrint
         customTabs={[{ key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
@@ -284,6 +226,8 @@ export default function UserPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hidePrint":true}}
+      hidePrint
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

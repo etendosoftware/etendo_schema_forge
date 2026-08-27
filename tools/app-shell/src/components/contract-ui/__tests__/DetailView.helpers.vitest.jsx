@@ -837,6 +837,72 @@ describe('DetailView helper functions', () => {
       expect(screen.getByText('Show')).toBeInTheDocument();
       expect(screen.queryByText('Hide')).toBeNull();
     });
+
+    // ETP-4999 — the function-form callback now receives a third `onRefresh`
+    // field (alongside `data`/`children`), mirroring `topbarExtra`'s own
+    // onRefresh, so an `extraActions` entry (e.g. resend-invitation) can
+    // refresh the record after a side-effecting action the same way a
+    // `topbarExtra` component already can.
+    it('passes onRefresh as a third field to the function-form callback', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn() };
+      const actionsFn = vi.fn(() => [{ key: 'x', label: 'X', onClick: vi.fn() }]);
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      expect(actionsFn).toHaveBeenCalledWith({
+        data,
+        children: hook.children,
+        onRefresh: expect.any(Function),
+      });
+    });
+
+    it('onRefresh invokes hook.fetchById with data?.id', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.fetchById).toHaveBeenCalledWith('rec-1');
+    });
+
+    it('onRefresh does not throw when hook.fetchById is not provided', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [] };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      expect(() => capturedOnRefresh()).not.toThrow();
+    });
+
+    // ETP-4999 — `renderExtraActionButtons` now also forwards `action.disabled`
+    // onto the rendered `<Button>`, needed for the resend-invitation action to
+    // disable itself while a request is in flight.
+    it('renders a disabled Button when action.disabled is true', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn(), disabled: true }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).toBeDisabled();
+    });
+
+    it('does not disable the Button when action.disabled is omitted', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn() }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).not.toBeDisabled();
+    });
+
+    it('does not disable the Button when action.disabled is false', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn(), disabled: false }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).not.toBeDisabled();
+    });
   });
 
   describe('getDetailContentContainerClassName', () => {

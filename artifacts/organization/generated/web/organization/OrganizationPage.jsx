@@ -6,6 +6,8 @@ import OrganizationTable from './OrganizationTable';
 import OrganizationForm from './OrganizationForm';
 import InformationTable from './InformationTable';
 import InformationForm from './InformationForm';
+import ActividadesDelIaeTable from './ActividadesDelIaeTable';
+import ActividadesDelIaeForm from './ActividadesDelIaeForm';
 import catalogs from './mockCatalogs';
 
 
@@ -84,6 +86,17 @@ export const api = {
       "listUrl": "/sws/neo/organizaci-n/information",
       "detailUrl": "/sws/neo/organizaci-n/information/{id}",
       "supportedFilters": []
+    },
+    "actividadesDelIae": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/organizaci-n/actividadesDelIae",
+      "detailUrl": "/sws/neo/organizaci-n/actividadesDelIae/{id}",
+      "supportedFilters": []
     }
   },
   "selectors": [
@@ -102,6 +115,30 @@ export const api = {
       "reference": "Location",
       "inputMode": "search",
       "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+    },
+    {
+      "entity": "actividadesDelIae",
+      "field": "epgrafeIAE",
+      "column": "Epiae_Epigraph_ID",
+      "reference": "EPIAE_Epigraph",
+      "inputMode": "selector",
+      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epgrafeIAE"
+    },
+    {
+      "entity": "actividadesDelIae",
+      "field": "epiaeType",
+      "column": "Epiae_Type_ID",
+      "reference": "epiae_type",
+      "inputMode": "selector",
+      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeType"
+    },
+    {
+      "entity": "actividadesDelIae",
+      "field": "epiaeCode",
+      "column": "Epiae_Code_ID",
+      "reference": "EPIAE_Code",
+      "inputMode": "selector",
+      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeCode"
     }
   ],
   "actions": [
@@ -170,6 +207,14 @@ export default function OrganizationPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'actividadesDelIae', label: 'Actividades del IAE', Table: ActividadesDelIaeTable, Form: ActividadesDelIaeForm, addLineFields: { entry: [
+          { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', type: 'selector', label: 'Epígrafe IAE', reference: 'EPIAE_Epigraph', inputMode: 'selector' },
+          { key: 'epiaeType', column: 'Epiae_Type_ID', type: 'selector', label: 'Clave', reference: 'epiae_type', inputMode: 'selector' },
+          { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', label: 'Código', reference: 'EPIAE_Code', inputMode: 'selector' },
+          { key: 'default', column: 'Isdefault', type: 'checkbox', required: true, label: 'Valor por defecto' },
+          ], derived: [], hidden: [] }, tabOrder: 10 },
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
       />

@@ -206,6 +206,186 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
     await page.getByTestId('confirm-modal-cancel-btn').click();
     await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0, { timeout: 5_000 });
   });
+
+  /**
+   * ETP-4942 — the price-list picker inside GoodsShipmentConfirmModal.
+   *
+   * A shipment with no linked sales order has no price list of its own, so the
+   * backend cannot always resolve a tariff when the "create invoice" toggle is
+   * on. The picker is REQUIRED (blocks confirm) in that case, and merely
+   * optional/pre-filled when the shipment does have a linked order.
+   *
+   * Case 1 (no linked order): the picker blocks "Confirmar y crear factura"
+   * until a tariff is chosen, then confirming succeeds.
+   * Case 2 (linked order): the picker still renders, but never blocks confirm.
+   */
+  test('price-list picker: required and blocking without a linked order, optional and non-blocking with one', async ({ page }) => {
+    // ── Case 1: no linked order — picker is required ────────────────────────
+    const shipmentNoOrder = makeShipment({
+      id: 'gs-no-order-001',
+      documentNo: 'GS-NOORDER-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      processed: false,
+      'businessPartner$_identifier': 'Cliente Sin Pedido S.L.',
+      linkedOrders: [], // no linked sales order
+    });
+
+    await login(page);
+    await installGoodsShipmentMock(page, [shipmentNoOrder]);
+
+    await page.route(
+      (url) =>
+        url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-no-order-001/action/documentAction'),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: { documentStatus: 'CO' } } }),
+        });
+      }
+    );
+
+    let createDraftInvoiceBody = null;
+    await page.route(
+      (url) =>
+        url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-no-order-001/action/createDraftInvoice'),
+      async (route) => {
+        createDraftInvoiceBody = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: { data: { id: 'inv-no-order-001', documentNo: 'FAC-NOORDER-001', grandTotalAmount: 100 } },
+          }),
+        });
+      }
+    );
+
+    // usePriceListPicker hits `${base}/price-list/priceList` where base is one
+    // level up from the goods-shipment spec root (`/sws/neo`) — same
+    // spec-swapped endpoint the "Crear Factura" describe block below mocks.
+    // No entry is flagged `default`, so the hook still auto-selects the FIRST
+    // match once the fetch resolves — matching real usePriceListPicker behavior
+    // (see PriceListPicker.jsx: `matches.find(p => p.default) || matches[0]`).
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: {
+            data: [
+              { id: 'pl-general', name: 'Tarifa General', active: true, salesPriceList: true, default: false },
+              { id: 'pl-vip', name: 'Tarifa VIP', active: true, salesPriceList: true, default: false },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto('/goods-shipment/gs-no-order-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
+    );
+
+    await expect(page.getByTestId('confirm-inout-modal')).toBeVisible({ timeout: 8_000 });
+    // Invoice toggle defaults to checked (ETP-4848), so the picker is active
+    // from the moment the modal opens.
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toHaveAttribute('aria-checked', 'true');
+
+    const priceListSelect = page.getByTestId('confirm-modal-price-list-select');
+    await expect(priceListSelect).toBeVisible({ timeout: 5_000 });
+
+    const confirmBtn = page.getByTestId('confirm-modal-confirm-btn');
+
+    // Once the price-list fetch resolves, the hook auto-selects the first match
+    // — the picker never leaves the user stuck with no option to confirm — so
+    // the button ends up enabled without a manual pick.
+    await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+
+    // Explicitly choose the OTHER tariff to prove the manual-selection path
+    // (onChange → setPriceListId) drives the request body, not just whatever
+    // the hook auto-selected.
+    await priceListSelect.click();
+    await page.getByTestId('option-confirm-modal-price-list-pl-vip').click();
+
+    await confirmBtn.click();
+    await expect.poll(() => createDraftInvoiceBody, { timeout: 8_000 }).not.toBeNull();
+    expect(createDraftInvoiceBody).toEqual({ priceListId: 'pl-vip' });
+
+    // ── Case 2: shipment WITH a linked order — picker is optional ──────────
+    const shipmentWithOrder = makeShipment({
+      id: 'gs-with-order-001',
+      documentNo: 'GS-WITHORDER-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      processed: false,
+      'businessPartner$_identifier': 'Cliente Con Pedido S.L.',
+      linkedOrders: [
+        { id: 'order-002', grandTotalAmount: 2500, 'currency$_identifier': 'EUR' },
+      ],
+    });
+
+    await installGoodsShipmentMock(page, [shipmentWithOrder]);
+
+    await page.route(
+      (url) =>
+        url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-with-order-001/action/documentAction'),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: { documentStatus: 'CO' } } }),
+        });
+      }
+    );
+
+    await page.route(
+      (url) =>
+        url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-with-order-001/action/createDraftInvoice'),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: { data: { id: 'inv-with-order-001', documentNo: 'FAC-WITHORDER-001', grandTotalAmount: 2500 } },
+          }),
+        });
+      }
+    );
+
+    await page.goto('/goods-shipment/gs-with-order-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
+    );
+
+    await expect(page.getByTestId('confirm-inout-modal')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toHaveAttribute('aria-checked', 'true');
+
+    // The picker still renders (showPriceListPicker is unconditional on
+    // GoodsShipmentConfirmModal) ...
+    await expect(page.getByTestId('confirm-modal-price-list-select')).toBeVisible({ timeout: 5_000 });
+
+    // ...but with a linked order, hasLinkedOrder=true means the backend can
+    // resolve the tariff on its own — the confirm button is never blocked by
+    // the picker, even right after the modal opens (before the price-list
+    // fetch — reusing the same auto-selecting route above — has necessarily
+    // settled, and regardless of whatever it resolves to).
+    const confirmBtnWithOrder = page.getByTestId('confirm-modal-confirm-btn');
+    await expect(confirmBtnWithOrder).toBeEnabled({ timeout: 1_000 });
+
+    await confirmBtnWithOrder.click();
+    await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0, { timeout: 8_000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

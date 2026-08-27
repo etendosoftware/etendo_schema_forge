@@ -15,6 +15,7 @@ import { useOrganizationData } from './useOrganizationData.js';
 import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
+import ActividadesIaeSection from './ActividadesIaeSection.jsx';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -445,7 +446,6 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionContact"
           descKey="orgSectionContactDesc"
-          divider={false}
           testId="OrganizationPage__section-contact"
           data-testid="SectionRow__a5f503">
           {/* Email/Phone/Website now live directly on AD_OrgInfo (em_etgo_email/phone/web) —
@@ -496,6 +496,24 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </PrefixedInput>
             </div>
           </div>
+        </SectionRow>
+
+        {/* Actividades del IAE (ETP-4975) — repeatable grid, not a field pair, so it
+            gets its own dedicated component instead of inline JSX like the sections
+            above. Independent fetch/save lifecycle: each row persists immediately
+            (create/update/delete), it is NOT part of `form`/the unsaved-changes
+            banner. See ActividadesIaeSection.jsx and useActividadesIae.js. */}
+        <SectionRow
+          titleKey="orgSectionIae"
+          descKey="orgSectionIaeDesc"
+          divider={false}
+          testId="OrganizationPage__section-iae"
+          data-testid="SectionRow__a5f503">
+          <ActividadesIaeSection
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            orgId={orgId}
+            data-testid="ActividadesIaeSection__a5f503" />
         </SectionRow>
         </div>
       </div>

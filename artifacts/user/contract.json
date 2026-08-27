@@ -1,19 +1,23 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-20T15:39:16.471Z",
-  "checksum": "f26d6514b2858ce6",
+  "updatedAt": "2026-08-25T14:00:31.519Z",
+  "checksum": "1f22932d2c0ac365",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "hidePrint": true,
       "customComponents": {
         "headerTable": "UserHeaderTable"
       },
       "headerExtra": {
         "customForm": "AssignTemplateRolesControl"
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "customPanelTabs": [
         {
@@ -423,356 +427,6 @@
           }
         ],
         "javaQualifier": "user"
-      },
-      "emailConfiguration": {
-        "tableName": "C_POC_CONFIGURATION",
-        "tabId": "9F5F8C2271F248FB856833C1D257CD03",
-        "tabName": "Email Configuration",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "label": "Active",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "smtpServer",
-            "apiKey": "smtpServer",
-            "column": "Smtpserver",
-            "label": "Smtp Server",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "sMTPAuthentification",
-            "apiKey": "sMTPAuthentification",
-            "column": "IsSmtpAuthorization",
-            "label": "SMTP Authentification",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "smtpServerAccount",
-            "apiKey": "smtpServerAccount",
-            "column": "Smtpserveraccount",
-            "label": "Smtp Server Account",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "section": "auth",
-            "validation": {
-              "maxLength": 50
-            }
-          },
-          {
-            "name": "smtpServerPassword",
-            "apiKey": "smtpServerPassword",
-            "column": "Smtpserverpassword",
-            "label": "Smtp Server Password",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "auth",
-            "validation": {
-              "maxLength": 60
-            }
-          },
-          {
-            "name": "smtpServerSenderAddress",
-            "apiKey": "smtpServerSenderAddress",
-            "column": "Smtpserversenderaddress",
-            "label": "Smtp Server Sender Address",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 50
-            }
-          },
-          {
-            "name": "smtpConnectionSecurity",
-            "apiKey": "smtpConnectionSecurity",
-            "column": "Smtpconnectionsecurity",
-            "label": "SMTP Connection Security",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "enumValues": [
-              {
-                "value": "N",
-                "name": "None",
-                "labels": {
-                  "es_ES": "Ninguna"
-                }
-              },
-              {
-                "value": "STARTTLS",
-                "name": "STARTTLS",
-                "labels": {
-                  "es_ES": "STARTTLS"
-                }
-              },
-              {
-                "value": "SSL",
-                "name": "SSL",
-                "labels": {
-                  "es_ES": "SSL"
-                }
-              }
-            ],
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 60
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port"
-            }
-          },
-          {
-            "name": "smtpPort",
-            "apiKey": "smtpPort",
-            "column": "Smtpport",
-            "label": "Smtp Port",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "25"
-            },
-            "defaultValue": "25",
-            "section": "server",
-            "validation": {
-              "required": true,
-              "maxLength": 10
-            }
-          },
-          {
-            "name": "smtpConnectionTimeout",
-            "apiKey": "smtpConnectionTimeout",
-            "column": "SmtpTimeout",
-            "label": "Smtp Connection Timeout",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "600"
-            },
-            "defaultValue": "600",
-            "section": "server",
-            "validation": {
-              "maxLength": 10
-            }
-          },
-          {
-            "name": "fromName",
-            "apiKey": "fromName",
-            "column": "Smtpserverfromname",
-            "label": "From Name",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "replyToAddress",
-            "apiKey": "replyToAddress",
-            "column": "Smtpreplytoaddress",
-            "label": "Reply-To Address",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "sender",
-            "validation": {
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "testSuccessful",
-            "apiKey": "testSuccessful",
-            "column": "Istestsuccessful",
-            "label": "Test Successful",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "lastTestDate",
-            "apiKey": "lastTestDate",
-            "column": "Lasttestdate",
-            "label": "Last Test Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "validation": {
-              "maxLength": 19
-            }
-          },
-          {
-            "name": "smtpconnectiontest",
-            "apiKey": "smtpconnectiontest",
-            "column": "Smtpconnectiontest",
-            "label": "Test SMTP Connection",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "defaultConfiguration",
-            "apiKey": "defaultConfiguration",
-            "column": "Isdefaultconfig",
-            "label": "Default",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          }
-        ],
-        "searchableFields": [
-          "smtpServer"
-        ],
-        "computedFields": [
-          {
-            "name": "smtpPort",
-            "derivation": {
-              "type": "computed",
-              "source": "25"
-            }
-          },
-          {
-            "name": "smtpConnectionTimeout",
-            "derivation": {
-              "type": "computed",
-              "source": "600"
-            }
-          },
-          {
-            "name": "testSuccessful",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "smtpconnectiontest",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "defaultConfiguration",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          }
-        ]
       }
     }
   },
@@ -782,11 +436,15 @@
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "hidePrint": true,
       "customComponents": {
         "headerTable": "UserHeaderTable"
       },
       "headerExtra": {
         "customForm": "AssignTemplateRolesControl"
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "customPanelTabs": [
         {
@@ -1169,216 +827,17 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
           }
         ],
         "javaQualifier": "user"
-      },
-      "emailConfiguration": {
-        "tableName": "C_POC_CONFIGURATION",
-        "tabId": "9F5F8C2271F248FB856833C1D257CD03",
-        "tabName": "Email Configuration",
-        "fields": [
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "emailConfigOrganization",
-            "apiKey": "emailConfigOrganization",
-            "column": "Email_Conf_AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "smtpServer",
-            "apiKey": "smtpServer",
-            "column": "Smtpserver",
-            "type": "string",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "sMTPAuthentification",
-            "apiKey": "sMTPAuthentification",
-            "column": "IsSmtpAuthorization",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "smtpServerAccount",
-            "apiKey": "smtpServerAccount",
-            "column": "Smtpserveraccount",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "smtpServerPassword",
-            "apiKey": "smtpServerPassword",
-            "column": "Smtpserverpassword",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "smtpServerSenderAddress",
-            "apiKey": "smtpServerSenderAddress",
-            "column": "Smtpserversenderaddress",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "smtpConnectionSecurity",
-            "apiKey": "smtpConnectionSecurity",
-            "column": "Smtpconnectionsecurity",
-            "type": "enum",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "smtpPort",
-            "apiKey": "smtpPort",
-            "column": "Smtpport",
-            "type": "integer",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "smtpConnectionTimeout",
-            "apiKey": "smtpConnectionTimeout",
-            "column": "SmtpTimeout",
-            "type": "integer",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "fromName",
-            "apiKey": "fromName",
-            "column": "Smtpserverfromname",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "replyToAddress",
-            "apiKey": "replyToAddress",
-            "column": "Smtpreplytoaddress",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "testSuccessful",
-            "apiKey": "testSuccessful",
-            "column": "Istestsuccessful",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "lastTestDate",
-            "apiKey": "lastTestDate",
-            "column": "Lasttestdate",
-            "type": "date",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "smtpconnectiontest",
-            "apiKey": "smtpconnectiontest",
-            "column": "Smtpconnectiontest",
-            "type": "button",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "userContact",
-            "apiKey": "userContact",
-            "column": "Email_Conf_AD_User_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "defaultConfiguration",
-            "apiKey": "defaultConfiguration",
-            "column": "Isdefaultconfig",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "emailConfigClient",
-            "apiKey": "emailConfigClient",
-            "column": "Email_Conf_AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Poc_Configuration_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
       }
     },
     "endpoints": [
@@ -1414,38 +873,6 @@
         "path": "/user/:id",
         "entity": "user",
         "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/emailConfiguration",
-        "entity": "emailConfiguration",
-        "supportedFilters": [
-          "smtpServer"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/emailConfiguration/:id",
-        "entity": "emailConfiguration",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/emailConfiguration",
-        "entity": "emailConfiguration",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/emailConfiguration/:id",
-        "entity": "emailConfiguration",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/emailConfiguration/:id",
-        "entity": "emailConfiguration",
-        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -1466,19 +893,6 @@
         "supportedFilters": [
           "name",
           "email"
-        ]
-      },
-      "emailConfiguration": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/user/emailConfiguration",
-        "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
-        "supportedFilters": [
-          "smtpServer"
         ]
       }
     },
@@ -1581,14 +995,6 @@
         "url": "/sws/neo/user/user/{id}/action/grantPortalAccess",
         "processId": "97FFD59B991D49BFB5153C309B009272",
         "processType": "obuiapp"
-      },
-      {
-        "entity": "emailConfiguration",
-        "field": "smtpconnectiontest",
-        "column": "Smtpconnectiontest",
-        "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
-        "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -1611,14 +1017,6 @@
   "testManifest": {
     "tests": [
       {
-        "id": "t-action-endpoint-emailConfiguration-smtpconnectiontest",
-        "category": "action-endpoint",
-        "entity": "emailConfiguration",
-        "field": "smtpconnectiontest",
-        "runner": "node",
-        "description": "Action endpoint for 'smtpconnectiontest' in emailConfiguration should exist"
-      },
-      {
         "id": "t-action-endpoint-user-grantPortalAccess",
         "category": "action-endpoint",
         "entity": "user",
@@ -1635,58 +1033,11 @@
         "description": "Action endpoint for 'processNow' in user should exist"
       },
       {
-        "id": "t-crud-flags-emailConfiguration",
-        "category": "crud-flags",
-        "entity": "emailConfiguration",
-        "runner": "node",
-        "description": "CRUD flags for 'emailConfiguration' should all be booleans"
-      },
-      {
         "id": "t-crud-flags-user",
         "category": "crud-flags",
         "entity": "user",
         "runner": "node",
         "description": "CRUD flags for 'user' should all be booleans"
-      },
-      {
-        "id": "t-default-value-type-emailConfiguration-defaultConfiguration",
-        "category": "default-value-type",
-        "entity": "emailConfiguration",
-        "field": "defaultConfiguration",
-        "runner": "node",
-        "description": "Default value for 'defaultConfiguration' in emailConfiguration should be a string"
-      },
-      {
-        "id": "t-default-value-type-emailConfiguration-smtpconnectiontest",
-        "category": "default-value-type",
-        "entity": "emailConfiguration",
-        "field": "smtpconnectiontest",
-        "runner": "node",
-        "description": "Default value for 'smtpconnectiontest' in emailConfiguration should be a string"
-      },
-      {
-        "id": "t-default-value-type-emailConfiguration-smtpConnectionTimeout",
-        "category": "default-value-type",
-        "entity": "emailConfiguration",
-        "field": "smtpConnectionTimeout",
-        "runner": "node",
-        "description": "Default value for 'smtpConnectionTimeout' in emailConfiguration should be a string"
-      },
-      {
-        "id": "t-default-value-type-emailConfiguration-smtpPort",
-        "category": "default-value-type",
-        "entity": "emailConfiguration",
-        "field": "smtpPort",
-        "runner": "node",
-        "description": "Default value for 'smtpPort' in emailConfiguration should be a string"
-      },
-      {
-        "id": "t-default-value-type-emailConfiguration-testSuccessful",
-        "category": "default-value-type",
-        "entity": "emailConfiguration",
-        "field": "testSuccessful",
-        "runner": "node",
-        "description": "Default value for 'testSuccessful' in emailConfiguration should be a string"
       },
       {
         "id": "t-default-value-type-user-isPasswordExpired",
@@ -1727,126 +1078,6 @@
         "field": "password",
         "runner": "node",
         "description": "Display logic for 'password' in user should be valid JS"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-active",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-defaultConfiguration",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "defaultConfiguration",
-        "runner": "node",
-        "description": "Field 'defaultConfiguration' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-fromName",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "fromName",
-        "runner": "node",
-        "description": "Field 'fromName' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-lastTestDate",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "lastTestDate",
-        "runner": "node",
-        "description": "Field 'lastTestDate' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-replyToAddress",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "replyToAddress",
-        "runner": "node",
-        "description": "Field 'replyToAddress' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-sMTPAuthentification",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "sMTPAuthentification",
-        "runner": "node",
-        "description": "Field 'sMTPAuthentification' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpConnectionSecurity",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpConnectionSecurity",
-        "runner": "node",
-        "description": "Field 'smtpConnectionSecurity' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpconnectiontest",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpconnectiontest",
-        "runner": "node",
-        "description": "Field 'smtpconnectiontest' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpConnectionTimeout",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpConnectionTimeout",
-        "runner": "node",
-        "description": "Field 'smtpConnectionTimeout' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpPort",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpPort",
-        "runner": "node",
-        "description": "Field 'smtpPort' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpServer",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpServer",
-        "runner": "node",
-        "description": "Field 'smtpServer' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpServerAccount",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpServerAccount",
-        "runner": "node",
-        "description": "Field 'smtpServerAccount' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpServerPassword",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpServerPassword",
-        "runner": "node",
-        "description": "Field 'smtpServerPassword' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-smtpServerSenderAddress",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "smtpServerSenderAddress",
-        "runner": "node",
-        "description": "Field 'smtpServerSenderAddress' should be present in emailConfiguration"
-      },
-      {
-        "id": "t-field-presence-emailConfiguration-testSuccessful",
-        "category": "field-presence",
-        "entity": "emailConfiguration",
-        "field": "testSuccessful",
-        "runner": "node",
-        "description": "Field 'testSuccessful' should be present in emailConfiguration"
       },
       {
         "id": "t-field-presence-user-active",
@@ -1983,126 +1214,6 @@
         "field": "supervisor",
         "runner": "node",
         "description": "Field 'supervisor' should be present in user"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-active",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should have type 'boolean' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-defaultConfiguration",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "defaultConfiguration",
-        "runner": "node",
-        "description": "Field 'defaultConfiguration' should have type 'boolean' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-fromName",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "fromName",
-        "runner": "node",
-        "description": "Field 'fromName' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-lastTestDate",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "lastTestDate",
-        "runner": "node",
-        "description": "Field 'lastTestDate' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-replyToAddress",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "replyToAddress",
-        "runner": "node",
-        "description": "Field 'replyToAddress' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-sMTPAuthentification",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "sMTPAuthentification",
-        "runner": "node",
-        "description": "Field 'sMTPAuthentification' should have type 'boolean' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpConnectionSecurity",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpConnectionSecurity",
-        "runner": "node",
-        "description": "Field 'smtpConnectionSecurity' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpconnectiontest",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpconnectiontest",
-        "runner": "node",
-        "description": "Field 'smtpconnectiontest' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpConnectionTimeout",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpConnectionTimeout",
-        "runner": "node",
-        "description": "Field 'smtpConnectionTimeout' should have type 'number' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpPort",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpPort",
-        "runner": "node",
-        "description": "Field 'smtpPort' should have type 'number' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpServer",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpServer",
-        "runner": "node",
-        "description": "Field 'smtpServer' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpServerAccount",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpServerAccount",
-        "runner": "node",
-        "description": "Field 'smtpServerAccount' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpServerPassword",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpServerPassword",
-        "runner": "node",
-        "description": "Field 'smtpServerPassword' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-smtpServerSenderAddress",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "smtpServerSenderAddress",
-        "runner": "node",
-        "description": "Field 'smtpServerSenderAddress' should have type 'string' in emailConfiguration"
-      },
-      {
-        "id": "t-field-type-emailConfiguration-testSuccessful",
-        "category": "field-type",
-        "entity": "emailConfiguration",
-        "field": "testSuccessful",
-        "runner": "node",
-        "description": "Field 'testSuccessful' should have type 'boolean' in emailConfiguration"
       },
       {
         "id": "t-field-type-user-active",
@@ -2369,14 +1480,6 @@
         "description": "Rule 'Test_SMTP_Connection' (process) should be declared"
       },
       {
-        "id": "t-searchable-filters-emailConfiguration-smtpServer",
-        "category": "searchable-filters",
-        "entity": "emailConfiguration",
-        "field": "smtpServer",
-        "runner": "node",
-        "description": "Field 'smtpServer' should be a supported filter for emailConfiguration"
-      },
-      {
         "id": "t-searchable-filters-user-email",
         "category": "searchable-filters",
         "entity": "user",
@@ -2449,86 +1552,6 @@
         "description": "Selector endpoint for 'supervisor' in user should exist"
       },
       {
-        "id": "t-system-field-emailConfiguration-client",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-createdBy",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-creationDate",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-emailConfigClient",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "emailConfigClient",
-        "runner": "node",
-        "description": "System field 'emailConfigClient' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-emailConfigOrganization",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "emailConfigOrganization",
-        "runner": "node",
-        "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-id",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-organization",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-updated",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-updatedBy",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-userContact",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "userContact",
-        "runner": "node",
-        "description": "System field 'userContact' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
         "id": "t-system-field-user-alternativePhone",
         "category": "system-field",
         "entity": "user",
@@ -2599,6 +1622,14 @@
         "field": "emailServerUsername",
         "runner": "node",
         "description": "System field 'emailServerUsername' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-system-field-user-eTGOIsOwner",
+        "category": "system-field",
+        "entity": "user",
+        "field": "eTGOIsOwner",
+        "runner": "node",
+        "description": "System field 'eTGOIsOwner' should exist in backend but not frontend for user"
       },
       {
         "id": "t-system-field-user-fax",
@@ -2761,13 +1792,6 @@
         "description": "System field 'viasms' should exist in backend but not frontend for user"
       },
       {
-        "id": "t-visibility-emailConfiguration",
-        "category": "visibility",
-        "entity": "emailConfiguration",
-        "runner": "node",
-        "description": "Entity 'emailConfiguration' should only expose visible fields in frontend"
-      },
-      {
         "id": "t-visibility-user",
         "category": "visibility",
         "entity": "user",
@@ -2776,25 +1800,25 @@
       }
     ],
     "summary": {
-      "total": 148,
+      "total": 100,
       "byCategory": {
-        "action-endpoint": 3,
-        "crud-flags": 2,
-        "default-value-type": 8,
+        "action-endpoint": 2,
+        "crud-flags": 1,
+        "default-value-type": 3,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 32,
-        "field-type": 32,
+        "field-presence": 17,
+        "field-type": 17,
         "readonlylogic-evaluable": 1,
         "readonlylogic-valid": 1,
         "rule-declared": 16,
-        "searchable-filters": 3,
+        "searchable-filters": 2,
         "selector-endpoint": 7,
-        "system-field": 39,
-        "visibility": 2
+        "system-field": 30,
+        "visibility": 1
       },
       "byRunner": {
-        "node": 148,
+        "node": 100,
         "junit": 0
       }
     }

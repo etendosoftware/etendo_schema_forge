@@ -14,6 +14,7 @@ import {
   fetchImageDataUrl,
   buildLocationAddressLines,
   renderPdf,
+  renderHtml,
   usePdfGenerator,
   buildReturnDocCommonFields,
   sortLinesByLineNo,
@@ -61,7 +62,7 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
 
-async function buildReturnToVendorData(shipmentId, base, token) {
+export async function buildReturnToVendorData(shipmentId, base, token) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/return-to-vendor-shipment/returnToVendorShipment/${shipmentId}`, token),
     fetchAll(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`, token),
@@ -120,4 +121,28 @@ export function getReturnToVendorPdfLabels(ui) {
     colOriginalQty:   ui('returnToVendorPdfColOriginalQty'),
     notes:            ui('invoicePdfNotes'),
   };
+}
+
+/**
+ * The movement document as a PDF, outside React — used by the print flow via
+ * `documentPdfRegistry.js`. These documents deliberately do NOT use the commercial
+ * DOCUMENT_TEMPLATE: they carry quantities and a receiver signature, not prices and
+ * totals. See `docs/document-printables.md`.
+ *
+ * @param {string} recordId
+ * @param {string} apiBaseUrl  full base, as the hook receives it
+ * @param {string} token
+ * @param {object} labels      from getReturnToVendorPdfLabels(ui)
+ */
+export async function generateReturnToVendorPdf(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildReturnToVendorData(recordId, base, token);
+  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+}
+
+/** HTML twin of generateReturnToVendorPdf, for the list view's multi-document print. */
+export async function generateReturnToVendorHtml(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildReturnToVendorData(recordId, base, token);
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
 }
