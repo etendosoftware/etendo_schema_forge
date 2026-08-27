@@ -141,16 +141,36 @@ function makeRowClickHandler(onRowClick, row) {
   };
 }
 
-function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
+/**
+ * ETP-5030 — row background precedence, deliberately ordered because three of
+ * the branches below paint the same CSS property (`background-color`) and
+ * Tailwind resolves competing utilities by stylesheet order, not by class
+ * order:
+ *   1. Selection wins over the highlight tint — the same rule DataTable states
+ *      as "Selection always wins over hover, in both styles"
+ *      (DataTable.jsx ~1225). `bg-primary/5` is DataTable's own checked-row
+ *      shade (DataTable.jsx ~1131), so a tab grid and the list grid shade a
+ *      selected row identically.
+ *   2. `bg-card` — the opaque base that keeps the row shadow readable — is
+ *      dropped while a selection background is painting, mirroring DataTable's
+ *      `selectionPainted` guard (DataTable.jsx ~1237). Keeping both would let
+ *      `bg-card` win by stylesheet order and the row would render unshaded.
+ *   3. `isEditing` only adds a shadow and a z-index, so it stacks on top of
+ *      whichever background the two rules above resolved to.
+ */
+function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected }) {
+  const selectionPainted = Boolean(isSelected);
   return [
     // `hover:relative hover:z-10` lifts the row above its neighbors so the
     // shadow can spill onto the rows below without being clipped by them.
-    'group/row flex items-stretch border-b bg-card transition-shadow',
+    'group/row flex items-stretch border-b transition-shadow',
+    selectionPainted ? '' : 'bg-card',
     'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
-    isHighlighted ? 'bg-muted/40' : '',
+    selectionPainted ? 'bg-primary/5' : '',
+    isHighlighted && !selectionPainted ? 'bg-muted/40' : '',
     isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
     hasRowClick ? 'cursor-pointer' : '',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 /**
@@ -1151,7 +1171,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <React.Fragment key={row.id}>
           <div
             data-testid={`line-row-${row.id}`}
-            className={computeRowClassName(isHighlighted, isEditing, Boolean(onRowClick))}
+            className={computeRowClassName({ isHighlighted, isEditing, hasRowClick: Boolean(onRowClick), isSelected })}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
