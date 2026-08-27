@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -6,19 +6,75 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
 import { TBAI_SPEC, TBAI_ENTITY } from './useFiscalMonitor.js';
 
+/**
+ * Groups resultadoValidación rows by tbaiSyncinvoiceID (FK → sincronización row id).
+ * A sincronización row can have 0..N validation results — all are kept and shown.
+ */
+function buildValidationMap(validationResults) {
+  const map = {};
+  for (const r of (validationResults ?? [])) {
+    const key = r.tbaiSyncinvoiceID;
+    if (!key) continue;
+    map[key] ??= [];
+    map[key].push({ codigo: r.codigo, descripcion: r.descripcion });
+  }
+  return map;
+}
+
+/**
+ * Formats the validation results of one sincronización row as a single line —
+ * `[codigo] descripcion` joined by " | ". Shared by the on-screen "Error Reason"
+ * column and the CSV export so both always show the exact same text.
+ */
+function formatValidationEntries(entries) {
+  return (entries ?? [])
+    .map(v => v.codigo ? `[${v.codigo}] ${v.descripcion}` : v.descripcion)
+    .join(' | ');
+}
+
+/**
+ * Resolves the click handler of a row's status pill: error rows open the error
+ * detail (falling back to the business-partner popup), pending rows with an
+ * invoice open the invoice. Returns undefined when the pill is not clickable.
+ */
+function resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen }) {
+  if (isErrorStatus(row.estado)) {
+    // Always clickable on error — even if businessPartner is null
+    return onErrorClick
+      ? () => onErrorClick(row.businessPartner ?? null, null, row.estado)
+      : () => onBpClick?.(row.businessPartner);
+  }
+  if (isPendingStatus(row.estado) && row.invoice) {
+    return () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
+  }
+  return undefined;
+}
+
 const STATUS_FIELD = 'estado';
 
 const FILTER_ALL      = 'all';
 const FILTER_SENT     = 'sent';
 const FILTER_REJECTED = 'rejected';
 
-const TBAI_EXPORT_COLS = [
-  { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
-  { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
-  { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
-  { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
-  { label: 'Status',      get: r => r.estado ?? '' },
-];
+/**
+ * Builds the CSV column defs for TBAI export. `validationMap` (tbaiSyncinvoiceID
+ * → validation results) is joined in so exported rows carry the same error
+ * reason(s) shown in the table — same shape as the "Error Reason" join used
+ * for the on-screen rows.
+ */
+function buildTbaiExportCols(validationMap) {
+  return [
+    { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
+    { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
+    { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
+    { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
+    { label: 'Status',      get: r => r.estado ?? '' },
+    {
+      label: 'Error Reason',
+      get: r => formatValidationEntries(validationMap[r.id]),
+    },
+  ];
+}
 
 function parseIdentifier(row) {
   const raw = row['invoice$_identifier'] ?? row.invoiceIdentifier ?? null;
@@ -59,10 +115,12 @@ export default function TbaiMonitorSection({
   orgId, apiBaseUrl, initialFilter = 'all', mockRows, onFilterChange,
   refreshKey = 0, onInvoiceOpen, onBpClick, onErrorClick,
   kpis,
+  validationResults,
   noWrap,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
+  const validationMap = useMemo(() => buildValidationMap(validationResults), [validationResults]);
   const [filter, setFilter]       = useState(FILTER_ALL);
   const [page, setPage]           = useState(1);
   const [rows, setRows]           = useState([]);
@@ -120,7 +178,7 @@ export default function TbaiMonitorSection({
         `/${TBAI_SPEC}/${encodeURIComponent(TBAI_ENTITY)}`,
         params,
         `tbai_${filter}`,
-        TBAI_EXPORT_COLS,
+        buildTbaiExportCols(validationMap),
       );
     } finally {
       setExporting(false);
@@ -182,27 +240,21 @@ export default function TbaiMonitorSection({
                 <th>{ui('fiscalMonitor.col.description')}</th>
                 <th>{ui('fiscalMonitor.col.signature')}</th>
                 <th>{ui('fiscalMonitor.col.status')}</th>
+                <th>{ui('fiscalMonitor.col.errorReason')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
+                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 7 cols: checkbox + 6 data */}
                     {ui('fiscalMonitor.empty')}
                   </td>
                 </tr>
               ) : rows.map((row, i) => {
                 const inv = parseIdentifier(row);
                 const isSigned = row.estado === 'Recibido';
-                let pillClick;
-                if (isErrorStatus(row.estado)) {
-                  // Always clickable on error — even if businessPartner is null
-                  pillClick = onErrorClick
-                    ? () => onErrorClick(row.businessPartner ?? null, null, row.estado)
-                    : () => onBpClick?.(row.businessPartner);
-                } else if (isPendingStatus(row.estado) && row.invoice) {
-                  pillClick = () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
-                }
+                const rowErrors = validationMap[row.id] ?? [];
+                const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
                 return (
                   <tr key={row.id ?? i}>
                     <td><Checkbox
@@ -232,6 +284,9 @@ export default function TbaiMonitorSection({
                         onClick={pillClick}
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
                         data-testid="StatusPill__dd7710" />
+                    </td>
+                    <td style={{ color: rowErrors.length ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                      {rowErrors.length > 0 ? formatValidationEntries(rowErrors) : '—'}
                     </td>
                   </tr>
                 );

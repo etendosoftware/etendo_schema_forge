@@ -13,6 +13,17 @@
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 
+// ETP-4999 — a role summary card on the Roles overview page links here as
+// `/user?role=<id>`; UserHeaderTable reads that query param once on mount
+// (lazy useState initializer) as the starting value of the SAME `roleFilter`
+// state `RoleFilterControl` already owns. Tests override this per-case via
+// `mockSearchParams` (default: no `role` param, matching the plain "/user"
+// route with no filter pre-applied).
+let mockSearchParams = new URLSearchParams();
+vi.mock('react-router-dom', () => ({
+  useSearchParams: () => [mockSearchParams, vi.fn()],
+}));
+
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
   fetchTemplateRoles: vi.fn(),
@@ -114,6 +125,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tableProps = null;
   debugModeActive = false;
+  mockSearchParams = new URLSearchParams();
 });
 
 describe('UserHeaderTable — layout', () => {
@@ -286,6 +298,61 @@ describe('UserHeaderTable — role filter (client-side row filtering)', () => {
   });
 });
 
+/**
+ * ETP-4999 — a role summary card on the Roles overview page links here as
+ * `/user?role=<id>`; `roleFilter`'s lazy `useState` initializer reads that
+ * query param exactly once, on mount, as the starting value for the SAME
+ * state `RoleFilterControl`'s dropdown already owns/can change afterward.
+ * Reuses the exact same `stub-role-filter-value`/`row-*` assertion approach
+ * the "role filter (client-side row filtering)" suite above already
+ * established for a non-null `roleFilter`.
+ */
+describe('UserHeaderTable — initial role filter from the ?role= query param (ETP-4999)', () => {
+  it('seeds RoleFilterControl\'s initial value from the ?role= query param', async () => {
+    mockSearchParams = new URLSearchParams('role=role-fin');
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    expect(await screen.findByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
+  });
+
+  it('filters the grid rows on mount using the seeded ?role= value, with no click needed', async () => {
+    mockSearchParams = new URLSearchParams('role=role-fin');
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+
+    expect(screen.getByTestId('row-user-1')).toBeInTheDocument(); // has role-fin
+    expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument(); // has role-sales only
+    expect(screen.queryByTestId('row-user-3')).not.toBeInTheDocument(); // classic Admin, no assignments entry
+  });
+
+  it('defaults to null (no filter) when the ?role= param is absent, showing every row', async () => {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    expect(await screen.findByTestId('stub-role-filter-value')).toHaveTextContent('__null__');
+    expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
+    expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
+    expect(screen.getByTestId('row-user-3')).toBeInTheDocument();
+  });
+
+  it('the seeded value is only an initial value — RoleFilterControl can still change it afterward', async () => {
+    mockSearchParams = new URLSearchParams('role=role-fin');
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+    expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
+
+    fireEvent.click(screen.getByTestId('stub-clear-filter'));
+
+    expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('__null__');
+    expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
+    expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
+    expect(screen.getByTestId('row-user-3')).toBeInTheDocument();
+  });
+});
+
 describe('UserHeaderTable — debug panel (ETP-4830, item #4)', () => {
   it('does not render the debug panel when debug mode is inactive', async () => {
     debugModeActive = false;
@@ -349,7 +416,15 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
     expect(pill).toHaveAttribute('data-tone', 'neutral');
   });
 
-  it.each(['ACCEPTED', 'REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
+  it('renders the green (success) pill for invitationStatus ACCEPTED (ETP-4999)', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'ACCEPTED' }));
+
+    const pill = getByTestId('document-status-pill');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+  });
+
+  it.each(['REVOKED', null, undefined, 'SOME_FUTURE_STATUS'])(
     'renders a blank cell (no crash) for invitationStatus %s',
     async (status) => {
       const col = await getInvitationColumn();
@@ -362,6 +437,17 @@ describe('UserHeaderTable — invitationStatus column cell render (ETP-4830 scop
   it('renders a blank cell (no crash) when the row itself is undefined', async () => {
     const col = await getInvitationColumn();
     expect(() => render(col.render(undefined))).not.toThrow();
+  });
+
+  // ETP-4999 — the Figma spec gives the grid a short label ("Pendiente", ...)
+  // distinct from the detail form's full sentence; `PendingInvitationPill`'s own
+  // suite covers the full compact/non-compact matrix, this just confirms the grid
+  // column actually opts into the short wording via `compact`.
+  it('passes compact to PendingInvitationPill so the grid cell uses the short-wording i18n key (ETP-4999)', async () => {
+    const col = await getInvitationColumn();
+    const { getByTestId } = render(col.render({ id: 'row-1', invitationStatus: 'PENDING' }));
+
+    expect(getByTestId('document-status-pill')).toHaveTextContent('pendingInvitationGridBadge');
   });
 });
 
