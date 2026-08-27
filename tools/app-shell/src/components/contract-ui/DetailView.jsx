@@ -568,10 +568,20 @@ export function SecondaryTableTab(props) {
   // blocks the empty-state add trigger for the maxDetailLines:0 (import-only)
   // case — a tab capped at >=1 still shows it while empty, same as today.
   const canAddMore = resolveCanAddSecondaryLines(props.st, secondaryChildren.length);
+  // ETP-4836 — the illustration itself must not depend on hasAddFields: tabs whose
+  // rows are entirely backend-managed (no addLineFields declared, e.g. invoices'
+  // Exchange Rates) still need "no records" feedback instead of a blank area, same
+  // as the primary Lines tab (shouldShowLinesEmptyState has no such gate). Only the
+  // "+ Add" CTA itself stays conditional on the tab actually supporting manual add.
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && hasAddFields && canAddMore && !props.st.customAddModal && !tabReadOnly;
+    && props.hook.editing && !props.st.customAddModal && !tabReadOnly;
   if (showEmptyState) {
-    return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
+    const canAddViaEmptyState = hasAddFields && canAddMore;
+    return secondaryTabEmptyState({
+      ui: props.ui,
+      onAddLineClick: canAddViaEmptyState ? props.onAddLineClick : undefined,
+      addLineLabel: props.addLineLabel,
+    });
   }
   return (
     <>

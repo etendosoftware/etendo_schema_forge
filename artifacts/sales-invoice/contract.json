@@ -45,7 +45,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -63,13 +63,15 @@
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
         }
       },
       "listViewOptions": {
@@ -2769,7 +2771,8 @@
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
               "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
-            }
+            },
+            "noTrailing": true
           }
         ],
         "searchableFields": [],
@@ -2828,7 +2831,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -2846,13 +2849,15 @@
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
         }
       },
       "listViewOptions": {
@@ -5939,13 +5944,15 @@
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "Foreign_Amount": "Importe en Moneda Objetivo"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
-        "C_DocTypeTarget_ID": "Document Type"
+        "C_DocTypeTarget_ID": "Document Type",
+        "Foreign_Amount": "Target Currency Amount"
       }
     }
   },
