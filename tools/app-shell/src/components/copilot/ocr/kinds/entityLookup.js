@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 export const SEARCH_DEBOUNCE_MS = 250;
 
 export function escHql(value) {
@@ -32,6 +32,7 @@ export function useClickOutside(ref, enabled, onOutside) {
 export function useEntitySearch({ open, endpoint, token, query, filter, limit }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     if (!open || !endpoint || !token) return undefined;
@@ -45,7 +46,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
         : baseFilter;
       const url = `${endpoint}?_neoWhere=${encodeURIComponent(where)}&limit=${limit}`;
       try {
-        const res = await fetch(url, { headers: authHeaders(token) });
+        const res = await apiFetch(url, { baseUrl: '' });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const json = await res.json();
         const data = json?.response?.data ?? json?.data ?? [];
@@ -60,7 +61,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, token, query, filter, limit]);
+  }, [open, endpoint, token, query, filter, limit, apiFetch]);
 
   return { items, loading };
 }

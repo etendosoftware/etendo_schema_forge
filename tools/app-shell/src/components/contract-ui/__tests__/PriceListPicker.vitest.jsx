@@ -98,7 +98,7 @@ describe('usePriceListPicker', () => {
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
         `${BASE}/price-list/priceList?_startRow=0&_endRow=200`,
-        { headers: HEADERS },
+        { headers: HEADERS, credentials: 'include' },
       );
     });
   });

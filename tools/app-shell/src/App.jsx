@@ -20,7 +20,7 @@ import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
-import { authHeaders } from '@/auth/api.js';
+import { apiFetch } from '@/auth/api.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -78,10 +78,10 @@ export async function fetchWindowAccess(session) {
     // class javadoc in com.etendoerp.go for the full rationale. Same backend
     // Java class (SFWindowAccessMap) and response shape either way, only the
     // transport changed.
-    const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: session?.token ? authHeaders(session.token) : {},
+    const res = await apiFetch(`${apiBase}/sws/neo/windowaccessmap`, {
+      baseUrl: '',
+      token: session?.token ?? null,
+      on401: 'ignore',
     });
     if (!res.ok) return null;
     const data = await res.json();

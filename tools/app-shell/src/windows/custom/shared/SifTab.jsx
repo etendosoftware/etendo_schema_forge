@@ -13,7 +13,7 @@ import {
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function Field({ label, htmlFor, children }) {
   return (
     <div className="space-y-1.5">
@@ -310,6 +310,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     getVal,
     getDateVal,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // ETP-4751 (Block B): exempt-tax signal served by the invoice-header NeoHandler
   // (AbstractInvoiceHeaderHandler#enrichHasExemptTaxes). Refreshed on every line
@@ -328,9 +329,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     onChange?.('aeatsiiIsauthorization', val); // optimistic update
     if (!apiBaseUrl || !token) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/header/callout`, {
+      const res = await apiFetch('/header/callout', {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({ field: 'aeatsiiIsauthorization', value: val ? 'Y' : 'N', formState: data ?? {} }),
       });
       if (!res.ok) return;
@@ -345,7 +345,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
         }
       }
     } catch { /* network error — keep optimistic state */ }
-  }, [apiBaseUrl, token, data, onChange]);
+  }, [apiBaseUrl, token, apiFetch, data, onChange]);
 
   // ETP-4783: Per-field lock conditions that differ from the general siiFieldReadOnly gate.
   // Classic parity: SII desc and accounting-register date are editable even on completed

@@ -13,7 +13,7 @@ import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryC
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -66,6 +66,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const modalRef = useRef(null);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
@@ -89,11 +90,9 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // Fetch the full header record once; all 3 specs share 1 HTTP call via the cached promise.
   const shipmentDocSpecs = useMemo(() => {
     let detailPromise = null;
-    const getDetail = (id, tok, base) => {
+    const getDetail = (id, tok) => {
       if (!detailPromise) {
-        detailPromise = fetch(`${base}/goodsShipment/${id}`, {
-          headers: buildHeaders(tok),
-        })
+        detailPromise = apiFetch(`/goodsShipment/${id}`, { token: tok })
           .then(r => r.ok ? r.json() : null)
           .then(j => j?.response?.data?.[0] ?? {})
           .catch(() => ({}));
@@ -106,7 +105,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.returnReceipts ?? []) },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shipment?.id]);
+  }, [shipment?.id, apiFetch]);
 
   if (!shipment) return null;
 

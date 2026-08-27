@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
 const POST_URL = (id) =>
@@ -26,12 +26,8 @@ const UNPOST_URL = (id) =>
  * Shared POST-with-token request used by both the post and unpost actions.
  * Returns { success, message } so callers decide how to surface the result.
  */
-async function callTransactionAction(url, token) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: buildHeaders(token),
-    body: '{}',
-  });
+async function callTransactionAction(apiFetch, url, token) {
+  const res = await apiFetch(url, { baseUrl: '', method: 'POST', body: '{}', token });
   const body = await res.json().catch(() => null);
   const nested = body?.response?.data?.[0];
   const message = nested?.message ?? body?.response?.message ?? body?.message;
@@ -53,6 +49,7 @@ async function callTransactionAction(url, token) {
 export function MovementRowKebab({ movement, onReload, onEdit }) {
   const ui = useUI();
   const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const { processMovement, processing } = useProcessMovement();
   const { reactivateMovement, reactivating } = useReactivateMovement();
   const { deleteMovement, deleting } = useDeleteMovement();
@@ -111,7 +108,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
     if (busy) return;
     setPosting(true);
     try {
-      const { success, message } = await callTransactionAction(POST_URL(movement.id), token);
+      const { success, message } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
@@ -129,7 +126,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
     if (busy || !isPosted) return;
     setUnposting(true);
     try {
-      const { success, message } = await callTransactionAction(UNPOST_URL(movement.id), token);
+      const { success, message } = await callTransactionAction(apiFetch, UNPOST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentUnposted'));
         onReload?.();

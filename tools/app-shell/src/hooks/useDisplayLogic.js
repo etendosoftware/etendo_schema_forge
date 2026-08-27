@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Module-level "last known good" cache for the subset of evaluate-display keys a caller
  * has declared safe to reuse across different records (see `cacheableKeys` below) — keyed
@@ -71,6 +71,7 @@ export function __resetDisplayLogicCacheForTests() {
  *   or delays re-checking the real answer.
  */
 export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cacheableKeys }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const cacheKeySet = cacheableKeys ? new Set(cacheableKeys) : null;
   const cacheKey = apiBaseUrl && entity ? `${apiBaseUrl}/${entity}` : null;
 
@@ -98,9 +99,8 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
     if (!values.id && (!cacheRef.current.cacheKeySet || cacheRef.current.cacheKeySet.size === 0)) return;
 
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/evaluate-display`, {
+      const res = await apiFetch(`/${entity}/evaluate-display`, {
         method: 'POST',
-        headers: buildHeaders(token),
         body: JSON.stringify({ fieldValues: values }),
       });
       if (res.ok) {
@@ -115,7 +115,7 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
     } catch {
       // Best-effort — if evaluate-display fails, all fields remain editable
     }
-  }, [entity, token, apiBaseUrl]);
+  }, [entity, token, apiBaseUrl, apiFetch]);
 
   // Evaluate when fieldValues change (debounced to avoid flooding on rapid edits)
   useEffect(() => {

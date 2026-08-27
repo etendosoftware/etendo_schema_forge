@@ -113,6 +113,7 @@ describe('WarehouseWindow', () => {
 
     expect(fetch).toHaveBeenCalledWith('/ctx-api/storageBin', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         Authorization: 'Bearer ctx-token', 'Accept-Language': 'es_ES',
         'Content-Type': 'application/json',

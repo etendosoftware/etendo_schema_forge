@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 
 import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 export function useConfirmWithCredit({
   data,
   recordId,
@@ -28,14 +29,15 @@ export function useConfirmWithCredit({
     : data?.hasReturnInvoice === true;
 
   const headers = useMemo(() => (buildHeaders(token)), [token]);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const handleCreateReturnInvoice = useCallback(async () => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/${entitySegment}/${data?.id || recordId}/action/createReturnInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({}) },
+      const res = await apiFetch(
+        `/${entitySegment}/${data?.id || recordId}/action/createReturnInvoice`,
+        { method: 'POST', body: JSON.stringify({}) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -56,7 +58,7 @@ export function useConfirmWithCredit({
     } finally {
       setCreatingInvoice(false);
     }
-  }, [data, recordId, apiBaseUrl, headers, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey]);
+  }, [data, recordId, apiFetch, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey]);
 
   const buildInvoiceResultFromConfirm = useCallback((invoice) => {
     if (!invoice?.id) return null;

@@ -1,8 +1,7 @@
 import { useCallback } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { authHeaders } from '@/auth/api.js';
 /**
  * Triggers a browser download for a Blob using a transient <a download>.
  */
@@ -43,21 +42,19 @@ function buildExportQuery(params) {
  * @returns {(opts: { path: string, params?: object, filename?: string }) => Promise<void>}
  */
 export function useCsvExport() {
-  const { token } = useAuth();
+  const apiBase = getApiBase();
+  const apiFetch = useApiFetch(apiBase);
 
   return useCallback(
     async ({ path, params = {}, filename = 'export' }) => {
-      const apiBase = getApiBase();
       const query = buildExportQuery(params);
-      const url = `${apiBase}${path}${path.includes('?') ? '&' : '?'}${query}`;
-      const res = await fetch(url, {
-        headers: authHeaders(token),
-      });
+      const url = `${path}${path.includes('?') ? '&' : '?'}${query}`;
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const safeName = /\.csv$/i.test(filename) ? filename : `${filename}.csv`;
       triggerBlobDownload(blob, safeName);
     },
-    [token],
+    [apiFetch],
   );
 }

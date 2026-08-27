@@ -6,7 +6,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
 // scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE and
 // CreatableSearchSelect.jsx's SERVER_SEARCH_PAGE so all three selector styles page at the
@@ -20,6 +20,7 @@ const SERVER_SEARCH_PAGE = 50;
  */
 export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, token, displayLabel, excludeId = null, clearOnType = true }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   // `query` is PURE search text (ETP-4600 Gap B parity with CreatableSearchSelect) — it must
   // never be prefilled with the selected value's label. It always starts empty on open/focus so
   // the full option list shows, and is reset to '' on close so a stale term never leaks into the
@@ -126,9 +127,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     queryParams.offset = offset;
     const runFetch = () => {
       fetchInFlightRef.current = true;
-      fetch(buildUrlWithParams(selectorUrl, queryParams), {
-        headers: buildHeaders(token),
-      })
+      apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data?.items) return;
@@ -150,7 +149,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     } else {
       runFetch();
     }
-  }, [selectorUrl, selectorContext, token]);
+  }, [selectorUrl, selectorContext, token, apiFetch]);
 
   const filtered = useMemo(() => {
     let base;

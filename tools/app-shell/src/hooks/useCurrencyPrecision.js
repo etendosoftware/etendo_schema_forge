@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { authHeaders } from '@/auth/api.js';
 /**
  * Returns the org currency's Standard Precision from the /sws/neo/session endpoint.
  *
@@ -13,17 +13,16 @@ import { authHeaders } from '@/auth/api.js';
  */
 export function useCurrencyPrecision() {
   const { token } = useAuth();
+  const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch(apiBase);
   const [precision, setPrecision] = useState(2);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    const apiBase = getApiBase();
     (async () => {
       try {
-        const res = await fetch(`${apiBase}/sws/neo/session`, {
-          headers: authHeaders(token),
-        });
+        const res = await apiFetch('/sws/neo/session');
         if (cancelled || !res.ok) return;
         const json = await res.json();
         const value = json?.currencyStandardPrecision;
@@ -35,7 +34,7 @@ export function useCurrencyPrecision() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, apiFetch]);
 
   return precision;
 }

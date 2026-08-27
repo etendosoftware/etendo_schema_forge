@@ -5,7 +5,7 @@ import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // A tree needs its FULL leaf list upfront to know which top-level folders exist —
 // it can't discover them via ListView's incremental "scroll near bottom, load a bit
 // more" pagination (ListView only fetches one BATCH_SIZE page per `data` prop, and
@@ -367,6 +367,7 @@ export default function AccountTreeView({
   ...rest
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const treeColumns = useMemo(() => buildTreeColumns(ui), [ui]);
 
   // Self-fetch: the full leaf-account list, loaded directly (bypassing ListView's
@@ -384,9 +385,9 @@ export default function AccountTreeView({
     (async () => {
       setIsFetchingFull(true);
       try {
-        const res = await fetch(
-          `${apiBaseUrl}/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
-          { headers: token ? authHeaders(token) : undefined },
+        const res = await apiFetch(
+          `/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
+          { token },
         );
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();
@@ -407,7 +408,7 @@ export default function AccountTreeView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, token, fetchGeneration]);
+  }, [apiBaseUrl, token, apiFetch, fetchGeneration]);
 
   // Refetch the complete dataset after a new sub-account is saved, in addition to
   // whatever `onDataMutated` triggers on the caller's side (ListView's own

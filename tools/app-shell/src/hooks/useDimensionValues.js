@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from './useNeoResource';
 
-import { buildHeaders } from '@/auth/api.js';
 /**
  * Fetches the selectable values for a set of accounting dimensions from
  *   GET /sws/neo/financial-account-transactions?action=dimension-values&dimension=<key>
@@ -15,6 +15,8 @@ import { buildHeaders } from '@/auth/api.js';
  */
 export function useDimensionValues(dimensions, enabled = true) {
   const { token } = useAuth();
+  const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch(apiBase);
   const [optionsByDim, setOptionsByDim] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -29,16 +31,12 @@ export function useDimensionValues(dimensions, enabled = true) {
     }
     let cancelled = false;
     const ctrl = new AbortController();
-    const base = getApiBase();
     setLoading(true);
 
     Promise.all(keys.map(async (key) => {
-      const url = `${base}/sws/neo/financial-account-transactions?action=dimension-values&dimension=${encodeURIComponent(key)}`;
+      const path = `/sws/neo/financial-account-transactions?action=dimension-values&dimension=${encodeURIComponent(key)}`;
       try {
-        const res = await fetch(url, {
-          headers: buildHeaders(token),
-          signal: ctrl.signal,
-        });
+        const res = await apiFetch(path, { signal: ctrl.signal, on401: 'ignore' });
         if (!res.ok) return [key, []];
         const json = await res.json();
         const values = json?.response?.data?.values;
@@ -54,7 +52,7 @@ export function useDimensionValues(dimensions, enabled = true) {
     });
 
     return () => { cancelled = true; ctrl.abort(); };
-  }, [dimKey, enabled, token]);
+  }, [dimKey, enabled, token, apiFetch]);
 
   return { optionsByDim, loading };
 }

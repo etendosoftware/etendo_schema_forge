@@ -15,11 +15,12 @@ describe('useCsvExport source', () => {
   });
 
   it('sends the session Bearer token', () => {
-    // ETP-5022 — the header is no longer a literal here: it comes from the canonical
-    // builder, which also attaches Accept-Language. Asserting the builder call is the
-    // stronger check, and test/auth-header-policy.test.js fails the build if any file
-    // goes back to hand-rolling the header.
-    assert.match(src, /(authHeaders|buildHeaders)\s*\(/);
+    // ETP-5022 — the header is no longer a literal here: it comes from the unified
+    // useApiFetch hook, which attaches Authorization + Accept-Language for every
+    // request. Asserting the hook is in use is the stronger check, and
+    // test/auth-header-policy.test.js fails the build if any file goes back to
+    // hand-rolling the header.
+    assert.match(src, /useApiFetch\s*\(/);
   });
 
   it('skips null/undefined/empty params', () => {

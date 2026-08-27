@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-import { buildHeaders } from '@/auth/api.js';
 // -- Helpers ------------------------------------------------------------------
 
 function guessCategory(name) {
@@ -13,12 +13,10 @@ function guessCategory(name) {
   return 'Other';
 }
 
-function buildAuthHeaders(token) {
-  return buildHeaders(token);
-}
-
-async function fetchJSON(url, headers) {
-  const res = await fetch(url, { headers });
+// 401 is treated as a domain error (setError), never a global logout, so every
+// call passes `on401: 'ignore'` and leaves the existing !res.ok handling in charge.
+async function fetchJSON(apiFetch, path) {
+  const res = await apiFetch(path, { on401: 'ignore' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -35,13 +33,13 @@ function parseEntityRows(data) {
 
 const STATUS_MAP = { CO: 'delivered', DR: 'draft', IP: 'in-progress', VO: 'voided' };
 
-async function loadFromAPI(poBase, headers) {
+async function loadFromAPI(apiFetch, poPath) {
   // Fetch catalogs (required) and orders (best-effort) independently
   const [productsRes, suppliersRes, taxRes, uomRes] = await Promise.all([
-    fetchJSON(`${poBase}/lines/selectors/M_Product_ID?limit=200`, headers),
-    fetchJSON(`${poBase}/header/selectors/C_BPartner_ID?limit=200`, headers),
-    fetchJSON(`${poBase}/lines/selectors/C_Tax_ID?limit=50`, headers),
-    fetchJSON(`${poBase}/lines/selectors/C_UOM_ID?limit=50`, headers),
+    fetchJSON(apiFetch, `${poPath}/lines/selectors/M_Product_ID?limit=200`),
+    fetchJSON(apiFetch, `${poPath}/header/selectors/C_BPartner_ID?limit=200`),
+    fetchJSON(apiFetch, `${poPath}/lines/selectors/C_Tax_ID?limit=50`),
+    fetchJSON(apiFetch, `${poPath}/lines/selectors/C_UOM_ID?limit=50`),
   ]);
 
   // Build lookup maps
@@ -90,8 +88,8 @@ async function loadFromAPI(poBase, headers) {
   let supplierPriceLists = {};
   try {
     const headersRes = await fetchJSON(
-      `${poBase}/header?_sortBy=creationDate desc&_startRow=0&_endRow=19&documentStatus=CO`,
-      headers,
+      apiFetch,
+      `${poPath}/header?_sortBy=creationDate desc&_startRow=0&_endRow=19&documentStatus=CO`,
     );
     const rawHeaders = parseEntityRows(headersRes).filter(h => h.documentStatus === 'CO');
     if (rawHeaders.length === 0) {
@@ -111,7 +109,7 @@ async function loadFromAPI(poBase, headers) {
         const bpId = h.businessPartner || h.C_BPartner_ID || null;
         const bpName = h['businessPartner$_identifier'] || '';
         try {
-          const linesData = await fetchJSON(`${poBase}/lines?parentId=${h.id}`, headers);
+          const linesData = await fetchJSON(apiFetch, `${poPath}/lines?parentId=${h.id}`);
           const rawLines = parseEntityRows(linesData);
           return {
             id: h.id,
@@ -152,6 +150,7 @@ async function loadFromAPI(poBase, headers) {
 
 export function useQuickPurchaseData(apiBaseUrl) {
   const { token } = useAuth();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [previousOrders, setPreviousOrders] = useState([]);
@@ -159,19 +158,18 @@ export function useQuickPurchaseData(apiBaseUrl) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const poBase = apiBaseUrl ? `${apiBaseUrl}/purchase-order` : null;
+  const poPath = apiBaseUrl ? '/purchase-order' : null;
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !poBase) {
+    if (!token || !poPath) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;
     }
 
-    const headers = buildAuthHeaders(token);
-    loadFromAPI(poBase, headers)
+    loadFromAPI(apiFetch, poPath)
       .then(result => {
         if (cancelled) return;
         setProducts(result.products);
@@ -188,7 +186,7 @@ export function useQuickPurchaseData(apiBaseUrl) {
       });
 
     return () => { cancelled = true; };
-  }, [token, poBase]);
+  }, [token, apiFetch, poPath]);
 
   // Derived: product categories
   const categories = useMemo(

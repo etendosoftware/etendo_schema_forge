@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
-import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
@@ -41,11 +41,12 @@ function renderContactsHeaderSummary(data) {
 
 export default function ContactsWindow(props) {
   const ui = useUI();
+  const apiFetch = useApiFetch(props.apiBaseUrl);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
-    const { rows, apiBaseUrl, token, reselectFailed } = pendingBulkDelete;
+    const { rows, reselectFailed } = pendingBulkDelete;
     setPendingBulkDelete(null);
 
     // ETP-4656 (QA fix) — was a sequential loop that stopped on the first
@@ -56,9 +57,8 @@ export default function ContactsWindow(props) {
     // `extractErrorMessage` (FK-violation → `deleteBlockedByReferences`), and
     // exactly one Spanish 3-outcome toast via `toastBatchDeleteOutcome`.
     const { succeeded, failed } = await runBatchDelete(rows, (row) =>
-      fetch(`${apiBaseUrl}/businessPartner/${row.id || row}`, {
+      apiFetch(`/businessPartner/${row.id || row}`, {
         method: 'DELETE',
-        headers: authHeaders(token),
       }).then(async (res) => {
         if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
         return row;
@@ -71,7 +71,7 @@ export default function ContactsWindow(props) {
     // deselect the succeeded ones — same outcome handling the generic
     // "Delete selected" toolbar button gets for free via useBulkRowDelete.
     reselectFailed(succeeded, failed);
-  }, [pendingBulkDelete, ui]);
+  }, [pendingBulkDelete, ui, apiFetch]);
 
   const handleBulkDeleteCancel = useCallback(() => {
     setPendingBulkDelete(null);
