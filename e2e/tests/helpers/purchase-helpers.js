@@ -763,27 +763,34 @@ export async function saveDraft(page) {
  * @param {boolean} [opts.isFirst=false] - True if this is the first line (uses empty-state button)
  */
 export async function addProductLine(page, { productIndex = 0, quantity, isFirst = false } = {}) {
-  // Click add-line button — retry the whole click→inline-add-row sequence
-  if (isFirst) {
-    const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
+  // Opening the inline-add row is a named step because the recovery paths below have
+  // to be able to repeat it: pressing Escape to dismiss the product drawer also
+  // dismisses the row itself, and everything after this point addresses fields that
+  // only exist while the row is open.
+  const openInlineAddRow = async () => {
+    if (isFirst) {
+      const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
+        .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
 
-    await expect(async () => {
-      const addLinesResponse = page.waitForResponse(
-        (r) => r.url().includes('/sws/neo/') && r.status() < 400,
-        { timeout: 15_000 },
-      );
-      await emptyStateBtn.click({ timeout: 3_000 });
-      await addLinesResponse;
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 30_000 });
-  } else {
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
-    await expect(async () => {
-      await addLineBtn.click({ timeout: 3_000 });
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 15_000 });
-  }
+      await expect(async () => {
+        const addLinesResponse = page.waitForResponse(
+          (r) => r.url().includes('/sws/neo/') && r.status() < 400,
+          { timeout: 15_000 },
+        );
+        await emptyStateBtn.click({ timeout: 3_000 });
+        await addLinesResponse;
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+    } else {
+      const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
+      await expect(async () => {
+        await addLineBtn.click({ timeout: 3_000 });
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 });
+    }
+  };
+
+  await openInlineAddRow();
   await slow(page);
 
   // Click product field WITHIN the inline-add-row — opens ProductSearchDrawer
@@ -792,10 +799,35 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   const productField = inlineRow.getByTestId('inline-add-field-product');
   const searchDrawer = page.getByTestId('product-search-drawer');
 
-  await expect(async () => {
-    await productField.click({ timeout: 3_000 });
+  // The row mounts before its fields do: they are painted from the backend's
+  // `/defaults`, so there is a gap between `inline-add-row` being visible and the
+  // product field existing inside it. That wait used to live implicitly inside the
+  // click's actionability timeout, budgeted at 3s against an idle backend — enough
+  // when this spec runs alone, not when the full suite has the connection pool busy.
+  // Waiting for the field explicitly keeps the assertion (the field must appear, the
+  // drawer must open) and stops it from depending on how fast the row fills in.
+  const openProductDrawer = async () => {
+    // The row is what carries the field, and a previous attempt may have closed it
+    // (see dismissDrawer). Re-open before addressing anything inside it.
+    if (!await inlineRow.isVisible().catch(() => false)) await openInlineAddRow();
+    await expect(productField).toBeVisible({ timeout: 15_000 });
+    await productField.click({ timeout: 5_000 });
     await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-  }).toPass({ timeout: 20_000 });
+  };
+
+  // Escape is the only way to dismiss the drawer, and it bubbles: with the drawer
+  // already gone it reaches the inline-add row and cancels it. That is exactly how
+  // this helper used to strand itself — it pressed Escape to retry an empty drawer,
+  // closed the row along with it, and then waited out its whole budget for a product
+  // field that no longer existed anywhere on the page. Only send it while the drawer
+  // is actually up, and let openProductDrawer restore the row if it goes anyway.
+  const dismissDrawer = async () => {
+    if (!await searchDrawer.isVisible().catch(() => false)) return;
+    await page.keyboard.press('Escape').catch(() => {});
+    await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
+  };
+
+  await expect(openProductDrawer).toPass({ timeout: 30_000 });
   await slow(page);
 
   // Select the product by index — fall back to first if nth doesn't exist.
@@ -816,12 +848,8 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
     await optionsAppear();
   } catch {
     // Close and reopen, then give it one more full budget.
-    await page.keyboard.press('Escape').catch(() => {});
-    await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
-    await expect(async () => {
-      await productField.click({ timeout: 3_000 });
-      await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 20_000 });
+    await dismissDrawer();
+    await expect(openProductDrawer).toPass({ timeout: 30_000 });
     await optionsAppear();
   }
 
@@ -844,10 +872,8 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
       // The drawer paints, then refines: it can go back to empty after the first
       // options render, so an attempt that finds nothing is not a dead end. Reopen —
       // a fresh open re-issues the query — and only then give up on this attempt.
-      await page.keyboard.press('Escape').catch(() => {});
-      await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
-      await productField.click({ timeout: 3_000 });
-      await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
+      await dismissDrawer();
+      await openProductDrawer();
       await expect(allProducts.first()).toBeVisible({ timeout: 10_000 });
       count = await allProducts.count();
     }
