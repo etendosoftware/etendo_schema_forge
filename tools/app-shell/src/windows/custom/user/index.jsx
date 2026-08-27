@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2, Send } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
@@ -122,6 +122,7 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
  */
 function useResendInvitationExtraActions() {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const [sending, setSending] = useState(false);
 
   return useCallback(({ data, onRefresh }) => {
@@ -132,7 +133,7 @@ function useResendInvitationExtraActions() {
     const handleClick = async () => {
       setSending(true);
       try {
-        await resendInvitation(id);
+        await resendInvitation(id, locale);
         toast.success(ui('resendInvitationSuccessToast'));
         onRefresh?.();
       } catch (err) {
