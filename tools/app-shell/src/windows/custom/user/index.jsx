@@ -219,6 +219,7 @@ function useAdminPromotionExtraActions(adminRoleId) {
   return useCallback(({ data, onRefresh }) => {
     const id = data?.id;
     if (!id || id === 'new' || data?.isOwner) return [];
+    if (!adminRoleId) return [];
 
     const currentDefaultRoleId = resolveDefaultRoleId(data);
     const isAdmin = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
