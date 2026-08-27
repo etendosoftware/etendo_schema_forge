@@ -1,7 +1,20 @@
 // Mock dependencies BEFORE any import
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
+
+// The modal GETs the contract's default subject/message before anything else (ETP-5003). Queue an
+// answer for it first, so the responses a test lines up still meet the requests it cares about.
+// The modal fetches more than the send request (the preview cache, for one), so locate the send
+// request by what it is rather than by call index.
+function sendRequestBody() {
+  const call = global.fetch.mock.calls.find(
+    ([url, init]) => String(url).endsWith('/send') && init?.method === 'POST',
+  );
+  if (!call) throw new Error('no send request was made');
+  return JSON.parse(call[1].body);
+}
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -235,12 +248,20 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'doc-1',
       intent: 'send-document',
       idempotencyKey: 'sales-invoice-send:doc-1:send:v1',
+      // ETP-5003 — the operator's locale travels with every send. Without it the module renders
+      // its catalog copy in Spanish regardless of the language the operator is working in.
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
     expect(body.to).toBeUndefined();
     expect(body.template).toBeUndefined();
@@ -277,13 +298,11 @@ describe('SendDocumentModal', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('blob:test');
     });
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      2,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/doc-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      3,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
       expect.objectContaining({ method: 'POST' }),
     );
@@ -317,12 +336,18 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'order-1',
       intent: 'send-document',
       idempotencyKey: 'sales-order-send:order-1:send:v1',
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -353,12 +378,18 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'quotation-1',
       intent: 'send-document',
       idempotencyKey: 'sales-quotation-send:quotation-1:send:v1',
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -746,6 +777,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     expect(subjectInput).toHaveValue('Custom subject line');
 
     const messageTextarea = getMessageTextarea();
+    await user.clear(messageTextarea);
     await user.type(messageTextarea, 'Please review this document');
     expect(messageTextarea).toHaveValue('Please review this document');
   });
@@ -765,6 +797,9 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
       />,
     );
 
+    // ETP-5003 — the message starts pre-filled with the copy that would be sent, so replacing it
+    // means clearing first.
+    await user.clear(getMessageTextarea());
     await user.type(getMessageTextarea(), 'Please review this document');
     await user.click(getSendButton());
 
@@ -774,14 +809,14 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body.messageEdits).toBeTruthy();
     expect(body.messageEdits.message).toBe('Please review this document');
-    // Subject was not touched — its auto-derived default is carried alongside.
+    // Subject was not touched — its default is carried alongside.
     expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
   });
 
-  it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
+  it('sends the on-screen subject and message even when the operator changed nothing', async () => {
     // This is a regression guard, not a bug-reproduction test: it documents
     // that a send where the operator never touched subject/message must stay
     // byte-identical to the legacy payload shape (no messageEdits key at all).
@@ -807,8 +842,18 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(body.messageEdits).toBeUndefined();
+    const body = sendRequestBody();
+    // ETP-5003 — this used to assert the opposite. Omitting an untouched message left the module
+    // recomposing it from its own catalog in whatever language the command carried, so a command
+    // with no language rebuilt in Spanish what the operator had just read in English.
+    expect(body.messageEdits).toBeTruthy();
+    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
+    // The greeting is part of the editable message so the operator can see how the customer is
+    // addressed; the module skips its own whenever a message is supplied.
+    // ui() is mocked as `key:{params}`, so this pins the composition, not the wording.
+    expect(body.messageEdits.message).toBe(
+      'sendModalDefaultGreeting:{"bpName":"ACME"}\n\n'
+      + 'sendModalDefaultMessage:{"documentType":"Invoice","documentNo":"INV-001"}');
   });
 });
 
@@ -819,5 +864,32 @@ describe('SendDocumentButton', () => {
     render(<SendDocumentButton onClick={onClick} />);
     await user.click(screen.getByTestId('action-send-email'));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it('posts the operator locale so the module does not fall back to Spanish', async () => {
+    // ETP-5003 — the modal read the locale and handed it to its own send helper, which did not
+    // destructure it, so it never reached the request body. Everything the module resolved from
+    // its catalog (button, link fallback, summary labels, date format) came back in Spanish while
+    // the operator was working in English. The server logs a WARN when this field is missing.
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+
+    await user.click(getSendButton());
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+    expect(sendRequestBody().language).toBeTruthy();
   });
 });
