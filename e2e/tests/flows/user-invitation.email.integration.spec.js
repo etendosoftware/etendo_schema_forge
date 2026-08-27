@@ -56,7 +56,9 @@ function uniqueEmail(label) {
 // unwrap; the plain-servlet /sws/go/* endpoints write their JSON body directly
 // and do not need it.
 function unwrapNeoWebhookResult(body) {
-  if (typeof body?.result === 'string') return JSON.parse(body.result);
+  if (typeof body?.result === 'string') {
+    try { return JSON.parse(body.result); } catch { throw new Error('NEO webhook returned an invalid result payload'); }
+  }
   if (body?.result && typeof body.result === 'object') return body.result;
   return body;
 }
