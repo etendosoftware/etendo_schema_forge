@@ -1,7 +1,7 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { deriveContactsApiBase } from '../contactApi.js';
 
-import { authHeaders } from '@/auth/api.js';
+import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Translate the vision-LLM extracted JSON for a purchase invoice into a list
  * of batch operations.

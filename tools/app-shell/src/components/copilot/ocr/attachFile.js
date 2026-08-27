@@ -1,4 +1,4 @@
-import { buildHeaders } from '@/auth/api.js';
+import { buildHeaders } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Thin client for Etendo's `AttachFile` webhook
  * (com.etendoerp.copilot.toolpack.webhooks.AttachFileWebhook).

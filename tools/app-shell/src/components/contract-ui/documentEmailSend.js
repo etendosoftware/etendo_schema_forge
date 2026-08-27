@@ -1,6 +1,6 @@
 import { uploadAndMarkMainAttachment } from '../copilot/ocr/listAttachments.js';
 
-import { authHeaders } from '@/auth/api.js';
+import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
 export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }

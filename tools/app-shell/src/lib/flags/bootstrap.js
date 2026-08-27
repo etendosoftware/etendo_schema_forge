@@ -2,7 +2,7 @@ import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
 
-import { authHeaders } from '@/auth/api.js';
+import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Feature-flag bootstrap.
  *

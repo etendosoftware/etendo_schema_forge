@@ -1,4 +1,4 @@
-import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { authHeaders, buildHeaders } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Thin client for the NEO Headless attachments endpoints
  * (com.etendoerp.go NeoBuiltInEndpointHandler /sws/neo/attachments/*).

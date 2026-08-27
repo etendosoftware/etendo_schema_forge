@@ -1,4 +1,4 @@
-import { authHeaders } from '@/auth/api.js';
+import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
 export const READINESS_ENDPOINTS = {
   session: '/sws/neo/session',
   defaults: '/sws/neo/sales-invoice/header/defaults',
