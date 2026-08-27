@@ -387,6 +387,32 @@ function statementDisplayName(s, bcpLocale) {
     || (s.periodFrom || s.periodTo ? formatRange(s.periodFrom, s.periodTo, bcpLocale) : '—');
 }
 
+/**
+ * ETP-5030 — resolves the statement row's classes so exactly ONE background
+ * utility is ever emitted, mirroring `computeRowClassName` in
+ * components/contract-ui/InlineLinesPanel.jsx (the shared reference).
+ *
+ * The row previously hardcoded `bg-card` twice (base string AND the `open`
+ * branch); appending a selected background alongside those would have competed
+ * on the same CSS property, which Tailwind resolves by stylesheet order rather
+ * than class order, so the row could render unshaded despite carrying the
+ * class. Both hardcoded backgrounds are now folded into this one chain.
+ *
+ * `hoverBackgroundClass` tracks the resting background so the tint survives
+ * hover — the pointer is over the row exactly when the user clicks the
+ * checkbox, which is the "ticking it does nothing" bug being fixed here.
+ */
+function computeStatementRowClassName({ selected, open }) {
+  const backgroundClass = selected ? 'bg-primary/5' : 'bg-card';
+  const hoverBackgroundClass = selected ? 'hover:bg-primary/5' : 'hover:bg-card';
+  return cn(
+    GRID_CLASS,
+    'group relative cursor-pointer items-center px-4 py-3 text-sm transition-shadow',
+    backgroundClass,
+    open ? '' : `hover:z-10 hover:shadow-lg ${hoverBackgroundClass}`,
+  );
+}
+
 function StatementRow({
   statement: s, currency, bcpLocale, ui, open, onToggle, actions, selected, onSelectionChange,
 }) {
@@ -399,11 +425,7 @@ function StatementRow({
         role="row"
         data-testid={`statement-row-${s.id}`}
         style={GRID_STYLE}
-        className={cn(
-          GRID_CLASS,
-          'group relative cursor-pointer items-center bg-card px-4 py-3 text-sm transition-shadow',
-          open ? 'bg-card' : 'hover:z-10 hover:bg-card hover:shadow-lg',
-        )}
+        className={computeStatementRowClassName({ selected, open })}
         onClick={onToggle}
       >
         <button

@@ -438,7 +438,17 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 {(documentsByPeriod[period.id] || []).map((doc) => {
                   const docPending = !!pendingActions[`document-${doc.id}`];
                   return (
-                    <div key={doc.id} className="flex items-center gap-2 py-1.5">
+                    // ETP-5030 — the document row had no selection feedback at
+                    // all. Background only: nothing behind these rows paints
+                    // one (the `pl-8` list container and the outer `border-b`
+                    // wrapper are both transparent — the sticky `bg-card` is on
+                    // the period header, a sibling above, not an ancestor), so
+                    // the tint has nothing to compete with. No padding or
+                    // margin is added, so selecting a row shifts no layout.
+                    <div
+                      key={doc.id}
+                      className={`flex items-center gap-2 py-1.5${selectedDocIds.has(doc.id) ? ' bg-primary/5' : ''}`}
+                    >
                       <Checkbox
                         checked={selectedDocIds.has(doc.id)}
                         onChange={() => toggleDocSelection(doc.id)}

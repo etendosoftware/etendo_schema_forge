@@ -255,8 +255,15 @@ export default function TbaiMonitorSection({
                 const isSigned = row.estado === 'Recibido';
                 const rowErrors = validationMap[row.id] ?? [];
                 const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
+                // ETP-5030 — selected-row tint. The single source of truth is the
+                // `.fm-row--selected` rule in fiscal-monitor.css: this table paints its
+                // backgrounds on the CELLS, so a Tailwind `bg-primary/5` on the <tr> would be
+                // covered by `tr:hover td` at exactly the moment the user clicks the checkbox.
+                // Only the class-name lookup is repeated across the three monitor sections —
+                // a shared export from FmPrimitives.jsx would break the five test files that
+                // mock that module exhaustively.
                 return (
-                  <tr key={row.id ?? i}>
+                  <tr key={row.id ?? i} className={selectedIds.has(row.id) ? 'fm-row--selected' : undefined}>
                     <td><Checkbox
                       checked={selectedIds.has(row.id)}
                       onChange={() => handleToggleRow(row.id)}

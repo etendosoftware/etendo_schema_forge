@@ -415,6 +415,50 @@ export function buildMovementSortColumns(ui) {
   ];
 }
 
+/**
+ * ETP-5030 — resolves the movement row's classes so exactly ONE background
+ * utility is ever emitted, mirroring `computeRowClassName` in
+ * components/contract-ui/InlineLinesPanel.jsx (the shared reference).
+ *
+ * Emitting two background classes on the same element does NOT let the "last
+ * one wins": Tailwind resolves competing utilities by stylesheet order, not by
+ * the order they appear in the attribute, so the row can silently render
+ * unshaded. Hence the explicit if/else chain instead of appending a class.
+ *
+ * `hoverBackgroundClass` tracks the resting background for the same reason the
+ * row already carried a `hover:bg-card`: TableRow's own base class is
+ * `hover:bg-muted/50`, so without a `hover:` counterpart the tint vanishes the
+ * moment the pointer is over the row — which is exactly when the user clicks
+ * the checkbox, and precisely the "ticking it does nothing" bug being fixed.
+ *
+ * Selection outranks the deep-link highlight (consistent with the shared
+ * components); the highlight keeps its own cue as a ring, which is box-shadow
+ * and therefore costs no layout — the same move InlineLinesPanel made, and
+ * already precedented on table rows by DataTable's `isSelectedLine`.
+ */
+function computeMovementRowClassName({ selected, highlighted, expanded, rowCanExpand }) {
+  let backgroundClass;
+  let hoverBackgroundClass;
+  if (selected) {
+    backgroundClass = 'bg-primary/5';
+    hoverBackgroundClass = 'hover:bg-primary/5';
+  } else if (highlighted) {
+    backgroundClass = 'bg-[hsl(var(--muted))]';
+    hoverBackgroundClass = 'hover:bg-[hsl(var(--muted))]';
+  } else {
+    backgroundClass = 'bg-card';
+    hoverBackgroundClass = 'hover:bg-card';
+  }
+  return [
+    'group relative transition-shadow',
+    rowCanExpand ? 'cursor-pointer' : '',
+    backgroundClass,
+    hoverBackgroundClass,
+    highlighted ? 'ring-1 ring-focus-ring' : '',
+    expanded ? 'z-20 border-b-0 [&>td]:border-b-0' : 'hover:z-10 hover:shadow-lg',
+  ].filter(Boolean).join(' ');
+}
+
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit,
@@ -481,13 +525,12 @@ export function MovementsTable({
       <Fragment key={movement.id} data-testid="Fragment__ae5a16">
         <TableRow
           data-testid={`movement-row-${movement.id}`}
-          className={`group relative transition-shadow ${rowCanExpand ? 'cursor-pointer' : ''} ${
-            highlighted ? 'bg-[hsl(var(--muted))]' : 'bg-card'
-          } ${
-            expanded
-              ? 'z-20 border-b-0 [&>td]:border-b-0 hover:bg-card'
-              : 'hover:z-10 hover:bg-card hover:shadow-lg'
-          }`}
+          className={computeMovementRowClassName({
+            selected: selectedIds.has(movement.id),
+            highlighted,
+            expanded,
+            rowCanExpand,
+          })}
           onClick={() => { if (rowCanExpand) toggleExpand(movement.id); }}
         >
           {/* Expand chevron (circular button) */}
