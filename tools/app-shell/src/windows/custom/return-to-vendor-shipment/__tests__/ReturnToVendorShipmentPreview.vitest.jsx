@@ -1,11 +1,20 @@
 // Mocks must come before imports (Vitest hoisting)
 //
-// ETP-4718 — "Enviar" (send-email) is only meaningful once the Purchase Return
-// Shipment is Confirmado (documentStatus === 'CO'); Borrador (and any other
-// non-final state) has nothing to send yet. This suite guards the `isSendable`
-// gate that decides whether `onEmail` reaches buildReturnPreviewContent, and
-// mirrors the existing conventions from
-// return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx.
+// ETP-4717 — QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" (send-email)
+// action on this window: the frontend derives the email contract name as
+// `${windowName}-send` (`return-to-vendor-shipment-send`), but the backend
+// only registers `ReturnToVendorSendEmailContract.NAME` =
+// `return-to-vendor-send`, so every click failed with "Unknown email
+// contract". QA explicitly asked to REMOVE the action from this window
+// rather than reconcile the contract name mismatch (that reconciliation is a
+// separate, deliberately out-of-scope backend concern). The previous
+// `isSendable` gate (documentStatus === 'CO') that used to decide whether
+// `onEmail` reached `buildReturnPreviewContent` no longer exists — `onEmail`
+// is never wired here, for any status. See the "ETP-4717 — Enviar action
+// removed (no onEmail wiring)" describe block below, and mirrors the
+// pre-existing convention from
+// return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx
+// (which also never passes `onEmail`).
 //
 // ETP-4789 — Download PDF gets its own status gate on this window (it has no
 // pre-existing isSendable to reuse for that purpose): only downloadable once
@@ -195,32 +204,34 @@ describe('ReturnToVendorShipmentPreview', () => {
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
   });
 
-  describe('isSendable gate (ETP-4718 — send-email only for documentStatus === "CO")', () => {
-    it('passes onEmail=sendModal.openEmailModal to buildReturnPreviewContent when documentStatus is CO', () => {
+  describe('ETP-4717 — Enviar action removed (no onEmail wiring)', () => {
+    // This is the behavior-changing case: before ETP-4717, documentStatus ===
+    // 'CO' wired onEmail to sendModal.openEmailModal (the ETP-4718 isSendable
+    // gate). QA rejected the whole action for this window (email contract
+    // name mismatch — see file header), so onEmail must now be undefined even
+    // when the shipment is Confirmado. Asserted against the OLD source, this
+    // exact expectation would have failed (old code passed openEmailModalMock
+    // for CO), which is what confirms this is a genuine regression test.
+    it('passes onEmail=undefined to buildReturnPreviewContent when documentStatus is CO', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
       expect(mockBuildReturnPreviewContent).toHaveBeenCalledTimes(1);
       const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBe(openEmailModalMock);
+      expect(callArgs.onEmail).toBeUndefined();
     });
 
-    it('passes onEmail=undefined to buildReturnPreviewContent when documentStatus is not CO (e.g. DR)', () => {
+    it('passes onEmail=undefined to buildReturnPreviewContent when documentStatus is DR', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
       expect(mockBuildReturnPreviewContent).toHaveBeenCalledTimes(1);
       const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
       expect(callArgs.onEmail).toBeUndefined();
     });
 
-    it('does not wire onEmail for any other non-CO status either', () => {
+    it('does not wire onEmail for any other status either', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'VO' } });
       const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
       expect(callArgs.onEmail).toBeUndefined();
     });
 
-    // ETP-4718 QA edge case — a shipment record missing/nulling documentStatus
-    // (unexpected API payload shape) must NOT fall through to "sendable"; the
-    // strict === 'CO' comparison already guards this, but it's worth locking
-    // down explicitly since a looser check (e.g. `!== 'DR'`) would have shipped
-    // a real regression here.
     it('does not wire onEmail when documentStatus is undefined', () => {
       const shipmentWithoutStatus = { ...defaultShipment };
       delete shipmentWithoutStatus.documentStatus;
@@ -235,7 +246,7 @@ describe('ReturnToVendorShipmentPreview', () => {
       expect(callArgs.onEmail).toBeUndefined();
     });
 
-    it('renders ReceiptSendModal regardless of documentStatus (modal wiring stays mounted; only the trigger button is gated)', () => {
+    it('renders ReceiptSendModal regardless of documentStatus (modal wiring stays mounted even though no trigger ever opens it)', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
       expect(screen.getByTestId('receipt-send-modal')).toBeInTheDocument();
     });
@@ -267,7 +278,7 @@ describe('ReturnToVendorShipmentPreview', () => {
         'rtvs-1',
         '/api/return-to-vendor-shipment',
         'tok',
-        { tableName: 'M_InOut', storeCondition: true },
+        { tableName: 'M_InOut', storeCondition: true, recordUpdated: null },
       );
     });
   });

@@ -16,6 +16,10 @@
     ],
     "customComponents": {
       "headerTable": "UserHeaderTable"
+    },
+    "hidePrint": true,
+    "listViewOptions": {
+      "hidePrint": true
     }
   },
   "discardPatterns": ["EM_*"],
@@ -186,74 +190,8 @@
     },
     "userRoles": { "exclude": true },
     "emailConfiguration": {
-      "fields": {
-        "smtpServer": {
-          "visibility": "editable",
-          "grid": true,
-          "searchable": true,
-          "section": "server"
-        },
-        "sMTPAuthentification": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server",
-          "reason": "Controls whether auth fields are relevant"
-        },
-        "smtpServerAccount": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "auth"
-        },
-        "smtpServerPassword": {
-          "visibility": "editable",
-          "section": "auth"
-        },
-        "smtpServerSenderAddress": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "smtpConnectionSecurity": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server"
-        },
-        "smtpPort": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server"
-        },
-        "smtpConnectionTimeout": {
-          "visibility": "editable",
-          "section": "server",
-          "reason": "Advanced setting, form-only"
-        },
-        "fromName": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "replyToAddress": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "testSuccessful": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reason": "Status flag from last SMTP test"
-        },
-        "lastTestDate": {
-          "visibility": "readOnly",
-          "reason": "Timestamp of last SMTP test"
-        },
-        "active": {
-          "visibility": "editable",
-          "grid": true
-        },
-        "defaultConfiguration": {
-          "visibility": "editable",
-          "grid": true,
-          "reason": "Marks this as the default SMTP config"
-        }
-      }
+      "exclude": true,
+      "reason": "ETP-4999 — 'Configuración del correo electrónico' removed from the Users window tab strip entirely (human-confirmed not relevant to this window). Same 'exclude the whole child entity' pattern userRoles already uses above (ETP-4906): closes the entity in NEO (ISINCLUDED='N') and stops the generator from emitting detailEntity/DetailTable/DetailForm/detailProcesses/addLineFields for it. The rule decisions below (EmailConfiguration_Port_Smtpconnectionsecurity, Test_SMTP_Connection) are left as historical documentation, unchanged, matching the precedent already set for userRoles' own AD_Role_of_Client rule."
     }
   },
   "rules": {

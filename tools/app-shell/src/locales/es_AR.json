@@ -16448,8 +16448,8 @@
     "Connections": {
       "label": "Conexiones"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Revenue this month": {
       "label": "Ingresos del mes"
@@ -18070,7 +18070,7 @@
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
     "financeReconcileFilterStatusPending": "Pendiente",
-    "financeReconcileFilterStatusSuggested": "Sugerido",
+    "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Diferencias",
     "financeReconcileFilterStatusReconciled": "Conciliadas",
@@ -18091,7 +18091,7 @@
     "financeReconcileColPendingBalance": "Saldo pendiente",
     "financeReconcileColAmount": "Importe",
     "financeReconcileColSelect": "Seleccionar",
-    "financeReconcileBadgeSuggested": "Sugerida",
+    "financeReconcileBadgeSuggested": "Con sugerencia",
     "financeReconcileBadgeByRule": "Por regla",
     "financeReconcileBadgeDifference": "Diferencia",
     "financeReconcileBadgePending": "Pendiente",
@@ -18364,7 +18364,7 @@
     "financeAccountStatementsManualSaving": "Guardando…",
     "financeAccountStatementsManualErrorName": "Introduce un nombre para el extracto",
     "financeAccountStatementsManualErrorLines": "Añade al menos una línea con importe",
-    "financeAccountStatementsManualErrorIncompleteLine": "Completa los campos obligatorios de cada línea (fecha, Reference No, salida y entrada)",
+    "financeAccountStatementsManualErrorIncompleteLine": "Completá los campos obligatorios de cada línea (fecha y un importe de salida o entrada)",
     "financeAccountStatementsManualDiscardTitle": "¿Descartar cambios?",
     "financeAccountStatementsManualDiscardBody": "Si cierras ahora perderás los datos no guardados de este extracto.",
     "financeAccountStatementsManualDiscardKeep": "Seguir editando",
@@ -18447,6 +18447,11 @@
     "financeAccountStatementsImportDropDrop": "Suelta el archivo para subirlo",
     "financeAccountStatementsImportDropHint": "Cuaderno 43, CSV o Excel · máx. 10 MB",
     "financeAccountStatementsImportErrorBody": "No podemos leer este archivo. Sube un Cuaderno 43 (.c43), un CSV o un Excel exportado desde tu banco.",
+    "financeAccountStatementsImportShowAll": "Mostrar todas",
+    "financeAccountStatementsImportShowLess": "Mostrar menos",
+    "financeAccountStatementsImportSuccessToastPartial": "Extracto '{name}' importado · {count} movimientos agregados · {discarded} línea/s omitidas por no tener importe",
+    "financeAccountStatementsImportDiscardedLines": "{count} línea/s no se van a importar porque no tienen importe.",
+    "financeAccountStatementsImportNoValidLines": "El archivo no tiene líneas válidas para importar.",
     "financeAccountStatementsImportKpiLines": "LÍNEAS",
     "financeAccountStatementsImportKpiCredits": "ABONOS",
     "financeAccountStatementsImportKpiDebits": "CARGOS",
@@ -20875,8 +20880,8 @@
     "Fiscal Configuration": {
       "label": "Configuración fiscal"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Smart Scan": {
       "label": "Escaneo inteligente"

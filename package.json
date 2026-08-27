@@ -17,8 +17,8 @@
   },
   "devDependencies": {
     "@etendosoftware/app-shell-core": "0.3.41-preview.feature-ETP-4996.20260827205554.ceb7fa9",
-    "@etendosoftware/schema-forge-cli": "0.3.39",
-    "@etendosoftware/schema-forge-core": "0.3.39",
+    "@etendosoftware/schema-forge-cli": "0.3.41-preview.feature-ETP-4996.20260827205554.ceb7fa9",
+    "@etendosoftware/schema-forge-core": "0.3.41-preview.feature-ETP-4996.20260827205554.ceb7fa9",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",

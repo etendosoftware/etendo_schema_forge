@@ -168,7 +168,25 @@
     "businessPartner": {
       "fields": {
         "tbaiIssimplifiedinv": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Simplified Invoice"
+        },
+        "aeatsiiDefaultsiikey": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "SII Default Key"
+        },
+        "aeatsiiSiikeylist": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "SII Key List"
         },
         "employee": {
           "visibility": "editable",
