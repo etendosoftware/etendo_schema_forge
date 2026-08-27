@@ -202,7 +202,11 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
   await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/4');
   await page.getByTestId('ImportDialog__importButton').click();
   await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('3');
+  // Two, not three: ETP-4996 validates the price during REVIEW, so BAD-PRICE-4905 is already
+  // an error here and never enters the batch. It used to be counted as importable and only
+  // failed inside buildOperations, after the user had confirmed. AMBIG-4905 still needs the
+  // send to fail, because its category is only resolved server-side.
+  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('2');
   await page.getByTestId('ImportConfirmStep__confirm').click();
   const errorFilter = page.getByTestId('ImportReviewQueue__statusFilter-error');
   await expect(errorFilter).toContainText('2');
