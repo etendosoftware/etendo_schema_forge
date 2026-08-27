@@ -10074,7 +10074,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "09a9e28f933c69dffe536a5c6bc05d02e2782a69648f198f33fbdc860013269e",
+      "checksum": "26b10f45e40df20f1e8ad87bda3fc63fbb622cb84a31b7cccc70c8a58e55ab51",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -10588,6 +10588,12 @@
           "ad_table_id": "96A56B61A35441E8877536646345EA6A",
           "columnname": "Last_Callback_Type",
           "position": "39"
+        },
+        {
+          "ad_column_id": "FA0850D2A55444749FE7CD443A3BF317",
+          "ad_table_id": "96A56B61A35441E8877536646345EA6A",
+          "columnname": "EM_ETGO_Payment_Intent",
+          "position": "40"
         },
         {
           "ad_column_id": "D567A4B632AB4E279578B52F94758EC5",
@@ -28802,7 +28808,7 @@
       ]
     },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
-      "checksum": "8785f48084e7d677f729c04a9d19c8d6461b1e875e33746b439c0eec56a9d298",
+      "checksum": "83108f1157bd681dd19a9859154756da208c7d123d75a0b7ced52344bf35ec68",
       "params": [
         "108"
       ],
@@ -29232,6 +29238,12 @@
           "ad_table_id": "114",
           "columnname": "Isdefaultfordocs",
           "position": "51"
+        },
+        {
+          "ad_column_id": "7F6CB3F646EE4C9B8B37449D0D90FD0E",
+          "ad_table_id": "114",
+          "columnname": "EM_ETGO_Is_Owner",
+          "position": null
         },
         {
           "ad_column_id": "521F8231193A6C29E040007F01001B31",

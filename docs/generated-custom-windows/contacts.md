@@ -214,11 +214,11 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 
 **Composite descriptor splits one CSV row into three records.** Contacts registers a custom import descriptor (`contactsImportDescriptor.js`, name `contacts`) instead of the plain single-entity default: a row builds a `businessPartner` op (with `oBTIKTaxIDKey` defaulted and `searchKey` falling back to `name`), and — only when address fields are present — a `locationAddress` op plus a `contact` (person) op, so a single "Company + contact person + address" row lands correctly across the three underlying tabs. `country`/`region` resolve through dedicated FK resolvers (`contactsFkResolvers.js`) rather than the generic per-field resolver, since they need the composite descriptor's own SimSearch calls.
 
-**Row-level dedupe by email.** `window.import.dedupe` is `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
+**Row-level dedupe.** ⚠️ **Superseded by ETP-4995:** the key is now `["taxID"]`, not `["etgoEmail"]` — email is optional, and `dedupeRows` skips deduplication entirely when any key part is blank. `window.import.dedupe` was `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
 
 ## ETP-4905 — Contact category resolution during import
 
-The Contacts CSV import supports the same dependent-category behavior as the Product import. A row may provide `categoryCode` (exact `C_BP_Group.Value`), `categoryName` (accent/case/whitespace-insensitive `C_BP_Group.Name`), or the legacy `category` column. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
+The Contacts CSV import supports the same dependent-category behavior as the Product import. ⚠️ **Superseded by ETP-4995:** the three columns described here (`categoryCode`, `categoryName`, `category`) collapsed into a single `category` column, whose cell is matched as an exact `C_BP_Group.Value` first and as an accent/case/whitespace-insensitive `C_BP_Group.Name` otherwise. The resolution and auto-creation semantics below are unchanged. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
 
 When no category matches, the descriptor creates one through the `business-partner-category` endpoint using a deterministic uppercase code derived from the category name. The resolver cache stores in-flight promises per import token, so concurrent rows with the same new category create one record and reuse its ID. Ambiguous normalized names fail the individual row without guessing; category-creation failures also remain row-level errors, while valid rows in the same file continue. Files without any category column preserve legacy behavior and let the backend defaults apply.
 
@@ -356,3 +356,261 @@ itself is still frágil for other windows in principle, but tightening it for ev
 is a separate, cross-window concern with its own risk budget — out of scope here. Verified
 with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
 `statusField` resolves to `null` and the pill no longer renders on new or existing records.
+
+## ETP-4784 (part 2) — SII/TicketBAI Business Partner defaults exposed
+
+Three Classic Business Partner fields, used as **billing-time defaults** by the Etendo
+Classic AEAT SII / TicketBAI modules, are now exposed in the Go Contacts window. These are
+plain configuration values with **no callout/derivation logic of their own** on the Business
+Partner — they are only *read* later when an invoice is generated. Architecture investigation
+has **confirmed, by code inspection and live DB-trigger verification**, that consumption of
+these defaults at invoicing time already works automatically in Go with no additional code:
+the `aeatsii_invoice_trg` DB trigger was confirmed to exist with correct logic for reading
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`, and `XMLUtils.java` was confirmed to read the
+`tbaiIssimplifiedinv` field directly off the Business Partner at TBAI send time — both fire
+the same way regardless of whether the invoice originates in Classic or Go. **Not yet
+verified end-to-end through the Go UI** — that check requires a running Tomcat/Go
+environment, which was not available during this ticket's development, so it remains a
+pending manual verification (steps below) rather than a follow-up ticket.
+
+**Pending manual end-to-end verification (requires a live Go environment):**
+1. Start Tomcat / the local Go environment.
+2. In Go Contacts, create or edit a Business Partner with `Customer = true`, "Clave por
+   defecto" checked, "Clave tipo factura" = `F1`, and "Factura Simplificada" checked. Save.
+3. Create and complete a sales invoice for that Business Partner from Go.
+4. In Classic, open the invoice → AEAT SII tab → confirm "Clave tipo factura" was populated
+   with `F1`.
+5. Trigger/inspect that invoice's TBAI submission → confirm the XML carries
+   `<FacturaSimplificada>S</FacturaSimplificada>`.
+
+| Classic field | Go field (camelCase) | Entity | Where it lives in Go |
+|---|---|---|---|
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+
+**SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
+and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
+(part 4 below):** that classification was only correct for the `customer` entity; the fields
+were never declared for `businessPartner`, which is the entity the UI actually persists
+through, so saves were silently discarded until part 4's fix. Deliberately
+**not** declared with an explicit `fieldGroup`/entity-level customization in `decisions.json`:
+the generated `CustomerForm.jsx` for the `customer` entity is never imported by
+`BusinessPartnerPage.jsx` or any custom component — every `customer`/`vendor` entity field in
+this window (`priceList`, `paymentMethod`, `purchasePricelist`, …) is hand-wired directly via
+small local `fields` arrays passed to `EntityForm`. `aeatsiiDefaultsiikey`/`aeatsiiSiikeylist`
+follow that same established pattern, but from `FiscalDefaultsSection.jsx` (see below) rather
+than `BillingPreferencesForm.jsx`.
+
+**Hide ≠ strip.** Unchecking "Clave por defecto" hides `aeatsiiSiikeylist` via
+`displayLogic` — it does **not** clear the stored value. The field simply stops being
+visible and stops being required while hidden; its previously-saved value persists
+untouched, and reappears if "Clave por defecto" is checked again. This is intentional
+parity with Classic's own behavior for the same field, not a bug. Covered by a regression
+test in `FiscalDefaultsSection.vitest.jsx` ("does not clear aeatsiiSiikeylist when the
+default-key checkbox is off").
+
+Field labels are resolved
+automatically by `EntityForm` via `useLabel()`/`t(column)` against the AD dictionary
+(`EM_Aeatsii_Defaultsiikey` → "Default Key", `EM_Aeatsii_Siikeylist` → "Invoice type key" in
+both `en_US.json` and `es_ES.json` — the AD reference data itself has not been translated to
+Spanish yet; that is a pre-existing AD/i18n data gap, not something this change introduces).
+The four enum option labels (`R`/`F1`/`F2`/`F4`) are hardcoded in the component with their
+`labels.es_ES` overrides copied verbatim from `contract.json`, following the same static-enum
+pattern already used by `AssetsConfigPanel.jsx`/`TaxSifField.jsx` — `F1` ("Invoice") has no
+AD-side Spanish translation either, same underlying data gap.
+
+## ETP-4784 (part 2, UX follow-up) — Fiscal defaults grouped into one section
+
+Part 2 (above) shipped the 3 fields as **stray fields** split across two unrelated spots:
+`aeatsiiDefaultsiikey`/`aeatsiiSiikeylist` inside the Cliente billing block, and
+`tbaiIssimplifiedinv` auto-rendered in the header form's General tab — with no visual
+indication that all three configure the same thing (billing-time defaults consumed by SII /
+TicketBAI when an invoice is generated for this Business Partner). Human feedback: group them
+under one clearly-labeled section, regardless of which Classic tab each field originally came
+from.
+
+**New component — `tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx`.**
+Self-contained: it renders its own title/description (i18n keys `fiscalDefaults` /
+`fiscalDefaultsDescription`, both locales) plus the 3 fields, so `ContactsFinancialPanel.jsx`
+only needs to mount it — no layout duplication. It follows the label-left / content-right row
+convention already used by the sibling Credit and Billing Preferences sections in the same
+panel. Rendered in the Financial tab, directly below the Billing Preferences row (own `<hr>`
+separator).
+
+- `tbaiIssimplifiedinv` — always rendered, unconditional (it never depended on the
+  Customer/Vendor flags to begin with).
+- `aeatsiiDefaultsiikey` / `aeatsiiSiikeylist` — moved out of `BillingPreferencesForm.jsx`
+  verbatim, keeping the exact same `displayLogic`/gating wiring: both only render when
+  `data.customer` is true, and `aeatsiiSiikeylist` stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` (unchanged AD parity behavior, see above).
+
+**`decisions.json` — `tbaiIssimplifiedinv.form` flipped `true` → `false`** (visibility stays
+`editable`). This removes it from the header form's auto-rendered field array
+(`BusinessPartnerForm.jsx`) and from the generated `requiredHeaderFields` gate on
+`BusinessPartnerPage.jsx` (used only to gate the "+ Add Line" affordance on child tabs) —
+harmless here since it's a boolean checkbox that is always "filled" (`defaultValue: "N"`), so
+the required-flag never actually blocked anything. The field itself is unaffected in
+`contract.json`/the API: `form: false` only silences the auto-form emission, it does not
+touch `visibility`, so the field keeps flowing through `resolve-curated.js` →
+`generate-contract.js` exactly as before — `FiscalDefaultsSection.jsx` reads/writes it
+directly off `data`/`onChange`, same mechanism `BillingPreferencesForm.jsx` already used for
+the other two fields.
+
+No other generator or `decisions.json` change was needed — this was a pure UI-grouping
+task on top of the already-working part 2 wiring. Verified with `make regen ONLY=contacts`
+(published core, no `LOCAL_CORE` needed): `BusinessPartnerForm.jsx` no longer emits
+`tbaiIssimplifiedinv`, `BusinessPartnerPage.jsx`'s `requiredHeaderFields` array dropped it,
+and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
+`FiscalDefaultsSection.vitest.jsx`, `ContactsFinancialPanel.vitest.jsx`) pass.
+
+## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
+
+Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
+explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
+had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
+lists, then by reading 3 server-maintained flags off `AD_OrgInfo`
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`). **That gating was reverted.**
+
+Investigation of the real `AD_FIELD.DisplayLogic` in Classic for the 3 fields
+(`aeatsiiDefaultsiikey`, `aeatsiiSiikeylist`, `tbaiIssimplifiedinv`) confirmed **none of them
+depend on whether the organization has SII/TicketBAI active** — they are shown whenever the
+containing tab is visible. Human decision: **"be faithful to Classic, don't invent
+show/hide logic"**. `FiscalDefaultsSection.jsx` final behavior:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — shown only when
+  `data.customer` is true. This is the same `data.customer` gate `BillingPreferencesForm.jsx`
+  uses for its own Cliente block, and matches where these two fields live in Classic (the
+  Customer tab). `aeatsiiSiikeylist` still stays hidden-not-cleared behind
+  `aeatsiiDefaultsiikey` via `displayLogic` (unchanged, see part 2 above).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — always shown, unconditional. No
+  organization-level or Customer/Vendor gating at all.
+- The section title/description (`fiscalDefaults`/`fiscalDefaultsDescription`) always render
+  — no `loading` state, no early `return null`.
+
+**Removed:** `tools/app-shell/src/windows/custom/contacts/fiscalDefaults.utils.js` (the
+`useSiiTbaiActive`/`resolveOrganizationId` hook and its `organization/information/{orgId}`
+fetch) and its test file — deleted outright, nothing else in the repo imported them.
+`FiscalDefaultsSection.jsx` no longer takes an `apiBaseUrl`-driven network dependency; it is
+now a pure presentational component driven entirely by `data`/`onChange`, same contract as
+`BillingPreferencesForm.jsx`.
+
+The `organization` spec's 3 `AD_OrgInfo` flags added in the discarded intermediate design
+(`etsgHasSIIConfig`/`etsgHasTbaiConfig`/`etsgHasVfactuConfig`, `system` visibility) were
+**kept as-is** in `artifacts/organization/decisions.json` — they remain legitimate
+Organization-window information exposed on the backend contract, just no longer consumed
+from Contacts. See `docs/generated-custom-windows/organization.md` for that side.
+
+No `decisions.json` or generator change was needed for this simplification — pure
+custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all
+Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
+visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
+to `onChange`).
+
+## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
+
+**Bug:** editing "Clave por Defecto" (`aeatsiiDefaultsiikey`) or "Clave tipo factura"
+(`aeatsiiSiikeylist`) in `FiscalDefaultsSection.jsx` and saving appeared to succeed (`PATCH`
+returned `200 OK`), but reloading the record showed the old value — the change never
+persisted.
+
+**Root cause:** part 2 above documented these two fields against entity `customer`, but that
+was only true for their *read* classification. `FiscalDefaultsSection.jsx` is mounted by
+`ContactsFinancialPanel.jsx` on the `businessPartner` entity's own `data`/`onChange` — it
+writes through `PATCH /businessPartner/{id}`, not `/customer`. In `artifacts/contacts/decisions.json`
+neither field was explicitly declared under `entities.businessPartner.fields`, so both fell
+back to the extractor's default classification for that entity/tab: `visibility: "system"`
+(a leftover from pre-ETP-4784 classification). `system` visibility maps to
+`ETGO_SF_FIELD.isreadonly='Y'`, so NEO's `businessPartner` PATCH handler accepted the request,
+silently dropped the two fields (not in the writable set), and returned 200 — masking the
+failure. The sibling `customer` entity (a different sub-tab on the same `C_BPartner` table)
+happened to classify the same two columns as `editable`, which is why part 2 wrongly assumed
+the fields were already correctly configured end-to-end.
+
+**Fix:** declared `aeatsiiDefaultsiikey` and `aeatsiiSiikeylist` explicitly under
+`entities.businessPartner.fields` in `artifacts/contacts/decisions.json` with
+`visibility: "editable"`, `form: false` (rendered by hand in `FiscalDefaultsSection.jsx`, not
+by the auto-generated form), matching the existing `tbaiIssimplifiedinv` entry right above
+them. Regenerated with `make regen ONLY=contacts PUSH_TO_NEO=1`; confirmed in
+`ETGO_SF_FIELD` that both columns now have `isreadonly='N'` for the `businessPartner` entity,
+and confirmed end-to-end with a live `PATCH` + `GET` against
+`/sws/neo/contacts/businessPartner/{id}` that the new value survives a reload.
+
+No frontend code changed — `FiscalDefaultsSection.jsx` was already reading/writing the right
+entity; this was purely a backend field-classification gap. `npx vitest run
+src/windows/custom/contacts` still passes unchanged (167 passed, 1 skipped).
+
+**Lesson:** an entity table in this doc records *where a field is rendered*, not *which
+entity's PATCH endpoint persists it*. When a custom component reads `data`/`onChange` from a
+different entity than the one implied by a field's original Classic tab, always verify the
+`decisions.json` classification against the entity the component is actually mounted on.
+## ETP-4995 — CSV import fixes and cleanup
+
+**P0 — the downloaded template could not be imported.** `buildTemplateCsv` emits every
+declared field's first alias as a column, so the template always carried
+`clave nif pais residencia` (`oBTIKTaxIDKey`). An empty cell in that column arrives as `''`
+(defined), not `undefined`, and the descriptor spread the AD default `'1'` *before*
+`...bpFields` — so the blank cell overwrote it and the mandatory column failed with
+`MISSING_REQUIRED_FIELDS` for **every** row. The only workaround was deleting the column
+from the file. Defaults are now applied after the row's own fields, and only a non-blank,
+valid cell may override one.
+
+**AD-coded columns accept the labels a human types.** `EM_OBTIK_Tax_ID_Key` is an AD List
+(`1`=NIF, `2`=NOI, `3`=Pasaporte, `4`=Documento oficial de identificación expedido por el
+país, `5`=Certificado de residencia fiscal, `6`=Otro documento probatorio, `7`=No Censado —
+`1` also accepts `CIF`/`CIF/NIF`, which is not an AD list name but is what users type, the
+window's own tax-id column being labelled "CIF/NIF")
+and `EM_Etgo_Isperson` is an AD **Yes/No** (`Y`=Persona, `N`=Empresa, AD default `N`) — not
+a list, despite reading like one. Neither can go through `matchEntity` FK resolution, which
+queries SimSearch by DAL *entity* name; a reference list is not an entity. Both now resolve
+through a per-descriptor synonym table (`lib/codedValue.js`), accent- and case-insensitively,
+with the raw code always accepted so an Etendo-exported CSV round-trips. An unrecognized
+value fails its own row with a message naming the accepted values, instead of a bare 400.
+
+**`etgoIsperson` is importable at all.** It had no column, was absent from `BP_TARGETS`, and
+`mapColumns` only ever matches a header against a field's `label`/`aliases` — never against
+the target name — so every imported row landed on the same contact type.
+
+**A bare `nombre` column no longer produces a nameless business partner.** `nombre` was an
+alias of `etgoFirstname`, so a CSV whose only name column was `nombre` left `name` (razón
+social) and the derived `searchKey` empty. `nombre` is now an alias of `name`; the descriptor
+additionally falls back to first+last name, and fails the row when neither is present.
+
+**`searchKey` no longer collides.** `C_BPartner.Value` is capped at 40 chars and was derived
+with a blind `.slice(0, 40)`, so two commercial names sharing a 40-char prefix collapsed onto
+one key. Names that fit are used verbatim; longer ones keep a 32-char prefix plus a
+deterministic FNV-1a hash of the *full* name, so re-importing a file is idempotent.
+
+**Dedupe key changed from `etgoEmail` to `taxID`.** `dedupeRows`'s `buildKey` returns `null`
+when any key part is blank, and email is optional — so the default path deduplicated nothing.
+`taxID` is `required: true` (see above), so it is always present, and two rows sharing a tax id
+are the same legal entity — a stronger identity than a matching commercial name, which two
+distinct companies can share.
+
+**Category columns 3 → 1.** `categoryCode`/`categoryName`/`category` were three columns for
+one concept. Only `category` survives; the cell is probed against the existing category codes
+first and treated as a name otherwise (`lib/dependentEntityCell.js`), preserving both the
+exact-code match and the derived-code auto-create.
+
+**`creditLimit` removed from `BP_TARGETS`** — no declared column could ever populate it.
+
+**CIF/NIF is required at import level, on purpose.** `C_BPartner.TaxID` is *not* mandatory
+in AD (`ismandatory='N'`, 20 chars) and a contact created by hand can be saved without one —
+but a contact loaded in bulk without a tax id is not useful, so `decisions.json` declares
+`taxID` as `required: true`. This is the import being deliberately stricter than the
+dictionary, which is precisely what a per-window import config is for. The explicit flag also
+survives the generator's AD backfill, which would otherwise mark it optional.
+
+**`required: true` is now declared, and `required: false` is deliberate.**
+`requiredTargets` (`ImportDialog.jsx`) is built from `f.required`; with nothing declared it
+was empty and `validateRow` validated nothing, so the user learned about a missing mandatory
+field from a backend 400. Note that `generate-contract.js` **backfills `required` from AD**
+when `decisions.json` is silent: `etgoIsperson` and `etgoFirstname` are AD-mandatory but must
+stay optional in the CSV (the descriptor defaults the first, and a company legitimately has
+no first name), so both declare `required: false` explicitly. Omitting that flag re-breaks
+the plain template exactly like the P0 bug did.
+
+Regression coverage: `contactsImportDescriptor.vitest.js`, plus
+`windows/custom/__tests__/importTemplateRoundTrip.vitest.js`, which downloads the template,
+fills it without deleting a column, and asserts it maps, validates and builds operations —
+the end-to-end path none of the per-unit tests covered.
