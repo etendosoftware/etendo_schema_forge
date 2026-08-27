@@ -100,6 +100,8 @@ Allow Etendo GO to charge a **recurring monthly amount per plan**, and to be rea
 | Countable resources | A catalog **table** | Adding a resource must never be a column. |
 | Resource restriction | **Configurable HQL fragment** | The Etendo convention (`AD_TAB.whereclause` et al). Guardrails in §7.2. |
 | Consumption capture | **Scheduled recomputation by query**, not write-time instrumentation | §6. |
+| Price | Lives on the plan row, editable from Classic with no deploy; **display amount derived from the provider Price, never typed** | The price is expected to change. Two hand-maintained amounts eventually disagree, and the customer is who finds out. |
+| Billable unit for documents | **Posted sales invoices** | Posting is what makes the invoice real. Reversible without development, since the catalog is data. |
 | Consumption window | The **subscription billing period**, never the calendar month | A plan can change mid-period; a calendar-month comparison becomes meaningless the moment it does. |
 | Upgrade | Immediate | Paying more to get more later is not an upgrade. |
 | Downgrade | At the end of the current period | §8.1. |
@@ -154,9 +156,17 @@ Each advantage is a risk avoided:
 
 ### 6.1 Counting policy
 
-- Counting is by the date property named in the catalog — `CREATED` in the common case — within the period.
-- **A closed day is final.** A document deleted or voided afterwards does not reduce an already-closed day. Counting live rows instead would let consumption decrease, which cannot be un-billed once reported to a payment provider.
+- Counting is by the date property named in the catalog — `invoiceDate` for posted sales invoices, `CREATED` in other common cases — within the period.
+- **A day becomes final once its settling window has elapsed. Until then it is recomputed on every run. Once final it never changes** — a document voided afterwards does not reduce it. Counting live rows with no finality at all would let consumption decrease, which cannot be un-billed once reported to a payment provider.
 - Granularity is daily, keyed by tenant, resource and day, so a later Stripe Billing Meters emission can use a deterministic event identifier per tenant, resource and day and be idempotent end to end.
+
+### 6.1.1 Why the settling window exists
+
+The billable unit for documents is a **posted** sales invoice. `C_Invoice` carries `POSTED` as a flag and has **no posting timestamp** — verified against `etendo_core/src-db/database/model/tables/C_INVOICE.xml`, where the available dates are `CREATED`, `DATEINVOICED`, `DATEACCT` and `UPDATED`.
+
+A plain "closed day is final" therefore under-counts permanently: an invoice dated the 27th and posted on the 30th reads as unposted when the 27th is computed, and is never counted afterwards. `UPDATED` is not an escape — it moves on any change, so a later edit would re-bucket an invoice into a different day and shift counts between days already reported.
+
+The settling window is configuration, default proposal 5 days. It preserves the property that matters — a reported value is never revised downward — without the silent under-count. It also multiplies the work per run by roughly the window length, which is why query cost must be measured with the window applied rather than for a single day.
 
 ### 6.2 The one resource this cannot count
 
@@ -390,6 +400,33 @@ Two consequences bind every task in §14:
 | **ETP-5051** | First confirm that with no quota rows nothing changed at all. Then add one quota row in `warn`, exceed it, see the warning; switch the same row to `block` and confirm the denial; switch to `off` and confirm it stops — all without a deploy or a restart. That sequence *is* the configuration-not-development claim, demonstrated live. |
 | **ETP-5053** | Upgrade a tenant mid-period and assert the billing date did not move — that is the one to watch. Then schedule a downgrade, confirm it shows as pending, upgrade over it, and confirm the pending change was cleared. |
 
+### 14.3 What is a proposal and what is a constraint
+
+Everything in this document is open to changes and improvements the implementer considers appropriate. The table shapes, the class boundaries, the ordering inside a task are proposals; a better way is a better way.
+
+What the document actually pins down is the list below. As long as none of these is dropped, the *how* belongs to whoever builds it.
+
+| Invariant | Where it comes from |
+|---|---|
+| Idempotency is a database constraint, not a map, and payment state survives a restart | The defect currently charging customers with nothing delivered |
+| No card data and no full provider payloads in any table or log | PCI posture; also §12 |
+| The webhook signature verifier stays as it is | Correct today; a rewrite has no upside and real downside |
+| The paywall keeps its decision-versus-plan separation | ETP-4966 shipped charged accounts into demo environments precisely by inferring one from the other |
+| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing |
+| Tenant and period scoping is applied outside any configurable query fragment, and the fragment is always parenthesized | A fragment able to escape it would mis-bill every customer at once |
+| Configurable fragments are System-authored only, never tenant-editable | Reuses the `AD_TAB.whereclause` trust boundary; widening it is a different feature |
+| Absence of a quota row means unlimited; the limit mechanism ships inert | No default value may silently cap a resource at zero |
+| Consumption is compared over the subscription billing period, never the calendar month | A plan can change mid-period and the anchor deliberately does not move |
+| A day is final only after its settling window, and once final never changes | §6.1.1 — `POSTED` has no timestamp |
+| The billing cycle anchor never moves on a plan change | One parameter permanently shifts the customer's billing date |
+| A checkout row without a provider session id is never closed automatically | Closing it is the one unrecoverable answer |
+| Enforcement has exactly one call site, behind a kill switch, and a tenant with no subscription row is never blocked | Guards a security-critical path; grandfathering is what makes the switch safe to flip |
+| The set of countable resources is data, not code; no branching on resource keys | The extensibility claim is false the moment a `switch` appears |
+| No billing or payment question requires reading a log file or the database to answer | §10 |
+| Each task is independently testable and handed over on its own | §14.1 |
+
+Most of these exist because of a specific incident or a verified constraint rather than a preference. If one looks wrong, it should be changed deliberately and recorded here — the failure mode to avoid is dropping one quietly.
+
 ---
 
 ## 15. Open decisions
@@ -398,7 +435,7 @@ Two consequences bind every task in §14:
 |---|---|---|
 | Upgrade proration: `always_invoice` or `create_prorations` | Product | ETP-5053 implementation |
 | Downgrade below current consumption: warn or refuse | Product | ETP-5053 implementation |
-| "Documents issued": one resource with an HQL status restriction, or one resource per document type | Product | Catalog seeding in ETP-5050. Reversible later without development, since the catalog is data. |
+| ~~"Documents issued": one resource or one per document type~~ — **resolved: posted sales invoices** (`salesTransaction = true and posted = Y`, bucketed by `invoiceDate`) | Product | Closed. Reversible without development, since the catalog is data. |
 | Plan names, monthly amounts and currency; whether regional pricing is needed | Product | ETP-5046 seeding |
 | Quota values per plan | Product, informed by the shadow-mode report | ETP-5051 activation, not its implementation |
 | Whether request volume justifies write-path instrumentation | Product + Platform | A future task; nothing here depends on it |
