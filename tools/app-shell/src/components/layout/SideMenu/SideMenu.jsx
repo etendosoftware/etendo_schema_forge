@@ -578,10 +578,14 @@ export default function SideMenu({
         {expanded ? (
           <div className="relative flex shrink-0 items-center h-[62px] px-3 gap-2">
             <DropdownMenu data-testid="DropdownMenu__247c75">
+              {/* data-testid="company-switcher" is the stable E2E hook for this button.
+                  aria-label is ui('switchCompany') -> the TRANSLATED string ("Cambiar
+                  empresa"), so it cannot serve as a language-independent selector. */}
               <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__247c75">
                 <button
                   type="button"
                   aria-label={ui('switchCompany')}
+                  data-testid="company-switcher"
                   className="flex flex-1 min-w-0 items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted/60 transition-colors"
                 >
                   <img
