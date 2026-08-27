@@ -405,9 +405,7 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
     await acceptNewInvitation(browser, inviteLink, email);
   });
 
-  // SKIPPED: switching company fails in the backend — the environment login rejects an org
-  // with no warehouse of its own (SMFSWS_OrgHasNoRole). Root cause under investigation.
-  test.skip('completes the same-account cross-client invitation flow and switches back', async ({
+  test('completes the same-account cross-client invitation flow and switches back', async ({
     request,
     browser,
   }, testInfo) => {
