@@ -20804,8 +20804,6 @@
     "sifDataTabs.status.sii.acceptedWithErrors": "Accepted with errors",
     "sifDataTabs.status.sii.incorrect": "Incorrect",
     "sifDataTabs.status.sii.sendError": "Send error",
-    "sifErrorBanner.errorCode": "Error code",
-    "sifErrorBanner.errorDetail": "Error detail",
     "sifDataTabs.status.sii.pending": "Pending",
     "sifDataTabs.status.sii.cancelled": "Cancelled",
     "sifDataTabs.status.sii.dropped": "Dropped",
