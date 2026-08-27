@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * Returns the org currency's Standard Precision from the /sws/neo/session endpoint.
  *
@@ -21,7 +22,7 @@ export function useCurrencyPrecision() {
     (async () => {
       try {
         const res = await fetch(`${apiBase}/sws/neo/session`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders(token),
         });
         if (cancelled || !res.ok) return;
         const json = await res.json();

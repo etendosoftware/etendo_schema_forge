@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 const FETCH_TIMEOUT_MS = 10000;
 const ENDPOINT = '/sws/neo/financial-accounts-page';
 
@@ -14,10 +15,7 @@ function getApiBase() {
 async function fetchAccountsPayload(apiBase, token, signal) {
   const url = `${apiBase}${ENDPOINT}`;
   const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: buildHeaders(token),
     signal,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

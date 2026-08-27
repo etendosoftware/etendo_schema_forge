@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { authHeaders } from '@/auth/api.js';
 const DEBOUNCE_MS = 200;
 
 /**
@@ -30,7 +31,7 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
     setError(null);
     try {
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
         signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -117,7 +118,7 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
       + `&bpartnerId=${encodeURIComponent(bpartnerId ?? '')}&doc=${doc === 'out' ? 'out' : 'in'}`;
     setLoading(true);
     setError(null);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal })
+    fetch(url, { headers: authHeaders(token), signal: ctrl.signal })
       .then((res) => {
         if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
         return res.json();

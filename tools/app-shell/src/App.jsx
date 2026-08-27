@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -10,6 +10,8 @@ import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
 import { createMockFetch } from './lib/mockFetch.js';
 import { useLocaleState } from './i18n/useLocaleState.js';
+import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from './lib/unsavedChanges.js';
+import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
@@ -18,6 +20,7 @@ import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
+import { authHeaders } from '@/auth/api.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -78,7 +81,7 @@ export async function fetchWindowAccess(session) {
     const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
       method: 'GET',
       credentials: 'include',
-      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+      headers: session?.token ? authHeaders(session.token) : {},
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -233,6 +236,34 @@ export default function App() {
   const [locale, setLocale] = useLocaleState();
   const { dictionaries, renderedLocale } = useLocaleDictionaries(locale, coreLoaders);
 
+  // ETP-5022 — changing the language must reload the page. Translated reference data
+  // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
+  // Accept-Language, so anything already fetched keeps the OLD language until it is
+  // re-fetched. Re-fetching selectively is not reliable here: HTTP access is spread over
+  // ~297 call sites in ~121 files, so a reload is the only way to guarantee every surface
+  // comes back in the new locale.
+  const [pendingLocale, setPendingLocale] = useState(null);
+
+  const applyLocaleAndReload = useCallback((next) => {
+    setLocale(next);            // persists to localStorage; survives the reload
+    suppressNextUnloadPrompt(); // the user already confirmed — don't also fire beforeunload
+    window.location.reload();
+  }, [setLocale]);
+
+  // Wraps the setLocale handed to every switcher (avatar menu, LocaleSwitcher), so the
+  // unsaved-changes warning cannot be bypassed by adding another switcher later.
+  const guardedSetLocale = useCallback((next) => {
+    if (next === locale) return;
+    if (hasUnsavedChanges()) {
+      setPendingLocale(next);
+      return;
+    }
+    applyLocaleAndReload(next);
+  }, [locale, applyLocaleAndReload]);
+
+  // F5 / tab close: the browser's own prompt, for the same unsaved changes.
+  useEffect(() => installUnloadGuard(), []);
+
   useEffect(() => {
     if (import.meta.env.VITE_MOCK === 'true') {
       loadAllMockData().then(mockData => {
@@ -260,7 +291,7 @@ export default function App() {
         layout={AppLayout}
         auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
         locale={renderedLocale}
-        setLocale={setLocale}
+        setLocale={guardedSetLocale}
         dictionaries={dictionaries}
         notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
         data-testid="AppShellRuntime__ecaf3f">
@@ -268,6 +299,11 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
+        <LocaleChangeConfirmDialog
+          open={pendingLocale !== null}
+          onConfirm={() => applyLocaleAndReload(pendingLocale)}
+          onCancel={() => setPendingLocale(null)}
+          data-testid="LocaleChangeConfirmDialog__ecaf3f" />
       </AppShellRuntime>
     </ObservabilityProvider>
   );

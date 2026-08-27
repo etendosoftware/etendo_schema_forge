@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * ETP-4656 — shared, UI-agnostic core of the "checkbox selection → confirm →
  * batch delete → 3-outcome toast" pattern. Extracted once a 4th consumer
@@ -47,7 +48,7 @@ export function deleteSelectedChildRows({ selectedChildRows, api, detailEntity, 
       || `${apiBaseUrl}/${detailEntity}/${row.id}`;
     return fetch(childUrl, {
       method: 'DELETE',
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { ...(token ? authHeaders(token) : {}) },
     }).then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return row;

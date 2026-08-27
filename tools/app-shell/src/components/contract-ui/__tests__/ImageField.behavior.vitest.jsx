@@ -71,7 +71,7 @@ describe('ImageField — behaviour', () => {
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/etendo/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
+        { headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       );
       const img = await screen.findByRole('img');
       expect(img).toHaveAttribute('src', BLOB_URL);
@@ -81,7 +81,7 @@ describe('ImageField — behaviour', () => {
       render(<ImageField imageId="IMG-1" token="tk" onChange={vi.fn()} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         '/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
+        { headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       ));
     });
 
@@ -193,7 +193,7 @@ describe('ImageField — behaviour', () => {
       const [url, options] = globalThis.fetch.mock.calls.at(-1);
       expect(url).toBe('/etendo/sws/neo/image');
       expect(options.method).toBe('POST');
-      expect(options.headers).toEqual({ Authorization: 'Bearer tk', 'Content-Type': 'application/json' });
+      expect(options.headers).toEqual({ Authorization: 'Bearer tk', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' });
       const body = JSON.parse(options.body);
       expect(body.name).toBe('front.png');
       expect(body.mimeType).toBe('image/png');

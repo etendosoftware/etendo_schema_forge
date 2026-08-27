@@ -6,6 +6,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
 // scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE and
 // CreatableSearchSelect.jsx's SERVER_SEARCH_PAGE so all three selector styles page at the
@@ -126,7 +127,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const runFetch = () => {
       fetchInFlightRef.current = true;
       fetch(buildUrlWithParams(selectorUrl, queryParams), {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: buildHeaders(token),
       })
         .then(r => r.ok ? r.json() : null)
         .then(data => {

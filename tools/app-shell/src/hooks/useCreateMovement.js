@@ -2,15 +2,13 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { buildHeaders } from '@/auth/api.js';
 /** POSTs a JSON payload to a financial-account-transactions action and returns data. */
 async function postAction(token, action, payload) {
   const url = `${getApiBase()}/sws/neo/financial-account-transactions?action=${action}`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: buildHeaders(token),
     body: JSON.stringify(payload),
   });
   if (!res.ok) {

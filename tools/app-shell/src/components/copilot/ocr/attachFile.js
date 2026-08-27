@@ -1,3 +1,4 @@
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Thin client for Etendo's `AttachFile` webhook
  * (com.etendoerp.copilot.toolpack.webhooks.AttachFileWebhook).
@@ -75,10 +76,7 @@ export async function attachFile({ token, tabId, recordId, file, fileName } = {}
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: buildHeaders(token),
       body: JSON.stringify({
         ADTabId: tabId,
         RecordId: recordId,

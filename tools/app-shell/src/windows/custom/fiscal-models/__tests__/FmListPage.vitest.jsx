@@ -827,7 +827,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
     await waitForCatalogLoad();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE}/fiscal-models-catalog`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
     );
   });
 
@@ -877,7 +877,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': true, '349': false }),
         })
       );
@@ -897,7 +897,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': false, '349': false }),
         })
       );
@@ -1083,7 +1083,7 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE}/fiscal303/incidents?id=decl-url-check`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
       );
     });
   });

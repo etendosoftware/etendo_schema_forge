@@ -13,6 +13,7 @@ import {
 } from '@/components/attachments/attachmentsBus';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
  * and write the same real `Attachment` row, marked via `EM_ETGO_ISPREVIEWMAIN`
@@ -164,7 +165,7 @@ export function useMainAttachment({
     setIsBusy(true);
     setStoreFailed(false);
     try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(url, { headers: authHeaders(token) });
       if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
       const blob = await res.blob();
       await uploadAndMark(blob, fileName, blob.type || 'application/pdf');

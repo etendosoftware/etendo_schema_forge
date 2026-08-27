@@ -1,3 +1,4 @@
+import { authHeaders } from '@/auth/api.js';
 /**
  * copilotApi.js — HTTP client layer for the Copilot service.
  * All endpoints are relative to /sws/copilot/*.
@@ -58,11 +59,14 @@ export async function parseJsonResponse(response) {
  */
 export async function copilotRequest(path, token, options = {}) {
   const headers = new Headers(options.headers || {});
+  // ETP-5022: /sws/copilot IS the Etendo backend, so the UI locale must travel here too.
+  // authHeaders() supplies Authorization + Accept-Language and deliberately no Content-Type,
+  // which is what lets the FormData exception below keep working.
+  for (const [key, value] of Object.entries(authHeaders(token))) {
+    headers.set(key, value);
+  }
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
-  }
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(buildCopilotUrl(path), {

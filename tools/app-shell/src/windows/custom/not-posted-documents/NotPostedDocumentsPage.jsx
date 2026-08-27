@@ -4,9 +4,8 @@ import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import './not-posted-documents.css';
 
-function buildHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
+// ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
+import { buildHeaders } from '@/auth/api.js';
 
 function formatDate(raw) {
   if (!raw) return '';

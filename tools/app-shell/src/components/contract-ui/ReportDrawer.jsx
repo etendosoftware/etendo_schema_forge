@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
+import { buildHeaders } from '@/auth/api.js';
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
 // Labels are resolved at render time via useUI() (see FORMATS usage below).
@@ -116,7 +117,7 @@ const MAX_REPORT_ROWS = 10000;
 const BATCH = 200;
 
 async function fetchAllRecords(apiBaseUrl, entity, token, sortColumn, sortDirection) {
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = buildHeaders(token);
   let allRows = [];
   let start = 0;
   let hasMore = true;

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
+import { buildHeaders } from '@/auth/api.js';
 function sanitizeCalloutMessage(raw) {
   return raw
     .replace(/<br[^>]{0,10}>/gi, ' ')
@@ -56,10 +57,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         };
         const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: buildHeaders(token),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });

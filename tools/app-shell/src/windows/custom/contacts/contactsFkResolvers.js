@@ -2,6 +2,7 @@ import { registerFkResolver } from '@etendosoftware/app-shell-core/lib/import/fk
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/resolveForeignKeys.js';
 
+import { authHeaders } from '@/auth/api.js';
 registerFkResolver('contacts-country', async (value, { token, simSearchFn = simSearch }) => {
   const [result] = await simSearchFn({ token, entityName: 'Country', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
@@ -13,7 +14,7 @@ async function defaultFetchRegionCountryId(regionId, token, apiBaseUrl) {
   const where = `id='${String(regionId).replace(/'/g, "''")}'`;
   const url = `${contactsBase}/region?_neoWhere=${encodeURIComponent(where)}&limit=1`;
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { headers: authHeaders(token) });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];

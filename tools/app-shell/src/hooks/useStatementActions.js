@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Write actions for an existing bank statement: process, reactivate, update and
  * delete. All target the same NEO endpoint with a different `action`. process /
@@ -35,10 +36,7 @@ export function useStatementActions() {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify(body),
       });
       if (!res.ok) {

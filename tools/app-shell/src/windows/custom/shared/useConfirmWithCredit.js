@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 
+import { buildHeaders } from '@/auth/api.js';
 export function useConfirmWithCredit({
   data,
   recordId,
@@ -26,10 +27,7 @@ export function useConfirmWithCredit({
     ? data.returnInvoices.some(inv => inv.documentStatus === 'CO')
     : data?.hasReturnInvoice === true;
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const handleCreateReturnInvoice = useCallback(async () => {
     if (creatingInvoice) return;

@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 const PAGE_SIZE = 30;
 
 export const COLORS = [
@@ -56,7 +57,7 @@ export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, 
     if (src || !imageId || !neoBaseUrl || !token) return;
     let cancelled = false;
     fetch(`${neoBaseUrl}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(r => r.ok ? r.blob() : null)
       .then(blob => {
@@ -113,7 +114,7 @@ export function useProductImages({ open, selectorUrl, token }) {
     if (!imageUrl || !token) return undefined;
     let cancelled = false;
     fetch(`${imageUrl}?_startRow=0&_endRow=500`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -235,7 +236,7 @@ export function useProductSelectorFetch({
       const params = { ...selectorContextRef.current, limit: PAGE_SIZE, offset };
       if (q) params.q = q.trim();
       fetch(buildUrlWithParams(selectorUrl, params), {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: buildHeaders(token),
         signal: controller.signal,
       })
         .then(r => r.ok ? r.json() : null)

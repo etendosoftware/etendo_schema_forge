@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
+import { buildHeaders } from '@/auth/api.js';
 import {
   DocChip, RelatedDocumentsShell, docChipProps,
   neoBase, fetchById,
@@ -36,7 +37,7 @@ async function resolveLinkedOrder(seen, orderSchedId, token, apiBaseUrl, result)
 
 async function fetchLinkedDocuments(recordId, token, apiBaseUrl) {
   const base = neoBase(apiBaseUrl);
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = buildHeaders(token);
 
   const linesRes = await fetch(`${base}/payment-out/lines?parentId=${recordId}&_limit=50`, { headers });
   const lines = linesRes.ok

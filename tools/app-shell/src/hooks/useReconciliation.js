@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from './useNeoResource';
 
+import { buildHeaders } from '@/auth/api.js';
 const BASE_PATH = '/sws/neo/bank-reconciliation';
 
 /**
@@ -36,10 +37,7 @@ function useNeoPost(action) {
       const url = `${getApiBase()}${BASE_PATH}?action=${action}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify(payload),
       });
 

@@ -6,6 +6,7 @@ import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDow
 import { Checkbox } from '@/components/ui/checkbox';
 import './fiscal-models.css';
 
+import { authHeaders } from '@/auth/api.js';
 function parseCityLine(cityLine) {
   if (!cityLine) return { postal: '', city: '', province: '' };
   // Format: "28001 - Madrid (Madrid)" — postal optional, region in parens optional
@@ -803,7 +804,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
     if (!token || !apiBaseUrl) return;
     const controller = new AbortController();
     fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
       signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : null)

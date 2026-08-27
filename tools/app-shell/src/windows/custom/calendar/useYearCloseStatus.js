@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * The single, canonical "is this year closed" derivation for the whole Calendar window —
  * reused by YearCloseStatusBadge (detail header pill), YearTableWithCloseStatus (list column),
@@ -26,7 +27,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     let cancelled = false;
     setClosed(undefined);
     fetch(`${endYearCloseApiBaseUrl}/accounting?year=${yearId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);

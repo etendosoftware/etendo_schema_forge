@@ -13,6 +13,7 @@ import {
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 function Field({ label, htmlFor, children }) {
   return (
     <div className="space-y-1.5">
@@ -329,7 +330,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     try {
       const res = await fetch(`${apiBaseUrl}/header/callout`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: buildHeaders(token),
         body: JSON.stringify({ field: 'aeatsiiIsauthorization', value: val ? 'Y' : 'N', formState: data ?? {} }),
       });
       if (!res.ok) return;

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -57,8 +58,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       setLoading(true);
       setErrorState(null);
       try {
+        // ETP-5022: tokenless is correct here (pre-login), but the locale still must travel —
+        // the invitation error strings are composed by the backend.
         const res = await fetch(
-          `${apiBase}/sws/go/company-invitations/resolve?token=${encodeURIComponent(token.trim())}`
+          `${apiBase}/sws/go/company-invitations/resolve?token=${encodeURIComponent(token.trim())}`,
+          { headers: authHeaders() }
         );
         const data = await res.json().catch(() => ({}));
         if (!isMounted) return;
@@ -105,7 +109,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          ...(sessionToken ? authHeaders(sessionToken) : {}),
         },
         body: JSON.stringify({ token: token.trim() }),
       });
@@ -143,7 +147,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     try {
       const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders(),
         body: JSON.stringify({
           token: token.trim(),
           name: trimmedName,
@@ -183,7 +187,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const registerInvitationAccount = async ({ name: accountName, password: accountPassword }) => {
     const res = await fetch(`${apiBase}/sws/go/company-invitations/register-and-accept`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
       body: JSON.stringify({
         token: token.trim(),
         name: accountName.trim(),

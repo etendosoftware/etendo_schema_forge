@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 
+import { authHeaders } from '@/auth/api.js';
 const SELECTOR_PAGE = 50;
 
 function buildSelectPlaceholder(ui, label) {
@@ -72,7 +73,7 @@ export function SelectorInput({
       offset,
     });
     fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {

@@ -1,3 +1,4 @@
+import { authHeaders } from '@/auth/api.js';
 /**
  * Instance-wide currency number-formatting configuration (thousands/decimal separators,
  * and the per-currency symbol side).
@@ -81,7 +82,7 @@ export function isCurrencySymbolRightSide(currencyCode) {
 export function fetchCurrencyFormatConfig() {
   if (fetchPromise) return fetchPromise;
 
-  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`)
+  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`, { headers: authHeaders() })
     .then((res) => {
       if (!res.ok) throw new Error(`currency-format fetch failed: ${res.status}`);
       return res.json();

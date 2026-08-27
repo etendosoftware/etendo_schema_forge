@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { createDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { useDashboardDateRange } from '@/components/dashboard/DashboardDateRangeContext';
 
+import { buildHeaders } from '@/auth/api.js';
 /* ------------------------------------------------------------------
  * Constants
  * ----------------------------------------------------------------*/
@@ -34,7 +35,7 @@ async function fetchWidget(apiBase, token, entity, range) {
 
   try {
     const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
       signal: ctrl.signal,
     });
     clearTimeout(timer);

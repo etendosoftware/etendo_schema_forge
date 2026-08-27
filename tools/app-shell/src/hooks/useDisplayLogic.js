@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Module-level "last known good" cache for the subset of evaluate-display keys a caller
  * has declared safe to reuse across different records (see `cacheableKeys` below) — keyed
@@ -99,10 +100,7 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/evaluate-display`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify({ fieldValues: values }),
       });
       if (res.ok) {

@@ -18,6 +18,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 
+import { authHeaders } from '@/auth/api.js';
 // AD table name backing the AEAT justificante attachments store — both the
 // server-side auto-attach on a successful telematic submission and the
 // manual "Presentación con Acuse de recibo" upload persist here.
@@ -74,7 +75,7 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
 function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
   if (!token || !apiBaseUrl) return;
   fetch(`${neoBase(apiBaseUrl)}/session`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -333,7 +334,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       try {
         const iaeRes = await fetch(
           `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: authHeaders(token) },
         );
         if (iaeRes.ok) {
           const iaeRows = (await iaeRes.json())?.response?.data ?? [];

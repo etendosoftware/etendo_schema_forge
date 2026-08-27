@@ -124,7 +124,7 @@ describe('useInvoicePdf', () => {
   describe('fetchAll (inline replica)', () => {
     async function fetchAll(url, token) {
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       });
       if (!res.ok) return [];
       const d = await res.json();

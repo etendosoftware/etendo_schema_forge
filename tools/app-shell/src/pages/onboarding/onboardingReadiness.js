@@ -1,3 +1,4 @@
+import { authHeaders } from '@/auth/api.js';
 export const READINESS_ENDPOINTS = {
   session: '/sws/neo/session',
   defaults: '/sws/neo/sales-invoice/header/defaults',
@@ -15,7 +16,7 @@ export const READINESS_FAILURE_KEYS = {
 
 async function fetchJson(fetchImpl, baseUrl, token, endpoint, label) {
   const response = await fetchImpl(`${baseUrl}${endpoint}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: token ? authHeaders(token) : {},
   });
 
   let body = null;

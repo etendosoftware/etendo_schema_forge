@@ -27,6 +27,7 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', reference: 'Asset', inputMode: 'selector', required: true, readOnlyLogic: (r) => r['posted'] === 'Y' },
@@ -152,7 +153,7 @@ export default function AmortizationLinesTable({
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
@@ -201,7 +202,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ [fieldKey]: value }),
       });
       if (res.ok) { fetchLines(); onRefresh?.(); }
@@ -234,7 +235,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       if (res.ok) {
         fetchLines();
@@ -265,7 +266,7 @@ export default function AmortizationLinesTable({
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
         fetch(`${apiBaseUrl}/lines/${id}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders(token),
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;
@@ -288,7 +289,7 @@ export default function AmortizationLinesTable({
     try {
       const res = await fetch(`${apiBaseUrl}/lines`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ ...newLine, amortization: recordId, currency: data?.currency }),
       });
       if (res.ok) {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Fetch data from a NEO Headless widget endpoint.
  *
@@ -17,10 +18,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
     setLoading(true);
     setError(null);
     fetch(`${apiBaseUrl}/${specName}/data`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: buildHeaders(token),
     })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);

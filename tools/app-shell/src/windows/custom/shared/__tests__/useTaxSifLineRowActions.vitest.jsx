@@ -297,7 +297,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${API_BASE_URL}/header/${RECORD_ID}`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      { headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
     ));
 
     await waitFor(() => {
@@ -312,7 +312,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       expect(url).toContain('priceList=PL-1');
       expect(url).toContain('C_BPartner_Location_ID=ADDR-1');
       expect(url).toContain('currency=EUR');
-      expect(init).toEqual({ headers: { Authorization: `Bearer ${TOKEN}` } });
+      expect(init).toEqual({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } });
     });
   });
 

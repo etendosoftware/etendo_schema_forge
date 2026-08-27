@@ -9,6 +9,7 @@ import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.js
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
   for (const [key, value] of Object.entries(option)) {
@@ -163,7 +164,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     setLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/price?parentId=${recordId}&_startRow=0&_endRow=200`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       if (!res.ok) throw new Error();
       const payload = await res.json();
@@ -197,7 +198,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
 
     let aborted = false;
     fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}?limit=200`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(res => (res.ok ? res.json() : null))
       .then(payload => {
@@ -303,7 +304,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     try {
       const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ [field]: String(value) }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
@@ -321,7 +322,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     try {
       const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
       await refreshPrices();
@@ -340,7 +341,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     try {
       const res = await fetch(`${apiBaseUrl}/price`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({
           parentId: recordId,
           product: recordId,
@@ -382,7 +383,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   const submitCreateTariff = useCallback(async (name) => {
     const res = await fetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: buildHeaders(token),
       body: JSON.stringify({
         name,
         salesPriceList: isSales,

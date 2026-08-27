@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
  *
@@ -27,10 +28,7 @@ import { useCallback, useMemo, useState } from 'react';
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const execute = useCallback(async (recordId, actionName) => {
     if (!apiBaseUrl || !recordId || !actionName) {

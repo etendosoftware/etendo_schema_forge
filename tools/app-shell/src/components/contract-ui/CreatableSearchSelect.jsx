@@ -7,6 +7,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * CreatableSearchSelect — generic search-style selector with an inline "Create X" action.
  *
@@ -154,7 +155,7 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
 function fetchServerOptions({ selectorUrl, selectorContext, token, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
   return fetch(buildUrlWithParams(selectorUrl, params), {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
     .then(res => (res.ok ? res.json() : null))
     .then(data => {
@@ -423,7 +424,7 @@ export function CreatableSearchSelect({
     if (parentKey && parentValue && filterKey) params[filterKey] = parentValue;
 
     fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -474,7 +475,7 @@ export function CreatableSearchSelect({
     if (!selectorUrl || !token) return;
     let cancelled = false;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {

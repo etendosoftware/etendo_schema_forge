@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 
+import { authHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -30,7 +31,7 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
     }
     setStats(null);
     setTrend(null);
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = authHeaders(token);
     fetch(`${apiBaseUrl}/bp-stats?businessPartnerId=${recordId}`, { headers })
       .then(r => (r.ok ? r.json() : null))
       .then(data => setStats(data?.response?.data ?? []))

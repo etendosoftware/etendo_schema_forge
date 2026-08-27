@@ -61,7 +61,7 @@ function mockPriceListFetch(priceLists) {
   }));
 }
 
-const HEADERS = { Authorization: 'Bearer test-token' };
+const HEADERS = { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' };
 const BASE = '/sws/neo/goods-shipment';
 
 // ── usePriceListPicker ────────────────────────────────────────────────────────

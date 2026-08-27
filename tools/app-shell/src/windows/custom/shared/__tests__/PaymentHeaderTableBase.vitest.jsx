@@ -420,7 +420,7 @@ describe('PaymentHeaderTableBase — confirm payment flow', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('cobroConfirmadoOk'));
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/neo/finPayment/p1/action/aPRMProcessPayment',
-      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer tok-1' }) }),
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer tok-1', 'Accept-Language': 'es_ES' }) }),
     );
     expect(listener).toHaveBeenCalledTimes(1);
     expect(onDataMutated).toHaveBeenCalledTimes(1);

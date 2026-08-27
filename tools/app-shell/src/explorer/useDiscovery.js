@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
+import { buildHeaders } from '@/auth/api.js';
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');
@@ -18,11 +19,11 @@ function getAdminToken() {
   return localStorage.getItem('sf_admin_token') || getToken();
 }
 
+// ETP-5022: was a local header builder with no Accept-Language, so explorer requests
+// resolved reference data in the user's AD language instead of the UI locale. Delegates
+// to the canonical builder now; the getToken() fallback is the only local behaviour left.
 function authHeaders(token) {
-  const t = token || getToken();
-  const h = { 'Content-Type': 'application/json' };
-  if (t) h['Authorization'] = `Bearer ${t}`;
-  return h;
+  return buildHeaders(token || getToken());
 }
 
 function adminAuthHeaders() {

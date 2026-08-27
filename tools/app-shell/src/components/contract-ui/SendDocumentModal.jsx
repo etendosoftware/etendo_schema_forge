@@ -7,6 +7,7 @@ import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
 
+import { buildHeaders } from '@/auth/api.js';
 // ETP-4226 — default send policy: editable To/CC recipients everywhere unless
 // the window's `decisions.json → window.sendDocument` override says otherwise.
 const DEFAULT_SEND_POLICY = { editableRecipients: true, cc: true, maxRecipients: 10 };
@@ -96,7 +97,7 @@ async function renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoad
   try {
     const res = await fetch(`/api/reports/${reportId}/render`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: buildHeaders(token),
       body: JSON.stringify({ format: 'html', params: { documentId } }),
     });
     if (!res.ok) throw new Error(`Preview failed (${res.status})`);
@@ -205,7 +206,7 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChang
 async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token) {
   const res = await fetch(`/api/reports/${reportId}/render`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: buildHeaders(token),
     body: JSON.stringify({ format: 'html', params: { documentId } }),
   });
   if (!res.ok) throw new Error('Failed to render');
@@ -236,7 +237,7 @@ function resolveContactsBaseUrl(apiBaseUrl) {
 async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmail, setTo, isCancelled }) {
   const contactsBaseUrl = resolveContactsBaseUrl(apiBaseUrl);
   const response = await fetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildHeaders(token),
   });
   const data = response.ok ? await response.json() : null;
   if (isCancelled()) return;

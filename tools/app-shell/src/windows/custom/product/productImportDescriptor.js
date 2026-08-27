@@ -5,6 +5,7 @@ import { parseBoolean } from '@/lib/parseBoolean.js';
 import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // Columns copied verbatim onto the product body. Everything else declared in
 // `window.import.fields` needs interpreting first: `productType` and `uOM` are resolved
 // below, the two price columns become their own operations, and `category` resolves to a
@@ -109,7 +110,7 @@ async function fetchProductDefaults(token) {
   try {
     const res = await fetch(url, {
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) return {};
     const json = await res.json().catch(() => null);
@@ -130,7 +131,7 @@ function resolveProductDefaults(token) {
 async function fetchPriceListVersion(spec, token, wantSales) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
-  const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, { credentials: 'include', headers: authHeaders(token) });
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -159,7 +160,7 @@ async function fetchProductCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { credentials: 'include', headers: authHeaders(token) });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -209,10 +210,7 @@ async function resolveCategory(row, config) {
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.token}`,
-      },
+      headers: buildHeaders(config.token),
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {

@@ -55,7 +55,7 @@ describe('patchById — method, headers, body', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/sws/neo/tax/tax/tax-1', {
       method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
   });

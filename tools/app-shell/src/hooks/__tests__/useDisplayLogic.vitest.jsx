@@ -46,7 +46,7 @@ describe('useDisplayLogic', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES',
         }),
         body: JSON.stringify({ fieldValues }),
       }),

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
+import { authHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
@@ -57,7 +58,7 @@ export default function ContactsWindow(props) {
     const { succeeded, failed } = await runBatchDelete(rows, (row) =>
       fetch(`${apiBaseUrl}/businessPartner/${row.id || row}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       }).then(async (res) => {
         if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
         return row;

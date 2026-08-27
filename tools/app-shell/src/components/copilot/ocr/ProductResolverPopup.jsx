@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { X, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 
+import { authHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 const SELECTOR_PAGE_SIZE = 50;
@@ -58,7 +59,7 @@ export default function ProductResolverPopup({
   onCancel,
 }) {
   const ui = useUI();
-  const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const authHeader = useMemo(() => (authHeaders(token)), [token]);
 
   // selections: { [idx]: { id, label } | null }
   const [selections, setSelections] = useState({});

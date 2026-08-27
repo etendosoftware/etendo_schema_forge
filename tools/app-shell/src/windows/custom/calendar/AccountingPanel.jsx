@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
 
+import { authHeaders } from '@/auth/api.js';
 export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
@@ -13,7 +14,7 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
     if (!parentId) return;
     setRows(undefined);
     fetch(`${apiBaseUrl}/accounting?year=${parentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);

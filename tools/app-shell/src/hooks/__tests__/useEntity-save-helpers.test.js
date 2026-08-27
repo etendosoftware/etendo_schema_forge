@@ -866,7 +866,7 @@ describe('resolveSavedRecordAfterSave', () => {
   const opts = (extra = {}) => ({
     apiBaseUrl: '/api',
     entity: 'header',
-    headers: { Authorization: 'Bearer t' },
+    headers: { Authorization: 'Bearer t', 'Accept-Language': 'es_ES' },
     refetchAfterSave: true,
     ...extra,
   });
@@ -937,7 +937,7 @@ describe('resolveSavedRecordAfterSave', () => {
     try {
       await resolveSavedRecordAfterSave({ id: '1' }, opts());
       assert.equal(seen[0][0], '/api/header/1');
-      assert.deepEqual(seen[0][1], { headers: { Authorization: 'Bearer t' } });
+      assert.deepEqual(seen[0][1], { headers: { Authorization: 'Bearer t', 'Accept-Language': 'es_ES' } });
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -3,6 +3,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUI } from '@/i18n';
 
+import { authHeaders } from '@/auth/api.js';
 const PAYMENT_STATUS = {
   E:      'Executed',
   P:      'Pending',
@@ -39,7 +40,7 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
     if (!parentId || !token) return;
     setLoading(true);
 
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = authHeaders(token);
 
     fetch(`${apiBaseUrl}/paymentPlan?parentId=${parentId}`, { headers })
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))

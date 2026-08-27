@@ -299,7 +299,7 @@ describe('DetailView line sidebar save/delete flow (classic layout)', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
-    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { Authorization: 'Bearer test-token' } });
+    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } });
     await waitFor(() => expect(mockHook.handleUpdateChild).toHaveBeenCalledWith('L1', { id: 'L1', unitPrice: 55, lineNetAmount: 55 }));
   });
 

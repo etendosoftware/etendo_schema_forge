@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { aggregateProducts } from './warehouseUtils';
 
+import { authHeaders } from '@/auth/api.js';
 async function fetchJson(url, token) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const json = await res.json();

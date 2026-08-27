@@ -48,6 +48,7 @@ import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Resolve a value from an object using a dotted path (e.g. `_aux._LOC`).
  */
@@ -164,10 +165,7 @@ export async function runInlineToggleRequest({
   try {
     const res = await fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: buildHeaders(token),
       body: JSON.stringify({ [col.key]: checked }),
     });
     if (!res.ok) {

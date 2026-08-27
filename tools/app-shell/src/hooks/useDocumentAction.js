@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { trackTransactionPosted } from '@/lib/observability/health-events.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Invokes Etendo DocAction buttons via NEO Headless.
  * POST {apiBaseUrl}/{entity}/{recordId}/action/documentAction { docAction }
@@ -9,10 +10,7 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const execute = useCallback(async (recordId, docAction, { onSuccess, onError } = {}) => {
     if (!recordId || !docAction) {

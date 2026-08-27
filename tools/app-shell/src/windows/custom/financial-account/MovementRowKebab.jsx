@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 
+import { buildHeaders } from '@/auth/api.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
 const POST_URL = (id) =>
@@ -28,7 +29,7 @@ const UNPOST_URL = (id) =>
 async function callTransactionAction(url, token) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildHeaders(token),
     body: '{}',
   });
   const body = await res.json().catch(() => null);

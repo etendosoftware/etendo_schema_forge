@@ -6,6 +6,7 @@ import FiscalDefaultsSection from './FiscalDefaultsSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
+import { buildHeaders } from '@/auth/api.js';
 function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   const ui = useUI();
   const num = value === '' || value == null ? 0 : Number(value);
@@ -96,10 +97,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       const payload = { [fieldKey]: normalizedValue };
       const res = await fetch(`${apiBaseUrl}/businessPartner/${data.id}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify(payload),
       });
 

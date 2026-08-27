@@ -262,7 +262,7 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
     });
 
-    expect(fetch).toHaveBeenCalledWith('/api/pending', { headers: { Authorization: 'Bearer test-token' } });
+    expect(fetch).toHaveBeenCalledWith('/api/pending', { headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } });
   });
 
   it('falls back to generic subtitle when pendingQtyUrl fetch fails', async () => {
@@ -353,7 +353,7 @@ describe('CreateInvoiceConfirmModal', () => {
       await waitFor(() => {
         expect(fetch).toHaveBeenCalledWith(
           '/sws/neo/goods-shipment/price-list/priceList?_startRow=0&_endRow=200',
-          { headers: { Authorization: 'Bearer test-token' } },
+          { headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } },
         );
       });
     });

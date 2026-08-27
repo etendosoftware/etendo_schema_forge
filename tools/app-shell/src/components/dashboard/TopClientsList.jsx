@@ -7,6 +7,7 @@ import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
+import { buildHeaders } from '@/auth/api.js';
 async function resolveClientRoute({ client, token, apiBaseUrl }) {
   const directRoute = resolveDashboardNavigation(client?.navigation);
   if (directRoute) return directRoute;
@@ -23,7 +24,7 @@ async function resolveClientRoute({ client, token, apiBaseUrl }) {
   try {
     const res = await fetch(
       `${apiBaseUrl}/contacts/businessPartner?_sortBy=name asc&_startRow=0&_endRow=10&criteria=${criteria}`,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      { headers: buildHeaders(token) }
     );
     if (!res.ok) return '/contacts';
     const json = await res.json();

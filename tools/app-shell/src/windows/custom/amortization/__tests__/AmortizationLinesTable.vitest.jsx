@@ -167,7 +167,7 @@ describe('AmortizationLinesTable — fetch + render', () => {
     // fetch URL targets the lines sub-endpoint with the parent id
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/lines?parentId=amort-1'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) }),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) }),
     );
   });
 

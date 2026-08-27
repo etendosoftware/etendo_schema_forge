@@ -28,6 +28,7 @@ import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
 
+import { buildHeaders } from '@/auth/api.js';
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
 function labelOrFallback(ui, key, fallbackKey) {
@@ -285,10 +286,7 @@ export function ListModalWindow({
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
 
-  const authHeaders = useCallback(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const authHeaders = useCallback(() => (buildHeaders(token)), [token]);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {

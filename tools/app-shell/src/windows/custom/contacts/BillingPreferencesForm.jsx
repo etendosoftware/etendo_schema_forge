@@ -5,6 +5,7 @@ import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
   'priceList',
   'paymentMethod',
@@ -80,7 +81,7 @@ export default function BillingPreferencesForm(props) {
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
   const apiBase = apiBaseUrl ?? api?.baseUrl ?? '';
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = buildHeaders(token);
   const organizationId = resolveId(data?.organization ?? data?.adOrgId ?? data?.ad_org_id);
   const clientId = resolveId(data?.client ?? data?.adClientId ?? data?.ad_client_id);
   // Sub-entity records (current BP's discount)
@@ -138,7 +139,7 @@ export default function BillingPreferencesForm(props) {
     if (!bpId || !token) return;
 
     // Fetch current discount record for this BP
-    fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : null)
       .then(d => setDiscountRecord(d?.response?.data?.[0] ?? null))
       .catch(() => setDiscountRecord(null));
@@ -147,7 +148,7 @@ export default function BillingPreferencesForm(props) {
     const discountParams = new URLSearchParams({ limit: '200', offset: '0' });
     if (organizationId) discountParams.set('AD_Org_ID', organizationId);
     if (clientId) discountParams.set('AD_Client_ID', clientId);
-    fetch(`${apiBase}/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBase}/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         const seen = new Set();

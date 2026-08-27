@@ -59,7 +59,7 @@ describe('CheckboxCard', () => {
 
 const BASE_PROPS = {
   base: '/api',
-  headers: { Authorization: 'Bearer tok' },
+  headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' },
   recordId: 'rec-1',
   specName: 'goods-receipt',
   entityName: 'goodsReceipt',

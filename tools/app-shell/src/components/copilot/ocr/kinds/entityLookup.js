@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { authHeaders } from '@/auth/api.js';
 export const SEARCH_DEBOUNCE_MS = 250;
 
 export function escHql(value) {
@@ -44,7 +45,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
         : baseFilter;
       const url = `${endpoint}?_neoWhere=${encodeURIComponent(where)}&limit=${limit}`;
       try {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(url, { headers: authHeaders(token) });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const json = await res.json();
         const data = json?.response?.data ?? json?.data ?? [];

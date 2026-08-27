@@ -11,13 +11,14 @@ import FmCatalogPage from './FmCatalogPage.jsx';
 import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
 async function computeBoxes303Real(decl, { token, apiBaseUrl } = {}) {
   if (!token || !apiBaseUrl) throw new Error('missing credentials');
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const params = new URLSearchParams({ year: decl.year, period: decl.period });
   const res = await fetch(`${base}/fiscal303/boxes?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(`boxes fetch failed: ${res.status}`);
   return await res.json();
@@ -410,7 +411,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     if (!token || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     fetch(`${base}/fiscal303/declarations`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
@@ -454,7 +455,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     if (!token || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     fetch(`${base}/fiscal-models-catalog`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setActiveModels(data ?? {}))
@@ -569,7 +570,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       fetch(`${base}/fiscal303/declarations`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: buildHeaders(token),
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -910,7 +911,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               fetch(`${base}/fiscal-models-catalog`, {
                 method: 'PUT',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                headers: buildHeaders(token),
                 body: JSON.stringify(newActive),
               })
                 .then(r => { if (!r.ok) throw new Error(r.status); })

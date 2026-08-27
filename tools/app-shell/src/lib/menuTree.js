@@ -1,3 +1,4 @@
+import { authHeaders } from '@/auth/api.js';
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');
@@ -31,12 +32,12 @@ function getToken() {
 async function callMenuWebhook(params) {
   const url = `${NEO_BASE}/listmenu`;
   const token = getToken();
-  // No Content-Type: this is a GET with no body, and application/json isn't a
-  // CORS-safelisted value — setting it unnecessarily triggers a preflight
-  // OPTIONS request (and risks it failing) whenever VITE_API_BASE points at a
-  // different origin than the SPA.
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // authHeaders() sets NO Content-Type, preserving the reason this was hand-built: a GET has
+  // no body, and application/json isn't a CORS-safelisted value, so setting it would trigger a
+  // preflight OPTIONS whenever VITE_API_BASE points at a different origin than the SPA.
+  // ETP-5022: it also sends Accept-Language — which IS CORS-safelisted, so the preflight
+  // concern still doesn't apply — without which the menu labels came back in the AD language.
+  const headers = authHeaders(token);
   const query = new URLSearchParams(params).toString();
   const res = await fetch(query ? `${url}?${query}` : url, { headers });
   const text = await res.text();

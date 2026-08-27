@@ -4,6 +4,7 @@ import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 const PERIOD_VALUES = ['0A', '1T', '2T', '3T', '4T',
@@ -117,7 +118,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
-    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         // NEO does not expose `updated` — sort by invoiceDate desc, then
@@ -221,7 +222,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const rows = parseRows(json);
@@ -584,7 +585,7 @@ export default function ReversedInvoicesPanel({
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-models-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${neoBase}/fiscal-models-catalog`, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(json => setActiveModels(json ?? {}))
       .catch(() => {})
@@ -628,7 +629,7 @@ export default function ReversedInvoicesPanel({
     try {
       const res = await fetch(
         `${apiBaseUrl}/reversedInvoices?_startRow=0&_endRow=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: authHeaders(token) }
       );
       if (!res.ok) return;
       const json = await res.json();
@@ -669,7 +670,7 @@ export default function ReversedInvoicesPanel({
     try {
       const res = await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -725,7 +726,7 @@ export default function ReversedInvoicesPanel({
     try {
       await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       fetchLines();
     } catch { /* silent */ } finally { setDeleting(null); }
@@ -756,7 +757,7 @@ export default function ReversedInvoicesPanel({
       delete payload['reversedInvoice$_identifier'];
       const res = await fetch(`${apiBaseUrl}/reversedInvoices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ invoice: parentId, ...payload }),
       });
       if (res.ok) {

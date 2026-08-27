@@ -5,6 +5,7 @@ import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 import { paymentDisplayState } from './paymentStatuses';
 import { useRecordRefreshSignal } from './useRecordRefreshSignal';
 
+import { buildHeaders } from '@/auth/api.js';
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   return formatCurrency(currency || 'EUR', n);
@@ -297,7 +298,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const headers = buildHeaders(token);
     const linesEntity = isIn ? 'finPaymentScheduleDetail' : 'lines';
     let cancelled = false;
     (async () => {

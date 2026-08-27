@@ -46,7 +46,7 @@ describe('useNeoAction', () => {
         method: 'POST',
         body: '{}',
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES',
           'Content-Type': 'application/json',
         }),
       }),

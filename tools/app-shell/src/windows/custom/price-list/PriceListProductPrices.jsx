@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { InlineLinesPanel } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 
+import { buildHeaders } from '@/auth/api.js';
 // ETP-4592: product-price lines cannot be deleted from this tab (products are
 // added to a tariff from the product record itself). InlineLinesPanel has no
 // prop to hide just the row-delete icon — it renders unconditionally alongside
@@ -56,10 +57,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const parentId = data?.id || (recordId !== 'new' ? recordId : null);
   const selectorContext = useMemo(() => (versionId ? { parentId: versionId } : {}), [versionId]);

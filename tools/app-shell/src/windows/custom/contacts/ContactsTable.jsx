@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
 const INPUT_CLS = 'w-full h-7 px-2 text-sm rounded border border-border-control bg-card text-text-primary focus:outline-none focus:ring-1 focus:ring-focus-ring focus:border-transparent';
@@ -72,7 +73,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     setEditingRow(null);
     const res = await fetch(`${apiBaseUrl}/businessPartner/${id}`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
       body: JSON.stringify(values),
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
@@ -207,7 +208,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     try {
       const res = await fetch(`${apiBaseUrl}/businessPartner/${row.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       if (!res.ok) {
         toast.error(await extractApiErrorMessage(res));

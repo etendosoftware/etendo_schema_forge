@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
 
+import { authHeaders } from '@/auth/api.js';
 function PeriodLink({ label, onClick }) {
   return (
     <button
@@ -105,7 +106,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     const url = `${apiBaseUrl}/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`;
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(url, { headers: authHeaders(token) })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -116,7 +117,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         const ids = [...new Set(normalizedRows.map(l => l.amortization).filter(Boolean))];
         return Promise.all(
           ids.map(id =>
-            fetch(`${amortBase}/header/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+            fetch(`${amortBase}/header/${id}`, { headers: authHeaders(token) })
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
@@ -147,7 +148,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
         fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
           method: 'DELETE',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: token ? authHeaders(token) : {},
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;

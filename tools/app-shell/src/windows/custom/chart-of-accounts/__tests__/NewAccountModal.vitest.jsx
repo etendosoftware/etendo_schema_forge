@@ -134,7 +134,7 @@ describe('NewAccountModal', () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } }),
+      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } }),
     ));
     await waitFor(() => {
       const select = screen.getByTestId('new-account-modal-parent');
@@ -234,7 +234,7 @@ describe('NewAccountModal', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(`${BASE_URL}/elementValue`, expect.objectContaining({
       method: 'POST',
-      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       body: JSON.stringify({ searchKey: '40001234', name: 'US Sales', accountType: 'E' }),
     }));
     expect(toast.success).toHaveBeenCalledWith('newSubAccountSuccess');

@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -43,10 +44,7 @@ export default function PurchaseOrderActions({
     [apiBaseUrl],
   );
   const headers = useMemo(
-    () => ({
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    }),
+    () => (buildHeaders(token)),
     [token],
   );
 
@@ -327,10 +325,7 @@ function ConfirmOrderModal({
   const [needsReload, setNeedsReload] = useState(false);
 
   const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   // Fetch fresh record + line count on mount
   useEffect(() => {

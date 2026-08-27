@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 const DEFAULT_TIMEOUT_MS = 15000;
 
 /**
@@ -21,10 +22,7 @@ export function getApiBase() {
 async function fetchNeoPayload(apiBase, token, path, signal) {
   const url = `${apiBase}${path}`;
   const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: buildHeaders(token),
     signal,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

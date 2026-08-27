@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * Triggers a browser download for a Blob using a transient <a download>.
  */
@@ -50,7 +51,7 @@ export function useCsvExport() {
       const query = buildExportQuery(params);
       const url = `${apiBase}${path}${path.includes('?') ? '&' : '?'}${query}`;
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();

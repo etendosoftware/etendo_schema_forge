@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/custom/shared/documentPdfRegistry.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
@@ -116,7 +117,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     try {
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -158,7 +159,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       // Get HTML
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });
       if (!res.ok) throw new Error(ui('actionFailed'));
@@ -300,7 +301,7 @@ export async function printDocuments(windowName, documentIds, token, translate =
       }
       const res = await fetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: buildHeaders(token),
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error(translate('actionFailed'));

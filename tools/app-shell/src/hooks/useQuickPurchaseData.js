@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 // -- Helpers ------------------------------------------------------------------
 
 function guessCategory(name) {
@@ -13,7 +14,7 @@ function guessCategory(name) {
 }
 
 function buildAuthHeaders(token) {
-  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return buildHeaders(token);
 }
 
 async function fetchJSON(url, headers) {

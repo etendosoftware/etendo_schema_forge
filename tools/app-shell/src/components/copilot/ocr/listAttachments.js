@@ -1,3 +1,4 @@
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 /**
  * Thin client for the NEO Headless attachments endpoints
  * (com.etendoerp.go NeoBuiltInEndpointHandler /sws/neo/attachments/*).
@@ -33,7 +34,7 @@ export async function listAttachments({ token, tableName, recordId, apiBaseUrl }
     const res = await fetch(url, {
       method: 'GET',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
@@ -70,7 +71,7 @@ export async function uploadAttachment({ token, tableName, recordId, file, fileN
       method: 'POST',
       credentials: 'include',
       // No Content-Type header — the browser must set the multipart boundary.
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
       body: form,
     });
     if (!res.ok) {
@@ -96,7 +97,7 @@ export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {})
     const res = await fetch(`${base}/sws/neo/attachments/file/${attachmentId}`, {
       method: 'DELETE',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -122,7 +123,7 @@ export async function fetchAttachmentBlob({ token, attachmentId, apiBaseUrl } = 
     const res = await fetch(url, {
       method: 'GET',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) return null;
     return await res.blob();
@@ -159,7 +160,7 @@ export async function fetchMainAttachment({ token, tableName, recordId, apiBaseU
     const res = await fetch(url, {
       method: 'GET',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
@@ -190,7 +191,7 @@ export async function uploadAndMarkMainAttachment({
     const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
       body: form,
     });
     if (!res.ok) return null;
@@ -216,7 +217,7 @@ export async function markAttachmentAsMain({ token, attachmentId, isMain, apiBas
     const res = await fetch(url, {
       method: 'PATCH',
       credentials: 'include',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
       body: JSON.stringify({ isMain }),
     });
     return res.ok;

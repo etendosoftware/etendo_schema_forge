@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Hook for creating a bank statement manually (header + lines, no file).
  *
@@ -37,10 +38,7 @@ export function useCreateStatement() {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,
           name,

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { authHeaders } from '@/auth/api.js';
 import {
   Dialog,
   DialogContent,
@@ -70,7 +71,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token ? authHeaders(token) : {}),
         },
         body: JSON.stringify({ email: trimmed }),
       });

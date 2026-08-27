@@ -3,6 +3,7 @@ import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
 // ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ function fmt(v) {
 // ---------------------------------------------------------------------------
 export async function fetchJson(url, token) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildHeaders(token),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   const d = await res.json();
@@ -117,7 +118,7 @@ export async function fetchJson(url, token) {
 
 export async function fetchAll(url, token) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildHeaders(token),
   });
   if (!res.ok) return [];
   const d = await res.json();
@@ -159,7 +160,7 @@ export async function fetchImageDataUrl(imageId, base, token) {
   if (!imageId) return null;
   try {
     const res = await fetch(`${base}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res.ok) return null;
     return await blobToDataUrl(await res.blob());

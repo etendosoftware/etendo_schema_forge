@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUI, getStoredLocale } from '@/i18n';
+import { useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast.js';
 
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
 // since this is a custom component, not generator-driven output.
@@ -61,15 +62,13 @@ function yearCriteria(yearId) {
 // DOCUMENT_CATEGORY_LABEL_KEYS below for the actual fix (client-side enumLabels, same
 // convention DataTable.cellRenderers.jsx's renderEnumCell already uses everywhere else). The
 // header is still sent since it's correct for other things (e.g. AD_Message translations) and
-// doesn't hurt. `getStoredLocale()` (from @/i18n, app-shell-core's useLocaleState.js) is the
-// canonical "read the active locale outside of React" helper already published for exactly
-// this use case — reused here instead of duplicating useEntity.js's own localStorage read.
-function buildLocaleHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    'Accept-Language': getStoredLocale(),
-  };
-}
+// doesn't hurt.
+//
+// ETP-5022: this panel's local header builder was folded into the canonical `authHeaders()`
+// (app-shell-core/auth), which sends exactly the same two headers. The finding above still
+// stands: periodControl/documents is served by the classic DefaultJsonDataService, and these
+// labels are AD_Ref_List statuses rather than FK identifiers, so the DAL's native *_Trl
+// translation path does not reach them. The client-side enumLabels below remain the fix here.
 
 // The actual fix for the untranslated labels: client-side enumLabels dictionaries resolved via
 // ui()/tMenu (dictionary.genericLabels), exactly like DataTable.cellRenderers.jsx's
@@ -140,7 +139,7 @@ const DOCUMENT_CATEGORY_LABEL_KEYS = {
 };
 
 async function fetchJson(url, token) {
-  const res = await fetch(url, { headers: buildLocaleHeaders(token) });
+  const res = await fetch(url, { headers: authHeaders(token) });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
   // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
@@ -153,7 +152,7 @@ async function fetchJson(url, token) {
 async function postAction(url, token, fieldValues) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { ...buildLocaleHeaders(token), 'Content-Type': 'application/json' },
+    headers: buildHeaders(token),
     // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
     // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
     body: JSON.stringify({ fieldValues }),

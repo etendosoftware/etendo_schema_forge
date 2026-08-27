@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Fetches the selectable values for a set of accounting dimensions from
  *   GET /sws/neo/financial-account-transactions?action=dimension-values&dimension=<key>
@@ -35,7 +36,7 @@ export function useDimensionValues(dimensions, enabled = true) {
       const url = `${base}/sws/neo/financial-account-transactions?action=dimension-values&dimension=${encodeURIComponent(key)}`;
       try {
         const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          headers: buildHeaders(token),
           signal: ctrl.signal,
         });
         if (!res.ok) return [key, []];

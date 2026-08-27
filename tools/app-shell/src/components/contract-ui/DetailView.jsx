@@ -103,6 +103,8 @@ const NO_GATE_EXCLUSIONS = Object.freeze([]);
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { authHeaders, buildHeaders } from '@/auth/api.js';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 import {
   CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
@@ -239,7 +241,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
     try {
       res = await fetch(childUrl, {
         method: 'PATCH',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
+        headers: {...(token ? authHeaders(token) : {}), 'Content-Type': 'application/json'},
         body: JSON.stringify({[fieldKey]: value}),
       });
     } catch (err) {
@@ -344,7 +346,7 @@ export function buildSecondaryLineHandlers(deps) {
       normalizePatchFieldValues(secondaryLineEdits, fieldValues, st.addLineFields?.entry);
       const res = await fetch(secUrl, {
         method: 'PATCH',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        headers: {'Content-Type': 'application/json', ...(token ? authHeaders(token) : {})},
         body: JSON.stringify(fieldValues),
       });
       if (res.ok) {
@@ -386,7 +388,7 @@ export function buildSecondaryLineHandlers(deps) {
             || `${apiBaseUrl}/${st.key}/${row.id}`;
         return fetch(childUrl, {
           method: 'DELETE',
-          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+          headers: {...(token ? authHeaders(token) : {})},
         }).then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return row;
@@ -765,7 +767,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
 
     const res = await fetch(childUrl, {
       method: 'PATCH',
-      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      headers: {'Content-Type': 'application/json', ...(token ? authHeaders(token) : {})},
       body: JSON.stringify(fieldValues),
     });
     if (res.ok) {
@@ -798,7 +800,7 @@ export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, c
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
       const res = await fetch(childUrl, {
         method: 'DELETE',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        headers: {...(token ? authHeaders(token) : {})},
       });
       if (res.ok) {
         hook.handleDeleteChild(row.id);
@@ -974,7 +976,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(token ? authHeaders(token) : {}),
           },
           body: JSON.stringify({ fieldValues }),
         }).then(res => ({ res, row }));
@@ -1799,6 +1801,9 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
+  // ETP-5022: publish to the global registry so a language change (which reloads the page)
+  // and F5 / tab close both warn before discarding these edits.
+  useUnsavedChangesGuard(isDirty);
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1908,7 +1913,7 @@ export function DetailView({
       try {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         const sessionRes = await fetch(`${neoBase}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders(token),
         });
         if (!sessionRes.ok || cancelled) return;
         const session = await sessionRes.json();
@@ -1937,7 +1942,7 @@ export function DetailView({
 
         const rateRes = await fetch(
           `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: authHeaders(token) },
         );
         if (!rateRes.ok || cancelled) {
           activeCurrencyConversionRef.current = null;
@@ -2322,7 +2327,7 @@ export function DetailView({
           };
           try {
             const sessionRes = await fetch(`${neoBase}/session`, {
-              headers: { Authorization: `Bearer ${token}` },
+              headers: authHeaders(token),
             });
             if (!sessionRes.ok) { revert(); return; }
             const session = await sessionRes.json();
@@ -2332,7 +2337,7 @@ export function DetailView({
             if (!orgCurrencyId || orgCurrencyId === value) return;
             const rateRes = await fetch(
               `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { headers: { Authorization: `Bearer ${token}` } },
+              { headers: authHeaders(token) },
             );
             if (!rateRes.ok) { revert(); return; }
             const rateData = await rateRes.json();
@@ -2425,10 +2430,7 @@ export function DetailView({
       };
       const res = await fetch(`${apiBaseUrl}/${detailEntity}/callout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify(payload),
       });
       if (!res.ok) return;
@@ -2491,10 +2493,7 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify({ etgoTotalDiscount: pct }),
       });
       if (!res.ok) {
@@ -2528,10 +2527,7 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: JSON.stringify({ [notesField]: value }),
       });
       if (!res.ok) {
@@ -3505,7 +3501,7 @@ export function DetailView({
                                             }
                                             const res = await fetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              headers: { 'Content-Type': 'application/json', ...(token ? authHeaders(token) : {}) },
                                               body: JSON.stringify({ fieldValues }),
                                             });
                                             if (res.ok) {
@@ -3534,7 +3530,7 @@ export function DetailView({
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
                                             const res = await fetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              headers: { ...(token ? authHeaders(token) : {}) },
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -3723,7 +3719,7 @@ export function DetailView({
                                                 normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
-                                                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                  headers: { 'Content-Type': 'application/json', ...(token ? authHeaders(token) : {}) },
                                                   body: JSON.stringify(fieldValues),
                                                 });
                                                 if (res.ok) {
@@ -3734,7 +3730,7 @@ export function DetailView({
                                                   // derived fields (lineNetAmount, discounts) on save.
                                                   try {
                                                     const freshRes = await fetch(childUrl, {
-                                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                      headers: { ...(token ? authHeaders(token) : {}) },
                                                     });
                                                     if (freshRes.ok) {
                                                       const freshJson = await freshRes.json();
@@ -3781,7 +3777,7 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
                                               const res = await fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                headers: { ...(token ? authHeaders(token) : {}) },
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -4215,7 +4211,7 @@ export function DetailView({
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
                   const res = await fetch(secUrl, {
                     method: 'DELETE',
-                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    headers: { ...(token ? authHeaders(token) : {}) },
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

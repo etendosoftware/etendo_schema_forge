@@ -15,7 +15,7 @@ async function executeDocumentAction(apiBaseUrl, entity, token, recordId, docAct
     `${apiBaseUrl}/${entity}/${recordId}/action/documentAction`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       body: JSON.stringify({ docAction }),
     },
   );

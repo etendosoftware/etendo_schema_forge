@@ -21,22 +21,13 @@ import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismiss
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
+// ETP-5022: header policy has ONE home (app-shell-core/auth). This module used to
+// carry its own buildHeaders copy, which is how header sets drift apart.
+import { buildHeaders } from '@/auth/api.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
 export { isEmailField };
-
-function buildHeaders(token) {
-    let locale = 'es_ES';
-    try { locale = localStorage.getItem('schema-forge-locale') || 'es_ES'; } catch { /* SSR/test */ }
-    return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        // Propagate the UI locale so backend AD_Message translations match the
-        // language the user selected in the frontend.
-        'Accept-Language': locale,
-    };
-}
 
 export function pickMessageFromObject(node) {
     if (typeof node === 'object') {

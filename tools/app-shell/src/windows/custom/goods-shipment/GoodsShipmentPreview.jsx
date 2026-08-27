@@ -13,6 +13,7 @@ import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryC
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -91,7 +92,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     const getDetail = (id, tok, base) => {
       if (!detailPromise) {
         detailPromise = fetch(`${base}/goodsShipment/${id}`, {
-          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+          headers: buildHeaders(tok),
         })
           .then(r => r.ok ? r.json() : null)
           .then(j => j?.response?.data?.[0] ?? {})

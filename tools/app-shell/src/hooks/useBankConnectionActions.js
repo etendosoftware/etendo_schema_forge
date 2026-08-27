@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 
+import { buildHeaders } from '@/auth/api.js';
 const BASE_PATH = '/sws/neo/financial-account-bank-connection';
 
 /** SPA route the Salt Edge popup returns to (see BankConnectionCallbackPage). */
@@ -115,10 +116,7 @@ export function useBankConnectionActions() {
       const url = `${getApiBase()}${BASE_PATH}${buildQuery({ action, ...query })}`;
       const res = await fetch(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: buildHeaders(token),
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });

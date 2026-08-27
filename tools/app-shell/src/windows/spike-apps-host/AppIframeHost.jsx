@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
+import { authHeaders } from '@/auth/api.js';
 function resolveAppTokenUrl(appId) {
   const envBase = import.meta.env.VITE_API_BASE;
   const path = window.location.pathname;
@@ -11,9 +12,7 @@ function resolveAppTokenUrl(appId) {
 async function fetchAppToken(appId, etendoToken) {
   const res = await fetch(resolveAppTokenUrl(appId), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${etendoToken}`,
-    },
+    headers: authHeaders(etendoToken),
   });
   if (!res.ok) throw new Error(`token endpoint failed: ${res.status}`);
   const body = await res.json();

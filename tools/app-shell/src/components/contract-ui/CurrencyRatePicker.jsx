@@ -3,6 +3,7 @@ import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
+import { authHeaders } from '@/auth/api.js';
 /**
  * CurrencyRatePicker — searchable currency selector for order header fields.
  *
@@ -78,7 +79,7 @@ export function CurrencyRatePicker({
       try {
         const res = await fetch(
           `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: authHeaders(token) },
         );
         if (cancelled) return;
         if (res.ok) {
@@ -105,7 +106,7 @@ export function CurrencyRatePicker({
       try {
         const res = await fetch(
           `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: authHeaders(token) },
         );
         if (cancelled || !res.ok) return;
         const json = await res.json();

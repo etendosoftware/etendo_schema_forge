@@ -9,6 +9,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { selectSifFields, pickRegimeChild } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
 
+import { authHeaders } from '@/auth/api.js';
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
 // LinesTable.jsx declares for both sales-invoice and purchase-invoice.
 const TAX_SELECTOR_COLUMN = 'C_Tax_ID';
@@ -66,7 +67,7 @@ async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, 
       ...selectorContext,
       ...(currency ? { currency } : {}),
     });
-    const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const taxResponse = await fetch(url, { headers: authHeaders(token) });
     const data = taxResponse.ok ? await taxResponse.json() : null;
     // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
     // state, since nothing is waiting for it any more.
@@ -221,7 +222,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
 
     async function loadTaxCatalog() {
       const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
       });
       const headerJson = headerResponse.ok ? await headerResponse.json() : null;
       // NEO envelopes single-record GETs as { response: { data: [ {...} ], status } } —

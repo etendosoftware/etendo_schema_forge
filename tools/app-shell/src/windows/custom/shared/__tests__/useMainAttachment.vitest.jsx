@@ -295,7 +295,7 @@ describe('useMainAttachment', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://example.com/f.pdf',
-        { headers: { Authorization: 'Bearer test-token' } },
+        { headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' } },
       );
       expect(uploadAndMarkMainAttachment).toHaveBeenCalledWith(expect.objectContaining({
         fileName: 'remote.pdf',
