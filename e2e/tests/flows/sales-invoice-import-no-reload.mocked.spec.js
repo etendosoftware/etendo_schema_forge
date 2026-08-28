@@ -79,7 +79,21 @@ const SHIP_LINE = {
 async function installMocks(page) {
   // Invoice header — detail page fetch
   await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
+    const req = route.request();
+    // A PATCH on the header must echo the updated header. Deferring it to the /sws/**
+    // catch-all instead answers with that route's generic saved-record body, which carries
+    // no businessPartner — the detail view then holds a record with no customer, so the
+    // import modal receives bpId === undefined and filters every shipment out.
+    if (req.method() === 'PATCH' || req.method() === 'PUT') {
+      const patch = req.postData() ? JSON.parse(req.postData()) : {};
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...INVOICE_HEADER, ...patch }] } }),
+      });
+      return;
+    }
+    if (req.method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -237,7 +251,18 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Invoice header
     await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
+      const req = route.request();
+      // See the note on the same route in installMocks: a PATCH has to echo the header.
+      if (req.method() === 'PATCH' || req.method() === 'PUT') {
+        const patch = req.postData() ? JSON.parse(req.postData()) : {};
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [{ ...INVOICE_HEADER, ...patch }] } }),
+        });
+        return;
+      }
+      if (req.method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
