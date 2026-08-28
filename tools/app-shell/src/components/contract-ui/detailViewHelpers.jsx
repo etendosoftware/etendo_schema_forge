@@ -400,6 +400,18 @@ export function getDocumentIds(recordId) {
   return recordId ? [recordId] : [];
 }
 
+// ETP-5052: display-only merge exposing whether the master record currently has
+// child lines to HEADER field `readOnlyLogicJs` expressions (e.g. `"!!record.hasLines"`
+// on Physical Inventory's `warehouse`), so a header field can lock once count/detail
+// lines exist and unlock again once the last one is removed. `children` is guarded
+// (not every window's `hook.children` is an array — header-only windows have none).
+// NEVER feed the returned object into a save/PUT payload: `handleSave` (useEntity.js)
+// builds the request from `editing` state directly, never from this merge, so the
+// synthetic `hasLines` key never reaches the backend.
+export function buildHeaderFormData(data, children) {
+  return { ...data, hasLines: Array.isArray(children) && children.length > 0 };
+}
+
 export function resolveSidebarContent(sidebarContent, data) {
   return typeof sidebarContent === 'function' ? sidebarContent(data) : sidebarContent;
 }
