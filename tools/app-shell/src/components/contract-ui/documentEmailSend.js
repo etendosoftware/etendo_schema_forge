@@ -31,6 +31,11 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
     recordId: documentId,
     intent: 'send-document',
   };
+  // ETP-5003 — without this the backend falls back to Spanish for every recipient, whatever
+  // locale the operator is working in.
+  if (options.language) {
+    command.language = options.language;
+  }
   // ETP-4717 — opt-in, mirrors recipientEdits: only present when the operator
   // actually changed subject/message away from their auto-derived defaults,
   // so an untouched send stays byte-identical with the legacy payload shape.
@@ -146,6 +151,7 @@ export async function sendDocumentEmail({
   pdfBlobUrl,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
@@ -161,7 +167,7 @@ export async function sendDocumentEmail({
     method: 'POST',
     baseUrl: '',
     token,
-    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
+    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits, language })),
   });
   return readEmailContractResponse(res);
 }

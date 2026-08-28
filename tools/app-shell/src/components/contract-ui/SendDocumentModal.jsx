@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { hasClientPdf, buildClientPdfBlob } from '@/windows/custom/shared/documentPdfRegistry.js';
 import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
@@ -65,6 +65,7 @@ async function sendDocumentFromModal({
   onClose,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
@@ -76,6 +77,10 @@ async function sendDocumentFromModal({
     pdfBlobUrl: cachePreviewBeforeSend ? pdfBlobUrl : null,
     recipientEdits,
     messageEdits,
+    // ETP-5003 — the caller passed this all along and it was dropped right here, so every send
+    // reached the module with no language and rendered its catalog copy in Spanish while the
+    // operator was reading English on screen. The module logs a WARN when it arrives empty.
+    language,
   });
 
   if (data.status === 'SENT' || data.status === 'DUPLICATE') {
@@ -342,6 +347,7 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
 export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
+  const { locale } = useLocaleSwitch();
 
   // ETP-4912 — most callers hand over the PDF their own useXxxPdf hook produced. The
   // generic one (ListView's fallback modal) has no hook, so it used to leave this empty
@@ -433,9 +439,27 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   // kept around so handleSend can tell whether the operator actually changed
   // either one; an untouched send must stay byte-identical to the legacy
   // payload (no `messageEdits` key at all).
+  // ETP-5003 — the operator must read exactly what the customer will receive, so both fields start
+  // filled with the copy the backend composes when nothing is edited.
+  //
+  // ⚠ KEEP IN SYNC with the module's message catalog, which owns the same two sentences for a send
+  // that carries no edits:
+  //   com.etendoerp.go/.../email/render/messages/emails_*.properties
+  //   → document.subject.withRecipient  and  document.body
+  // They are composed here rather than fetched, to save the round trip. That trade only holds while
+  // both sides say the same thing — they diverged once already, and the operator read one subject
+  // while the customer received another. `defaultCopyInSync.test.js` fails when they drift; fix the
+  // mismatch rather than relaxing the test.
   const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
+  // ETP-5003 — the greeting is part of the editable message, not something the backend adds
+  // afterwards: the operator has to be able to read and change how the customer is addressed.
+  // The module skips its own greeting whenever a message is supplied, so this is the only one.
+  const defaultMessage = [
+    bpName ? ui('sendModalDefaultGreeting', { bpName }) : null,
+    ui('sendModalDefaultMessage', { documentType, documentNo }),
+  ].filter(Boolean).join('\n\n');
   const [subject, setSubject] = useState(defaultSubject);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(!effectivePdfUrl);
@@ -490,11 +514,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       const recipientEdits = editableRecipients
         ? buildRecipientEdits(baseRecipientsRef.current, { to: toRecipients, cc: ccRecipients })
         : null;
-      // Untouched subject/message yield null here, keeping the command
-      // byte-identical to the legacy one (mirrors recipientEdits above).
-      const messageEdits = (subject !== defaultSubject || message !== '')
-        ? { subject, message }
-        : null;
+      // ETP-5003 — subject and message always travel, edited or not. They used to be omitted when
+      // untouched, leaving the module to recompose them from its own catalog in whatever language
+      // the command carried: a command with no language rebuilt them in Spanish while the operator
+      // had just read them in English on this very screen. Sending what is on screen removes the
+      // whole class of divergence — there is no second copy left to drift.
+      const messageEdits = { subject, message };
       await sendDocumentFromModal({
         apiBaseUrl,
         token,
@@ -513,6 +538,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         setSendFeedback,
         onClose,
         recipientEdits,
+        language: locale,
         messageEdits,
       });
     } catch {

@@ -123,12 +123,16 @@ describe('ListView — isRowDeletable (ETP-4871)', () => {
   });
 
   // ── (a) absent → unchanged behavior — the regression-proof case ───────────
-  it('prop absent: the button is never disabled by this mechanism, no tooltip, for a mix that would otherwise be blocked', () => {
+  // ETP-4972 — the button became icon-only, so it now always carries a
+  // `title` tooltip (previously it had a visible "Eliminar" label and no
+  // title at all when not blocked). The blocked-tooltip title still
+  // overrides this default one — see the (c)/(d) cases below.
+  it('prop absent: the button is never disabled by this mechanism, plain delete tooltip, for a mix that would otherwise be blocked', () => {
     renderList(ROWS_MIXED);
 
     const button = screen.getByTestId('bulk-delete-selected');
     expect(button).not.toBeDisabled();
-    expect(button).not.toHaveAttribute('title');
+    expect(button).toHaveAttribute('title', 'delete');
   });
 
   it('prop absent: still not disabled even when every row has no deletable flag at all', () => {
@@ -138,12 +142,12 @@ describe('ListView — isRowDeletable (ETP-4871)', () => {
   });
 
   // ── (b) present, every selected row passes ─────────────────────────────────
-  it('prop present, every row deletable: button enabled, no tooltip', () => {
+  it('prop present, every row deletable: button enabled, plain delete tooltip', () => {
     renderList(ROWS_ALL_DELETABLE, { isRowDeletable: (row) => row.deletable === true });
 
     const button = screen.getByTestId('bulk-delete-selected');
     expect(button).not.toBeDisabled();
-    expect(button).not.toHaveAttribute('title');
+    expect(button).toHaveAttribute('title', 'delete');
   });
 
   // ── (c) present, some selected rows fail ───────────────────────────────────
@@ -163,9 +167,9 @@ describe('ListView — isRowDeletable (ETP-4871)', () => {
     expect(button).toHaveAttribute('title', 'bulkDeleteBlockedTooltip({"count":2})');
   });
 
-  it('prop present, nothing in the current selection fails the predicate: no tooltip', () => {
+  it('prop present, nothing in the current selection fails the predicate: plain delete tooltip', () => {
     renderList(ROWS_ALL_DELETABLE, { isRowDeletable: () => true });
 
-    expect(screen.getByTestId('bulk-delete-selected')).not.toHaveAttribute('title');
+    expect(screen.getByTestId('bulk-delete-selected')).toHaveAttribute('title', 'delete');
   });
 });

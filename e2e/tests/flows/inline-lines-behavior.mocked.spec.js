@@ -307,11 +307,18 @@ test.describe('Tanda 1 — core behaviors', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Tanda 2 — selection and totals', () => {
-  // Bulk delete (LinesSelectionBar) intentionally not E2E'd here. Its portal is
+  // Bulk delete (now the shared `SelectionToolbar` shell, ETP-4972) intentionally
+  // not E2E'd here. The original reason this note gave — its portal being
   // anchored to AddLineButton's viewport rect, which sits below the screenshot
-  // fold under Playwright headless layout — the bar materialises in the DOM but
-  // can't be deterministically asserted. Coverage lives in:
-  //   - LinesSelectionBar.test.js                   (portal, animations, props)
+  // fold under Playwright headless layout — no longer applies: SelectionToolbar
+  // has no rect-anchoring at all, it's hardcoded fixed to the viewport's
+  // bottom-center regardless of scroll/layout. That fix (ETP-4972) shipped
+  // without adding a real-browser regression test for the actual production bug
+  // it fixed (a long, scrolled list keeping the bar visible) — this remains a
+  // real coverage gap, not a deliberate exclusion; a follow-up spec here or in
+  // a sibling file should assert that. Existing coverage lives in:
+  //   - SelectionToolbar.test.js / SelectionToolbar.vitest.jsx (portal,
+  //     positioning, animations, props — jsdom-level, not real-browser)
   //   - InlineLinesPanel.test.js                    (onSelectionChange emit)
   //   - inline-lines-quotation.mocked.spec.js       (single-row trash → DELETE,
   //                                                  same handler as bulk delete)

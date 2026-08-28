@@ -65,10 +65,9 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
-import LinesSelectionBar from './LinesSelectionBar.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
 import DetailSidePanel from './DetailSidePanel.jsx';
-import LinesBulkActionBar from './LinesBulkActionBar.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -107,7 +106,7 @@ import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -503,8 +502,6 @@ function secondaryAddLineBar(props) {
     return null;
   }
   return (
-    // Wrapper measured by the secondary selection bar — its
-    // `position: fixed` portal overlays exactly this region.
     // Mirrors the primary header-lines add-button wrapper (shared
     // getAddLineWrapperClassName/Style helpers) so both paths get the
     // same top border, vertical spacing and padding — keeps alignment
@@ -514,8 +511,8 @@ function secondaryAddLineBar(props) {
     // sticky bottom-0 variant is only correct for the tall PRIMARY
     // header-lines area — applying it here makes the button overlap the
     // last table row when the scroll container is resized.
+    // ETP-4972: no longer measured — SelectionToolbar below is viewport-fixed.
     <div
-      ref={props.secondaryAddLineWrapperRef}
       className="relative"
       // No borderTop: the child table already renders its own bottom
       // border, so the primary path's top divider would double up here.
@@ -537,20 +534,27 @@ function secondaryAddLineBar(props) {
           for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
           the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
       {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
-          <LinesSelectionBar
+          <SelectionToolbar
             visible={props.secondaryBarVisible[props.st.key] ?? false}
             closing={props.secondaryBarClosing[props.st.key] ?? false}
-            barRect={props.secondaryBarRects[props.st.key]}
-            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
-            selectedLabel={props.selectedLabel}
-            totalLabel={null}
-            deleting={props.secondaryDeleting[props.st.key] ?? false}
-            deleteTitle={props.deleteLabel}
-            closeTitle={props.closeTitle}
-            compact
-            onDelete={props.onDelete}
             onClose={props.onClose}
-            data-testid="LinesSelectionBar__fa3275" />
+            closeTitle={props.closeTitle}
+            data-testid="SelectionToolbar__fa3275">
+            <span className="text-sm font-medium">{props.selectedLabel}</span>
+            {/* ETP-4972 — icon-only, no border, no visible label: applied
+                Figma instance's own canvas render has no stroke around this
+                icon, just red icon color. */}
+            <button
+              type="button"
+              disabled={props.secondaryDeleting[props.st.key] ?? false}
+              title={props.deleteLabel}
+              aria-label={props.deleteLabel}
+              onClick={props.onDelete}
+              className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+            </button>
+          </SelectionToolbar>
       )}
     </div>
   );
@@ -1443,16 +1447,6 @@ export function DetailView({
     }
     return secondaryAddRowRefs.current[key];
   }, []);
-  // Per-tab refs powering the selection bar in secondary inline-editable tabs.
-  // Mirrors `addLineWrapperRef` + `inlineLinesRef` from the primary lines flow,
-  // one entry per tab key so each tab measures and clears independently.
-  const secondaryAddLineWrapperRefs = useRef({});
-  const getSecondaryAddLineWrapperRef = useCallback((key) => {
-    if (!secondaryAddLineWrapperRefs.current[key]) {
-      secondaryAddLineWrapperRefs.current[key] = { current: null };
-    }
-    return secondaryAddLineWrapperRefs.current[key];
-  }, []);
   const secondaryInlineLinesRefs = useRef({});
   const getSecondaryInlineLinesRef = useCallback((key) => {
     if (!secondaryInlineLinesRefs.current[key]) {
@@ -1592,37 +1586,7 @@ export function DetailView({
   const [secondarySelectedRows, setSecondarySelectedRows] = useState({});
   const [secondaryBarVisible, setSecondaryBarVisible] = useState({});
   const [secondaryBarClosing, setSecondaryBarClosing] = useState({});
-  const [secondaryBarRects, setSecondaryBarRects] = useState({});
   const [secondaryDeleting, setSecondaryDeleting] = useState({});
-  // Position of the AddLineButton wrapper in viewport coordinates. Drives the
-  // portal-rendered selection bar so its downward shadow always renders OUTSIDE
-  // the linesScrollRef's overflow-auto clipping boundary, regardless of how
-  // many rows are in the table.
-  const addLineWrapperRef = useRef(null);
-  const [barRect, setBarRect] = useState(null);
-  useEffect(() => {
-    if (!selectionBarVisible) return;
-    const el = addLineWrapperRef.current;
-    const scrollEl = linesScrollRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-      if (scrollEl) ro.observe(scrollEl);
-    }
-    const events = ['scroll', 'resize'];
-    events.forEach(e => window.addEventListener(e, measure, true));
-    return () => {
-      ro?.disconnect();
-      events.forEach(e => window.removeEventListener(e, measure, true));
-    };
-  }, [selectionBarVisible, linesLayout]);
   // When the bottom section (Docs/Notes/Totals) grows because the user expanded
   // an inner block (e.g., "Añadir descuento total"), the lines area shrinks via
   // flex-1, and rows previously at the bottom of the visible scroll get covered.
@@ -1747,38 +1711,6 @@ export function DetailView({
       }
     };
   }, []);
-  // Measure each visible secondary tab's add-line wrapper so its bar can be
-  // portaled with `position: fixed`. Only the active tab actually mounts its
-  // wrapper (inactive tabs unmount their content), so refs from other tabs
-  // resolve to null and are skipped naturally.
-  useEffect(() => {
-    const cleanups = [];
-    for (const st of secondaryTabs) {
-      if (!secondaryBarVisible[st.key]) continue;
-      const el = secondaryAddLineWrapperRefs.current[st.key]?.current;
-      if (!el) continue;
-      const measure = () => {
-        const r = el.getBoundingClientRect();
-        setSecondaryBarRects(prev => ({
-          ...prev,
-          [st.key]: { top: r.top, left: r.left, width: r.width, height: r.height },
-        }));
-      };
-      measure();
-      let ro = null;
-      if (typeof ResizeObserver !== 'undefined') {
-        ro = new ResizeObserver(measure);
-        ro.observe(el);
-      }
-      const events = ['scroll', 'resize'];
-      events.forEach(e => window.addEventListener(e, measure, true));
-      cleanups.push(() => {
-        ro?.disconnect();
-        events.forEach(e => window.removeEventListener(e, measure, true));
-      });
-    }
-    return () => cleanups.forEach(fn => fn());
-  }, [secondaryBarVisible, secondaryTabs]);
   // Clear secondary-tab selection state when the active tab changes. The
   // InlineLinesPanel resets its internal checkboxes on unmount, so we mirror
   // that here so the bar doesn't outlive the row checks.
@@ -3357,33 +3289,18 @@ export function DetailView({
                             <div className={getLinesContainerClassName(linesLayout, embedded)}>
                               {/* Table + add button */}
                               <div className="flex-1 min-w-0">
-                                {/* Bulk action bar: delete + detail processes (classic only) */}
-                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <LinesBulkActionBar
-                                    linesLayout={linesLayout}
-                                    api={api}
-                                    detailEntity={detailEntity}
-                                    isDocumentReadOnly={isDocumentReadOnly}
-                                    selectedChildRows={selectedChildRows}
-                                    detailProcesses={detailProcesses}
-                                    ui={ui}
-                                    executingDetailProcess={executingDetailProcess}
-                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
-                                    executeDetailProcessImpl={executeDetailProcessImpl}
-                                    detailProcessDeps={detailProcessDeps}
-                                    tMenu={tMenu}
-                                    deletingChildren={deletingChildren}
-                                    setDeletingChildren={setDeletingChildren}
-                                    confirmDelete={confirmDelete}
-                                    apiBaseUrl={apiBaseUrl}
-                                    token={token}
-                                    hook={hook}
-                                    selectedLine={selectedLine}
-                                    setSelectedLine={setSelectedLine}
-                                    setSelectedChildRows={setSelectedChildRows}
-                                    data-testid="LinesBulkActionBar__7c75ad"
-                                  />
-                                )}
+                                {/* Bulk action bar: delete + detail processes (classic only).
+                                    ETP-4972 — floating SelectionToolbar, reuses the primary
+                                    selectionBarVisible/Closing lifecycle (mutually exclusive
+                                    with the inlineEditable bar below by linesLayout). */}
+                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && renderDetailBulkActionBar({
+                                  visible: selectionBarVisible, closing: selectionBarClosing,
+                                  linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+                                  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess,
+                                  executeDetailProcessImpl, detailProcessDeps, tMenu, deletingChildren,
+                                  setDeletingChildren, confirmDelete, apiBaseUrl, token, hook,
+                                  selectedLine, setSelectedLine, setSelectedChildRows,
+                                })}
                                 <DetailTable
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
@@ -3540,7 +3457,6 @@ export function DetailView({
 
                                 {canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) && (
                                   <div
-                                    ref={addLineWrapperRef}
                                     className={getAddLineWrapperClassName(linesLayout)}
                                     style={getAddLineWrapperStyle(linesLayout)}
                                   >
@@ -3573,51 +3489,63 @@ export function DetailView({
                                         onForceOpenHandled={() => setForceOpenImport(false)}
                                         data-testid="DetailExtraActions__fa3275" />
                                     )}
-                                    {/* Selection toolbar — portaled to document.body so the
-                              downward shadow renders OUTSIDE the linesScrollRef's
-                              overflow-auto clipping boundary even when scroll is
-                              engaged (many rows). Positioned via fixed coords from
-                              `barRect`, measured off `addLineWrapperRef`. */}
+                                    {/* Selection toolbar — portaled to document.body, TRUE
+                              viewport-fixed (ETP-4972), not anchored to this wrapper. */}
                                     {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
-                                      <LinesSelectionBar
+                                      <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}
-                                        barRect={barRect}
-                                        count={selectedChildRows.length}
-                                        selectedLabel={ui('selected', { count: selectedChildRows.length })}
-                                        totalLabel={getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data)}
-                                        deleting={deletingChildren}
-                                        deleteTitle={ui('delete')}
-                                        closeTitle={ui('close')}
-                                        onDelete={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setDeletingChildren(true);
-                                          try {
-                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                            // batchDelete.js); replaces the old two-independent-if
-                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                            // pattern this bar predates.
-                                            const { succeeded, failed } = await deleteSelectedChildRows({
-                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                                            });
-                                            for (const row of succeeded) {
-                                              hook.handleDeleteChild(row.id);
-                                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                                            }
-                                            inlineLinesRef.current?.clearSelection?.();
-                                            setSelectedChildRows([]);
-                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                          } catch (err) {
-                                            toast.error(err.message || ui('networkError'));
-                                          } finally {
-                                            setDeletingChildren(false);
-                                          }
-                                        }}
                                         onClose={() => {
                                           inlineLinesRef.current?.clearSelection?.();
                                           setSelectedChildRows([]);
                                         }}
-                                        data-testid="LinesSelectionBar__fa3275" />
+                                        closeTitle={ui('close')}
+                                        data-testid="SelectionToolbar__fa3275">
+                                        {/* ETP-4972 — no amount subtitle here: the Figma "Floating
+                                            Toolbar | Dark" spec shows only the plain "N Seleccionados"
+                                            counter, nothing else in that segment. The previous
+                                            LinesSelectionBar carried an optional totalLabel line (the
+                                            selected-rows subtotal) that Figma doesn't have — dropped to
+                                            match. getSelectedLinesTotalLabel() itself is kept (still
+                                            covered by its own tests) in case a future design brings
+                                            the total back, just not called from here. */}
+                                        <span className="text-sm font-medium">
+                                          {ui('selected', { count: selectedChildRows.length })}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          disabled={deletingChildren}
+                                          title={ui('delete')}
+                                          onClick={async () => {
+                                            if (!(await confirmDelete())) return;
+                                            setDeletingChildren(true);
+                                            try {
+                                              // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                              // batchDelete.js); replaces the old two-independent-if
+                                              // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                              // pattern this bar predates.
+                                              const { succeeded, failed } = await deleteSelectedChildRows({
+                                                selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                                              });
+                                              for (const row of succeeded) {
+                                                hook.handleDeleteChild(row.id);
+                                                if (selectedLine?.id === row.id) setSelectedLine(null);
+                                              }
+                                              inlineLinesRef.current?.clearSelection?.();
+                                              setSelectedChildRows([]);
+                                              toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
+                                            } catch (err) {
+                                              toast.error(err.message || ui('networkError'));
+                                            } finally {
+                                              setDeletingChildren(false);
+                                            }
+                                          }}
+                                          aria-label={ui('delete')}
+                                          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+                                        </button>
+                                      </SelectionToolbar>
                                     )}
                                   </div>
                                 )}
@@ -3884,11 +3812,9 @@ export function DetailView({
                                 secondaryAddRowRef={getSecondaryAddRowRef(st.key)}
                                 secondaryAddRowSeed={secondaryAddRowSeed}
                                 secondaryChildDefaults={secondaryHooks[stIdx]?.childDefaults}
-                                secondaryAddLineWrapperRef={getSecondaryAddLineWrapperRef(st.key)}
                                 hideChevron={hideAddLineChevron}
                                 secondaryBarVisible={secondaryBarVisible}
                                 secondaryBarClosing={secondaryBarClosing}
-                                secondaryBarRects={secondaryBarRects}
                                 secondaryDeleting={secondaryDeleting}
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}

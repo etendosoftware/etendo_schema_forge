@@ -221,9 +221,14 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
       act(() => { capturedBulkDeleteOptions.onSuccess(succeeded, failed); });
 
       expect(refreshMock).toHaveBeenCalled();
-      // Only the failed row remains selected -> selection count reflects 1, not 2.
+      // Only the failed row remains selected -> the selection toolbar (and its
+      // bulk-delete button, which is icon-only since ETP-4972 and carries no
+      // count in its own text) is still shown. The remaining selection is
+      // verified directly via the DataTable deselect wiring below, which is
+      // the actual mechanism ListView uses to communicate "keep only the
+      // failed rows selected" to the grid.
       expect(screen.getByTestId('selection-count')).toBeInTheDocument();
-      expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(1)');
+      expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
       // DataTable's deselect mechanism is told to drop the succeeded id.
       expect(capturedDeselect.trigger).toBe(1);
       expect(capturedDeselect.ids).toEqual(['r1']);
@@ -237,8 +242,8 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
       act(() => { capturedBulkDeleteOptions.onSuccess([], allRows); });
 
       expect(refreshMock).not.toHaveBeenCalled();
-      // Selection still shows both rows.
-      expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(2)');
+      // Selection still shows both rows — the toolbar remains mounted.
+      expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
       // No deselect bump — deselectTrigger stays at its initial value.
       expect(capturedDeselect.trigger).toBe(0);
     });
@@ -279,9 +284,13 @@ describe('ListView — selectionBarRightActions.reselectFailed (ETP-4656)', () =
     act(() => { capturedArgs.reselectFailed(succeeded, failed); });
 
     expect(refreshMock).toHaveBeenCalled();
-    // Only the failed row remains selected -> selection count reflects 1, not 2.
+    // Only the failed row remains selected -> the selection toolbar stays
+    // mounted; the remaining selection itself is verified via the DataTable
+    // deselect wiring below (see note in the "onSuccess outcome handling"
+    // block above re: the icon-only bulk-delete button no longer carrying a
+    // count in its own text since ETP-4972).
     expect(screen.getByTestId('selection-count')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(1)');
+    expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
     // DataTable's deselect mechanism is told to drop the succeeded id.
     expect(capturedDeselect.trigger).toBe(1);
     expect(capturedDeselect.ids).toEqual(['r1']);

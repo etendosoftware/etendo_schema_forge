@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
@@ -392,24 +393,37 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                   {ui('openClosePeriod')}
                 </button>
               </div>
-              {isExpanded && selectedDocIds.size > 0 && (
-                <div
-                  className="flex items-center justify-between gap-2 py-1.5 px-3"
+              {/* ETP-4972 — this bar was an in-flow row, never migrated to the
+                  floating SelectionToolbar used everywhere else a checkbox
+                  list has a bulk action. Keeps a visible text label (unlike
+                  Print/Clone/kebab elsewhere): Ale (design) confirmed
+                  icon-only is fine only for universally-recognized actions —
+                  this same checklist icon means something different in
+                  BulkDocumentAction.jsx (Confirmar/Procesado masivo), so on
+                  its own it isn't reliably meaningful. No "(count)" suffix —
+                  the pill's own counter segment already shows it. */}
+              {isExpanded && (
+                <SelectionToolbar
+                  visible={selectedDocIds.size > 0}
+                  onClose={() => setSelectedDocIds(new Set())}
+                  closeTitle={ui('close')}
                   data-testid={`document-bulk-bar-${period.id}`}
                 >
-                  <span role="status" className="text-sm font-semibold" data-testid="document-selection-count">
+                  <span role="status" className="text-sm font-medium" data-testid="document-selection-count">
                     {ui('selected').replace('{count}', String(selectedDocIds.size))}
                   </span>
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
+                  <button
+                    type="button"
+                    title={ui('bulkOpenCloseDocuments')}
                     data-testid={`document-bulk-openclose-${period.id}`}
                     onClick={() => openCloseSelectedDocuments(period.id)}
                     disabled={!!pendingActions[`bulk-${period.id}`]}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
                   >
-                    {ui('bulkOpenCloseDocuments')} ({selectedDocIds.size})
-                  </Button>
-                </div>
+                    <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__periodsBulkBar" />
+                    {ui('bulkOpenCloseDocuments')}
+                  </button>
+                </SelectionToolbar>
               )}
             </div>
             {isExpanded && (

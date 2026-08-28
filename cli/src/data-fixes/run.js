@@ -27,11 +27,15 @@
  * (remediated_client_id, fix_id). Status set:
  *   APPLIED, SKIPPED_NOT_NEEDED, FAILED, BASELINE, DETECTED, MANUALLY_FIXED.
  *
- * Checksum is deferred — the column stays NULL until CHECKSUM_MISMATCH lands.
+ * Checksum is deferred — the ledger's `checksum` column stays NULL until general
+ * CHECKSUM_MISMATCH lands. A narrow exception: `retired.json` (ETP-4877) records
+ * a checksum for each retired fix and this runner verifies it against the live
+ * file before honoring the retirement — see loadRetiredList()/verifyRetiredList().
  */
 
 import { readdir, readFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createDbPool, closePool } from '../db.js';
@@ -41,6 +45,7 @@ import { startExecutionLog } from './lib/exec-log.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SQL_DIR = join(__dirname, 'sql');
+const RETIRED_PATH = join(__dirname, 'retired.json');
 
 // Ledger table name. Inlined as a literal in every query below (never
 // interpolated) so SonarQube S2077 — "Formatting SQL queries" — never fires:
@@ -105,6 +110,103 @@ export async function loadCatalog() {
     const fix = parseFix(text, fixId);
     fix.timestamp = parseFixTimestamp(fixId);
     catalog.push(fix);
+  }
+  return catalog;
+}
+
+// ---------------------------------------------------------------------------
+// Retirement (ETP-4877) — a retired fix is skipped entirely, for every tenant,
+// past and future: never @check, never @apply. Distinct from a normal fix that
+// merely converges to SKIPPED_NOT_NEEDED — a retired fix leaves NO ledger row
+// at all on a run after retirement (see applyChain/cmdTargetedFix below).
+// ---------------------------------------------------------------------------
+
+/**
+ * Load `retired.json`: fixId -> the full retirement entry (checksum, reason,
+ * etc.). Missing file => no fixes are retired (empty Map), same as an empty
+ * array — this file is optional infrastructure, not a required one.
+ */
+export async function loadRetiredList() {
+  let raw;
+  try {
+    raw = await readFile(RETIRED_PATH, 'utf-8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return new Map();
+    throw err;
+  }
+  let entries;
+  try {
+    entries = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`retired.json: invalid JSON (${err.message})`);
+  }
+  if (!Array.isArray(entries)) {
+    throw new Error('retired.json: expected a top-level JSON array');
+  }
+  const map = new Map();
+  for (const entry of entries) {
+    if (!entry || typeof entry.fixId !== 'string' || typeof entry.checksum !== 'string') {
+      throw new Error(`retired.json: every entry needs a string "fixId" and "checksum" (got ${JSON.stringify(entry)})`);
+    }
+    map.set(entry.fixId, entry);
+  }
+  return map;
+}
+
+/** sha256 hex digest of a catalog fix's raw `.sql` file content, by fixId. */
+async function fileChecksum(fixId) {
+  const text = await readFile(join(SQL_DIR, `${fixId}.sql`), 'utf-8');
+  return createHash('sha256').update(text, 'utf-8').digest('hex');
+}
+
+/**
+ * Verifies every `retired.json` entry against the catalog and the LIVE file's
+ * checksum before any retirement is honored — the "positive identity check
+ * against the exact file superseded" the mechanism requires. Throws
+ * immediately (aborts the whole run, never a silent skip) when:
+ *   - a retired fixId is absent from the catalog (the immutable file was
+ *     removed or renamed — retirement can never be honored against nothing), or
+ *   - the live file's checksum no longer matches the recorded one (the file
+ *     was touched despite the immutability rule, or a future fix reuses the
+ *     same filename).
+ *
+ * @param {object[]} catalog - the loaded fix catalog (see loadCatalog())
+ * @param {Map<string, object>} retired - from loadRetiredList()
+ * @returns {Promise<Set<string>>} the set of fixIds that are genuinely retired
+ */
+export async function verifyRetiredList(catalog, retired) {
+  const catalogIds = new Set(catalog.map(f => f.fixId));
+  for (const [fixId, entry] of retired) {
+    if (!catalogIds.has(fixId)) {
+      throw new Error(
+        `retired.json: retired fix "${fixId}" is not in the .sql catalog (removed or renamed?) — ` +
+        'refusing to proceed. Retired fixes must stay in the catalog, byte-for-byte, forever.',
+      );
+    }
+    const actual = await fileChecksum(fixId);
+    if (actual !== entry.checksum) {
+      throw new Error(
+        `retired.json: checksum mismatch for retired fix "${fixId}" — expected ${entry.checksum}, got ${actual}. ` +
+        'Retired fixes are immutable; this means the file was touched despite that rule, or a different ' +
+        'fix now reuses this filename. Refusing to honor the retirement against the wrong file.',
+      );
+    }
+  }
+  return new Set(retired.keys());
+}
+
+/**
+ * loadCatalog() + retirement verification, in one call — every CLI entry
+ * point that walks the catalog (full run, --fix, --list-clients) must use
+ * this instead of the bare loadCatalog() so a retired fix's `.retired = true`
+ * flag is always set before applyChain/cmdTargetedFix ever see it.
+ */
+export async function loadCatalogWithRetirement() {
+  const catalog = await loadCatalog();
+  const retired = await loadRetiredList();
+  const retiredIds = await verifyRetiredList(catalog, retired);
+  for (const fix of catalog) {
+    fix.retired = retiredIds.has(fix.fixId);
   }
   return catalog;
 }
@@ -364,6 +466,13 @@ async function applyChain(pool, catalog, clientId, names, { dryRun }) {
   console.log(`\nTenant ${tenantLabel(names, clientId)} (watermark: ${wmLabel})`);
 
   for (const fix of catalog) {
+    // Retirement (ETP-4877) gates BEFORE the watermark and BEFORE @check — a
+    // retired fix is never evaluated at all, for any tenant, regardless of
+    // where it sits relative to the watermark. No ledger row is written.
+    if (fix.retired) {
+      console.log(`  ${fix.fixId}: RETIRED — skipped (never @check/@apply, see retired.json)`);
+      continue;
+    }
     // Strict watermark: skip everything at or before it (no look-back).
     if (fix.timestamp && fix.timestamp.getTime() <= watermark) continue;
 
@@ -398,6 +507,12 @@ async function cmdMarkFixed(pool, { client, fix, reason }) {
 async function cmdTargetedFix(pool, catalog, { client, fix, dryRun }) {
   const target = catalog.find(f => f.fixId === fix || f.id === fix);
   if (!target) throw new Error(`--fix: no such fix "${fix}" in catalog`);
+  if (target.retired) {
+    throw new Error(
+      `--fix: "${target.fixId}" is retired (see retired.json) and can never be forced — ` +
+      'it is permanently skipped for every tenant, past and future.',
+    );
+  }
   const names = await fetchClientNames(pool);
   const tenants = client ? [client] : await resolveTenants(pool, null);
   console.log(`Targeted run of ${target.fixId} (ignores order + cutoff) for ${tenants.length} tenant(s)`);
@@ -458,6 +573,7 @@ async function cmdListClients(pool, catalog) {
       }
     }
     const pending = catalog.filter(f => {
+      if (f.retired) return false; // retired fixes are never candidates, never "pending"
       const row = ledger.get(f.fixId);
       return !row || !PROCESSED.has(row.status);
     });
@@ -510,10 +626,10 @@ export async function runMain({ dbConfig, argv } = {}) {
     if (args.markFixed) {
       await cmdMarkFixed(pool, args);
     } else if (args.listClients) {
-      const catalog = await loadCatalog();
+      const catalog = await loadCatalogWithRetirement();
       await cmdListClients(pool, catalog);
     } else {
-      const catalog = await loadCatalog();
+      const catalog = await loadCatalogWithRetirement();
       const connection = dbConfig
         ? `${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`
         : '(gradle.properties / env)';
