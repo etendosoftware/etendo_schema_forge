@@ -346,7 +346,7 @@ describe('report-journal-entries — template-excel.hbs document-type column ren
     const html = renderHtmlLike(TEMPLATE_EXCEL_SRC, ROWS, 'en_US');
     assert.match(html, new RegExp(RETURN_LABELS.en_US.MMR_RETURN));
     assert.match(html, /Material Receipt/);
-    assert.notEqual('Material Receipt', RETURN_LABELS.en_US.MMR_RETURN);
+    assert.notEqual(RETURN_LABELS.en_US.MMR_RETURN, 'Material Receipt');
   });
 });
 
