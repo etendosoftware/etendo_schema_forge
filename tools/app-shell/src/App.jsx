@@ -152,7 +152,6 @@ async function loadAllMockData() {
     import('@generated/fiscal-monitor/custom/mockData.js'),
     import('@generated/fiscal-models/custom/mockData.js'),
     import('@generated/conversion-rates/generated/web/conversion-rates/mockData.js'),
-    import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/mockData.js'),
     import('@generated/open-close-period-control/generated/web/open-close-period-control/mockData.js'),
     import('@generated/asset-group/generated/web/asset-group/mockData.js'),
     import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
