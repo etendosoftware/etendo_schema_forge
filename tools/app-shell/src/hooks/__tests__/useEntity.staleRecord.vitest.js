@@ -47,15 +47,44 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
     expect(toast.error.mock.calls[0][0]).toBe('saveConflictRecordChanged');
   });
 
-  it('offers a reload action wired to the callback, so the user can recover in place', async () => {
+  it('offers exactly two choices: cancel the save, or discard and refresh', async () => {
+    // No third, cleverer option. A merge was tried and removed: it silently overwrote the other
+    // person's value on any field both had edited, and it injected values without running the
+    // callouts a real edit would run, so the form showed a combination nothing had derived.
     const onStaleRecord = vi.fn();
     await handleSaveErrorResponse(
       jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), onStaleRecord,
     );
     const options = toast.error.mock.calls[0][1];
-    expect(options.action.label).toBe('saveConflictReload');
-    options.action.onClick();
+    expect(options.cancel.label).toBe('saveConflictKeepEditing');
+    expect(options.action.label).toBe('saveConflictDiscardAndReload');
+  });
+
+  it('names the destruction in the action label, so refreshing cannot read as harmless', async () => {
+    // The refresh drops the user's work. A button that does that must say so, not say "reload".
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), vi.fn(),
+    );
+    expect(toast.error.mock.calls[0][1].action.label).toBe('saveConflictDiscardAndReload');
+  });
+
+  it('wires the refresh to the callback', async () => {
+    const onStaleRecord = vi.fn();
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), onStaleRecord,
+    );
+    toast.error.mock.calls[0][1].action.onClick();
     expect(onStaleRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelling does nothing at all — the form keeps the edits the user made', async () => {
+    // Nothing was written, so the edits are still theirs to save later against a fresh read.
+    const onStaleRecord = vi.fn();
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), onStaleRecord,
+    );
+    toast.error.mock.calls[0][1].cancel.onClick();
+    expect(onStaleRecord).not.toHaveBeenCalled();
   });
 
   it('never auto-dismisses — a silently vanishing data-loss warning is the original defect', async () => {
@@ -65,12 +94,15 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
     expect(toast.error.mock.calls[0][1].duration).toBe(Infinity);
   });
 
-  it('does not offer an action when no reload callback was supplied', async () => {
+  it('does not offer a refresh when no reload callback was supplied', async () => {
     // A caller without a reload path must still SEE the conflict; a dead button would be worse.
+    // Cancel still stands, so the notice is dismissible.
     await handleSaveErrorResponse(
       jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), undefined,
     );
-    expect(toast.error.mock.calls[0][1].action).toBeUndefined();
+    const options = toast.error.mock.calls[0][1];
+    expect(options.action).toBeUndefined();
+    expect(options.cancel.label).toBe('saveConflictKeepEditing');
   });
 
   it('does not set field errors — no single field is at fault in a conflict', async () => {

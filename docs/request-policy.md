@@ -119,9 +119,30 @@ Two situations produce this, and only one is a defect:
 
 **409** with `error: "stale_record"`. Branch on that discriminator, **never on the status alone** —
 a duplicate-key rejection is also a 409 and its remedy is the opposite (change your data, not your
-baseline). `useEntity` handles this already: a non-dismissing toast offering *reload and keep my
-changes*, which re-reads the record and layers the user's own pending edits (`userChangedKeysRef`)
-back on top, then leaves the form dirty so they see the merged result before saving again.
+baseline).
+
+`useEntity` handles this already, with a non-dismissing notice and **exactly two choices**:
+
+- **Cancel save** — nothing was written, so the form keeps the user's edits and they can save later
+  against a fresh read.
+- **Discard my changes and refresh** — re-reads the record as the system holds it and drops the
+  pending edits. The label names the loss on purpose: a button that destroys work must not read as
+  a harmless "reload".
+
+**There is deliberately no merge option.** An earlier implementation re-applied the user's changed
+keys over the freshly-read record, and it was wrong twice:
+
+1. it silently overwrote the other person's value on any field **both** had edited — the exact data
+   loss this ticket removes, moved one step later;
+2. it injected values through `setEditing`, which does **not** run callouts. On a document whose
+   fields are interdependent (changing the business partner recomputes price list, payment terms
+   and taxes) the merged form displayed a combination no callout had ever derived. The server would
+   recompute on save, so the database stayed consistent — but the user was shown numbers that did
+   not add up, and asked to approve them.
+
+Re-entering a value by hand goes through the normal edit path, so **its callouts fire in the new
+context** — which no merge could guarantee. On a rare, integrity-critical path, that is worth more
+than the convenience of not retyping.
 
 ### If you set `updated` yourself
 

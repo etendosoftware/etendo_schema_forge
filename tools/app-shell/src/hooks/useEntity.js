@@ -692,16 +692,21 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
         // ignore — fall through to the legacy extractor
     }
     if (staleConflict) {
-        // The whole point of the P0 fix is that this is never silent, so the message stays until
-        // the user acts on it: no auto-dismiss, and the reload is offered rather than performed,
-        // because discarding-and-remerging someone's in-progress edit without asking is the very
-        // data loss this ticket is about.
+        // Never silent, and never auto-dismissed: the save did NOT happen, and a warning that
+        // vanishes on its own is the defect this ticket is about.
+        //
+        // Two explicit choices and no third clever one. Cancelling keeps the form exactly as the
+        // user left it (nothing was written, so their edits are still theirs to save later against
+        // a fresh read). Refreshing drops those edits — the action label says so, because a button
+        // that destroys work must name what it destroys rather than read as a harmless "reload".
+        // We deliberately do NOT offer to merge: see discardChangesAndReload for why.
         const msg = ui('saveConflictRecordChanged');
         setSaveError(msg);
         toast.error(msg, {
             duration: Infinity,
+            cancel: { label: ui('saveConflictKeepEditing'), onClick: () => {} },
             ...(onStaleRecord
-                ? { action: { label: ui('saveConflictReload'), onClick: () => onStaleRecord() } }
+                ? { action: { label: ui('saveConflictDiscardAndReload'), onClick: () => onStaleRecord() } }
                 : {}),
         });
         return;
@@ -1314,42 +1319,49 @@ export function useEntity(entity, childEntity, {
     }, [syncRegisteredFields]);
 
     /**
-     * ETP-5073 / DOC-04: re-read the record after a concurrency conflict and layer the user's
-     * own pending edits back on top of the other person's saved values.
+     * ETP-5073 / DOC-04: re-read the record after a concurrency conflict, discarding the pending
+     * edits.
      *
-     * Reapplies rather than discards: the user's work is the thing we are protecting, and the
-     * fresh read is only needed for the baseline. `userChangedKeysRef` is the exact set of keys
-     * they touched this session, so untouched fields take the other person's new values while
-     * their own edits survive.
+     * Deliberately NOT a merge. An earlier version layered the user's changed keys back over the
+     * freshly-read record, and that was wrong twice over:
      *
-     * Deliberately does NOT save. The form stays dirty and the user presses Save again, so they
-     * get to see the merged result before it is written — a silent re-save would be the same
-     * blind overwrite from the other side.
+     *  - it silently overwrote the other person's value on any field BOTH had edited, which is the
+     *    very data loss this ticket exists to remove, moved one step later;
+     *  - it injected values through `setEditing`, which does not run callouts. On a document whose
+     *    fields are interdependent (a business-partner change recomputes price list, payment terms
+     *    and taxes) the merged form showed a combination no callout had ever derived.
+     *
+     * So the record is reloaded as the system holds it and the pending edits are dropped. The user
+     * re-enters what still makes sense, and because each re-entry goes through the normal edit
+     * path, its callouts fire in the NEW context — which a merge could never guarantee. Safety over
+     * convenience: this is a rare path, and guessing intent on a document with chained derivations
+     * is not a guess we are entitled to make.
+     *
+     * The caller only reaches this after the user explicitly chose it over cancelling the save.
      */
-    const reloadAndReapply = useCallback(async () => {
+    const discardChangesAndReload = useCallback(async () => {
         if (!selected?.id) return;
-        const pending = {};
-        for (const key of userChangedKeysRef.current) {
-            if (editing && Object.prototype.hasOwnProperty.call(editing, key)) {
-                pending[key] = editing[key];
-            }
-        }
         try {
             const res = await apiFetch(`/${entity}/${selected.id}`);
             if (!res.ok) throw new Error(String(res.status));
             const data = await res.json();
-            // normalizeRecord also refreshes the remembered `updated`, so the next Save carries
+            // normalizeRecord also refreshes the remembered `updated`, so the next save carries
             // the token this read just produced instead of the one the conflict rejected.
             const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
             setSelected(fresh);
-            setEditing({ ...fresh, ...pending });
+            setEditing({ ...fresh });
+            // Both sides now hold the same values, so isDirtyHeader is false and every unsaved-
+            // changes consumer (the navigation guard, the clone gate) sees a clean form again.
+            // The changed-key set is dropped too: those keys are no longer the user's edits, and
+            // leaving them would keep scoping format validation to fields nobody touched.
+            userChangedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
             toast.info(ui('saveConflictReloaded'));
         } catch {
             toast.error(ui('saveConflictReloadFailed'));
         }
-    }, [selected, editing, entity, apiFetch, ui]);
+    }, [selected, entity, apiFetch, ui]);
 
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
@@ -1454,7 +1466,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, reloadAndReapply);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload);
                 return null;
             }
         } catch (err) {
@@ -1465,7 +1477,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, reloadAndReapply]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
