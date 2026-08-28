@@ -77,7 +77,8 @@
           "grid": true,
           "gridOrder": 3,
           "searchable": true,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "readOnlyLogicJs": "!!record.hasLines"
         },
         "movementDate": {
           "grid": true,
