@@ -1757,13 +1757,6 @@ export function DetailView({
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
   // is what stops the navigation.
   useUnsavedChangesGuard(isDirty, () => hook.handleSave({ silent: true }));
-  // No saver is passed: the line's save lives in an inline handler in the lines sidebar, not in
-  // an extractable callback, so the prompt offers Discard and Cancel. The user can cancel, save
-  // the line, then switch. Offering Save here needs that handler extracted first — deliberately
-  // NOT done inside this P0 fix.
-  const guardLineSwitch = useCallback((openLine) => {
-    requestTransition(openLine, { isDirty: () => lineEdits != null });
-  }, [lineEdits]);
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -2547,7 +2540,7 @@ export function DetailView({
     // TypeError the inline handler used to throw — a silent bogus write beats no diagnosis only
     // for the code, never for the user. The button is only rendered with a line open, so this is
     // defence, not an expected path.
-    if (!selectedLine?.id) return;
+    if (!selectedLine?.id) return false;
     setSavingLine(true);
     try {
       const childUrl = buildSelectedLineUrl();
@@ -2567,7 +2560,7 @@ export function DetailView({
       if (res.ok) {
         setLineEdits(null);
         setLineEditColumns({});
-        toast.success('Record saved');
+        toast.success(ui('recordSaved'));
         // Always refresh from persisted record — backend may recompute
         // derived fields (lineNetAmount, discounts) on save.
         try {
@@ -2587,14 +2580,39 @@ export function DetailView({
           hook.handleUpdateChild(selectedLine.id, fieldValues);
           setSelectedLine(prev => ({ ...prev, ...fieldValues }));
         }
-      } else if (!(await raiseLineSaveConflict(res))) {
+        return true;
+      }
+      if (!(await raiseLineSaveConflict(res))) {
         toast.error(await extractErrorMessage(res));
       }
+      return false;
     } catch (err) {
-      toast.error(err.message || 'Network error');
+      toast.error(err.message || ui('networkError'));
+      return false;
     } finally { setSavingLine(false); }
   }, [selectedLine, buildSelectedLineUrl, lineEdits, allEntryFields, apiFetch, token, hook,
-    extractErrorMessage, raiseLineSaveConflict]);
+    extractErrorMessage, raiseLineSaveConflict, ui]);
+
+  /**
+   * ETP-5073 / DOC-08: guards switching to another line while one is being edited.
+   *
+   * Defined here, below handleSaveLine, so it can hand the prompt a saver — a `const` cannot be
+   * named in a dependency array declared above its own initialiser.
+   *
+   * Passing `save` is not a nicety. Without it the prompt falls back to the GLOBAL saver, which
+   * saves every dirty form: with a dirty header open at the same time, "Guardar y salir" saved the
+   * HEADER, reported success and switched line, silently discarding the line edit the prompt was
+   * raised to protect. Scoped `isDirty` for the reason above; scoped `save` for this one.
+   */
+  const guardLineSwitch = useCallback((openLine) => {
+    requestTransition(openLine, {
+      isDirty: () => lineEdits != null,
+      // handleSaveLine answers false when the write was refused (a validation error, or the
+      // concurrency conflict), which is what keeps the prompt from switching away from a line
+      // whose edits were never persisted.
+      save: handleSaveLine,
+    });
+  }, [lineEdits, handleSaveLine]);
 
   const [panelCounts, setPanelCounts] = useState({});
   useEffect(() => { setPanelCounts({}); }, [parentRecordId]);

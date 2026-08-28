@@ -91,14 +91,26 @@ click through the dialog without reading it.
 
 ```js
 // Switching to another line endangers the line being edited, NOT a dirty header.
-requestTransition(openLine, { isDirty: () => lineEdits != null });
+requestTransition(openLine, { isDirty: () => lineEdits != null, save: handleSaveLine });
 ```
 
-`save` pairs with `isDirty`: a scoped transition supplies its own saver, so the prompt saves that
-one thing instead of every registered form. Omit it and the prompt offers only *Discard* and
-*Cancel* — which is what the line switch does today, because the lines sidebar's save lives in an
-inline handler rather than an extractable callback. Extracting it (so the prompt can offer *Save*
-there too) is a deliberate follow-up, not part of the ETP-5073 P0 fix.
+**`save` is not optional in practice — pass it whenever `isDirty` is scoped.** It looks like a
+nicety (the prompt gains a *Save* button) but omitting it is a data-loss bug, because the fallback
+is not "no Save button": `savePendingNavigation` falls back to the GLOBAL saver, which saves every
+registered dirty form. The line switch shipped without it and behaved like this:
+
+| State | What the prompt did |
+|---|---|
+| Line dirty, header clean | Correct — no form registered a saver, so no *Save* button |
+| Line dirty, **header also dirty** | Offered *Save*, saved the **header**, reported success and switched line — **the line edit was silently discarded** |
+
+A button labelled *Save* that throws the user's work away is worse than the silent loss this guard
+exists to prevent. Whatever `isDirty` is scoped to, `save` must persist that same thing.
+
+The saver must answer falsy when the write was refused: `savePendingNavigation` stops there and
+leaves the user on the form, which is what keeps a validation error or a concurrency conflict from
+navigating away from unsaved work. `handleSaveLine` returns `false` on every refusal for exactly
+this reason.
 
 ## Gating an action instead of a navigation
 

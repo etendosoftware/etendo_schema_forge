@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   setUnsavedChanges, clearUnsavedChanges, hasUnsavedChanges, canSaveUnsavedChanges,
-  saveUnsavedChanges, requestNavigation, subscribeNavigationPrompt,
+  saveUnsavedChanges, requestNavigation, requestTransition, subscribeNavigationPrompt,
   confirmPendingNavigation, cancelPendingNavigation, savePendingNavigation,
   resetUnsavedChangesForTests,
 } from '../unsavedChanges.js';
@@ -144,6 +144,58 @@ describe('saving every dirty form', () => {
   it('refuses outright when a dirty form cannot save itself', async () => {
     setUnsavedChanges('no-saver', true);
     await expect(saveUnsavedChanges()).resolves.toBe(false);
+  });
+});
+
+describe('scoped save precedence over the global saver (ETP-5073)', () => {
+  // guardLineSwitch (DetailView.jsx) is a SCOPED transition: switching lines endangers only the
+  // line being edited, not the header. It must supply its own `save` so the prompt saves the
+  // line, not every dirty form. These tests exercise the generic rule that makes that possible —
+  // the caller-side bug that motivated them is documented separately below.
+  beforeEach(() => resetUnsavedChangesForTests());
+
+  it('runs only the transition-own saver, never the global one, when both are dirty', async () => {
+    const perform = vi.fn();
+    const headerSave = vi.fn().mockResolvedValue({ id: 'header' });
+    const lineSave = vi.fn().mockResolvedValue({ id: 'line' });
+    subscribeNavigationPrompt(vi.fn());
+    setUnsavedChanges('header', true, headerSave);
+    requestTransition(perform, { isDirty: () => true, save: lineSave });
+    await expect(savePendingNavigation()).resolves.toBe(true);
+    expect(lineSave).toHaveBeenCalledTimes(1);
+    expect(headerSave).not.toHaveBeenCalled();
+    expect(perform).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks the transition when the scoped saver is refused, without touching the global saver', async () => {
+    const perform = vi.fn();
+    const headerSave = vi.fn().mockResolvedValue({ id: 'header' });
+    const lineSave = vi.fn().mockResolvedValue(null);
+    subscribeNavigationPrompt(vi.fn());
+    setUnsavedChanges('header', true, headerSave);
+    requestTransition(perform, { isDirty: () => true, save: lineSave });
+    await expect(savePendingNavigation()).resolves.toBe(false);
+    expect(lineSave).toHaveBeenCalledTimes(1);
+    expect(headerSave).not.toHaveBeenCalled();
+    expect(perform).not.toHaveBeenCalled();
+  });
+
+  it('REGRESSION: a scoped transition with no `save` falls back to the GLOBAL saver — this is ' +
+    'exactly why guardLineSwitch must always pass its own `save`', async () => {
+    // Before the fix, guardLineSwitch called requestTransition(openLine, { isDirty }) — no
+    // `save`. With the header ALSO dirty and registered with its own saver, savePendingNavigation
+    // fell back to saveUnsavedChanges(), which saved the HEADER, reported success, and switched
+    // lines — silently discarding the line edit the prompt existed to protect. This test proves
+    // the module's fallback rule is correct behaviour by design: the defect was the caller
+    // omitting `save`, not this fallback.
+    const perform = vi.fn();
+    const headerSave = vi.fn().mockResolvedValue({ id: 'header' });
+    subscribeNavigationPrompt(vi.fn());
+    setUnsavedChanges('header', true, headerSave);
+    requestTransition(perform, { isDirty: () => true });
+    await expect(savePendingNavigation()).resolves.toBe(true);
+    expect(headerSave).toHaveBeenCalledTimes(1);
+    expect(perform).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -25,6 +25,9 @@ import {
 import {
   getRecordVersion, rememberRecordVersion, resetRecordVersionsForTests,
 } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+import {
+  subscribeNavigationPrompt, savePendingNavigation, resetUnsavedChangesForTests,
+} from '@/lib/unsavedChanges.js';
 import { DetailView } from '../DetailView.jsx';
 
 vi.mock('react-router-dom', async () => {
@@ -44,7 +47,10 @@ const mockHook = {
   items: [],
   selected: { id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false },
   editing: { id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false },
-  children: [{ id: 'L1', product: 'P1', 'product$_identifier': 'Widget', unitPrice: 10, lineNetAmount: 100 }],
+  children: [
+    { id: 'L1', product: 'P1', 'product$_identifier': 'Widget', unitPrice: 10, lineNetAmount: 100 },
+    { id: 'L2', product: 'P2', 'product$_identifier': 'Gadget', unitPrice: 20, lineNetAmount: 200 },
+  ],
   isDirtyHeader: false,
   loadingChildren: false,
   childrenLoading: false,
@@ -259,6 +265,7 @@ describe('DetailView line sidebar — save conflict (ETP-5073)', () => {
     mockHook.handleUpdateChild = vi.fn();
     resetSaveConflictForTests();
     resetRecordVersionsForTests();
+    resetUnsavedChangesForTests();
   });
 
   afterEach(() => {
@@ -456,6 +463,79 @@ describe('DetailView line sidebar — save conflict (ETP-5073)', () => {
       expect(screen.queryByTestId('stub-detail-form')).toBeNull();
       expect(getSidebarSaveButton()).toBeUndefined();
       expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5073 / DOC-08: guardLineSwitch (DetailView.jsx) passes handleSaveLine as the `save` of a
+  // SCOPED navigation transition (see unsavedChanges.js). handleSaveLine is not exported, so its
+  // return value is exercised the same way production code exercises it: through
+  // savePendingNavigation(), which is what the (elsewhere-mounted) navigation-prompt dialog calls
+  // when the user picks "Save and leave".
+  describe('handleSaveLine return value, observed through the line-switch guard', () => {
+    async function switchToLine(user, rowId) {
+      await user.click(screen.getByTestId(`row-${rowId}`));
+    }
+
+    it('resolves true on a successful PATCH, and the guarded line switch proceeds', async () => {
+      const fetchMock = vi.fn((url, opts) => {
+        if (opts?.method === 'PATCH') return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+        return Promise.resolve(freshLineResponse());
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const promptListener = vi.fn();
+      subscribeNavigationPrompt(promptListener);
+
+      const user = userEvent.setup();
+      renderDetailView();
+      await selectLineAndEdit(user);
+      await switchToLine(user, 'L2');
+
+      // The switch is held, not performed immediately: the sidebar still shows the line being
+      // edited, and the prompt was asked to open.
+      expect(screen.getByTestId('stub-detail-form-data').textContent).toContain('"id":"L1"');
+      expect(promptListener).toHaveBeenCalledWith(true);
+
+      await expect(savePendingNavigation()).resolves.toBe(true);
+      expect(fetchMock.mock.calls.some(([, opts]) => opts?.method === 'PATCH')).toBe(true);
+      await waitFor(() => {
+        expect(screen.getByTestId('stub-detail-form-data').textContent).toContain('"id":"L2"');
+      });
+    });
+
+    it('resolves false on a 409 stale_record, and the line switch does NOT proceed', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce(
+        jsonResponse({ error: 'stale_record', message: 'OBJSON_StaleDate' }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const opened = mountConflictHost();
+      subscribeNavigationPrompt(vi.fn());
+
+      const user = userEvent.setup();
+      renderDetailView();
+      await selectLineAndEdit(user);
+      await switchToLine(user, 'L2');
+
+      await expect(savePendingNavigation()).resolves.toBe(false);
+      // The conflict dialog was raised instead of the generic error toast — see
+      // `raiseLineSaveConflict` above — and the sidebar never switched to L2.
+      expect(opened).toEqual([true]);
+      expect(screen.getByTestId('stub-detail-form-data').textContent).toContain('"id":"L1"');
+    });
+
+    it('resolves false on a generic network error, and the line switch does NOT proceed', async () => {
+      const { toast } = await import('sonner');
+      const fetchMock = vi.fn().mockRejectedValueOnce(new Error('Network down'));
+      vi.stubGlobal('fetch', fetchMock);
+      subscribeNavigationPrompt(vi.fn());
+
+      const user = userEvent.setup();
+      renderDetailView();
+      await selectLineAndEdit(user);
+      await switchToLine(user, 'L2');
+
+      await expect(savePendingNavigation()).resolves.toBe(false);
+      expect(toast.error).toHaveBeenCalledWith('Network down');
+      expect(screen.getByTestId('stub-detail-form-data').textContent).toContain('"id":"L1"');
     });
   });
 });
