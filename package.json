@@ -16,15 +16,15 @@
     "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },
   "devDependencies": {
-    "@etendosoftware/app-shell-core": "0.3.41-preview.feature-ETP-5022.20260827225401.418cdc0",
-    "@etendosoftware/schema-forge-cli": "0.3.41-preview.feature-ETP-5022.20260827225401.418cdc0",
-    "@etendosoftware/schema-forge-core": "0.3.41-preview.feature-ETP-5022.20260827225401.418cdc0",
+    "@etendosoftware/app-shell-core": "0.3.41-preview.feature-ETP-5022.20260828120321.fb554eb",
+    "@etendosoftware/schema-forge-cli": "0.3.41-preview.feature-ETP-5022.20260828120321.fb554eb",
+    "@etendosoftware/schema-forge-core": "0.3.41-preview.feature-ETP-5022.20260828120321.fb554eb",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",
     "shadcn": "^4.0.2"
   },
   "dependencies": {
-    "@etendosoftware/etendo-go-core": "0.3.41-preview.feature-ETP-5022.20260827225401.418cdc0"
+    "@etendosoftware/etendo-go-core": "0.3.41-preview.feature-ETP-5022.20260828120321.fb554eb"
   }
 }
