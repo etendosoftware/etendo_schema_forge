@@ -18797,6 +18797,7 @@
     "financeAccountStatementsRowDelete": "Delete",
     "financeAccountStatementsRowProcessedTooltip": "Processed statements can't be modified",
     "financeAccountStatementsRowReactivateTooltip": "Only processed statements can be reactivated",
+    "financeAccountStatementsRowBankSyncedTooltip": "Statements of a bank-connected account cannot be edited or deleted",
     "financeAccountStatementsReactivateTitle": "Reactivate statement",
     "financeAccountStatementsReactivateBody": "Statement “{name}” will return to draft so you can edit or delete it. Continue?",
     "financeAccountStatementsReactivateConfirm": "Reactivate",

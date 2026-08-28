@@ -18307,6 +18307,7 @@
     "financeAccountStatementsRowDelete": "Eliminar",
     "financeAccountStatementsRowProcessedTooltip": "Los extractos procesados no se pueden modificar",
     "financeAccountStatementsRowReactivateTooltip": "Solo los extractos procesados se pueden reactivar",
+    "financeAccountStatementsRowBankSyncedTooltip": "Los extractos de una cuenta conectada al banco no se pueden editar ni eliminar",
     "financeAccountStatementsReactivateTitle": "Reactivar extracto",
     "financeAccountStatementsReactivateBody": "El extracto «{name}» volverá a borrador y podrás editarlo o eliminarlo. ¿Continuar?",
     "financeAccountStatementsReactivateConfirm": "Reactivar",

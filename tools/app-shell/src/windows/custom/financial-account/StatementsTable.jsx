@@ -224,6 +224,8 @@ export function StatementsTable({
   // instead of keeping the ones fetched when it was first opened (ETP-4921). Purely a pass-down
   // to StatementLinesInline; nothing in this component reads it.
   linesRefreshToken = 0,
+  // PSD2-connected account: its statements are read-only (ETP-4921). Pass-down to RowActions.
+  bankConnected = false,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -298,7 +300,7 @@ export function StatementsTable({
       {/* Body */}
       {renderBody({
         loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-        selectedIds, onSelectionChange, linesRefreshToken,
+        selectedIds, onSelectionChange, linesRefreshToken, bankConnected,
       })}
     </div>
   );
@@ -310,7 +312,7 @@ export function StatementsTable({
 // ─────────────────────────────────────────────────────────────────────────────
 function renderBody({
   loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-  selectedIds, onSelectionChange, linesRefreshToken = 0,
+  selectedIds, onSelectionChange, linesRefreshToken = 0, bankConnected = false,
 }) {
   if (loading && statements.length === 0) {
     return [1, 2, 3, 4, 5].map((n) => (
@@ -351,6 +353,7 @@ function renderBody({
         selected={selectedIds.has(s.id)}
         onSelectionChange={onSelectionChange}
         linesRefreshToken={linesRefreshToken}
+        bankConnected={bankConnected}
         data-testid="StatementRow__3acaeb" />
     );
   });
@@ -361,8 +364,13 @@ function renderBody({
 // ─────────────────────────────────────────────────────────────────────────────
 // Trailing per-row actions: Edit + Delete reveal on hover (drafts only, mirroring
 // the sales-order grid), with the kebab in the middle holding Procesar / Reactivar.
-function RowActions({ statement: s, actions, ui }) {
-  const isDraft = isDraftStatement(s);
+//
+// On a PSD2-connected account they never reveal at all (ETP-4921): its statements come from the
+// bank and must not be hand-edited or deleted. They are hidden rather than shown disabled because
+// that is what this row already does for a processed statement — the explanation lives on the
+// kebab's disabled Reactivar, the one affordance that stays visible.
+function RowActions({ statement: s, actions, ui, bankConnected = false }) {
+  const isDraft = isDraftStatement(s) && !bankConnected;
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors';
   return (
     <>
@@ -382,6 +390,7 @@ function RowActions({ statement: s, actions, ui }) {
         statement={s}
         onProcess={actions.onProcess}
         onReactivate={actions.onReactivate}
+        bankConnected={bankConnected}
         data-testid="StatementRowKebab__3acaeb" />
       {isDraft ? (
         <button
@@ -410,7 +419,7 @@ function statementDisplayName(s, bcpLocale) {
 
 function StatementRow({
   statement: s, currency, bcpLocale, ui, open, onToggle, actions, selected, onSelectionChange,
-  linesRefreshToken = 0,
+  linesRefreshToken = 0, bankConnected = false,
 }) {
   // Context handed to the contract-column cell renderers.
   const cellCtx = { ui, bcpLocale, displayName: (st) => statementDisplayName(st, bcpLocale) };
@@ -476,7 +485,7 @@ function StatementRow({
             className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-card px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <RowActions statement={s} actions={actions} ui={ui} data-testid="RowActions__3acaeb" />
+            <RowActions statement={s} actions={actions} ui={ui} bankConnected={bankConnected} data-testid="RowActions__3acaeb" />
           </div>
         ) : null}
       </div>

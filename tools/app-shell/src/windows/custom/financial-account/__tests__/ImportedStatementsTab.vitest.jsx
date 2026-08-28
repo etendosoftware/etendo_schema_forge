@@ -103,6 +103,7 @@ vi.mock('../StatementsToolbar', () => ({
 vi.mock('../StatementsTable', () => ({
   StatementsTable: ({
     statements, loading, currency, actions, selectedIds, onSelectionChange, linesRefreshToken,
+    bankConnected,
   }) => (
     <div
       data-testid="stub-table"
@@ -112,6 +113,7 @@ vi.mock('../StatementsTable', () => ({
       data-has-actions={actions ? 'true' : 'false'}
       data-selected={selectedIds ? Array.from(selectedIds).join(',') : ''}
       data-lines-token={String(linesRefreshToken)}
+      data-bank-connected={bankConnected ? 'true' : 'false'}
     >
       {statements.map((s) => (
         <div key={s.id}>
@@ -179,7 +181,7 @@ vi.mock('../ManualStatementModal', () => ({
   ),
 }));
 
-import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
+import { ImportedStatementsTab, resolveBulkDeleteBlock } from '../ImportedStatementsTab.jsx';
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'USD' };
 const NOW = new Date();
@@ -687,6 +689,77 @@ describe('ImportedStatementsTab', () => {
       await waitFor(() => expect(toastError).toHaveBeenCalled());
       expect(token()).toBe('0');
       expect(reloadFn).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * ETP-4921 — a PSD2-connected account's statements come from the bank and must not be
+   * hand-edited or deleted. The signal is ACCOUNT-level on purpose: nothing on the statement
+   * records that it came from the bank (the PSD2 module only writes `fileName` from a translated
+   * AD_MESSAGE, so its value depends on the language the sync ran in). Keying off the connection
+   * is coherent with what this tab already does — it swaps "Importar / Nuevo extracto" for
+   * "Sincronizar extractos", so a statement cannot be created by hand there either.
+   */
+  describe('bank-connected account is read-only', () => {
+    const CONNECTED = { ...ACCOUNT, bankConnected: true };
+
+    it('forwards the flag to the table so the row affordances disappear', () => {
+      render(<ImportedStatementsTab account={CONNECTED} />);
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'true');
+    });
+
+    it('leaves it off for an account that is not connected', () => {
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'false');
+    });
+
+    // Even a DRAFT selection — which is normally deletable — is blocked here.
+    it('blocks the bulk trash with the bank-connected reason', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-select-s4')); // s4 is a draft
+      const trigger = screen.getByTestId('bulk-delete-selection-trigger');
+
+      expect(trigger).toBeDisabled();
+      expect(trigger).toHaveAttribute('title', 'financeAccountStatementsRowBankSyncedTooltip');
+
+      await user.click(trigger);
+      expect(deleteStatement).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The two block reasons have a deliberate precedence. Tested on the pure function rather than
+   * through the DOM: the ordering is the whole point and it reads directly here.
+   */
+  describe('resolveBulkDeleteBlock', () => {
+    const ui = (key) => key;
+
+    it('returns null when nothing blocks', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: false, selectionHasNonDraft: false,
+      })).toBeNull();
+    });
+
+    it('reports the processed reason for a non-draft selection', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: false, selectionHasNonDraft: true,
+      })).toBe('financeAccountStatementsRowProcessedTooltip');
+    });
+
+    // The connected-account reason wins: it is unconditional, whereas "processed" points at a
+    // state the user could try to change — misleading when nothing in this window unblocks it.
+    it('prefers the bank-connected reason when both apply', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: true, selectionHasNonDraft: true,
+      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
+    });
+
+    it('reports the bank-connected reason even for an all-draft selection', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: true, selectionHasNonDraft: false,
+      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
     });
   });
 

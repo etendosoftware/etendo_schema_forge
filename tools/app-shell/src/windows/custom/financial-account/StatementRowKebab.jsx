@@ -23,17 +23,35 @@ import {
  * Edit and Delete are NOT here — they live as inline hover quick-actions on the
  * row (see {@link StatementsTable}), mirroring the sales-order grid.
  *
+ * `bankConnected` (ETP-4921) closes the whole edit path on a PSD2-connected account: its
+ * statements come from the bank and must not be hand-edited. Reactivar is the only door —
+ * Edit and Delete already hide themselves for a processed statement, and reactivating is what
+ * would reopen them — so disabling it here is what makes the account read-only. It is an
+ * ACCOUNT-level flag on purpose: nothing on the statement itself records that it came from the
+ * bank (the PSD2 module only sets `fileName` from a translated AD_MESSAGE, so its value depends
+ * on the language the sync ran in). Keying off the connection is coherent with what this window
+ * already does — `StatementsToolbar` replaces "Importar / Nuevo extracto" with "Sincronizar
+ * extractos" on such an account, so a statement cannot be created by hand there either.
+ *
+ * Procesar is deliberately NOT gated by it: completing a draft is not editing its content.
+ *
  * @param {{
  *   statement: object,
  *   onProcess: (s: object) => void,
  *   onReactivate: (s: object) => void,
+ *   bankConnected?: boolean,
  * }} props
  */
-export function StatementRowKebab({ statement: s, onProcess, onReactivate }) {
+export function StatementRowKebab({ statement: s, onProcess, onReactivate, bankConnected = false }) {
   const ui = useUI();
   const isDraft = isDraftStatement(s);
   const lockedTip = ui('financeAccountStatementsRowProcessedTooltip');
-  const reactivateTip = ui('financeAccountStatementsRowReactivateTooltip');
+  // Its own wording rather than the "already processed" one: the user must not be left thinking
+  // this unblocks by processing or reactivating something. Nothing they can do in this window
+  // unblocks it — the account is connected to the bank.
+  const reactivateTip = bankConnected
+    ? ui('financeAccountStatementsRowBankSyncedTooltip')
+    : ui('financeAccountStatementsRowReactivateTooltip');
 
   // A menu item active only when `enabled`, otherwise disabled with a tooltip.
   const gatedItem = ({ icon: Icon, label, onClick, testid, enabled, tip }) => {
@@ -88,7 +106,7 @@ export function StatementRowKebab({ statement: s, onProcess, onReactivate }) {
             label: ui('financeAccountStatementsRowReactivate'),
             onClick: onReactivate,
             testid: 'statement-row-reactivate',
-            enabled: !isDraft,
+            enabled: !isDraft && !bankConnected,
             tip: reactivateTip,
           })}
         </DropdownMenuContent>

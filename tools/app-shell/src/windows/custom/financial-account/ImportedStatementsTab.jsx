@@ -26,6 +26,28 @@ import { isDraftStatement } from './statementStatus.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
+ * Why the bulk-delete trigger is blocked, as a ready-to-show tooltip, or `null` when it is free
+ * to fire. Two independent reasons, checked in order of how absolute they are (ETP-4921):
+ *
+ *  1. The account is connected to the bank (PSD2). Its statements come from the bank and are
+ *     read-only, whatever their state — nothing the user does in this window unblocks it, so this
+ *     wins over the per-statement reason below, which would otherwise point them at a state they
+ *     could try to change.
+ *  2. The selection contains a processed statement. That one IS state-dependent: reactivating it
+ *     first makes it deletable.
+ *
+ * A plain function rather than inline ternaries so the precedence is stated once and testable.
+ *
+ * @param {{ ui: Function, bankConnectionSynced: boolean, selectionHasNonDraft: boolean }} args
+ * @returns {string|null}
+ */
+export function resolveBulkDeleteBlock({ ui, bankConnectionSynced, selectionHasNonDraft }) {
+  if (bankConnectionSynced) return ui('financeAccountStatementsRowBankSyncedTooltip');
+  if (selectionHasNonDraft) return ui('financeAccountStatementsRowProcessedTooltip');
+  return null;
+}
+
+/**
  * Imported Statements tab for the Financial Account detail view.
  *
  * State machine:
@@ -126,9 +148,13 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     }),
     [selectedIds, statements],
   );
-  const bulkDeleteDisabledReason = selectionHasNonDraft
-    ? ui('financeAccountStatementsRowProcessedTooltip')
-    : null;
+  // Two independent reasons the bulk trash refuses to fire. The connected-account one is checked
+  // FIRST because it is unconditional: on a PSD2 account no statement is deletable at all, so
+  // saying "processed statements cannot be modified" there would point the user at a state they
+  // could try to change, when nothing in this window unblocks it.
+  const bulkDeleteDisabledReason = resolveBulkDeleteBlock({
+    ui, bankConnectionSynced, selectionHasNonDraft,
+  });
 
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteStatement(id),
@@ -324,6 +350,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}
           linesRefreshToken={linesRefreshToken}
+          bankConnected={bankConnectionSynced}
           data-testid="StatementsTable__6f147a" />
       </div>
       {batchDeleteDialog}

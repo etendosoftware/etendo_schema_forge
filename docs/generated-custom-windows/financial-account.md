@@ -1044,6 +1044,8 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - **Left panel — "Progreso" column** (`ProgressCell`): a thin 4px bar = `reconciled / total`, shown
   only when the line has something reconciled; hovering shows a tooltip "X € por conciliar" (the
   remaining amount). No "% chip" on the row. Column order: Fecha · Descripción · Progreso · Importe.
+  The "something reconciled" test is `reconciledAmount != 0`, computed backend-side — see the
+  sign note below.
   A PARTIAL line also shows a second **"Parcial"** status badge next to "Pendiente" (`line.partial`
   → `StatusBadge kind="partial"`, same warning tone as "Factura"/"Por regla") — otherwise a partial
   line was indistinguishable from a fully-untouched pending one in that column.
@@ -1399,6 +1401,91 @@ noise.
 The edit modal needs no token: its own `useBankStatementLines` call passes `null` while closed, so
 `path` flips `null` → url on every open, which is already a dependency change and already forces a
 fresh fetch.
+
+#### Why a fully pending line used to show a full progress bar (ETP-4921)
+
+Reported as "some statement lines have no Progreso column". The question was inverted: the lines
+WITHOUT a bar were the correct ones. On an account whose lines were all unreconciled, every
+WITHDRAWAL drew a solid black bar under a "Pendiente" badge, and only the two deposits were blank.
+
+`ProgressCell` draws a bar whenever `reconciledAmount != 0`, and `reconciledAmount` came from
+
+```java
+BigDecimal reconciled = amount.subtract(pending);   // ReconciliationHandlerSupport
+```
+
+where the two operands do not share a sign convention. `amount` is SIGNED (a withdrawal is
+negative), while `pendingAmount` is the unsigned `|cramount - dramount|` that
+`BankStatementLinePendingAmountHandler` stores — and that `BankStatementsSupport.mergeMatchGroups`
+sums across a split group's sub-lines. Verified against the live rows that surfaced it:
+
+| Line | `amount` | stored `pendingAmount` | old `reconciled` | bar |
+|---|---|---|---|---|
+| deposit | `+10.00` | `10.00` | `0` | none — correct, *by coincidence* |
+| withdrawal | `-0.50` | `0.50` | `-1.00` | solid, at 200% clamped to 100% |
+| partial withdrawal | `-100` | `46.76` | `-146.76` | solid 100% instead of 53% |
+
+Deposits only ever worked because both signs happened to match. The fix is
+`ReconciliationHandlerSupport.signedReconciledAmount(amount, pending)`: subtract MAGNITUDES, then
+put the sign of `amount` back, clamped at zero (`pending > |amount|` is a data anomaly, and
+"nothing reconciled" is the honest reading of it — the alternative flips the sign and draws a bar
+pointing the wrong way). Unit-tested in `ReconciliationSupportTest` with the live values above.
+
+Fixed in the CONSUMER, not the stored column. Making `EM_ETGO_Pending_Amount` signed would also
+work arithmetically, but it is a magnitude by contract, three other call sites read it, and
+`mergeMatchGroups` sums it — that is a semantics change plus a data migration for an error that
+lives in one subtraction. No frontend change: the `reconciledAmount != 0` contract was always
+right, it was being fed wrong numbers.
+
+#### A bank-connected account's statements are read-only (ETP-4921)
+
+On a PSD2-connected account the statements come from the bank, so they must not be hand-edited.
+Reactivar was the one door still open: Edit and Delete already hide themselves once a statement is
+processed (and the sync leaves them processed), but reactivating brings it back to draft and
+reopens both.
+
+**The signal is ACCOUNT-level, and that is deliberate.** Nothing on the statement records that it
+came from the bank. The PSD2 module writes only a `fileName`, from a translated AD_MESSAGE:
+
+```java
+// BankStatementHelper.java:533 (com.etendoerp.psd2.bank.integration)
+newBankStatement.setFileName(OBMessageUtils.getI18NMessage("PSD2_BankStatementFileName"));
+```
+
+`com.etendoerp.psd2.bank.integration.es_es` ships a Spanish translation of that message, so the
+stored text depends on the language the sync ran in — matching against it later would resolve a
+different string. There is no link table and no marker column either (`fin_bankstatement` carries
+only the `em_etgo_*` aggregates and the bulk-posting columns), and the document type is `BSF` for
+manual statements too.
+
+So the gate keys off `account.bankConnected` (Salt Edge status `"CO"`,
+`FinancialAccountsPageHandler:310`). That is coherent with a decision this window already made:
+`StatementsToolbar:185` replaces the "Importar extracto / Nuevo extracto" split-button with
+"Sincronizar extractos" on such an account, so a statement cannot be created by hand there
+either. The known consequence, accepted knowingly: a legacy MANUAL statement sitting on a
+now-connected account also becomes non-reactivable — it is one that could no longer be created
+there in the first place.
+
+Three entry points are closed, all from the same flag threaded
+`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`:
+
+| Entry point | Behaviour |
+|---|---|
+| `StatementRowKebab` Reactivar | disabled, tooltip `financeAccountStatementsRowBankSyncedTooltip` |
+| `RowActions` inline Edit + Delete | not rendered at all, even for a draft — same as they already do for a processed statement |
+| Bulk-delete trigger | disabled with the same reason, via `resolveBulkDeleteBlock` |
+
+Procesar is deliberately NOT gated: completing a draft is not editing its content.
+
+`resolveBulkDeleteBlock` (exported from `ImportedStatementsTab`, unit-tested directly) states the
+precedence between the two block reasons: the connected-account one wins over "the selection
+contains a processed statement", because it is unconditional. Reporting "processed statements
+cannot be modified" on a connected account would point the user at a state they could try to
+change, when nothing in this window unblocks it. That is also why the copy is a new key rather
+than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+
+Follow-up worth having: if the PSD2 module ever marks the statements it creates, this gate should
+move to that per-statement flag — it would then also leave legacy manual statements editable.
 
 #### Bulk delete cannot attempt a processed statement, and failures explain why (ETP-4921)
 

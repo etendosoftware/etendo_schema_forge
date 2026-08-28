@@ -210,6 +210,37 @@ describe('StatementsTable', () => {
       expect(screen.queryByTestId('statement-row-delete-s1')).not.toBeInTheDocument();
       expect(screen.getByTestId('statement-row-menu-s1')).toBeInTheDocument();
     });
+
+    // ETP-4921 — on a PSD2-connected account the statements come from the bank, so even a DRAFT
+    // one offers no Edit and no Delete. Hidden rather than disabled, matching what this row
+    // already does for a processed statement; the reason is shown on the kebab's Reactivar.
+    it('hides inline Edit + Delete on a bank-connected account, even for a draft', () => {
+      render(
+        <StatementsTable
+          statements={[DRAFT]}
+          loading={false}
+          bankConnected
+          actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+        />,
+      );
+      expect(screen.queryByTestId('statement-row-edit-d1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('statement-row-delete-d1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+    });
+
+    // Guard against over-correcting: an unconnected account keeps the draft affordances.
+    it('keeps them on a draft when the account is not connected', () => {
+      render(
+        <StatementsTable
+          statements={[DRAFT]}
+          loading={false}
+          bankConnected={false}
+          actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+        />,
+      );
+      expect(screen.getByTestId('statement-row-edit-d1')).toBeInTheDocument();
+      expect(screen.getByTestId('statement-row-delete-d1')).toBeInTheDocument();
+    });
   });
 
   describe('selection', () => {
