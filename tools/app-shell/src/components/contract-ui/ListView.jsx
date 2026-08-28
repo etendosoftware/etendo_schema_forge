@@ -219,8 +219,12 @@ function TableRowsIcon({ size = 24, color = 'currentColor' }) {
   );
 }
 
-function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
-  if (!galleryRenderer) return null;
+// `forceShow` lets a caller outside ListView (the report catalog, ETP-5013)
+// render this same list/gallery switch without a `galleryRenderer` — ListView's
+// own callers never pass it, so their gate (hide the toggle when the window
+// declares no gallery layout) is unchanged.
+export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode, forceShow }) {
+  if (!galleryRenderer && !forceShow) return null;
   return (
     <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
       <button

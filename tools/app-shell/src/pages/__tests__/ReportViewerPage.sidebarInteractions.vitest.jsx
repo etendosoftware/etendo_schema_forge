@@ -258,8 +258,13 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Date From')).toBeInTheDocument());
 
-    // Submitting with the required date empty shows the error
-    await user.click(screen.getByText('runReport'));
+    // The sidebar's own "Generate Report" button is now disabled while a
+    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
+    // longer be used to trigger validateRequired() here. The top-bar PDF
+    // button still calls validateRequired() unconditionally (only gated by
+    // `loading`), so it remains a reachable path to the same error state.
+    expect(screen.getByText('runReport')).toBeDisabled();
+    await user.click(screen.getByText('PDF'));
     await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
 
     // Setting a value should clear the error (handleChange clears errors[name] when value is truthy)
@@ -329,7 +334,13 @@ describe('ReportViewerPage — ReportSidebar conditional required (requiredIf, E
     expect(dateLabel.closest('label')).not.toHaveTextContent('*');
 
     // Now submitting with referenceYearId empty must show the required error.
-    await user.click(screen.getByText('runReport'));
+    // The sidebar's own "Generate Report" button is now disabled while a
+    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
+    // longer be used to trigger validateRequired() here. The top-bar PDF
+    // button still calls validateRequired() unconditionally (only gated by
+    // `loading`), so it remains a reachable path to the same error state.
+    expect(screen.getByText('runReport')).toBeDisabled();
+    await user.click(screen.getByText('PDF'));
     await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
   });
 

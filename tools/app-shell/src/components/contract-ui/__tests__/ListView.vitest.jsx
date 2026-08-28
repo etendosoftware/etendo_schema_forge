@@ -63,7 +63,7 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
   useWindowFilterPresets: () => ({ presets: {}, savePreset: vi.fn(), deletePreset: vi.fn() }),
 }));
 
-import { ListView } from '../ListView.jsx';
+import { ListView, ViewToggle } from '../ListView.jsx';
 
 // A minimal Table component mock that renders rows
 function MockTable({ data, onNavigate, ...rest }) {
@@ -234,6 +234,52 @@ describe('ListView', () => {
     const { container } = render(<ListView {...defaultProps} />);
     const toggleWrapper = container.querySelector('.inline-flex.border.border-border.rounded-lg.overflow-hidden');
     expect(toggleWrapper).not.toBeInTheDocument();
+  });
+
+  // ── ViewToggle (exported directly) — `forceShow` prop (ETP-5013) ───────────
+  // `forceShow` is additive-only: it lets a caller with no `galleryRenderer`
+  // concept (the report catalog) still render the toggle. Every existing
+  // ListView-internal usage only ever passes `galleryRenderer`, never
+  // `forceShow`, so the pre-existing gate (no gallery → no toggle) must still
+  // hold when `forceShow` is absent/falsy.
+  describe('ViewToggle — forceShow', () => {
+    it('renders when forceShow is true even without a galleryRenderer', () => {
+      render(
+        <ViewToggle
+          forceShow
+          viewMode="gallery"
+          onSelectList={vi.fn()}
+          onSelectGallery={vi.fn()}
+        />,
+      );
+      const toggleWrapper = screen.getByTestId('view-toggle');
+      expect(toggleWrapper).toBeInTheDocument();
+      expect(toggleWrapper.querySelectorAll('button')).toHaveLength(2);
+    });
+
+    it('returns null when neither forceShow nor galleryRenderer is provided (backward compatibility)', () => {
+      const { container } = render(
+        <ViewToggle
+          viewMode="gallery"
+          onSelectList={vi.fn()}
+          onSelectGallery={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('view-toggle')).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('still renders when galleryRenderer is truthy and forceShow is absent (unchanged pre-existing behavior)', () => {
+      render(
+        <ViewToggle
+          galleryRenderer={() => null}
+          viewMode="list"
+          onSelectList={vi.fn()}
+          onSelectGallery={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId('view-toggle')).toBeInTheDocument();
+    });
   });
 
   // ── window.readOnly propagation (windowReadOnly true branch) ───────────────

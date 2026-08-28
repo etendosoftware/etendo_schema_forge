@@ -35,9 +35,9 @@
   "parameters": [
     { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true },
     { "name": "glId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true, "section": "alcance" },
-    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "default": "__TODAY__", "required": true, "section": "periodo" },
+    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "required": true, "section": "periodo" },
     { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "inputStyle": "popup", "section": "alcance" },
-    { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "boolean", "hidden": true },
+    { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "toggle", "section": "alcance" },
     { "name": "column1", "label": { "en_US": "Number Of Days Overdue: Group One", "es_ES": "Días Tramo 1" }, "type": "number", "section": "tramos" },
     { "name": "column2", "label": { "en_US": "Number Of Days Overdue: Group Two", "es_ES": "Días Tramo 2" }, "type": "number", "section": "tramos" },
     { "name": "column3", "label": { "en_US": "Number Of Days Overdue: Group Three", "es_ES": "Días Tramo 3" }, "type": "number", "section": "tramos" },

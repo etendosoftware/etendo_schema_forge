@@ -1,3 +1,5 @@
+import { RETURN_LABELS } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+
 /**
  * Canonical Handlebars helpers for LOCAL HTML rendering of reports.
  *
@@ -10,7 +12,8 @@
  * These mirror — verbatim — the generated `artifacts/<id>/helpers.js` functions
  * that the report HTML render path historically registered (the fixed whitelist:
  * isGroupBreak, resetGroupTracking, formatDate, formatCurrency, formatBoolean,
- * formatNumber, ifCond, eq, sumField, formatDateDisplay, sumRowsByCategory).
+ * formatNumber, ifCond, eq, sumField, formatDateDisplay, sumRowsByCategory,
+ * translateDocType).
  *
  * Keeping them as a trusted in-repo module lets the report server and the Vite
  * dev plugin register the helpers WITHOUT dynamically executing the per-report
@@ -119,6 +122,18 @@ export function createReportHelpers({ numberFormat } = {}) {
       .reduce(function(sum, r) { return sum + (Number(r[field]) || 0); }, 0);
   }
 
+  // Report row VALUE translation (ETP-5013). `translatedName` already comes
+  // translated from SQL (Journal Entries' `document_type` = COALESCE(trl name
+  // from a real `ad_ref_list_trl` JOIN, base ad_ref_list name, raw c_doctype
+  // name, 'Journal')) — this helper's only remaining job is the MMR/MMS return
+  // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
+  // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
+  function translateDocType(docbasetype, isreturn, translatedName, locale) {
+    if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
+    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+    return dict[docbasetype + '_RETURN'] || translatedName;
+  }
+
   return {
     isGroupBreak,
     resetGroupTracking,
@@ -131,6 +146,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     sumField,
     formatDateDisplay,
     sumRowsByCategory,
+    translateDocType,
   };
 }
 
@@ -261,6 +277,16 @@ const JSREPORT_HELPER_SOURCES = {
   return rows
     .filter(function(r) { return (r.category || '').startsWith(categoryPrefix); })
     .reduce(function(sum, r) { return sum + (Number(r[field]) || 0); }, 0);
+}`,
+  // RETURN_LABELS is embedded as a JSON literal, not imported — jsreport runs
+  // in a separate Docker process with no shared module system with this repo
+  // (see buildJsreportHelpersString's docstring below). Baked in at BUILD time
+  // (this module's own load), not per-render, since the dictionary is static.
+  translateDocType: `function translateDocType(docbasetype, isreturn, translatedName, locale) {
+  var RETURN_LABELS = ${JSON.stringify(RETURN_LABELS)};
+  if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
+  var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+  return dict[docbasetype + '_RETURN'] || translatedName;
 }`,
 };
 
