@@ -78,6 +78,11 @@ vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
 }));
 
+const mockUseViewerRole = vi.fn();
+vi.mock('@/hooks/useViewerRole.js', () => ({
+  useViewerRole: () => mockUseViewerRole(),
+}));
+
 import { useRoleSelection } from '../roleSelectionContext.js';
 
 /** Renders inside the mocked UserPage, giving tests a hook to drive the shared
@@ -168,6 +173,10 @@ beforeEach(() => {
   lastUserPageProps = null;
   // No admin role by default — see the `vi.mock('@/lib/rolesApi.js', ...)` comment above.
   fetchRolesOverview.mockResolvedValue({ roles: [] });
+  // Viewer-role gating follow-up (ETP-5019) — default every test to an admin viewer so the
+  // pre-existing promote/demote tests (which never asserted on the VIEWER's own role) keep
+  // exercising exactly what they always did; tests for the new gating itself override this.
+  mockUseViewerRole.mockReturnValue({ roleId: 'admin-role', isClientAdmin: true });
 });
 
 describe('UserWindow — fetching applied roles on load', () => {
@@ -891,6 +900,52 @@ describe('UserWindow — admin promote/demote buttons (ETP-5019, merged into the
     await screen.findByTestId('user-page');
     expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
     expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both promote and demote buttons while viewer role is still loading', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue(undefined);
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both buttons when viewer role resolves to null (unauthenticated/unknown)', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue(null);
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both buttons when the viewer is authenticated but not client-admin', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue({ roleId: 'some-role', isClientAdmin: false });
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('shows the promote button for a non-admin target when the viewer IS client-admin', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue({ roleId: 'admin-role', isClientAdmin: true });
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('PromoteToAdminButton');
   });
 
   it('renders nothing on a brand-new, not-yet-saved record (no id to promote/demote)', async () => {

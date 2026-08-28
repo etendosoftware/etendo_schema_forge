@@ -11,6 +11,7 @@ import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRol
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { useViewerRole } from '@/hooks/useViewerRole.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
@@ -211,8 +212,19 @@ function useAdminRoleId() {
  * exact comparison) against `adminRoleId` (resolved by `useAdminRoleId` above):
  * already holding the Admin role → "Remove administrator role"; otherwise →
  * "Make administrator".
+ *
+ * **Viewer gating (follow-up).** Both buttons are also gated by the CURRENT
+ * LOGGED-IN VIEWER's own role, via `useViewerRole()` — fail closed for
+ * `undefined` (still loading) and `null` (unauthenticated/unknown), only
+ * unlocking when the viewer is confirmed to hold the client-admin role
+ * themselves (covers both the owner and any other promoted admin viewing the
+ * page). The backend remains the real authority regardless
+ * (`UserRoleCompositionService#promoteToAdmin`/`demoteFromAdmin`'s
+ * `callerIsOwnerOrAdmin` check); this is UX-only, closing the previously
+ * documented gap where any viewer who could open a User's detail page saw a
+ * button that would always fail for them.
  */
-function useAdminPromotionExtraActions(adminRoleId) {
+function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
   const ui = useUI();
   const [working, setWorking] = useState(false);
 
@@ -220,6 +232,7 @@ function useAdminPromotionExtraActions(adminRoleId) {
     const id = data?.id;
     if (!id || id === 'new' || data?.isOwner) return [];
     if (!adminRoleId) return [];
+    if (viewerRole?.isClientAdmin !== true) return [];
 
     const currentDefaultRoleId = resolveDefaultRoleId(data);
     const isAdmin = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
@@ -264,7 +277,7 @@ function useAdminPromotionExtraActions(adminRoleId) {
       onClick: handlePromote,
       label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
     }];
-  }, [adminRoleId, working, ui]);
+  }, [adminRoleId, viewerRole, working, ui]);
 }
 
 /**
@@ -351,7 +364,8 @@ export default function UserWindow(props) {
   const navigate = useNavigate();
   const resendInvitationExtraActions = useResendInvitationExtraActions();
   const adminRoleId = useAdminRoleId();
-  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId);
+  const viewerRole = useViewerRole();
+  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole);
   // ETP-5019 — `extraActions` accepts either a plain array or a function taking
   // `{ data, children, onRefresh }` (see `detailViewHelpers.jsx`'s
   // `renderExtraActionButtons`); merges both action-producing hooks' results into
