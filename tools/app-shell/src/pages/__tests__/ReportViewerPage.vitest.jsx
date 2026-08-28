@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
 
 // Mutable search params — tests can override before rendering
 let mockSearchParams = new URLSearchParams();
@@ -1115,17 +1116,8 @@ describe('ReportViewer (viewer sub-component)', () => {
     await waitFor(() => {
       expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    // The sidebar's own "Generate Report" button is now disabled while a
-    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
-    // longer be used to trigger validateRequired() here. The top-bar PDF
-    // button still calls validateRequired() unconditionally (only gated by
-    // `loading`), so it remains a reachable path to the same error state.
-    expect(screen.getByText('runReport')).toBeDisabled();
-    await user.click(screen.getByText('PDF'));
     // Should show "required" error message
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
   });
 
   // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call

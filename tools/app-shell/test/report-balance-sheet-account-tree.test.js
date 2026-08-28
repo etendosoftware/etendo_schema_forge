@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
 // account-report tree as profit-loss. In Etendo Classic both are literally one
@@ -34,16 +35,6 @@ const PL_CONTRACT = JSON.parse(readFileSync(resolve(PL_DIR, 'report-contract.jso
 const SQL = CONTRACT.sql.query;
 const OPERANDS_SQL = CONTRACT.sql.operandsQuery;
 const HELPERS_CODE = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
-// ETP-5013 added `{{> document-branding}}` to template.hbs's .report-header —
-// NOT a native Handlebars partial (see report-api.js's own comment on
-// expandReportPartials), so it must be string-expanded before compiling or
-// Handlebars throws "The partial document-branding could not be found".
-// template-excel.hbs/template-csv.hbs never got the partial.
-const BRANDING_PARTIAL = readFileSync(
-  resolve(import.meta.dirname, '../../../templates/reports/document-branding.hbs'), 'utf8');
-function expandBrandingPartial(templateSrc) {
-  return templateSrc.replace(/\{\{>\s*document-branding\s*\}\}/g, BRANDING_PARTIAL);
-}
 
 // ── Part 1: contract shape ──────────────────────────────────────────────────
 

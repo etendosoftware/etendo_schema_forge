@@ -28,6 +28,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Handlebars from 'handlebars';
 import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/tax-report');
 
@@ -66,12 +67,6 @@ describe('tax-report/template.hbs — no redundant "Detail" heading (ETP-5013)',
 const CONTRACT = JSON.parse(readFileSync(resolve(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const MOCK_DATA = JSON.parse(readFileSync(resolve(ARTIFACT_DIR, 'mock-data.json'), 'utf8'));
 const HELPERS_CODE = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
-const BRANDING_PARTIAL = readFileSync(
-  resolve(import.meta.dirname, '../../../templates/reports/document-branding.hbs'), 'utf8');
-
-function expandBrandingPartial(templateSrc) {
-  return templateSrc.replace(/\{\{>\s*document-branding\s*\}\}/g, BRANDING_PARTIAL);
-}
 
 function labelsFor(locale) {
   const out = {};

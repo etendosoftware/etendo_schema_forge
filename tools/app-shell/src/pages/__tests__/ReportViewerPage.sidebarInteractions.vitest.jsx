@@ -6,6 +6,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -258,14 +259,7 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Date From')).toBeInTheDocument());
 
-    // The sidebar's own "Generate Report" button is now disabled while a
-    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
-    // longer be used to trigger validateRequired() here. The top-bar PDF
-    // button still calls validateRequired() unconditionally (only gated by
-    // `loading`), so it remains a reachable path to the same error state.
-    expect(screen.getByText('runReport')).toBeDisabled();
-    await user.click(screen.getByText('PDF'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
 
     // Setting a value should clear the error (handleChange clears errors[name] when value is truthy)
     const dateField = screen.getByTestId('date-field');
@@ -334,14 +328,7 @@ describe('ReportViewerPage — ReportSidebar conditional required (requiredIf, E
     expect(dateLabel.closest('label')).not.toHaveTextContent('*');
 
     // Now submitting with referenceYearId empty must show the required error.
-    // The sidebar's own "Generate Report" button is now disabled while a
-    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
-    // longer be used to trigger validateRequired() here. The top-bar PDF
-    // button still calls validateRequired() unconditionally (only gated by
-    // `loading`), so it remains a reachable path to the same error state.
-    expect(screen.getByText('runReport')).toBeDisabled();
-    await user.click(screen.getByText('PDF'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
   });
 
   it('toggling the gate back off re-hides both visibleIf-gated params and clears the requirement', async () => {
