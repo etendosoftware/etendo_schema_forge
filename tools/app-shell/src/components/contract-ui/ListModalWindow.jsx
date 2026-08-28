@@ -22,6 +22,8 @@ import { EntityForm } from './EntityForm.jsx';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
+import { RefreshButton } from './RefreshButton.jsx';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
@@ -538,6 +540,12 @@ export function ListModalWindow({
             onClear={clearSort}
             isDefaultSort={isDefaultSort}
             data-testid="ListSortPopover__19eda5" />
+          {/* Same slot a generated list gives it (between sort and the create button). This
+              window draws its own toolbar, so it never inherited ListView's. */}
+          <RefreshButton
+            onRefresh={reload}
+            label={ui('refresh')}
+            data-testid="RefreshButton__19eda5" />
           <button
             type="button"
             onClick={openCreate}
@@ -563,6 +571,11 @@ export function ListModalWindow({
           {ui(config.bannerKey)}
         </InfoBanner>
       )}
+      {/* Refresh indicator — only once rows are on screen; the first fetch shows the skeletons
+          just below instead. */}
+      {loading && allRows.length > 0 ? (
+        <ListProgressBar testId="list-modal-progress-bar" data-testid="ListProgressBar__19eda5" />
+      ) : null}
       {/* Grid */}
       {loading && allRows.length === 0 ? (
         <div className="flex flex-col gap-2 px-2">

@@ -340,3 +340,44 @@ describe('StatementsTable — column sorting (ETP-4921)', () => {
     expect(rowIds()).toEqual(['s1', 's2', 's3']);
   });
 });
+
+/**
+ * ETP-4921 — numeric column headers must sit over their own figures. The generic `DataTable`
+ * right-aligns any header whose column type is numeric; this grid is hand-rolled and never
+ * inherited that rule, so Líneas / Salida / Entrada were labelled at the left edge of columns
+ * whose cells have always been `text-right tabular-nums`.
+ */
+describe('StatementsTable — numeric header alignment', () => {
+  // Every header button sits directly inside its grid-cell <span>; a non-numeric one carries no
+  // className at all, which is exactly the "not right-aligned" signal being asserted.
+  const headerCellClass = (sortKey) => screen
+    .getByTestId(`column-header-sort-${sortKey}`)
+    .parentElement.className ?? '';
+
+  it('right-aligns the money and count headers', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    for (const key of ['lines', 'out', 'in']) {
+      expect(headerCellClass(key), `${key} header`).toContain('text-right');
+    }
+  });
+
+  // Estado renders a pill, not a figure — it stays left, like every text column.
+  it('leaves the non-numeric headers alone', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    expect(headerCellClass('status')).not.toContain('text-right');
+    expect(headerCellClass('documentNo')).not.toContain('text-right');
+  });
+
+  // `align="right"` also flips the sort arrow to the label's left, so the arrow stays on the
+  // column's outer edge instead of drifting into the middle of the row.
+  it('puts the sort arrow on the outer edge of a right-aligned header', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    const btn = screen.getByTestId('column-header-sort-in');
+    expect(btn.className).toContain('flex-row-reverse');
+    expect(screen.getByTestId('column-header-sort-documentNo').className)
+      .not.toContain('flex-row-reverse');
+  });
+});

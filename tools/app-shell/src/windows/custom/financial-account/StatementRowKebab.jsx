@@ -1,5 +1,6 @@
 import { MoreVertical, PlayCircle, RotateCcw } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { isDraftStatement } from './statementStatus.js';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,7 +31,7 @@ import {
  */
 export function StatementRowKebab({ statement: s, onProcess, onReactivate }) {
   const ui = useUI();
-  const isDraft = s.status === 'DRAFT' || s.processed === 'N';
+  const isDraft = isDraftStatement(s);
   const lockedTip = ui('financeAccountStatementsRowProcessedTooltip');
   const reactivateTip = ui('financeAccountStatementsRowReactivateTooltip');
 

@@ -87,16 +87,35 @@ describe('useStatementActions', () => {
     expect(result.current.busy).toBe(false);
   });
 
-  it('throws and captures the error on HTTP failure', async () => {
+  // ETP-4921 — the message must be the backend's own reason, not a generic "HTTP 400" wrapper:
+  // it flows straight into a toast (see ImportedStatementsTab.runConfirm), so a caller that
+  // shows it verbatim (or translates it via backendErrors.js) needs the real sentence.
+  it('throws the backend reason, unwrapped, on a NEO error envelope', async () => {
     globalThis.fetch.mockResolvedValue({
-      ok: false, status: 400, text: async () => 'Only draft (unprocessed) statements can be modified',
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Only draft (unprocessed) statements can be modified', status: 400 } }),
     });
     const { result } = renderHook(() => useStatementActions());
 
     await act(async () => {
-      await expect(result.current.processStatement('st-1')).rejects.toThrow(/HTTP 400/);
+      await expect(result.current.processStatement('st-1'))
+        .rejects.toThrow('Only draft (unprocessed) statements can be modified');
     });
     expect(result.current.error).toBeInstanceOf(Error);
-    expect(result.current.error.message).toContain('Only draft');
+    expect(result.current.error.message).not.toMatch(/HTTP/);
+  });
+
+  // A body that isn't the expected NEO envelope (or isn't JSON at all) must not surface as
+  // "undefined" or an empty toast — fall back to a status-only message.
+  it('falls back to an HTTP-status message when the error body has no reason', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false, status: 500, json: async () => { throw new SyntaxError('not json'); },
+    });
+    const { result } = renderHook(() => useStatementActions());
+
+    await act(async () => {
+      await expect(result.current.deleteStatement('st-1')).rejects.toThrow('HTTP 500');
+    });
   });
 });

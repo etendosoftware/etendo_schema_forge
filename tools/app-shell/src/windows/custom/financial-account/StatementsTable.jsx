@@ -10,6 +10,7 @@ import { StatementLinesInline } from './StatementLinesInline';
 import { StatementRowKebab } from './StatementRowKebab';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import { isDraftStatement } from './statementStatus.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout — grid (NOT <table>) so the expanded accordion row can span all cols.
@@ -89,10 +90,17 @@ const STATEMENT_COLUMNS = getContractGridColumns('importedBankStatements');
 // The synthetic tail (lines / out / in / status). Not declarable AD fields — they are computed
 // aggregates the handler attaches to each row — but they travel WITH the row, so sorting them
 // client-side is exactly as correct as sorting a contract column.
+//
+// `numeric` right-aligns the HEADER to match the cell underneath, which has always been
+// `text-right tabular-nums`. This grid is hand-rolled, so it does not inherit the generic
+// DataTable rule that right-aligns a header whose column type is in `NUMERIC_FIELD_TYPES` — the
+// labels were left-aligned over right-aligned figures. Same fix already applied in Movimientos
+// and Reconciliaciones (`amountAligned` there); `align="right"` also flips the sort arrow to the
+// label's left, so the arrow stays on the outside edge in both directions.
 const TAIL_SORT = {
-  lines: { labelKey: 'financeAccountStatementsColLines', value: (s) => Number(s.lineCount) || 0 },
-  out: { labelKey: 'financeAccountStatementsColOut', value: (s) => Number(s.totalOut) || 0 },
-  in: { labelKey: 'financeAccountStatementsColIn', value: (s) => Number(s.totalIn) || 0 },
+  lines: { labelKey: 'financeAccountStatementsColLines', value: (s) => Number(s.lineCount) || 0, numeric: true },
+  out: { labelKey: 'financeAccountStatementsColOut', value: (s) => Number(s.totalOut) || 0, numeric: true },
+  in: { labelKey: 'financeAccountStatementsColIn', value: (s) => Number(s.totalIn) || 0, numeric: true },
   status: { labelKey: 'financeAccountStatementsColStatus', value: (s) => s.status },
 };
 
@@ -212,6 +220,10 @@ export function StatementsTable({
   statements, loading, currency = 'EUR', actions = null,
   selectedIds = new Set(), onSelectionChange = () => {},
   sortKey = null, sortDirection = 'asc', onSort,
+  // Bumped by the tab after any statement mutation, so an expanded row refetches its own lines
+  // instead of keeping the ones fetched when it was first opened (ETP-4921). Purely a pass-down
+  // to StatementLinesInline; nothing in this component reads it.
+  linesRefreshToken = 0,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -232,8 +244,15 @@ export function StatementsTable({
     }
   };
 
+  // Only the true initial fetch (no rows yet) wipes the body into skeleton rows below. A later
+  // refresh already has rows to show, so it stays smooth via this opacity dim instead — same
+  // reasoning as MovementsTable / ListView's own ownScroll gate.
+  const dimWhileRefreshing = loading && statements.length > 0
+    ? 'opacity-70 transition-opacity duration-200'
+    : 'transition-opacity duration-200';
+
   return (
-    <div role="table" className="w-full">
+    <div role="table" className={cn('w-full', dimWhileRefreshing)}>
       {/* Header — same style as MovementsTable headers (xs / semibold / hsl(var(--foreground))). */}
       <div
         role="row"
@@ -263,13 +282,14 @@ export function StatementsTable({
           </span>
         ))}
         {Object.entries(TAIL_SORT).map(([key, tail]) => (
-          <span key={key}>
+          <span key={key} className={tail.numeric ? 'text-right' : undefined}>
             <SortableHeaderLabel
               label={ui(tail.labelKey)}
               sortKey={key}
               activeKey={sortKey}
               direction={sortDirection}
               onSort={onSort}
+              align={tail.numeric ? 'right' : undefined}
               data-testid="SortableHeaderLabel__3acaeb" />
           </span>
         ))}
@@ -278,7 +298,7 @@ export function StatementsTable({
       {/* Body */}
       {renderBody({
         loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-        selectedIds, onSelectionChange,
+        selectedIds, onSelectionChange, linesRefreshToken,
       })}
     </div>
   );
@@ -290,9 +310,9 @@ export function StatementsTable({
 // ─────────────────────────────────────────────────────────────────────────────
 function renderBody({
   loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-  selectedIds, onSelectionChange,
+  selectedIds, onSelectionChange, linesRefreshToken = 0,
 }) {
-  if (loading) {
+  if (loading && statements.length === 0) {
     return [1, 2, 3, 4, 5].map((n) => (
       <div key={n} role="row" style={GRID_STYLE} className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}>
         {SKELETON_CELL_KEYS.map((k) => (
@@ -330,6 +350,7 @@ function renderBody({
         actions={actions}
         selected={selectedIds.has(s.id)}
         onSelectionChange={onSelectionChange}
+        linesRefreshToken={linesRefreshToken}
         data-testid="StatementRow__3acaeb" />
     );
   });
@@ -341,7 +362,7 @@ function renderBody({
 // Trailing per-row actions: Edit + Delete reveal on hover (drafts only, mirroring
 // the sales-order grid), with the kebab in the middle holding Procesar / Reactivar.
 function RowActions({ statement: s, actions, ui }) {
-  const isDraft = s.status === 'DRAFT' || s.processed === 'N';
+  const isDraft = isDraftStatement(s);
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors';
   return (
     <>
@@ -389,6 +410,7 @@ function statementDisplayName(s, bcpLocale) {
 
 function StatementRow({
   statement: s, currency, bcpLocale, ui, open, onToggle, actions, selected, onSelectionChange,
+  linesRefreshToken = 0,
 }) {
   // Context handed to the contract-column cell renderers.
   const cellCtx = { ui, bcpLocale, displayName: (st) => statementDisplayName(st, bcpLocale) };
@@ -463,6 +485,7 @@ function StatementRow({
           <StatementLinesInline
             statementId={s.id}
             currency={currency}
+            refreshToken={linesRefreshToken}
             data-testid="StatementLinesInline__3acaeb" />
         </div>
       ) : (

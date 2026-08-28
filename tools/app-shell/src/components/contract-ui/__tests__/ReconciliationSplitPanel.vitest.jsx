@@ -203,6 +203,49 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByText('Transfer ACME')).toBeInTheDocument();
   });
 
+  // ETP-4921 — this panel never goes through ListView, so it never inherited ListView's
+  // refresh progress bar. It renders the extracted ListProgressBar above the split, under the
+  // same gate ListView uses: only once lines are already on screen, because on the true first
+  // fetch the panel's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over lines already on screen', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the lines mounted underneath the bar (smooth refresh, not a remount)', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
+    });
+
+    it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+      setLines([]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = false;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid, not the default ListView one', () => {
+      setLines([LINE_A]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the empty state on the right until a line is selected', () => {
     setLines([LINE_A]);
     renderPanel();
@@ -1779,6 +1822,41 @@ describe('ReconciliationSplitPanel', () => {
     });
 
     // The row still falls back through partnerName / referenceNo when there is no description.
+    /**
+     * ETP-4921 — the money headers carried an explicit `text-left` while every MoneyCell under
+     * them is `text-right`, so "Importe" / "Saldo pendiente" labelled the opposite edge of their
+     * own column. The generic DataTable right-aligns a numeric column's header; these two
+     * hand-rolled panels never inherited that.
+     */
+    it('right-aligns the money headers over their own figures', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const moneyHeads = heads.filter((h) => /financeReconcileCol(Amount|PendingBalance)/
+        .test(h.textContent));
+      // Left panel Importe + right panel Saldo pendiente & Importe.
+      expect(moneyHeads.length).toBeGreaterThan(0);
+      for (const h of moneyHeads) {
+        expect(h.className, h.textContent).toContain('text-right');
+        expect(h.className, h.textContent).not.toContain('text-left');
+      }
+    });
+
+    // Fecha / Descripción / Progreso name text or a bar, not a figure — they stay left.
+    it('leaves the non-money headers alone', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const textHeads = heads.filter((h) => /financeReconcileCol(Date|Description|Progress)/
+        .test(h.textContent));
+      expect(textHeads.length).toBeGreaterThan(0);
+      for (const h of textHeads) {
+        expect(h.className, h.textContent).not.toContain('text-right');
+      }
+    });
+
     it('keeps the description fallback chain', () => {
       setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
       renderPanel();

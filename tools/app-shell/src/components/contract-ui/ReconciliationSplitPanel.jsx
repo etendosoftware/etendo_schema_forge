@@ -22,6 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
+import { ListProgressBar } from './ListProgressBar.jsx';
 import {
   Table,
   TableHeader,
@@ -172,7 +173,10 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
  * single line of copy floating in it looks broken.
  */
 function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow }) {
-  if (loading) {
+  // Only the true initial fetch (no rows yet) wipes the body into skeleton rows — a later
+  // refresh (the left toolbar's refresh button, or reselecting a line for the right panel)
+  // already has rows to show, same reasoning as MovementsTable / StatementsTable.
+  if (loading && items.length === 0) {
     return SKELETON_ROWS.map((n) => (
       <TableRow key={n} data-testid="TableRow__d0f4d5">
         {SKELETON_CELL_KEYS.slice(0, colSpan).map((cellKey) => (
@@ -220,9 +224,14 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
  */
 function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   const ui = useUI();
+  // A refresh over rows that are already on screen dims instead of collapsing into skeletons —
+  // see renderRows' matching `items.length === 0` gate.
+  const dimWhileRefreshing = loading && items.length > 0 ? 'opacity-70' : '';
   return (
     <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
-      <Table className="table-fixed" data-testid="Table__d0f4d5">
+      <Table
+        className={cn('table-fixed transition-opacity duration-200', dimWhileRefreshing)}
+        data-testid="Table__d0f4d5">
         <TableHeader data-testid="TableHeader__d0f4d5">
           <TableRow
             className="h-11 border-b border-[hsl(var(--border-subtle))] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[hsl(var(--foreground))]"
@@ -485,7 +494,11 @@ function StatementLinesPanel({
           <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
           <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
-          <TableHead className="w-[139px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          {/* Right-aligned to sit over its own figures: MoneyCell renders `text-right`, so a
+              left-aligned header put the label at the opposite edge of the column from the
+              amount it names — the same rule the generic DataTable applies to any numeric
+              column, which this hand-rolled table does not inherit. */}
+          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -764,8 +777,10 @@ function CandidateOperationsPanel({
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
           <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColInfo')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          {/* Both money columns render through MoneyCell (`text-right`) — see the left panel's
+              own Importe header for why these follow it. */}
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -1556,6 +1571,12 @@ export function ReconciliationSplitPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Spans BOTH columns, unlike the toolbar: the header's refresh button reloads the whole
+          tab, so the indicator belongs above the split rather than inside the left panel. Only
+          once lines are on screen — the first fetch shows the panel's own skeleton rows. */}
+      {linesLoading && lines.length > 0 ? (
+        <ListProgressBar testId="reconciliation-progress-bar" data-testid="ListProgressBar__d0f4d5" />
+      ) : null}
       <div className="flex flex-1 overflow-hidden">
         <StatementLinesPanel
           lines={visibleLines}

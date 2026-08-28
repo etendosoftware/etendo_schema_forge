@@ -121,4 +121,43 @@ describe('useBankStatementLines', () => {
     });
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
+
+  /**
+   * ETP-4921 — the lines of a statement change from OUTSIDE this hook (the edit modal's
+   * ?action=update, a reconciliation), while every consumer keys only off statementId. Without a
+   * second dependency the fetch happens once and never again, which is why an expanded row kept
+   * showing the pre-edit amounts under a header that had already updated.
+   */
+  it('refetches the same statement when the refresh token changes', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ lines: [] }));
+
+    const { result, rerender } = renderHook(
+      ({ tok }) => useBankStatementLines('stmt-1', tok),
+      { initialProps: { tok: 0 } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    rerender({ tok: 1 });
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+    // Same statement, same URL — only the invalidation signal differed.
+    expect(globalThis.fetch.mock.calls[1][0]).toBe(globalThis.fetch.mock.calls[0][0]);
+  });
+
+  // Guard against the opposite mistake: a token that never changes must not cause a refetch
+  // loop on every render.
+  it('does not refetch while the token stays the same', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ lines: [] }));
+
+    const { result, rerender } = renderHook(
+      ({ tok }) => useBankStatementLines('stmt-1', tok),
+      { initialProps: { tok: 7 } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    rerender({ tok: 7 });
+    rerender({ tok: 7 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
 });

@@ -35,6 +35,15 @@ describe('translateBackendError', () => {
         raw: 'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank',
         key: 'backendError.ibanInvalid',
       },
+      // ETP-4921 — BankStatementsHandler.requireDraft / .requireProcessed guards.
+      {
+        raw: 'Only draft (unprocessed) statements can be modified',
+        key: 'backendError.statementNotDraft',
+      },
+      {
+        raw: 'Only processed statements can be reactivated',
+        key: 'backendError.statementNotProcessed',
+      },
     ];
 
     for (const { raw, key } of KNOWN) {

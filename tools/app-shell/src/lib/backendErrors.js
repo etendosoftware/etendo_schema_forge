@@ -27,6 +27,12 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  // Bank statement lifecycle guards (BankStatementsHandler.requireDraft / .requireProcessed).
+  // Shared by process/update/delete (requireDraft) and reactivate (requireProcessed) — ETP-4921:
+  // a bulk-delete of a processed statement used to surface only "None of the N selected could be
+  // deleted", with no hint that the reason was the statement being processed already.
+  'Only draft (unprocessed) statements can be modified': 'backendError.statementNotDraft',
+  'Only processed statements can be reactivated': 'backendError.statementNotProcessed',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
