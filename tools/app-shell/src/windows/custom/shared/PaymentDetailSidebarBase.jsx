@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { formatInstant, hasTimeOfDay, parseInstant } from '@/lib/instant.js';
 import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 import { paymentDisplayState } from './paymentStatuses';
 import { useRecordRefreshSignal } from './useRecordRefreshSignal';
@@ -38,15 +40,16 @@ function confirmedLabelKey(isIn, state) {
   return isIn ? 'cobroConfirmado' : 'pagoConfirmado';
 }
 
+/**
+ * A row's timestamp, which may be either kind: {@code creationDate} and {@code updated} are
+ * instants and belong in the viewer's clock, while {@code paymentDate} is a business date and must
+ * read the same everywhere. Routing them the same way is what showed a UTC hour as if it were
+ * local (ETP-4895), so the shape decides.
+ */
 function fmtDate(raw) {
   if (!raw) return '';
-  const str = String(raw);
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(str);
-  if (!m) return '';
-  const d = new Date(+m[1], +m[2] - 1, +m[3]);
-  if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) +
-    (m[4] ? ` · ${m[4]}` : '');
+  if (hasTimeOfDay(raw)) return formatInstant(raw);
+  return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function Separator() {
@@ -64,22 +67,16 @@ function BreakdownRow({ label, value, muted }) {
   );
 }
 
-function parseAdDate(raw) {
-  if (!raw) return null;
-  const str = String(raw);
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(str);
-  if (!m) return null;
-  const d = new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
-  return isNaN(d.getTime()) ? null : d;
-}
-
 /**
- * True when an AD date-or-timestamp string carries an actual time-of-day component (an
- * `HH:mm` group after the date), as opposed to a date-only value that `parseAdDate` would
- * otherwise silently default to midnight.
+ * An audit timestamp as the moment it refers to.
+ *
+ * Was a local-constructor parse of the server's digits, which showed a payment confirmed at 08:32
+ * in Argentina as 11:32 — NEO sends no zone, so its UTC wall clock was being read as local
+ * (ETP-4895). {@code parseInstant} is where that assumption now lives, once, and it declines a
+ * date-only value rather than pinning it to midnight.
  */
-function hasTimeComponent(raw) {
-  return !!raw && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(String(raw));
+function parseAdDate(raw) {
+  return parseInstant(raw);
 }
 
 /**
@@ -127,7 +124,7 @@ function resolveConfirmedEvents(data, isDraft) {
   if (stored.length > 0 || isDraft) return stored;
 
   const source = auditTimestamp(data) || data.paymentDate;
-  if (!hasTimeComponent(source)) return stored;
+  if (!hasTimeOfDay(source)) return stored;
   const backfill = parseAdDate(source);
   if (!backfill) return stored;
 
@@ -149,10 +146,9 @@ function resolvePostedAt(data, isDraft) {
   return backfill;
 }
 
+/** A recorded instant, in the viewer's clock. Same rendering as {@link fmtDate}'s instant half. */
 function fmtNow(d) {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) + ` · ${h}:${m}`;
+  return formatInstant(d);
 }
 
 function eventStorageKey(id, kind) {

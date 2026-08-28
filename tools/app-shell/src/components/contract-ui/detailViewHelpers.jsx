@@ -356,6 +356,12 @@ export function SecondaryPanelTab(props) {
 }
 
 export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  // ETP-4836 — the subtitle + "add" CTA only make sense when the tab actually
+  // supports manual row creation (st.addLineFields configured). Tabs whose rows
+  // are entirely backend-managed (e.g. invoices' Exchange Rates, auto-created by
+  // AbstractInvoiceHeaderHandler) still get the "no records" illustration instead
+  // of a blank area, just without an action that would do nothing.
+  const canAdd = Boolean(onAddLineClick);
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
@@ -366,11 +372,15 @@ export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
           <line x1="8" y1="17" x2="13" y2="17" />
         </svg>
       </div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
-        + {addLineLabel}
-      </button>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: canAdd ? 4 : 0 }}>{ui('noRecordsYet')}</span>
+      {canAdd && (
+        <>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+          <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+            + {addLineLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }
