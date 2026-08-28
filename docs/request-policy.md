@@ -121,7 +121,26 @@ Two situations produce this, and only one is a defect:
 a duplicate-key rejection is also a 409 and its remedy is the opposite (change your data, not your
 baseline).
 
-`useEntity` handles this already, with a non-dismissing notice and **exactly two choices**:
+The same dialog is raised from all three write paths, so a conflict looks identical wherever the
+user was typing:
+
+| Path | Where it is wired | Refresh action |
+|---|---|---|
+| Header save | `useEntity.handleSaveErrorResponse` | `discardChangesAndReload` |
+| Lines sidebar save | `useLineSaveConflict.raiseLineSaveConflict` | `discardLineChangesAndReload` |
+| Inline lines grid (`linesLayout: 'inlineEditable'`) | `useLineSaveConflict.raiseRowSaveConflict` | `discardRowChangesAndReload` |
+
+`components/contract-ui/useLineSaveConflict.js` holds both line paths (extracted from
+`DetailView.jsx`, which is size-gated). Its `isStaleRecordResponse` reads a **clone** of the
+response so the caller's own `extractErrorMessage` still has an unconsumed body — ask for the
+conflict first, extract the message second.
+
+The inline grid needs one extra step: `InlineLinesPanel` catches the save handler's throw and
+toasts it, so a failure the handler had already reported surfaced **twice**. The handler therefore
+throws `Object.assign(new Error(msg), { userNotified: true })` and the panel skips its own toast on
+that marker. Any error raised from elsewhere still gets one.
+
+`useEntity` handles the header already, with a non-dismissing notice and **exactly two choices**:
 
 - **Cancel save** — nothing was written, so the form keeps the user's edits and they can save later
   against a fresh read.

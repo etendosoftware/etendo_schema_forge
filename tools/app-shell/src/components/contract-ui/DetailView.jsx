@@ -110,12 +110,10 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 // because a dirty HEADER is not endangered by changing line, and prompting about it would train
 // users to click through the dialog without reading it.
 import { requestTransition } from '@/lib/unsavedChanges.js';
-// ETP-5073 / DOC-04: the lines sidebar reuses the SAME conflict dialog the header uses, so a
-// concurrent edit is reported identically wherever it happens. `rememberRecordVersion` is called
-// explicitly on the refresh read below because that read does not go through useEntity's
-// normalizeRecord, which is what normally records the optimistic-locking token.
-import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
-import { rememberRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+// ETP-5073 / DOC-04: both line write paths — the sidebar save and the inline grid autosave —
+// reuse the SAME conflict dialog the header uses, so a concurrent edit is reported identically
+// wherever it happens.
+import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
   CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
@@ -703,7 +701,7 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields }) {
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
     // and numeric strings coerced for BigDecimal — mirrors the side-panel save at line ~1750. `coerce`
@@ -801,9 +799,18 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
       // still surfaces the SIF warning toast.
       if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
     } else {
+      // ETP-5073 / DOC-04: a concurrency conflict gets the shared dialog, with the same
+      // "discard and refresh" button the sidebar and the header offer — the inline grid used to
+      // report it as a plain toast, which said what happened but left the user to find the reload.
+      // Asked first so it reads the CLONED body before extractErrorMessage consumes the original.
+      const raised = await raiseRowSaveConflict?.(res, row.id);
       const msg = await extractErrorMessage(res);
-      toast.error(msg || ui('networkError'));
-      throw new Error(msg || 'PATCH failed');
+      if (!raised) toast.error(msg || ui('networkError'));
+      // The throw is what stops InlineLinesPanel from claiming the row was saved, but its catch
+      // also toasts — so every inline failure used to surface TWICE (identical text, two stacked
+      // toasts). `userNotified` tells it the user has already been told, here by the toast above
+      // or by the conflict dialog.
+      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
     }
   } : undefined;
 }
@@ -2517,72 +2524,14 @@ export function DetailView({
   const hiddenEntryDefaults = addLineFields.hidden ?? [];
   const editableChildFields = allEntryFields.filter(f => f.type === 'number' || f.type === 'amount');
 
-  /**
-   * The lines sidebar's detail URL for the line currently open.
-   *
-   * Extracted because three places need the identical URL — the save, the post-save refresh and
-   * the conflict refresh — and they must not drift: a mismatch would refresh a different record
-   * than the one just written.
-   */
-  const buildSelectedLineUrl = useCallback(() => (
-    api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine?.id)
-      || `${apiBaseUrl}/${detailEntity}/${selectedLine?.id}`
-  ), [api, detailEntity, apiBaseUrl, selectedLine?.id]);
-
-  /**
-   * ETP-5073 / DOC-04: re-read the open line and drop its pending edits, after the user chose that
-   * over cancelling in the conflict dialog.
-   *
-   * Deliberately not a merge, for the same reasons as the header's equivalent: it would overwrite
-   * the other person's value on any field both had edited, and it would inject values without
-   * running the callouts a real edit runs.
-   */
-  const discardLineChangesAndReload = useCallback(async () => {
-    if (!selectedLine?.id) return;
-    try {
-      const res = await apiFetch(buildSelectedLineUrl(), { token, baseUrl: '' });
-      if (!res.ok) throw new Error(String(res.status));
-      const json = await res.json();
-      const freshLine = json?.response?.data?.[0] ?? json;
-      if (freshLine?.id) {
-        // This read bypasses useEntity's normalizeRecord, so the optimistic-locking token is
-        // recorded by hand. Without it the store would keep the version the conflict just
-        // rejected and the very next save would fail again — a refresh that does not let the
-        // user save is not a refresh.
-        rememberRecordVersion(freshLine);
-        hook.handleUpdateChild(selectedLine.id, freshLine);
-        setSelectedLine(prev => ({ ...prev, ...freshLine }));
-      }
-      setLineEdits(null);
-      setLineEditColumns({});
-      dismissSaveConflict();
-      toast.info(ui('saveConflictReloaded'));
-    } catch {
-      toast.error(ui('saveConflictReloadFailed'));
-    }
-  }, [selectedLine, buildSelectedLineUrl, apiFetch, token, hook, ui]);
-
-  /**
-   * ETP-5073 / DOC-04: raise the shared conflict dialog when the server refused this write because
-   * the record moved on, and report whether it was raised.
-   *
-   * Returns false for every other failure so the caller falls through to its normal error toast,
-   * and false when no dialog host is mounted — silence is the one outcome this ticket removes.
-   *
-   * Keyed off the `error` discriminator, never the 409 status alone: a duplicate key is also a 409
-   * and its remedy is the opposite (change your data, not your baseline).
-   */
-  const raiseLineSaveConflict = useCallback(async (res) => {
-    let staleConflict = false;
-    try {
-      const body = await res.clone().json();
-      staleConflict = body?.error === 'stale_record';
-    } catch {
-      return false;
-    }
-    if (!staleConflict) return false;
-    return openSaveConflict({ onRefresh: discardLineChangesAndReload });
-  }, [discardLineChangesAndReload]);
+  // ETP-5073 / DOC-04 — conflict handling for both line write paths (sidebar save and inline grid
+  // autosave). See useLineSaveConflict.js for why it lives outside this file.
+  const {
+    buildSelectedLineUrl, discardLineChangesAndReload, raiseLineSaveConflict, raiseRowSaveConflict,
+  } = useLineSaveConflict({
+    api, detailEntity, apiBaseUrl, apiFetch, token, hook, ui,
+    selectedLine, setSelectedLine, setLineEdits, setLineEditColumns,
+  });
 
   /**
    * Saves the line open in the sidebar.
@@ -3468,7 +3417,7 @@ export function DetailView({
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields, raiseRowSaveConflict })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
