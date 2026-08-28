@@ -8,7 +8,7 @@
 set -euo pipefail
 
 BASE_URL="${ETENDO_URL:-http://localhost:8080/etendo}"
-USERNAME="${ETENDO_USER:-admin@etendo.software}"
+USERNAME="${ETENDO_USER:-admin}"
 PASSWORD="${ETENDO_PASSWORD:-admin}"
 
 ROLE_ID="42D0EEB1C66F497A90DD526DC597E6F0"          # F&B International Group Admin
