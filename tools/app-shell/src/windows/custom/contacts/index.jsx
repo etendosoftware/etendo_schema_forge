@@ -10,7 +10,7 @@ import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 import { useUI } from '@/i18n';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
-import { Trash2, X } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
@@ -76,24 +76,25 @@ export default function ContactsWindow(props) {
     setPendingBulkDelete(null);
   }, []);
 
+  // ETP-4972 — the standalone X (clear-selection) button was removed: the
+  // floating SelectionToolbar now provides its own built-in close button, so
+  // this one was a visually-broken duplicate (an old light-bar X next to the
+  // new dark-pill one). The trash button is restyled for legibility on the
+  // dark pill (was `bg-card` — a near-white chip, invisible against the
+  // pill). Icon-only, no visible "Eliminar" label: the applied Figma
+  // instance has this button's Button Text property set to false.
   const selectionBarRightActions = useCallback(
-    ({ selectedRows, clearSelection, token, apiBaseUrl, reselectFailed }) => (
-      <>
-        <button
-          onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--destructive) / 0.3)] bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)] transition-colors"
-        >
-          <Trash2 className="h-4 w-4 text-[hsl(var(--destructive))]" data-testid="Trash2__ef097c" />
-        </button>
-        <button
-          onClick={clearSelection}
-          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors"
-        >
-          <X className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="X__ef097c" />
-        </button>
-      </>
+    ({ selectedRows, token, apiBaseUrl, reselectFailed }) => (
+      <button
+        onClick={() => setPendingBulkDelete({ rows: selectedRows, apiBaseUrl, token, reselectFailed })}
+        title={ui('delete')}
+        aria-label={ui('delete')}
+        className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10"
+      >
+        <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__ef097c" />
+      </button>
     ),
-    []
+    [ui]
   );
 
   return (
@@ -108,7 +109,8 @@ export default function ContactsWindow(props) {
            Form={ContactsBusinessPartnerForm}
            subsetFilters={SUBSET_FILTERS}
            // ETP-4656 — this window renders its own delete affordance via
-           // `selectionBarRightActions` below (trash + X buttons), so it must opt out of
+           // `selectionBarRightActions` below (trash button; close is now
+           // SelectionToolbar's own built-in X, ETP-4972), so it must opt out of
            // ListView's generic "Delete selected" toolbar action explicitly via
            // `hideBulkDelete` (no more implicit inference from selectionBarRightActions'
            // mere presence). NOTE: this whole object REPLACES — not merges with — the

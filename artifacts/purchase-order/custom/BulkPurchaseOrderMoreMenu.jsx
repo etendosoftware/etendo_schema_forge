@@ -147,7 +147,7 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 w-9 p-0" disabled={running}>
+        <Button variant="ghost" size="icon" title={ui('more')} disabled={running}>
           <MoreVertical className="h-4 w-4" />
           <span className="sr-only">{ui('more')}</span>
         </Button>

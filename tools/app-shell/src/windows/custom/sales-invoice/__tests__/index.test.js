@@ -36,6 +36,12 @@ describe('SalesInvoiceWindow — wiring', () => {
   it('routes to HeaderPage when a recordId is present', () => {
     assert.match(src, /if\s*\(recordId\)/);
   });
+
+  it('does not hardcode hidePrint on ListView (ETP-4728 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/,
+      'the bulk "Print (N)" grid button must not be hidden via listViewOptions — ' +
+      'ETP-4728 restored it for sales-invoice, mirroring sales-order (ETP-4729)');
+  });
 });
 
 // ETP-4888 point 5 — Tax SIF quick-fix modal shortcut on invoice lines. The

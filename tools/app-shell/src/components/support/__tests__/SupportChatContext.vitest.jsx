@@ -382,6 +382,26 @@ describe('SupportChatContext', () => {
       expect(result.current.state.conversations[0].unread).toBe(true);
     });
 
+    it('the 15s conversation-list poll refreshes conversations when assigneeKind flips to '
+        + '"human" — regression: escalation lands via a background webhook, asynchronous to the '
+        + 'message-send response, so this poll is what eventually surfaces it and hides the '
+        + '"talk to a human" bar', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, assigneeKind: 'ai' }],
+      }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, assigneeKind: 'human' }],
+      }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+      expect(result.current.state.conversations[0].assigneeKind).toBe('human');
+    });
+
     it('the 5s message poll leaves messages unchanged when the response is not ok', async () => {
       const { result } = await renderSupportChat();
       act(() => {
@@ -701,7 +721,7 @@ describe('SupportChatContext', () => {
     });
 
     describe('UPDATE_CONVERSATION staleness guard', () => {
-      it('keeps the newer cached lastActivity/lastMessage when a stale-timestamped update arrives, but still applies other fields', async () => {
+      it('discards the entire update — not just lastActivity/lastMessage — when its updatedAt is older than the cached one', async () => {
         const { result } = await renderSupportChat();
         mockApiFetch.mockResolvedValueOnce(jsonResponse({
           conversations: [{
@@ -709,37 +729,44 @@ describe('SupportChatContext', () => {
             subject: 'X',
             status: 'open',
             rated: false,
+            assigneeKind: 'human',
             lastActivity: '2024-01-05T00:00:00.000Z',
             lastMessage: 'el mensaje más nuevo',
+            updatedAt: '2024-01-05T00:00:00.000Z',
           }],
         }));
         await act(async () => {
           await result.current.actions.loadConversations();
         });
-        // A slow request (e.g. closeConversation) resolves with a snapshot taken BEFORE
-        // a faster background poll already landed a newer lastActivity/lastMessage.
+        // A slow request (e.g. closeConversation) resolves with a snapshot read from the DB
+        // BEFORE a faster background call (e.g. the async human-takeover flip) already
+        // landed newer state — confirmed regression: previously only lastActivity/lastMessage
+        // were protected, so status/rated/assigneeKind from this stale snapshot still
+        // clobbered the fresher cached values (this is what made the "talk to a human" bar
+        // flicker back to visible after a stale response landed out of order).
         mockApiFetch.mockResolvedValueOnce(jsonResponse({
           conversation: {
             id: 'c1',
             status: 'closed',
             rated: true,
+            assigneeKind: 'ai',
             lastActivity: '2024-01-01T00:00:00.000Z',
             lastMessage: 'un mensaje viejo',
+            updatedAt: '2024-01-01T00:00:00.000Z',
           },
         }));
         await act(async () => {
           await result.current.actions.closeConversation('c1');
         });
         const updated = result.current.state.conversations.find((c) => c.id === 'c1');
-        // Stale lastActivity/lastMessage must NOT clobber the newer cached values...
         expect(updated.lastActivity).toBe('2024-01-05T00:00:00.000Z');
         expect(updated.lastMessage).toBe('el mensaje más nuevo');
-        // ...but every other field from the stale-timestamped update still applies.
-        expect(updated.status).toBe('closed');
-        expect(updated.rated).toBe(true);
+        expect(updated.status).toBe('open');
+        expect(updated.rated).toBe(false);
+        expect(updated.assigneeKind).toBe('human');
       });
 
-      it('applies lastActivity/lastMessage normally when the incoming update is newer', async () => {
+      it('applies the update normally when its updatedAt is newer', async () => {
         const { result } = await renderSupportChat();
         mockApiFetch.mockResolvedValueOnce(jsonResponse({
           conversations: [{
@@ -748,6 +775,7 @@ describe('SupportChatContext', () => {
             status: 'open',
             lastActivity: '2024-01-01T00:00:00.000Z',
             lastMessage: 'viejo',
+            updatedAt: '2024-01-01T00:00:00.000Z',
           }],
         }));
         await act(async () => {
@@ -759,6 +787,7 @@ describe('SupportChatContext', () => {
             status: 'closed',
             lastActivity: '2024-01-05T00:00:00.000Z',
             lastMessage: 'nuevo',
+            updatedAt: '2024-01-05T00:00:00.000Z',
           },
         }));
         await act(async () => {
@@ -770,7 +799,7 @@ describe('SupportChatContext', () => {
         expect(updated.status).toBe('closed');
       });
 
-      it('applies lastActivity/lastMessage normally when the incoming update has an equal timestamp', async () => {
+      it('applies the update normally when its updatedAt is equal to the cached one', async () => {
         const { result } = await renderSupportChat();
         mockApiFetch.mockResolvedValueOnce(jsonResponse({
           conversations: [{
@@ -779,6 +808,7 @@ describe('SupportChatContext', () => {
             status: 'open',
             lastActivity: '2024-01-05T00:00:00.000Z',
             lastMessage: 'igual',
+            updatedAt: '2024-01-05T00:00:00.000Z',
           }],
         }));
         await act(async () => {
@@ -790,6 +820,7 @@ describe('SupportChatContext', () => {
             status: 'closed',
             lastActivity: '2024-01-05T00:00:00.000Z',
             lastMessage: 'igual actualizado',
+            updatedAt: '2024-01-05T00:00:00.000Z',
           },
         }));
         await act(async () => {
@@ -798,6 +829,57 @@ describe('SupportChatContext', () => {
         const updated = result.current.state.conversations.find((c) => c.id === 'c1');
         expect(updated.lastMessage).toBe('igual actualizado');
         expect(updated.status).toBe('closed');
+      });
+    });
+
+    describe('15s poll uses MERGE_CONVERSATIONS (per-item updatedAt guard, not a blind replace)', () => {
+      it('does not let an out-of-order stale poll response revert assigneeKind back to "ai"', async () => {
+        const { result } = await renderSupportChat();
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            assigneeKind: 'ai',
+            lastActivity: '2024-01-01T00:00:00.000Z',
+            updatedAt: '2024-01-01T00:00:00.000Z',
+          }],
+        }));
+        await act(async () => {
+          await result.current.actions.loadConversations();
+        });
+        // A poll tick that lands AFTER escalation already applied — the good case, bar hides.
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            assigneeKind: 'human',
+            lastActivity: '2024-01-02T00:00:00.000Z',
+            updatedAt: '2024-01-02T00:00:00.000Z',
+          }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15000);
+        });
+        // The NEXT poll tick's response reflects a snapshot read from the DB before the
+        // escalation flip (stale updatedAt) — reproduces the reported bug: the escalate
+        // button reappearing a few seconds after it correctly disappeared.
+        mockApiFetch.mockResolvedValueOnce(jsonResponse({
+          conversations: [{
+            id: 'c1',
+            subject: 'X',
+            status: 'open',
+            assigneeKind: 'ai',
+            lastActivity: '2024-01-01T00:00:00.000Z',
+            updatedAt: '2024-01-01T00:00:00.000Z',
+          }],
+        }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15000);
+        });
+        const conv = result.current.state.conversations.find((c) => c.id === 'c1');
+        expect(conv.assigneeKind).toBe('human');
       });
     });
 

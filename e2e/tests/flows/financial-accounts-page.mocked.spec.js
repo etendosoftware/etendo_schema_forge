@@ -434,8 +434,10 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
 
     await rowCheckbox(page, 'acc-2').click();
     await expect(page.getByTestId('selection-count')).toContainText('2');
-    // The trigger carries the count too — "Eliminar seleccionados (2)".
-    await expect(page.getByTestId('bulk-delete-selected')).toContainText('2');
+    // ETP-4972 made the trigger icon-only (no "Eliminar seleccionados (2)" text at all,
+    // deliberately — the pill's own counter segment above already shows the count), so this
+    // only checks the button is still there and enabled, not any text content.
+    await expect(page.getByTestId('bulk-delete-selected')).toBeEnabled();
   });
 
   // The generic bar has no cancel button (the bespoke one did): clearing the selection is done

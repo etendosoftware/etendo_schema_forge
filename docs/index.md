@@ -6,6 +6,7 @@
 |------|-------------|
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
 | [repo-topology.md](repo-topology.md) | The 3-repo split, the two dev profiles (functional-only vs core), published-package default vs `LOCAL_CORE` local-source mode (React + CLI), GitHub Packages auth |
+| [email-inventory.md](email-inventory.md) | Inventory of every email Etendo sends across both stacks (GO email contracts + Core SMTP), with triggers, key files, and where each format lives |
 | [transactional-email-framework.md](transactional-email-framework.md) | Transactional email framework: contract-driven execution, security boundary, lifecycle, edge cases, and agent checklist |
 | [email-contracts.md](email-contracts.md) | Email contracts guide: descriptor schema, request/response contract, recipient policies, versioning, and initial contract sketches |
 | [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |

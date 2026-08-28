@@ -1318,3 +1318,117 @@
   incident. Root fix would be to strip comments before the `.includes()` (or scan executable SQL
   only) in `cli/src/data-fixes/run.js`, with its own test — deliberately left out of ETP-4893's
   scope as shared-runner surface.
+
+## ETP-4877 — Existing-tenant system-role-templates retrofit (2026-08-26)
+
+Closes L1 (Tenant Ownership, `onboarding-gaps.md`) on the corrective front. Ships
+`R26-tenant-owner-and-personal-role-retrofit.sql` (owner detection + personal-role backfill +
+org-access/defaults backfill for pre-existing personal-role holders + `AD_User_Roles` cleanup +
+`EM_ETGO_Show_Acct_Fields` derived-flag sync) and `R27-deactivate-r16-duplicate-roles.sql`
+(deactivates confirmed-unused R16-era per-client role clones), plus the `retired.json` mechanism
+that permanently retires R16 at the runner level. Full field-verified findings below.
+
+- **2026-08-26 — `AD_User.C_BPartner_ID IS NULL` is the load-bearing distinction between a real
+  staff/login user and a BP-contact row that happens to live in `AD_User`.** Confirmed live: every
+  BP-contact-linked row (the F1-gap "Default Customer Contact" seeded per org, plus a large
+  population of orphaned BP-contact test users left over on several E2E tenants — names like
+  "Andres1787679884486 Name", "Julia... Legacy", "Lucia... Code") has `C_BPartner_ID` SET and holds
+  ZERO `AD_User_Roles` rows; every genuine staff/login user (the ones with a `username`, the ones
+  an admin actually manages via "Usuarios") has `C_BPartner_ID` NULL. Live count on this DB: 127
+  active `AD_User` rows across 41 real tenants, only 47 with `C_BPartner_ID IS NULL`. **Apply:** any
+  fix that needs to enumerate "real users" of a tenant (not BP contacts) must filter
+  `C_BPartner_ID IS NULL` — minting a personal role, granting access, or counting "how many users"
+  without this filter massively over-counts and touches rows that are never login principals.
+- **2026-08-26 — `UserRoleCompositionService#isReusablePersonalRole`'s definition does NOT check
+  a role's NAME.** A role named anything (e.g. GOClient's "Classic Role") counts as a genuine,
+  reusable "personal role" for a user as long as it is active, non-template, non-client-admin, same
+  client, not itself an `AD_Role_Inheritance` `InheritFrom` target, and has 0 or exactly 1 active
+  `AD_User_Roles` row (and if 1, it's this user's). **Apply generally:** never assume the
+  `"Personal – "` name prefix is how the Java code recognizes a personal role — it's a display
+  convention `buildPersonalRoleName` applies when CREATING one, not a check anything reads back.
+- **2026-08-26 — Corrupting-bug found+fixed while building R26: TWO DIFFERENT users legitimately
+  sharing ONE non-personal role via `Default_Ad_Role_ID` (zero `AD_User_Roles` rows for either) is
+  real, live data on this DB** — GOClient's "11111" and "test" both point `Default_Ad_Role_ID` at
+  the SAME "Classic Role". Per the identity check above, EITHER user individually sees that role as
+  "reusable" (0 assignments = "never assigned yet, safe to reuse"). A first draft of R26 scoped its
+  org-access/defaults/`AD_User_Roles`-cleanup steps to "any non-template, non-admin default role" —
+  broke immediately: the `AD_User_Roles` enforcement step would insert ONE row per user pointing at
+  the SAME shared role, instantly breaking that role's own exclusivity for both (2 active rows, not
+  0 or 1) and manufacturing real login access neither user previously had via `AD_User_Roles` — well
+  outside what a "cleanup extra rows" step should ever do. **Fix:** those three steps only ever
+  touch a user's default role when it is EITHER the fix's own deterministic personal-role id OR
+  already named `"Personal – %"` (the established convention) — never an arbitrary reusable-but-
+  unnamed default role. Caught by full-fleet idempotency testing (`@check` after `@apply` returned
+  1 row instead of 0) — proves why "re-run the check after apply, inside the same transaction" is
+  worth doing for every non-trivial fix, not just the ones that look risky on paper.
+- **2026-08-26 — Deterministic (hashed) role ids, not `get_uuid()`, for a multi-step `@apply` that
+  needs to reference a row it just inserted.** `get_uuid()` (Postgres-side, used everywhere else in
+  this catalog) can't be "read back" by a LATER separate top-level statement in the same `@apply`
+  without a data-modifying CTE with `RETURNING` — and CTEs don't span multiple statements. R26 needs
+  the SAME personal-role id in ~6 separate statements (role INSERT, inheritance INSERT, window-access
+  INSERT, `Default_Ad_Role_ID` UPDATE, org-access INSERT, defaults UPDATE, `AD_User_Roles`
+  INSERT/DELETE). Solution: `UPPER(MD5(u.ad_user_id || ':ETP4877-personal-role'))` — a stable,
+  32-hex-uppercase (matches the Etendo id format exactly), collision-safe-enough (128-bit hash
+  space) id every step can independently RE-DERIVE from `u.ad_user_id` alone, with no read-back
+  needed. Bonus: a retried run after a mid-chain failure recomputes the IDENTICAL id instead of
+  minting a second orphaned role. **Apply generally:** this pattern generalizes to any future fix
+  that needs a fresh row's id available to several later statements in the same `@apply` — prefer a
+  deterministic hash of a stable natural key over `get_uuid()` when that's the case.
+- **2026-08-26 — `AD_Role_Inheritance` alone grants NOTHING; the window/tab/field/process-access
+  rows must be separately materialized.** Confirmed by reading `UserRoleCompositionService`'s own
+  javadoc: core's `RoleInheritanceEventHandler`/`WindowAccessInjector` do this via a Hibernate event
+  observer, not a DB trigger. But R16 (2026-07-27) already proved a plain SQL
+  `INSERT INTO ad_window_access ... SELECT ... FROM <source role's own ad_window_access>` reaches
+  the identical end state without Hibernate — R26 Step 2b reuses that exact pattern (source = the
+  resolved system template, not a fixed GOClient row), reading the template's CURRENT grants so a
+  future widening (ETP-4878) is picked up automatically on the next run, not hardcoded. This is WHY
+  R26 could stay `@type: sql` instead of escalating to `@type: webhook` despite needing to replicate
+  `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
+- **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
+  never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
+  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
+  currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
+  responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
+  ETP-4877. **Confirmed live, real bug (not hypothetical):** the system Finance template itself read
+  `'N'` (should always be `'Y'`), and 24 active, non-template, non-client-admin roles fleet-wide
+  already inherited from Finance via `AD_Role_Inheritance` yet still read `'N'` — including
+  GOClient's "RoleFinanzas" (the BUG-1 role from the ETP-4906 QA finding — see the header note in
+  R26 for why BUG-1's window-access-ownership corruption does NOT affect this fix; it's a completely
+  separate column) and "Classic Role". Fixed both directions (R26 Step 8b: `'Y'` iff a matching
+  active inheritance row exists, `'N'` otherwise) and added
+  `UserRoleCompositionService#syncShowAccountingFieldsFlag`, called unconditionally at the end of
+  every `reconcileInheritances`, so `AssignTemplateRolesControl`'s live save path self-heals this
+  going forward. **Apply generally:** a "derived" column with no read-time join is a classic drift
+  trap — whenever a column looks like it SHOULD be computed from another table but a native-SQL read
+  shows it's just stored, audit every WRITE path that could invalidate it, not just the one you're
+  currently touching.
+- **2026-08-26 — This DB is a SHARED, actively-mutated dev/QA environment, not a static fixture —
+  re-running the SAME read-only diagnostic query minutes apart can return DIFFERENT results.**
+  F&B International Group showed 1 active `is_client_admin` holder in an early diagnostic pass and
+  0 in a later one, with no write from this session in between. Root cause not chased (plausible:
+  background E2E suites continuously creating/mutating "E2E User ..." tenants, or a scheduled data
+  refresh) — not a bug in any fix here. **Apply generally:** on this DB specifically, do not treat
+  an early count as still-true evidence later in the same session; a fix's OWN `@check`/`@report`
+  re-evaluating live state at apply time is what actually matters, not a diagnostic snapshot taken
+  earlier. This is exactly why the ticket's own instruction ("re-run your own audit queries against
+  the actual DB... do not size off assumed counts") matters in practice, not just in principle.
+- **2026-08-26 — `schema_forge_core`'s mirrored `cli/src/data-fixes/` copy is confirmed still stale
+  (tops out at R8) and on an unrelated branch (`mergeblock/ETP-4962`)** — same finding as the R23
+  entry above, reconfirmed for ETP-4877. No `retired.json` exists there at all. Per this repo's own
+  documented drift-handling convention (`CLAUDE.md` repo-topology section: "treat this repo's copy
+  as authoritative for functional-tenant remediation and flag the drift") and the established R23
+  precedent, NOT reconciled here — flagged in the PR/final report only, reconciling the two catalogs
+  is a separate task.
+- **2026-08-26 — `retired.json` (ETP-4877) is new shared-runner infrastructure, the first fix ever
+  to actually need `@type: webhook`-adjacent framework work despite staying `@type: sql` itself.**
+  Item 7's ask ("skip retired fixes entirely, BEFORE parsing/evaluating any fix... checksum
+  double-check... fails loudly on mismatch") is implemented as `loadRetiredList()` (reads
+  `retired.json`, tolerant of a missing file) → `verifyRetiredList(catalog, retired)` (throws
+  immediately on a retired fixId missing from the catalog, or a live sha256 checksum mismatch) →
+  `loadCatalogWithRetirement()` (the one function every CLI entry point — full run, `--fix`,
+  `--list-clients` — now calls instead of the bare `loadCatalog()`, so `fix.retired` is always set
+  before `applyChain`/`cmdTargetedFix` ever see a fix). The full general `CHECKSUM_MISMATCH` ledger
+  status (deferred per the runner's own Phase-0 docs) was deliberately NOT built — only the narrow
+  checksum verification `retired.json` itself needs, computed on-demand for retired fixIds only, not
+  stored anywhere or computed for the whole catalog on every run.

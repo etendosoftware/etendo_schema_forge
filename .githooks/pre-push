@@ -147,7 +147,7 @@ fi
 
 # Resolve base branch dynamically at the start
 BASE_REF=""
-for branch in "origin/epic/ETP-3504" "origin/develop" "origin/main"; do
+for branch in "origin/develop" "origin/main"; do
   if git rev-parse --verify --quiet "$branch" >/dev/null; then
     BASE_REF="$branch"
     break
@@ -426,9 +426,9 @@ run_domain_boundary_check() {
 check_base_conflicts() {
   echo "==> Checking for conflicts with base branch (fetch + merge-tree)..."
 
-  # Fetch the latest base branch (prefer epic/ETP-3504, then develop, then main).
+  # Fetch the latest base branch (prefer develop, then main).
   local base_branch=""
-  for b in "epic/ETP-3504" "develop" "main"; do
+  for b in "develop" "main"; do
     if git fetch --quiet origin "$b" 2>/dev/null; then
       base_branch="$b"
       break
@@ -476,8 +476,8 @@ check_base_conflicts() {
 
 # Check that the sibling com.etendoerp.go checkout (used as REGEN_CHECK_PREV_XML_DIR
 # below) has no local commits missing from origin. offline-regen-check.yml resolves
-# its own branch there (exact match, else hotfix/*->main, feature/*->epic/ETP-3504,
-# else->develop) and always fetches fresh — it only ever sees what's actually on
+# its own branch there (exact match, else hotfix/*->main, else->develop) and 
+# always fetches fresh — it only ever sees what's actually on
 # GitHub. If your local checkout is ahead of that (unpushed commits), this check
 # passes against YOUR state while CI compares against an older one — exactly the
 # kind of local-pass/CI-fail split this whole exercise is trying to close.
@@ -506,7 +506,6 @@ check_go_module_push_sync() {
   else
     case "$sf_branch" in
       hotfix/*)  expected_branch="main" ;;
-      feature/*) expected_branch="epic/ETP-3504" ;;
       *)         expected_branch="develop" ;;
     esac
   fi

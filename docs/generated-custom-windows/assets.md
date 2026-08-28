@@ -392,7 +392,7 @@ handled zero correctly.
 ### Amortization Plan tab — row selection and bulk delete
 
 `AssetsAmortizationPanel.jsx` now supports full row selection on the "Plan de amortización"
-tab, using the same `LinesSelectionBar` portal pattern as Sales Order and Physical Inventory.
+tab, using the same shared `SelectionToolbar` component as Sales Order and Physical Inventory.
 
 **Select-all checkbox** — first column header contains a `Checkbox` with three states:
 unchecked (nothing selected), checked (all rows selected), and indeterminate (some rows
@@ -402,14 +402,21 @@ and the current `lines` array length.
 **Per-row checkbox** — each row has a `Checkbox` in the first column. Clicking toggles the
 row's id in `selectedRows`.
 
-**`LinesSelectionBar` floating bar** — rendered via portal (position tracked by a
-`ResizeObserver` on a `barAnchorRef` div inside the table container). Appears when
-`selectedRows.size > 0`, with a 250 ms exit animation when selection drops to zero. Displays
-selection count, a **Delete** button, and a **Close** button.
+**`SelectionToolbar` floating bar (ETP-4972)** — rendered via portal to `document.body` with
+true `position: fixed` coordinates (bottom-center of the viewport, `bottom: 24px; left: 50%;
+transform: translateX(-50%)`) — no rect-measuring, no `ResizeObserver`/`barAnchorRef`. (An
+earlier version of this component tracked the bar's position off a `ResizeObserver` on a
+`barAnchorRef` sentinel div in the table container — the same anchor-rect pattern the old,
+now-retired `LinesSelectionBar` used everywhere; it broke once the sentinel scrolled out of
+view on a long list. `SelectionToolbar` owns its position outright, so that bug class cannot
+recur here.) Appears when `selectedRows.size > 0`, with a 250 ms exit animation when
+selection drops to zero. Displays selection count, an icon-only red **Delete** button (no
+visible "Eliminar" label, `title` tooltip only — ETP-4972 Figma-driven restyle), and the
+shell's own built-in **Close** (×) button.
 
 **Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
 /amortizationLine/{id}` requests for every selected row id. On completion, selection is
-cleared and `fetchLines()` is called to refresh the table. The `LinesSelectionBar` shows a
+cleared and `fetchLines()` is called to refresh the table. The delete button shows a
 loading spinner (`deleting` flag) while requests are in flight.
 
 **Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`

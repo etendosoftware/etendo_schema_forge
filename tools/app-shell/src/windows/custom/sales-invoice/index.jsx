@@ -239,7 +239,6 @@ export default function SalesInvoiceWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         hideLink
-        listViewOptions={{ hidePrint: true }}
         bulkActions={SalesInvoiceBulkAction}
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (

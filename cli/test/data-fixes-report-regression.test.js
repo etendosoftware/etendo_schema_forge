@@ -26,6 +26,13 @@ const FIXES_WITH_REPORT = new Set([
   // that blocked the delete — exactly the "skipped part of its own work" case this section exists
   // for. See cli/test/data-fixes-r24-payment-method-cheque-to-recibo.test.js.
   '20260821T120000Z__R24-payment-method-cheque-to-recibo',
+  // R26 (ETP-4877) can't mechanically resolve a tenant with zero is_client_admin holders (owner
+  // detection has nothing to act on) or a personal-role name collision — @report surfaces both
+  // for manual review instead of silently doing nothing.
+  '20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit',
+  // R27 (ETP-4877) never deactivates a legacy Finance/Sales/Purchasing/Inventory clone that is
+  // still in real use — @report lists any such role found, for manual review.
+  '20260826T121500Z__R27-deactivate-r16-duplicate-roles',
 ]);
 
 async function loadCatalogFiles() {

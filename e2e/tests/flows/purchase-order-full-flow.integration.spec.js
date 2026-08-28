@@ -4,7 +4,7 @@ import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
+  addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
   readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
 } from '../helpers/purchase-helpers.js';
@@ -78,6 +78,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     let poTotals;
+    let invoiceId;
 
     await test.step('Navigate to Purchase Order and validate required fields', async () => {
       await navigateTo(page, 'purchase-order');
@@ -236,6 +237,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await expect(page).toHaveURL(/\/purchase-invoice\//, { timeout: 15_000 });
       await waitForDetailReady(page);
 
+      // Capture the invoice id so the post-confirmation check can target THIS
+      // invoice's row (`row-{id}`) instead of "the first Completed row", which
+      // any leftover invoice from an earlier run also satisfies.
+      invoiceId = (page.url().match(/\/purchase-invoice\/([^/?]+)/) || [])[1];
+      expect(invoiceId, 'Should have captured the invoice record id from the URL').toBeTruthy();
+
       // Verify invoice is in draft status with 2 lines
       await expectStatusPill(page, /borrador|draft/i,
         'Invoice should be in Draft status');
@@ -263,43 +270,40 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Verify invoice is Completed', async () => {
-      // Dismiss the preview/upload panel that opens automatically after confirming
-      // (the "Sube tu documento" overlay blocks pointer events on the list)
-      const previewClose = page.locator('[data-testid="preview-drop-zone"]')
-        .or(page.locator('.fixed.inset-0.z-50'));
-      if (await previewClose.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await page.keyboard.press('Escape');
-        await expect(previewClose).toBeHidden({ timeout: 5_000 }).catch(() => {});
-      }
-
       const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (!onDetailView) {
+        // Confirming navigated back to the list. Reload to drop the router state
+        // that re-opens the row-preview overlay for the just-saved record, then
+        // re-enter the invoice through its row quick action — openListRow owns
+        // the overlay dismissal, the hover-to-reveal pill and the scoped pencil
+        // testid, none of which the previous inline block did.
         await safeReload(page);
-        await waitForDetailReady(page).catch(() => {});
-        const completedRow = page.locator('tbody tr').filter({ hasText: /completado|completed/i }).first();
-        await expect(completedRow,
-          '[Plan 22.1] Invoice should appear as Completed in the list view',
-        ).toBeVisible({ timeout: 10_000 });
-        // The preview panel may open after confirm — click "Editar" if visible,
-        // otherwise dblclick the row directly
-        const editarInPreview = page.locator('button', { hasText: /editar|edit/i }).first();
-        if (await editarInPreview.isVisible({ timeout: 3_000 }).catch(() => false)) {
-          await editarInPreview.click();
-        } else {
-          await completedRow.dblclick();
-        }
-        await slow(page);
-        await waitForDetailReady(page);
-      } else {
-        await waitForDetailReady(page);
-        await expectStatusPill(page, /completado|registrado|booked|completed/i,
-          '[Plan 22.1] Invoice should show Completed after confirmation');
+        await expect(page.getByTestId('list-view'),
+          'Reloading after confirmation should land on the purchase-invoice list',
+        ).toBeVisible({ timeout: 20_000 });
 
-        await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-          'Invoice should still have 2 lines after completion',
-        ).toBeVisible({ timeout: 10_000 });
+        // Target THIS invoice by record id, and read its status from the
+        // language-independent `data-row-status` attribute (DataTable) rather
+        // than from translated cell text.
+        const invoiceRow = page.getByTestId(`row-${invoiceId}`);
+        await expect(invoiceRow,
+          '[Plan 22.1] The confirmed invoice should appear in the list view',
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(invoiceRow,
+          '[Plan 22.1] Invoice should appear as Completed in the list view',
+        ).toHaveAttribute('data-row-status', 'CO', { timeout: 10_000 });
+
+        await openListRow(page, invoiceRow, { label: 'completed invoice' });
       }
+
+      await waitForDetailReady(page);
+      await expectStatusPill(page, /completado|registrado|booked|completed/i,
+        '[Plan 22.1] Invoice should show Completed after confirmation');
+
+      await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
+        'Invoice should still have 2 lines after completion',
+      ).toBeVisible({ timeout: 10_000 });
       await slow(page);
     });
 

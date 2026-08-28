@@ -496,7 +496,10 @@ describe('ImportedStatementsTab', () => {
       expect(toastWarning).not.toHaveBeenCalled();
       expect(toastError).not.toHaveBeenCalled();
       await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
-      expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+      // ETP-4972 — the bar now renders through SelectionToolbar (portaled), which
+      // doesn't forward an arbitrary data-testid prop onto its DOM; assert via
+      // the count span's own testid instead (see BulkDeleteSelectionBar.jsx).
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
     });
 
     it('all fail: does not reload, fires a single error toast, and leaves the bar showing the same selection', async () => {
@@ -512,7 +515,7 @@ describe('ImportedStatementsTab', () => {
       expect(toastSuccess).not.toHaveBeenCalled();
       expect(toastWarning).not.toHaveBeenCalled();
       expect(reloadFn).not.toHaveBeenCalled();
-      expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
       expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
     });
   });

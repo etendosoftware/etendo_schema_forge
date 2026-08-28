@@ -161,21 +161,23 @@ feeds the first one — this is intentional (ETP-4714 was scoped to the form vie
 explicit product direction: the list-view print must never be touched by this feature). Two
 regressions were caught during review because of this split, with two different fixes:
 
-- `sales-invoice`/`purchase-order` **already had** `hidePrint: true` before this ticket (list
-  AND form both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form
-  behavior silently un-hid their list-view print buttons (list has no gate of its own once
-  `hidePrint` is unset). Fix: also declare `"listViewOptions": { "hidePrint": true }` alongside
-  `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint` prop
-  (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its pre-ticket
-  always-hidden state. **These two windows also needed a second fix**: their custom
-  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-rolls its
+- `sales-invoice`/`purchase-order` **had** `hidePrint: true` before ETP-4714 (list AND form
+  both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form behavior
+  silently un-hid their list-view print buttons (list has no gate of its own once `hidePrint`
+  is unset). ETP-4714's fix was to also declare `"listViewOptions": { "hidePrint": true }`
+  alongside `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint`
+  prop (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its
+  pre-ticket always-hidden state. Because both windows' custom
+  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-roll their
   own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`
-  (only the detail/record route goes through the generated component) — so the generator's
-  literal `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` is never even reached for
-  the list. The custom wrapper needs the exact same prop hardcoded directly on its own
-  `<ListView>` call (matching the existing pattern already used there for `dateFilterKey` etc.)
-  — check for this class of gap on **any** window whose custom `index.jsx` renders `<ListView>`
-  itself rather than delegating unconditionally to the generated `App`/`HeaderPage`.
+  (only the detail/record route goes through the generated component), the generator's literal
+  `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` was never even reached for the
+  list — the custom wrapper needed the same prop hardcoded directly on its own `<ListView>`
+  call too. **ETP-4728 QA later flagged this as an inconsistency** (grid print present on
+  `sales-order`, absent on `sales-invoice`/`purchase-order` with no per-status reason) and
+  ETP-4728 **removed** the `listViewOptions.hidePrint` from both windows' `decisions.json` AND
+  their custom `index.jsx`, unifying them with the `sales-order`/`sales-quotation` baseline
+  below — do **not** reintroduce it for these two windows either.
 - `purchase-invoice` needed the **opposite** correction: it never had `hidePrint` set before
   this ticket, so its list-view print was **visible**. An earlier iteration set
   `"hidePrint": true` to hide the form unconditionally, which also hid the previously-visible
@@ -190,9 +192,16 @@ regressions were caught during review because of this split, with two different 
   (plus `goods-shipment`'s), restoring their list-view print to always-visible as the new,
   tested, intended baseline — `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js`
   has an explicit regression guard (`'does not hardcode hidePrint on ListView (ETP-4729 — print
-  restored)'`) asserting this. ETP-4714's original `listViewOptions` fix for these two windows
-  is now obsolete and was removed — do **not** reintroduce it; the list stays unconditionally
-  visible for `sales-order`/`sales-quotation`, only the detail-view `hidePrintWhen` gate applies.
+  restored)'`) asserting this. **ETP-4728 later applied the same removal to `sales-invoice` and
+  `purchase-order`** (see above), each with the same class of regression guard on their own
+  custom `index.jsx` test — the list stays unconditionally visible for all four windows
+  (`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`); only the detail-view
+  `hidePrintWhen` gate applies anywhere now. `listViewOptions.hidePrint` remains legitimately
+  in use elsewhere for non-document master-data windows with their own unrelated reason to
+  suppress print (e.g. `contacts`, alongside `hideCounter`/`hideLink`/`hideBulkDelete`) — but
+  for the sales/purchase document windows specifically, before reintroducing it, re-check
+  whether the list-level suppression is genuinely intended (product decision) rather than an
+  accidental carry-over from an unrelated `hidePrintWhen` change, per the pitfall above.
 
 **Rule of thumb:** before changing a window's Print visibility, check what its list-view print
 buttons looked like *before* your change, and make sure they still look the same *after* it —
