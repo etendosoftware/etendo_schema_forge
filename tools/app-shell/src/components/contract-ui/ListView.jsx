@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -391,6 +392,7 @@ export function ListView({
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { runBatch } = useBatch({ apiBaseUrl, token });
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into
@@ -668,9 +670,7 @@ export function ListView({
     params.append('criteria', JSON.stringify(criteria));
     params.append('_startRow', '0');
     params.append('_endRow', '1000');
-    const res = await fetch(`${apiBaseUrl}/${importConfig.entity}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch(`/${importConfig.entity}?${params.toString()}`);
     if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -678,7 +678,7 @@ export function ListView({
     return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
       keyTargets.map((target) => [target, record[target]]),
     ));
-  }, [apiBaseUrl, token, importConfig?.entity]);
+  }, [apiFetch, importConfig?.entity]);
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
