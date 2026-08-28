@@ -170,6 +170,20 @@ describe('CloneOrderModal', () => {
     });
   });
 
+  it('surfaces a flat {message} error body with no error/response.error wrapper (ETP-4781)', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: 'Flat backend error' }),
+    });
+
+    render(<CloneOrderModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('action-clone-record'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Flat backend error')).toBeInTheDocument();
+    });
+  });
+
   it('shows fallback error key when API error has no message', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: false,
