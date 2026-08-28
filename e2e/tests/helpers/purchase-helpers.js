@@ -89,10 +89,16 @@ export async function waitForConfirmResponse(page) {
   );
 }
 
-/** Wait for the purchase-order documentAction confirmation request itself. */
-export function waitForDocumentActionResponse(page) {
+/**
+ * Wait for the documentAction confirmation request itself, scoped to a specific
+ * entity path — precise alternative to the generic waitForConfirmResponse() above,
+ * which resolves on ANY successful NEO write and can race ahead of the actual
+ * confirmation request (autosave, background poll, etc. resolving first).
+ * Defaults to 'purchase-order' for backward compatibility with existing call sites.
+ */
+export function waitForDocumentActionResponse(page, entityPath = 'purchase-order') {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/purchase-order/header/')
+    (resp) => resp.url().includes(`/${entityPath}/header/`)
       && resp.url().includes('/action/documentAction')
       && resp.request().method() === 'POST',
     { timeout: 30_000 },
@@ -134,20 +140,187 @@ export async function waitForLinesSettled(page, count, message) {
 
 // ── Common interactions ──────────────────────────────────────────────────────
 
+// Fixed (never timestamped) name so ensureVendorSetup is idempotent across runs:
+// find the SAME dedicated fixture every time instead of creating a fresh one
+// each run or mutating an arbitrary real contact.
+export const VENDOR_FIXTURE_NAME = 'E2E Vendor Fixture';
+const VENDOR_FIXTURE_ADDRESS_LINE = 'E2E Vendor Fixture Address';
+const VENDOR_FIXTURE_CITY = 'E2E City';
+
 /**
- * Ensure the first contact in the list has isVendor = true.
- * Navigates to /contacts, opens the first row, checks the vendor checkbox.
+ * GETs businessPartner candidates for the vendor fixture, sorted oldest-first
+ * (`_sortBy=creationDate`, per `queryParams.sorting` in the Contacts window's
+ * own generated api doc — BusinessPartnerPage.jsx), so that whenever more than
+ * one row comes back the FIRST one is always the same one across runs. When
+ * `useCriteria` is true this is the same exact-match AdvancedCriteria filter
+ * the ListView's own filter bar sends (see `buildBackendFilter()` in
+ * tools/app-shell/src/lib/gridQuery.js and `mergeFilterCriteria()` in
+ * tools/app-shell/src/hooks/useEntity.js); when false it fetches an unfiltered
+ * (bounded) page and matches by name client-side — see findVendorFixture()'s
+ * doc comment for why that second mode exists.
  */
-export async function ensureVendorSetup(page, { navigateTo }) {
-  await navigateTo(page, 'contacts');
-  await slow(page);
+async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
+  const params = { _sortBy: 'creationDate', _startRow: '0', _endRow: '500' };
+  if (useCriteria) {
+    params.criteria = JSON.stringify({
+      _constructor: 'AdvancedCriteria',
+      operator: 'and',
+      criteria: [{ fieldName: 'name', operator: 'equals', value: VENDOR_FIXTURE_NAME }],
+    });
+  }
+  const res = await page.request.get('/sws/neo/contacts/businessPartner', {
+    params,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`ensureVendorSetup: fixture lookup failed (${res.status()}): ${await res.text()}`);
+  }
+  const body = await res.json();
+  const rows = Array.isArray(body?.response?.data) ? body.response.data : [];
+  return useCriteria ? rows : rows.filter((row) => row?.name === VENDOR_FIXTURE_NAME);
+}
 
-  const contactRow = page.locator('tbody tr').first();
-  await expect(contactRow).toBeVisible({ timeout: 10_000 });
-  await contactRow.click();
-  await slow(page);
+/**
+ * Picks the deterministic vendor fixture out of one or more candidates
+ * (already sorted oldest-first by the caller) and warns if there was more
+ * than one — a same-tenant duplicate should never happen, but silently
+ * picking whichever the backend feels like returning would let the suite
+ * ping-pong between homonyms across runs instead of surfacing the problem.
+ */
+function pickDeterministicFixture(candidates) {
+  if (candidates.length > 1) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[ensureVendorSetup] Found ${candidates.length} business partners named `
+      + `"${VENDOR_FIXTURE_NAME}" in this tenant (ids: ${candidates.map((c) => c.id).join(', ')}). `
+      + `Using the oldest one (${candidates[0].id}) deterministically — the tenant likely needs a `
+      + 'manual data cleanup to remove the duplicates.',
+    );
+  }
+  return candidates[0];
+}
+
+/**
+ * Read-only lookup of the vendor fixture business partner via the Contacts
+ * window's own `businessPartner` entity. Confirmed live: the endpoint returns
+ * the full record — including the `vendor` boolean — in one GET, so the
+ * caller can skip all UI navigation entirely on the common "already set up"
+ * path.
+ *
+ * A prior version trusted a zero-row filtered result outright as "does not
+ * exist yet", which is what let a genuinely failing/mismatched filter
+ * silently trigger `createVendorFixture()` and produce a same-tenant
+ * duplicate contact — the create path has no way to tell "the criteria query
+ * is broken" apart from "this really is the first run". So a zero-row result
+ * from the filtered query is re-verified against an unfiltered (bounded) page
+ * of the same entity, matched by name client-side, before it is trusted
+ * enough to justify a create. (Investigated the specific incident reported
+ * for this fixture: the two `E2E Vendor Fixture` rows found by a raw
+ * cross-tenant DB query turned out to belong to two different `AD_Client_ID`s
+ * — i.e. two separate onboarding-created tenants, each correctly creating its
+ * own fixture once — not a same-tenant lookup miss. No evidence of the
+ * `criteria` param itself being broken was found, but the fallback below is
+ * cheap insurance against exactly that class of bug regardless.)
+ */
+async function findVendorFixture(page) {
+  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
+  if (!token) {
+    throw new Error(
+      'ensureVendorSetup could not find an auth token in localStorage["sf_auth_token"] — '
+      + 'call login(page) before ensureVendorSetup(page, ...).',
+    );
+  }
+
+  const filtered = await queryVendorFixtureCandidates(page, token, { useCriteria: true });
+  if (filtered.length > 0) {
+    return pickDeterministicFixture(filtered);
+  }
+
+  const unfiltered = await queryVendorFixtureCandidates(page, token, { useCriteria: false });
+  if (unfiltered.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[ensureVendorSetup] The criteria-filtered lookup for "${VENDOR_FIXTURE_NAME}" returned 0 rows, `
+      + `but an unfiltered scan found ${unfiltered.length} match(es) by name — the "name equals" filter `
+      + 'may be misbehaving for this entity/backend version. Using the unfiltered match instead of creating a duplicate.',
+    );
+    return pickDeterministicFixture(unfiltered);
+  }
+
+  return null;
+}
+
+/**
+ * Ensure the "Clave NIF País Residencia" combobox ends up with a value before
+ * saving a new contact — mirrors `ensureTaxIdKeySelected` in
+ * contacts-integration.spec.js (same required-field default-race handling;
+ * duplicated here rather than imported since that helper is not exported from
+ * a spec file).
+ */
+async function ensureTaxIdKeySelected(page) {
+  const taxInput = page.getByTestId('field-oBTIKTaxIDKey');
+  const taxChip = page.getByTestId('field-oBTIKTaxIDKey-chip');
+
+  const defaultArrived = await taxChip.waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!defaultArrived) {
+    await expect(taxInput).toBeVisible({ timeout: 5_000 });
+    await taxInput.click();
+    const taxOption = page.locator('[role="option"]').first();
+    await expect(taxOption).toBeVisible({ timeout: 5_000 });
+    await taxOption.click();
+  }
+  await expect(taxChip).toBeVisible({ timeout: 10_000 });
+}
+
+async function fillVendorFixtureForm(page) {
+  const nameInput = page.getByRole('textbox', { name: /razón social/i });
+  await expect(nameInput).toBeVisible({ timeout: 5_000 });
+  await nameInput.clear();
+  await nameInput.fill(VENDOR_FIXTURE_NAME);
+  await ensureTaxIdKeySelected(page);
+}
+
+/**
+ * Create the vendor fixture contact via the /contacts window's own "New"
+ * form — the same minimal-required-fields flow (Razón social + Clave NIF
+ * default) already exercised by `fillNewContactForm` in
+ * contacts-integration.spec.js, including its retry-once-after-reload
+ * fallback for the known flaky "sequence not ready on fresh onboarding
+ * environments" backend hiccup on first save.
+ */
+async function createVendorFixture(page) {
+  await fillVendorFixtureForm(page);
+
+  const saveBtn = page.getByTestId('action-save').or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+  await expect(saveBtn.first()).toBeEnabled({ timeout: 10_000 });
+  await saveBtn.first().click();
+
+  const saved = await page.waitForURL(/\/contacts\/(?!new)/, { timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!saved) {
+    await page.reload({ waitUntil: 'networkidle' });
+    await waitForDetailReady(page);
+    await fillVendorFixtureForm(page);
+    const retrySave = page.getByTestId('action-save').or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    await expect(retrySave.first()).toBeEnabled({ timeout: 10_000 });
+    await retrySave.first().click();
+    await expect(page,
+      'ensureVendorSetup: creating the vendor fixture contact failed even after one retry',
+    ).not.toHaveURL(/\/contacts\/new/, { timeout: 20_000 });
+  }
   await waitForDetailReady(page);
+}
 
+/**
+ * Ensure the "Proveedor" (isVendor) checkbox on the currently-open contact
+ * detail is checked, saving only if it was not already.
+ */
+async function ensureVendorFlagChecked(page) {
   const financieroTab = page.getByRole('button', { name: /financiero|financial/i });
   await expect(financieroTab).toBeVisible({ timeout: 10_000 });
   await financieroTab.click();
@@ -182,6 +355,275 @@ export async function ensureVendorSetup(page, { navigateTo }) {
 }
 
 /**
+ * Select the first available option of a CreatableSearchSelect-backed combo
+ * field (`field-<key>` trigger, `option-<key>-<id>` items — same shape as
+ * `selectVendorBP`'s businessPartner picker), but ONLY if the field does not
+ * already hold a value (i.e. its `-chip` variant is not showing). Idempotent:
+ * safe to call on a fixture that already has the value set from a prior run.
+ */
+async function ensureComboFieldSelected(page, fieldKey) {
+  const chip = page.getByTestId(`field-${fieldKey}-chip`);
+  const alreadySet = await chip.isVisible({ timeout: 2_000 }).catch(() => false);
+  if (alreadySet) return;
+
+  const trigger = page.getByTestId(`field-${fieldKey}`);
+  await expect(trigger, `"${fieldKey}" field should be visible on the vendor fixture`).toBeVisible({ timeout: 10_000 });
+
+  const firstOption = page.locator(`[data-testid^="option-${fieldKey}-"]`).first();
+  await expect(async () => {
+    await trigger.click({ timeout: 3_000 });
+    await expect(firstOption).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 15_000 });
+
+  await firstOption.click();
+  await slow(page);
+}
+
+/**
+ * Ensure the vendor fixture's "Purchase Pricelist" (`purchasePricelist`), "PO
+ * Payment Terms" (`pOPaymentTerms`) and "PO Payment Method"
+ * (`pOPaymentMethod`) fields — all rendered by VendorForm.jsx under the
+ * "Financiero" tab once `vendor` is checked (`displayLogic: record.vendor`)
+ * — hold a value.
+ *
+ * PO Payment Terms/Method are required by
+ * `ReturnShipmentUtils.applyBusinessPartnerFinancials` (com.etendoerp.go):
+ * generating a purchase rectificative invoice via `createReturnInvoice`
+ * throws "Business Partner is missing mandatory PO Payment Terms or PO
+ * Payment Method" when either is null on the vendor BP record.
+ *
+ * Purchase Pricelist is required for a DIFFERENT, non-obvious reason: that
+ * same `applyBusinessPartnerFinancials` path only runs when the return has no
+ * traceable source invoice (`findSourceInvoice()` returns null — true for
+ * this fixture's flow, since the PO is confirmed as receipt-only, no invoice
+ * at PO- or receipt-confirm time). In that path it sets
+ * `invoice.setCurrency(bp.getPurchasePricelist().getCurrency())` ONLY inside
+ * an `if (bp.getPurchasePricelist() != null)` guard — with no pricelist, the
+ * invoice's `Currency` column is silently left null, and `OBDal.save()`/
+ * `flush()` then fails with a raw (non-`OBException`) constraint-violation
+ * exception, which `createReturnInvoice`'s generic catch turns into an opaque
+ * "An internal error occurred while creating the return invoice" (HTTP 500)
+ * — a much harder failure to diagnose than the explicit payment-terms
+ * `OBException` (HTTP 400) above it, since none of the mandatory-field logic
+ * ever runs.
+ *
+ * None of the three were covered by `ensureVendorFlagChecked()` (isVendor +
+ * address only).
+ *
+ * Assumes the caller is already on the vendor fixture's "Financiero" tab
+ * (true right after `ensureVendorFlagChecked()`, which leaves that tab
+ * active) and that the `vendor` checkbox is checked, so all three fields are
+ * already rendered in the DOM. Picks whichever option comes first for each —
+ * this fixture only needs a NON-NULL value to satisfy the mandatory checks
+ * above, not a specific one.
+ */
+async function ensureVendorPaymentFieldsSet(page) {
+  const fieldKeys = ['purchasePricelist', 'pOPaymentTerms', 'pOPaymentMethod'];
+  const chipVisibility = await Promise.all(
+    fieldKeys.map((key) => page.getByTestId(`field-${key}-chip`).isVisible({ timeout: 2_000 }).catch(() => false)),
+  );
+  if (chipVisibility.every(Boolean)) return;
+
+  for (const key of fieldKeys) {
+    // eslint-disable-next-line no-await-in-loop -- each selection depends on the previous field's dropdown having closed
+    await ensureComboFieldSelected(page, key);
+  }
+
+  const saveBtn = page.getByTestId('action-save').or(
+    page.getByRole('button', { name: /guardar|save/i }),
+  ).first();
+  await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+  const savePromise = expectSaveResponse(page);
+  await saveBtn.click();
+  await savePromise;
+  await slow(page);
+}
+
+/**
+ * Read-only lookup of how many C_BPartner_Location rows the vendor fixture
+ * already has, via the same `parentId={id}` child-entity filter the
+ * secondaryTabs machinery itself documents (see
+ * `queryParams.parentFilter` in artifacts/contacts/generated/web/contacts/
+ * BusinessPartnerPage.jsx and LocationEditorModal's own create call,
+ * `${apiBase}/locationAddress?parentId=${bpId}`) — not an invented param
+ * shape.
+ *
+ * Deliberately NOT read from the "Direcciones" tab's count badge: that badge
+ * is rendered as `count={childCount}` (buildInitialTabs() in
+ * detailViewHelpers.jsx) and the DetailView only prints it once the related
+ * records have actually finished fetching — `count != null` gates the whole
+ * `<span>` (TabStripButton in DetailView.jsx). Sampling the tab's textContent
+ * shortly after clicking it races that fetch: while it's still in flight the
+ * badge span isn't in the DOM at all, so `(text.match(/(\d+)/) || ['0','0'])`
+ * silently falls back to "0" even when the fixture already has an address —
+ * this caused ensureVendorAddress() to create a brand-new duplicate address
+ * on almost every run instead of reusing the existing one.
+ */
+async function fetchVendorLocationCount(page, bpId) {
+  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
+  if (!token) {
+    throw new Error(
+      'ensureVendorAddress could not find an auth token in localStorage["sf_auth_token"] — '
+      + 'call login(page) before ensureVendorSetup(page, ...).',
+    );
+  }
+  const res = await page.request.get('/sws/neo/contacts/locationAddress', {
+    params: { parentId: bpId },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`ensureVendorAddress: location lookup failed (${res.status()}): ${await res.text()}`);
+  }
+  const body = await res.json();
+  return Array.isArray(body?.response?.data) ? body.response.data.length : 0;
+}
+
+/**
+ * Ensure the vendor fixture business partner has at least one address (a
+ * C_BPartner_Location row) — the BP callout that populates `partnerAddress`
+ * on Purchase/Sales Order needs a location to auto-select; with zero
+ * locations it has nothing to offer and
+ * `waitForDerivedFieldValue(page, 'partnerAddress')` times out.
+ *
+ * On the common "already has one" path this never touches the UI at all —
+ * mirrors ensureVendorSetup()'s own vendor-flag lookup. Only opens the
+ * "Direcciones" tab and the LocationEditorModal (the exact flow already
+ * exercised by contacts-integration.spec.js, PART 5b: Address — create via
+ * modal) when the API confirms there are truly zero locations. Assumes the
+ * contact detail for `bpId` is already the currently-open page.
+ */
+async function ensureVendorAddress(page, bpId) {
+  const existingCount = await fetchVendorLocationCount(page, bpId);
+  if (existingCount > 0) return;
+
+  const addressTab = page.getByTestId('tab-locationAddress')
+    .or(page.getByRole('button', { name: /direcci[oó]n|address/i }));
+  await expect(addressTab.first(), 'Address tab should be visible on the vendor fixture').toBeVisible({ timeout: 10_000 });
+  await addressTab.first().click();
+  await slow(page);
+
+  const addAddrBtn = page.getByTestId('action-add-line')
+    .or(page.getByRole('button', { name: /a[nñ]adir.*direcci|add.*address|nueva.*direcci/i }));
+  await expect(addAddrBtn.first()).toBeVisible({ timeout: 5_000 });
+  await addAddrBtn.first().click();
+
+  // Address uses LocationEditorModal ("Dirección") — scope to the modal
+  // overlay (inline style position:fixed + z-index:150) since the background
+  // grid's "Dirección" column header also matches the text.
+  const addressModal = page.locator('div[style*="z-index: 150"]');
+  await expect(addressModal.getByText(/^direcci[oó]n$/i).first()).toBeVisible({ timeout: 5_000 });
+
+  const modalInputs = page.locator('.fixed.inset-0 input[type="text"], div[class*="bg-black"] ~ div input[type="text"]');
+  const modalInputCount = await modalInputs.count();
+  if (modalInputCount >= 4) {
+    // Primera línea (1st), Segunda línea (2nd), Código postal (3rd), Ciudad (4th)
+    await modalInputs.nth(0).fill(VENDOR_FIXTURE_ADDRESS_LINE);
+    await modalInputs.nth(3).fill(VENDOR_FIXTURE_CITY);
+  } else {
+    const primeraLabel = page.getByText(/primera l[ií]nea/i);
+    const firstInput = primeraLabel.locator('xpath=following::input[1]');
+    await firstInput.fill(VENDOR_FIXTURE_ADDRESS_LINE);
+  }
+
+  // Select País — button opens a search dialog with country list
+  const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+  await paisButton.click();
+
+  const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+  await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+  await countrySearch.fill('spa');
+
+  const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
+    .or(page.getByRole('button', { name: /^spain$/i }))
+    .or(page.locator('button').filter({ hasText: /^España$/ }))
+    .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+  await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+  await countryOption.first().click();
+
+  const modalGuardar = page.getByRole('button', { name: /^guardar$/i }).last();
+  const saveAddrP = expectSaveResponse(page);
+  await modalGuardar.click();
+  await saveAddrP;
+  await slow(page);
+}
+
+/**
+ * Ensure a dedicated, deterministically-named vendor contact exists, has
+ * isVendor = true, AND has at least one address — find-or-create/repair,
+ * never "whatever the first row happens to be".
+ *
+ * Replaces the previous `tbody tr`-position-0 approach, which:
+ *   - depended on grid ordering and on whatever data a previous run left behind
+ *   - could silently resolve to the grid's own empty-state placeholder row
+ *     (`data-empty-state`, still a real, visible `<tr>`) when Contacts had 0
+ *     records — producing an opaque `tbody tr` visibility timeout instead of a
+ *     clear "could not find/create a vendor" error
+ *   - mutated an ARBITRARY real business partner's vendor flag every run
+ *
+ * The vendor-fixture lookup alone reports whether `vendor` is already true,
+ * but it does NOT report whether the fixture has any location, so
+ * `ensureVendorAddress()` always does its own read-only API check (see its
+ * doc comment) — it just never needs the UI to do so on the common path.
+ */
+export async function ensureVendorSetup(page, { navigateTo }) {
+  await navigateTo(page, 'contacts');
+  await slow(page);
+
+  const listView = page.getByTestId('list-view');
+  await expect(listView, 'Contacts list view should load').toBeVisible({ timeout: 15_000 });
+
+  const existing = await findVendorFixture(page);
+
+  if (existing) {
+    await page.goto(`/contacts/${existing.id}`);
+  } else {
+    const newBtn = page.getByTestId('action-new');
+    await expect(newBtn, 'Contacts "New" button should be visible').toBeVisible({ timeout: 10_000 });
+    await newBtn.click();
+    await expect(page, 'Should navigate to /contacts/new').toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+  }
+  await waitForDetailReady(page);
+
+  if (!existing) {
+    await createVendorFixture(page);
+  }
+
+  // Resolve the fixture's own id (needed by ensureVendorAddress()'s API
+  // check) from whichever path we took: the lookup's id when it already
+  // existed, or the id the save redirect assigned when creating it fresh.
+  const bpId = existing?.id ?? (page.url().match(/\/contacts\/([^/?]+)/) || [])[1];
+  if (!bpId) {
+    throw new Error(`ensureVendorSetup: could not resolve the vendor fixture's id from URL "${page.url()}"`);
+  }
+
+  // Capture the settled detail URL (either the pre-existing fixture's, or the
+  // one assigned on create) BEFORE switching tabs, so the address step below
+  // can navigate back to a clean "General" tab view.
+  const contactUrl = page.url();
+
+  // ensureVendorFlagChecked() checks the checkbox state itself and only saves
+  // when it isn't already checked, so calling it unconditionally is safe and
+  // idempotent (mirrors ensureVendorAddress()'s own "already has one" guard).
+  await ensureVendorFlagChecked(page);
+
+  // Same idempotent "check state, only act if missing" pattern as the vendor
+  // flag above — PO Payment Terms/Method are mandatory for createReturnInvoice
+  // (see ensureVendorPaymentFieldsSet's doc comment). Still on the
+  // "Financiero" tab here, where both fields render once vendor is checked.
+  await ensureVendorPaymentFieldsSet(page);
+
+  // ensureVendorFlagChecked() leaves the "Financiero" tab active, but the
+  // address tab lives under "General" — reload the detail view fresh
+  // (same idiom as contacts-integration.spec.js's PART 5c comment: "sub-tab
+  // state may be stale" after switching tabs) instead of assuming a
+  // sub-tab-switch UI exists.
+  await page.goto(contactUrl);
+  await waitForDetailReady(page);
+
+  await ensureVendorAddress(page, bpId);
+}
+
+/**
  * Re-pick the currently displayed (or first) option of an EntityForm Select,
  * but ONLY when the field is not already holding a real, valid value.
  *
@@ -205,9 +647,77 @@ export async function reselectComboOption(page, fieldKey) {
 }
 
 /**
- * Select the first vendor BP in a selector field and wait for callout.
+ * Locator for the current value of a chip-or-input FK/dependent field.
+ *
+ * CreatableSearchSelect (and its PartnerAddressPicker/DependentFkField wrappers
+ * — see EntityForm.jsx / PartnerAddressPicker.jsx) render EITHER a `-chip`
+ * (SelectorChip, `data-testid="field-<key>-chip"`) when a value is selected,
+ * OR the plain search `<input data-testid="field-<key>">` otherwise — never
+ * both at once. Callers must check whichever one currently exists in the DOM
+ * rather than assuming a fixed testid suffix.
  */
-export async function selectVendorBP(page) {
+export function derivedFieldLocator(page, fieldKey) {
+  return page.getByTestId(`field-${fieldKey}-chip`).or(page.getByTestId(`field-${fieldKey}`));
+}
+
+/**
+ * Wait until a callout/derivation-populated field shows a real value — not the
+ * placeholder and not an empty chip/input. Uses an auto-retrying `expect.poll()`
+ * instead of a one-shot `textContent()` sample, because fields routed through
+ * PartnerAddressPicker (e.g. `partnerAddress`) settle via an ADDITIONAL
+ * client-side round trip — CreatableSearchSelect fetches its own selector
+ * options and auto-selects the first one — which is separate from (and can
+ * resolve later than) the backend callout response that fills fields like
+ * `paymentTerms`/`priceList` directly.
+ *
+ * `derivedFieldLocator()` resolves to EITHER a chip (its value lives in
+ * `textContent`) OR a plain `<input>` (its value lives in the `value`
+ * attribute, never in `textContent`, which is always `""`) — never both at
+ * once. `not.toHaveText()` against the `.or()`-combined locator can therefore
+ * never pass on the input shape, no matter how long the field takes to settle.
+ * Poll each shape with the accessor that actually holds its value instead.
+ */
+export async function waitForDerivedFieldValue(page, fieldKey, { timeout = 30_000 } = {}) {
+  const field = derivedFieldLocator(page, fieldKey);
+  await expect(field).toBeVisible({ timeout });
+
+  const placeholderPattern = /^$|buscar|search|seleccionar|select/i;
+  const chip = page.getByTestId(`field-${fieldKey}-chip`);
+  const input = page.getByTestId(`field-${fieldKey}`);
+
+  await expect.poll(async () => {
+    if (await chip.isVisible().catch(() => false)) {
+      return (await chip.textContent().catch(() => null)) ?? '';
+    }
+    if (await input.isVisible().catch(() => false)) {
+      return (await input.inputValue().catch(() => null)) ?? '';
+    }
+    return ''; // neither shape present yet — treated as "still placeholder"
+  }, {
+    message: `Field "${fieldKey}" should show a real derived value (not the placeholder)`,
+    timeout,
+    intervals: [100, 200, 200, 500, 500, 1_000],
+  }).not.toMatch(placeholderPattern);
+
+  return field;
+}
+
+/**
+ * Select a vendor BP in a selector field and wait for callout.
+ *
+ * By default (no `name`) selects whichever vendor happens to be FIRST in the
+ * dropdown — the original behavior, unchanged, since most PO-flow specs only
+ * need ANY valid vendor for basic CRUD and don't care which one.
+ *
+ * Pass `{ name }` to instead type it into the field's server-search input
+ * (CreatableSearchSelect `serverSearch` mode — same `?q=` filter the field
+ * already supports) and select the matching option — needed by flows that
+ * require a SPECIFIC, pre-configured vendor (e.g. the `VENDOR_FIXTURE_NAME`
+ * fixture set up by `ensureVendorSetup`, which has PO Payment Terms/Method
+ * set — required by `createReturnInvoice` — where "whichever is first" is
+ * not good enough).
+ */
+export async function selectVendorBP(page, { name } = {}) {
   const bpInput = page.getByTestId('field-businessPartner');
   await expect(bpInput).toBeVisible({ timeout: 10_000 });
 
@@ -218,23 +728,30 @@ export async function selectVendorBP(page) {
       .toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 15_000 });
 
-  const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-    .filter({ hasNotText: /crear|create/i }).first();
+  if (name) {
+    await bpInput.fill(name);
+    // Debounced server-search fetch — give it time to settle before reading options.
+    await page.waitForTimeout(800);
+  }
+
+  const bpOption = name
+    ? page.locator('[data-testid^="option-businessPartner-"]').filter({ hasText: name }).first()
+    : page.locator('[data-testid^="option-businessPartner-"]').filter({ hasNotText: /crear|create/i }).first();
   await expect(bpOption,
-    'At least one vendor option should appear',
+    name ? `Vendor option matching "${name}" should appear` : 'At least one vendor option should appear',
   ).toBeVisible({ timeout: 15_000 });
   await bpOption.click();
 
-  // BP selection triggers multiple chained callouts (price list, payment terms,
-  // address). Wait until a key derived field is populated — this proves ALL
-  // callouts finished, without relying on networkidle.
-  await expect(async () => {
-    const chipOrValue = page.getByTestId('field-paymentTerms-chip')
-      .or(page.getByTestId('field-paymentTerms'));
-    await expect(chipOrValue).toBeVisible({ timeout: 3_000 });
-    // Ensure it's not still showing the placeholder
-    await expect(chipOrValue).not.toHaveText(/buscar|search|seleccionar|select/i, { timeout: 1_000 });
-  }).toPass({ timeout: 30_000 });
+  // BP selection triggers multiple chained callouts/fetches (price list, payment
+  // terms, address). paymentTerms/priceList are filled directly by the backend
+  // callout response, but partnerAddress (PartnerAddressPicker) needs an EXTRA
+  // client-side round trip (see waitForDerivedFieldValue above) — so waiting on
+  // paymentTerms alone does NOT prove partnerAddress has settled too. This gap
+  // let a flaky partnerAddress assertion slip through in
+  // purchase-order-to-invoice.integration.spec.js (deterministic failure: the
+  // address callout hadn't landed yet when the caller sampled its value).
+  await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
+  await waitForDerivedFieldValue(page, 'partnerAddress', { timeout: 30_000 });
   await slow(page);
 }
 
@@ -373,9 +890,9 @@ export async function clickConfirmButton(page) {
 /**
  * Verify a document's status pill contains the expected text.
  */
-export async function expectStatusPill(page, pattern, message) {
+export async function expectStatusPill(page, pattern, message, timeout = 10_000) {
   const pill = page.getByTestId('document-status-pill').first();
-  await expect(pill, message).toContainText(pattern, { timeout: 10_000 });
+  await expect(pill, message).toContainText(pattern, { timeout });
 }
 
 // ── Price / totals utilities ─────────────────────────────────────────────────

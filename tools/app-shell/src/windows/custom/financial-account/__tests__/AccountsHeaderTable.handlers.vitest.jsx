@@ -8,7 +8,7 @@
  * deep links); only the host moved from the page to this `headerTable` slot.
  *
  * The handlers used to be reachable through the page's `AccountsTable` props. They now
- * reach the cells through the `cellCtx` the slot builds: `pendingCount` renders through
+ * reach the cells through the `cellCtx` the slot builds: `eTGOPendingCount` renders through
  * the `reconcilePill` entry of ACCOUNT_CELL_TYPES (a contract column since the
  * `virtualFields[]` declaration), `_rowActions` is the one hand-appended column. Both are
  * handed to the generic DataTable, so this suite stubs it with a renderer that calls
@@ -19,6 +19,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
+  // ListSortPopover (rendered in the toolbar since ETP-4921) resolves each menu entry
+  // through resolveColumnLabel, which needs the AD dictionary translator.
+  useLabel: () => (key) => key,
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
@@ -131,17 +134,21 @@ import AccountsHeaderTable from '@generated/financial-account/custom/AccountsHea
 /** Bank-connected account: exposes the sync button and the disconnect menu item. */
 const CONNECTED = {
   id: 'acc-1', name: 'BBVA', type: 'B', currentBalance: 0,
-  currencyIso: 'EUR', pendingCount: 2, bankConnected: true, active: true,
+  currencyIso: 'EUR', eTGOPendingCount: 2, bankConnected: true, active: true,
 };
-/** Offline bank account: exposes the "connect" affordances instead. */
+/**
+ * Offline bank account: exposes the "connect" affordances instead.
+ * countryIso ES on purpose — those affordances are Spain-only since ETP-4896
+ * (see saltEdgeEligibility.js), so without it they would not render at all.
+ */
 const OFFLINE = {
-  id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0,
-  currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true,
+  id: 'acc-2', name: 'Sabadell', type: 'B', currentBalance: 0, countryIso: 'ES',
+  currencyIso: 'EUR', eTGOPendingCount: 0, bankConnected: false, active: true,
 };
 /** ETP-4871 — zero dependent records anywhere: the row kebab offers a real delete. */
 const DELETABLE = {
   id: 'acc-3', name: 'Empty Account', type: 'B', currentBalance: 0,
-  currencyIso: 'EUR', pendingCount: 0, bankConnected: false, active: true, deletable: true,
+  currencyIso: 'EUR', eTGOPendingCount: 0, bankConnected: false, active: true, deletable: true,
 };
 
 const onDataMutated = vi.fn();

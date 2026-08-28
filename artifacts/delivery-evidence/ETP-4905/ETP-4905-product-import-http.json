@@ -1,0 +1,19 @@
+{
+  "categoryCreate": {
+    "status": 200,
+    "body": {
+      "searchKey": "MUEBLES_Y_HOGAR",
+      "name": "Muebles y Hogar"
+    }
+  },
+  "batch": {
+    "status": 200,
+    "committed": true,
+    "product": {
+      "searchKey": "PROD-ETP-4905",
+      "name": "Mesa de comedor",
+      "productType": "I",
+      "productCategory": "cat-e2e-4905"
+    }
+  }
+}

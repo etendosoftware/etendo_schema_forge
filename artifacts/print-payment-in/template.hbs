@@ -53,6 +53,7 @@
   {{!-- Document Header --}}
   <div class="doc-header">
     <div class="doc-company">
+      {{> document-branding}}
       <div class="doc-company-name">{{header.org_name}}</div>
       <div class="doc-company-info">
         {{#if header.org_taxid}}Tax ID: {{header.org_taxid}}<br>{{/if}}
@@ -131,7 +132,7 @@
   {{!-- Footer with QR --}}
   <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6mm; padding-top:4mm; border-top:1px solid #e2e8f0;">
     <div style="flex-shrink:0;">
-      <img src="{{qrCode header}}" width="80" height="80" style="display:block;" />
+      <img src="{{header.qrDataUrl}}" width="80" height="80" style="display:block;" />
       <div style="font-size:6pt; color:#94a3b8; margin-top:1mm; max-width:80px; text-align:center;">Scan to verify</div>
     </div>
     <div style="font-size:7pt; color:#94a3b8; text-align:right;">

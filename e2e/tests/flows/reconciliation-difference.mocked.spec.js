@@ -251,10 +251,9 @@ async function installMocks(page, {
 /**
  * Opens the account detail on the reconciliation tab and returns the PARTIAL line's row locator.
  *
- * Entering that tab ALWAYS pops the automatch suggestions modal first
- * (`financial-account/index.jsx`: "The automatch modal opens whenever the user enters the
- * Reconciliation tab"), and while it is open its overlay swallows every click on the panel behind
- * it — so it has to be dismissed before anything else, deep link or not.
+ * Entering that tab MAY pop the automatch suggestions modal (ETP-4922: only when the engine finds
+ * at least one suggestion for the mocked account), and while it is open its overlay swallows every
+ * click on the panel behind it — so it has to be dismissed before anything else, deep link or not.
  *
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<import('@playwright/test').Locator>}

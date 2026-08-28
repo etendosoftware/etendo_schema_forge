@@ -4,12 +4,13 @@
  * `NameCell` / `TypeCell` / `BalanceCell` are rendered by TWO hosts: the legacy hand-rolled
  * `AccountRow`, which marks its <tr> as a plain Tailwind `group`, and the generic `DataTable`,
  * which marks it as a NAMED group (`group/row`, DataTable.jsx:1201). Tailwind's `group-hover:`
- * variant does NOT match `.group/row`, so the two affordances that start at `opacity-0` —
- * the copy-IBAN button and the drag grip — silently stayed invisible forever once the Cuentas
- * list moved onto DataTable. Nothing in the suite asserted them, so 111 green tests coexisted
- * with a visibly broken UI.
+ * variant does NOT match `.group/row`, so the affordance that starts at `opacity-0` — the
+ * copy-IBAN button — silently stayed invisible forever once the Cuentas list moved onto
+ * DataTable. Nothing in the suite asserted it, so 111 green tests coexisted with a visibly
+ * broken UI. (A drag grip had the same bug and the same guard; it was removed in ETP-4921,
+ * see the test below.)
  *
- * HONEST LABEL: the two hover tests below are className assertions, NOT behavioural ones.
+ * HONEST LABEL: the hover test below is a className assertion, NOT a behavioural one.
  * jsdom neither loads the Tailwind stylesheet nor computes `opacity`, so hovering the row and
  * asserting the button became visible is impossible here — a test written that way would look
  * behavioural and prove nothing. The emitted variant list IS the contract, so that is what is
@@ -29,6 +30,10 @@ const ACCOUNT = {
   type: 'B',
   currentBalance: 1234.56,
   currencyIso: 'EUR',
+  // ES on purpose: the connect affordance below is Spain-only since ETP-4896
+  // (see saltEdgeEligibility.js), so a fixture without it would hide the button.
+  countryIso: 'ES',
+  countryName: 'Spain',
   iban: 'ES1212340000000000000001',
   bankConnected: true,
 };
@@ -52,13 +57,15 @@ describe('NameCell', () => {
     expect(screen.getByText('BBVA Principal')).toBeInTheDocument();
   });
 
-  // Regression guard (ETP-4658): the grip is the 44px slot that keeps the row content
-  // aligned with the `pl-[84px]` header, and it only appears on row hover.
-  it('reveals the drag grip on hover from EITHER host\'s row group', () => {
+  // ETP-4921 inverted this guard. NameCell used to open with a 44px drag-grip slot, but the
+  // grip was purely decorative — aria-hidden, no draggable attribute, no handlers, and the
+  // repo has no drag-and-drop library — so it advertised a row reordering that does not
+  // exist. It is gone, along with its slot; COLUMN_CHROME.name's left padding in
+  // AccountsHeaderTable mirrors this cell's leading offset and dropped from 84px to 40px.
+  it('renders no drag grip, since row reordering is not implemented', () => {
     render(<NameCell account={ACCOUNT} ui={ui} />);
 
-    const grip = screen.getByTestId('GripVertical__dc050f').parentElement;
-    expectBothGroupVariants(grip);
+    expect(screen.queryByTestId('GripVertical__dc050f')).not.toBeInTheDocument();
   });
 
   it('shows the offline badge only for a bank/card account that is not connected', () => {

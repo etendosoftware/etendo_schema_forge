@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { StatementLinesInline } from './StatementLinesInline';
 import { StatementRowKebab } from './StatementRowKebab';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout — grid (NOT <table>) so the expanded accordion row can span all cols.
@@ -37,6 +38,9 @@ const STATEMENT_CELL_RENDERERS = {
   name: {
     width: 'minmax(0,1.6fr)',
     labelKey: 'financeAccountStatementsColName',
+    // Sorts by what the cell shows, which for a nameless statement is the formatted
+    // periodFrom–periodTo range, not the empty `name`.
+    sortValue: (s, ctx) => ctx.displayName(s),
     render: (s, ctx) => <span className="truncate text-[hsl(var(--foreground))]">{ctx.displayName(s)}</span>,
   },
   fileName: {
@@ -67,16 +71,30 @@ const STATEMENT_CELL_RENDERERS = {
   importdate: {
     width: '116px',
     labelKey: 'financeAccountStatementsColImportDate',
+    // The ISO string, not the formatted date: `formatDate` yields dd/mm/yyyy, which would sort
+    // by day-of-month. Lexicographic order on ISO-8601 is chronological.
+    sortValue: (s) => s.importDate,
     render: (s, ctx) => <span className="whitespace-nowrap text-[hsl(var(--foreground))]">{formatDate(s.importDate, ctx.bcpLocale)}</span>,
   },
   transactionDate: {
     width: '116px',
     labelKey: 'financeAccountStatementsColTransactionDate',
+    sortValue: (s) => s.transactionDate,
     render: (s, ctx) => <span className="whitespace-nowrap text-[hsl(var(--foreground))]">{formatDate(s.transactionDate, ctx.bcpLocale)}</span>,
   },
 };
 
 const STATEMENT_COLUMNS = getContractGridColumns('importedBankStatements');
+
+// The synthetic tail (lines / out / in / status). Not declarable AD fields — they are computed
+// aggregates the handler attaches to each row — but they travel WITH the row, so sorting them
+// client-side is exactly as correct as sorting a contract column.
+const TAIL_SORT = {
+  lines: { labelKey: 'financeAccountStatementsColLines', value: (s) => Number(s.lineCount) || 0 },
+  out: { labelKey: 'financeAccountStatementsColOut', value: (s) => Number(s.totalOut) || 0 },
+  in: { labelKey: 'financeAccountStatementsColIn', value: (s) => Number(s.totalIn) || 0 },
+  status: { labelKey: 'financeAccountStatementsColStatus', value: (s) => s.status },
+};
 
 // Inline grid-template-columns: lead + one track per contract column + tail.
 const GRID_TEMPLATE = [
@@ -155,9 +173,45 @@ function StatusPill({ status, matched, total, ui }) {
  *   onSelectionChange?: (id: string) => void;
  * }} props
  */
+/**
+ * Sort accessors for this grid.
+ *
+ * Exported with the builder below so the TAB can own the sort state — its toolbar hosts the
+ * "Ordenar por" popover and is this table's sibling, not its child. Same split as
+ * ListView/DataTable: the container owns the state, the grid receives it.
+ *
+ * @param {string} bcpLocale needed by the `name` accessor, whose cell falls back to a formatted
+ *   periodFrom–periodTo range when the statement carries no name.
+ */
+export function buildStatementSortAccessors(bcpLocale) {
+  const ctx = { displayName: (st) => statementDisplayName(st, bcpLocale) };
+  return {
+    ...Object.fromEntries(
+      STATEMENT_COLUMNS
+        .filter((c) => STATEMENT_CELL_RENDERERS[c.name]?.sortValue)
+        .map((c) => [c.name, (row) => STATEMENT_CELL_RENDERERS[c.name].sortValue(row, ctx)]),
+    ),
+    ...Object.fromEntries(Object.entries(TAIL_SORT).map(([k, t]) => [k, t.value])),
+  };
+}
+
+/** The sortable columns — contract ones plus the synthetic tail — for the toolbar popover. */
+export function buildStatementSortColumns(ui) {
+  return [
+    ...STATEMENT_COLUMNS.map((col) => ({
+      key: col.name,
+      label: STATEMENT_CELL_RENDERERS[col.name]
+        ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey)
+        : col.label,
+    })),
+    ...Object.entries(TAIL_SORT).map(([key, tail]) => ({ key, label: ui(tail.labelKey) })),
+  ];
+}
+
 export function StatementsTable({
   statements, loading, currency = 'EUR', actions = null,
   selectedIds = new Set(), onSelectionChange = () => {},
+  sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -165,7 +219,9 @@ export function StatementsTable({
   const [openId, setOpenId] = useState(null);
   const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
 
-  // Selection over the currently rendered rows, mirroring the Movements tab.
+
+  // Selection over the currently rendered rows, mirroring the Movements tab. Deliberately over
+  // `statements`, not `sorted`: reordering the rows must not change what is selected.
   const allSelected = statements.length > 0 && statements.every((s) => selectedIds.has(s.id));
   const someSelected = statements.some((s) => selectedIds.has(s.id)) && !allSelected;
   const handleSelectAll = () => {
@@ -197,13 +253,26 @@ export function StatementsTable({
         </span>
         {STATEMENT_COLUMNS.map((col) => (
           <span key={col.name}>
-            {STATEMENT_CELL_RENDERERS[col.name] ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
+            <SortableHeaderLabel
+              label={STATEMENT_CELL_RENDERERS[col.name] ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
+              sortKey={col.name}
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__3acaeb" />
           </span>
         ))}
-        <span>{ui('financeAccountStatementsColLines')}</span>
-        <span>{ui('financeAccountStatementsColOut')}</span>
-        <span>{ui('financeAccountStatementsColIn')}</span>
-        <span>{ui('financeAccountStatementsColStatus')}</span>
+        {Object.entries(TAIL_SORT).map(([key, tail]) => (
+          <span key={key}>
+            <SortableHeaderLabel
+              label={ui(tail.labelKey)}
+              sortKey={key}
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__3acaeb" />
+          </span>
+        ))}
         <span aria-hidden="true" />
       </div>
       {/* Body */}

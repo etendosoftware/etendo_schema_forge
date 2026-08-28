@@ -22,8 +22,15 @@ vi.mock('sonner', () => ({
 // own callback wiring (onConfirmed/onClose/onConfirm/navigate) via buttons the
 // tests can click directly — the real modals' internals are out of scope here.
 vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
-  default: ({ onConfirmed, onClose }) => (
-    <div data-testid="confirm-inout-modal">
+  // invoiceAction/defaultCreateInvoice are exposed as data-attributes (ETP-4848)
+  // so tests can assert what ConfirmWithCreditButtonBase computed and passed down,
+  // without needing to render the real modal's internals.
+  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice }) => (
+    <div
+      data-testid="confirm-inout-modal"
+      data-invoice-action={invoiceAction ?? ''}
+      data-default-create-invoice={String(defaultCreateInvoice)}
+    >
       <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100 } })} />
       <button data-testid="confirm-inout-confirm-no-id" onClick={() => onConfirmed({ invoice: {} })} />
       <button data-testid="confirm-inout-close" onClick={onClose} />
@@ -162,7 +169,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     window.location = originalLocation;
   });
 
-  it('opens ConfirmInOutModal when the DR confirm button is clicked', () => {
+  it('opens ConfirmInOutModal when the DR confirm button is clicked', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -171,7 +178,9 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     );
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
-    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
+    // ETP-4940 follow-up: the click now awaits maybeSaveBeforeConfirm (a no-op
+    // async tick here since isDirty is not passed) before opening the modal.
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
   });
 
   it('does not open any modal when the DR confirm button is disabled (confirmDisabled via linesCount 0)', () => {
@@ -199,7 +208,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
   });
 
-  it('closes ConfirmInOutModal without producing a result when its onClose fires', () => {
+  it('closes ConfirmInOutModal without producing a result when its onClose fires', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -207,14 +216,14 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
-    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('confirm-inout-close'));
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
   });
 
-  it('closes ConfirmInOutModal and shows the result modal when onConfirmed resolves an invoice with an id', () => {
+  it('closes ConfirmInOutModal and shows the result modal when onConfirmed resolves an invoice with an id', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -222,6 +231,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
 
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
@@ -229,7 +239,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
-  it('closes ConfirmInOutModal and reloads the page (no result modal) when onConfirmed resolves an invoice without an id', () => {
+  it('closes ConfirmInOutModal and reloads the page (no result modal) when onConfirmed resolves an invoice without an id', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -237,6 +247,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-no-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-no-id'));
 
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
@@ -282,6 +293,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
 
@@ -303,6 +315,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
 
@@ -310,5 +323,116 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     await waitFor(() => expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument());
     await waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4848 — DR-status confirm modal must default-check the invoice option
+// whenever the document is not yet fully invoiced (isFullyInvoiced = parseFloat
+// (data?.invoiceStatus ?? 0) >= 100), and must hide the invoice option entirely
+// (invoiceAction=undefined) once it is fully invoiced.
+describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by invoiceStatus (ETP-4848)', () => {
+  it('passes invoiceAction="createReturnInvoice" and defaultCreateInvoice=true when invoiceStatus is partial (40)', async () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 40 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
+    expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
+  });
+
+  it('passes invoiceAction="createReturnInvoice" and defaultCreateInvoice=true when invoiceStatus is unset', async () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
+    expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
+  });
+
+  it('passes invoiceAction=undefined and defaultCreateInvoice=false when invoiceStatus is 100 (number)', async () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 100 }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
+    expect(modal).toHaveAttribute('data-invoice-action', '');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
+  });
+
+  it('passes invoiceAction=undefined and defaultCreateInvoice=false when invoiceStatus is "100" (string, real API shape)', async () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: '100' }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
+    expect(modal).toHaveAttribute('data-invoice-action', '');
+    expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
+  });
+});
+
+// ETP-4940 follow-up — reported live in return-material-receipt/return-to-vendor-
+// shipment: this component fires its own documentAction POST (inside
+// ConfirmInOutModal) that never went through DetailView's draftMode/kebab
+// save-before-confirm guards. A header edit made without clicking Save first was
+// silently discarded — the record confirmed with the last-persisted value.
+describe('ConfirmWithCreditButtonBase — save pending edits before confirm (ETP-4940 follow-up)', () => {
+  it('saves via onSave before opening the confirm modal when isDirty is true', async () => {
+    const onSave = vi.fn().mockResolvedValue({ id: 'REC-001' });
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        isDirty
+        onSave={onSave}
+      />
+    );
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
+  });
+
+  it('does not open the confirm modal when the pending save fails', async () => {
+    const onSave = vi.fn().mockResolvedValue(null);
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        isDirty
+        onSave={onSave}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  it('does not call onSave when there is nothing pending (isDirty false) and still opens the modal', async () => {
+    const onSave = vi.fn().mockResolvedValue({ id: 'REC-001' });
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        isDirty={false}
+        onSave={onSave}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

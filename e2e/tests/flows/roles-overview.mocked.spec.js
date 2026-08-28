@@ -2,85 +2,182 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Roles Overview — Configuración > Roles (ETP-4513, mocked).
+ * Roles Overview — Configuración > Roles (ETP-4907 redesign, mocked).
  *
- * Validates the read-only "Configuración > Roles" page: the menu entry is
- * gated by the `isAdminOrClientAdmin` capability from `SFWindowAccessMap`
- * (see registry.js's `filterMenuGroupsByAccess` capability axis and
- * AppLayout.jsx's `useCapabilitiesSafe()` wiring), the page lists all 5 fixed
- * GOClient roles from `GET /sws/neo/rolesoverview` (ETP-4513 — moved off the
- * Webhooks module's `/webhooks/SFRolesOverview`, which required a per-role
- * grant row wiped by `update.database`, onto NEO Headless's own
- * JWT-authenticated bridge), and Edit only ever
- * opens a "coming soon" notice — no create/delete UI anywhere.
+ * ETP-4907 redesigned this screen from a plain role list (ETP-4513) into:
+ * 5 role summary cards (`RoleSummaryCard.jsx` — icon, name, user-count badge,
+ * window count) followed by a full category-grouped window x role access
+ * matrix (`RolesAccessMatrix.jsx`), each cell tri-state (full / read-only /
+ * none) via `AccessTierPill.jsx`. Data comes from `useRolesOverviewData()`
+ * (`tools/app-shell/src/pages/roles/useRolesOverviewData.js`), which still
+ * calls the real `GET /sws/neo/rolesoverview` (`lib/rolesApi.js`'s
+ * `fetchRolesOverview()`, unchanged since ETP-4513 — NEO Headless's own
+ * JWT-authenticated bridge, not the Webhooks module's `/webhooks/*` grant
+ * table wiped by `update.database`) but adapts the ETP-4907-extended response
+ * (`roles[].windowCount`/`roleSource`, plus a brand-new top-level `matrix`)
+ * into this page's card/matrix shape.
+ *
+ * The menu-gating layer (`isAdminOrClientAdmin` capability from
+ * `SFWindowAccessMap`, `menu-item-roles` testid, `/roles` route) was NOT
+ * touched by ETP-4907 — only the page's internal content changed — so those
+ * tests are carried over unchanged from the ETP-4513 spec.
  *
  * Mock mode only: this spec installs its own route/fetch overrides on top of
- * what `login()` seeds, so it does not need a backend. It follows the
- * `role-filtered-sidebar.mocked.spec.js` precedent for gating a menu entry
- * via a webhook-backed signal, and `row-quick-actions.mocked.spec.js` for the
- * overall list/dialog interaction shape.
- *
- * `login()`'s own addInitScript already stubs `/sws/neo/windowaccessmap`
- * with a Proxy that resolves every capability key to `true` (full access) —
- * see `e2e/tests/helpers/auth.js`. That covers the admin/client-admin
- * scenario below for free. The non-admin scenario needs to downgrade that
- * flag to `false`, which requires layering a SECOND `addInitScript` (see
- * `installNonAdminCapabilities()` below) rather than a `page.route()`
- * override — `SFWindowAccessMap` is short-circuited entirely inside
- * `window.fetch` before any request reaches the network layer that
- * `page.route()` operates on.
+ * what `login()` seeds, so it does not need a backend. It follows
+ * `row-quick-actions.mocked.spec.js` for the overall mocked list/detail shape
+ * and keeps its own inline `page.route()` fixture (rather than delegating to
+ * `lib/mockFetch.js`'s `handleRolesOverviewRequest()`) for full control over
+ * exact test data — matching this spec's own pre-existing convention, and
+ * consistent with the guide's `VITE_MOCK=true` gotcha (that mock-mode wiring
+ * bypasses `page.route()` entirely, so it's not a substitute here).
  */
+
+// Deliberately NOT already in the canonical display order (Admin, Sales,
+// Purchasing, Finance, Inventory — see `ROLE_ORDER` in
+// `useRolesOverviewData.js`). The backend's own fixed-name order is
+// Finance/Sales/Purchasing/Inventory (Admin wherever it naturally falls) per
+// that module's `sortByRoleOrder` JSDoc, so scrambling it here actually
+// exercises the client-side re-sort instead of passing by coincidence.
+const ROLE_IDS = {
+  finance: 'e2e-role-finance',
+  purchasing: 'e2e-role-purchasing',
+  admin: 'e2e-role-admin',
+  inventory: 'e2e-role-inventory',
+  sales: 'e2e-role-sales',
+};
+
+const ROLE_BOILERPLATE_DESCRIPTION = '*** Please, do not edit this role. Use Copy Record instead ***';
 
 const ROLES_FIXTURE = [
   {
-    id: '9B8D736190724807AB256DC95F20EC5E',
+    id: ROLE_IDS.finance,
+    name: 'Finance',
+    rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+    isClientAdmin: false,
+    roleSource: 'tenant',
+    userCount: 2,
+    windowCount: 27,
+    windows: [],
+  },
+  {
+    id: ROLE_IDS.purchasing,
+    name: 'Purchasing',
+    rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+    isClientAdmin: false,
+    roleSource: 'systemTemplate',
+    userCount: 1,
+    windowCount: 11,
+    windows: [],
+  },
+  {
+    id: ROLE_IDS.admin,
     name: 'GOClient Admin',
     rawDescription: 'GOClient Admin',
+    isClientAdmin: true,
+    roleSource: 'tenant',
     userCount: 2,
-    windows: [
-      { id: '108', name: 'User', tier: 'full' },
-      { id: '146', name: 'Price List', tier: 'full' },
-    ],
+    windowCount: 48,
+    windows: [],
   },
   {
-    id: '127AE77FE2994067B7FE6495FC21D51E',
-    name: 'Finance',
-    rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-    userCount: 2,
-    windows: [
-      { id: 'w-fin-1', name: 'Financial Account', tier: 'full' },
-      { id: 'w-fin-2', name: 'Sales Invoice', tier: 'read-only' },
-    ],
-  },
-  {
-    id: '2A159DF4F4B944A6AA903202AD35B545',
-    name: 'Sales',
-    rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-    userCount: 1,
-    windows: [{ id: 'w-sales-1', name: 'Sales Order', tier: 'full' }],
-  },
-  {
-    id: 'A826430F723E4C1B9A53EBB0746A98C0',
-    name: 'Purchasing',
-    rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
-    userCount: 0,
-    windows: [{ id: 'w-pur-1', name: 'Purchase Order', tier: 'full' }],
-  },
-  {
-    id: '55E05A4B43514A029D6FB6B8D94B49D4',
+    id: ROLE_IDS.inventory,
     name: 'Inventory',
-    rawDescription: '*** Please, do not edit this role. Use Copy Record instead ***',
+    rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+    isClientAdmin: false,
+    roleSource: 'tenant',
     userCount: 0,
-    windows: [{ id: 'w-inv-1', name: 'Warehouse and Storage Bins', tier: 'read-only' }],
+    windowCount: 13,
+    windows: [],
+  },
+  {
+    id: ROLE_IDS.sales,
+    name: 'Sales',
+    rawDescription: ROLE_BOILERPLATE_DESCRIPTION,
+    isClientAdmin: false,
+    roleSource: 'tenant',
+    userCount: 3,
+    windowCount: 13,
+    windows: [],
   },
 ];
 
+// The canonical ETP-4907 display order — see `ROLE_ORDER`/`sortByRoleOrder`
+// in `useRolesOverviewData.js`. `RoleSummaryCard.jsx` prefixes its root
+// `Card`'s data-testid with `RoleSummaryCard__`, so the DOM order of these
+// ids is a direct, un-guessable proxy for the sort the frontend applied.
+const EXPECTED_CARD_ORDER = [
+  `RoleSummaryCard__${ROLE_IDS.admin}`,
+  `RoleSummaryCard__${ROLE_IDS.sales}`,
+  `RoleSummaryCard__${ROLE_IDS.purchasing}`,
+  `RoleSummaryCard__${ROLE_IDS.finance}`,
+  `RoleSummaryCard__${ROLE_IDS.inventory}`,
+];
+
+// `matrix.categories[].windows[].access` is keyed by the SAME role ids as
+// `roles[].id` (see `useRolesOverviewData.js`'s file-level JSDoc) — real
+// tier values are hyphenated (`'read-only'`), normalized client-side to
+// `'readOnly'` by `normalizeTier()`. One row below deliberately exercises all
+// 3 states across its 5 role columns (full / full / none / read-only / none)
+// so the tri-state cell rendering is proven, not just the happy path.
+const MATRIX_FIXTURE = {
+  categories: [
+    {
+      name: 'Sales',
+      windows: [
+        {
+          id: 'e2e-window-sales-order',
+          name: 'Sales Order',
+          access: {
+            [ROLE_IDS.admin]: 'full',
+            [ROLE_IDS.sales]: 'full',
+            [ROLE_IDS.purchasing]: 'none',
+            [ROLE_IDS.finance]: 'read-only',
+            [ROLE_IDS.inventory]: 'none',
+          },
+        },
+      ],
+    },
+    {
+      name: 'Inventory',
+      windows: [
+        {
+          id: 'e2e-window-warehouse',
+          name: 'Warehouse and Storage Bins',
+          access: {
+            [ROLE_IDS.admin]: 'full',
+            [ROLE_IDS.sales]: 'none',
+            [ROLE_IDS.purchasing]: 'none',
+            [ROLE_IDS.finance]: 'none',
+            [ROLE_IDS.inventory]: 'read-only',
+          },
+        },
+      ],
+    },
+  ],
+};
+
+// `GENERAL_ROWS` in `RolesAccessMatrix.jsx` — 3 hardcoded rows (Inicio/
+// Favoritos/Copilot) always overlaid ahead of the real `matrix.categories`,
+// always full access for every role. Never present in a real backend
+// response — this is a pure client-side constant, asserted against directly.
+const GENERAL_ROW_IDS = ['dashboard', 'favorites', 'copilot'];
+
+/**
+ * `fetchRolesOverview()` (`lib/rolesApi.js`) does: parse JSON, then if
+ * `Array.isArray(data.roles)` return `data` as-is — so a plain
+ * `{ roles, matrix }` body (no `{ result: "<json-string>" }` wrapping) is a
+ * valid, real code path, not a test-only shortcut.
+ */
 async function installRolesOverviewMock(page) {
-  await page.route('**/sws/neo/rolesoverview{/**,}**', async (route) => {
+  // The real endpoint (`NEO_BASE + '/rolesoverview'`) never receives a
+  // sub-path or query string, so a single glued `**` is sufficient — no
+  // brace-alternation needed here (see the e2e guide's gotcha on `{/**,}**`
+  // silently degrading for multi-segment sub-paths; this endpoint has none).
+  await page.route('**/sws/neo/rolesoverview**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ roles: ROLES_FIXTURE }),
+      body: JSON.stringify({ roles: ROLES_FIXTURE, matrix: MATRIX_FIXTURE }),
     });
   });
 }
@@ -137,40 +234,106 @@ test.describe('Roles overview — admin/client-admin', () => {
     await expect(page.getByTestId('RolesOverviewPage')).toBeVisible();
   });
 
-  test('renders all 5 roles with real data-testid selectors (no hardcoded label-string assertions)', async ({ page }) => {
+  test('renders all 5 role summary cards in the canonical Admin/Sales/Purchasing/Finance/Inventory order', async ({ page }) => {
     await page.goto('/roles');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('RolesOverviewPage__content')).toBeVisible();
 
     for (const role of ROLES_FIXTURE) {
-      const card = page.getByTestId(`RolesOverviewPage__role-${role.id}`);
+      const card = page.getByTestId(`RoleSummaryCard__${role.id}`);
       await expect(card).toBeVisible();
-      await expect(page.getByTestId(`RolesOverviewPage__userCount-${role.id}`)).toContainText(String(role.userCount));
-      for (const w of role.windows) {
-        await expect(page.getByTestId(`RolesOverviewPage__window-${role.id}-${w.id}`)).toBeVisible();
-      }
+      await expect(page.getByTestId(`RoleSummaryCard__content-${role.id}`)).toBeVisible();
+      await expect(page.getByTestId(`RoleSummaryCard__userCount-${role.id}`)).toContainText(String(role.userCount));
+      // ETP-4999 — the window-count badge/icon was removed from the card
+      // entirely (Figma spec); `RoleSummaryCard__windowsIcon-*`/
+      // `RoleSummaryCard__windowCount-*` no longer exist in the DOM at all, so
+      // the assertions that used to check them here are gone (the fixture
+      // still carries `role.windowCount`, unused by this component now).
     }
 
+    // Real DOM order of the card grid's direct children — a direct proxy for
+    // `sortByRoleOrder()` having actually run, since the fixture above is
+    // deliberately scrambled.
+    const renderedOrder = await page
+      .locator('[data-testid="RolesOverviewPage__cards"] > [data-testid^="RoleSummaryCard__"]')
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-testid')));
+    expect(renderedOrder).toEqual(EXPECTED_CARD_ORDER);
+
     // The raw AD_Role boilerplate text must never surface as display copy —
-    // only the curated i18n descriptions render.
+    // only the curated i18n role names render.
     await expect(page.locator('body')).not.toContainText('Please, do not edit this role');
   });
 
   test('exposes no edit/create/delete affordance anywhere on the page', async ({ page }) => {
-    // These 5 roles are product-defined, not editable by any tenant user (2026-07-27 decision —
-    // only future user-created roles, out of scope for now, will ever be editable here). The
-    // "coming soon" Edit dialog this test used to click through was removed entirely, not just
-    // disabled — there is no `RolesOverviewPage__edit-*` testid anywhere on the page anymore.
+    // These 5 roles are product-defined, not editable by any tenant user
+    // (2026-07-27 decision — only future user-created roles, out of scope
+    // for now, will ever be editable here). ETP-4907's redesign carries this
+    // forward: neither the cards nor the matrix expose any edit/create/
+    // delete affordance — scope the search to the page's own content so a
+    // false positive from unrelated global chrome (topbar, user menu) can't
+    // slip through.
     await page.goto('/roles');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    const firstRole = ROLES_FIXTURE[0];
-    await expect(page.getByTestId(`RolesOverviewPage__role-${firstRole.id}`)).toBeVisible();
+    const content = page.getByTestId('RolesOverviewPage__content');
+    await expect(content).toBeVisible();
 
-    await expect(page.getByTestId('RolesOverviewPage__editDialog')).toHaveCount(0);
-    await expect(page.getByTestId(/^RolesOverviewPage__edit/i)).toHaveCount(0);
-    await expect(page.getByTestId(/delete/i)).toHaveCount(0);
-    await expect(page.getByTestId(/create/i)).toHaveCount(0);
-    await expect(page.getByTestId(/^RolesOverviewPage__new/i)).toHaveCount(0);
+    await expect(content.locator('[data-testid*="edit" i]')).toHaveCount(0);
+    await expect(content.locator('[data-testid*="delete" i]')).toHaveCount(0);
+    await expect(content.locator('[data-testid*="create" i]')).toHaveCount(0);
+    await expect(content.getByRole('button', { name: /new|nuevo/i })).toHaveCount(0);
+  });
+
+  test('matrix General section always shows full access for every role', async ({ page }) => {
+    await page.goto('/roles');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await expect(page.getByTestId('RolesAccessMatrix')).toBeVisible();
+    await expect(page.getByTestId('RolesAccessMatrix__category-General')).toBeVisible();
+
+    for (const rowId of GENERAL_ROW_IDS) {
+      const rowKey = `General::${rowId}`;
+      await expect(page.getByTestId(`RolesAccessMatrix__row-${rowKey}`)).toBeVisible();
+      for (const role of ROLES_FIXTURE) {
+        const cell = page.getByTestId(`RolesAccessMatrix__cell-${rowKey}-${role.id}`);
+        // AccessTierPill renders the literal '✓' glyph for 'full' — not an
+        // i18n string, so safe to assert exactly across both locales.
+        await expect(cell).toHaveText('✓');
+      }
+    }
+  });
+
+  test('matrix renders real categories with correct per-role tri-state access cells', async ({ page }) => {
+    await page.goto('/roles');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await expect(page.getByTestId('RolesAccessMatrix__headerIcon-' + ROLE_IDS.admin)).toBeVisible();
+
+    const salesCategory = MATRIX_FIXTURE.categories[0];
+    const salesWindow = salesCategory.windows[0];
+    const salesRowKey = `${salesCategory.name}::${salesWindow.id}`;
+
+    await expect(page.getByTestId(`RolesAccessMatrix__category-${salesCategory.name}`)).toBeVisible();
+    await expect(page.getByTestId(`RolesAccessMatrix__row-${salesRowKey}`)).toBeVisible();
+
+    // full → literal '✓' glyph
+    await expect(page.getByTestId(`RolesAccessMatrix__cell-${salesRowKey}-${ROLE_IDS.admin}`)).toHaveText('✓');
+    await expect(page.getByTestId(`RolesAccessMatrix__cell-${salesRowKey}-${ROLE_IDS.sales}`)).toHaveText('✓');
+
+    // none → literal '—' glyph
+    await expect(page.getByTestId(`RolesAccessMatrix__cell-${salesRowKey}-${ROLE_IDS.purchasing}`)).toHaveText('—');
+    await expect(page.getByTestId(`RolesAccessMatrix__cell-${salesRowKey}-${ROLE_IDS.inventory}`)).toHaveText('—');
+
+    // read-only (normalized from the backend's hyphenated 'read-only' to
+    // 'readOnly') → an i18n string, neither of the other two glyphs and
+    // non-empty. Avoids hardcoding the locale-specific rendered text while
+    // still proving the tri-state (not just full/none) actually renders.
+    const readOnlyCell = page.getByTestId(`RolesAccessMatrix__cell-${salesRowKey}-${ROLE_IDS.finance}`);
+    await expect(readOnlyCell).toBeVisible();
+    const readOnlyText = (await readOnlyCell.textContent())?.trim();
+    expect(readOnlyText).not.toBe('✓');
+    expect(readOnlyText).not.toBe('—');
+    expect(readOnlyText).toBeTruthy();
   });
 });
 
@@ -191,20 +354,109 @@ test.describe('Roles overview — non-admin', () => {
     await expect(page.getByTestId('menu-item-roles')).toHaveCount(0);
   });
 
-  // NOTE (QA, ETP-4513): a "direct navigation to /roles as a denied non-admin" deep-link test
-  // was attempted here and deliberately removed — see the QA report for why. In short:
-  // `mockFetch.js`'s `handleRolesOverviewRequest()` is checked unconditionally, ahead of any
-  // capability logic (unlike the real `SFRolesOverview.java`, which does branch on the caller's
-  // admin status), so it always serves the fixed 5-role fixture no matter what a test overrides
-  // via `page.route()` or an `addInitScript`-wrapped `window.fetch` — neither technique can win
-  // against it once `App.jsx`'s async mock-install effect has replaced `window.fetch` (which, for
-  // a fetch fired well after page load like `RolesOverviewPage`'s mount-time call, it reliably
-  // has by then). The real backend enforcement is proven instead by
-  // `SFRolesOverviewTest#testCallerIsAGoClientRoleButNotAdminIsStillDenied` (JUnit), and the
-  // frontend's handling of an empty `roles` array is proven by
-  // `RolesOverviewPage.vitest.jsx`'s "shows the no-access card when roles resolves to an empty
-  // array" test — both already cover this scenario's two halves individually. Wiring them
-  // together in a mocked E2E spec would need `handleRolesOverviewRequest()` to gain the same
-  // kind of admin-gate `handleWindowAccessMapRequest()` already has (a follow-up for whoever
+  // NOTE (QA, ETP-4513, carried over unchanged by ETP-4907): a "direct
+  // navigation to /roles as a denied non-admin" deep-link test was attempted
+  // here and deliberately removed — see the original QA report for why. In
+  // short: `mockFetch.js`'s `handleRolesOverviewRequest()` is checked
+  // unconditionally, ahead of any capability logic (unlike the real
+  // `SFRolesOverview.java`, which does branch on the caller's admin status),
+  // so it always serves the fixed 5-role fixture no matter what a test
+  // overrides via `page.route()` or an `addInitScript`-wrapped
+  // `window.fetch` — neither technique can win against it once `App.jsx`'s
+  // async mock-install effect has replaced `window.fetch` (which, for a
+  // fetch fired well after page load like `RolesOverviewPage`'s mount-time
+  // call, it reliably has by then). The real backend enforcement is proven
+  // instead by
+  // `SFRolesOverviewTest#testCallerIsAGoClientRoleButNotAdminIsStillDenied`
+  // (JUnit), and the frontend's handling of an empty `roles` array is proven
+  // by `RolesOverviewPage.vitest.jsx`'s "shows the no-access card when cards
+  // resolves to an empty array" test — both already cover this scenario's
+  // two halves individually. Wiring them together in a mocked E2E spec would
+  // need `handleRolesOverviewRequest()` to gain the same kind of admin-gate
+  // `handleWindowAccessMapRequest()` already has (a follow-up for whoever
   // owns `mockFetch.js`, not a QA fix).
+});
+
+/**
+ * ETP-4999 — clicking a role summary card click-through-navigates to the Users
+ * window pre-filtered by that role: `/user?role=<role.id>`, read once on mount by
+ * `UserHeaderTable.jsx`'s `roleFilter` lazy initializer (see that file's own
+ * ETP-4999 doc comment). Mirrors the grid-mock fixtures/route shapes established by
+ * `user-role-assignment.mocked.spec.js`'s "Users grid role filter" describe block
+ * (`systemroletemplates`/`userroleassignments`/`user/user` list) — this spec's own
+ * `installRolesOverviewMock` already covers `/sws/neo/rolesoverview**` for the
+ * `/roles` page itself, reused as-is for the grid's own `useUserRoleGridData` call.
+ */
+test.describe('Roles overview — click-through to filtered Users grid (ETP-4999)', () => {
+  const SYSTEM_TEMPLATE_ROLES = ROLES_FIXTURE.filter((role) => !role.isClientAdmin);
+
+  const GRID_ROWS = [
+    { id: 'row-001', name: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', locked: false, defaultRole: 'role-personal-ada' },
+    { id: 'row-002', name: 'Grace Hopper', firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', locked: false, defaultRole: 'role-personal-grace' },
+  ];
+  const ASSIGNMENTS = {
+    'row-001': [ROLE_IDS.finance],
+    'row-002': [ROLE_IDS.sales],
+  };
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installRolesOverviewMock(page);
+    // See user-role-assignment.mocked.spec.js's identical route + doc comment —
+    // `RoleChipsCell.jsx`'s `useUserRoleGridData` also calls `fetchTemplateRoles()`.
+    await page.route('**/sws/neo/systemroletemplates**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ roles: SYSTEM_TEMPLATE_ROLES }),
+    }));
+    await page.route('**/sws/neo/userroleassignments**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ assignments: ASSIGNMENTS }),
+    }));
+    await page.route('**/sws/neo/user/user**', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: GRID_ROWS, totalRows: GRID_ROWS.length } }),
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/roles');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('RolesOverviewPage__content')).toBeVisible();
+  });
+
+  test('clicking the Finance role card navigates to /user?role=<id> with the grid pre-filtered', async ({ page }) => {
+    await page.getByTestId(`RoleSummaryCard__${ROLE_IDS.finance}`).click();
+
+    await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.finance}$`));
+    await expect(page.getByTestId('UserHeaderTable__toolbar')).toBeVisible();
+
+    // The dropdown trigger's visible label already reflects the seeded filter —
+    // no click/open needed to prove it arrived pre-set (DistinctValuesFilter's
+    // `triggerLabel` renders `labelFor(value)` once `value` is non-null).
+    // `DistinctValuesFilter` never destructures/applies its own `data-testid` prop
+    // (see `RoleFilterControl.jsx`'s doc comment / the identical gotcha noted in
+    // `user-role-assignment.mocked.spec.js`), so — mirroring that spec's own
+    // workaround — locate the trigger button structurally inside the toolbar.
+    const filterTrigger = page.getByTestId('UserHeaderTable__toolbar').locator('button').first();
+    await expect(filterTrigger).toContainText('Finanzas');
+
+    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
+    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
+  });
+
+  test('keyboard Enter on a focused role card also navigates and pre-filters', async ({ page }) => {
+    const card = page.getByTestId(`RoleSummaryCard__${ROLE_IDS.sales}`);
+    await card.focus();
+    await card.press('Enter');
+
+    await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.sales}$`));
+    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toBeVisible();
+    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toHaveCount(0);
+  });
 });

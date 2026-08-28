@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
+import { isPaymentProcessed } from './paymentStatuses.js';
 
 /**
  * useInvoicePreview — all data-fetching, state, and handlers for an invoice preview.
@@ -14,7 +15,7 @@ import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
  * and its overlay modals (payment, email, SIF). Contains no JSX.
  *
  * Drop zone state has been removed — GenericPreviewModal manages file persistence
- * via the attachmentConfig prop and usePreviewAttachment internally.
+ * via the attachmentConfig prop and useMainAttachment internally.
  */
 export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-invoice', onInvoiceUpdated = null }) {
   const ui = useUI();
@@ -29,10 +30,23 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const updateEventName = `${specName}:invoice-updated`;
 
   const isSalesInvoice = specName === 'sales-invoice';
+  // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig in
+  // InvoicePreview.jsx; lets useInvoicePdf skip the jsreport round-trip and serve
+  // the marked attachment directly when one already exists, instead of
+  // regenerating on every open. Only relevant for the sales branch (purchase
+  // never calls this hook at all — its documentId/apiBaseUrl are null above).
+  // ETP-4787 — `recordUpdated` makes that cache self-invalidating: a marked attachment
+  // older than the record's last edit is ignored and re-rendered.
+  const pdfCacheConfig = {
+    tableName: 'C_Invoice',
+    storeCondition: invoiceData?.documentStatus !== 'DR',
+    recordUpdated: invoiceData?.updated ?? null,
+  };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useInvoicePdf(
     isSalesInvoice ? invoiceData?.id : null,
     isSalesInvoice ? apiBaseUrl : null,
     token,
+    pdfCacheConfig,
   );
 
   const [installments, setInstallments] = useState([]);
@@ -127,7 +141,18 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const isDraft = status === 'DR' || status === 'draft';
   const isFullyPaid = totalOutstanding <= 0 && installments.length > 0;
   const isCompleted = status === 'CO' || status === 'complete' || status === 'completed';
-  const canAddPayment = isCompleted && !isFullyPaid;
+  // A draft payment does not lower the invoice's outstanding, but it is already earmarked against
+  // it. Offering the whole outstanding again over-pays the invoice the moment both drafts are
+  // confirmed, so what is really free is the outstanding minus everything the drafts reserve.
+  const reservedByDrafts = payments
+    .filter((payment) => !isPaymentProcessed(payment))
+    .reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0);
+  const freeToAllocate = totalOutstanding - reservedByDrafts;
+  const invoiceTakesPayments = isCompleted && !isFullyPaid;
+  const canAddPayment = invoiceTakesPayments && freeToAllocate > 0;
+  // Kept apart from `canAddPayment` so the button can be shown disabled — with a reason — instead
+  // of vanishing, which reads as "this invoice takes no payments at all".
+  const addPaymentBlockedByDraft = invoiceTakesPayments && !canAddPayment;
 
   return {
     displayInvoice,
@@ -138,7 +163,8 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     pdfUrl, pdfBlob, pdfLoading, pdfError, handleDownloadPdf,
     // payments
     installments, payments, loadingPayments,
-    totalOutstanding, canAddPayment, isFullyPaid, fetchPayments,
+    totalOutstanding, canAddPayment, addPaymentBlockedByDraft, freeToAllocate,
+    isFullyPaid, fetchPayments,
     // display
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)

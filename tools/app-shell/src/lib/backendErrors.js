@@ -6,6 +6,13 @@ const BACKEND_ERROR_MAP = {
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
   'Country needed in an IBAN account.': 'backendError.countryIban',
+  // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
+  // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
+  // Spanish phrasing for one rule.
+  'A bank account with an IBAN must have a country.': 'backendError.countryIban',
+  'The IBAN is too short.': 'backendError.ibanTooShort',
+  'The IBAN is not valid: the check digits do not match.': 'backendError.ibanChecksumInvalid',
+  'Invalid country': 'backendError.invalidCountry',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
   'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank': 'backendError.ibanInvalid',
@@ -65,11 +72,30 @@ const BACKEND_ERROR_MAP = {
   // literal, thrown when the Business Partner lacks mandatory Payment Terms/Method
   // (ETP-4831 case 4, family A).
   'Business Partner is missing mandatory Payment Terms or Payment Method': 'backendError.bpMissingPaymentTermsOrMethod',
+  // CreateDraftInvoiceHandler.java (com.etendoerp.go, ensurePriceListResolved) —
+  // hardcoded English literal thrown when invoicing a shipment with no linked
+  // sales order and no Business Partner default Price List, and the confirm
+  // popup's price-list picker was left empty (ETP-4942).
+  'No Price List could be resolved for this invoice: select a tariff or configure a default Price List for the Business Partner':
+    'backendError.shipmentPriceListRequired',
   // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
   // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
   // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
   'Cannot modify document conversion rate when the invoice is not in draft status.':
     'backendError.conversionRateNotDraft',
+  // Cash close (CashCloseSupport, com.etendoerp.go — ETP-4795) — hardcoded English literals with
+  // no AD_Message involvement, so they reach the toast untranslated whatever the session locale.
+  'The close date cannot be in the future.': 'backendError.cashCloseDateInFuture',
+  'This reconciliation already has bank-statement lines linked to it; cash close and bank reconciliation cannot share the same document.':
+    'backendError.cashCloseHasBankStatementLines',
+  'Cash close is only available for cash-type financial accounts':
+    'backendError.cashCloseOnlyForCashAccount',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-4830 BUG-1 guard) — hardcoded English
+  // literals, no AD_Message involvement, thrown when a PATCH explicitly sets active=false
+  // on the acting user's own record or the client's last remaining active admin.
+  'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
+  'Cannot deactivate the last active administrator for this client':
+    'backendError.cannotDeactivateLastAdmin',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -167,11 +193,221 @@ function matchShipmentNotFound(msg) {
   return { id };
 }
 
+// CashCloseSupport.java (com.etendoerp.go — ETP-4795), three cash-close rejections that embed a
+// dynamic value. Same plain-string-slicing rationale as the matchers above: no regex, so there is
+// no backtracking surface over the movement identifier (SonarQube javascript:S5852).
+//
+// The difference amount is deliberately DROPPED rather than interpolated: the backend sends it as a
+// raw `BigDecimal.toPlainString()` ("-162.05"), and pasting that into Spanish copy would render a
+// money value with the wrong decimal separator and no currency symbol — exactly what the repo's
+// currency-formatting policy exists to prevent. The figure is already on screen, formatted, in the
+// close summary right next to the button; the toast only has to name the fix.
+const CASH_CLOSE_NO_CONCEPT_PREFIX = 'There is a difference of ';
+const CASH_CLOSE_NO_CONCEPT_SUFFIX = ' and this account has no accounting concept configured for it.'
+  + ' Configure a GL Item Difference in Edit account before confirming the close.';
+
+function matchCashCloseNoConcept(msg) {
+  if (!msg.startsWith(CASH_CLOSE_NO_CONCEPT_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_NO_CONCEPT_SUFFIX)) return null;
+  const amount = msg.slice(
+    CASH_CLOSE_NO_CONCEPT_PREFIX.length,
+    -CASH_CLOSE_NO_CONCEPT_SUFFIX.length,
+  );
+  return amount ? {} : null;
+}
+
+const CASH_CLOSE_BACKDATED_PREFIX = 'The close date cannot be earlier than the last confirmed close (';
+const CASH_CLOSE_BACKDATED_SUFFIX = ').';
+
+function matchCashCloseBackdated(msg) {
+  if (!msg.startsWith(CASH_CLOSE_BACKDATED_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_BACKDATED_SUFFIX)) return null;
+  const date = msg.slice(CASH_CLOSE_BACKDATED_PREFIX.length, -CASH_CLOSE_BACKDATED_SUFFIX.length);
+  return date ? { date } : null;
+}
+
+const CASH_CLOSE_CLOSED_PERIOD_PREFIX = 'The movement "';
+const CASH_CLOSE_CLOSED_PERIOD_SUFFIX = '" has an accounting date in a closed period.'
+  + ' Reopen that period or unmark the movement before confirming the close.';
+
+function matchCashCloseLineInClosedPeriod(msg) {
+  if (!msg.startsWith(CASH_CLOSE_CLOSED_PERIOD_PREFIX)
+    || !msg.endsWith(CASH_CLOSE_CLOSED_PERIOD_SUFFIX)) return null;
+  const movement = msg.slice(
+    CASH_CLOSE_CLOSED_PERIOD_PREFIX.length,
+    -CASH_CLOSE_CLOSED_PERIOD_SUFFIX.length,
+  );
+  return movement ? { movement } : null;
+}
+
+// PSD2 bank-connection link (com.etendoerp.go, ETP-4406/ETP-4891 flow) — the
+// `PSD2_IBANAutoFillFailed` AD_MESSAGE ("IBAN could not be set automatically (%0). Please enter it
+// manually in the Financial Account."), shown when the connected bank account's own IBAN implies a
+// country that conflicts with the Financial Account's configured country (e.g. a Spain-registered
+// account linked to a German IBAN). Like `SMFCR_CannotModifyRateNonDraft` above, the owning module
+// (`com.etendoerp.psd2`) ships no real es_ES AD_MESSAGE_TRL for its ~108 messages — the es_ES row is
+// a verbatim copy of the English text — so Core resolves the same English string regardless of
+// session locale. `%0` is substituted server-side with the IBAN before this reaches the frontend, so
+// the skeleton is a fixed prefix/suffix around a dynamic IBAN, same shape as the other parameterized
+// matchers here (plain slicing, no regex — an IBAN is not attacker-controlled but consistency keeps
+// the ReDoS-safety argument uniform across this file, per the matchers above).
+const IBAN_AUTOFILL_FAILED_PREFIX = 'IBAN could not be set automatically (';
+const IBAN_AUTOFILL_FAILED_SUFFIX = '). Please enter it manually in the Financial Account.';
+
+function matchIbanAutoFillFailed(msg) {
+  if (!msg.startsWith(IBAN_AUTOFILL_FAILED_PREFIX) || !msg.endsWith(IBAN_AUTOFILL_FAILED_SUFFIX)) {
+    return null;
+  }
+  const iban = msg.slice(
+    IBAN_AUTOFILL_FAILED_PREFIX.length,
+    -IBAN_AUTOFILL_FAILED_SUFFIX.length,
+  );
+  return iban ? { iban } : null;
+}
+
+// PSD2 bank-statement sync result (com.etendoerp.go's `ImportedStatementsTab` "Sincronizar
+// extractos" and `EditAccountModal`'s sync action — same bridge, two UI entry points, ETP-4891
+// follow-up). Same root cause as the IBAN-autofill matcher above: `com.etendoerp.psd2` ships no
+// real es_ES translation for these AD_MESSAGEs either, so the raw English reaches the frontend
+// regardless of session locale. `%0` is substituted server-side with the account name.
+//
+// Note the odd literal " ." (space before the period) on the first two — that is genuinely what
+// the AD_MESSAGE template contains (verified against ad_message.msgtext), not a typo introduced
+// here; the skeleton has to match it exactly or the message falls through untranslated.
+const TRANSACTIONS_OBTAINED_PREFIX = 'Transactions obtained for the account: ';
+const TRANSACTIONS_OBTAINED_SUFFIX = ' .';
+
+function matchTransactionsObtained(msg) {
+  if (!msg.startsWith(TRANSACTIONS_OBTAINED_PREFIX) || !msg.endsWith(TRANSACTIONS_OBTAINED_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(
+    TRANSACTIONS_OBTAINED_PREFIX.length,
+    -TRANSACTIONS_OBTAINED_SUFFIX.length,
+  );
+  return account ? { account } : null;
+}
+
+const NO_NEW_TRANSACTIONS_PREFIX = 'No new transactions found for the account: ';
+const NO_NEW_TRANSACTIONS_SUFFIX = ' .';
+
+function matchNoNewTransactionsFound(msg) {
+  if (!msg.startsWith(NO_NEW_TRANSACTIONS_PREFIX) || !msg.endsWith(NO_NEW_TRANSACTIONS_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(
+    NO_NEW_TRANSACTIONS_PREFIX.length,
+    -NO_NEW_TRANSACTIONS_SUFFIX.length,
+  );
+  return account ? { account } : null;
+}
+
+const SYNC_FETCH_FAILED_PREFIX = 'The bank reported an error while synchronizing: ';
+const SYNC_FETCH_FAILED_SUFFIX = '.';
+
+function matchSyncFetchFailed(msg) {
+  if (!msg.startsWith(SYNC_FETCH_FAILED_PREFIX) || !msg.endsWith(SYNC_FETCH_FAILED_SUFFIX)) {
+    return null;
+  }
+  const detail = msg.slice(SYNC_FETCH_FAILED_PREFIX.length, -SYNC_FETCH_FAILED_SUFFIX.length);
+  return detail ? { detail } : null;
+}
+
 // Runs the parameterized matchers in order and returns the winning translation
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
 // guard against the key echoing back" logic isn't duplicated once per matcher.
+/* ETP-4896: the three String.format-interpolated messages from
+ * `FinancialAccountCountrySupport.validateIbanCountryPair`. They cannot be exact-match entries
+ * above, which is why the QA-reported "Argentina has no IBAN configuration…" reached the user as
+ * raw English. Matching on the literal Java text makes those strings a de facto wire contract —
+ * see the pointer comment in that class before rewording any of them. */
+
+const COUNTRY_NO_IBAN_SUFFIX = ' has no IBAN configuration, so it cannot be used on an account'
+  + ' with an IBAN.';
+
+function matchCountryNoIbanConfig(msg) {
+  if (!msg.endsWith(COUNTRY_NO_IBAN_SUFFIX)) return null;
+  const country = msg.slice(0, -COUNTRY_NO_IBAN_SUFFIX.length);
+  return country ? { country } : null;
+}
+
+const IBAN_PREFIX_MISMATCH_PREFIX = "The IBAN starts with '";
+const IBAN_PREFIX_MISMATCH_MID1 = "' but the selected country is ";
+const IBAN_PREFIX_MISMATCH_SUFFIX = ').';
+
+function matchIbanPrefixCountryMismatch(msg) {
+  if (!msg.startsWith(IBAN_PREFIX_MISMATCH_PREFIX)
+    || !msg.endsWith(IBAN_PREFIX_MISMATCH_SUFFIX)) return null;
+  const middle = msg.slice(
+    IBAN_PREFIX_MISMATCH_PREFIX.length,
+    -IBAN_PREFIX_MISMATCH_SUFFIX.length,
+  );
+  const mid1Idx = middle.indexOf(IBAN_PREFIX_MISMATCH_MID1);
+  if (mid1Idx === -1) return null;
+  const prefix = middle.slice(0, mid1Idx);
+  const rest = middle.slice(mid1Idx + IBAN_PREFIX_MISMATCH_MID1.length);
+  // The country name itself may contain spaces or parentheses, so split on the LAST ' (' —
+  // the ISO code is always the final parenthesised token.
+  const isoIdx = rest.lastIndexOf(' (');
+  if (isoIdx === -1) return null;
+  const country = rest.slice(0, isoIdx);
+  const iso = rest.slice(isoIdx + 2);
+  if (!prefix || !country || !iso) return null;
+  return { prefix, country, iso };
+}
+
+const IBAN_LENGTH_PREFIX = 'An IBAN for ';
+const IBAN_LENGTH_MID1 = ' must have ';
+const IBAN_LENGTH_MID2 = ' characters (received ';
+const IBAN_LENGTH_SUFFIX = ').';
+
+function matchIbanCountryLengthMismatch(msg) {
+  if (!msg.startsWith(IBAN_LENGTH_PREFIX) || !msg.endsWith(IBAN_LENGTH_SUFFIX)) return null;
+  const middle = msg.slice(IBAN_LENGTH_PREFIX.length, -IBAN_LENGTH_SUFFIX.length);
+  const mid1Idx = middle.indexOf(IBAN_LENGTH_MID1);
+  if (mid1Idx === -1) return null;
+  const country = middle.slice(0, mid1Idx);
+  const afterMid1 = middle.slice(mid1Idx + IBAN_LENGTH_MID1.length);
+  const mid2Idx = afterMid1.indexOf(IBAN_LENGTH_MID2);
+  if (mid2Idx === -1) return null;
+  const expected = afterMid1.slice(0, mid2Idx);
+  const actual = afterMid1.slice(mid2Idx + IBAN_LENGTH_MID2.length);
+  if (!country || !expected || !actual) return null;
+  return { country, expected, actual };
+}
+
+/*
+ * Every parameterized matcher below shares one shape: it returns null on no-match, or an object
+ * whose fields ARE the interpolation params. So they dispatch off a table instead of a chain of
+ * near-identical if blocks — which is also what keeps this function under Sonar's cognitive
+ * complexity ceiling (javascript:S3776). The ETP-4891 sync matchers and the ETP-4896 country/IBAN
+ * ones landed on separate branches and together pushed the old chain to 16 against the 15 allowed;
+ * with a table, adding the next matcher is a row here and costs no complexity at all.
+ *
+ * ORDER IS SIGNIFICANT — it is the resolution precedence, preserved verbatim from the chain this
+ * replaced. `matchAccountNotFound` stays hand-written below because it is the one matcher that maps
+ * to two different keys, and omits a param, depending on what it found.
+ */
+const PARAMETERIZED_MATCHERS = [
+  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
+  [matchOrderNotFound, 'backendError.orderNotFound'],
+  [matchShipmentNotFound, 'backendError.shipmentNotFound'],
+  [matchCashCloseNoConcept, 'backendError.cashCloseNoConcept'],
+  [matchCashCloseBackdated, 'backendError.cashCloseDateBeforeLastClose'],
+  [matchCashCloseLineInClosedPeriod, 'backendError.cashCloseLineInClosedPeriod'],
+  [matchCountryNoIbanConfig, 'backendError.countryNoIbanConfig'],
+  [matchIbanPrefixCountryMismatch, 'backendError.ibanPrefixCountryMismatch'],
+  [matchIbanCountryLengthMismatch, 'backendError.ibanCountryLengthMismatch'],
+  [matchIbanAutoFillFailed, 'backendError.ibanAutoFillFailed'],
+  [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
+  [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
+  [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+];
+
 function resolveParameterizedMatch(msg) {
+  // Hand-written: two possible keys, and `group` must be absent from the params (not present and
+  // undefined) when the message carried no BP group.
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
     if (accountMatch.group !== null) {
@@ -183,26 +419,11 @@ function resolveParameterizedMatch(msg) {
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
   }
 
-  const invoiceLineMatch = matchInvoiceLineAlreadyInvoiced(msg);
-  if (invoiceLineMatch) {
-    return {
-      key: 'backendError.invoiceLineAlreadyInvoiced',
-      params: {
-        docNo: invoiceLineMatch.docNo,
-        invoiced: invoiceLineMatch.invoiced,
-        pending: invoiceLineMatch.pending,
-      },
-    };
-  }
-
-  const orderMatch = matchOrderNotFound(msg);
-  if (orderMatch) {
-    return { key: 'backendError.orderNotFound', params: { orderId: orderMatch.orderId } };
-  }
-
-  const shipmentMatch = matchShipmentNotFound(msg);
-  if (shipmentMatch) {
-    return { key: 'backendError.shipmentNotFound', params: { id: shipmentMatch.id } };
+  for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
+    const match = matcher(msg);
+    if (match) {
+      return { key, params: { ...match } };
+    }
   }
 
   return null;
@@ -214,6 +435,25 @@ function translateParameterized(msg, t) {
   const translated = t(match.key, match.params);
   // Guard: if t() returns the key itself the translation is missing — keep original
   return (translated && translated !== match.key) ? translated : null;
+}
+
+export async function parseBackendErrorMessage(res) {
+  let raw;
+  try {
+    const data = await res.json();
+    // NEO Headless top-level format: { error: { message, status } }
+    if (data?.error?.message) raw = data.error.message;
+    else {
+      // Etendo JsonDataService format: { response: { error: { message } | string } }
+      const err = data?.response?.error;
+      if (err?.message) raw = err.message;
+      else if (typeof err === 'string') raw = err;
+      else if (data?.message) raw = data.message;
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return raw;
 }
 
 export function translateBackendError(msg, t) {

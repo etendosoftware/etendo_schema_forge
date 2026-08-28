@@ -1,8 +1,8 @@
 {
-  "version": "0.43.0",
+  "version": "0.44.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-28T13:29:08.917Z",
-  "contractChecksum": "0a9b37b0def7dd37",
+  "updatedAt": "2026-08-19T15:15:00.244Z",
+  "contractChecksum": "31fd92d903feb69c",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -78,6 +78,14 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/assets/assets/selectors/project"
+      },
+      {
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "column": "EM_Etadas_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
       },
       {
         "entity": "amortizationLine",
@@ -275,6 +283,7 @@
             "required": true,
             "defaultValue": "N"
           },
+          "eTADASCostCenter": {},
           "etgoAmortizationStatus": {
             "readOnly": true,
             "defaultValue": "0"
@@ -392,5 +401,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "17ac6dae0ad76be5"
+  "checksum": "6f19cd64f27b44c9"
 }

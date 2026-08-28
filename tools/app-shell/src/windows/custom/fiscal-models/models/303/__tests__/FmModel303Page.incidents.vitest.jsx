@@ -10,7 +10,11 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const navigateMock = vi.fn();
+
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -27,6 +31,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -51,7 +56,6 @@ vi.mock('../../../FmCommon.jsx', () => ({
 }));
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
-  FilesTab: () => null,
   HistoryTab: () => null,
   IncidentsTab: ({ decl, blocking, warning }) => React.createElement(
     'div',

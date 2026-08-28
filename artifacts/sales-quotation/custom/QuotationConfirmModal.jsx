@@ -16,6 +16,7 @@ export default function QuotationConfirmModal({
   apiBaseUrl,
   onClose,
   onSave,
+  onRefresh,
 }) {
   const ui = useUI();
   const [selected, setSelected] = useState('order');
@@ -130,6 +131,10 @@ export default function QuotationConfirmModal({
             + (err?.response?.message || err?.message || `Error (${res.status})`)
           );
         }
+        // ETP-4779 — the sales order now exists; let the "Documentos" section
+        // refetch immediately instead of requiring a full page reload (mirrors
+        // sales-order:document-created / purchase-order:document-created).
+        window.dispatchEvent(new CustomEvent('sales-quotation:document-created'));
 
         // Fetch created order by quotation link
         const criteria = JSON.stringify([{ fieldName: 'quotation', operator: 'equals', value: quotationId }]);
@@ -178,6 +183,8 @@ export default function QuotationConfirmModal({
             err?.response?.message || err?.message || `Error (${res.status})`
           );
         }
+        // ETP-4779 — see rationale above (order path).
+        window.dispatchEvent(new CustomEvent('sales-quotation:document-created'));
         const doc = (await res.json())?.response?.data;
         setCreatedDoc({
           type: 'invoice',
@@ -205,10 +212,13 @@ export default function QuotationConfirmModal({
     window.location.href = `${basePath}/${target}/${createdDoc.id}`;
   };
 
-  // After creating a document, reload the page to refresh state (badge, readonly, etc.)
+  // ETP-4779 — after creating a document, refresh the header state (badge,
+  // readonly, etc.) via onRefresh instead of a full page reload. The
+  // "Documentos" section already refetched off the sales-quotation:document-created
+  // event dispatched in handleConfirm above.
   const handleCloseAfterCreate = () => {
     onClose();
-    window.location.reload();
+    onRefresh?.();
   };
 
   // ── Success state ──────────────────────────────────────────

@@ -40,6 +40,7 @@
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
 | [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which |
 | [pipeline-validator-reference.md](pipeline-validator-reference.md) | **Pipeline completeness validator**: rules F1–F10, artifact classification, CLI flags, exit codes, and troubleshooting |
+| [document-printables.md](document-printables.md) | **Document printables** — the TWO document designs and which button shows each, the criteria a change must meet, the PDF cache and its (missing) invalidation, and the decisions on record. Governing skill: `/document-printables` |
 | [contract-generation-ownership.md](contract-generation-ownership.md) | **Contract/generated output ownership**: producers, consumers, regeneration triggers, and split-ready artifact rules |
 | [line-pricing-model.md](line-pricing-model.md) | **Line pricing model**: client-side lineGrossAmount calculation for orders/quotations, field roles, callout vs client-side split, invoice refactor checklist |
 
@@ -53,6 +54,20 @@
 | [TDD-anex.md](TDD-anex.md) | API versioning implementation details |
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
 | [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
+
+## MCP / Agentic Validation
+
+Benchmark of the Etendo GO MCP server against a reference vendor MCP (Holded), and the improvement
+backlog it produces. Refresh with the `/mcp-comparison` skill.
+
+| File | Description |
+|------|-------------|
+| [mcp-evaluation/README.md](mcp-evaluation/README.md) | **Start here** — layout of the whole MCP evaluation folder, run-report history, and what the per-item `imps/` working files are for |
+| [mcp-evaluation/imps/](mcp-evaluation/imps/) | One working file per improvement: root-cause investigation, refuted hypotheses, and what a fix must touch. Written while the item is worked |
+| [mcp-improvements-registry.md](mcp-evaluation/mcp-improvements-registry.md) | **Single source of truth** for every IMP-* improvement: status, priority, class, repo, points, cohort, evidence · **MARI** (the 0–100 readiness index the OKR is set against) + the M5 diagnostics · per-run changelog. Includes the IMP-15 walk-through (Appendix A) |
+| [mcp-comparison-holded-vs-etendo-go.md](mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | Baseline benchmark: architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification |
+| [mcp-comparison-post-audit-2026-08-05.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-05.md) | Run report (2026-08-05, `etendo-go-local`): live read + authorized write evidence, defects, IMP-11…IMP-15, M1–M4, and the MARI baseline (28) |
+| [mcp-comparison-post-audit-2026-08-06.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-06.md) | Run report (2026-08-06, `etendo-go-local` + Holded demo): full-coverage run — all 6 probe surfaces closed, M1/M2 re-measured on the frozen 5-task suite, IMP-16…IMP-21, quota re-based 73 → 97, **MARI 28 → 49** |
 
 ## Etendo AD Reference
 
@@ -136,6 +151,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 
 | File | Description |
 |------|-------------|
+| [plans/2026-08-03-etp-4315-attachment-preview-sync.md](plans/2026-08-03-etp-4315-attachment-preview-sync.md) | ETP-4315 — Purchase invoice/goods receipt attachment vs. preview sync: root cause, window inventory, reverse-plan rejection, forward-plan cost, open questions — **investigation in progress** |
 | [plans/completed/2026-03-12/process-and-report-pipeline.md](plans/completed/2026-03-12/process-and-report-pipeline.md) | Process & Report Pipeline — **All 4 phases complete** (processes, reports, form detection, unified entry point) |
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |
 | [plans/2026-03-05-vertical-slice-design.md](plans/2026-03-05-vertical-slice-design.md) | Vertical slice design |

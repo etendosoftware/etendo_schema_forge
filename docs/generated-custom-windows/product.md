@@ -198,7 +198,7 @@ Updated on 2026-06-08 as part of the feature/ETP-4190 branch. Significant change
 
 **Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
 
-**Composite descriptor — 4 columns, product + price in one batch (ETP-4669).** The import supports exactly four CSV columns: `searchKey` (aliases `codigo`/`código`/`sku`), `name` (alias `nombre`), `description` (aliases `descripcion`/`descripción`), and `price` (alias `precio`). `productImportDescriptor.js` (registered as `product`, wired via `windows/custom/product/index.jsx`) builds a `product` create op from searchKey/name/description, plus — only when the row has a price — a second `price` op (`M_ProductPrice`) `parentRef`-linked to the product in the same `/batch` call, mirroring how `contactsImportDescriptor.js` links its child records. The single CSV `price` is written as `standardPrice`/`listPrice`/`priceLimit` against the org's default **sales** price list version, resolved ONCE per import run from `/price/selectors/M_PriceList_Version_ID` (the same version `ProductPriceBar.jsx`'s add-tariff flow lands on). A non-empty, non-numeric price fails that row with a friendly error; a priced row in an environment with no sales price list also fails clearly rather than guessing.
+**Composite descriptor — 4 columns, product + price in one batch (ETP-4669).** ⚠️ **Superseded by ETP-4995:** the import now has eight columns (adding `productType`, `uOM`, and splitting `price` into `salesPrice`/`purchasePrice`); see the ETP-4995 section at the end. Historically the import supported exactly four CSV columns: `searchKey` (aliases `codigo`/`código`/`sku`), `name` (alias `nombre`), `description` (aliases `descripcion`/`descripción`), and `price` (alias `precio`). `productImportDescriptor.js` (registered as `product`, wired via `windows/custom/product/index.jsx`) builds a `product` create op from searchKey/name/description, plus — only when the row has a price — a second `price` op (`M_ProductPrice`) `parentRef`-linked to the product in the same `/batch` call, mirroring how `contactsImportDescriptor.js` links its child records. The single CSV `price` is written as `standardPrice`/`listPrice`/`priceLimit` against the org's default **sales** price list version, resolved ONCE per import run from `/price/selectors/M_PriceList_Version_ID` (the same version `ProductPriceBar.jsx`'s add-tariff flow lands on). A non-empty, non-numeric price fails that row with a friendly error; a priced row in an environment with no sales price list also fails clearly rather than guessing.
 
 **Row-level dedupe by search key.** `window.import.dedupe` is `{ scope: "file", key: ["searchKey"] }` — an in-file duplicate SKU is flagged `skipped` rather than sent twice.
 
@@ -376,3 +376,78 @@ They also stop appearing in the `Others` form (`ProductForm.jsx`). No generator 
 Regenerated with `make regen ONLY=product FROM_CACHE=1` (contract `0.26.0 → 0.26.1`;
 `FROM_CACHE=1` is required in this environment or the local DB's missing `es_ES` ref-list
 translations strip enum labels repo-wide). `sf-validate-pipeline --scope=product`: OK.
+
+## ETP-4967 — Hide the internal discount product
+
+**`ETGO_DTO`, the generic product used internally to represent the global discount on an order/invoice, is now hidden from every product-facing surface.** It exists purely as a posting mechanism and was never meant to be picked, browsed, or reported on like a real product.
+
+- **Category-based exclusion, not a hardcoded product id:** the mechanism is the same `EM_Etgo_IsSystemCategory` flag documented in `product-category.md` — `ETGO_DTO` is classified under a category flagged that way (`Discounts`), and the Product window's GET responses (list and single-record) strip out any product whose category carries the flag. `ProductDefaultsHandler.hideSystemCategoryProducts` (com.etendoerp.go) implements this, resolving the client's hidden-category ids via the shared `SystemCategoryIds` helper and adjusting `response.totalRows`/`endRow` by the number of rows it removes, so a caller paging off those fields (rather than `data.length`) doesn't request a page past the end.
+- **Every product selector in the app, not just this window:** `ProductSystemCategorySelectorPolicy` applies the same exclusion to the generic FK product selector used by order/invoice/shipment/receipt/goods-movement lines app-wide (`entityName` starting with `"Product"`), and `ReportSelectorsServlet`/`WidgetQueryPolicyRegistry`/`InventoryStockReportHandler` apply it to the report product-filter selector, the Best Sellers/Best Products dashboard widgets, and the Inventory Stock Report respectively. `vite-plugins/report-api.js` (the `make dev`-only mock of the report selectors, which queries Postgres directly and bypasses the real backend) mirrors the same exclusion — it must be kept in sync by hand if the Java query ever changes.
+- **Known, accepted gap — existing document lines:** if `ETGO_DTO` already exists as a line on some pre-existing document (e.g. a goods receipt created before this fix), the code that builds a *returnable-lines* list for a return against that specific document reads the line directly by SQL, not through any selector — so it can still surface there. This is about re-displaying an existing line on its own document, not about picking a new product, and was deliberately left out of scope.
+- **Retroactive backfill:** `R25-etgo-dto-discount-category` (schema_forge `cli/src/data-fixes/`) creates the `Discounts` category for tenants onboarded before it existed, reclassifies their `ETGO_DTO` into it, flags the category, and preserves the accounting entries `ETGO_DTO` was already posting against. New tenants get both from the GOClient sampledata directly.
+
+## Product import category resolution and auto-creation — ETP-4905
+
+Extended the Products CSV/TXT import descriptor (`productImportDescriptor.js`) and contract (`artifacts/product/decisions.json`) so product categories can be supplied, matched to existing categories, or created automatically when absent:
+
+- **Supported Headers / Aliases:** ⚠️ **superseded by ETP-4995** — the three columns below
+  collapsed into a single `category` column (`categoria` / `categoría` / `codigo categoria` /
+  `nombre categoria`). The resolution semantics described next still hold; only the number of
+  columns changed. See the ETP-4995 section at the end of this document.
+  - ~~`categoryCode` / `codigoCategoria` / `código categoría` / `codigo_categoria` / `category_code`~~
+  - ~~`categoryName` / `nombreCategoria` / `nombre categoría` / `nombre_categoria` / `category_name`~~
+  - `category` / `categoria` / `categoría` (now the only category column)
+- **Resolution semantics:**
+  1. Exact match on category `searchKey` / `code`.
+  2. Normalized match on category `name` (case, trim, diacritics / accent-insensitive).
+  3. If ambiguous (>1 match), rejects the row with a clear, localized ambiguity error.
+  4. If no match exists, automatically creates the category using the cell as an exact code when it matches an existing one, or a derived uppercase slug from the name otherwise, and links it to the imported product.
+- **Reuse & Concurrency Protection:** In-flight resolutions are cached per import run (`getResolutionCache`), ensuring that multiple rows referencing the same new category create it exactly once and reuse its ID across concurrent workers.
+- **Backward Compatibility:** Files without category columns retain existing behavior (server-side default category injection). Composite product-and-price batch operations remain fully functional.
+
+## ETP-4995 — CSV import fixes and cleanup
+
+**Services are importable (`productType`).** `M_Product.ProductType` is an AD List
+(`I`=Artículo, `S`=Servicio, `E`=Gasto, `R`=Recurso, `O`=Online, AD default `I`) that had no
+CSV column and was never written, so every imported row was an Item. It now resolves through
+the shared synonym table (`lib/codedValue.js`), accepting the Spanish or English label or the
+raw code, accent- and case-insensitively; an unrecognized value fails its own row naming the
+accepted values. This supersedes the ETP-4669 note above for `productType` only.
+
+**`uOM` is honoured (was dead code).** `uOM` appeared in neither `PRODUCT_TARGETS` nor
+`window.import.fields`, which left the descriptor's `if (!productBody.uOM && productDefaults.uOM)`
+guard permanently true — the row's unit was ignored on every import and the org default
+always won. There is now a `uOM` column resolved through a dedicated FK resolver
+(`productFkResolvers.js`, SimSearch entity `UOM` — the DAL class name for `C_UOM`); a blank
+cell still keeps the org default, and an unmatchable one fails the row rather than importing
+under the wrong unit. The field also declares `matchEntity: 'UOM'`, which drives the
+**preview** validation — note that path never rewrites the row (`ImportDialog` hands
+`buildOperations` the raw row), which is why the descriptor resolves it a second time at send
+time, exactly like Contacts does for `country`.
+
+**Purchase and sales prices.** There was one `price` column, written as
+`standardPrice`/`listPrice`/`priceLimit` against the sales price list version only — a
+purchase price could not be imported at all. `price` is replaced by `salesPrice`
+(aliases `precio de venta`, `precio venta`, `precio`, `pvp`) and `purchasePrice`
+(`precio de compra`, `precio compra`, `coste`, `costo`); each produces its own
+`parentRef`-linked `price` op (ids `salesPrice` / `purchasePrice`) against its own price list
+version, resolved once per run and cached per direction. An **unflagged** price list version
+still counts as a sales list (a human sees those in the Sales tab) but is never assumed to be
+a purchase one — a purchase price requires an explicitly purchase-flagged version, or the row
+fails rather than silently filing the cost against a sales list.
+
+**Category columns 3 → 1.** `categoryCode`/`categoryName`/`category` collapse into `category`;
+the cell is probed against existing category codes first and treated as a name otherwise
+(`lib/dependentEntityCell.js`), preserving both the exact-code match and the derived-code
+auto-create described in the ETP-4905 section above.
+
+**`required: true` is now declared on `searchKey` and `name`**, so `validateRow` catches a
+missing mandatory value in the preview instead of surfacing it as a backend 400. `productType`
+and `uOM` are AD-mandatory but declare `required: false` explicitly, because the descriptor
+supplies a default for both — `generate-contract.js` backfills `required` from AD when
+`decisions.json` is silent, and an AD-mandatory-but-defaulted column marked required would
+reject the untouched template.
+
+Regression coverage: `productImportDescriptor.vitest.js`, plus
+`windows/custom/__tests__/importTemplateRoundTrip.vitest.js` (template → map → validate →
+build operations, for both windows).

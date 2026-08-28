@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-08-12T14:26:26.692Z",
-  "checksum": "dd67d6fa3fa22e9d",
+  "updatedAt": "2026-08-24T22:21:36.419Z",
+  "checksum": "664452d34da39d36",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -26,7 +26,7 @@
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel",
         "processConfirmModal": "ReactivarConfirmModal",
-        "topbarExtra": "PaymentConciliadoBadge",
+        "topbarExtra": "PaymentTopbarActions",
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
@@ -57,7 +57,7 @@
           "columnName": "etprReactivatePayment",
           "label": "processReactivate",
           "style": "ghost-danger",
-          "displayLogicRaw": "@status@ != 'RPAP'"
+          "displayLogicRaw": "@status@ != 'RPAP' & @pisLocked@ = 'N'"
         }
       },
       "detailEntity": null,
@@ -68,7 +68,8 @@
         "RPR": "pagoDepositado",
         "RDNC": "pagoDepositado",
         "RPPC": "pagoDepositado",
-        "PPM": "pagoDepositado",
+        "PPM": "cpPaymentStateInProgress",
+        "ETGOERR": "cpPaymentStateError",
         "PWNC": "pagoDepositado"
       },
       "toolbarBorderBottom": true,
@@ -623,6 +624,13 @@
                 "name": "Payment Cleared",
                 "labels": {
                   "es_ES": "Conciliado"
+                }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
                 }
               }
             ],
@@ -1989,7 +1997,7 @@
         "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel",
         "processConfirmModal": "ReactivarConfirmModal",
-        "topbarExtra": "PaymentConciliadoBadge",
+        "topbarExtra": "PaymentTopbarActions",
         "sidePanelStyle": {
           "order": -1,
           "borderLeft": "none",
@@ -2020,7 +2028,7 @@
           "columnName": "etprReactivatePayment",
           "label": "processReactivate",
           "style": "ghost-danger",
-          "displayLogicRaw": "@status@ != 'RPAP'"
+          "displayLogicRaw": "@status@ != 'RPAP' & @pisLocked@ = 'N'"
         }
       },
       "detailEntity": null,
@@ -2031,7 +2039,8 @@
         "RPR": "pagoDepositado",
         "RDNC": "pagoDepositado",
         "RPPC": "pagoDepositado",
-        "PPM": "pagoDepositado",
+        "PPM": "cpPaymentStateInProgress",
+        "ETGOERR": "cpPaymentStateError",
         "PWNC": "pagoDepositado"
       },
       "toolbarBorderBottom": true,
@@ -3043,6 +3052,14 @@
             "type": "id",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOPaymentIntent",
+            "apiKey": "eTGOPaymentIntent",
+            "column": "EM_ETGO_Payment_Intent",
+            "type": "text",
+            "visibility": "system",
+            "required": false
           }
         ]
       }
@@ -6516,6 +6533,14 @@
         "description": "System field 'endToEnd' should exist in backend but not frontend for bankPayments"
       },
       {
+        "id": "t-system-field-bankPayments-eTGOPaymentIntent",
+        "category": "system-field",
+        "entity": "bankPayments",
+        "field": "eTGOPaymentIntent",
+        "runner": "node",
+        "description": "System field 'eTGOPaymentIntent' should exist in backend but not frontend for bankPayments"
+      },
+      {
         "id": "t-system-field-bankPayments-exchangeRate",
         "category": "system-field",
         "entity": "bankPayments",
@@ -6946,7 +6971,7 @@
       }
     ],
     "summary": {
-      "total": 441,
+      "total": 442,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 3,
@@ -6962,11 +6987,11 @@
         "rule-declared": 105,
         "searchable-filters": 5,
         "selector-endpoint": 24,
-        "system-field": 61,
+        "system-field": 62,
         "visibility": 3
       },
       "byRunner": {
-        "node": 439,
+        "node": 440,
         "junit": 2
       }
     }

@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import {
-  Settings, Download,
-  OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
-  Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
-  ClipboardCheck, ReceiptText, Folder, FileCheck,
+  Download,
+  OctagonAlert, TriangleAlert, CircleCheck,
+  Calculator, Loader2, TrendingUp, TrendingDown,
+  ClipboardCheck, ReceiptText, FileCheck, Landmark,
 } from 'lucide-react';
-import { Tabs, KpiWidget } from '../../FmCommon.jsx';
-import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
+import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
+import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
-import AeatSubmitFlow from './AeatSubmitFlow.jsx';
+import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
+import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.jsx';
+import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents } from '../../fiscalModelsUtils.js';
+import { useAuth } from '@/auth/AuthContext.jsx';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 
 // AD table name backing the AEAT justificante attachments store — both the
@@ -20,11 +23,13 @@ import { AttachmentsTab, useAttachments } from '@/components/attachments';
 // manual "Presentación con Acuse de recibo" upload persist here.
 const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 
-const STEPPER_INDEX = {
-  draft: 0, ready: 1,
-  submitted: 2, submitted_ext: 2, submitted_ack: 2,
-  skipped: -1,
-};
+// statusLabelKey (ETP-4755): the status badge must always read the plain "Presentado" for
+// BOTH `submitted` and `submitted_ack` — `submitted_ack` collapses onto `submitted`'s i18n
+// key here. HOW it was submitted is shown exclusively via the `submissionMethod` suffix
+// rendered alongside the badge below, never inside the badge text itself.
+function statusLabelKey(status) {
+  return status === 'submitted_ack' ? 'submitted' : status;
+}
 
 function toBoxArray(src) {
   if (Array.isArray(src)) return src;
@@ -120,7 +125,7 @@ const CASILLAS_SECTIONS = [
   { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
-function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t }) {
+function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t, isSubmitted }) {
   const [activeSection, setActiveSection] = useState('identificacion');
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
@@ -166,65 +171,10 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
             identification={{ ...orgIdent, ...identChecks }}
             onIdentChange={onIdentChange}
             onBoxChange={onBoxChange}
+            readOnly={isSubmitted}
             data-testid="FmBoxes303__4f6c0d" />
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── More options kebab menu ──────────────────────────────────────
-function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBlocked, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-section-header__icon-btn"
-        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', background: 'hsl(var(--card))' }}
-        onClick={() => setOpen(o => !o)}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__4f6c0d" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onCompare(); setOpen(false); }}>
-            <ArrowLeftRight
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="ArrowLeftRight__4f6c0d" />
-            {t('fm.action.compare') ?? 'Comparar'}
-          </button>
-          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onConfig(); setOpen(false); }}>
-            <Settings
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Settings__4f6c0d" />
-            {t('fm.config.title') ?? 'Configuración'}
-          </button>
-          <button
-            className="fm-status-select__item fm-status-select__item--14"
-            role="menuitem"
-            onClick={() => { onGenerate(); setOpen(false); }}
-            disabled={generating}
-          >
-            <Download
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-              data-testid="Download__4f6c0d" />
-            {t('fm.action.gen303') ?? 'Generar fichero 303'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -255,15 +205,28 @@ function buildIncidentVariants(blocking, warning, t) {
 export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
+  // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
+  // (see handleGenerate). Requires a Router/AuthProvider ancestor — every test
+  // that mounts this page must wrap it in both, or mock `react-router-dom`'s
+  // `useNavigate` and `@/auth/AuthContext.jsx`'s `useAuth`.
+  const navigate = useNavigate();
+  const { selectedOrg } = useAuth();
   const [status, setStatus] = useState(decl.status);
+  // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
+  // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
+  // from decl.submissionMethod (persisted, present for any declaration submitted after
+  // this feature shipped) and updated locally by handlePresent's two manual paths; the
+  // AEAT telematic path sets it server-side only (see handleSubmit's onSuccess below) and
+  // does not update this local state until the declaration is next refetched.
+  const [submissionMethod, setSubmissionMethod] = useState(decl.submissionMethod);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
   const [showAeatFlow, setShowAeatFlow] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
-  const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
+  // Hydrate from persisted decl.manualData when present, falling back to the old
+  // non-persisted decl.identification only for fixtures/demo declarations that predate it.
+  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? decl.identification ?? {});
   const handleIdentChange = (id, value) => {
     setIdentChecks(prev => ({ ...prev, [id]: value }));
     if (id === 'motivo_rectificacion' && value !== 'D') {
@@ -272,7 +235,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     }
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
-  const [manualOverrides, setManualOverrides] = useState({});
+  const [manualOverrides, setManualOverrides] = useState(decl.manualData?.manualOverrides ?? {});
+  // Refs backing the debounced manualData autosave effect further below (defined after
+  // isSubmitted is computed, since it depends on it) — declared here alongside the state
+  // they track.
+  const manualDataSaveTimer = useRef(null);
+  const isFirstManualDataRender = useRef(true);
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
@@ -298,6 +266,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
+  // Distinguishes the missing-default-IAE-activity pre-flight guard (ETP-4975) from every
+  // other `genError` (IBAN required, generic backend failure) so only ITS banner gets the
+  // "Go to Organization" CTA — mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
+  const [missingIaeGuard, setMissingIaeGuard] = useState(false);
 
   // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
   // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
@@ -329,9 +301,53 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     }
   }
 
+  // Auto-compute on mount when the list didn't hand us any precomputed data
+  // (ETP-4755 regression). `FmListPage`'s `useFiscalAutoCompute` only ever
+  // precomputes DRAFT declarations — once a declaration is submitted (or is
+  // opened via a path that bypasses the list's own auto-compute), `decl._precomputed`
+  // is `undefined` and every KPI/box/source starts blank even though the backend
+  // is always ready to recompute regardless of status. This mirrors what the
+  // (now hidden-when-submitted) "Calcular" button used to do manually. Scoped to
+  // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
+  // per opened declaration instead of looping once `handleCompute` populates state.
+  useEffect(() => {
+    const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
+    if (hasPrecomputed) return;
+    if (!token || !apiBaseUrl) return;
+    handleCompute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl.id]);
+
   async function handleGenerate({ filename } = {}) {
     setGenError(null);
+    setMissingIaeGuard(false);
     setGenerating(true);
+    // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
+    // (see that file for the full rationale). "Generar fichero 303" hits the exact same
+    // backend AEAT303Report code path as "Marcar como Presentado" for the last period of
+    // the fiscal year, so without this it round-trips to an untranslated
+    // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
+    // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
+    // any fetch/network error (never blocks a generation that might otherwise succeed).
+    if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
+      try {
+        const iaeRes = await fetch(
+          `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (iaeRes.ok) {
+          const iaeRows = (await iaeRes.json())?.response?.data ?? [];
+          if (isMissingDefaultIaeActivity(iaeRows)) {
+            setMissingIaeGuard(true);
+            setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+            setGenerating(false);
+            return;
+          }
+        }
+      } catch (_) {
+        // fail open — see comment above.
+      }
+    }
     const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
     if (!result.ok) applyGenerateError(result, t, setGenError);
@@ -339,9 +355,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
 
-  function handleStatusChange(newStatus) {
+  function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
-    onStatusChange?.(decl.id, newStatus);
+    if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
+    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
   // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
@@ -372,13 +389,37 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     if (newStatus === 'submitted_ack' && acuseFile) {
       uploadReceipt(acuseFile);
     }
-    handleStatusChange(newStatus);
+    // submissionMethod (ETP-4755): the two manual paths PresentModal can report here —
+    // 'submitted_ack' always carries the uploaded acuse (see canConfirm in PresentModal),
+    // 'submitted' never does. Neither collides with the AEAT telematic path's own
+    // 'aeat_telematic' value, set server-side only (see handleSubmit's onSuccess below).
+    const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
+    handleStatusChange(newStatus, submissionMethodForPath);
   }
 
   const blocking = incidents?.blocking ?? 0;
   const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
+
+  // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
+  // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
+  // declaration is submitted (nothing is editable at that point) and on the very first render
+  // (that render is just the hydration above — not a genuine user edit).
+  useEffect(() => {
+    if (isFirstManualDataRender.current) {
+      isFirstManualDataRender.current = false;
+      return;
+    }
+    if (isSubmitted || !token || !apiBaseUrl) return;
+    if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
+    manualDataSaveTimer.current = setTimeout(() => {
+      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });
+    }, 800);
+    return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identChecks, manualOverrides, isSubmitted, token, apiBaseUrl, decl.id]);
+
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
   // are reflected in the accrued/deductible/result cards without a full recalculate.
@@ -408,13 +449,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       badge: incidentCount > 0 ? incidentCount : null,
       badgeTone: incidentBadgeTone,
       icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" /> },
-    { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
-      badge: decl.file ? 1 : null,
-      icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
     { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
       icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
-    { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
-      icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
 
   const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
@@ -431,11 +467,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
             Modelo 303 - {periodLabel}
           </span>
-          <MoreVertical
-            size={14}
-            strokeWidth={1.75}
-            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
-            data-testid="MoreVertical__4f6c0d" />
+          <MoreOptionsMenu
+            favKey="fiscal-models"
+            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            data-testid="MoreOptionsMenu__4f6c0d" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
           Tesorería / Modelo 303 - {periodLabel}
@@ -450,7 +485,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <button
           className="fm-btn"
           onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
         >
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
@@ -458,41 +493,55 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
           background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         }}>
-          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
+          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${statusLabelKey(status)}`) ?? status}
+          {/* submissionMethod (ETP-4755) — only for the 2 statuses that can carry one;
+              a declaration that predates this feature (no submissionMethod) shows the
+              bare status, unchanged. The badge text itself never varies between `submitted`
+              and `submitted_ack` (see `statusLabelKey`) — only this sub-suffix does. */}
+          {submissionMethod && (status === 'submitted' || status === 'submitted_ack') && (
+            <span style={{ opacity: .75 }}> · {t(`fm.present.method.${submissionMethod}`)}</span>
+          )}
         </span>
 
         <div style={{ flex: 1 }} />
 
-        <MoreOptionsMenu
-          onCompare={() => setShowCompare(true)}
-          onConfig={() => setShowConfig(true)}
-          onGenerate={() => { setGenError(null); setShowFilegen(true); }}
-          generating={generating}
-          fileBlocked={fileBlocked}
-          t={t}
-          data-testid="MoreOptionsMenu__4f6c0d" />
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={handleCompute}
+            disabled={computing}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
+          >
+            {computing
+              ? <Loader2
+              size={16}
+              strokeWidth={1.75}
+              style={{ animation: 'spin 1s linear infinite' }}
+              data-testid="Loader2__4f6c0d" />
+              : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
+            }
+            {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+          </button>
+        )}
 
         <button
           className="fm-btn"
-          onClick={handleCompute}
-          disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))' }}
+          onClick={() => { setGenError(null); setShowFilegen(true); }}
+          disabled={generating}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
         >
-          {computing
-            ? <Loader2
-            size={24}
+          <Download
+            size={16}
             strokeWidth={1.75}
-            style={{ animation: 'spin 1s linear infinite' }}
-            data-testid="Loader2__4f6c0d" />
-            : <Calculator size={24} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
-          }
-          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+            style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+            data-testid="Download__4f6c0d" />
+          {t('fm.action.gen303') ?? 'Generar fichero 303'}
         </button>
 
         {!isSubmitted && (
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
@@ -567,9 +616,24 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           display: 'flex',
           alignItems: 'center',
           gap: 8,
+          flexWrap: 'wrap',
         }}>
           <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
           {genError}
+          {/* CTA only for the missing-default-IAE-activity guard — every other genError
+              (IBAN required, generic backend failure) has no dedicated settings screen to
+              send the user to. Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. */}
+          {missingIaeGuard && (
+            <button
+              type="button"
+              className="fm-btn fm-btn--primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}
+              onClick={() => navigate('/organization')}
+            >
+              <Landmark size={14} data-testid="Landmark__gen303GoToOrganization" />
+              {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
+            </button>
+          )}
         </div>
       )}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
@@ -590,6 +654,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           liveBoxes={liveBoxes}
           onBoxChange={handleBoxChange}
           t={t}
+          isSubmitted={isSubmitted}
           data-testid="CasillasTab__4f6c0d" />
       )}
       {activeTab !== 'boxes' && (
@@ -608,15 +673,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               t={t}
               onGoToSources={() => setActiveTab('sources')}
               data-testid="IncidentsTab__4f6c0d" />
-          )}
-          {activeTab === 'files' && (
-            <FilesTab
-              decl={decl}
-              t={t}
-              fileBlocked={fileBlocked}
-              onGenerate={() => { setGenError(null); setShowFilegen(true); }}
-              genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
-              data-testid="FilesTab__4f6c0d" />
           )}
           {activeTab === 'receipt' && (
             // key={`${status}-${receiptRefreshTick}`}: `status` changes when a
@@ -638,9 +694,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               config={{ allowedMimeTypes: ['application/pdf'] }}
               key={`${status}-${receiptRefreshTick}`}
               data-testid="AttachmentsTab__303receipt" />)
-          )}
-          {activeTab === 'history' && (
-            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
           )}
         </div>
       )}
@@ -673,16 +726,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal303__4f6c0d" />
       )}
-      {showConfig && <ConfigDrawer
-        onClose={() => setShowConfig(false)}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        model="303"
-        data-testid="ConfigDrawer__4f6c0d" />}
-      {showCompare && <CompareDrawer
-        decl={decl}
-        onClose={() => setShowCompare(false)}
-        data-testid="CompareDrawer__4f6c0d" />}
     </div>
   );
 }

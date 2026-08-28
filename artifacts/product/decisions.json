@@ -65,10 +65,14 @@
       "limit": { "maxRows": 5000, "concurrency": 4 },
       "dedupe": { "scope": "file", "key": ["searchKey"] },
       "fields": [
-        { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
-        { "target": "name", "aliases": ["nombre"] },
+        { "target": "searchKey", "aliases": ["codigo", "código", "sku"], "label": "Search Key", "required": true },
+        { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true },
         { "target": "description", "aliases": ["descripcion", "descripción"] },
-        { "target": "price", "aliases": ["precio"], "label": "Price" }
+        { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false },
+        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false },
+        { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price" },
+        { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra", "coste", "costo"], "label": "Purchase Price" },
+        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category" }
       ]
     }
   },
@@ -389,6 +393,7 @@
       }
     },
     "stock": {
+      "readOnly": true,
       "javaQualifier": "productStockWarehouseHandler",
       "fields": {
         "storageBin": {
@@ -504,6 +509,7 @@
       "exclude": true
     },
     "costing": {
+      "readOnly": true,
       "fields": {
         "costType": {
           "visibility": "readOnly",
@@ -572,6 +578,7 @@
       "exclude": true
     },
     "transactions": {
+      "readOnly": true,
       "fields": {
         "movementDate": {
           "visibility": "readOnly",

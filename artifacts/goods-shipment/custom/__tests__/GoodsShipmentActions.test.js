@@ -237,4 +237,34 @@ describe('GoodsShipmentActions', () => {
       assert.doesNotMatch(src, /generateShipmentPdf\(/);
     });
   });
+
+  // ETP-4779 — QA regression: the "Documentos" related-docs section on Sales
+  // Goods Shipment (Albarán de Venta) required a manual page reload to show a
+  // newly generated Sales Invoice. Root cause: this component discarded the
+  // `onRefresh` prop DetailView's topbarRight slot already passes (see
+  // DetailView.jsx TopbarRightComponent), calling a full
+  // `window.location.reload()` instead.
+  describe('partial refresh instead of full page reload (ETP-4779)', () => {
+    it('accepts an onRefresh prop', () => {
+      assert.match(src, /export default function GoodsShipmentActions\(\{[^}]*onRefresh[^}]*\}\)/);
+    });
+
+    it('never calls window.location.reload', () => {
+      assert.doesNotMatch(src, /window\.location\.reload/);
+    });
+
+    it('calls onRefresh (not a reload) when closing the invoice-result modal, unless the user navigated away', () => {
+      assert.match(
+        src,
+        /setInvoiceResult\(null\);\s*setTimeout\(\(\) => \{\s*[\s\S]*?if\s*\(!resultNavigatedRef\.current\)\s*onRefresh\?\.\(\);/,
+      );
+    });
+
+    it('calls onRefresh (not a reload) as the ReturnWizard onSuccess fallback when the created return has no id to navigate to', () => {
+      assert.match(
+        src,
+        /if\s*\(returnData\?\.id\)\s*\{\s*navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\);\s*\}\s*else\s*\{\s*[\s\S]*?onRefresh\?\.\(\);\s*\}/,
+      );
+    });
+  });
 });

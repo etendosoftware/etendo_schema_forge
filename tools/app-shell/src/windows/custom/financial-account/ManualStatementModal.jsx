@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
@@ -106,14 +107,14 @@ function isBlankLine(r) {
 }
 
 /**
- * A line is "complete" (committable / saveable) when it has its transaction date,
- * a Reference No, and at least one amount entered (a statement line is an inflow
- * OR an outflow, so the other side is left empty = 0). The contact / G/L item are
- * optional. Empty amount fields count as 0.
+ * A line is "complete" (committable / saveable) when it has its transaction date
+ * and at least one amount entered (a statement line is an inflow OR an outflow,
+ * so the other side is left empty = 0). Reference No, contact and G/L item are
+ * all optional — a blank reference is stored as `**`, exactly like the CSV
+ * import does. Empty amount fields count as 0.
  */
 function isLineComplete(r) {
   return !!r.date
-    && r.reference.trim() !== ''
     && (parseAmount(r.out) > 0 || parseAmount(r.in) > 0);
 }
 
@@ -142,7 +143,7 @@ function HeaderFields({ form, setForm, ui }) {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <FieldRow
           label={ui('financeAccountStatementsManualName')}
           required
@@ -172,14 +173,6 @@ function HeaderFields({ form, setForm, ui }) {
             onChange={(iso) => setForm((f) => ({ ...f, importDate: iso }))}
             data-testid="manual-statement-importdate"
           />
-        </FieldRow>
-        <FieldRow
-          label={ui('financeAccountStatementsManualFileName')}
-          optional={ui('financeAccountStatementsManualOptional')}
-          data-testid="FieldRow__6b4086">
-          <input type="text" value={form.fileName} onChange={set('fileName')}
-            placeholder={ui('financeAccountStatementsManualFileNamePlaceholder')}
-            data-testid="manual-statement-filename" className={inputClass} />
         </FieldRow>
       </div>
       <FieldRow
@@ -230,7 +223,6 @@ function LinesHeader({ ui }) {
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColReference')}
-        required
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColDesc')}
@@ -258,7 +250,7 @@ function LinesHeader({ ui }) {
 }
 
 /** A statement line — always inline-editable, cell by cell (no edit/display toggle). */
-function EditRow({ row, onChange, onRemove, ui, currencySym }) {
+function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSide = true }) {
   const set = (field) => (e) => onChange(row.id, field, e.target.value);
   const setVal = (field) => (value) => onChange(row.id, field, value);
   const amountCell = (field, testId) => (
@@ -266,8 +258,9 @@ function EditRow({ row, onChange, onRemove, ui, currencySym }) {
       <input
         type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
         placeholder={ui('financeAccountAmountPlaceholder')}
-        className={cn(cellAmount, 'pr-7')} data-testid={testId} />
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]">
+        className={cn(cellAmount, currencySymRightSide ? 'pr-7' : 'pl-7')} data-testid={testId} />
+      <span
+        className={`pointer-events-none absolute ${currencySymRightSide ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]`}>
         {currencySym}
       </span>
     </div>
@@ -333,7 +326,7 @@ function LineEditHint({ ui }) {
   );
 }
 
-function EditableLines({ rows, setRows, ui, currencySym }) {
+function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide }) {
   // The row whose cell currently has focus — drives the inline keyboard hint.
   const [focusedId, setFocusedId] = useState(null);
 
@@ -376,6 +369,7 @@ function EditableLines({ rows, setRows, ui, currencySym }) {
               onRemove={remove}
               ui={ui}
               currencySym={currencySym}
+              currencySymRightSide={currencySymRightSide}
               data-testid="EditRow__6b4086" />
             {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
           </div>
@@ -577,6 +571,8 @@ export function ManualStatementModal({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const money = useMemo(() => makeMoneyFormatter(accountCurrency), [accountCurrency, bcpLocale]);
   const currencySym = useMemo(() => getCurrencySymbol(accountCurrency), [accountCurrency]);
+  // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
+  const currencySymRightSide = isCurrencySymbolRightSide(accountCurrency);
 
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
@@ -645,8 +641,9 @@ export function ManualStatementModal({
       toast.error(ui('financeAccountStatementsManualErrorLines'));
       return;
     }
-    // Every non-blank line must have its required fields (date, Reference No,
-    // both amounts) — an incomplete line cannot be saved.
+    // Every non-blank line must carry its transaction date and an amount on one
+    // of the two sides. Unlike the CSV import — which drops amount-less rows the
+    // way Classic does — here the user is present, so it is a validation error.
     if (usable.some((r) => !isLineComplete(r))) {
       toast.error(ui('financeAccountStatementsManualErrorIncompleteLine'));
       return;
@@ -665,6 +662,10 @@ export function ManualStatementModal({
       name: form.name.trim(),
       transactionDate: toIsoUtc(form.transactionDate),
       importDate: toIsoUtc(form.importDate),
+      // The file name field is import-only and no longer rendered in this modal —
+      // its presence suggested a file could be attached here. It stays in the
+      // form state as an invisible passthrough so editing a draft that already
+      // carries one does not wipe it.
       fileName: form.fileName.trim(),
       notes: form.notes.trim(),
       process,
@@ -735,6 +736,7 @@ export function ManualStatementModal({
               setRows={setRowsDirty}
               ui={ui}
               currencySym={currencySym}
+              currencySymRightSide={currencySymRightSide}
               data-testid="EditableLines__6b4086" />
           </div>
 

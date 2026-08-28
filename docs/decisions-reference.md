@@ -107,6 +107,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `sendDocument` | object | _absent_ (auto-enabled on documental windows) | See below | Send/Download envelope config forwarded to the generic `SendDocumentModal`. Auto-enabled when the header exposes `documentNo`; declare it only to disable (`enabled: false`), drop the email panel (`allowEmail: false`), or tune the recipient-edit policy (see the Send Document subsection below). |
 | `balanceFooter` | object | `null` | `{ debitField, creditField }` | Renders a debit/credit balance footer (Σ debit, Σ credit, difference, balanced ✓/✗ badge) for double-entry windows (e.g. manual journals). Both fields must be amount-typed fields on the lines entity. When set, the generator emits `BalanceFooterPanel` instead of `DocumentTotalsPanel` and disables the Save button (with a tooltip) only when the entry is unbalanced (Σ debit ≠ Σ credit). An empty/zero entry is treated as balanced and is savable as a draft; the ✓/✗ badge is hidden until the lines carry amounts. Validator F17 enforces field existence. Example: `"balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }`. |
 | `linesLayout` | string | `"classic"` | `"classic"`, `"inlineEditable"` | Lines tab rendering mode. `"classic"` keeps the side-panel edit flow (current behavior). `"inlineEditable"` switches the table to `InlineLinesPanel`: pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. All column types (string, number, amount, percent, date, selector, search) are inline-editable; selector/search columns use `InlineSearchCombo` (text input with server-side search) so FK fields with many options are filterable by typing. The add-line button, related-documents panel, notes panel and totals panel are unchanged. Validator F12 enforces the enum. |
+| `lineTaxSifTrigger` | boolean \| object | `false` | `{ enabled, _note }` | ETP-4888 point 5 (`sales-invoice`, `purchase-invoice`), extended to `sales-order`/`purchase-order` in a follow-up round after a real-world sales-order confirmation failed with an uncommunicated missing "Clave Régimen Especial IVA" — the same error class this feature exists to surface earlier. Shows an inline warning-color badge next to the lines grid's `tax` cell value when the selected tax is missing its TBAI/Verifactu SIF (Sistemas de Información de Facturación) key, opening a quick-fix modal (`TaxSifModal.jsx`) instead of sending the user to the standalone Impuestos (Taxes) window. Accepts either a plain boolean or the `{ enabled, _note }` object shape (same "boolean-or-object" convention as `attachments`/`sendDocument` above) — all four windows use the object form purely to carry the inline `_note` below, no other sub-key is read. **Not yet wired through `generate-frontend.js`** — this flag documents the decision, but today each of the four windows' own hand-written `index.jsx` mirrors it by hand via a local `LINE_TAX_SIF_TRIGGER_ENABLED` constant, calling `useTaxSifLineRowActions()` and passing its `cellBadges` result to the generated `HeaderPage`'s (invoices) or `GeneratedApp`'s (orders — which forwards `...rest` into `HeaderPage`, itself forwarding `{...props}` into `DetailView`, so the prop reaches the line grid unchanged either way) `lineCellBadges` prop — the same "hand-mirror a decision the generator doesn't carry" convention this file already uses for `SUBSET_FILTERS`/`LABEL_OVERRIDES` on the invoice windows. See `docs/ui-customization.md` §14e for the full mechanism (also covers the backend `InvoiceLineTaxSifSelectorPolicy` enrichment in `com.etendoerp.go`, whose `IN_SCOPE_WINDOW_IDS` now covers all four windows' AD_Window_Id — `167`/`183`/`143`/`181` — required for the enrichment the badge's completeness check depends on; omitting a window there produces FALSE POSITIVES, not just a missing badge, since the frontend treats an absent enrichment column the same as a genuinely blank one). SII is out of scope: it has nothing to configure at tax level (its header-level `aeatsiiCauseExemption` equivalent is unaffected, still owned by `SifTab.jsx`). `goods-shipment` (albarán) is explicitly OUT OF SCOPE — its `lines` entity carries no fields at all, so there is no `tax` field to attach a badge to. A follow-up ticket to wire this through `generate-frontend.js` (in `schema_forge_core`) is recommended once convenient, per Alex's review. **Compound/summary-tax follow-up (ETP-4888):** when the line's own `tax` is a compound/summary tax (`c_tax.issummary='Y'`, e.g. "Entregas IVA+RE 21+5.2% ISP"), both the trigger's completeness check and the modal it opens now resolve down to the actual rate-component child that carries the régimen key (`em_obspti_isequivalentcharge='N'`), instead of reading/writing the summary tax's own always-blank columns — see `docs/ui-customization.md` §14e's "Compound/summary-tax resolution" note for the full mechanism, including the `artifacts/tax/decisions.json` visibility promotions (`summaryLevel`/`parentTaxRate`/`oBSPTIEquivalentCharge`, `discarded` → `system`) this relies on. |
 
 ### Print Visibility (`window.hidePrintWhen`) — ETP-4714
 
@@ -699,7 +700,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `name` | string | Entity key | Override display name. |
-| `exclude` | boolean | `false` | Omit entire entity from schema. |
+| `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
@@ -769,6 +770,8 @@ Enables a two-button save workflow: "Save Draft" (save only) + "Save & {label}" 
 
 **When disabled** (default): single "Save" button.
 **When enabled**: "Save draft" + "Save & {label}" buttons, plus process buttons from `processEndpoints`.
+
+**`draftMode.onConfirm` — custom confirm callback (not a `decisions.json` property).** A window's custom wrapper (`windows/custom/{window}/index.jsx`) can pass a `draftMode.onConfirm` function prop at the React level — instead of `processField`/`processValue` — to run its own logic (typically dispatching a `CustomEvent` that opens the window's own confirm modal) when the "Save & {label}" button is clicked, bypassing the generic `hook.handleSaveAndProcess` POST entirely. Because `onConfirm` fully bypasses `handleSaveAndProcess` (which already saves first), `DetailView.jsx`'s `renderDraftModeSaveActions` saves any pending change via `hook.handleSave` — gated on `isDirty` (header OR line-edit/add-row state) — immediately before invoking `draftMode.onConfirm()` (ETP-4940, `maybeSaveBeforeConfirm` in `tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`). This is part of the `draftMode.onConfirm` contract every window author can rely on: a pending header/line edit is never silently discarded when the user clicks Confirm without saving first. Currently used by `sales-order`, `purchase-order`, `sales-quotation`, `goods-receipt`, `goods-shipment`.
 
 ### Named Filters (`entities.{name}.namedFilters`)
 
@@ -1248,8 +1251,10 @@ that already has values stored with the scheme included.
 | `min` | number | `undefined` | Minimum allowed value for numeric fields. In **grid / inline rows** (DataTable) the UI autocorrects values below this limit to `min` on blur. In **detail forms** (EntityForm) a value below `min` raises a `fieldMinValueError` toast on blur and blocks the save (via `getNumericFieldViolation` in `useEntity`). The toast interpolates the declared threshold — "Value must be at least `{min}`" — so a `0` on a `min: 1` field is reported accurately (never as "negative"). Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
 | `integer` | boolean | `undefined` (decimals allowed) | When `true`, the numeric field rejects decimal values. In detail forms a decimal raises a `fieldIntegerError` toast on blur and blocks the save. **Default (flag absent or `false`) accepts decimals** — omit it for the common case; only set `integer: true` for whole-number fields (e.g. Assets `usableLifeMonths` / `usableLifeYears`, declared `"min": 1, "integer": true`). Fully backwards-compatible: a field that declares neither `min` nor `integer` performs no numeric validation. Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
-| `readOnlyLogic` | string \| null | `null` | Expression for conditional read-only. Set `null` to omit. |
-| `displayLogic` | string \| null | `null` | Expression for conditional visibility. Set `null` to omit. |
+| `readOnlyLogic` | string \| null | `null` | AD-logic-string expression for conditional read-only (`@Column@=value` syntax, compiled from raw AD `displaylogic`/`readonlylogic`). Set `null` to omit — e.g. to silence the raw AD value before overriding it with `readOnlyLogicJs` below. |
+| `readOnlyLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional read-only, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to lock a field once the record is persisted (a "locks after first save" pattern the AD-logic translator cannot express, since raw AD `displaylogic`/`readonlylogic` only ever references *other column values*, never "does this record have a PK yet"). Compiles into the SAME generated `readOnlyLogic: (record) => …` function property as the AD-logic-string variant above — `EntityForm.jsx`'s `evalReadOnlyLogic` doesn't know or care which decisions.json key produced it. Real examples: `sales-invoice`/`purchase-invoice`'s `transactionDocument` (`"!!record.id"`, locked after first save) and `simple-g-l-journal`'s several fields (`"record['processed'] === true"`, an AD-shaped condition written directly in JS because it was simpler than composing the equivalent `@Processed@` logic string). When both `readOnlyLogic` and `readOnlyLogicJs` are set on the same field, set `readOnlyLogic: null` explicitly (as in the examples above) — otherwise the raw AD value and the JS override may both compile into contradictory or redundant checks. |
+| `displayLogic` | string \| null | `null` | AD-logic-string expression for conditional visibility (`@Column@=value` syntax). Set `null` to omit. |
+| `displayLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional visibility, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to hide a field only on the CREATE form (shown again once persisted; the double negation is deliberate — `evalDisplayLogic` treats a truthy result as "show", so "hidden until saved" needs `!!record.id`, not the single-negation `!record.id`, which would do the opposite). Compiles into the same generated `displayLogic: (record) => …` function property `EntityForm.jsx`'s `evalDisplayLogic` reads to filter `displayFields` — a field failing this check is removed from the rendered form entirely, not merely disabled. Real examples: `assets`/`asset-group`'s several fields gated on `"record.depreciate === true \|\| record.depreciate === 'Y'"`, and `user`'s `password` (ETP-4830, `"!!record.id"` — hidden on the create form now that admin-typed passwords no longer bypass the invite-email flow, shown again once the user record is saved so an existing user's password can still be reset). |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |
 | `agentPrompt` | string | `null` | Per-field guidance for AI agents. Carried into the curated field and persisted to `ETGO_SF_FIELD.AGENT_PROMPT`, from where `neo_schema` returns it inside each field object. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
 
@@ -1357,6 +1362,34 @@ Rule keys use **extended names** (including trigger column suffix for multi-trig
   }
 }
 ```
+
+**What it does (ETP-4793).** The entity is dropped from the curated schema, and so
+from `contract.json`. Both write paths then close it in NEO:
+
+| Row | Column | Value |
+|---|---|---|
+| `ETGO_SF_ENTITY` (the excluded entity) | `ISINCLUDED` | `N` |
+| `ETGO_SF_FIELD` (every field of it) | `ISINCLUDED` | `N` |
+
+`ISINCLUDED = 'N'` on the entity is what actually removes it from the served
+surface — every REST and MCP reader filters on it before resolving an entity, so
+neither `GET /{entity}` nor an MCP `neo_list` can reach it. The field rows are
+closed too: it is redundant for behaviour, but a closed entity whose 15 field rows
+still claim `ISINCLUDED = 'Y'` misreports the size of the agent surface, which is
+exactly how the gap went unnoticed for 90 entities / 386 fields.
+
+Two deliberate non-changes:
+
+- **The six HTTP method flags are left at the window default, not zeroed.** They
+  are unreachable once the entity is closed, and an all-`N` set would break the
+  "GET and GETBYID are always granted" invariant that `cli/src/lib/entity-methods.js`
+  enforces. Leaving them alone also keeps the XML diff to one column per entity.
+- **`VISIBILITY` is not written on the closed field rows.** The offline XML delta
+  does not model that column, and NULL beside `ISINCLUDED='N'` / `ISREADONLY='N'`
+  is already the pair `mapVisibility('discarded')` produces.
+
+Excluding an entity changes `ETGO_SF_*`, so it needs a re-push and an export:
+`make regen ONLY=<window> PUSH_TO_NEO=1` then `./gradlew export.database`.
 
 ### Custom NeoHandler for an entity
 ```json

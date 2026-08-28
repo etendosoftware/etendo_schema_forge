@@ -112,6 +112,22 @@ vi.mock('@/components/ui/select', () => {
 // the props SifTab wires (entityName / selectorUrl / value / displayValue) as data
 // attributes, plus a trigger button that fires the two-arg onChange(id, label) the
 // FK pair relies on — so a test can assert the two resulting onChange calls.
+// ETP-4888: the SII/Verifactu/TBAI panels each embed a reusable "Adjuntos" section that
+// points the generic attachments endpoints at a fiscal sub-record id. SifTab's own tests
+// only care about the WIRING (which tableName/recordId each panel passes down) — the
+// section's internal list/download behavior is covered by SifAttachmentsSection's own
+// test suite — so it's stubbed out here to a simple marker exposing its props as data
+// attributes.
+vi.mock('@/windows/custom/shared/SifAttachmentsSection.jsx', () => ({
+  default: ({ tableName, recordId }) => (
+    <div
+      data-testid="mock-sif-attachments-section"
+      data-table-name={tableName}
+      data-record-id={recordId ?? ''}
+    />
+  ),
+}));
+
 vi.mock('@/components/contract-ui/SelectorInput.jsx', () => ({
   SelectorInput: ({ entityName, selectorUrl, value, displayValue, onChange }) => (
     <div
@@ -261,19 +277,19 @@ describe('SifTab', () => {
 
     it('shows the authorization checkbox', () => {
       render(<SifTab {...makeProps()} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toBeInTheDocument();
     });
 
     it('checkbox reflects unchecked state initially', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: false } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toHaveAttribute('aria-checked', 'false');
     });
 
     it('checkbox reflects checked state when field is true', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: true } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toHaveAttribute('aria-checked', 'true');
     });
 
@@ -284,20 +300,20 @@ describe('SifTab', () => {
     it('calls onChange with the toggled value when the checkbox is clicked', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIsauthorization: false }, onChange })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       fireEvent.click(checkbox);
       expect(onChange).toHaveBeenCalledWith('aeatsiiIsauthorization', true);
     });
 
     it('SII fields disabled when invoice has been sent to SII', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIssent: 'Y' } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).toBeDisabled();
     });
 
     it('SII fields enabled when invoice has NOT been sent to SII', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiIssent: false } })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       expect(checkbox).not.toBeDisabled();
     });
 
@@ -309,6 +325,22 @@ describe('SifTab', () => {
     it('shows default pending badge when estado is missing', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'CO' } })} />);
       expect(screen.getByText('sifDataTabs.status.sii.pending')).toBeInTheDocument();
+    });
+
+    // ETP-4888: the SII panel's Adjuntos section is wired to the invoice's
+    // aeatsii_facturas sub-record id, stamped on the header by the backend NeoHandler.
+    it('renders the Adjuntos section wired to aeatsii_facturas / aeatsiiFacturaId', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', aeatsiiFacturaId: 'sii-sub-001' } })} />);
+      const section = screen.getByTestId('mock-sif-attachments-section');
+      expect(section).toHaveAttribute('data-table-name', 'aeatsii_facturas');
+      expect(section).toHaveAttribute('data-record-id', 'sii-sub-001');
+    });
+
+    it('renders the Adjuntos section with an empty recordId when aeatsiiFacturaId is absent', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
+      const section = screen.getByTestId('mock-sif-attachments-section');
+      expect(section).toHaveAttribute('data-table-name', 'aeatsii_facturas');
+      expect(section).toHaveAttribute('data-record-id', '');
     });
   });
 
@@ -538,48 +570,53 @@ describe('SifTab', () => {
     });
   });
 
-  // ── TBAI removed ────────────────────────────────────────────────────────────
-  // The TBAI tab/section was removed from SifTab (ETP-4401): the chaining
-  // sequence is now configured automatically by TbaiConfigSequenceHandler, so
-  // per-invoice TBAI fields no longer need a UI surface here. SII and
-  // Verifactu are unaffected. The 'tbai' fiscal-config profile still exists
-  // (used elsewhere, e.g. SifDataTabs), but SifTab no longer renders anything
-  // for it — it falls through to the empty state.
+  // ── TBAI: minimal Adjuntos-only rail (ETP-4888) ─────────────────────────────
+  // ETP-4401 removed the full TBAI field panel (Chain Sequence, Invoice Series, Invoice
+  // Sequence) from SifTab because chaining sequences are now generated automatically per
+  // fiscal configuration — that removal still holds, and this suite guards it never comes
+  // back. ETP-4888 reintroduces a DIFFERENT, much smaller TBAI rail whose only content is
+  // the "Adjuntos" section for the invoice's tbai_syncinvoice sub-record (the XML/response
+  // attachments the classic Attachments tab can never reach, since they hang off that
+  // sub-record rather than off C_Invoice). SII and Verifactu are unaffected either way.
 
-  describe('TBAI removed from SifTab (tbai profile, sales-invoice)', () => {
+  describe('TBAI: minimal Adjuntos-only rail (tbai profile, sales-invoice) — ETP-4888', () => {
     beforeEach(() => {
       mockFiscalConfig('tbai');
     });
 
-    it('never renders a TBAI rail button', () => {
+    it('renders a TBAI rail button', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
+      expect(screen.getByText('sifDataTabs.tab.tbai')).toBeInTheDocument();
     });
 
-    it('never renders the TBAI panel title', () => {
+    it('renders the TBAI panel title and defaults to it as the only active target', () => {
       render(<SifTab {...makeProps()} />);
-      expect(screen.queryByText('sifDataTabs.panel.tbai.title')).not.toBeInTheDocument();
+      expect(screen.getByText('sifDataTabs.panel.tbai.title')).toBeInTheDocument();
     });
 
-    it('never renders the TBAI read-only fields', () => {
+    it('renders the Adjuntos section wired to tbai_syncinvoice / tbaiSyncInvoiceId', () => {
+      render(<SifTab {...makeProps({ data: { tbaiSyncInvoiceId: 'tbai-sub-001' } })} />);
+      const section = screen.getByTestId('mock-sif-attachments-section');
+      expect(section).toHaveAttribute('data-table-name', 'tbai_syncinvoice');
+      expect(section).toHaveAttribute('data-record-id', 'tbai-sub-001');
+    });
+
+    // ETP-4401 regression guard: the full per-invoice TBAI field panel (Chain Sequence,
+    // Invoice Series, Invoice Sequence) must NOT come back — only the Adjuntos section.
+    it('never renders the removed TBAI read-only fields (ETP-4401)', () => {
       render(<SifTab {...makeProps({ data: { tbaiSequence: 'SEQ1', tbaiInvoicenum: 'SER1', tbaiInvoiceseq: 'INV1' } })} />);
       expect(screen.queryByTestId('input-sif-tbaiSeq')).not.toBeInTheDocument();
       expect(screen.queryByTestId('input-sif-tbaiSerie')).not.toBeInTheDocument();
       expect(screen.queryByTestId('input-sif-tbaiInvSeq')).not.toBeInTheDocument();
     });
 
-    it('never renders the TBAI badge, sent or not', () => {
+    it('never renders a TBAI status badge (ETP-4401 — no per-invoice status field exists here)', () => {
       render(<SifTab {...makeProps({ data: { tbaiIssent: 'Y' } })} />);
       expect(screen.queryByText('sifDataTabs.status.tbai.sent')).not.toBeInTheDocument();
       expect(screen.queryByText('sifDataTabs.status.tbai.notSent')).not.toBeInTheDocument();
     });
 
-    it('falls through to the empty state since only TBAI targets the invoice', () => {
-      render(<SifTab {...makeProps()} />);
-      expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
-    });
-
-    it('does not show TBAI for purchase-invoice either (tbai profile)', () => {
+    it('does not show TBAI for purchase-invoice (TBAI is a sales-invoice-only target)', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
       expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
@@ -642,19 +679,33 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
     });
+
+    // ETP-4888: the Verifactu panel's Adjuntos section covers only the AEAT-response
+    // leg — the outbound-send leg already attaches directly to C_Invoice via the
+    // standard Attachments tab, so this is deliberately a DIFFERENT sub-record/id
+    // than the SII one above.
+    it('renders the Adjuntos section wired to etvfac_c_invoice_verifactu / invoiceVerifactuId', () => {
+      render(<SifTab {...makeProps({ data: { invoiceVerifactuId: 'vf-sub-001' } })} />);
+      const section = screen.getByTestId('mock-sif-attachments-section');
+      expect(section).toHaveAttribute('data-table-name', 'etvfac_c_invoice_verifactu');
+      expect(section).toHaveAttribute('data-record-id', 'vf-sub-001');
+    });
   });
 
-  // ── sii+tbai profile — TBAI half removed ────────────────────────────────────
+  // ── sii+tbai profile ─────────────────────────────────────────────────────────
+  // ETP-4888: the combined profile now shows BOTH rails for a sales invoice — SII with
+  // its full field panel, and TBAI with its minimal Adjuntos-only panel. Purchase invoices
+  // never get TBAI (fiscalTargets.js gates it to sales only), so they still show SII alone.
 
   describe('sii+tbai profile (sales-invoice)', () => {
     beforeEach(() => {
       mockFiscalConfig('sii+tbai');
     });
 
-    it('renders only the SII rail button (TBAI removed)', () => {
+    it('renders both the SII and TBAI rail buttons', () => {
       render(<SifTab {...makeProps()} />);
       expect(screen.getByText('sifDataTabs.tab.sii')).toBeInTheDocument();
-      expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
+      expect(screen.getByText('sifDataTabs.tab.tbai')).toBeInTheDocument();
     });
 
     it('defaults to the SII panel', () => {
@@ -667,7 +718,7 @@ describe('SifTab', () => {
       expect(screen.queryByText('sifDataTabs.tab.verifactu')).not.toBeInTheDocument();
     });
 
-    it('shows only SII rail for purchase-invoice (no TBAI)', () => {
+    it('shows only the SII rail for purchase-invoice (TBAI is sales-invoice-only)', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.getByText('sifDataTabs.tab.sii')).toBeInTheDocument();
       expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
@@ -712,7 +763,7 @@ describe('SifTab', () => {
     it('checkbox click calls onChange with the field key regardless of apiBaseUrl-derived specName', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/sales-invoice', data: { documentStatus: 'DR', aeatsiiIsauthorization: false }, onChange })} />);
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
       fireEvent.click(checkbox);
       expect(onChange).toHaveBeenCalledWith('aeatsiiIsauthorization', true);
     });
@@ -843,28 +894,30 @@ describe('SifTab', () => {
   describe('Verifactu conditional fields visibility matrix', () => {
     const SIMPLIFIED_LABEL = 'sifDataTabs.field.simplifiedInvoiceArt7273';
     const NO_RECIPIENT_LABEL = 'sifDataTabs.field.noRecipientIdArt61d';
-    const REVERSE_LABEL = 'sifDataTabs.field.correctiveInvoiceType';
+    // ETP-4783: correctiveInvoiceType (etvfacReverseinvtype) is no longer shown in
+    // the UI — it is always saved as 'I' automatically via useSifFieldPatcher.
 
     beforeEach(() => {
       mockFiscalConfig('verifactu');
     });
 
     it.each([
-      // invType,   simplified(art7273), noRecipient(art61d), reverse(correctiveType)
-      [undefined, true, false, false],
-      ['F1', true, false, false],
-      ['F2', false, true, false],
-      ['F3', true, false, false],
-      ['R1', true, false, true],
-      ['R2', true, false, true],
-      ['R3', true, false, true],
-      ['R4', true, false, true],
-      ['R5', false, true, true],
-    ])('invType=%s → simplified=%s noRecipient=%s reverse=%s', (invType, simplified, noRecipient, reverse) => {
+      // invType,   simplified(art7273), noRecipient(art61d)
+      [undefined, true, false],
+      ['F1', true, false],
+      ['F2', false, true],
+      ['F3', true, false],
+      ['R1', true, false],
+      ['R2', true, false],
+      ['R3', true, false],
+      ['R4', true, false],
+      ['R5', false, true],
+    ])('invType=%s → simplified=%s noRecipient=%s', (invType, simplified, noRecipient) => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: invType } })} />);
       expect(Boolean(screen.queryByText(SIMPLIFIED_LABEL))).toBe(simplified);
       expect(Boolean(screen.queryByText(NO_RECIPIENT_LABEL))).toBe(noRecipient);
-      expect(Boolean(screen.queryByText(REVERSE_LABEL))).toBe(reverse);
+      // correctiveInvoiceType is always hidden from the UI (ETP-4783)
+      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
     });
 
     it('simplified and noRecipient are mutually exclusive for every invType', () => {
@@ -890,23 +943,8 @@ describe('SifTab', () => {
       mockFiscalConfig('verifactu');
     });
 
-    it('shows the corrective invoice type field immediately after selecting R2', () => {
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } });
-      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByTestId('mock-select-option-R2'));
-
-      expect(screen.getByText('sifDataTabs.field.correctiveInvoiceType')).toBeInTheDocument();
-    });
-
-    it('hides the corrective invoice type field again after switching to F1', () => {
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } });
-      expect(screen.getByText('sifDataTabs.field.correctiveInvoiceType')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByTestId('mock-select-option-F1'));
-
-      expect(screen.queryByText('sifDataTabs.field.correctiveInvoiceType')).not.toBeInTheDocument();
-    });
+    // ETP-4783: correctiveInvoiceType is no longer shown in the UI — it is
+    // always saved as 'I' automatically. See useSifFieldPatcher auto-set tests.
 
     it('flips simplified/noRecipient live when switching from F1 to R5', () => {
       renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'F1' } });
@@ -919,12 +957,8 @@ describe('SifTab', () => {
       expect(screen.getByText('sifDataTabs.field.noRecipientIdArt61d')).toBeInTheDocument();
     });
 
-    it('calls onChange with etvfacReverseinvtype when changed via its select', () => {
-      const onChange = vi.fn();
-      renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } }, onChange);
-      fireEvent.click(screen.getByTestId('mock-select-option-S'));
-      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'S');
-    });
+    // ETP-4783: etvfacReverseinvtype is auto-set to 'I' via useSifFieldPatcher
+    // when invType is R1-R5 — no UI select needed. Tested in useSifFieldPatcher tests.
   });
 
   // ── onChange wiring for every editable SIF field (ETP-4463) ────────────────
@@ -972,12 +1006,8 @@ describe('SifTab', () => {
       expect(onChange).toHaveBeenCalledWith('etvfacInvNoIDArt61d', true);
     });
 
-    it('etvfacReverseinvtype calls onChange when a select option is picked', () => {
-      const onChange = vi.fn();
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'R2' }, onChange })} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-I'));
-      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
-    });
+    // ETP-4783: etvfacReverseinvtype has no UI select — it is auto-set to 'I'
+    // via useSifFieldPatcher when invType is R1-R5.
   });
 
   // ── etvfacInvType auto-default effect (ETP-4390) ────────────────────────────
@@ -1040,17 +1070,8 @@ describe('SifTab', () => {
       expect(screen.getByRole('checkbox')).not.toBeDisabled();
     });
 
-    it('etvfacReverseinvtype select is disabled for completed (R2 branch)', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', etvfacInvType: 'R2' } })} />);
-      const wrapper = document.querySelector('#sif-vfReverseType').closest('[data-testid="select-wrapper"]');
-      expect(wrapper).toHaveAttribute('data-disabled', 'true');
-    });
-
-    it('etvfacReverseinvtype select is enabled for draft (R2 branch)', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } })} />);
-      const wrapper = document.querySelector('#sif-vfReverseType').closest('[data-testid="select-wrapper"]');
-      expect(wrapper).toHaveAttribute('data-disabled', 'false');
-    });
+    // ETP-4783: etvfacReverseinvtype select removed from UI — no disabled/enabled
+    // check needed. The field is always saved as 'I' via useSifFieldPatcher.
   });
 
   // ── edge cases ──────────────────────────────────────────────────────────────
@@ -1075,14 +1096,15 @@ describe('SifTab', () => {
     // ETP-4390: the field this test originally exercised (sif-vfDate /
     // etvfacDateIssue) was removed from the Verifactu panel. The em-dash
     // placeholder behavior it targets lives in the shared ReadOnlyValue helper
-    // and is still exercised in production by the SII panel's read-only fields
-    // (e.g. sif-siiYear), so repoint the test there instead of dropping the
-    // coverage.
+    // and is exercised via the ExemptionCauseField when rendered as read-only
+    // (aeatsiiCauseExemption$_identifier undefined → '—' placeholder).
+    // ETP-4783: redirected again from sif-siiYear (removed from SII panel)
+    // to sif-exemption (visible when hasExemptTaxes is falsy — always read-only).
     it('ReadOnlyValue shows em-dash placeholder when value is null/undefined', () => {
       mockFiscalConfig('sii');
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiEjercicio: undefined } })} />);
-      const yearInput = screen.getByTestId('input-sif-siiYear');
-      expect(yearInput).toHaveValue('—');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
+      const exemptionInput = screen.getByTestId('input-sif-exemption');
+      expect(exemptionInput).toHaveValue('—');
     });
   });
 
@@ -1092,7 +1114,7 @@ describe('SifTab', () => {
   // tab button itself should stay in the tab bar. See DetailView.jsx customTabVisibility.
 
   describe('onVisibilityChange callback', () => {
-    it('calls onVisibilityChange(false) when neither SII nor Verifactu applies (TBAI-only/unconfigured)', () => {
+    it('calls onVisibilityChange(false) when no fiscal target applies (unconfigured)', () => {
       mockFiscalConfig('unconfigured');
       const onVisibilityChange = vi.fn();
       render(<SifTab {...makeProps({ onVisibilityChange })} />);
@@ -1100,11 +1122,14 @@ describe('SifTab', () => {
       expect(onVisibilityChange).not.toHaveBeenCalledWith(true);
     });
 
-    it('calls onVisibilityChange(false) for a TBAI-only profile (TBAI removed from SifTab)', () => {
+    // ETP-4888: a TBAI-only profile now HAS something to show — the minimal
+    // Adjuntos-only rail — so the tab must stay visible instead of collapsing.
+    it('calls onVisibilityChange(true) for a TBAI-only profile (ETP-4888 minimal rail)', () => {
       mockFiscalConfig('tbai');
       const onVisibilityChange = vi.fn();
       render(<SifTab {...makeProps({ onVisibilityChange })} />);
-      expect(onVisibilityChange).toHaveBeenCalledWith(false);
+      expect(onVisibilityChange).toHaveBeenCalledWith(true);
+      expect(onVisibilityChange).not.toHaveBeenCalledWith(false);
     });
 
     it('calls onVisibilityChange(true) when SII applies', () => {

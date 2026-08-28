@@ -10,6 +10,10 @@
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
     "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
+    "lineTaxSifTrigger": {
+      "enabled": true,
+      "_note": "ETP-4888 point 5 follow-up round. NOT yet wired through generate-frontend.js (that generator lives in schema_forge_core, out of reach from this repo) — consumed directly by this window's hand-written index.jsx via a local LINE_TAX_SIF_TRIGGER_ENABLED constant, so flipping this value alone does nothing today; the index.jsx constant must be edited by hand too, in sync. See docs/decisions-reference.md's lineTaxSifTrigger row and docs/ui-customization.md §14e for the full mechanism. Follow-up: wire this through generate-frontend.js once convenient (per Alex's review)."
+    },
     "menuActions": [
       {
         "key": "reactivate",
@@ -157,13 +161,14 @@
           "visibility": "system"
         },
         "invoiceAddress": {
+          "visibility": "system",
           "reference": "BusinessPartnerLocation",
           "dependsOn": {
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
           "section": "other",
-          "visibility": "discarded"
+          "agentPrompt": "Invoice (bill-to) address of the order, AD column BillTo_ID. It is mandatory on a sales order: a create call that omits it is rejected. The value is a business partner location belonging to the order's businessPartner and flagged as the bill-to address. Do not assume it equals partnerAddress, which is the ship-to location; the two coincide only when the partner has a single location. In the UI the SE_Order_BPartner callout fills this automatically when the business partner is picked, but an agent gets no callout, so resolve the location yourself — query this field's selector filtered by C_BPartner_ID with the chosen business partner and send the resulting location id."
         },
         "project": {
           "visibility": "discarded"

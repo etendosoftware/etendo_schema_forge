@@ -4,7 +4,7 @@ import {
   MOVEMENT_TEMPLATE_OPEN, MOVEMENT_TEMPLATE_HEADER, MOVEMENT_TEMPLATE_PARTIES,
   MOVEMENT_TEMPLATE_SIGNATURE, MOVEMENT_TEMPLATE_NOTES, MOVEMENT_TEMPLATE_FOOTER,
   fetchJson, fetchAll, fetchOptionalJson, fetchLocationAddress, fetchImageDataUrl,
-  buildLocationAddressLines, renderPdf, usePdfGenerator,
+  buildLocationAddressLines, renderPdf, renderHtml, usePdfGenerator,
 } from '../shared/pdfUtils.js';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 // ---------------------------------------------------------------------------
 // Build shipment data for the template
 // ---------------------------------------------------------------------------
-async function buildShipmentData(shipmentId, base, token) {
+export async function buildShipmentData(shipmentId, base, token) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/goods-shipment/goodsShipment/${shipmentId}`, token),
     fetchAll(`${base}/goods-shipment/goodsShipmentLine?parentId=${shipmentId}&_startRow=0&_endRow=200`, token),
@@ -127,16 +127,17 @@ async function buildShipmentData(shipmentId, base, token) {
  * @param {string|null} shipmentId — the shipment record ID
  * @param {string}      apiBaseUrl — e.g. "/sws/neo/goods-shipment"
  * @param {string}      token      — Bearer token
+ * @param {Object}      [cacheConfig] — see usePdfGenerator's cacheConfig doc (pdfUtils.js)
  * @returns {{ pdfUrl, pdfBlob, loading, error }}
  */
-export function useShipmentPdf(shipmentId, apiBaseUrl, token) {
+export function useShipmentPdf(shipmentId, apiBaseUrl, token, cacheConfig = null) {
   const ui = useUI();
   return usePdfGenerator(shipmentId, apiBaseUrl, token, (id, base, tok) => {
     const labels = getShipmentPdfLabels(ui);
     return buildShipmentData(id, base, tok).then((data) =>
       renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels }),
     );
-  });
+  }, cacheConfig);
 }
 
 export function getShipmentPdfLabels(ui) {
@@ -165,4 +166,11 @@ export async function generateShipmentPdf(shipmentId, apiBaseUrl, token, labels)
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const data = await buildShipmentData(shipmentId, base, token);
   return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+}
+
+/** HTML twin of generateShipmentPdf, for the list view's multi-document print. */
+export async function generateShipmentHtml(recordId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildShipmentData(recordId, base, token);
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
 }

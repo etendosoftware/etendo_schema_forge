@@ -12,8 +12,12 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
+// uiMock is a vi.fn() (not a plain arrow) so a single test below can override its
+// implementation to prove the ETP-4891 translateBackendError wiring on the sync-result toast,
+// while every other test keeps the default key-echoing behavior.
+const uiMock = vi.fn((key) => key);
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => uiMock,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
@@ -68,6 +72,8 @@ vi.mock('@/hooks/useFinancialAccountAccounting.js', () => ({
 const hasCapability = vi.fn(() => true);
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useHasCapability: (key) => hasCapability(key),
+  // ETP-4896: the Country field's CreatableSearchSelect reads the token directly.
+  useAuth: () => ({ token: 'test-token' }),
 }));
 
 // ETP-4795: the GL Item Difference selector (General tab, every account type) is a ChipSelect
@@ -79,12 +85,18 @@ vi.mock('@/hooks/useMovementLookups.js', () => ({
 
 import { EditAccountModal, initialEditTab, isDeleteMode } from '../EditAccountModal.jsx';
 
+// `countryIso: 'ES'` (the STORED country) makes this account eligible for the Salt Edge
+// connection, which is Spain-only since ETP-4896 — see saltEdgeEligibility.js. `countryId` is
+// deliberately absent: it is what the FORM binds to, and leaving it unset keeps this fixture
+// usable for the "legacy row with no country" cases. The two are independent axes here.
 const BANK_ACCOUNT = {
   id: 'acc-1',
   name: 'BBVA',
   type: 'B',
   iban: 'ES9121000418450200051332',
+  swiftCode: 'BBVAESMM',
   currencyId: '102',
+  countryIso: 'ES',
   bankConnected: false,
 };
 
@@ -151,6 +163,8 @@ describe('EditAccountModal', () => {
       statementGrouping: '1BD',
     });
     sync.mockResolvedValue({ status: 'OK', message: 'done' });
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
     saveImportSettings.mockResolvedValue({});
     disconnect.mockResolvedValue({});
     // Reset the accounting-config fetch/save back to the neutral default before every test so
@@ -264,13 +278,13 @@ describe('EditAccountModal', () => {
   });
 
   describe('connected account', () => {
-    it('renders the bank connection panel (sync, read-only IBAN/Currency) and no Connect button', async () => {
+    it('renders the bank connection panel (sync, editable IBAN, read-only Currency) and no Connect button', async () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await waitFor(() => expect(fetchStatus).toHaveBeenCalledWith('acc-9'));
       expect(await screen.findByTestId('bank-connection-edit-sync')).toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-connect-bank')).not.toBeInTheDocument();
-      // IBAN/Currency are read-only when connected.
-      expect(screen.queryByTestId('edit-account-iban')).not.toBeInTheDocument();
+      // IBAN is editable even while connected (ETP-4896 follow-up); Currency stays read-only.
+      expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument();
     });
 
@@ -298,6 +312,26 @@ describe('EditAccountModal', () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await user.click(await screen.findByTestId('bank-connection-edit-sync'));
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
+    });
+
+    // ETP-4891 follow-up: com.etendoerp.psd2's AD_MESSAGE for this toast has no real es_ES
+    // translation (Core resolves the same English text regardless of session locale — see
+    // backendErrors.js), so the raw sync-result message must be run through translateBackendError
+    // before it reaches the toast, not passed straight through like an unmapped string.
+    it('translates the "No new transactions found" sync toast instead of showing the raw English', async () => {
+      uiMock.mockImplementation((key, params) => (key === 'backendError.noNewTransactionsForAccount'
+        ? `No se encontraron movimientos nuevos para la cuenta: ${params.account}.`
+        : key));
+      const user = userEvent.setup();
+      sync.mockResolvedValue({
+        status: 'WARNING',
+        message: 'No new transactions found for the account: Cuenta pais españa .',
+      });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await user.click(await screen.findByTestId('bank-connection-edit-sync'));
+      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith(
+        'No se encontraron movimientos nuevos para la cuenta: Cuenta pais españa.',
+      ));
     });
 
     it('maps a BANK_CONNECTION_TIMEOUT sync failure to the timeout label', async () => {
@@ -590,11 +624,11 @@ describe('EditAccountModal', () => {
     // The account is still bound to one Salt Edge account, so the fields the bank owns must stay
     // locked. Editing the currency here and then reconnecting would silently desync the account
     // from the bank account it re-binds to (the link filters the bank's accounts by currency).
-    it('keeps the bank-owned fields locked while deactivated', async () => {
+    it('keeps Type/Currency locked while deactivated (IBAN is editable, ETP-4896 follow-up)', async () => {
       renderModal({ account: DEACTIVATED_ACCOUNT });
       await screen.findByTestId('edit-account-reconnect-bank');
 
-      expect(screen.queryByTestId('edit-account-iban')).toBeNull();
+      expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-type')).toBeNull();
       expect(screen.queryByTestId('edit-account-currency')).toBeNull();
     });
@@ -1141,10 +1175,25 @@ describe('EditAccountModal', () => {
   describe('General tab: cash accounts see only the GL Item Difference section (ETP-4795)', () => {
     const CASH_ACCOUNT = { id: 'acc-cash', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false };
 
-    it('still renders the General tab trigger for a cash account, defaulting to Accounting', () => {
+    it('renders the General tab trigger for a cash account and lands on it', () => {
       renderModal({ account: CASH_ACCOUNT });
       expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
-      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('drops the section top margin for cash, where it is the tab\'s first section', () => {
+      // mt-6 separates a section from the one above it. For cash the two preceding sections are
+      // skipped, so that margin landed directly under the tab row and stacked with its pt-4 —
+      // visibly more space than the Accounting tab, whose only section carries no top margin.
+      renderModal({ account: CASH_ACCOUNT });
+      expect(screen.getByTestId('gl-item-difference-section').className).not.toContain('mt-6');
+    });
+
+    it('keeps the section top margin for a bank account, where sections precede it', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      expect(screen.getByTestId('gl-item-difference-section').className).toContain('mt-6');
     });
 
     it('shows the GL Item Difference section but not bank connection/tolerances for cash', async () => {
@@ -1163,19 +1212,24 @@ describe('EditAccountModal', () => {
       expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
     });
 
-    // Review fix (PR #913): editTab used to initialize to a fixed EDIT_TAB_GENERAL and rely
-    // entirely on the reset useEffect above to correct it for cash accounts — meaning the very
-    // FIRST render (before that effect flushes) had no active trigger and no visible content.
-    // React Testing Library's render() flushes effects synchronously, so a render-based test
-    // can't observe that first-paint gap; initialEditTab is exported specifically so the FIRST
-    // render's own computation (the useState lazy initializer) can be verified directly,
-    // independent of the reset effect.
-    it('initialEditTab computes the same tab the reset effect would — cash starts on Contabilidad', () => {
-      expect(initialEditTab(true)).toBe('accounting');
+    // initialEditTab is exported so the FIRST render's own computation (the useState lazy
+    // initializer) can be verified directly, independent of the reset effect. React Testing
+    // Library's render() flushes effects synchronously, so a render-based test cannot tell the two
+    // apart, and they must agree: initializing to one tab and letting the effect correct it leaves
+    // the very first paint with no active trigger and no visible content (PR #913).
+    it('initialEditTab is General for every account type', () => {
+      expect(initialEditTab()).toBe('general');
+      // Tolerates the old isCash argument, which it now ignores.
+      expect(initialEditTab(true)).toBe('general');
       expect(initialEditTab(false)).toBe('general');
     });
 
-    it('defaults straight to Contabilidad when reopened for a cash account after a bank account', () => {
+    it('opens a cash account on General, not on Contabilidad', () => {
+      // Cash used to land on Contabilidad. ETP-4795 gave General real content for cash (the GL
+      // Item Difference selector), and landing on Contabilidad put the required, empty "Cuenta
+      // bancaria" field in the user's face with Save disabled — which reads as an error the modal
+      // is reporting rather than a starting point. The missing-asset-account summary already
+      // surfaces that on General without hijacking the tab (ETP-4530 / BUG-1, below).
       const { rerender } = renderModal();
       expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
 
@@ -1190,10 +1244,8 @@ describe('EditAccountModal', () => {
         />,
       );
 
-      // ETP-4795: General still renders for cash (it carries the GL Item Difference selector),
-      // but Accounting remains the tab a cash account lands on.
-      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'false');
-      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+      expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'false');
     });
   });
 
@@ -1322,14 +1374,15 @@ describe('EditAccountModal', () => {
       expect(nameInput).toHaveValue('Renamed with movements');
     });
 
-    it('keeps the bank-connected IBAN as a read-only ReadField with a copy button (unchanged)', async () => {
+    it('keeps the bank-connected IBAN copyable, and now also editable (ETP-4896 follow-up)', async () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await screen.findByTestId('bank-connection-edit-sync');
-      // IBAN stays a copyable ReadField (grey box with copy control), not a plain InfoField…
+      // The copy button survives the switch to an editable input — see EditAccountModal's own
+      // doc comment on why: locking IBAN once linked made an inconsistent (IBAN, country) pair
+      // on an already-linked account unfixable from this modal.
       expect(screen.getByLabelText('financeAccountsCopyIban')).toBeInTheDocument();
-      // …and never becomes an editable input.
-      expect(screen.queryByTestId('edit-account-iban')).not.toBeInTheDocument();
-      // Type/Currency, by contrast, are locked (connected) → no editable controls.
+      expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
+      // Type/Currency, by contrast, stay locked (connected) → no editable controls.
       expect(screen.queryByTestId('edit-account-type')).not.toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument();
     });
@@ -1485,4 +1538,291 @@ describe('EditAccountModal', () => {
       expect(screen.getByTestId('gl-item-difference-section')).toBeInTheDocument();
     });
   });
+
+  // ── ETP-4896: Country field ────────────────────────────────────────────────
+  // Country is always editable — never locked the way Type/Currency are — and its picker is a
+  // CreatableSearchSelect over the live C_Country_ID selector, so these tests mock `global.fetch`
+  // the same way CreatableSearchSelect-serverSearch.vitest.jsx does for that component directly.
+  describe('country field (ETP-4896)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function mockCountrySelectorFetch(items) {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items }) });
+    }
+
+    it('renders Country as a pre-filled, editable chip', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, countryId: '106', countryName: 'Spain' } });
+      expect(screen.getByTestId('field-edit-account-country-chip')).toHaveTextContent('Spain');
+    });
+
+    it('keeps Country in the editable grid even when Type/Currency have locked into header info', () => {
+      // hasTransactions locks Type/Currency (ETP-4581) — Country must not follow them there.
+      renderModal({
+        account: { ...BANK_ACCOUNT, countryId: '106', countryName: 'Spain', hasTransactions: true },
+      });
+      expect(screen.getByTestId('edit-account-type-info')).toBeInTheDocument();
+      expect(screen.getByTestId('field-edit-account-country-chip')).toHaveTextContent('Spain');
+    });
+
+    it('enables Save on a country-only change and sends updateAccount with only { countryId }', async () => {
+      const user = userEvent.setup();
+      mockCountrySelectorFetch([{ id: '107', label: 'Italy' }]);
+      // No IBAN, so switching country has nothing to cross-check — isolates the country-only path.
+      renderModal({ account: { ...BANK_ACCOUNT, iban: '', countryId: '106', countryName: 'Spain' } });
+
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      await user.click(screen.getByTestId('field-edit-account-country-chip'));
+      await user.click(await screen.findByTestId('option-edit-account-country-107'));
+
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount).toHaveBeenCalledWith('acc-1', { countryId: '107' });
+    });
+
+    it('blocks Save with a country-mismatch message when the picked country does not match the stored IBAN', async () => {
+      const user = userEvent.setup();
+      mockCountrySelectorFetch([{ id: '107', label: 'Italy' }]);
+      fetchDefaults.mockResolvedValue({
+        currencies: [{ id: '102', iso: 'EUR' }],
+        countryIbanRules: [
+          { id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 },
+          { id: '107', iso: 'IT', name: 'Italy', ibanPrefix: 'IT', ibanLength: 27 },
+        ],
+      });
+      // BANK_ACCOUNT.iban is a real Spanish IBAN — consistent with countryId '106' at open.
+      renderModal({ account: { ...BANK_ACCOUNT, countryId: '106', countryName: 'Spain' } });
+
+      await user.click(screen.getByTestId('field-edit-account-country-chip'));
+      await user.click(await screen.findByTestId('option-edit-account-country-107'));
+
+      // Touching the IBAN field surfaces the (now recomputed) error, same gate as the plain
+      // invalid-IBAN case above (`ibanTouched`).
+      await user.click(screen.getByTestId('edit-account-iban'));
+      await user.tab();
+
+      expect(screen.getByTestId('edit-account-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanCountryMismatch');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+
+    // ETP-4896 QA follow-up: picking a country with NO IBAN metadata (the ~198 majority) is
+    // rejected by C_GET_IBAN_DISPLAYED_ACCOUNT, but the frontend used to let it through and the
+    // user got the backend's raw English "Argentina has no IBAN configuration…" toast.
+    it('blocks Save when the picked country has no IBAN configuration', async () => {
+      const user = userEvent.setup();
+      mockCountrySelectorFetch([{ id: 'ar', label: 'Argentina' }]);
+      fetchDefaults.mockResolvedValue({
+        currencies: [{ id: '102', iso: 'EUR' }],
+        // Argentina is deliberately NOT in the catalog — that IS the condition being tested.
+        countryIbanRules: [
+          { id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 },
+        ],
+      });
+      renderModal({ account: { ...BANK_ACCOUNT, countryId: '106', countryName: 'Spain' } });
+
+      await user.click(screen.getByTestId('field-edit-account-country-chip'));
+      await user.click(await screen.findByTestId('option-edit-account-country-ar'));
+
+      await user.click(screen.getByTestId('edit-account-iban'));
+      await user.tab();
+
+      expect(screen.getByTestId('edit-account-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanCountryNoConfig');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+
+    // The dirty guard: a legacy account already stored with an IBAN and a metadata-less country,
+    // opened to change something else, must not be blocked for a pair it did not touch — mirroring
+    // the backend's own no-op rule (no `country` key in the body means no re-validation).
+    it('does not block an untouched legacy account whose stored country has no IBAN config', async () => {
+      const user = userEvent.setup();
+      fetchDefaults.mockResolvedValue({
+        currencies: [{ id: '102', iso: 'EUR' }],
+        countryIbanRules: [
+          { id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 },
+        ],
+      });
+      renderModal({ account: { ...BANK_ACCOUNT, countryId: 'ar', countryName: 'Argentina' } });
+
+      await user.clear(screen.getByTestId('edit-account-name'));
+      await user.type(screen.getByTestId('edit-account-name'), 'Renamed');
+
+      expect(screen.queryByTestId('edit-account-iban-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    it('blocks Save with a translated error when Country is cleared on a bank-linked account with a stored IBAN (regression)', async () => {
+      const user = userEvent.setup();
+      // CONNECTED_ACCOUNT is bank-linked — IBAN is editable here too (ETP-4896 follow-up) but the
+      // user only touches Country, which alone flips `ibanInvalid`. This used to sail past every
+      // frontend check and land as the backend's raw, untranslated "A bank account with an IBAN
+      // must have a country." 400.
+      renderModal({ account: { ...CONNECTED_ACCOUNT, countryId: '106', countryName: 'Spain' } });
+
+      const chip = await screen.findByTestId('field-edit-account-country-chip');
+      await user.click(within(chip.parentElement).getByRole('button', { name: 'clear' }));
+
+      expect(await screen.findByTestId('edit-account-iban-error'))
+        .toHaveTextContent('financeAccountsNewCountryRequiredForIban');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      // The whole point is that this never reaches the backend.
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    // ETP-4896 Test Cases 5-7 — Salt Edge is contracted for Spain only. This modal is the surface
+    // that EXPLAINS the rule (the list row and row kebab just hide their connect affordance),
+    // because it is the one place where the Country field that decides it is on screen.
+    it('offers the connect button enabled for a Spanish account (Test Case 5)', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, countryIso: 'ES' } });
+
+      expect(screen.getByTestId('edit-account-connect-bank')).toBeEnabled();
+      expect(screen.queryByTestId('edit-account-connect-country-hint')).not.toBeInTheDocument();
+    });
+
+    it('disables the connect button and explains why for a non-Spanish account (Test Case 6)', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, countryIso: 'IT' } });
+
+      expect(screen.getByTestId('edit-account-connect-bank')).toBeDisabled();
+      expect(screen.getByTestId('edit-account-connect-country-hint'))
+        .toHaveTextContent('financeAccountsBankConnectionSpainOnly');
+    });
+
+    it('disables the connect button when the stored country is unknown', () => {
+      // Pre-ETP-4896 rows carry no country. Unknown is not implicitly Spain: offering the
+      // connection would only have Salt Edge reject it later.
+      const { countryIso, ...noCountry } = BANK_ACCOUNT;
+      renderModal({ account: noCountry });
+
+      expect(screen.getByTestId('edit-account-connect-bank')).toBeDisabled();
+    });
+
+    it('reflects a saved country change on the next open (Test Case 7)', () => {
+      // The rule keys off the STORED country, matching the acceptance criteria ("guarda el
+      // cambio"). Saving closes the modal and reloads the list, so reopening is what the user
+      // actually sees — modelled here as a rerender with the persisted account.
+      const { rerender } = renderModal({ account: { ...BANK_ACCOUNT, countryIso: 'ES' } });
+      expect(screen.getByTestId('edit-account-connect-bank')).toBeEnabled();
+
+      rerender(
+        <EditAccountModal
+          open
+          account={{ ...BANK_ACCOUNT, countryIso: 'FR' }}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onArchive={vi.fn()}
+          onConnect={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId('edit-account-connect-bank')).toBeDisabled();
+    });
+
+    it('lets the IBAN itself be edited and saved even while bank-connected (ETP-4896 follow-up)', async () => {
+      const user = userEvent.setup();
+      // No country selected, so only mod-97 applies — isolates "is the field actually editable
+      // and persisted" from the pair cross-check already covered by the tests above.
+      renderModal({ account: { ...CONNECTED_ACCOUNT, countryId: '', countryName: '' } });
+      const ibanInput = screen.getByTestId('edit-account-iban');
+      expect(ibanInput).toHaveValue(CONNECTED_ACCOUNT.iban);
+
+      await user.clear(ibanInput);
+      await user.type(ibanInput, 'IT60X0542811101000000123456');
+      await user.tab();
+
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount).toHaveBeenCalledWith('acc-9', { iban: 'IT60X0542811101000000123456' });
+    });
+
+    it('does not flag a legacy account whose country was already empty, when left untouched', async () => {
+      const user = userEvent.setup();
+      // BANK_ACCOUNT has a real IBAN and (by default) no countryId — a common pre-ETP-4896 state.
+      // Renaming it must not be blocked by a field the user never touched.
+      renderModal();
+      expect(screen.queryByTestId('edit-account-iban-error')).not.toBeInTheDocument();
+
+      await user.clear(screen.getByTestId('edit-account-name'));
+      await user.type(screen.getByTestId('edit-account-name'), 'BBVA Renamed');
+
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount).toHaveBeenCalledWith('acc-1', { name: 'BBVA Renamed' });
+    });
+  });
+  // ETP-4896 QA follow-up: BIC/SWIFT existed only on the New Account form, so it could not be
+  // maintained from here at all.
+  describe('BIC/SWIFT field', () => {
+    it('renders pre-filled from the account record on a bank account', () => {
+      renderModal();
+      expect(screen.getByTestId('edit-account-bic')).toHaveValue('BBVAESMM');
+    });
+
+    it('is absent on a cash account', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, type: 'C', iban: '', swiftCode: '' } });
+      expect(screen.queryByTestId('edit-account-bic')).not.toBeInTheDocument();
+    });
+
+    // Gated on isBankType, not !isCash — the contract's displayLogic is @Type@='B', and a card
+    // account has no BIC.
+    it('is absent on a card account', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, type: 'CA', iban: '', swiftCode: '' } });
+      expect(screen.queryByTestId('edit-account-bic')).not.toBeInTheDocument();
+    });
+
+    it('renders empty without crashing when the record carries no BIC', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, swiftCode: undefined } });
+      expect(screen.getByTestId('edit-account-bic')).toHaveValue('');
+    });
+
+    // Without swiftDirty in the `dirty` chain, Save would stay disabled here — the exact bug the
+    // reconciliation tolerances hit in ETP-4764.
+    it('enables Save on a BIC-only edit and sends it upper-cased', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      const bic = screen.getByTestId('edit-account-bic');
+      await user.clear(bic);
+      await user.type(bic, 'caixesbbxxx');
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      expect(updateAccount).toHaveBeenCalledTimes(1);
+      expect(updateAccount.mock.calls[0][1]).toEqual({ swiftCode: 'CAIXESBBXXX' });
+    });
+
+    // The detail-page path used to serve a record without swiftCode at all; an untouched field must
+    // never send the key, so the backend preserves the stored value.
+    it('omits swiftCode from the payload when the field is untouched', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.clear(screen.getByTestId('edit-account-name'));
+      await user.type(screen.getByTestId('edit-account-name'), 'Renamed');
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      expect(updateAccount).toHaveBeenCalledTimes(1);
+      expect(updateAccount.mock.calls[0][1]).not.toHaveProperty('swiftCode');
+    });
+
+    it('treats re-typing the stored BIC in a different case as not dirty', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      const bic = screen.getByTestId('edit-account-bic');
+      await user.clear(bic);
+      await user.type(bic, 'bbvaesmm');
+
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+  });
+
 });

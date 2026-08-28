@@ -99,7 +99,7 @@ global.fetch = async (url, options) => {
 
   if (ctx) {
     const urlStr = String(url);
-    if (urlStr.includes('/preview-file')) {
+    if (urlStr.includes('markAsMain=true')) {
       ctx.previewCacheAttempted = true;
     } else if (urlStr.includes('/email-contracts/')) {
       ctx.sendEmailAttempted = true;
@@ -112,7 +112,7 @@ global.fetch = async (url, options) => {
 
     if (ctx) {
       const urlStr = String(url);
-      if (urlStr.includes('/preview-file')) {
+      if (urlStr.includes('markAsMain=true')) {
         ctx.previewCacheStatus = res.status;
         ctx.previewCacheOk = res.ok;
       } else if (urlStr.includes('/email-contracts/')) {
@@ -129,7 +129,7 @@ global.fetch = async (url, options) => {
     if (timeoutId) clearTimeout(timeoutId);
     if (ctx) {
       const urlStr = String(url);
-      if (urlStr.includes('/preview-file')) {
+      if (urlStr.includes('markAsMain=true')) {
         ctx.previewCacheError = err;
       } else if (urlStr.includes('/email-contracts/')) {
         ctx.sendEmailError = err;

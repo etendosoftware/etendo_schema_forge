@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getContractGridColumns } from '../contractColumns.js';
+import { getContractGridColumns, getContractPanelFields } from '../contractColumns.js';
 
 // These assertions run against the REAL window contract
 // (artifacts/financial-account/contract.json): they pin the declarative
@@ -50,18 +50,19 @@ describe('getContractGridColumns', () => {
     ]);
   });
 
-  // `pendingCount` has no AD column behind it — the NeoHandler injects it in
-  // afterHandle — so it is declared as an `entities.account.virtualFields[]` entry
-  // in decisions.json. It reaches the contract like any other grid field, which is
-  // what lets AccountsHeaderTable stop hand-appending it as a column literal.
+  // `eTGOPendingCount` ("Por conciliar") is the EM_ETGO_Pending_Count stored computed
+  // column. It used to be an `entities.account.virtualFields[]` entry the NeoHandler
+  // injected in afterHandle; either way it reaches the contract like any other grid
+  // field, which is what lets AccountsHeaderTable stop hand-appending it as a literal.
   it('returns the account (Cuentas list) grid columns in order', () => {
     const cols = getContractGridColumns('account').map((c) => c.name);
-    expect(cols).toEqual(['name', 'type', 'currentBalance', 'pendingCount']);
+    // ETP-4896 follow-up: Country inserted right after Type (gridOrder 3).
+    expect(cols).toEqual(['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']);
   });
 
-  it('places the virtual pendingCount column last, per its declared gridOrder', () => {
+  it('places the pending column last, per its declared gridOrder', () => {
     const cols = getContractGridColumns('account');
-    expect(cols.at(-1).name).toBe('pendingCount');
+    expect(cols.at(-1).name).toBe('eTGOPendingCount');
   });
 
   // Regression guard: the mapper used to forward only { name, label, type }, so
@@ -97,15 +98,17 @@ describe('getContractGridColumns', () => {
     }
   });
 
-  // `appendVirtualFields` (resolve-curated.js) copies a closed 10-key whitelist and
-  // `cellType` is not in it, so a virtual field cannot declare one — hence the
-  // VIRTUAL_FIELD_CELL_TYPES fallback in accountCellTypes.jsx.
-  it('leaves a virtual field without a declared cellType or gridLabelKey', () => {
-    const pending = getContractGridColumns('account').find((c) => c.name === 'pendingCount');
+  // The inverse of the assertion this replaced. While "Por conciliar" was a virtual field,
+  // `appendVirtualFields` (resolve-curated.js) copied a closed whitelist that excluded
+  // `cellType` and `gridLabelKey`, so both had to be routed around it — the
+  // VIRTUAL_FIELD_CELL_TYPES map and `window.labelOverrides` respectively. As a real
+  // AD-backed field it declares both, and the mapper must forward them.
+  it('forwards the pending column cellType and gridLabelKey like any real field', () => {
+    const pending = getContractGridColumns('account').find((c) => c.name === 'eTGOPendingCount');
 
-    expect(pending.column).toBe('pendingCount');
-    expect(pending.cellType ?? null).toBeNull();
-    expect(pending.gridLabelKey ?? null).toBeNull();
+    expect(pending.column).toBe('EM_ETGO_Pending_Count');
+    expect(pending.cellType).toBe('reconcilePill');
+    expect(pending.gridLabelKey).toBe('financeAccountsColPending');
   });
 
   it('returns an empty list for unknown entities', () => {
@@ -118,5 +121,37 @@ describe('getContractGridColumns', () => {
     // no gridOrder — they must not leak into the grid.
     expect(cols).not.toContain('depositAmount');
     expect(cols).not.toContain('paymentAmount');
+  });
+});
+
+// Pins the "more info" panel of the Movimientos row (ETP-4869): which accounting
+// dimensions it shows and in what order come from decisions.json → contract.json
+// (fields with `dimensionsPanel: true`, sorted by `seq`), not from a hardcoded
+// array in MovementsTable.jsx.
+describe('getContractPanelFields', () => {
+  // The funds-transfer counterpart link is declared with a lower seq than every accounting
+  // dimension precisely so it renders immediately BEFORE them, as the feature requires.
+  it('returns the transaction panel fields in declared seq order', () => {
+    const fields = getContractPanelFields('transaction').map((f) => f.name);
+    expect(fields).toEqual(['eTGOFinaccTransDest', 'project', 'costCenter', 'product']);
+  });
+
+  it('only includes fields that explicitly opt in via dimensionsPanel', () => {
+    const fields = getContractPanelFields('transaction').map((f) => f.name);
+    // organization/activity/salesCampaign/salesRegion/stDimension/ndDimension are
+    // accounting dimensions in the contract too, but are not declared for this
+    // panel — they must not leak into it.
+    expect(fields).not.toContain('organization');
+    expect(fields).not.toContain('activity');
+    expect(fields).not.toContain('salesCampaign');
+  });
+
+  it('exposes contract labels as fallbacks', () => {
+    const byName = Object.fromEntries(getContractPanelFields('transaction').map((f) => [f.name, f]));
+    expect(byName.costCenter.label).toBe('Cost Center');
+  });
+
+  it('returns an empty list for unknown entities', () => {
+    expect(getContractPanelFields('nope')).toEqual([]);
   });
 });

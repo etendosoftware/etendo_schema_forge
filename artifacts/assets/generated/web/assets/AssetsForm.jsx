@@ -4,6 +4,7 @@ import { EntityForm } from '@/components/contract-ui';
 const fields = [
   { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', section: 'principal', reference: 'Product', inputMode: 'search' },
   { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'accounting-dimension' },
+  { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'Costcenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'accounting-dimension' },
 ];
 // @sf-generated-end fields:assets
 
@@ -11,5 +12,6 @@ const fields = [
 export default function AssetsForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+AssetsForm.fields = fields;
 
 // @sf-generated-end component:AssetsForm

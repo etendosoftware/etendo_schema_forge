@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check, Landmark } from 'lucide-react';
+import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { formatCurrency } from '@/lib/formatCurrency.js';
 import './fiscal-models.css';
 
 function parseCityLine(cityLine) {
@@ -28,14 +27,18 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 4-path submission:
+// PresentModal — 2 manual paths + 1 opt-in AEAT sentinel path:
 //   1. submitted_ack   — upload PDF/XML receipt; status → submitted_ack
 //   2. submitted       — submitted without receipt; status → submitted
-//   3. submitted_ext   — submitted via external agency; status → submitted_ext
-//   4. aeat_telematic  — sentinel path (303 only): onConfirm reports the
-//      literal status 'aeat_telematic', which is never a real declaration
-//      status — the caller (FmModel303Page) intercepts it and opens the
-//      dedicated AeatSubmitFlow instead of changing the declaration status.
+//   3. aeat_telematic  — opt-in sentinel path (showAeatPath, 303 only):
+//      onConfirm reports the literal status 'aeat_telematic', which is
+//      never a real declaration status — the caller (FmModel303Page)
+//      intercepts it and opens the dedicated AeatSubmitFlow instead of
+//      changing the declaration status directly.
+// The former "Otra Plataforma" (external-agency) path was removed from
+// this modal — its status remains valid and fully-rendered for any
+// declaration that already carries it, it just can no longer be newly
+// selected here.
 export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
@@ -43,7 +46,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const canConfirm = path === 'submitted_ext' || path === 'submitted' || path === 'aeat_telematic' || (path === 'submitted_ack' && acuseFile);
+  const canConfirm = path === 'submitted' || path === 'aeat_telematic' || (path === 'submitted_ack' && acuseFile);
 
   function handleConfirm() {
     onConfirm({ status: path, acuseFile: path === 'submitted_ack' ? acuseFile : null });
@@ -53,7 +56,6 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const PATHS = [
     { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
     { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
-    { id: 'submitted_ext', icon: <ArrowUpRight size={16} strokeWidth={1.75} data-testid="ArrowUpRight__cda0bb" />, titleKey: 'fm.present.path.otra', descKey: 'fm.present.path.otra_desc' },
     ...(showAeatPath ? [
       { id: 'aeat_telematic', icon: <Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />, titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' },
     ] : []),
@@ -159,16 +161,31 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   );
 }
 
+// FileGenModal — despite the generic name, this is 349-specific (the 303 file-gen
+// flow uses FileGenModal303 below). Mirrors the classic "Parámetros de entrada del
+// generador de declaraciones" popup (OBTL_TaxReportLauncher) for Modelo 349: the 8
+// `OBTL_Tax_Report_Parameter` rows with type=I (user input), rendered in ascending
+// `order` — FileName/Contact (10), Phone (20), Substitutive (30), FormerStatement
+// (40), RepresentativeTaxId (80), Navarra (90), Guipuzcoa (100). The type=O rows
+// (Año, org name/NIF) are auto-derived by the backend and intentionally never shown
+// here. No conditional show/hide — classic's callout never toggles these fields.
 export function FileGenModal({ decl, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
-  const [phone,   setPhone]   = React.useState(decl?.phone   ?? '');
-  const [contact, setContact] = React.useState(decl?.contact ?? '');
+  const [fileName,            setFileName]            = React.useState('');
+  const [phone,                setPhone]               = React.useState(decl?.phone   ?? '');
+  const [contact,              setContact]             = React.useState(decl?.contact ?? '');
+  const [substitutive,         setSubstitutive]        = React.useState(false);
+  const [formerStatement,      setFormerStatement]     = React.useState('');
+  const [representativeTaxId,  setRepresentativeTaxId] = React.useState('');
+  const [navarra,              setNavarra]             = React.useState(false);
+  const [guipuzcoa,            setGuipuzcoa]           = React.useState(false);
   const inputSt = {
     width: '100%', fontSize: 14, padding: '8px 12px',
     border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
     boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
   };
+  const checkboxRowSt = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' };
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
@@ -188,6 +205,17 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
         <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.filename')}
+            </div>
+            <input
+              style={inputSt}
+              value={fileName}
+              onChange={e => setFileName(e.target.value)}
+              placeholder={`349_${decl?.period}_${decl?.year}`}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.contact_name')}
               {t('fm.filegen.contact_name_hint') && (
                 <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
@@ -199,6 +227,45 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
             <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={substitutive}
+                onChange={() => setSubstitutive(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.substitutive')}
+            </label>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.former_statement')}
+            </div>
+            <input style={inputSt} value={formerStatement} onChange={e => setFormerStatement(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.representative_nif')}
+            </div>
+            <input style={inputSt} value={representativeTaxId} onChange={e => setRepresentativeTaxId(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={navarra}
+                onChange={() => setNavarra(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.navarra')}
+            </label>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={guipuzcoa}
+                onChange={() => setGuipuzcoa(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.guipuzcoa')}
+            </label>
+          </div>
         </div>
 
         {/* Footer */}
@@ -208,7 +275,16 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </button>
           <button
             className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
-            onClick={() => { onConfirm?.({ phone, contact }); onClose(); }}
+            onClick={() => {
+              onConfirm?.({
+                fileName: fileName.trim() || undefined,
+                phone, contact, substitutive,
+                formerStatement: formerStatement.trim() || undefined,
+                representativeTaxId: representativeTaxId.trim() || undefined,
+                navarra, guipuzcoa,
+              });
+              onClose();
+            }}
           >
             {t('fm.filegen.generate')}
           </button>
@@ -268,59 +344,321 @@ export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
   );
 }
 
-export function NewDeclModal({ onConfirm, onClose }) {
+// useCloseOnOutsideClick — shared open/close behavior for NewDeclModal's two
+// dropdown panels (Modelo, Año): a ref on the panel itself + a document
+// 'mousedown' listener that closes it on an outside click. Returns a ref to
+// attach to the panel element.
+function useCloseOnOutsideClick(onClose) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+  return ref;
+}
+
+// ModelSelectMenu — the "Modelo" dropdown panel for NewDeclModal. Each row
+// reuses the same catalog i18n keys (`fm.catalog.<id>.name` / `.desc`)
+// FmCatalogPage.jsx already relies on, so a future catalog expansion (more
+// models) flows through automatically.
+function ModelSelectMenu({ model, availableModels, onSelect, onClose, t }) {
+  const ref = useCloseOnOutsideClick(onClose);
+  const [search, setSearch] = useState('');
+  const q = search.trim().toLowerCase();
+  const filtered = availableModels.filter(id => {
+    if (!q) return true;
+    const name = (t(`fm.catalog.${id}.name`) ?? '').toLowerCase();
+    return id.includes(q) || name.includes(q);
+  });
+  return (
+    <div className="fm-newdecl-model-panel" ref={ref} role="listbox">
+      <div className="fm-newdecl-model-search">
+        <Search size={14} strokeWidth={1.75} data-testid="Search__cda0bb" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t('fm.new_decl.search_placeholder')}
+          autoFocus
+        />
+      </div>
+      <div className="fm-newdecl-model-list">
+        {filtered.map(id => {
+          const selected = id === model;
+          return (
+            <div
+              key={id}
+              role="option"
+              aria-selected={selected}
+              className={`fm-newdecl-model-option${selected ? ' fm-newdecl-model-option--selected' : ''}`}
+              onClick={() => onSelect(id)}
+            >
+              <span className={`fm-model-badge fm-model-badge--${id}`}>{id}</span>
+              <div className="fm-newdecl-model-option__body">
+                <div className="fm-newdecl-model-option__name">{t(`fm.catalog.${id}.name`) ?? id}</div>
+                <div className="fm-newdecl-model-option__desc">{t(`fm.catalog.${id}.desc`) ?? ''}</div>
+              </div>
+              {selected && (
+                <Check size={16} strokeWidth={2} className="fm-newdecl-model-option__check" data-testid="Check__cda0bb" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// YearSelectMenu — the "Año" dropdown panel for NewDeclModal. Visually and
+// mechanically a simplified sibling of ModelSelectMenu above (button trigger +
+// outside-click-to-close panel + checkmark on the selected row), but SUPPORTED_YEARS
+// is a short flat list of plain year labels, so there's no search input and no
+// chip/subtitle here — just the year text and, for the selected one, a checkmark.
+function YearSelectMenu({ year, years, onSelect, onClose }) {
+  const ref = useCloseOnOutsideClick(onClose);
+  return (
+    <div className="fm-newdecl-year-panel" ref={ref} role="listbox">
+      <div className="fm-newdecl-year-list">
+        {years.map(y => {
+          const selected = y === year;
+          return (
+            <div
+              key={y}
+              role="option"
+              aria-selected={selected}
+              className={`fm-newdecl-year-option${selected ? ' fm-newdecl-year-option--selected' : ''}`}
+              onClick={() => onSelect(y)}
+            >
+              <span className="fm-newdecl-year-option__label">{y}</span>
+              {selected && (
+                <Check size={16} strokeWidth={2} className="fm-newdecl-year-option__check" data-testid="Check__cda0bb" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// NewDeclModal — "Nueva declaración". `existingDeclarations` is optional (defaults
+// to none, matching every pre-existing caller/test): when provided (FmListPage
+// passes its `decls` array), periods that already have a declaration for the
+// selected model+year render grayed-out with a dot badge AND are disabled —
+// they cannot be selected or submitted. No message/tooltip explains why: this
+// is a deliberate simplification (see complementaria/rectificativa note below)
+// until the correction flow is designed properly, so no warning banner is
+// rendered here. The onConfirm contract (`{ model, year, period, status: 'draft' }`)
+// is unchanged from before this restyle.
+//
+// Why disabled-with-no-message instead of "allow + warn": creating a second
+// declaration for the same model+year+period currently 500s server-side (a DB
+// unique-constraint violation) and the correct terminology/eligibility for a
+// correction ("complementaria" vs "rectificativa", and whether it's even valid)
+// depends on rules this modal doesn't model yet. Disabling the period keeps this
+// UI path from ever exercising that broken backend flow.
+export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations }) {
   const ui = useUI();
   const t = ui;
   const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
   const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-  const [model, setModel] = useState('303');
+  // Only offer models the user activated in the catalog. When no `activeModels`
+  // map is provided (e.g. legacy callers), fall back to all known models.
+  const availableModels = activeModels
+    ? Object.keys(activeModels).filter(id => activeModels[id])
+    : ['303', '349'];
+  const canCreate = availableModels.length > 0;
+  const [model, setModel] = useState(availableModels[0] ?? '303');
   const _cy = new Date().getFullYear();
   const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
+  const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' | 'monthly' — drives the Período grid below
   const [period, setPeriod] = useState('T1');
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [yearMenuOpen, setYearMenuOpen] = useState(false);
+
+  const periods = frequency === 'monthly' ? MONTHLY_PERIODS : QUARTERLY_PERIODS;
+  // Most-recent-first for the Año dropdown — SUPPORTED_YEARS itself stays
+  // ascending (other consumers, if any, keep relying on that order).
+  const yearOptions = useMemo(() => [...SUPPORTED_YEARS].sort((a, b) => b - a), []);
+
+  // Periods that already carry a declaration for the currently selected model+year.
+  // These render disabled in the grid below — never explained (see doc comment
+  // above): no warning banner, no tooltip.
+  const existingPeriods = useMemo(() => {
+    const set = new Set();
+    (existingDeclarations ?? []).forEach(d => {
+      if (String(d.model) === String(model) && Number(d.year) === Number(year) && d.period) {
+        set.add(d.period);
+      }
+    });
+    return set;
+  }, [existingDeclarations, model, year]);
+
+  // Every period of the current frequency is already taken — nothing left to
+  // pick. The CTA goes inert in that case (still no message, per spec).
+  const allPeriodsTaken = periods.length > 0 && periods.every(p => existingPeriods.has(p));
+
+  // Keep the selection off a disabled period: on mount, and whenever the set of
+  // taken periods changes (model, year, or frequency switch), jump to the first
+  // still-available period for the current frequency. If every period is taken
+  // there's nothing to jump to — `allPeriodsTaken` above disables the CTA instead.
+  useEffect(() => {
+    if (!existingPeriods.has(period)) return;
+    const firstAvailable = periods.find(p => !existingPeriods.has(p));
+    if (firstAvailable) setPeriod(firstAvailable);
+    // `periods` is derived purely from `frequency`, already tracked below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingPeriods, frequency, period]);
+
+  function selectFrequency(next) {
+    setFrequency(next);
+    setPeriod(next === 'monthly' ? MONTHLY_PERIODS[0] : QUARTERLY_PERIODS[0]);
+  }
+
+  function handleCreate() {
+    onConfirm?.({ model, year, period, status: 'draft' });
+    onClose();
+  }
+
+  const selectedModelName = t(`fm.catalog.${model}.name`) ?? model;
+
   return (
-    <div className="fm-modal-overlay" role="dialog" aria-modal="true">
-      <div className="fm-present-modal">
-        <div className="fm-present-modal__title">{t('fm.new_decl.title')}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
-            {t('fm.new_decl.model')}
-            <select value={model} onChange={e => { setModel(e.target.value); setPeriod('T1'); }} style={{ marginLeft: 8, fontSize: 12 }}>
-              <option value="303">303</option>
-              <option value="349">349</option>
-            </select>
-          </label>
-          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
-            {t('fm.new_decl.year')}
-            <select
-              value={year}
-              onChange={e => setYear(Number(e.target.value))}
-              style={{ marginLeft: 8, fontSize: 12 }}
-            >
-              {SUPPORTED_YEARS.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-          <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
-            {t('fm.new_decl.period')}
-            <select value={period} onChange={e => setPeriod(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
-              <optgroup label={t('fm.new_decl.period_quarterly') ?? 'Trimestral'}>
-                {QUARTERLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-              </optgroup>
-              <optgroup label={t('fm.new_decl.period_monthly') ?? 'Mensual'}>
-                {MONTHLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-              </optgroup>
-            </select>
-          </label>
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal fm-newdecl-modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.new_decl.title')}</div>
+            <div className="fm-config-modal__sub">{t('fm.new_decl.subtitle')}</div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
-        <div className="fm-present-modal__actions">
-          <button className="fm-present-modal__btn" onClick={onClose}>{t('fm.action.cancel')}</button>
-          <button
-            className="fm-present-modal__btn fm-present-modal__btn--primary"
-            onClick={() => { onConfirm?.({ model, year, period, status: 'draft' }); onClose(); }}
-          >
-            {t('fm.action.create')}
-          </button>
+
+        {/* Body */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto' }}>
+          {!canCreate && (
+            <div className="fm-banner fm-banner--warning">{t('fm.new_decl.no_active_models')}</div>
+          )}
+
+          {/* Modelo */}
+          <div className="fm-newdecl-field" style={{ position: 'relative' }}>
+            <label className="fm-newdecl-label">{t('fm.new_decl.model')}</label>
+            <button
+              type="button"
+              className="fm-newdecl-model-trigger"
+              disabled={!canCreate}
+              aria-haspopup="listbox"
+              aria-expanded={modelMenuOpen}
+              onClick={() => setModelMenuOpen(o => !o)}
+            >
+              <span className={`fm-model-badge fm-model-badge--${model}`}>{model}</span>
+              <span className="fm-newdecl-model-trigger__name">{selectedModelName}</span>
+              <ChevronDown size={16} strokeWidth={1.75} className="fm-newdecl-model-trigger__chevron" data-testid="ChevronDown__cda0bb" />
+            </button>
+            {modelMenuOpen && canCreate && (
+              <ModelSelectMenu
+                model={model}
+                availableModels={availableModels}
+                onSelect={(id) => { setModel(id); setPeriod(periods[0]); setModelMenuOpen(false); }}
+                onClose={() => setModelMenuOpen(false)}
+                t={t}
+                data-testid="ModelSelectMenu__cda0bb" />
+            )}
+          </div>
+
+          {/* Año / Frecuencia */}
+          <div className="fm-newdecl-row">
+            <div className="fm-newdecl-field" style={{ position: 'relative' }}>
+              <label className="fm-newdecl-label">{t('fm.new_decl.year')}</label>
+              <button
+                type="button"
+                className="fm-newdecl-year-trigger"
+                aria-haspopup="listbox"
+                aria-expanded={yearMenuOpen}
+                onClick={() => setYearMenuOpen(o => !o)}
+              >
+                <span className="fm-newdecl-year-trigger__value">{year}</span>
+                <ChevronDown size={16} strokeWidth={1.75} className="fm-newdecl-year-trigger__chevron" data-testid="ChevronDown__cda0bb" />
+              </button>
+              {yearMenuOpen && (
+                <YearSelectMenu
+                  year={year}
+                  years={yearOptions}
+                  onSelect={(y) => { setYear(y); setYearMenuOpen(false); }}
+                  onClose={() => setYearMenuOpen(false)}
+                  data-testid="YearSelectMenu__cda0bb" />
+              )}
+            </div>
+            <div className="fm-newdecl-field">
+              <label className="fm-newdecl-label">{t('fm.new_decl.frequency')}</label>
+              <div className="fm-newdecl-segmented" role="group" aria-label={t('fm.new_decl.frequency')}>
+                <button
+                  type="button"
+                  aria-pressed={frequency === 'quarterly'}
+                  className={`fm-newdecl-segmented__btn${frequency === 'quarterly' ? ' fm-newdecl-segmented__btn--active' : ''}`}
+                  onClick={() => selectFrequency('quarterly')}
+                >
+                  {t('fm.new_decl.period_quarterly')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={frequency === 'monthly'}
+                  className={`fm-newdecl-segmented__btn${frequency === 'monthly' ? ' fm-newdecl-segmented__btn--active' : ''}`}
+                  onClick={() => selectFrequency('monthly')}
+                >
+                  {t('fm.new_decl.period_monthly')}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Período */}
+          <div className="fm-newdecl-field">
+            <div className="fm-newdecl-field__label-row">
+              <label className="fm-newdecl-label" style={{ marginBottom: 0 }}>{t('fm.new_decl.period')}</label>
+              <span className="fm-newdecl-field__label-hint">
+                {frequency === 'monthly' ? t('fm.new_decl.period_section_months') : t('fm.new_decl.period_section_quarters')}
+              </span>
+            </div>
+            <div className={`fm-newdecl-period-grid fm-newdecl-period-grid--${frequency}`}>
+              {periods.map(p => {
+                const isSelected = p === period;
+                const isExisting = existingPeriods.has(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    aria-pressed={isSelected}
+                    disabled={isExisting}
+                    className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}`}
+                    onClick={() => setPeriod(p)}
+                  >
+                    {p}
+                    {isExisting && <span className="fm-newdecl-period-btn__dot" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="fm-config-modal__footer">
+          <div className="fm-newdecl-preview">
+            {t('fm.new_decl.will_create_as')} <strong>{t('fm.new_decl.preview', { model, period, year })}</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>{t('fm.action.cancel')}</button>
+            <button
+              className={`fm-btn fm-btn--save-pill${canCreate && !allPeriodsTaken ? ' fm-btn--save-pill--active' : ''}`}
+              disabled={!canCreate || allPeriodsTaken}
+              onClick={handleCreate}
+            >
+              {t('fm.new_decl.create_cta')}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -647,106 +985,6 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
             {t('fm.action.save') ?? 'Guardar'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// T1/2026 reference — used as prev when current decl is T2/2026
-const T1_2026_BOXES = { 7:3248, 27:682.08, 45:3498.39, 46:-2816.31 };
-
-export function CompareDrawer({ decl, prevDecl, onClose }) {
-  const ui = useUI();
-  const t = ui;
-
-  const boxes    = decl.boxes    ?? {};
-  const summary  = decl.summary  ?? {};
-  const pb       = prevDecl?.boxes ?? T1_2026_BOXES;
-  const prevLabel = prevDecl ? `${prevDecl.period} ${prevDecl.year}` : 'T1 2026';
-  const currLabel = `${decl.period} ${decl.year}`;
-
-  const currBase = (boxes[1] ?? 0) + (boxes[4] ?? 0) + (boxes[7] ?? 0);
-  const prevBase = (pb[1] ?? 0) + (pb[4] ?? 0) + (pb[7] ?? 0);
-
-  const rows = [
-    { label: t('fm.compare.row.base'),     prev: prevBase,         curr: currBase,                              separator: false },
-    { label: t('fm.compare.row.iva_dev'),  prev: pb[27] ?? 0,      curr: boxes[27] ?? summary.accrued   ?? 0,  separator: false },
-    { label: t('fm.compare.row.iva_ded'),  prev: pb[45] ?? 0,      curr: boxes[45] ?? summary.deductible ?? 0, separator: false },
-    { label: t('fm.compare.row.result'),   prev: pb[46] ?? 0,      curr: boxes[46] ?? summary.result    ?? 0,  separator: true  },
-    { label: t('fm.compare.row.intracom'), prev: pb[59] ?? 0,      curr: boxes[59] ?? 0,                       separator: false },
-    { label: t('fm.compare.row.exports'),  prev: pb[60] ?? 0,      curr: boxes[60] ?? 0,                       separator: false },
-  ];
-
-  const resultRow = rows.find(r => r.label === t('fm.compare.row.result'));
-  const resultImproved = resultRow && Math.abs(resultRow.curr) > Math.abs(resultRow.prev);
-  const devImproved    = (boxes[27] ?? 0) > (pb[27] ?? 0);
-
-  return (
-    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal" onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="fm-config-modal__header">
-          <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.compare.title')}</div>
-            <div className="fm-config-modal__sub">{prevLabel} → {currLabel}</div>
-          </div>
-          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
-        </div>
-
-        {/* Body */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 12, fontWeight: 400, color: 'hsl(var(--foreground))', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
-            <span />
-            <span style={{ textAlign: 'right', minWidth: 100 }}>{prevLabel}</span>
-            <span style={{ textAlign: 'right', minWidth: 100 }}>{currLabel}</span>
-            <span style={{ textAlign: 'right', minWidth: 72 }}>{t('fm.compare.delta')}</span>
-          </div>
-          {rows.map((r) => {
-            const d      = r.curr - r.prev;
-            const up     = d >= 0;
-            const pctNum = r.prev !== 0 ? (d / Math.abs(r.prev)) * 100 : null;
-            let deltaColor = 'hsl(var(--text-disabled))';
-            if (pctNum != null) deltaColor = up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
-            const arrow     = up ? '↑' : '↓';
-            const deltaText = pctNum == null ? '—' : `${arrow} ${Math.abs(pctNum).toFixed(1)}%`;
-            return (
-              <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid hsl(var(--border-subtle))' : '1px solid hsl(var(--muted))', fontSize: 14, alignItems: 'center' }}>
-                <span style={{ color: 'hsl(var(--foreground))' }}>{r.label}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.prev)}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.curr)}</span>
-                <span style={{ textAlign: 'right', minWidth: 72, color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                  {deltaText}
-                </span>
-              </div>
-            );
-          })}
-          <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--fm-info-bg)', borderRadius: 12, fontSize: 14, color: 'var(--fm-info-fg)', display: 'flex', gap: 8 }}>
-            <Info
-              size={14}
-              style={{ flexShrink: 0, marginTop: 1, color: 'var(--fm-info-fg)' }}
-              data-testid="Info__cda0bb" />
-            <span>
-              {devImproved
-                ? t('fm.compare.insight.dev_improved', { prev: prevLabel })
-                : t('fm.compare.insight.dev_fell', { prev: prevLabel })
-              }
-              {' '}
-              {resultImproved
-                ? t('fm.compare.insight.result_higher', { curr: currLabel })
-                : t('fm.compare.insight.result_lower', { curr: currLabel })
-              }
-            </span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="fm-config-modal__footer" style={{ justifyContent: 'flex-end' }}>
-          <button className="fm-btn fm-btn--save-pill fm-btn--save-pill--active" onClick={onClose}>
-            {t('fm.action.close') ?? 'Cerrar'}
-          </button>
-        </div>
-
       </div>
     </div>
   );

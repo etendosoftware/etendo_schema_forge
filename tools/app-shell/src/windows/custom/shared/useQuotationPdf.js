@@ -9,13 +9,14 @@ import {
   buildCompanyFields,
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
+  resolveProductCode,
   useDocumentPdf,
 } from './documentPdf.js';
 
 // ---------------------------------------------------------------------------
 // Build quotation data for the template
 // ---------------------------------------------------------------------------
-async function buildQuotationData(quotationId, base, token, currencyData = null) {
+export async function buildQuotationData(quotationId, base, token, currencyData = null) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/sales-quotation/quotation/${quotationId}`, token),
     fetchAll(`${base}/sales-quotation/quotationLine?parentId=${quotationId}`, token),
@@ -26,6 +27,7 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
   const linesSorted = sortDocumentLines(linesRaw);
   const lines = linesSorted.map((l, idx) => ({
     lineNo: l.lineNo || (idx + 1),
+    productCode: resolveProductCode(l),
     productName: l.product$_identifier || l.description || '—',
     quantity: l.orderedQuantity ?? 0,
     unitPrice: l.unitPrice ?? 0,
@@ -79,9 +81,15 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null) {
-  const ui = useUI();
-  const labels = buildDocumentPdfLabels(ui, {
+/**
+ * Label overrides as a plain function of `ui`, so the print flow
+ * (`documentPdfRegistry.js`, hook-free) builds the same labels. See
+ * `docs/document-printables.md`.
+ *
+ * @param {(key: string) => string} ui
+ */
+export function buildQuotationPdfLabels(ui) {
+  return buildDocumentPdfLabels(ui, {
     title:           ui('quotationPdfTitle'),
     documentNo:      ui('quotationPdfDocumentNo'),
     documentSection: ui('quotationPdfSection'),
@@ -89,10 +97,15 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = n
     validUntil:      ui('quotationPdfValidUntil'),
     colQty:          ui('quotationPdfColQty'),
   });
+}
+
+export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null, cacheConfig = null) {
+  const ui = useUI();
+  const labels = buildQuotationPdfLabels(ui);
   const buildData = useCallback(
     (recordId, base, tk) => buildQuotationData(recordId, base, tk, currencyData),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels);
+  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig);
 }

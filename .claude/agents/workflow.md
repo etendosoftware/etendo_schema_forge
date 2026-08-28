@@ -66,6 +66,46 @@ Never push a branch to publish it just to fix its tracking, and never leave the 
 Verify with `git rev-parse --abbrev-ref feature/ETP-XXXX@{upstream}` (expect "no upstream") and report it.
 </branch_conventions>
 
+<pr_conventions>
+**Git Police CLOSES a PR whose title contains a prohibited character.** It does not warn and
+leave it open — the PR is closed, the branch stays pushed, and the only trace is an
+`etendobot` comment. Prohibited in the title:
+
+```
+"   '   \   `   $   •   °   ©   ®   ¿   ¡   and \n \r \t
+```
+
+The apostrophe is the one that actually bites: an English possessive or contraction in a
+title reads perfectly and is rejected. `Expose the record's updated` was closed on sight
+(ETP-4912, PR #927); `Expose the updated timestamp` passed. Rephrase, never escape.
+
+Validate BEFORE calling `gh pr create` — one command, no excuse for skipping it:
+
+```bash
+TITLE="Feature ETP-1234: Some description"
+printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\\`$]" && echo "REJECTED: prohibited char" || echo "ok"
+```
+
+Same convention as commits otherwise: `Feature ETP-1234: Description`, `Epic ETP-1234: ...`,
+`Issue #N: ...`.
+
+**Recovering a PR Git Police already closed.** Fix the title FIRST, then reopen — reopening
+with the bad title gets it closed again. Note `gh pr edit` may fail with
+`your authentication token is missing required scopes [read:project]`; the REST API needs no
+such scope and does both in one call:
+
+```bash
+gh api -X PATCH repos/<owner>/<repo>/pulls/<N> \
+  -f title="Feature ETP-1234: Rephrased without the apostrophe" -f state=open
+```
+
+Do NOT open a second PR to work around a closed one — it splits the review and orphans the
+comments already on the first.
+
+**Report the PR title verbatim** in the delivery report, so the coordinator can see what was
+submitted rather than what was intended.
+</pr_conventions>
+
 <communication_style>
 - **Tone:** Terse, factual
 - **Format:** Bullet list of exact operations performed with resulting keys/URLs
@@ -77,7 +117,7 @@ Verify with `git rev-parse --abbrev-ref feature/ETP-XXXX@{upstream}` (expect "no
 DONE:
 - Jira: <KEY> created under <EPIC> — "<title>" [labels: <labels>]
 - Branch: <repo> <branch-name> (from <base-ref>)
-- PR: <url> (<head> → <base>)
+- PR: <url> (<head> → <base>) — title: "<exact title submitted>"
 
 BLOCKED (if any):
 - <what stopped me and what I need from the coordinator>

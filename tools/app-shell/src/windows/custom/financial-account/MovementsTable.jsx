@@ -18,7 +18,9 @@ import { MoneyAmount } from '@/components/ui/money-amount';
 import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
 import { MovementRowKebab } from './MovementRowKebab';
-import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
+import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
  * Formats an ISO date string using the user's locale. The movement date is a
@@ -59,6 +61,8 @@ const COL_COUNT = SKELETON_COL_KEYS.length;
 const MOVEMENT_CELL_RENDERERS = {
   transactionDate: {
     labelKey: 'financeAccountMovementsColDate',
+    // The ISO string, not the dd/mm/yyyy the cell shows — that would sort by day-of-month.
+    sortValue: (m) => m.date,
     renderCell: (m, ctx) => (
       <TableCell
         className="whitespace-nowrap text-sm leading-5 text-[hsl(var(--foreground))]"
@@ -69,6 +73,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   documentNo: {
     labelKey: 'financeAccountMovementsColDocument',
+    sortValue: (m) => m.documentNo,
     renderCell: (m, ctx) => (
       <TableCell
         className="whitespace-nowrap text-sm font-semibold leading-5"
@@ -90,6 +95,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   businessPartner: {
     labelKey: 'financeAccountMovementsColContact',
+    sortValue: (m) => m.contact,
     renderCell: (m) => (
       <TableCell
         className="text-sm leading-5 text-[hsl(var(--foreground))]"
@@ -98,6 +104,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   description: {
     labelKey: 'financeAccountMovementsColDescription',
+    sortValue: (m) => m.description,
     renderCell: (m) => (
       <TableCell
         className="max-w-[200px] truncate text-sm text-[hsl(var(--foreground))]"
@@ -106,6 +113,9 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   status: {
     labelKey: 'financeAccountMovementsColStatus',
+    // The translated badge text, so the two user-facing states group the way they read. The raw
+    // code would scatter them: every non-RPPC code collapses into "Sin conciliar" on screen.
+    sortValue: (m, ctx) => ctx.getStatusLabel(m),
     renderCell: (m) => (
       <TableCell data-testid="TableCell__ae5a16">
         <MovementStatusBadge status={m.paymentStatus} processed={m.processed} data-testid="MovementStatusBadge__ae5a16" />
@@ -114,6 +124,21 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   transactionType: {
     labelKey: 'financeAccountMovementsColType',
+    sortValue: (m, ctx) => ctx.getTrxTypeLabel(m),
+    // The cell stacks the transaction type over the posting status, so its header splits into
+    // two independently sortable segments ("Tipo & Contabilizado") — the hand-rolled equivalent
+    // of the `multiField` decorator the Cuentas list uses for "Tipo & IBAN". `posted` is not a
+    // contract grid column of its own; it only ever appears inside this cell.
+    parts: [
+      { key: 'transactionType', labelKey: 'financeAccountMovementsColType' },
+      {
+        key: 'posted',
+        labelKey: 'financeAccountMovementsColPosted',
+        // The translated PostingStatusDot text, so the two states group the way they read.
+        // Only 'Y' is posted; every other code renders as "Sin contabilizar".
+        sortValue: (m, ctx) => ctx.getPostedLabel(m),
+      },
+    ],
     renderCell: (m, ctx) => (
       <TableCell data-testid="TableCell__ae5a16">
         <div className="flex flex-col gap-0.5">
@@ -125,6 +150,7 @@ const MOVEMENT_CELL_RENDERERS = {
   },
   gLItem: {
     labelKey: 'financeAccountMovementsColGlItem',
+    sortValue: (m) => m.glItem,
     renderCell: (m) => (
       <TableCell
         className="max-w-[180px] truncate text-sm text-[hsl(var(--foreground))]"
@@ -160,9 +186,60 @@ const DIMENSION_LABEL_KEYS = {
   user2: 'financeAccountMovementsDimUser2',
 };
 
-// The "more info" panel shows only these three accounting dimensions (in this order),
-// regardless of which dimensions the chart of accounts has enabled.
-const DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product'];
+// The contract's field names (camelCase, from the AD/Etendo model) don't always
+// match the backend payload's `dimensions` keys (lowercase, from
+// FinancialAccountTransactionsHandler's DIM_* constants) — alias the ones that differ.
+const DIMENSION_PAYLOAD_KEY_ALIASES = {
+  costCenter: 'costcenter',
+  salesCampaign: 'campaign',
+  salesRegion: 'salesregion',
+  stDimension: 'user1',
+  ndDimension: 'user2',
+};
+
+/**
+ * Bespoke renderers for "more info" panel fields that are NOT accounting dimensions —
+ * same split of responsibility as MOVEMENT_CELL_RENDERERS for the grid: decisions.json
+ * decides WHICH fields appear and in what order, this registry decides HOW they render.
+ * A panel field with no entry here is treated as an accounting dimension (read-only
+ * input, gated by the chart-of-accounts config).
+ */
+const MOVEMENT_PANEL_RENDERERS = {
+  // Funds-transfer counterpart. One slot covers BOTH directions: the backend collapses
+  // em_etgo_finacc_trans_dest / em_aprm_finacc_trans_origin into the same transfer* props
+  // and flags which side this row is on, so the source (BPW) row shows the destination
+  // account and the destination (BPD) row shows the origin.
+  eTGOFinaccTransDest: {
+    isVisible: (m) => Boolean(m.transferTxnId),
+    labelKey: (m) => (m.transferDirection === 'in'
+      ? 'financeAccountMovementsTransferFrom'
+      : 'financeAccountMovementsTransferTo'),
+    render: (m, ctx) => (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); ctx.openTransferCounterpart(m); }}
+        data-testid={`movement-transfer-link-${m.id}`}
+        className="inline-flex h-10 items-center gap-1 self-start text-sm font-semibold text-[hsl(var(--foreground))] underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
+      >
+        {m.transferAccountName || m.transferTxnId}
+        <ArrowUpRight className="h-3 w-3" data-testid="ArrowUpRight__ae5a16" />
+      </button>
+    ),
+  },
+};
+
+// Which fields the "more info" panel shows, and in what order, comes from
+// decisions.json → contract.json (entity `transaction`, fields with
+// `dimensionsPanel: true`, sorted by `seq`) — same contract-driven pattern as
+// CONTRACT_COLUMNS above.
+const PANEL_FIELDS = getContractPanelFields('transaction');
+
+// The accounting-dimension subset (everything without a bespoke renderer), keyed the way
+// the backend payload keys them. Only these are gated by the chart-of-accounts config;
+// a bespoke field like the transfer link must NOT be hidden by an unrelated dimension setup.
+const DISPLAYED_DIMENSIONS = PANEL_FIELDS
+  .filter((f) => !MOVEMENT_PANEL_RENDERERS[f.name])
+  .map((f) => DIMENSION_PAYLOAD_KEY_ALIASES[f.name] ?? f.name.toLowerCase());
 
 function renderBody({ loading, movements, ui, renderRow }) {
   if (loading) {
@@ -198,7 +275,8 @@ function renderBody({ loading, movements, ui, renderRow }) {
   return movements.map(renderRow);
 }
 
-function useTrxTypeLabel() {
+// Exported so the tab can build the sort context with the same label resolver the cells use.
+export function useTrxTypeLabel() {
   const ui = useUI();
   return (movement) =>
     movement.typeLabel ||
@@ -209,33 +287,54 @@ function useTrxTypeLabel() {
     '—';
 }
 
+/** One "more info" cell: label on top, value below. */
+function PanelField({ label, children }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 /**
- * "More info" panel — read-only accounting dimensions rendered as disabled
- * form fields (label on top + greyed-out bordered box, same look as a read-only
- * field in the document forms), in a 4-column grid with an elevated surface.
+ * "More info" panel — the fields declared for this panel in the window contract,
+ * in their declared order, rendered in a 4-column grid with an elevated surface.
  *
- * Shows the dimensions enabled in the chart of accounts (even when empty, like
- * Classic), as read-only fields. The business partner is excluded — it already
- * has its own "Contacto" column.
+ * Accounting dimensions render as disabled form fields (same look as a read-only
+ * field in the document forms) and follow the chart of accounts: an enabled one is
+ * shown even when empty, like Classic. The business partner is excluded — it already
+ * has its own "Contacto" column. Fields with a MOVEMENT_PANEL_RENDERERS entry (e.g.
+ * the funds-transfer link) render through it and are gated by their own `isVisible`.
  */
-function DimensionsPanel({ movement, ui, visible }) {
+function DimensionsPanel({ movement, ui, visible, ctx }) {
   const dims = movement.dimensions || {};
 
   return (
     <div className="grid grid-cols-1 gap-5 pl-16 pr-[52px] pb-8 pt-3 sm:grid-cols-2 lg:grid-cols-4">
-      {visible.map((key) => (
-        <div key={key} className="flex flex-col gap-2">
-          <span className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">
-            {ui(DIMENSION_LABEL_KEYS[key] ?? key)}
-          </span>
-          <Input
-            className="items-center"
-            value={dims[key] || ''}
-            disabled
-            readOnly
-            data-testid="Input__ae5a16" />
-        </div>
-      ))}
+      {PANEL_FIELDS.map((field) => {
+        const custom = MOVEMENT_PANEL_RENDERERS[field.name];
+        if (custom) {
+          if (!custom.isVisible(movement)) return null;
+          return (
+            <PanelField key={field.name} label={ui(custom.labelKey(movement))} data-testid="PanelField__ae5a16">
+              {custom.render(movement, ctx)}
+            </PanelField>
+          );
+        }
+        const key = DIMENSION_PAYLOAD_KEY_ALIASES[field.name] ?? field.name.toLowerCase();
+        if (!visible.includes(key)) return null;
+        return (
+          <PanelField key={field.name} label={ui(DIMENSION_LABEL_KEYS[key] ?? key)} data-testid="PanelField__ae5a16">
+            <Input
+              className="items-center"
+              value={dims[key] || ''}
+              disabled
+              readOnly
+              data-testid="Input__ae5a16" />
+          </PanelField>
+        );
+      })}
     </div>
   );
 }
@@ -252,25 +351,98 @@ function DimensionsPanel({ movement, ui, visible }) {
  *   onSelectionChange: (id: string) => void;
  * }} props
  */
-export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload, onEdit }) {
+/**
+ * The sort context every `sortValue` reads: the label helpers that turn a raw code into the text
+ * the cell actually shows.
+ *
+ * Exported with the two builders below so the TAB can own the sort state — its toolbar hosts the
+ * "Ordenar por" popover and is this table's sibling, not its child. Same split as
+ * ListView/DataTable: the container owns the state, the grid receives it.
+ */
+export function buildMovementSortCtx(ui, getTrxTypeLabel) {
+  return {
+    getTrxTypeLabel,
+    // Mirrors MovementStatusBadge: `processed === false` is a Draft whatever the raw code says,
+    // because a reactivated transaction keeps RPR/PPM but is a draft again.
+    getStatusLabel: (m) => {
+      const config = m.processed === false ? DRAFT : MOVEMENT_STATUS_CONFIG[m.paymentStatus];
+      return config ? ui(config.labelKey) : '';
+    },
+    // Mirrors PostingStatusDot: only 'Y' is posted.
+    getPostedLabel: (m) => (m.posted === 'Y'
+      ? ui('financeAccountMovementsPosted')
+      : ui('financeAccountMovementsNotPosted')),
+  };
+}
+
+/**
+ * Sort accessors, keyed by the key each header segment issues.
+ *
+ * `Balance` is deliberately absent and its header renders non-clickable: it is a RUNNING
+ * balance, `currentbalance − SUM(subsequent)` over `statementdate ASC, line ASC`. It is
+ * order-dependent by construction, so reordering by anything else makes it meaningless.
+ */
+export function buildMovementSortAccessors(sortCtx) {
+  return {
+    ...Object.fromEntries(
+      CONTRACT_COLUMNS
+        .filter((c) => MOVEMENT_CELL_RENDERERS[c.name]?.sortValue)
+        .map((c) => [c.name, (row) => MOVEMENT_CELL_RENDERERS[c.name].sortValue(row, sortCtx)]),
+    ),
+    // A multi-segment header contributes one accessor per segment; the host column's own key
+    // already came from the loop above.
+    ...Object.fromEntries(
+      CONTRACT_COLUMNS
+        .flatMap((c) => MOVEMENT_CELL_RENDERERS[c.name]?.parts ?? [])
+        .filter((part) => part.sortValue)
+        .map((part) => [part.key, (row) => part.sortValue(row, sortCtx)]),
+    ),
+    amount: (m) => Number(m.amount) || 0,
+  };
+}
+
+/** The sortable columns, flattened over multi-segment headers, for the toolbar popover's menu. */
+export function buildMovementSortColumns(ui) {
+  return [
+    ...CONTRACT_COLUMNS.flatMap((col) => {
+      const renderer = MOVEMENT_CELL_RENDERERS[col.name];
+      if (renderer?.parts) {
+        return renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }));
+      }
+      return [{ key: col.name, label: renderer ? ui(renderer.labelKey) : col.label }];
+    }),
+    { key: 'amount', label: ui('financeAccountMovementsColAmount') },
+  ];
+}
+
+export function MovementsTable({
+  movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
+  highlightTxnId = null, onReload, onEdit,
+  sortKey = null, sortDirection = 'asc', onSort,
+}) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
   const [expandedId, setExpandedId] = useState(null);
+
   // The "more info" panel shows Proyecto / Centro de coste / Producto, but ONLY the ones actually
   // enabled in the chart of accounts (respects the org's accounting-dimension config).
   const displayedDims = DISPLAYED_DIMENSIONS.filter((k) => enabledDimensions.includes(k));
   const hasDimensions = displayedDims.length > 0;
+  // Expandability is per ROW, not global: a transfer row has a counterpart link to show even when
+  // the client has no accounting dimension enabled, and without this it would be unreachable.
+  const canExpand = (movement) => hasDimensions || Boolean(movement?.transferTxnId);
 
   // Scroll the deep-linked transaction (from the reconciled-txns modal) into view once loaded and
   // expand it so its accounting dimensions are visible.
   useEffect(() => {
     if (!highlightTxnId) return;
-    if (hasDimensions) setExpandedId(highlightTxnId);
+    if (canExpand(movements.find((m) => m.id === highlightTxnId))) setExpandedId(highlightTxnId);
     const row = document.querySelector(`[data-testid="movement-row-${highlightTxnId}"]`);
     if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightTxnId, movements, hasDimensions]);
 
   const allSelected = movements.length > 0 && selectedIds.size === movements.length;
@@ -291,28 +463,36 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
     navigate(`/${win}/${movement.paymentId}`);
   };
 
+  // Jump to the paired transaction in the other financial account. `?txn=` is the same
+  // deep-link the reconciled-txns modal uses, so the target row arrives highlighted and expanded.
+  const openTransferCounterpart = (movement) => {
+    if (!movement.transferAccountId || !movement.transferTxnId) return;
+    navigate(`/financial-account/${movement.transferAccountId}?tab=movements&txn=${movement.transferTxnId}`);
+  };
+
   // Helpers handed to the contract-column cell renderers.
-  const cellCtx = { ui, bcpLocale, getTrxTypeLabel, openPayment };
+  const cellCtx = { ui, bcpLocale, getTrxTypeLabel, openPayment, openTransferCounterpart };
 
   const renderRow = (movement) => {
     const expanded = expandedId === movement.id;
     const highlighted = highlightTxnId && movement.id === highlightTxnId;
+    const rowCanExpand = canExpand(movement);
     return (
       <Fragment key={movement.id} data-testid="Fragment__ae5a16">
         <TableRow
           data-testid={`movement-row-${movement.id}`}
-          className={`group relative transition-shadow ${hasDimensions ? 'cursor-pointer' : ''} ${
+          className={`group relative transition-shadow ${rowCanExpand ? 'cursor-pointer' : ''} ${
             highlighted ? 'bg-[hsl(var(--muted))]' : 'bg-card'
           } ${
             expanded
               ? 'z-20 border-b-0 [&>td]:border-b-0 hover:bg-card'
               : 'hover:z-10 hover:bg-card hover:shadow-lg'
           }`}
-          onClick={() => { if (hasDimensions) toggleExpand(movement.id); }}
+          onClick={() => { if (rowCanExpand) toggleExpand(movement.id); }}
         >
           {/* Expand chevron (circular button) */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
-            {hasDimensions ? (
+            {rowCanExpand ? (
               <button
                 type="button"
                 aria-label={ui('financeAccountMovementsMoreInfo')}
@@ -375,6 +555,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 movement={movement}
                 ui={ui}
                 visible={displayedDims}
+                ctx={cellCtx}
                 data-testid="DimensionsPanel__ae5a16" />
             </TableCell>
           </TableRow>
@@ -398,12 +579,40 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
                 onChange={handleSelectAll}
                 data-testid="Checkbox__ae5a16" />
             </TableHead>
-            {CONTRACT_COLUMNS.map((col) => (
-              <TableHead key={col.name} data-testid="TableHead__ae5a16">
-                {MOVEMENT_CELL_RENDERERS[col.name] ? ui(MOVEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
-              </TableHead>
-            ))}
-            <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColAmount')}</TableHead>
+            {CONTRACT_COLUMNS.map((col) => {
+              const renderer = MOVEMENT_CELL_RENDERERS[col.name];
+              return (
+                <TableHead key={col.name} data-testid="TableHead__ae5a16">
+                  {renderer?.parts ? (
+                    <SortableHeaderSegments
+                      parts={renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
+                      activeKey={sortKey}
+                      direction={sortDirection}
+                      onSort={onSort}
+                      data-testid="SortableHeaderSegments__ae5a16" />
+                  ) : (
+                    <SortableHeaderLabel
+                      label={renderer ? ui(renderer.labelKey) : col.label}
+                      sortKey={col.name}
+                      activeKey={sortKey}
+                      direction={sortDirection}
+                      onSort={onSort}
+                      data-testid="SortableHeaderLabel__ae5a16" />
+                  )}
+                </TableHead>
+              );
+            })}
+            <TableHead className="text-right" data-testid="TableHead__ae5a16">
+              <SortableHeaderLabel
+                label={ui('financeAccountMovementsColAmount')}
+                sortKey="amount"
+                activeKey={sortKey}
+                direction={sortDirection}
+                onSort={onSort}
+                align="right"
+                data-testid="SortableHeaderLabel__ae5a16" />
+            </TableHead>
+            {/* No onSort: the running balance only means anything in the backend's own order. */}
             <TableHead className="text-right" data-testid="TableHead__ae5a16">{ui('financeAccountMovementsColBalance')}</TableHead>
             <TableHead className="w-10" data-testid="TableHead__ae5a16" />
           </TableRow>
