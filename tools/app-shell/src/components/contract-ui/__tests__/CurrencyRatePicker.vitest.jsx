@@ -123,7 +123,7 @@ describe('CurrencyRatePicker', () => {
     });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE_URL}/header/rec-1/action/currencyOptions`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      { credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
     );
   });
 
@@ -160,7 +160,7 @@ describe('CurrencyRatePicker', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE_URL}/quotation/new/action/currencyOptions`,
-        { headers: { Authorization: `Bearer ${TOKEN}` } },
+        { credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
       );
     });
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();

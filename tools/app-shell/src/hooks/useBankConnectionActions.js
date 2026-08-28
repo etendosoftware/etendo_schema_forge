@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const BASE_PATH = '/sws/neo/financial-account-bank-connection';
 
@@ -102,7 +102,7 @@ function waitForConnection(popup) {
  * }}
  */
 export function useBankConnectionActions() {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -112,13 +112,8 @@ export function useBankConnectionActions() {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const url = `${getApiBase()}${BASE_PATH}${buildQuery({ action, ...query })}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`${BASE_PATH}${buildQuery({ action, ...query })}`, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
@@ -140,7 +135,7 @@ export function useBankConnectionActions() {
       clearTimeout(timer);
       setLoading(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   const connect = useCallback(
     // financialAccountId is optional: when connecting an existing account the bridge uses it to

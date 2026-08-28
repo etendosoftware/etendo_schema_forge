@@ -59,7 +59,7 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
     expect(url).toBe('http://host/neo/fiscal303/declarations?id=303-2026-T2');
     expect(init.method).toBe('PUT');
     expect(init.headers).toEqual({
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES',
       'Content-Type': 'application/json',
     });
     expect(JSON.parse(init.body)).toEqual({ status: 'submitted' });

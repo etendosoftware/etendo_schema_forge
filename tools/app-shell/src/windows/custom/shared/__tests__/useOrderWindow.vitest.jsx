@@ -123,7 +123,7 @@ function renderOrderHook(props = {}) {
       invoice: 'manageInvoice',
     },
     confirmLabelKey: 'confirmOrder',
-    headers: { Authorization: 'Bearer tok' },
+    headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' },
     ConfirmModal,
     ConfirmResultModal,
     ManageDocsLauncher,
